@@ -22,7 +22,7 @@ import GoalPhaseOrderedProgression as O
 /** Immutable Findings derived only at the native accepted business frontier.
   * Storage is the current call's fixed declared Journal, never a file fallback.
   * @since   Oct. 20, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object DevelopmentJournalFinding {
@@ -100,8 +100,13 @@ private[smworkflow] object DevelopmentJournalFinding {
           Vector(c.commit.identity, c.commit.parent, c.commit.tree).forall(_oid)) &&
         value.completed.map(_.step).distinct.size == value.completed.size &&
         value.completed.map(_.commit.identity).distinct.size == value.completed.size &&
-        value.completed.map(_.commit.parent) == (Vector(value.originalBase.head) ++
-          value.completed.map(_.commit.identity)).take(value.completed.size) &&
+        value.completed.zipWithIndex.forall { (closed, index) =>
+          val predecessor = if (index == 0) value.originalBase else {
+            val previous = value.completed(index - 1).commit
+            O.Snapshot(previous.identity, previous.tree)
+          }
+          closed.partialCompletion.fold(closed.commit.parent == predecessor.head)(_.originalParent == predecessor)
+        } &&
         value.candidate != null && value.candidate.forall(_snapshot) && value.checksReceipt != null &&
         value.checksReceipt.forall(_exact) && value.reviewEvidence != null && value.reviewEvidence.forall(_exact) &&
         (value.stepIdentity match {
@@ -195,7 +200,7 @@ private[smworkflow] object DevelopmentJournalFinding {
       entry.recordedAt, entry.observation.summary, None, Some(V.JournalFinding(entry.sourceKind,
         V.GoalPhaseReviewObservation(entry.observation.identity, entry.observation.category, entry.observation.summary, entry.observation.rationale),
         context.sourceRevision, context.planIdentity, context.planRevision, context.eligibilityStage, _snapshot_(context.originalBase),
-        context.completed.map(c => V.GoalPhaseClosedStep(c.step, V.GoalPhaseNativeCommit(c.commit.identity, c.commit.parent, c.commit.tree), c.review, c.admission.map(a => GoalPhaseNativeMetadata.record(a.asJson)))),
+        context.completed.map(NativeWorkflowOperationOutput.goalClosedStep),
         context.candidate.map(_snapshot_), context.checksReceipt, context.reviewEvidence)), None, None)
   }
   def view(entry: FindingEntry): String = {

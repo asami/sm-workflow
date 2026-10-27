@@ -17,7 +17,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 
 /** Passive normal Operations borrow only the current executing call's resource context.
   * @since   Oct. 15, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowPreparationServiceAssembly {
@@ -51,6 +51,10 @@ private[smworkflow] object NativeWorkflowPreparationServiceAssembly {
           "input" -> input.input, "selection-id" -> input.selectionId, "participant" -> input.participant,
           "origin" -> input.origin, "idempotency-key" -> input.idempotencyKey,
           "selection-collection" -> input.selectionCollection), reader)),
+      new BoundOperation[V.WorkflowTaskFixDeliveryPreparationInput](_declared.PrepareTaskFixDeliveryOperation,
+        (input, reader) => NativeTaskFixDelivery.prepareC(input, reader).map(_.toRecord())),
+      new BoundOperation[V.WorkflowTaskFixAdoptionPreparationInput](_declared.PrepareTaskFixAdoptionOperation,
+        (input, reader) => NativeTaskFixDelivery.adoptC(input, reader).map(_.toRecord())),
       new BoundOperation[V.WorkflowRepositoryStartPreparationInput](_declared.PrepareRepositoryStartOperation,
         (input, reader) => NativeRepositoryStartInput.prepareC(Map(
           "input" -> input.input,

@@ -23,7 +23,7 @@ import GoalPhaseDependencyValidation.given
   * the CML candidate-observed edge. Git staging cannot roll back with storage.
   * An intent without its actual recorded result is retained, never replayed.
   * @since   Oct.  6, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeCandidate {
@@ -40,7 +40,18 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     dependencySourceStages: Vector[GoalPhaseDependencySourceRevision.StageFact] = Vector.empty,
     dependencySourceCapture: Option[GoalPhaseDependencySourceRevision.Capture] = None)
   final case class StepEvidence(step: String, candidate: O.Snapshot, changedPaths: Vector[String], diff: String,
-    commit: O.Commit, eofCorrections: Vector[String])
+    commit: O.Commit, eofCorrections: Vector[String], partialCompletion: Option[O.StepCommitChain] = None)
+  object StepEvidence {
+    given Encoder[StepEvidence] = deriveEncoder[StepEvidence].mapJson(_.mapObject(_.filter {
+      case ("partialCompletion", value) => !value.isNull
+      case _ => true
+    }))
+    private val _decoder: Decoder[StepEvidence] = deriveDecoder
+    given Decoder[StepEvidence] = Decoder.instance(cursor => _decoder(cursor).flatMap(value =>
+      if (!cursor.downField("partialCompletion").focus.exists(_.isNull) && value.partialCompletion.forall(c =>
+          O.validStepCommitChain(c) && c.completion == value.commit)) Right(value)
+      else Left(DecodingFailure("Step evidence partial chain is malformed or crossed", cursor.history))))
+  }
   object Payload {
     given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
       case ("continuation" | "stepEvidence" | "dependencyAdmission" | "dependency" | "dependencyOrigin" |
@@ -78,7 +89,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
             Vector(e.candidate.head, e.candidate.tree, e.commit.identity, e.commit.parent, e.commit.tree).forall(value =>
               value != null && value.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")) && e.changedPaths != null &&
             e.changedPaths.distinct == e.changedPaths && e.diff != null && e.eofCorrections != null &&
-            e.eofCorrections.distinct == e.eofCorrections))
+            e.eofCorrections.distinct == e.eofCorrections && e.partialCompletion != null &&
+            e.partialCompletion.forall(chain => O.validStepCommitChain(chain) && chain.completion == e.commit)))
       if (valid) Right(value) else Left(DecodingFailure("Invalid native candidate extension", cursor.history))
       })
     })
@@ -449,13 +461,16 @@ private[smworkflow] object GoalPhaseNativeCandidate {
   /** Retained receipt structure is checked independently of current Git authority. */
   private[admission] def retainedEvidenceC(payload: Payload, controller: O.State,
     completedCandidates: Vector[Payload], managementPaths: Vector[String]): Consequence[Unit] = payload.stepEvidence match {
-    case None => Consequence.unit // Legacy receipts retain their original full-diff interpretation.
+    case None if controller.cursor == controller.plan.steps.size && payload.candidate.nonEmpty &&
+        controller.completed.exists(_.partialCompletion.nonEmpty) =>
+      F.invalid("partial-chain whole-Phase history requires its retained Step evidence")
+    case None => Consequence.unit // Legacy ordinary receipts retain their original full-diff interpretation.
     case Some(values) if controller.cursor == controller.plan.steps.size &&
-        completedCandidates.exists(_.continuation.nonEmpty) && values.size == controller.completed.size &&
+        (completedCandidates.exists(_.continuation.nonEmpty) || controller.completed.exists(_.partialCompletion.nonEmpty)) && values.size == controller.completed.size &&
         completedCandidates.size == values.size && values.zipWithIndex.forall { (value, index) =>
           val actual = completedCandidates(index)
           val closed = controller.completed(index)
-          value.step == closed.step && value.commit == closed.commit && actual.step == closed.step &&
+          value.step == closed.step && value.commit == closed.commit && value.partialCompletion == closed.partialCompletion && actual.step == closed.step &&
             actual.candidate.contains(value.candidate) && actual.changedPaths == value.changedPaths && actual.diff.contains(value.diff) &&
             B.pathsOwned(value.eofCorrections, controller.plan.steps(index).ownedPaths) &&
             (value.eofCorrections.isEmpty == (value.candidate.tree == closed.commit.tree))
@@ -489,7 +504,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     val base = controller.tipSnapshot
     val managementPaths = (documentPolicy.toVector.flatMap(_.paths) ++ recordingPaths).distinct
     val stagingPaths = if (whole && !controller.releaseRepairActive) managementPaths else ownedPaths
-    val scopedPhase = whole && completedCandidates.exists(_.continuation.nonEmpty)
+    val scopedPhase = whole && (completedCandidates.exists(_.continuation.nonEmpty) ||
+      controller.completed.exists(_.partialCompletion.nonEmpty))
     def reusePrefixC: Consequence[Vector[String]] = for {
       prefix <- _reuse_prefix_c
       affected <- sourceHistoryNormalization match {
@@ -526,7 +542,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
             corrections = changes.map(_.path.value)
             _ <- if (B.pathsOwned(corrections, plan.steps(values.size).ownedPaths) && payload.diff.nonEmpty)
               Consequence.unit else F.invalid("successful Step correction crosses retained ownership")
-          } yield values :+ StepEvidence(closed.step, snapshot, payload.changedPaths, payload.diff.get, closed.commit, corrections)
+          } yield values :+ StepEvidence(closed.step, snapshot, payload.changedPaths, payload.diff.get, closed.commit, corrections, closed.partialCompletion)
         }
       } yield Some(evidence)
     private def _evidence_c(payload: Payload): Consequence[Unit] =

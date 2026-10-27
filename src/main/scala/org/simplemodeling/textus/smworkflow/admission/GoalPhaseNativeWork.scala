@@ -16,12 +16,13 @@ import IncrementalSbtDiagnosisRepair.given
   * decoded from an AI reply. Other work kinds will be selected by owning advance
   * only after their actual native predecessor has been connected.
   * @since   Oct.  6, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWork {
   final case class CheckFailureContext(changedPaths: Vector[String], diff: String,
-    validation: GoalPhaseNativeValidation.Payload, initialPhaseRepair: Option[ContextReference] = None)
+    validation: GoalPhaseNativeValidation.Payload, initialPhaseRepair: Option[ContextReference] = None,
+    stepTestReportRepair: Option[ContextReference] = None)
   final case class Request(instanceIdentity: String, sourceRevision: String, kind: String,
     stepIdentity: Option[String], generation: Long, purpose: String, selectedPlan: O.Plan,
     originalBase: O.Snapshot, completed: Vector[O.ClosedStep], candidate: Option[O.Snapshot],
@@ -116,11 +117,12 @@ private[smworkflow] object GoalPhaseNativeWork {
     }
   }
   private given Encoder[CheckFailureContext] = deriveEncoder[CheckFailureContext].mapJson(_.mapObject(fields =>
-    if (fields("initialPhaseRepair").exists(_.isNull)) fields.remove("initialPhaseRepair") else fields))
+    Vector("initialPhaseRepair", "stepTestReportRepair").foldLeft(fields)((prior, key) =>
+      if (prior(key).exists(_.isNull)) prior.remove(key) else prior)))
   private val _check_failure_decoder: Decoder[CheckFailureContext] = deriveDecoder
   private given Decoder[CheckFailureContext] = Decoder.instance { cursor =>
-    if (cursor.downField("initialPhaseRepair").focus.exists(_.isNull))
-      Left(DecodingFailure("Initial Phase repair reference must be absent or valid", cursor.history))
+    if (Vector("initialPhaseRepair", "stepTestReportRepair").exists(key => cursor.downField(key).focus.exists(_.isNull)))
+      Left(DecodingFailure("Native repair references must be absent or valid", cursor.history))
     else _check_failure_decoder.tryDecode(cursor).flatMap(value =>
       if (admitCheckFailureContextC(value).isSuccess) Right(value)
       else Left(DecodingFailure("Invalid actual check failure context", cursor.history)))
@@ -158,23 +160,32 @@ private[smworkflow] object GoalPhaseNativeWork {
 
   def checkFailureContextC(changedPaths: Vector[String], diff: String,
     validation: GoalPhaseNativeValidation.Payload,
-    initialPhaseRepair: Option[ContextReference] = None): Consequence[CheckFailureContext] = {
-    val value = CheckFailureContext(changedPaths, diff, validation, initialPhaseRepair)
+    initialPhaseRepair: Option[ContextReference] = None,
+    stepTestReportRepair: Option[ContextReference] = None): Consequence[CheckFailureContext] = {
+    val value = CheckFailureContext(changedPaths, diff, validation, initialPhaseRepair, stepTestReportRepair)
     admitCheckFailureContextC(value).map(_ => value)
   }
 
-  def admitCheckFailureContextC(value: CheckFailureContext): Consequence[Unit] =
-    if (value != null && value.changedPaths != null && value.changedPaths.nonEmpty &&
-        value.changedPaths.forall(_bounded_text) && _context_text(value.diff) &&
-        value.validation != null && value.validation.outcome != null &&
-        value.initialPhaseRepair != null &&
-        ((value.initialPhaseRepair.isEmpty && value.validation.outcome.exists(Set("repair-required", "repair-limit-reached")) &&
-          GoalPhaseNativeValidation.repairable(value.validation)) ||
-          (value.initialPhaseRepair.exists(_initial_phase_reference) &&
-            (GoalPhaseInitialPhaseCheckRepair.terminalFailureValid(value.validation) ||
-              value.validation.outcome.exists(Set("repair-required", "repair-limit-reached")) &&
-                GoalPhaseInitialPhaseCheckRepair.repairContextValid(value.validation)))))
-      Consequence.unit else F.invalid("repair requires its retained actual selected check failure context")
+  def admitCheckFailureContextC(value: CheckFailureContext): Consequence[Unit] = {
+    val structural = value != null && value.changedPaths != null && value.changedPaths.nonEmpty &&
+      value.changedPaths.forall(_bounded_text) && _context_text(value.diff) &&
+      value.validation != null && value.validation.outcome != null &&
+      value.initialPhaseRepair != null && value.stepTestReportRepair != null
+    val valid = structural && {
+      val ordinary = value.initialPhaseRepair.isEmpty && value.stepTestReportRepair.isEmpty &&
+        value.validation.outcome.exists(Set("repair-required", "repair-limit-reached")) &&
+        GoalPhaseNativeValidation.repairable(value.validation)
+      val phase = value.stepTestReportRepair.isEmpty && value.initialPhaseRepair.exists(_initial_phase_reference) &&
+        (GoalPhaseInitialPhaseCheckRepair.terminalFailureValid(value.validation) ||
+          value.validation.outcome.exists(Set("repair-required", "repair-limit-reached")) &&
+            GoalPhaseInitialPhaseCheckRepair.repairContextValid(value.validation))
+      val report = value.initialPhaseRepair.isEmpty && value.stepTestReportRepair.nonEmpty &&
+        value.stepTestReportRepair.forall(GoalPhaseStepTestReportRepair.validReference) &&
+        GoalPhaseStepTestReportRepair.reportRepairFailureValid(value.validation)
+      ordinary || phase || report
+    }
+    if (valid) Consequence.unit else F.invalid("repair requires its retained actual selected check failure context")
+  }
 
   def initialC(source: F.Session): Consequence[Request] = for {
     state <- O.startC(source.started.receipt.payload.value.plan, source.started.receipt.payload.value.base)
@@ -285,6 +296,7 @@ private[smworkflow] object GoalPhaseNativeWork {
         value.checks.forall(_ != null))
       (validreview && request.checkFailure.isEmpty) ||
       (request.review.isEmpty && request.checkFailure.exists(value => admitCheckFailureContextC(value).isSuccess &&
+        value.stepTestReportRepair.forall(_.identity.startsWith(request.instanceIdentity + ":ordered-step-test-report-repair:")) &&
         request.stepIdentity != null && request.stepIdentity.contains(value.validation.step))) ||
       (request.review.isEmpty && request.stepIdentity != null && request.stepIdentity.isEmpty &&
         request.selectedPlan != null && request.completed != null &&

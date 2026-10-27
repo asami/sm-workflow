@@ -1,6 +1,6 @@
 /**
  * @since   Oct. 26, 2026
- * @version Oct. 26, 2026
+ * @version Oct. 27, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -184,7 +184,8 @@ final class StandaloneReviewFixSpec extends AnyWordSpec with GivenWhenThen with 
         "selection-collection" -> "entity:smworkflow.cli.goal_selection"), name =>
         if (name == "adopted.json") publicInput.toRecord().toJsonStringC
         else Consequence.stateConflict("Unselected review source read")))
-      _with_runtime_(root, "ReviewFixStart", Some(host.copy(goal = host.goal.copy(candidatePaths = Vector(selectedPath))))) {
+      _with_runtime_(root, "ReviewFixStart", Some(host.copy(goal = host.goal.copy(candidatePaths = Vector(selectedPath)))),
+        hostParameters = BoundedWorkExecutionAdmissionFixture.parameters) {
         (owner, component, actor, prepare) =>
         prepare(call => call.setupC(_setup_commands_(root, "ReviewFixStart").size).flatMap { _ =>
           val row = prepared.getVector("datastore").get.head.asInstanceOf[Record].getVector("records").get.head.asInstanceOf[Record]
@@ -208,6 +209,8 @@ final class StandaloneReviewFixSpec extends AnyWordSpec with GivenWhenThen with 
         work.state.automaticCount shouldBe 0
         issued.submitOperation shouldBe Some("submitStandaloneFixWorkResult")
         issued.issuedWorkContext.get.requiredOperation shouldBe "standalone-fix-repair-capability"
+        issued.issuedWorkContext.get.executionRequirement.getString("reasoningClass") shouldBe Some("DesignStandard")
+        issued.issuedWorkContext.get.executionRequirement.getRecord("disposition").nonEmpty shouldBe true
         redisplayed.issuedWorkContext shouldBe issued.issuedWorkContext
         ThreeWorkflowLauncherAssembly.publishedMcpOperations should contain("StandaloneFixService.startStandaloneReviewFix")
       }

@@ -71,6 +71,7 @@ ACTION_OPTIONS = {
     "submit-repository-conflict": {"request", "submission"},
 }
 FQN = "org.simplemodeling.textus.SmWorkflow.GoalPhaseService."
+TASK_FQN = "org.simplemodeling.textus.SmWorkflow.GoalTaskService."
 REPOSITORY_FQN = "org.simplemodeling.textus.SmWorkflow.RepositorySyncService."
 SPLIT_FQN = "org.simplemodeling.textus.SmWorkflow.SplitPhaseService."
 SPLIT_ROUTES = {
@@ -259,7 +260,7 @@ def route_record(task_fd):
     with os.fdopen(descriptor, "r", encoding="utf-8") as stream:
         require(stat.S_ISREG(os.fstat(stream.fileno()).st_mode), "routing must be a regular file")
         value = json_object(stream.read())
-    require(set(value) == {"family", "sessionId"} and value["family"] in {"GoalPhase", "SplitPhase", "RepositorySync"}
+    require(set(value) == {"family", "sessionId"} and value["family"] in {"GoalTask", "GoalPhase", "SplitPhase", "RepositorySync"}
             and nonblank(value["sessionId"]), "invalid task routing")
     return value
 
@@ -286,7 +287,8 @@ def new_file(directory_fd, name):
 
 def command_prefix(executable, runtime_root):
     """Use the explicitly selected installed CLI; artifact selection is its own."""
-    return [str(executable), "--runtime-root", str(runtime_root), "command"]
+    return [str(executable), "--runtime-root", str(runtime_root),
+            "--textus.assembly.descriptor=" + str(runtime_root / ".textus/assembly.yaml"), "command"]
 
 
 def installed_executable(path):
@@ -358,6 +360,7 @@ def start(options, task_fd):
 def advance(task_fd, family="GoalPhase"):
     session_id = routing(task_fd, family)
     operation = {"GoalPhase": "advanceGoalPhase", "SplitPhase": "advanceSplitPhase",
+                 "GoalTask": "advanceGoalTask",
                  "RepositorySync": "advanceRepositorySync"}[family]
     return operation, ["--sessionId", session_id], session_id
 
@@ -378,7 +381,9 @@ def issued_split_route(options, task_fd):
 
 def issued_goal_route(options, task_fd):
     """Pin the selected task to the consumed fields of its issued Request."""
-    session_id = routing(task_fd)
+    family = route_record(task_fd)["family"]
+    require(family in {"GoalPhase", "GoalTask"}, "invalid Goal Submit task routing")
+    session_id = routing(task_fd, family)
     _text, request = read_object(explicit_path(options["request"]))
     request_session_id = native_field(request, "sessionId")
     submit_operation = native_field(request, "submitOperation")
@@ -386,9 +391,9 @@ def issued_goal_route(options, task_fd):
     result_type = native_field(request, "resultType")
     require(request_session_id == session_id and request.get("kind") == "Request"
             and isinstance(request.get("work"), dict)
-            and submit_operation == "submitGoalPhaseWorkResult"
+            and submit_operation == ("submitGoalTaskWorkResult" if family == "GoalTask" else "submitGoalPhaseWorkResult")
             and submit_session_id == session_id
-            and result_type == "GoalPhaseWorkResult",
+            and result_type == ("GoalTaskWorkResult" if family == "GoalTask" else "GoalPhaseWorkResult"),
             "unsupported or contradictory issued Goal Submit route")
     return submit_operation, session_id
 
@@ -468,7 +473,13 @@ def submission_pairs(options, session_id, split=False):
 
 def submit(options, task_fd):
     submit_operation, session_id = issued_goal_route(options, task_fd)
-    return submit_operation, submission_pairs(options, session_id), session_id
+    pairs = submission_pairs(options, session_id)
+    if submit_operation == "submitGoalTaskWorkResult":
+        _text, request = read_object(explicit_path(options["request"]))
+        issued = native_field(request, "issuedWorkContext")
+        require(isinstance(issued, dict) and bool(issued), "Task Submit requires the actual Request issuedWorkContext")
+        pairs.extend(["--issuedWorkContext", json.dumps(issued, ensure_ascii=False, allow_nan=False)])
+    return submit_operation, pairs, session_id
 
 
 def execution_command(options, executable, task_fd):
@@ -483,13 +494,15 @@ def execution_command(options, executable, task_fd):
     own = (route["family"] == "GoalPhase"
            and operation == "submitGoalPhaseWorkResult" and target_id == session_id
            and result_type == "GoalPhaseWorkResult" and isinstance(request.get("work"), dict))
+    task = (route["family"] == "GoalTask" and operation == "submitGoalTaskWorkResult"
+            and result_type == "GoalTaskWorkResult" and target_id == session_id and isinstance(request.get("work"), dict))
     child = (route["family"] == "GoalPhase" and (operation, result_type) in REPOSITORY_ROUTES.values()
              and nonblank(target_id) and target_id != session_id)
     repository = (route["family"] == "RepositorySync" and target_id == session_id
                   and (operation, result_type) in REPOSITORY_ROUTES.values())
     split = (route["family"] == "SplitPhase" and target_id == session_id
              and (operation, result_type) in SPLIT_ROUTES.values())
-    require(request.get("kind") == "Request" and request_id == session_id and (own or child or split or repository),
+    require(request.get("kind") == "Request" and request_id == session_id and (own or task or child or split or repository),
             "unsupported or contradictory issued execution route under selected task")
     issued = native_field(request, "issuedWorkContext")
     require(isinstance(issued, dict) and bool(issued), "execution requires the actual issuedWorkContext object")
@@ -561,7 +574,11 @@ def action_command(options, executable, runtime_root, task_fd):
         elif action == "start-repository":
             service = REPOSITORY_FQN
     elif action == "advance":
-        operation, pairs, session_id = advance(task_fd)
+        family = route_record(task_fd)["family"]
+        require(family in {"GoalPhase", "GoalTask"}, "invalid Goal Advance task routing")
+        operation, pairs, session_id = advance(task_fd, family)
+        if family == "GoalTask":
+            service = TASK_FQN
     elif action == "advance-split":
         operation, pairs, session_id = advance(task_fd, "SplitPhase")
         service = SPLIT_FQN
@@ -586,6 +603,8 @@ def action_command(options, executable, runtime_root, task_fd):
         service = REPOSITORY_FQN
     else:
         operation, pairs, session_id = submit(options, task_fd)
+        if operation == "submitGoalTaskWorkResult":
+            service = TASK_FQN
     command = command_prefix(executable, runtime_root) + [service + operation]
     return command + pairs + ["--json"], session_id
 
@@ -845,11 +864,13 @@ def completion_commands(options, executable, runtime_root, task_fd):
         for name in ("answer", "resultReference", "executionEvidence"):
             pairs.extend(["--" + name, json.dumps(submission[name], ensure_ascii=False, allow_nan=False)])
         prepared_path = explicit_path(options["output"]) / "preparation" / "response.json"
-        command = [str(executable), "--runtime-root", str(runtime_root),
-                   "--textus.import.data.file=" + str(prepared_path),
-                   "command", FQN + pair[0], *pairs, "--json"]
+        command = command_prefix(executable, runtime_root)
+        command.insert(-1, "--textus.import.data.file=" + str(prepared_path))
+        command.extend([FQN + pair[0], *pairs, "--json"])
         preparation = (submission, provenance)
     elif family == "GoalPhase" and pair == ("submitGoalPhaseWorkResult", "GoalPhaseWorkResult"):
+        action = "submit"
+    elif family == "GoalTask" and pair == ("submitGoalTaskWorkResult", "GoalTaskWorkResult"):
         action = "submit"
     else:
         routes = SPLIT_ROUTES if family == "SplitPhase" else REPOSITORY_ROUTES
@@ -860,12 +881,13 @@ def completion_commands(options, executable, runtime_root, task_fd):
         command, submit_id = action_command(dict(options, action=action), executable, runtime_root, task_fd)
     advance_action, service, operation = {
         "GoalPhase": ("advance", FQN, "advanceGoalPhase"),
+        "GoalTask": ("advance", TASK_FQN, "advanceGoalTask"),
         "SplitPhase": ("advance-split", SPLIT_FQN, "advanceSplitPhase"),
         "RepositorySync": ("advance-repository", REPOSITORY_FQN, "advanceRepositorySync"),
     }[family]
     outer_id = route["sessionId"]
     following = command_prefix(executable, runtime_root) + [service + operation, "--sessionId", outer_id, "--json"]
-    return command, submit_id, following, outer_id, advance_action, preparation
+    return command, submit_id, following, outer_id, advance_action, preparation, family
 
 
 def display_observation(response):
@@ -876,8 +898,11 @@ def display_observation(response):
 
 def complete(options, executable, runtime_root, task_fd, output_fd):
     """Submit once, then explicitly Advance once only after actual acceptance."""
-    command, submit_id, following, outer_id, advance_action, preparation = completion_commands(
+    command, submit_id, following, outer_id, advance_action, preparation, family = completion_commands(
         options, executable, runtime_root, task_fd)
+    # Keep the validated original family across Submit; its actual response must
+    # remain visible even if routing is removed or corrupted during the call.
+    task_completion = family == "GoalTask"
     os.mkdir("advance", mode=0o700, dir_fd=output_fd)
     advance_fd = os.open("advance", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=output_fd)
     _request_text, request = read_object(explicit_path(options["request"]))
@@ -913,13 +938,16 @@ def complete(options, executable, runtime_root, task_fd, output_fd):
         _text, response = native_call(command, runtime_root, output_fd, submit_context)
         require(native_field(response, "sessionId") == submit_id and nonblank(response.get("message")),
                 "Submit response ID or message mismatches the selected route")
-        require(isinstance(response.get("accepted"), bool) and nonblank(response.get("outcome")),
-                "Submit response lacks boolean accepted or outcome")
+        if task_completion:
+            require(response.get("kind") == "Submitted", "Task Submit was not retained as Submitted")
+        else:
+            require(isinstance(response.get("accepted"), bool) and nonblank(response.get("outcome")),
+                    "Submit response lacks boolean accepted or outcome")
         display_observation(response)
         response_progress(response, submit_context)
-        require(response["accepted"] is True and response["outcome"] == "accepted",
+        require(task_completion or (response["accepted"] is True and response["outcome"] == "accepted"),
                 "Submit was not acknowledged as accepted")
-        require(route_record(task_fd) == {"family": {"advance": "GoalPhase", "advance-split": "SplitPhase",
+        require(route_record(task_fd) == {"family": {"advance": "GoalTask" if task_completion else "GoalPhase", "advance-split": "SplitPhase",
                                "advance-repository": "RepositorySync"}[advance_action],
                 "sessionId": outer_id}, "task routing changed after accepted Submit; retain output and stop")
         _text, response = native_call(following, runtime_root, advance_fd, advance_context)
@@ -976,10 +1004,14 @@ def acknowledge(action, response, session_id, task_fd, output_fd):
         return
     require(response_session_id == session_id, "native response ID mismatches the selected route")
     if action in {"advance", "advance-split", "advance-repository"}:
-        require(response.get("kind") in {"Request", "Human", "Wait", "Terminal"},
+        kinds = {"Request", "Human", "Wait", "Terminal"}
+        if route_record(task_fd)["family"] == "GoalTask":
+            kinds.add("Incomplete")
+        require(response.get("kind") in kinds,
                 "unsupported Advance kind")
     else:
-        require(response.get("accepted") is True and response.get("outcome") == "accepted",
+        require((route_record(task_fd)["family"] == "GoalTask" and action == "submit" and response.get("kind") == "Submitted")
+                or (response.get("accepted") is True and response.get("outcome") == "accepted"),
                 "Submit was not acknowledged as accepted")
 
 

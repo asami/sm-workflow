@@ -26,6 +26,13 @@ accepted checks.
    idempotencyKey. The actual actor, managed store and canonical session routing
    remain owned by CNCF. Each requested path must be a fixed configured host path;
    each requested check must resolve exactly to the configured typed binding.
+   Before creating a new native instance or running repository/check effects,
+   Start requires both the actual execution profile mapping and origin. The
+   adopted code/documentation kind derives CodingProgrammingStandard or
+   DesignStandard; possible independent review requires ReviewStandard. Missing
+   classes, invalid origins and incompatible forced-inline/isolation preferences
+   are rejected before Start. Fresh issues retain the resulting disposition.
+   This admission does not rebind an already retained pending WorkOrder.
 3. `advanceStandaloneFix(sessionId)` owns candidate observation, selected managed
    checks, diagnosis, semantic WorkOrder issue and completion assessment. Requests
    return their actual issuedWorkContext, submit operation/session and result type.

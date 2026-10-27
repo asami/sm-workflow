@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  5, 2026
- * @version Oct. 26, 2026
+ * @version Oct. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -32,7 +32,8 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
   private val _declarations: Vector[(ServiceDefinition, Vector[String])] = Vector(
     SmWorkflowComponent.NativeWorkflowPreparationServiceService -> Vector(
       "prepareGoalStart", "prepareRepositoryStart", "prepareSplitStart", "prepareRepositoryEffect", "prepareAuthority", "prepareEvidence",
-      "prepareExecution", "recordExecution", "prepareCallerInformation", "recordCallerInformation"
+      "prepareExecution", "recordExecution", "prepareCallerInformation", "recordCallerInformation",
+      "prepareStandaloneFixStart", "prepareStandaloneReviewFixStart", "prepareGoalTaskStart", "prepareTaskFixDelivery", "prepareTaskFixAdoption"
     ),
     SmWorkflowComponent.GoalPhaseServiceService -> Vector(
       "startGoalPhase", "advanceGoalPhase", "submitGoalPhaseWorkResult", "submitGoalPhaseOrderedDecision", "submitGoalPhaseFindingRecording",
@@ -62,6 +63,17 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
       "describeRepositorySyncValidationContinuation", "adoptRepositorySyncValidationContinuation",
       "submitNativeMergeReview", "submitNativeMergeRepair", "submitRepositoryConflictDecision"
     ),
+    SmWorkflowComponent.StandaloneFixServiceService -> Vector("startStandaloneFix", "startStandaloneReviewFix", "advanceStandaloneFix",
+      "submitStandaloneFixWorkResult", "resolveStandaloneFixDiagnosticInformation"),
+    SmWorkflowComponent.StandaloneFixRepairServiceService -> Vector("repairStandaloneFix"),
+    SmWorkflowComponent.StandaloneFixReviewServiceService -> Vector("reviewStandaloneFix"),
+    SmWorkflowComponent.StandaloneFixSemanticAdmissionServiceService -> Vector("admitStandaloneFixReview"),
+    SmWorkflowComponent.GoalTaskServiceService -> Vector("startGoalTask", "advanceGoalTask", "submitGoalTaskWorkResult", "resolveGoalTaskDiagnosticInformation",
+      "describeGoalTaskMalformedIssuedWorkRecovery", "recoverGoalTaskMalformedIssuedWork"),
+    SmWorkflowComponent.GoalTaskImplementationServiceService -> Vector("implementGoalTask"),
+    SmWorkflowComponent.GoalTaskRepairServiceService -> Vector("repairGoalTask"),
+    SmWorkflowComponent.GoalTaskReviewServiceService -> Vector("reviewGoalTask"),
+    SmWorkflowComponent.GoalTaskSemanticAdmissionServiceService -> Vector("admitGoalTaskReview"),
     SmWorkflowComponent.DevelopmentObservationServiceService -> Vector("readDevelopmentState", "readDevelopmentHistory"),
     SmWorkflowComponent.JournalServiceService -> Vector("readJournalEntry", "findJournalEntries"),
     SmWorkflowComponent.EvidenceServiceService -> Vector("readEvidence", "recordEvidenceJournal",
@@ -92,6 +104,13 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
   private val _host_service_names = Vector("meta", "system")
 
   private val _limits = Vector(
+    ("GoalPhaseService", "describeGoalPhaseClosureRecovery", Vector(
+      "CompletePartialCommit", "succeeded/Exited(0)", "exact remainder paths/blobs/modes"
+    )),
+    ("GoalPhaseService", "recoverGoalPhaseClosure", Vector(
+      "CompletePartialCommit", "separate ordinary Advance", "distinct completion intent",
+      "original-parent -> partial -> completion", "UNKNOWN completion intent is never replayed"
+    )),
     ("GoalPhaseService", "submitGoalPhaseOrderedDecision", Vector(
       "Independent host Human evidence", "authentication or AI output is not consent"
     )),

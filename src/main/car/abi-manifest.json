@@ -74,6 +74,33 @@
         },
         {
           "name": "DevelopmentObservationService"
+        },
+        {
+          "name": "StandaloneFixService"
+        },
+        {
+          "name": "StandaloneFixRepairService"
+        },
+        {
+          "name": "StandaloneFixReviewService"
+        },
+        {
+          "name": "StandaloneFixSemanticAdmissionService"
+        },
+        {
+          "name": "GoalTaskService"
+        },
+        {
+          "name": "GoalTaskRepairService"
+        },
+        {
+          "name": "GoalTaskReviewService"
+        },
+        {
+          "name": "GoalTaskSemanticAdmissionService"
+        },
+        {
+          "name": "GoalTaskImplementationService"
         }
       ],
       "operations": [
@@ -461,6 +488,181 @@
           "kind": "COMMAND",
           "input": "DevelopmentHistoryReadInput",
           "output": "DevelopmentObservationResult"
+        },
+        {
+          "service": "StandaloneFixService",
+          "name": "resolveStandaloneFixDiagnosticInformation",
+          "kind": "COMMAND",
+          "input": "GoalPhaseDiagnosticInformationInput",
+          "output": "GoalPhaseDiagnosticInformationResult"
+        },
+        {
+          "service": "StandaloneFixService",
+          "name": "startStandaloneFix",
+          "kind": "COMMAND",
+          "input": "StandaloneFixInput",
+          "output": "StandaloneFixView"
+        },
+        {
+          "service": "StandaloneFixService",
+          "name": "startStandaloneReviewFix",
+          "kind": "COMMAND",
+          "input": "StandaloneReviewFixInput",
+          "output": "StandaloneFixView"
+        },
+        {
+          "service": "StandaloneFixService",
+          "name": "advanceStandaloneFix",
+          "kind": "COMMAND",
+          "input": "StandaloneFixAdvanceInput",
+          "output": "StandaloneFixView"
+        },
+        {
+          "service": "StandaloneFixService",
+          "name": "submitStandaloneFixWorkResult",
+          "kind": "COMMAND",
+          "input": "StandaloneFixWorkResult",
+          "output": "StandaloneFixView"
+        },
+        {
+          "service": "StandaloneFixRepairService",
+          "name": "repairStandaloneFix",
+          "kind": "COMMAND",
+          "input": "StandaloneFixWorkRequest",
+          "output": "StandaloneFixWorkResult"
+        },
+        {
+          "service": "StandaloneFixReviewService",
+          "name": "reviewStandaloneFix",
+          "kind": "COMMAND",
+          "input": "StandaloneFixWorkRequest",
+          "output": "StandaloneFixWorkResult"
+        },
+        {
+          "service": "StandaloneFixSemanticAdmissionService",
+          "name": "admitStandaloneFixReview",
+          "kind": "COMMAND",
+          "input": "StandaloneFixWorkRequest",
+          "output": "StandaloneFixView"
+        },
+        {
+          "service": "GoalTaskService",
+          "name": "resolveGoalTaskDiagnosticInformation",
+          "kind": "COMMAND",
+          "input": "GoalPhaseDiagnosticInformationInput",
+          "output": "GoalPhaseDiagnosticInformationResult"
+        },
+        {
+          "service": "GoalTaskService",
+          "name": "startGoalTask",
+          "kind": "COMMAND",
+          "input": "GoalTaskInput",
+          "output": "GoalTaskView"
+        },
+        {
+          "service": "GoalTaskService",
+          "name": "advanceGoalTask",
+          "kind": "COMMAND",
+          "input": "GoalTaskAdvanceInput",
+          "output": "GoalTaskView"
+        },
+        {
+          "service": "GoalTaskService",
+          "name": "submitGoalTaskWorkResult",
+          "kind": "COMMAND",
+          "input": "GoalTaskWorkResult",
+          "output": "GoalTaskView"
+        },
+        {
+          "service": "GoalTaskRepairService",
+          "name": "repairGoalTask",
+          "kind": "COMMAND",
+          "input": "GoalTaskWorkRequest",
+          "output": "GoalTaskWorkResult"
+        },
+        {
+          "service": "GoalTaskReviewService",
+          "name": "reviewGoalTask",
+          "kind": "COMMAND",
+          "input": "GoalTaskWorkRequest",
+          "output": "GoalTaskWorkResult"
+        },
+        {
+          "service": "GoalTaskSemanticAdmissionService",
+          "name": "admitGoalTaskReview",
+          "kind": "COMMAND",
+          "input": "GoalTaskWorkRequest",
+          "output": "GoalTaskView"
+        },
+        {
+          "service": "GoalTaskImplementationService",
+          "name": "implementGoalTask",
+          "kind": "COMMAND",
+          "input": "GoalTaskWorkRequest",
+          "output": "GoalTaskWorkResult"
+        },
+        {
+          "service": "NativeWorkflowPreparationService",
+          "name": "prepareStandaloneFixStart",
+          "kind": "COMMAND",
+          "input": "WorkflowStandaloneFixStartPreparationInput",
+          "output": "WorkflowPreparedImport"
+        },
+        {
+          "service": "NativeWorkflowPreparationService",
+          "name": "prepareStandaloneReviewFixStart",
+          "kind": "COMMAND",
+          "input": "WorkflowStandaloneReviewFixStartPreparationInput",
+          "output": "WorkflowPreparedImport"
+        },
+        {
+          "service": "NativeWorkflowPreparationService",
+          "name": "prepareGoalTaskStart",
+          "kind": "COMMAND",
+          "input": "WorkflowGoalTaskStartPreparationInput",
+          "output": "WorkflowPreparedImport"
+        },
+        {
+          "service": "NativeWorkflowPreparationService",
+          "name": "prepareTaskFixDelivery",
+          "kind": "COMMAND",
+          "input": "WorkflowTaskFixDeliveryPreparationInput",
+          "output": "WorkflowTaskFixDelivery"
+        },
+        {
+          "service": "NativeWorkflowPreparationService",
+          "name": "prepareTaskFixAdoption",
+          "kind": "COMMAND",
+          "input": "WorkflowTaskFixAdoptionPreparationInput",
+          "output": "WorkflowTaskFixAdoption"
+        },
+        {
+          "service": "NativeWorkflowPreparationService",
+          "name": "prepareExecution",
+          "kind": "COMMAND",
+          "input": "WorkflowCallerExecutionPrepareInput",
+          "output": "WorkflowCallerExecutionState"
+        },
+        {
+          "service": "NativeWorkflowPreparationService",
+          "name": "recordExecution",
+          "kind": "COMMAND",
+          "input": "WorkflowCallerExecutionRecordInput",
+          "output": "WorkflowCallerExecutionState"
+        },
+        {
+          "service": "GoalTaskService",
+          "name": "describeGoalTaskMalformedIssuedWorkRecovery",
+          "kind": "COMMAND",
+          "input": "GoalTaskMalformedIssuedWorkRecoveryDescriptionInput",
+          "output": "GoalTaskMalformedIssuedWorkRecoveryDescriptionResult"
+        },
+        {
+          "service": "GoalTaskService",
+          "name": "recoverGoalTaskMalformedIssuedWork",
+          "kind": "COMMAND",
+          "input": "GoalTaskMalformedIssuedWorkRecoveryInput",
+          "output": "GoalTaskMalformedIssuedWorkRecoveryDescriptionResult"
         }
       ],
       "types": [
@@ -1233,6 +1435,15 @@
           ]
         },
         {
+          "name": "GoalPhaseStepCommitChain",
+          "kind": "value",
+          "fields": [
+            { "name": "originalParent", "type": "GoalPhaseNativeSnapshot", "multiplicity": "1", "required": true },
+            { "name": "partial", "type": "GoalPhaseNativeCommit", "multiplicity": "1", "required": true },
+            { "name": "completion", "type": "GoalPhaseNativeCommit", "multiplicity": "1", "required": true }
+          ]
+        },
+        {
           "name": "GoalPhaseClosedStep",
           "kind": "value",
           "fields": [
@@ -1251,8 +1462,20 @@
             {
               "name": "review",
               "type": "string",
-              "multiplicity": "1",
-              "required": true
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "admission",
+              "type": "org.goldenport.record.Record",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "partialCompletion",
+              "type": "GoalPhaseStepCommitChain",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },
@@ -3942,7 +4165,9 @@
               "type": "GoalPhaseNativeValidationView",
               "multiplicity": "1",
               "required": true
-            }
+            },
+            { "name": "initialPhaseRepair", "type": "WorkflowArtifactReference", "multiplicity": "?", "required": false },
+            { "name": "stepTestReportRepair", "type": "WorkflowArtifactReference", "multiplicity": "?", "required": false }
           ]
         },
         {
@@ -5102,6 +5327,1218 @@
             },
             {
               "name": "ownerDetailsUrl",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "StandaloneFixInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "repositoryIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "requestIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "objective",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "ownedPaths",
+              "type": "string",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "checks",
+              "type": "string",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "conditions",
+              "type": "string",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "sourceReferences",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "reviewRequired",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "kind",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "scalaLint",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "repairLimit",
+              "type": "int",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "StandaloneFixAdvanceInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "StandaloneFixWorkRequest",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "session",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sourceRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "kind",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "state",
+              "type": "record",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "StandaloneFixCondition",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "satisfied",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "detail",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "StandaloneFixWorkResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "summary",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "findings",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "conditions",
+              "type": "StandaloneFixCondition",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "unresolvedQuestions",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "diagnosticRepair",
+              "type": "record",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "fixAssessment",
+              "type": "GoalPhaseFixAssessment",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "reviewDispositions",
+              "type": "StandaloneReviewFixDisposition",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "StandaloneFixView",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "kind",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "state",
+              "type": "record",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "work",
+              "type": "record",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "issuedWorkContext",
+              "type": "WorkflowIssuedWorkContext",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "submitOperation",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "submitSessionId",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "resultType",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "diagnostics",
+              "type": "record",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "reviewContext",
+              "type": "WorkflowReviewContext",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "GoalTaskInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "repositoryIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "requestIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "objective",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "ownedPaths",
+              "type": "string",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "checks",
+              "type": "string",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "conditions",
+              "type": "string",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "sourceReferences",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "reviewRequired",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "kind",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "scalaLint",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "repairLimit",
+              "type": "int",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sourceKind",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "dependencies",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "GoalTaskAdvanceInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalTaskWorkRequest",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "session",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sourceRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "kind",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "state",
+              "type": "record",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalTaskCondition",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "satisfied",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "detail",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalTaskWorkResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "summary",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "findings",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "conditions",
+              "type": "GoalTaskCondition",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "unresolvedQuestions",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "diagnosticRepair",
+              "type": "record",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "fixAssessment",
+              "type": "GoalPhaseFixAssessment",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "GoalTaskView",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "kind",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "state",
+              "type": "record",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "work",
+              "type": "record",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "issuedWorkContext",
+              "type": "WorkflowIssuedWorkContext",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "submitOperation",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "submitSessionId",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "resultType",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "diagnostics",
+              "type": "record",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "reviewContext",
+              "type": "WorkflowReviewContext",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "StandaloneReviewFixInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "repositoryIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "requestIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "objective",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "ownedPaths",
+              "type": "string",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "checks",
+              "type": "string",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "conditions",
+              "type": "string",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "sourceReferences",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "reviewRequired",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "kind",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "scalaLint",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "repairLimit",
+              "type": "int",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "originalReview",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reviewContext",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "originalFindings",
+              "type": "StandaloneReviewFixFinding",
+              "multiplicity": "+",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "StandaloneReviewFixFinding",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "summary",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "paths",
+              "type": "string",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "sourceReferences",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "StandaloneReviewFixDisposition",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "basis",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "changedPaths",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "checks",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "WorkflowStandaloneFixStartPreparationInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "input",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "origin",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionCollection",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowStandaloneReviewFixStartPreparationInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "input",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "origin",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionCollection",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowGoalTaskStartPreparationInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "input",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "origin",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionCollection",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowCallerExecutionPrepareInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "issuedWorkContext",
+              "type": "WorkflowIssuedWorkContext",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "mapping",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "origin",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowCallerExecutionRecordInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "issuedWorkContext",
+              "type": "WorkflowIssuedWorkContext",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "session",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "observation",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reference",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "WorkflowCallerExecutionState",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "session",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "nextSelection",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "completionEvidence",
+              "type": "WorkflowExecutionEvidence",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "WorkflowTaskFixDeliveryPreparationInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "route",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "requestIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "requesterIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "destinationIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "destinationParticipant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "result",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sourceReference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowTaskFixDelivery",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "route",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "requestIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "requesterIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "destinationIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "destinationParticipant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sourceReference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "observation",
+              "type": "record",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "disposition",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "provenance",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowTaskFixAdoptionPreparationInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "delivery",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "requestIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "requesterIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "destinationIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "disposition",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowTaskFixAdoption",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "delivery",
+              "type": "WorkflowTaskFixDelivery",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "disposition",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "effect",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalTaskMalformedIssuedWorkRecoveryDescriptionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "oldContinuationId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalTaskMalformedIssuedWorkRecoveryInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "oldContinuationId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choice",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalTaskMalformedIssuedWorkRecoveryDescriptionResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "componentInstance",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choices",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "recoveryOperation",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "externalEffects",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "successorContinuationId",
               "type": "string",
               "multiplicity": "?",
               "required": false

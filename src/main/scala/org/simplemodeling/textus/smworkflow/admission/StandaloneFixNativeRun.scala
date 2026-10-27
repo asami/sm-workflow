@@ -32,11 +32,12 @@ private[smworkflow] object BoundedWorkRuntime {
     d.input.repositoryIdentity, d.target.root.toString, d.target.localBranch, d.candidatePaths,
     d.validationPolicy.toVector.flatMap(_.checks), d.executionProfiles, d.executionOrigin, d.reviewInstallation.map(_.evidence), d.evidencePolicy, d.journalPolicy)
   final case class Payload(state: S.State, root: String, branch: String, baseHead: String,
-    implementationWorker: Option[String] = None, unrelated: Option[Vector[G.DirtyPath]] = None, implementationWorkers: Option[Vector[String]] = None)
+    implementationWorker: Option[String] = None, unrelated: Option[Vector[G.DirtyPath]] = None, implementationWorkers: Option[Vector[String]] = None,
+    supersededWork: Option[String] = None)
   private given Encoder[G.DirtyPath] = deriveEncoder
   private given Decoder[G.DirtyPath] = deriveDecoder
   given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
-    case ("unrelated" | "implementationWorkers", value) => !value.isNull
+    case ("unrelated" | "implementationWorkers" | "supersededWork", value) => !value.isNull
     case _ => true
   }))
   given Decoder[Payload] = deriveDecoder
@@ -45,7 +46,7 @@ private[smworkflow] object BoundedWorkRuntime {
 /** Standalone business ownership over canonical CNCF persistence and execution.
   * No Phase Start, Plan, Step acceptance, commit or private command driver.
   * @since   Oct. 26, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   */
 private[smworkflow] object StandaloneFixNativeRun extends BoundedWorkNativeRun(false) {
   type Host = BoundedWorkRuntime.Host
@@ -116,11 +117,42 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean) {
       .getOrElse(invalid("Current frontier has no canonical standalone checkpoint"))
   } yield payload
 
+  /** Semantic intent only; the configured runtime owns concrete profile selection. */
+  private[admission] def executionRequirementC(input: S.Input, stage: String): Consequence[ExecutionRequirement] = {
+    import GoalPhaseWorkClassification.*
+    for {
+      _ <- if (Set("Implement", "Repair", "Review")(stage) && Set("code", "documentation")(input.kind))
+        Consequence.unit else invalid("Fresh work has no supported semantic classification")
+      required <- requiredC(stage)
+      kind = if (stage == "Review") Kind.REVIEW else if (input.kind == "code") Kind.CODING else Kind.DESIGN
+      requirement <- Classification(kind, Complexity.STANDARD, Domain.PROGRAMMING, Footprint.SMALL).requirementC(
+        ExecutionRequirement(Vector(CapabilityRequirement(required.identity.capability)), RiskLevel("SOURCE_IMPLEMENTATION"),
+          ReasoningLevel.Standard, stage == "Review"))
+    } yield requirement
+  }
+
+  /** New Starts must support both repair/implementation and possible independent review.
+    * Resolve classes without manufacturing an issued WorkOrder or execution observation.
+    */
+  private[admission] def preflightExecutionC(input: S.Input, profiles: Option[WorkflowExecutionProfileMapping],
+    origin: Option[GoalPhaseNativeExecution.Origin]): Consequence[Unit] = for {
+    _ <- GoalPhaseNativeExecution.validatePairC(profiles, origin)
+    mapping <- profiles.map(Consequence.success).getOrElse(invalid("New Start requires execution profiles and origin"))
+    current <- origin.map(Consequence.success).getOrElse(invalid("New Start requires execution profiles and origin"))
+    implementation <- executionRequirementC(input, if (task) "Implement" else "Repair")
+    review <- executionRequirementC(input, "Review")
+    _ <- mapping.resolveClassC(implementation.reasoningClass.get)
+    _ <- mapping.resolveClassC(review.reasoningClass.get)
+    _ <- mapping.resolveC(implementation, current.current, current.preference)
+    _ <- mapping.resolveC(review, current.current, current.preference)
+  } yield ()
+
   def startC(input: S.Input, participant: String, key: String, selection: String,
     selections: ProfileStartAdmission.CallScopedSelectionPort, h: Host, definition: DefinitionBinding,
     core: ActionCall.Core): Consequence[V.StandaloneFixView] = for {
     _ <- S.inputC(input)
     _ <- if (input.task.nonEmpty == task) Consequence.unit else invalid("Entry completion policy differs from the adopted input")
+    _ <- preflightExecutionC(input, h.profiles, h.origin)
     _ <- GoalPhaseParticipantAdmission.admitC(participant, core.executionContext)
     _ <- if (input.repositoryIdentity == h.repository && input.ownedPaths.forall(p => h.paths.contains(p))) Consequence.unit
       else invalid("Requested repository/paths exceed the configured host bindings")
@@ -190,13 +222,15 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean) {
             references <- recordEvidenceC(h, core, id, current.revision.value, done.result.value.asJson,
               "semantic-" + payload.state.stage, done.result.value.outcome)
             retained = next.copy(evidenceReferences = next.evidenceReferences ++ references)
-            saved <- saveC(h, storage, current, payload.copy(state = retained,
+            saved <- saveC(h, storage, current, payload.copy(state = retained, supersededWork = None,
               implementationWorker = if (Set("Repair", "Implement")(payload.state.stage)) done.evidence.workerIdentity else payload.implementationWorker,
               implementationWorkers = if ((task || payload.state.input.reviewOrigin.nonEmpty) && Set("Repair", "Implement")(payload.state.stage))
                 Some((payload.implementationWorkers.getOrElse(Vector.empty) ++ done.evidence.workerIdentity.toVector).distinct)
                 else payload.implementationWorkers), core)
           } yield saved
-        } else Consequence.success(current)
+        } else if (task && current.causation.value.startsWith(GoalTaskMalformedIssuedWorkRecovery.resumeCause))
+          GoalTaskMalformedIssuedWorkRecovery.resumeC(h, storage, current, core)
+        else Consequence.success(current)
         payload <- loadPayloadC(storage, id, state.revision.value, core)
         _ <- GoalPhaseParticipantAdmission.admitC(payload.state.participant, core.executionContext)
         response <- progressC(h, definition, storage, state, payload, core, 0)
@@ -368,11 +402,14 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean) {
   }
   private def issueC(h: Host, store: WorkflowComponentStorage, from: InstanceRecord, payload: Payload,
     core: ActionCall.Core): Consequence[V.StandaloneFixView] = for {
+    _ <- payload.supersededWork.fold(Consequence.unit)(old =>
+      GoalTaskMalformedIssuedWorkRecovery.correctionCurrentC(h, store, old, from.identity.value, core))
     _ <- if (payload.state.stage == "Implement") implementationFreshC(payload, core) else freshC(payload, core)
     required <- requiredC(payload.state.stage)
     work = S.Work(from.identity.value, from.revision.value.toString, payload.state.stage, payload.state)
     bundle = ContextBundle("Return only the assigned semantic result within the adopted objective and ownership. Native runtime owns validation, limits and acceptance. Review is independent and read-only; never execute commands or commit. If a prior review exists, judge only its retained findings, repair delta against priorReviewCandidate and affected meaning; preserve settled scope and applicable successful checks. Review-origin input retains the original review/context/findings: repair only these findings and affected meaning, return exact reviewDispositions and never repeat the original whole-repository review.",
-      (payload.state.input.sourceReferences ++ payload.state.input.reviewOrigin.toVector.flatMap(StandaloneReviewFix.references) ++ payload.state.evidenceReferences).distinct, Vector.empty,
+      (payload.state.input.sourceReferences ++ payload.state.input.reviewOrigin.toVector.flatMap(StandaloneReviewFix.references) ++ payload.state.evidenceReferences).distinct,
+      payload.supersededWork.toVector.map(id => ContextReference(id, "1")),
       ContextSnapshot(from.definition.workflowRevision.value, evidenceRevision = Some(work.sourceRevision)))
     continuation = Continuation(StateMachineRunIdentity(from.identity.value),
       ContinuationIdentity(from.identity.value + ":standalone:" + from.revision.next.value), StateMachineRevision(from.revision.next.value.toString), required, bundle)
@@ -383,12 +420,12 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean) {
         ContextSnapshotReference(bundle.snapshot.workflowRevision), CompletionReference(required.metadata.completionContract.identity),
         EvidenceReference(required.metadata.evidenceContract.identity), from.correlation)))
     handle <- WorkflowHandle.fromRecordC(SmWorkflowComponent.componentId, from)
+    requirement <- executionRequirementC(payload.state.input, work.kind)
     interaction = WorkflowInteraction[S.Work, Nothing](handle, WorkflowContinuation.WorkOrder(
       ContinuationRequest(continuation.runId, continuation.continuationId, continuation.expectedRevision, required.identity,
         required.operation, Some(TypedValue(inputCodec.typeIdentity, work)), required.resultType, bundle,
         required.metadata.completionContract, required.metadata.evidenceContract, completionOperation),
-      ExecutionRequirement(Vector(CapabilityRequirement(required.identity.capability)), RiskLevel("SOURCE_IMPLEMENTATION"),
-        ReasoningLevel.Standard, work.kind == "Review"), MinimalPresentation(entry + " " + work.kind, payload.state.input.objective)))
+      requirement, MinimalPresentation(entry + " " + work.kind, payload.state.input.objective)))
     selected <- GoalPhaseNativeExecution.bindIssuedC(interaction, h.profiles, h.origin)
     issued <- store.bindIssuedC(completionOperation, inputCodec)
     _ <- issued.suspendC(WorkflowInstanceAtomicTransitionV1.SuspensionIntent(WorkflowInstanceAtomicTransitionV1.schemaVersion,

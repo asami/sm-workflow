@@ -11,7 +11,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * establish actual terminal invocation evidence before attesting prior ended;
   * an AI-supplied Boolean or preparation output grants no authority.
   * @since   Oct. 22, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 object NativeClosureRecoveryPreparation {
@@ -21,15 +21,16 @@ object NativeClosureRecoveryPreparation {
     reference: V.WorkflowArtifactReference, execution: V.WorkflowExecutionEvidence,
     participant: String, issuer: String, occurredAt: Instant): Consequence[Prepared] = for {
     _ <- if (description != null && description.outcome == "decision-required" &&
-        description.choices == GoalPhaseClosureRecovery.choices &&
-        description.recoveryOperation == GoalPhaseClosureRecovery.recoveryOperation &&
+        description.recoveryOperation == GoalPhaseClosureRecovery.recoveryOperation) Consequence.unit
+      else Consequence.stateConflict("Closure recovery preparation requires the exact decision-required description and recovery operation")
+    target <- GoalPhaseClosureRecovery.targetC(description.target)
+    _ <- if (description.choices == GoalPhaseClosureRecovery.choicesFor(target) &&
         answer != null && (answer.choice == "Defer" || answer.priorExecutionEnded) && description.choices.contains(answer.choice) &&
         reference != null && _exact(reference.identity) && _exact(reference.revision) &&
         execution != null && execution.workerIdentity != null && execution.workerIdentity.contains(participant) &&
         execution.references != null && execution.references.nonEmpty &&
         _exact(participant) && _exact(issuer) && occurredAt != null) Consequence.unit
       else Consequence.stateConflict("Closure recovery preparation requires the exact description, affirmative prior-ended Human answer, execution evidence, matching worker, reference, issuer and time")
-    target <- GoalPhaseClosureRecovery.targetC(description.target)
     _ <- if (description.sessionId == target.sessionId && participant == target.participant) Consequence.unit
       else Consequence.stateConflict("Closure recovery preparation crosses its described Session or participant")
     binding <- GoalPhaseClosureRecovery.bindingC(description.componentInstance, target, answer.choice, answer.rationale,

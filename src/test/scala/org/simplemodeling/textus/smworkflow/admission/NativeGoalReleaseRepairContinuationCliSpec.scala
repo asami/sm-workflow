@@ -22,7 +22,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * All reviews and Human directions here are SPECIFICATION-OWNED test data.
   * No real Session, genuine approval, or manually seeded native receipt is used.
   * @since   Oct. 25, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
@@ -460,7 +460,8 @@ final class NativeGoalReleaseRepairContinuationCliSpec extends AnyWordSpec with 
         local.hcursor.downField("next").focus shouldBe Some(failednative)
         val expectedcompleted = localpayload.input.completed.map(value => V.GoalPhaseClosedStep(value.step,
           V.GoalPhaseNativeCommit(value.commit.identity, value.commit.parent, value.commit.tree), value.review,
-          admission = value.admission.map(a => GoalPhaseNativeMetadata.record(a.asJson))))
+          admission = value.admission.map(a => GoalPhaseNativeMetadata.record(a.asJson)),
+          partialCompletion = NativeWorkflowOperationOutput.goalClosedStep(value).partialCompletion))
         val parent = localpayload.input.completed.last.commit.identity
         val finalhead = s.candidateHead
         finalhead should not be parent

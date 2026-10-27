@@ -11,7 +11,7 @@ import GoalPhaseOrderedProgression.*
 /**
  * Pure controller evidence, not native Git/SBT, permission, storage or CLI proof.
  * @since   Oct.  6, 2026
- * @version Oct. 25, 2026
+ * @version Oct. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -45,6 +45,37 @@ final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers wi
   }
 
   "GoalPhase ordered deterministic controller" should {
+    "E67 retain the actual partial chain through next Step and Phase without accepting it as an ordinary direct child" in {
+      Given("docs/spec/goal-phase-closure-recovery.md R7,R8 E67: an accepted Closing candidate and a bound native P/C/D chain")
+      val accepted = reviewed(initial, oid('f'))
+      val pending = take(accepted.acceptC(ClosureIntentSaved(accepted.candidate.get, "partial-intent")))
+      val chain = StepCommitChain(base, Commit(oid('c'), base.head, oid('d')), Commit(oid('e'), oid('c'), oid('f')))
+      val event = StepPartialCompletionObserved("partial-intent", chain, oid('f'), Vector.empty)
+      When("the distinct chain event closes the original Step and normal work closes the next Step and Phase")
+      val first = take(pending.acceptC(event))
+      val all = close(first, oid('1'), oid('2'))
+      val observed = take(all.acceptC(CandidateObserved(all.tipSnapshot)))
+      val checked = take(observed.acceptC(ChecksObserved(all.tipSnapshot, plan.phaseChecks, "phase-check", true)))
+      val finalreview = take(checked.acceptC(ReviewAdmitted(work(checked), all.tipSnapshot,
+        "phase-check", "phase-review", ReviewOutcome.Accept)))
+      val terminal = take(finalreview.acceptC(PhaseLocallyCompleted(all.tipSnapshot, all.completed.map(_.commit), "phase-review")))
+      Then("D is the real next-Step tip and its actual parent C and original P remain visible in every completed prefix")
+      pending.acceptC(StepCommitObserved("partial-intent", chain.completion)).isSuccess shouldBe false
+      initial.acceptC(event).isSuccess shouldBe false
+      pending.acceptC(event.copy(chain = chain.copy(completion = chain.completion.copy(parent = base.head)))).isSuccess shouldBe false
+      first.completed.head.partialCompletion shouldBe Some(chain)
+      first.completed.head.commit.parent shouldBe chain.partial.identity
+      first.tipSnapshot shouldBe Snapshot(chain.completion.identity, chain.completion.tree)
+      first.generation shouldBe pending.generation + 1
+      first.repairs shouldBe 0
+      first.ordinaryRepairs shouldBe 0
+      all.completed(1).commit.parent shouldBe chain.completion.identity
+      terminal.stage shouldBe Stage.Closed
+      terminal.completed.head.partialCompletion shouldBe Some(chain)
+      terminal.base shouldBe base
+      validStepAcceptance(first.completed.head.copy(partialCompletion = Some(chain.copy(completion = chain.partial)))) shouldBe false
+    }
+
     "close a captured ordinary Release repair through one delta commit without reopening either completed Step" in {
       Given("two immutable accepted Steps and a successfully checked whole Phase")
       val all = close(close(initial, oid('c'), oid('d')), oid('e'), oid('f'))

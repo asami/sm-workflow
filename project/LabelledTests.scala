@@ -1,6 +1,6 @@
 import java.net.URLClassLoader
 import sbt._
-import sbt.testing.TestSelector
+import sbt.testing.{AnnotatedFingerprint, Fingerprint, Framework, SubclassFingerprint, TestSelector}
 
 /** SBT transport for canonical CNCF metadata. No persistent suite membership list. */
 object LabelledTests {
@@ -44,11 +44,48 @@ object LabelledTests {
       definition.name.matches(regex)
     })
 
-  private def _quoted(value: String): String = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
-  def arguments(selected: Seq[Selected]): Seq[String] = selected.map { value =>
-    val definition = value.definition
-    val names = definition.selectors.collect { case selector: TestSelector => selector.testName }.distinct
-    " " + definition.name + " -- " + names.map(name => "-t " + _quoted(name)).mkString(" ")
+  /** One SBT runner receives the exact suite-local selectors. There is no
+    * conversion back to framework arguments and no union of test names.
+    */
+  def group(selected: Seq[Selected]): Tests.Group = {
+    require(selected.nonEmpty, "Empty metadata selection is not PASS")
+    require(selected.map(_.definition.name).distinct.size == selected.size, "Duplicate selected suite")
+    require(selected.forall(_.definition.selectors.nonEmpty), "Selected suite has no operations")
+    Tests.Group("metadata-selected", selected.map(_.definition), Tests.InProcess)
+  }
+
+  /** Public sbt Tests/test-interface APIs only. One runner per matching
+    * framework sees the entire selected group; its genuine done() summary is
+    * retained verbatim for the standard TestResultLogger.
+    */
+  def execute(selected: Seq[Selected], frameworks: Map[TestFramework, Framework], loader: ClassLoader,
+    execution: Tests.Execution, log: sbt.internal.util.ManagedLogger): Task[Tests.Output] = {
+    val definitions = group(selected).tests.toVector
+    def matches(a: Fingerprint, b: Fingerprint): Boolean = (a, b) match {
+      case (x: SubclassFingerprint, y: SubclassFingerprint) =>
+        x.isModule == y.isModule && x.superclassName == y.superclassName
+      case (x: AnnotatedFingerprint, y: AnnotatedFingerprint) =>
+        x.isModule == y.isModule && x.annotationName == y.annotationName
+      case _ => false
+    }
+    val matching = frameworks.filter { case (_, framework) =>
+      definitions.exists(test => framework.fingerprints().exists(matches(test.fingerprint, _)))
+    }
+    require(definitions.forall(test => matching.values.exists(_.fingerprints().exists(matches(test.fingerprint, _)))),
+      "A selected suite has no loaded test framework")
+    val runners = matching.map { case (identity, framework) =>
+      val arguments = execution.options.collect {
+        case argument: Tests.Argument if argument.framework.forall(_ == identity) => argument.args
+      }.flatten
+      identity -> framework.runner(arguments.toArray, Array.empty[String], loader)
+    }
+    // This public Vector overload owns option filtering/setup/cleanup internally.
+    // Its ProcessedOptions overload is unusable outside sbt's package boundary.
+    Tests(matching, loader, runners, definitions, execution, log).map { output =>
+      output.copy(summaries = runners.map { case (identity, runner) =>
+        Tests.Summary(matching(identity).name(), runner.done())
+      }.toVector)
+    }
   }
 
   def select(classpath: Seq[File], classes: File, revision: String, purpose: String,

@@ -113,7 +113,8 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                          "--selection-collection", "entity:smworkflow.cli.repository_selections")
 
     def preparation_command(self, operation, value):
-        return [str(self.executable), "--runtime-root", str(self.runtime_root), "command", "org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService." + operation,
+        return [str(self.executable), "--runtime-root", str(self.runtime_root),
+                "--textus.assembly.descriptor=" + str(self.runtime_root / ".textus/assembly.yaml"), "command", "org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService." + operation,
                 "--input", json.dumps(value, ensure_ascii=False), "--json"]
 
     def repository_command(self, argv):
@@ -201,8 +202,18 @@ class NativeGoalCommandSpecification(unittest.TestCase):
         return status, output.getvalue(), diagnostic.getvalue(), native
 
     def command(self, operation, *pairs):
-        return [str(self.executable), "--runtime-root", str(self.runtime_root), "command", "org.simplemodeling.textus.SmWorkflow.GoalPhaseService." + operation,
+        return [str(self.executable), "--runtime-root", str(self.runtime_root),
+                "--textus.assembly.descriptor=" + str(self.runtime_root / ".textus/assembly.yaml"), "command", "org.simplemodeling.textus.SmWorkflow.GoalPhaseService." + operation,
                 *pairs, "--json"]
+
+    def test_command_prefix_selects_exact_existing_host_assembly_before_command(self):
+        # The host descriptor is an explicit routing prerequisite, not a new user grant.
+        descriptor = self.runtime_root / ".textus/assembly.yaml"
+        original = descriptor.read_bytes()
+        self.assertEqual(CALLER.command_prefix(self.executable, self.runtime_root), [
+            str(self.executable), "--runtime-root", str(self.runtime_root),
+            "--textus.assembly.descriptor=" + str(descriptor), "command"])
+        self.assertEqual(descriptor.read_bytes(), original)
 
     def assert_one_call(self, native, command):
         native.assert_called_once()

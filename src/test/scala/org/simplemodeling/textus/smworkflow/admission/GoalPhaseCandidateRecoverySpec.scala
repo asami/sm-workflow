@@ -20,7 +20,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Pure contract and passive preparation evidence; these inputs grant no real Human authority.
   * @since   Oct. 22, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -161,7 +161,115 @@ final class GoalPhaseCandidateRecoverySpec extends AnyWordSpec with NativeGoalSo
     }
   }
 
+  "E5 partial prefix preparation" should afterWord(
+    "in spec:goal-phase-closure-recovery, example:E5, rules:R8, phase:CB-P67-PC05") {
+    "accept later-Step and whole-Phase preparation absence while requiring exact evidence for the completed Phase candidate" in {
+      Given("docs/spec/goal-phase-closure-recovery.md R8 E5: typed events complete the first Step of a two-Step Plan with an accepted partial chain")
+      val original = _target.controller.plan
+      val first = original.steps.head
+      val second = first.copy(identity = "step-2", dependencies = Vector(first.identity))
+      val plan = original.copy(steps = Vector(first, second))
+      val started = take(O.startC(plan, _base))
+      val ready = take(started.acceptC(O.SemanticCompleted(started.next.asInstanceOf[O.Semantic].key, "First implementation ready")))
+      val candidate = O.Snapshot(_base.head, "e" * 40)
+      val inspected = take(ready.acceptC(O.CandidateObserved(candidate)))
+      val checked = take(inspected.acceptC(O.ChecksObserved(candidate, first.checks, "first-checks", true)))
+      val reviewed = take(checked.acceptC(O.ReviewAdmitted(checked.next.asInstanceOf[O.Semantic].key, candidate,
+        "first-checks", "first-review", O.ReviewOutcome.Accept)))
+      val pending = take(reviewed.acceptC(O.ClosureIntentSaved(candidate, "first-partial")))
+      val chain = O.StepCommitChain(_base, O.Commit("c" * 40, _base.head, "d" * 40),
+        O.Commit("f" * 40, "c" * 40, candidate.tree))
+      val firstclosed = take(pending.acceptC(O.StepPartialCompletionObserved("first-partial", chain, candidate.tree, Vector.empty)))
+      val laterready = take(firstclosed.acceptC(O.SemanticCompleted(firstclosed.next.asInstanceOf[O.Semantic].key, "Second implementation ready")))
+      val selected = C.Payload("10", first.identity, Vector(sourcePath), Vector(sourcePath), Some(candidate),
+        Vector(sourcePath), Some("first accepted diff"))
+      val laterinspection = C.Payload("20", second.identity, Vector("docs/guide.md"), Vector.empty, None, Vector.empty, None)
+      val latercandidate = O.Snapshot(chain.completion.identity, "1" * 40)
+      val laterselected = laterinspection.copy(stagedPaths = laterinspection.selectedPaths, candidate = Some(latercandidate),
+        changedPaths = laterinspection.selectedPaths, diff = Some("second accepted diff"))
+      When("retained loading examines a later-Step inspection and completed candidate after the accepted partial prefix")
+      val laterreceipts = Vector(laterinspection, laterselected)
+      val lateradmitted = laterreceipts.map(C.retainedEvidenceC(_, laterready, Vector(selected), Vector.empty))
+      Then("neither later-Step receipt requires whole-Phase evidence and both preserve absent evidence through the codec")
+      laterready.cursor shouldBe 1
+      lateradmitted.foreach(_.isSuccess shouldBe true)
+      laterreceipts.foreach { value =>
+        value.stepEvidence shouldBe None
+        C.codec.decode(C.codec.encode(value)) shouldBe Right(value)
+      }
+
+      Given("typed events also complete the second Step and enter whole-Phase inspection with inspection and staging receipts still lacking a candidate")
+      val laterseen = take(laterready.acceptC(O.CandidateObserved(latercandidate)))
+      val laterchecked = take(laterseen.acceptC(O.ChecksObserved(latercandidate, second.checks, "second-checks", true)))
+      val laterreviewed = take(laterchecked.acceptC(O.ReviewAdmitted(laterchecked.next.asInstanceOf[O.Semantic].key, latercandidate,
+        "second-checks", "second-review", O.ReviewOutcome.Accept)))
+      val laterpending = take(laterreviewed.acceptC(O.ClosureIntentSaved(latercandidate, "second-closure")))
+      val latercommit = O.Commit("2" * 40, chain.completion.identity, latercandidate.tree)
+      val closed = take(laterpending.acceptC(O.StepCommitObserved("second-closure", latercommit)))
+      val phaseinspection = C.Payload("30", "phase:" + plan.phase, Vector("docs/guide.md"), Vector.empty,
+        None, Vector.empty, None)
+      val phasestaged = phaseinspection.copy(stagedPaths = phaseinspection.selectedPaths)
+      val evidence = Vector(C.StepEvidence(first.identity, candidate, selected.changedPaths, selected.diff.get,
+        chain.completion, Vector.empty, Some(chain)),
+        C.StepEvidence(second.identity, latercandidate, laterselected.changedPaths, laterselected.diff.get,
+          latercommit, Vector.empty))
+      val phase = phasestaged.copy(candidate = Some(closed.tipSnapshot),
+        changedPaths = evidence.flatMap(_.changedPaths).distinct,
+        diff = Some("Phase aggregate\n" + evidence.map(_.diff).mkString("\n")), stepEvidence = Some(evidence))
+      val completed = Vector(selected, laterselected)
+      val preparation = Vector(phaseinspection, phasestaged)
+      When("retained loading checks in-progress whole-Phase receipts and the final candidate with absent or exact Step evidence")
+      val preparationadmitted = preparation.map(C.retainedEvidenceC(_, closed, completed, phaseinspection.selectedPaths))
+      val missing = C.retainedEvidenceC(phase.copy(stepEvidence = None), closed, completed, phaseinspection.selectedPaths)
+      val exact = C.retainedEvidenceC(phase, closed, completed, phaseinspection.selectedPaths)
+      Then("inspection and staging absence remain valid while only the completed whole-Phase candidate requires the exact accepted Step evidence")
+      closed.cursor shouldBe plan.steps.size
+      closed.stage shouldBe O.Stage.PhaseInspection
+      preparationadmitted.foreach(_.isSuccess shouldBe true)
+      preparation.foreach { value =>
+        value.candidate shouldBe None
+        value.stepEvidence shouldBe None
+        C.codec.decode(C.codec.encode(value)) shouldBe Right(value)
+      }
+      missing.isSuccess shouldBe false
+      exact.isSuccess shouldBe true
+      C.codec.decode(C.codec.encode(phase)) shouldBe Right(phase)
+    }
+  }
+
   "GoalPhase candidate recovery E9 retained Phase evidence" should afterWord("in spec:goal-phase-candidate-recovery, example:E9, rules:R1,R4, phase:CB-CC04-CAND-02") {
+    "retain an exact partial chain in whole Phase StepEvidence and reject a dropped or substituted chain" in {
+      Given("docs/spec/goal-phase-closure-recovery.md R8 E67: an accepted Step completed by a bound partial chain")
+      val plan = _target.controller.plan
+      val started = take(O.startC(plan, _base))
+      val ready = take(started.acceptC(O.SemanticCompleted(started.next.asInstanceOf[O.Semantic].key, "Ready")))
+      val candidate = O.Snapshot(_base.head, "e" * 40)
+      val inspected = take(ready.acceptC(O.CandidateObserved(candidate)))
+      val checked = take(inspected.acceptC(O.ChecksObserved(candidate, plan.steps.head.checks, "checks", true)))
+      val reviewed = take(checked.acceptC(O.ReviewAdmitted(checked.next.asInstanceOf[O.Semantic].key, candidate,
+        "checks", "review", O.ReviewOutcome.Accept)))
+      val pending = take(reviewed.acceptC(O.ClosureIntentSaved(candidate, "partial")))
+      val chain = O.StepCommitChain(_base, O.Commit("c" * 40, _base.head, "d" * 40), O.Commit("f" * 40, "c" * 40, candidate.tree))
+      val closed = take(pending.acceptC(O.StepPartialCompletionObserved("partial", chain, candidate.tree, Vector.empty)))
+      val selected = C.Payload("10", "step-1", Vector(sourcePath), Vector(sourcePath), Some(candidate), Vector(sourcePath), Some("accepted diff"))
+      val evidence = C.StepEvidence("step-1", candidate, selected.changedPaths, selected.diff.get, chain.completion, Vector.empty, Some(chain))
+      val phase = C.Payload("20", "phase:" + plan.phase, Vector.empty, Vector.empty, Some(closed.tipSnapshot),
+        selected.changedPaths, Some("Phase aggregate\naccepted diff"), stepEvidence = Some(Vector(evidence)))
+      When("the native candidate codec and recording-only evidence comparison reconstruct that completed Step")
+      val decoded = C.codec.decode(C.codec.encode(phase))
+      val admitted = C.retainedEvidenceC(phase, closed, Vector(selected), Vector.empty)
+      Then("the accepted candidate diff normalization and actual native parent are kept together")
+      decoded shouldBe Right(phase)
+      admitted.isSuccess shouldBe true
+      decoded.toOption.get.stepEvidence.get.head.partialCompletion shouldBe Some(chain)
+      C.retainedEvidenceC(phase.copy(stepEvidence = None), closed, Vector(selected), Vector.empty).isSuccess shouldBe false
+      C.retainedEvidenceC(phase.copy(stepEvidence = Some(Vector(evidence.copy(partialCompletion = None)))), closed, Vector(selected), Vector.empty).isSuccess shouldBe false
+      val other = chain.copy(partial = chain.partial.copy(tree = "1" * 40))
+      C.retainedEvidenceC(phase.copy(stepEvidence = Some(Vector(evidence.copy(partialCompletion = Some(other))))), closed, Vector(selected), Vector.empty).isSuccess shouldBe false
+      val ordinary = evidence.copy(partialCompletion = None)
+      ordinary.asJson.hcursor.downField("partialCompletion").focus shouldBe None
+    }
+
     "validate exact closed Step structure without consulting current Git" in {
       Given("CB-CC04-CAND-02: pure accepted Step facts with an explicit descendant candidate and scoped Phase evidence")
       val plan = _target.controller.plan

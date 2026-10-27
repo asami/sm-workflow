@@ -19,7 +19,7 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
   * Completion operations cannot issue these records. Configuration selects the
   * trusted issuer/read destination; it is not evidence, consent or a grant.
   * @since   Oct.  7, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   */
 private[smworkflow] object NativeExternalEvidence {
   val prefix = "sm-workflow.external-evidence."
@@ -30,6 +30,7 @@ private[smworkflow] object NativeExternalEvidence {
     case SplitStart extends Purpose(SplitPhaseTypedStartHumanVerification.purpose)
     case SplitAnswer extends Purpose(SplitPhaseHumanAnswerVerification.purpose)
     case StandaloneReview extends Purpose("standalone-fix-independent-review")
+    case GoalTaskMalformedIssuedWorkRecovery extends Purpose("goal-task-malformed-issued-work-recovery")
     case GoalReview extends Purpose("goal-phase-independent-review")
     case RepositoryReview extends Purpose("repository-sync-independent-review")
     case StepClosure extends Purpose("goal-phase-step-closure")
@@ -109,6 +110,13 @@ private[smworkflow] object NativeExternalEvidence {
       else Consequence.configurationInvalid("Native host evidence requires the common store and a separate input collection")
   } yield new Reader(declaration)
 
+  def bindBoundedC(host: ResolvedConfiguration, workflow: BoundedWorkRuntime.Host): Consequence[Reader] = for {
+    declaration <- decodeDeclarationC(host)
+    _ <- if (declaration.storeName == workflow.configuration.workflowStore.name &&
+        declaration.collection != workflow.instances && declaration.collection != workflow.continuations) Consequence.unit
+      else Consequence.configurationInvalid("Task evidence requires the common store and separate input collection")
+  } yield new Reader(declaration)
+
   def admitReadC(host: ResolvedConfiguration, store: String, collection: DataStore.CollectionId): Consequence[Unit] =
     decodeDeclarationC(host).flatMap { declared =>
       if (declared.storeName == store && declared.collection == collection) Consequence.unit
@@ -161,6 +169,12 @@ private[smworkflow] object NativeExternalEvidence {
           selected.hcursor.downField("humanAttestation").downField("answer").downField("reference").get[String]("identity").contains(value.reference) &&
           selected.hcursor.downField("humanAttestation").downField("answer").downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
       else Consequence.securityPermissionDenied("Independent Human attestation belongs to another actual participant or answer reference")
+    } else if (purpose == Purpose.GoalTaskMalformedIssuedWorkRecovery) {
+      val answer = selected.hcursor.downField("goalTaskMalformedIssuedWorkRecovery").downField("answer")
+      if (answer.get[String]("participant").contains(value.participant) &&
+          answer.downField("reference").get[String]("identity").contains(value.reference) &&
+          answer.downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
+      else Consequence.securityPermissionDenied("Task recovery Human evidence crosses its participant or reference")
     } else if (purpose == Purpose.RepositoryValidationContinuation || purpose == Purpose.ValidationRecovery || purpose == Purpose.SourceHistoryRecovery || purpose == Purpose.SourceHistoryNormalization || purpose == Purpose.CandidateRecovery ||
         purpose == Purpose.CandidateObservationContinuation || purpose == Purpose.WholePhaseCandidateRecovery ||
         purpose == Purpose.ClosureRecovery || purpose == Purpose.RemainingPlanAdoption || purpose == Purpose.FailedPhaseRepairAdoption ||
@@ -201,6 +215,7 @@ private[smworkflow] object NativeExternalEvidence {
     .map(Consequence.success).getOrElse(Consequence.stateConflict("Native host evidence purpose is unsupported"))
   private def selectedC(purpose: Purpose, value: Json): Consequence[Json] = {
     val selected = purpose match {
+      case Purpose.GoalTaskMalformedIssuedWorkRecovery => GoalTaskMalformedIssuedWorkRecovery.selectBinding(value)
       case Purpose.RepositoryEffect | Purpose.StepClosure | Purpose.PhaseClosure => NativeAuthorityScope.select(purpose, value)
       case Purpose.StandaloneReview | Purpose.GoalReview | Purpose.RepositoryReview => NativeReviewScope.select(purpose, value)
       case Purpose.GoalHuman | Purpose.RepositoryHuman => NativeHumanDecisionScope.select(purpose, value)

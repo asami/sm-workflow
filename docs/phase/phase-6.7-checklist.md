@@ -45,3 +45,31 @@ phase-scoped conditions; actual native/installed evidence remains required.
 T3 source handoff: [2026-10-27 review-origin implementation boundary](../journal/2026/10/2026-10-27-phase-6.7-t3-source-handoff.md).
 Original-finding attribution specifications do not close phase-scoped or
 installed acceptance conditions.
+
+T4 source handoff: [2026-10-27 packaging and existing-chat boundary](../journal/2026/10/2026-10-27-phase-6.7-t4-source-handoff.md).
+Plan revision 2 admitted the current Step's authored CAR ABI inventory. Actual
+runtime-owned publication and dedicated activation succeeded, and the published
+CAR contains the matching ABI and all six skills in 23 regular resources. The
+three new skills and five matching contracts were added to shared host discovery.
+The genuinely authorized existing-chat Task started once. Its old incomplete
+execution request was retained through the approved Supersession recovery, and
+one separately authorized successor completed actual implementation, native
+Compile and one suite/five tests, independent integrated Review and scoped local
+commit `07e623c2bc0a5f5c9c2d893a4ad5bc92ee031811`. The unchanged final public
+response was returned to the requester. It retains the warning that Common
+Evidence archive returned no allocation; completion does not establish successful
+archive/Journal projection. Public delivery preparation then rejected ordinary
+snake-case state fields. The same-purpose adapter correction and regressions
+passed affected independent source review. Runtime-owned publication071
+completed with exit0 and activated dedicated image0d19a544. Installed public
+delivery072 returned completed-committed; requester adoption preparation073
+returned adopt as an attachment only. Native T4 and Phase acceptance remain pending. Task success is retained without replay. See the T4
+handoff for exact source artifacts. The consumer fresh-issue classification
+and new-Start preflight fix was published and activated as image6cf10ee0. Separate
+actual installed failing-test and compiler-failure FIX Sessions reached Accepted:
+each passed Compile and three focused tests after repair, retained its original
+failure, and made no implicit commit. The compiler case retained affected tests
+as not executed during failure. These are actual standalone observations; Task
+native T4 acceptance, remaining variants and integrated
+Phase qualification are still pending. No box is closed by packaging, dispatch
+or source fixtures.

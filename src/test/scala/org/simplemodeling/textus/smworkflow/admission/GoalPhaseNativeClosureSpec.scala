@@ -15,7 +15,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Pure native-shaped records and typed blob facts; no installed effect or authority proof.
   * @since   Oct. 19, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -64,6 +64,65 @@ final class GoalPhaseNativeClosureSpec extends AnyWordSpec with Matchers with Gi
     Path.of(".").toRealPath(), "main", "origin", "main", "fixture-upstream.git")
 
   "Native selected Step attempts" should {
+    "E67 require full physical coverage and retain adjacent completion intent execution and v4 chain without replay authority" in {
+      Given("docs/spec/goal-phase-closure-recovery.md R7,R8 E67: accepted original work and a known successful partial commit")
+      val from = _frontier
+      val input = _input(from)
+      val old = _attempt(from, K.Payload(input, 1, None, check = Some(_clean)), true)
+      val summary = R.Execution(input, 1, 0, "commit-selected", "sm-workflow-repository", "succeeded",
+        Some("Exited(0)"), Some(0), "", Vector(_paths.head))
+      val original = R.ExecutionSaved(_append(old.intent.get.record, "execution-result"), summary)
+      val partial = O.Commit("d" * 40, _base.head, "e" * 40)
+      val changes = _paths.sorted.map(path => GoalPhasePartialCommitClosure.Change(path, "100644", "100644", Some("1" * 40), Some("2" * 40)))
+      val proof = GoalPhasePartialCommitClosure.Proof(_base, partial, _candidate.tree, Vector.empty, changes,
+        changes.filter(_.path == _paths.head), changes.filterNot(_.path == _paths.head), Vector(_paths.last))
+      val observed = R.Observation("/fixture/repository", "main", partial.identity, partial.tree, _candidate.tree, None,
+        Vector(RepositorySyncManagedGitObservation.DirtyPath('M', ' ', _paths.last, None)), proof.selectedPaths, true,
+        _paths, RepositorySyncManagedGitObservation.Commit(partial.identity, partial.tree, Vector(_base.head)))
+      val target = R.RecoveryTarget(input.instance, from.definition.workflowIdentity.value, from.definition.workflowRevision.value,
+        "participant", input.plan, input.planRevision, input.step, input.generation, input.sourceRevision,
+        original.record.revision.value.toString, R.reference(input, "intent", 0).identity, "1", old.intent.get.record.revision.value.toString,
+        1, 0, _base, _candidate, input.reviewEvidence, _paths, observed, Some(summary), partialCompletion = Some(proof))
+      val direction = R.DirectionSaved(_append(original.record, "recovery"), R.Direction(target, "CompletePartialCommit",
+        "Specification-owned exact completion", "participant", org.goldenport.cncf.workflow.ContextReference("human", "1"), true))
+      val progress = take(K.reconcileAttemptsC(from, input, 1, Vector(old.copy(execution = Some(original), direction = Some(direction)))))
+      val intent = GoalPhasePartialCommitClosure.Intent(direction.payload, old.intent.get.payload)
+      val prepared = _append(direction.record, "partial-completion-intent")
+      val execution = GoalPhasePartialCommitClosure.Execution(intent, summary.copy(selectedPaths = Vector(_paths.last)))
+      val executed = _append(prepared, "partial-completion-execution")
+      val chain = O.StepCommitChain(_base, partial, O.Commit("f" * 40, partial.identity, _candidate.tree))
+      val completed = intent.original.copy(commit = Some(chain.completion), partialCompletion = Some(chain))
+      When("recording-only reconstruction consumes each adjacent retained prefix and the completed v4 receipt")
+      val unknown = take(K.partialProgressC(progress, Some(prepared -> intent), None))
+      val succeeded = take(K.partialProgressC(progress, Some(prepared -> intent), Some(executed -> execution)))
+      val failed = take(K.partialProgressC(progress, Some(prepared -> intent), Some(executed -> execution.copy(
+        result = execution.result.copy(outcome = "failed", termination = Some("Exited(128)"), exitCode = Some(128))))))
+      Then("unknown and actual failed results retain distinct facts and neither grants a second attempt or a completed receipt")
+      GoalPhasePartialCommitClosure.coverage(_paths, Vector(_paths.head)) shouldBe false
+      GoalPhasePartialCommitClosure.coverage(_paths, Vector("src", "docs")) shouldBe true
+      unknown.nextAttempt shouldBe None
+      unknown.completionExecution shouldBe None
+      failed.nextAttempt shouldBe None
+      failed.completionExecution.get._2.result.outcome shouldBe "failed"
+      K.completedPartialC(completed, unknown).isSuccess shouldBe false
+      K.completedPartialC(completed, failed).isSuccess shouldBe false
+      K.completedPartialC(completed, succeeded).isSuccess shouldBe true
+      K.completedPartialC(completed.copy(partialCompletion = None), succeeded).isSuccess shouldBe false
+      K.partialProgressC(progress, Some(executed -> intent), Some(prepared -> execution)).isSuccess shouldBe false
+      K.codec.decode(K.codec.encode(completed)) shouldBe Right(completed)
+      K.codec.encode(completed).hcursor.get[String]("schemaVersion") shouldBe Right("sm-workflow.goal-phase-native-step-closure.v4")
+      GoalPhasePartialCommitClosure.intentCodec.decode(GoalPhasePartialCommitClosure.intentCodec.encode(intent)) shouldBe Right(intent)
+      GoalPhasePartialCommitClosure.executionCodec.decode(GoalPhasePartialCommitClosure.executionCodec.encode(execution)) shouldBe Right(execution)
+      succeeded.pending shouldBe old.intent
+      succeeded.record.history.take(original.record.history.size) shouldBe original.record.history
+      succeeded.completionIntent.get._2.original.input shouldBe input
+      val forged = completed.copy(commit = Some(chain.completion.copy(parent = _base.head)))
+      K.codec.decode(K.codec.encode(forged)).isLeft shouldBe true
+      val v3 = K.codec.encode(intent.original)
+      v3.hcursor.get[String]("schemaVersion") shouldBe Right("sm-workflow.goal-phase-native-step-closure.v3")
+      v3.hcursor.downField("payload").downField("partialCompletion").focus shouldBe None
+    }
+
     "bind closure input to the proven candidate parent while preserving the original Phase base" in {
       Given("an integrated descendant candidate with fresh checks and admitted independent review")
       val initial = take(O.startC(_plan, _base))

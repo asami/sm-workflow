@@ -18,7 +18,7 @@ import StandaloneFixExecution as S
 
 /** Ordinary public operations around the canonical CNCF continuation engine.
   * @since   Oct. 26, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   */
 private[smworkflow] object GoalTaskService {
   def bindC(creation: ComponentCreate, declaration: GoalPhaseNativeRun.Declaration): Consequence[spec.ServiceDefinition] = for {
@@ -32,12 +32,15 @@ private[smworkflow] object GoalTaskService {
     definition <- GoalTaskRuntimeCatalog.loadC()
     storage <- WorkflowComponentStorage.bindC(creation, SmWorkflowComponent.componentId, h.configuration,
       Vector(definition), h.instances, h.continuations)
+    reader <- NativeExternalEvidence.bindBoundedC(creation.configuration, h)
+    recovery = GoalTaskMalformedIssuedWorkRecovery.operations(h, definition,
+      new ThreeWorkflowExternalEvidencePorts(reader).goalTaskMalformedIssuedWorkRecovery)
     completion <- completionC(h, definition, storage, None, None)
     wrapped = CallScopedOperationBinding.wrapResult(completion, (core, submitted) =>
       N.storageC(h, definition, core).flatMap(storage => completionC(h, definition, storage, Some(core), Some(submitted))))
     service = NativeWorkflowDescriptionMetadata.service(SmWorkflowComponent.GoalTaskServiceService,
       spec.OperationDefinitionGroup(NonEmptyVector.of(new Operation(true, h, definition, selections),
-        new Operation(false, h, definition, selections), new InformationOperation(h, definition), wrapped)))
+        new Operation(false, h, definition, selections), new InformationOperation(h, definition), wrapped).concat(recovery)))
   } yield NativeWorkflowResultInput.task(service, creation, h, definition)
 
   private final class Operation(start: Boolean, h: Host, definition: DefinitionBinding,

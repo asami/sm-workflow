@@ -1335,6 +1335,16 @@ OperationResult
 | parent | string | 1 |
 | tree | string | 1 |
 
+## GoalPhaseStepCommitChain
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| originalParent | GoalPhaseNativeSnapshot | 1 |
+| partial | GoalPhaseNativeCommit | 1 |
+| completion | GoalPhaseNativeCommit | 1 |
+
 ## GoalPhaseClosedStep
 
 ### ATTRIBUTE
@@ -1345,6 +1355,7 @@ OperationResult
 | commit | GoalPhaseNativeCommit | 1 |
 | review | string | ? |
 | admission | org.goldenport.record.Record | ? |
+| partialCompletion | GoalPhaseStepCommitChain | ? |
 
 ## GoalPhaseRepairDirective
 
@@ -1789,6 +1800,7 @@ OperationResult
 | diff | string | 1 |
 | validation | GoalPhaseNativeValidationView | 1 |
 | initialPhaseRepair | WorkflowArtifactReference | ? |
+| stepTestReportRepair | WorkflowArtifactReference | ? |
 
 ## GoalPhaseWorkResult
 
@@ -3500,6 +3512,11 @@ on = release-repair-continuation-admitted
 
 to = Repair
 on = initial-phase-check-repair-admitted
+
+##### TRANSITION
+
+to = Repair
+on = step-test-report-repair-admitted
 
 ##### TRANSITION
 
@@ -5736,7 +5753,7 @@ GoalPhaseAdvanceResult
 
 ##### DESCRIPTION
 
-Describe only the exact paused selected-Step Closing intent without a committed result. Return its original source and current frontier, definition, participant, Plan, generation, ordinal and attempt, parent, reviewed candidate, accepted review, any actual saved execution summary and current typed read-only Git observation including the physical selectedPaths. Old intents without summaries remain unknown. Description observes Git through the owning UnitOfWork, appends no native record and grants no authority. Clean checks without commit intents and all other stages refuse.
+Describe only the exact paused selected-Step Closing intent without a committed result. Return its original source and current frontier, definition, participant, Plan, generation, ordinal and attempt, parent, reviewed candidate, accepted review, any actual saved execution summary and current typed read-only Git observation including the physical selectedPaths. CompletePartialCommit is offered only for a proved succeeded/Exited(0) partial commit: bind the original parent, actual partial commit, accepted candidate and admitted EOF normalization, exact remainder paths/blobs/modes, expected final tree and physical selection. Old intents without summaries remain unknown. Description observes Git through the owning UnitOfWork, appends no native record and grants no authority. Clean checks without commit intents and all other stages refuse.
 
 ##### TYPE
 
@@ -5764,7 +5781,7 @@ GoalPhaseClosureRecoveryDescriptionResult
 
 ##### DESCRIPTION
 
-Accept AuthorizeNewAttempt, ReconcileCommit or Defer for the exact current described target with separately installed goal-phase-closure-recovery Human evidence. Effect-bearing direction requires priorExecutionEnded=true independently attested by the trusted host using actual old invocation terminal evidence; unchanged HEAD and missing receipts prove neither termination nor nonexecution. AuthorizeNewAttempt requires the original parent, exact reviewed index and safe nonempty physical selection within original ownership. ReconcileCommit requires an actual single-parent child of that parent with the reviewed tree and clean selected state. Append only immutable mechanical direction; a separate ordinary Advance rechecks live Git and selection, then creates a fresh check/intent and invokes one commit, or records the matching observed commit without another commit. Keep old intent/result uncertainty, accepted checks/review, Session, history, Plan and counters. Defer changes nothing and needs no prior-ended assertion. Stale, duplicate, crossed or foreign targets and selection drift refuse. No Start, semantic Submit, automatic replay or accepted-check rerun occurs.
+Accept AuthorizeNewAttempt, ReconcileCommit, applicable CompletePartialCommit or Defer for the exact current described target with separately installed goal-phase-closure-recovery Human evidence. Effect-bearing direction requires priorExecutionEnded=true independently attested by the trusted host using actual old invocation terminal evidence; unchanged HEAD and missing receipts prove neither termination nor nonexecution. AuthorizeNewAttempt requires the original parent, exact reviewed index and safe nonempty physical selection within original ownership. ReconcileCommit requires an actual single-parent child of that parent with the reviewed tree and clean selected state. CompletePartialCommit requires a known successful direct partial commit whose native path/blob/mode changes are contained in the accepted final tree and whose exact nonempty staged remainder is fully covered by the actual physical selection. Append only immutable mechanical direction; a separate ordinary Advance rechecks live Git and selection, writes a distinct completion intent and persists the actual execution before closing the actual original-parent -> partial -> completion chain. Ordinary closure still requires one direct-parent commit. An UNKNOWN completion intent is never replayed; an actual failed completion stays failed and grants no retry. Keep old intent/result uncertainty, accepted checks/review, Session, history, Plan and counters. Defer changes nothing and needs no prior-ended assertion. Stale, duplicate, crossed or foreign targets and selection drift refuse. No Start, semantic Submit, automatic replay or accepted-check rerun occurs.
 
 ##### TYPE
 
@@ -6188,7 +6205,7 @@ GoalPhaseDependencySourceRevisionAdoptionResult
 
 ##### DESCRIPTION
 
-Read the actual unanswered implementation or repair Decision and the supplied raw complete Plan proposal. Capture the effective future contract and actual selected documents into the exact remaining-Plan adoption target. Return the retained complete Plan, accepted Step prefix, original base, repair counters and source references as business data. This operation does not answer the old question, issue work, execute checks or grant adoption. Only a separate independently admitted Human directive may select that compatible remaining Plan. Unknown effects, exhausted repair windows and closed or incompatible frontiers refuse.
+Read the actual unanswered implementation or repair Decision and the supplied raw complete Plan proposal. Capture the effective future contract and actual selected documents into the exact remaining-Plan adoption target. A distinct current primary-Component inventory branch permits only a strict literal ownedPaths append on the current uncompleted Step with every other Plan value and saved effective condition unchanged. Require every added path explicitly in the same repository host candidatePaths; describe the Component instance, Step, appended paths and complete ordered staging inventory. Plan direction grants no host staging or Git-selection registration. Return the retained complete Plan, accepted Step prefix, original base, repair counters and source references as business data. This operation does not answer the old question, issue work, execute checks or grant adoption. Only a separate independently admitted Human directive may select that compatible remaining Plan. Unknown effects and closed or incompatible frontiers refuse. The separate narrow Review branch retains its existing repair-allowance requirement.
 
 ##### TYPE
 
@@ -6216,7 +6233,7 @@ GoalPhaseRemainingPlanDescriptionResult
 
 ##### DESCRIPTION
 
-Adopt a raw complete remaining Plan for the exact described same-Session target after independent admission of its actual Human directive, rationale and reference. Preserve accepted Steps, commits, reviews, original base and all repair counts. Only unaccepted Step purpose and declared checks plus future acceptance may change; Step identities, scope, membership and closure policy remain. Load selected documents through File UoW. Atomically retain a separate superseded-by-adoption disposition for the original unanswered question without manufacturing an answer. No Advance, Submit, check, review or commit runs here. The next ordinary advanceGoalPhase continues the same remaining Step; stale, duplicate or crossed requests refuse.
+Adopt a raw complete remaining Plan for the exact described same-Session target after independent admission of its actual Human directive, rationale and reference. Preserve accepted Steps, commits, partialCompletion chains, reviews, original base and all repair counts. Ordinary remaining adoption may change only unaccepted Step purpose and declared checks plus future acceptance; Step identities, scope, membership and closure policy remain. The distinct current primary-Component inventory branch requires typed currentInventory metadata binding the actual Component instance, current Step, exact appendedPaths and finite host candidatePaths. It changes only revision and the current Step literal ownedPaths append, preserving all raw/effective acceptance and policies. Explicit null, malformed, crossed, excess, covered and overlapping paths refuse; absent metadata cannot authorize an append. Host registration remains separate authority. Inventory adoption increments generation once and resumes ordinary Implementation without consuming or refunding repairs. The narrow Review branch remains separate. Load selected documents through File UoW. Atomically retain a separate superseded-by-adoption disposition for the original unanswered question without manufacturing an answer. Reconstruct original saved targets and captures without recapturing later host defaults. No Advance, Submit, check, review or commit runs here. The next ordinary advanceGoalPhase continues the same remaining Step; stale, duplicate or crossed requests refuse.
 
 ##### TYPE
 
@@ -9545,6 +9562,62 @@ WorkflowSplitStartPreparationInput
 
 WorkflowPreparedImport
 
+#### prepareTaskFixDelivery
+
+##### DESCRIPTION
+
+Passively attach an actual public destination Task/FIX response to its selected request and distinct chat owners. Preserve complete state, selected checks, review, counters and commit truth. Supplied source metadata is an observation, never authentication or Human consent; no workflow mutation or delivery occurs.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+WorkflowTaskFixDeliveryPreparationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowTaskFixDeliveryPreparationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowTaskFixDelivery
+
+#### prepareTaskFixAdoption
+
+##### DESCRIPTION
+
+Prepare an explicit requester disposition of the exact returned attachment for its existing workflow. Adoption does not Submit, Advance, mutate a Session, accept destination evidence or authorize effects. Actual provenance and affected integration acceptance remain with the requester.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+WorkflowTaskFixAdoptionPreparationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowTaskFixAdoptionPreparationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowTaskFixAdoption
+
 #### prepareRepositoryEffect
 
 ##### DESCRIPTION
@@ -10035,6 +10108,10 @@ GoalPhaseDiagnosticInformationResult
 
 #### startStandaloneFix
 
+##### DESCRIPTION
+
+Start an idempotent bounded standalone repair for the selected participant and repository request. Native WorkOrder and managed validation own subsequent progress; successful acceptance leaves changes uncommitted.
+
 ##### TYPE
 
 COMMAND
@@ -10095,6 +10172,10 @@ StandaloneFixView
 
 #### advanceStandaloneFix
 
+##### DESCRIPTION
+
+Advance the retained standalone repair through native WorkOrder, managed checks, diagnosis and independent review. Redisplay an existing pending request rather than issue duplicate work; acceptance leaves changes uncommitted.
+
 ##### TYPE
 
 COMMAND
@@ -10118,6 +10199,10 @@ StandaloneFixAdvanceInput
 StandaloneFixView
 
 #### submitStandaloneFixWorkResult
+
+##### DESCRIPTION
+
+Admit the semantic result and independently supplied completion facts for the exact retained standalone WorkOrder. Submission does not run validation or commit changes; ordinary Advance owns subsequent progress.
 
 ##### TYPE
 
@@ -10149,9 +10234,17 @@ StandaloneFixView
 
 ## StandaloneFixRepairService
 
+### DESCRIPTION
+
+Perform the assigned bounded standalone repair and return its semantic work result. Native validation, diagnosis and independent review remain owned by the retained standalone workflow; acceptance leaves changes uncommitted.
+
 ### OPERATION
 
 #### repairStandaloneFix
+
+##### DESCRIPTION
+
+Perform only the assigned bounded standalone repair and return its semantic result. Preserve the retained ownership and findings; native checks and independent review determine subsequent acceptance.
 
 ##### TYPE
 
@@ -10173,9 +10266,17 @@ StandaloneFixWorkResult
 
 ## StandaloneFixReviewService
 
+### DESCRIPTION
+
+Independently review the exact assigned standalone candidate and return identified findings or acceptance. The reviewer does not repair the candidate or replace native validation and closure evidence.
+
 ### OPERATION
 
 #### reviewStandaloneFix
+
+##### DESCRIPTION
+
+Independently review the assigned standalone candidate and report identified findings or acceptance. Do not repair the candidate or present review as native validation or committed delivery.
 
 ##### TYPE
 
@@ -10204,6 +10305,10 @@ Native standalone completion admits the assigned review against the retained wor
 ### OPERATION
 
 #### admitStandaloneFixReview
+
+##### DESCRIPTION
+
+Admit the independently completed review against the exact retained standalone work and candidate through native semantic admission. This operation neither runs checks nor commits changes.
 
 ##### TYPE
 
@@ -10435,6 +10540,14 @@ operation = GoalTaskService.submitGoalTaskWorkResult
 
 operation = GoalTaskService.resolveGoalTaskDiagnosticInformation
 
+#### describeGoalTaskMalformedIssuedWorkRecovery
+
+operation = GoalTaskService.describeGoalTaskMalformedIssuedWorkRecovery
+
+#### recoverGoalTaskMalformedIssuedWork
+
+operation = GoalTaskService.recoverGoalTaskMalformedIssuedWork
+
 # STATE-MACHINE
 
 ## GoalTaskLifecycle
@@ -10472,6 +10585,62 @@ Ad hoc single-repository development from journal or direct instructions. Native
 
 ### OPERATION
 
+#### describeGoalTaskMalformedIssuedWorkRecovery
+
+##### DESCRIPTION
+
+Exact retained malformed Task target only. External effects remain UNKNOWN. Genuine independent Human direction permits one later ordinary Advance issue; Defer permits none. No work, Git or SBT executes during recovery.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalTaskMalformedIssuedWorkRecoveryDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalTaskMalformedIssuedWorkRecoveryDescriptionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalTaskMalformedIssuedWorkRecoveryDescriptionResult
+
+#### recoverGoalTaskMalformedIssuedWork
+
+##### DESCRIPTION
+
+Exact retained malformed Task target only. External effects remain UNKNOWN. Genuine independent Human direction permits one later ordinary Advance issue; Defer permits none. No work, Git or SBT executes during recovery.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalTaskMalformedIssuedWorkRecoveryInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalTaskMalformedIssuedWorkRecoveryInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalTaskMalformedIssuedWorkRecoveryDescriptionResult
+
 #### resolveGoalTaskDiagnosticInformation
 
 ##### DESCRIPTION
@@ -10502,6 +10671,10 @@ GoalPhaseDiagnosticInformationResult
 
 #### startGoalTask
 
+##### DESCRIPTION
+
+Start an idempotent single-repository Task for the selected participant, owned paths and development objective. Native WorkOrder, managed validation, mandatory independent review and a typed selected local commit own later completion.
+
 ##### TYPE
 
 COMMAND
@@ -10530,6 +10703,10 @@ GoalTaskView
 
 #### advanceGoalTask
 
+##### DESCRIPTION
+
+Advance the retained Task through native WorkOrder, fresh candidate observation, selected validation, mandatory independent review and typed selected local commit. Reuse pending issued work; after admitted malformed-work recovery, issue exactly one corrected successor on ordinary Advance.
+
 ##### TYPE
 
 COMMAND
@@ -10554,6 +10731,10 @@ GoalTaskView
 
 #### submitGoalTaskWorkResult
 
+##### DESCRIPTION
+
+Admit a semantic result for the exact retained Task WorkOrder and supplied independent completion evidence. Any issuedWorkContext must match the actual issued identity, revision, session, contracts and context; it is required after durable supersession history. Submission does not run checks or commit changes.
+
 ##### TYPE
 
 COMMAND
@@ -10570,6 +10751,7 @@ GoalTaskWorkResult
 |------+------|--------------|
 | sessionId | string | 1 |
 | result | GoalTaskWorkResult | 1 |
+| issuedWorkContext | WorkflowIssuedWorkContext | ? |
 | resultReference | WorkflowArtifactReference | 1 |
 | completionFacts | WorkflowArtifactReference | * |
 | executionEvidence | WorkflowExecutionEvidence | ? |
@@ -10584,9 +10766,17 @@ GoalTaskView
 
 ## GoalTaskRepairService
 
+### DESCRIPTION
+
+Repair only the exact assigned Task findings and owned paths. Return a semantic work result for fresh native candidate observation, validation and independent review without resetting retained repair counters.
+
 ### OPERATION
 
 #### repairGoalTask
+
+##### DESCRIPTION
+
+Repair only the assigned Task findings and owned paths and return a semantic work result. Preserve retained counters and history; fresh candidate observation, selected checks and independent review remain required.
 
 ##### TYPE
 
@@ -10608,9 +10798,17 @@ GoalTaskWorkResult
 
 ## GoalTaskReviewService
 
+### DESCRIPTION
+
+Independently review the exact assigned Task candidate and return identified findings or acceptance. Preserve worker independence and Task identity; review does not perform repairs, validation or the selected local commit.
+
 ### OPERATION
 
 #### reviewGoalTask
+
+##### DESCRIPTION
+
+Independently review the exact assigned Task candidate and return identified findings or acceptance. Do not repair it, relabel Task work as standalone work or replace native selected checks and closure evidence.
 
 ##### TYPE
 
@@ -10640,6 +10838,10 @@ Native Task completion admits the assigned review against the retained work and 
 
 #### admitGoalTaskReview
 
+##### DESCRIPTION
+
+Admit the independently completed Task review against the exact retained work and candidate through native semantic admission. This operation neither executes validation nor commits source changes.
+
 ##### TYPE
 
 COMMAND
@@ -10661,9 +10863,17 @@ GoalTaskView
 
 ## GoalTaskImplementationService
 
+### DESCRIPTION
+
+Implement the exact assigned Task objective within its owned repository paths and return a semantic work result. Native candidate observation, validation, independent review and selected local commit remain separate workflow steps.
+
 ### OPERATION
 
 #### implementGoalTask
+
+##### DESCRIPTION
+
+Implement only the assigned Task objective and owned paths, then return a semantic work result. Native candidate observation, selected checks, independent review and local commit remain separate workflow steps.
 
 ##### TYPE
 
@@ -10738,3 +10948,109 @@ One original finding identity with fixed, not-applicable or unresolved outcome; 
 | rationale | string | 1 |
 | changedPaths | string | * |
 | checks | string | * |
+
+# VALUE
+
+## WorkflowTaskFixDeliveryPreparationInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| route | string | 1 |
+| requestIdentity | string | 1 |
+| requesterIdentity | string | 1 |
+| destinationIdentity | string | 1 |
+| destinationParticipant | string | 1 |
+| result | string | 1 |
+| sourceReference | WorkflowArtifactReference | 1 |
+
+## WorkflowTaskFixDelivery
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| route | string | 1 |
+| requestIdentity | string | 1 |
+| requesterIdentity | string | 1 |
+| destinationIdentity | string | 1 |
+| destinationParticipant | string | 1 |
+| sessionId | string | 1 |
+| sourceReference | WorkflowArtifactReference | 1 |
+| observation | record | 1 |
+| disposition | string | 1 |
+| provenance | string | 1 |
+
+## WorkflowTaskFixAdoptionPreparationInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| delivery | string | 1 |
+| requestIdentity | string | 1 |
+| requesterIdentity | string | 1 |
+| destinationIdentity | string | 1 |
+| disposition | string | 1 |
+| rationale | string | 1 |
+
+## WorkflowTaskFixAdoption
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| delivery | WorkflowTaskFixDelivery | 1 |
+| disposition | string | 1 |
+| rationale | string | 1 |
+| effect | string | 1 |
+
+# VALUE
+
+## GoalTaskMalformedIssuedWorkRecoveryDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| oldContinuationId | string | 1 |
+
+## GoalTaskMalformedIssuedWorkRecoveryInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| oldContinuationId | string | 1 |
+| target | string | 1 |
+| choice | string | 1 |
+| rationale | string | 1 |
+| participant | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+
+## GoalTaskMalformedIssuedWorkRecoveryDescriptionResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| componentInstance | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| target | string | 1 |
+| choices | string | * |
+| recoveryOperation | string | 1 |
+| externalEffects | string | 1 |
+| successorContinuationId | string | ? |

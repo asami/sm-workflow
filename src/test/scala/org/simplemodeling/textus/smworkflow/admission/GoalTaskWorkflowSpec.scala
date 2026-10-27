@@ -1,6 +1,6 @@
 /**
  * @since   Oct. 26, 2026
- * @version Oct. 26, 2026
+ * @version Oct. 27, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -84,7 +84,7 @@ final class GoalTaskWorkflowSpec extends AnyWordSpec with GivenWhenThen with Thr
         "selection-collection" -> "entity:smworkflow.cli.goal_selection"), name =>
         if (name == "adopted.json") publicInput.toRecord().toJsonStringC
         else Consequence.stateConflict("Task preparation must read only its selected adopted input")))
-      _with_runtime_(root, "TaskStart") { (owner, component, actor, prepare) =>
+      _with_runtime_(root, "TaskStart", hostParameters = BoundedWorkExecutionAdmissionFixture.parameters) { (owner, component, actor, prepare) =>
         prepare(call => call.setupC(_setup_commands_(root, "TaskStart").size).flatMap { _ =>
           val row = prepared.getVector("datastore").get.head.asInstanceOf[Record]
             .getVector("records").get.head.asInstanceOf[Record]
@@ -104,6 +104,8 @@ final class GoalTaskWorkflowSpec extends AnyWordSpec with GivenWhenThen with Thr
         issued.submitOperation shouldBe Some("submitGoalTaskWorkResult")
         issued.resultType shouldBe Some("GoalTaskWorkResult")
         issued.issuedWorkContext.get.requiredOperation shouldBe "goal-task-implementation-capability"
+        issued.issuedWorkContext.get.executionRequirement.getString("reasoningClass") shouldBe Some("DesignStandard")
+        issued.issuedWorkContext.get.executionRequirement.getRecord("disposition").nonEmpty shouldBe true
         redisplayed.issuedWorkContext shouldBe issued.issuedWorkContext
         redisplayed.work shouldBe issued.work
         Files.exists(root.resolve("repository/docs/phase.md")) shouldBe false

@@ -191,7 +191,8 @@ class NativeHostProgressionSpecification(unittest.TestCase):
         return status, observations, diagnostic.getvalue(), calls, native
 
     def expected_command(self, service, operation, pairs):
-        return [str(self.executable), "--runtime-root", str(self.runtime_root), "command", SERVICES[service] + operation, *pairs, "--json"]
+        return [str(self.executable), "--runtime-root", str(self.runtime_root),
+                "--textus.assembly.descriptor=" + str(self.runtime_root / ".textus/assembly.yaml"), "command", SERVICES[service] + operation, *pairs, "--json"]
 
     def assert_success(self, output, responses, during=None):
         # Given the selected issued route, prepared output and native response fixtures,
@@ -202,6 +203,11 @@ class NativeHostProgressionSpecification(unittest.TestCase):
         self.assertEqual(status, 0, diagnostic)
         self.assertEqual(diagnostic, "")
         self.assertEqual(native.call_count, 2)
+        descriptor = "--textus.assembly.descriptor=" + str(self.runtime_root / ".textus/assembly.yaml")
+        for command in calls:
+            self.assertEqual(command[3], descriptor)
+            self.assertEqual(command.count(descriptor), 1)
+            self.assertEqual(command[4], "command")
         supplied = json.loads(self.submission.read_text(encoding="utf-8"))
         pairs = ["--sessionId", self.submit_id]
         for name in ("result", "resultReference", "completionFacts", "executionEvidence"):
@@ -269,9 +275,10 @@ class NativeHostProgressionSpecification(unittest.TestCase):
                 # Then the normal preparation, fixed binding Submit and unbound ordinary Advance retain actual outputs.
                 self.assertEqual(status, 0, diagnostic)
                 self.assertEqual(len(calls), 3)
-                self.assertEqual(calls[0][:5], [str(self.executable), "--runtime-root", str(self.runtime_root), "command",
+                self.assertEqual(calls[0][:6], [str(self.executable), "--runtime-root", str(self.runtime_root),
+                "--textus.assembly.descriptor=" + str(self.runtime_root / ".textus/assembly.yaml"), "command",
                     "org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.prepareEvidence"])
-                value = json.loads(calls[0][6])
+                value = json.loads(calls[0][7])
                 supplied = json.loads(self.submission.read_text())
                 provenance = json.loads(self.provenance.read_text())
                 self.assertEqual({name: value[name] for name in provenance}, provenance)
@@ -287,7 +294,7 @@ class NativeHostProgressionSpecification(unittest.TestCase):
                 for name in ("answer", "resultReference", "executionEvidence"):
                     pairs.extend(["--" + name, json.dumps(supplied[name], ensure_ascii=False)])
                 expected = self.expected_command("GoalPhase", HUMAN_PAIR[0], pairs)
-                expected.insert(3, "--textus.import.data.file=" + str(output / "preparation/response.json"))
+                expected.insert(4, "--textus.import.data.file=" + str(output / "preparation/response.json"))
                 self.assertEqual(calls[1], expected)
                 self.assertEqual(calls[2], self.expected_command("GoalPhase", "advanceGoalPhase", ["--sessionId", self.outer_id]))
                 self.assertEqual([json.loads(line) for line in observed.getvalue().splitlines()], responses)
@@ -439,8 +446,8 @@ class NativeHostProgressionSpecification(unittest.TestCase):
                    "prior = calls.read_text().splitlines() if calls.exists() else []\n"
                    "responses = " + repr(responses) + "\n"
                    "assert len(prior) < 2\n"
-                   "assert sys.argv[1:4] == " + repr(["--runtime-root", str(self.runtime_root), "command"]) + "\n"
-                   "assert sys.argv[4] == " + repr(SERVICES["GoalPhase"]) + " + ['submitGoalPhaseWorkResult', 'advanceGoalPhase'][len(prior)]\n"
+                   "assert sys.argv[1:5] == " + repr(["--runtime-root", str(self.runtime_root), "--textus.assembly.descriptor=" + str(self.runtime_root / ".textus/assembly.yaml"), "command"]) + "\n"
+                   "assert sys.argv[5] == " + repr(SERVICES["GoalPhase"]) + " + ['submitGoalPhaseWorkResult', 'advanceGoalPhase'][len(prior)]\n"
                    "with calls.open('a') as stream: stream.write(json.dumps({'argv': sys.argv[1:], 'cwd': os.getcwd()}) + '\\n')\n"
                    "sys.stderr.write('installed fixture diagnostic\\n')\n"
                    "print(json.dumps(responses[len(prior)], ensure_ascii=False))\n")
@@ -455,8 +462,8 @@ class NativeHostProgressionSpecification(unittest.TestCase):
         actual = [json.loads(line) for line in calls.read_text().splitlines()]
         self.assertEqual(len(actual), 2)
         self.assertTrue(all(call["cwd"] == str(self.runtime_root) for call in actual))
-        self.assertEqual(actual[0]["argv"][:4], ["--runtime-root", str(self.runtime_root), "command", SERVICES["GoalPhase"] + "submitGoalPhaseWorkResult"])
-        self.assertEqual(actual[1]["argv"], ["--runtime-root", str(self.runtime_root), "command", SERVICES["GoalPhase"] + "advanceGoalPhase", "--sessionId", self.outer_id, "--json"])
+        self.assertEqual(actual[0]["argv"][:5], ["--runtime-root", str(self.runtime_root), "--textus.assembly.descriptor=" + str(self.runtime_root / ".textus/assembly.yaml"), "command", SERVICES["GoalPhase"] + "submitGoalPhaseWorkResult"])
+        self.assertEqual(actual[1]["argv"], ["--runtime-root", str(self.runtime_root), "--textus.assembly.descriptor=" + str(self.runtime_root / ".textus/assembly.yaml"), "command", SERVICES["GoalPhase"] + "advanceGoalPhase", "--sessionId", self.outer_id, "--json"])
         business = [item for item in map(json.loads, observed.getvalue().splitlines()) if "recordType" not in item]
         self.assertEqual(business, responses)
         self.assertEqual(json.loads((output / "response.json").read_text()), responses[0])
@@ -480,13 +487,13 @@ class NativeHostProgressionSpecification(unittest.TestCase):
                    "index = len(prior)\n"
                    "assert index < 3\n"
                    "argv = sys.argv[1:]\n"
-                   "assert argv[:2] == " + repr(["--runtime-root", str(self.runtime_root)]) + "\n"
+                   "assert argv[:3] == " + repr(["--runtime-root", str(self.runtime_root), "--textus.assembly.descriptor=" + str(self.runtime_root / ".textus/assembly.yaml")]) + "\n"
                    "binding = " + repr(binding) + "\n"
                    "if index == 1:\n"
-                   " assert argv[2] == binding and argv[3] == 'command'\n"
+                   " assert argv[3] == binding and argv[4] == 'command'\n"
                    " assert pathlib.Path(binding.split('=', 1)[1]).read_bytes() == (json.dumps(responses[0], ensure_ascii=False)+'\\n').encode()\n"
                    "else:\n"
-                   " assert argv[2] == 'command' and binding not in argv\n"
+                   " assert argv[3] == 'command' and binding not in argv\n"
                    "operations = ['org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.prepareEvidence',"
                    "'" + SERVICES["GoalPhase"] + HUMAN_PAIR[0] + "','" + SERVICES["GoalPhase"] + "advanceGoalPhase']\n"
                    "assert argv[argv.index('command')+1] == operations[index]\n"
@@ -505,7 +512,7 @@ class NativeHostProgressionSpecification(unittest.TestCase):
         self.assertTrue(all(call["cwd"] == str(self.runtime_root) for call in actual))
         business = [item for item in map(json.loads, observed.getvalue().splitlines()) if "recordType" not in item]
         self.assertEqual(business, responses)
-        self.assertEqual(actual[1]["argv"][2], binding)
+        self.assertEqual(actual[1]["argv"][3], binding)
         self.assertNotIn(binding, actual[2]["argv"])
         self.assertEqual((self.runtime_root / ".textus/config.json").read_bytes(), config)
         for index, directory in enumerate((output / "preparation", output, output / "advance")):

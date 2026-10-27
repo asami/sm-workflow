@@ -1,6 +1,6 @@
 # Phase 6.7: Ad Hoc Task and Standalone Fix Delivery
 
-Status: active; P67-T1 retained completion, P67-T2 source prepared; Phase and installed acceptance pending
+Status: active; P67-T1/T2/T3 retained source completion; P67-T4 source delivery prepared; Phase and installed acceptance pending
 Planned: 2026-10-26 (Asia/Tokyo)
 Owner: sm-workflow development
 Predecessor: consume the qualified Phase 6.5 execution and Phase 6.6 diagnosis paths
@@ -114,3 +114,14 @@ source handoff does not close any phase-scoped acceptance condition.
 original finding input and attributed dispositions through the shared T1/T2
 engine. Selected native validation, installed skill delivery and actual Phase
 acceptance remain owned by their later runtime boundaries.
+
+## T4 source delivery boundary
+
+[Task/FIX delivery](../spec/task-fix-delivery.md) defines the three packaged thin
+adapters, passive actual-result attachment and explicit requester disposition.
+The [English handoff](../journal/2026/10/2026-10-27-phase-6.7-t4-source-handoff.md)
+records public setup, compatibility and actual-evidence gaps. Adopted Plan2 added
+the authored CAR ABI inventory to T4's ownership; its ordinary publication and
+dedicated activation retain the active Phase's separate qualified runtime pin.
+No installed availability, real Human direction, destination execution or
+requester acceptance is established by source fixtures; every P67 box stays open.

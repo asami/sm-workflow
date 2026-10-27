@@ -1,6 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import cats.data.NonEmptyVector
+import io.circe.Json
 import scala.reflect.ClassTag
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall}
@@ -8,11 +9,12 @@ import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
-import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{Configuration, DefinitionBinding, InstanceIdentity}
+import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{Configuration, DefinitionBinding, InstanceIdentity, InstanceRecord}
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
+import org.goldenport.record.Record
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.value as V
 
@@ -20,7 +22,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * Native completion consumes the typed result and owns its state, scope,
   * participant and update boundary. Public callers supply no control envelope.
   * @since   Oct.  9, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowResultInput {
@@ -65,8 +67,9 @@ private[smworkflow] object NativeWorkflowResultInput {
       def createCall(core: ActionCall.Core): ActionCall = command.createCall(core)
     }
   private final case class Submission(session: String, value: Value,
-    reference: Option[ContextReference], facts: Vector[ContextReference], evidence: ExecutionEvidence)
-  private final case class Assigned(handle: WorkflowHandle, request: ContinuationRequest[?])
+    reference: Option[ContextReference], facts: Vector[ContextReference], evidence: ExecutionEvidence,
+    issuedContext: Option[Json] = None)
+  private final case class Assigned(handle: WorkflowHandle, request: ContinuationRequest[?], issuedContext: Option[Json] = None)
   private final case class Target(operation: StateMachineOperationIdentity,
     readC: Request => Consequence[Value],
     load: (WorkflowComponentStorage, ContinuationIdentity, ExecutionContext) => Consequence[Assigned])
@@ -163,7 +166,15 @@ private[smworkflow] object NativeWorkflowResultInput {
     Target(operation, read, (storage, identity, context) =>
       storage.bindIssuedC(operation, codec).flatMap(_.loadC(identity)(using context)).flatMap {
         case Some(value) => value.current match {
-          case order: WorkflowContinuation.WorkOrder[?] => Consequence.success(Assigned(value.handle, order.request))
+          case order: WorkflowContinuation.WorkOrder[?] =>
+            if (operation == GoalTaskNativeRun.completionOperation) for {
+              input <- order.request.input.map(_.value).collect { case work: StandaloneFixExecution.Work => work }
+                .map(Consequence.success).getOrElse(_invalid("Task result target has no Task business input"))
+              context <- NativeWorkflowIssuedWorkContext.fromIssuedC(value,
+                if (input.kind == "Review") NativeWorkflowIssuedWorkContext.Mode.Review else NativeWorkflowIssuedWorkContext.Mode.Implementation, codec)
+              json <- _context_json_c(context.toRecord())
+            } yield Assigned(value.handle, order.request, Some(json))
+            else Consequence.success(Assigned(value.handle, order.request))
           case _ => _invalid("result target is not issued semantic work")
         }
         case None => _invalid("result target has no actual issued work")
@@ -201,7 +212,12 @@ private[smworkflow] object NativeWorkflowResultInput {
       facts <- NativeWorkflowOperationInput.vectorC[V.WorkflowArtifactReference](request, "completionFacts")
       evidence <- NativeWorkflowOperationInput.optionalValueC[V.WorkflowExecutionEvidence](request, "executionEvidence")
         .flatMap(_evidence_c)
-    } yield BoundAction(request, Submission(session, value, reference.map(_reference), facts.map(_reference), evidence),
+      issued <- if (target.operation == GoalTaskNativeRun.completionOperation)
+        NativeWorkflowOperationInput.optionalValueC[V.WorkflowIssuedWorkContext](request, "issuedWorkContext").flatMap {
+          case None => Consequence.success(Option.empty[Json])
+          case Some(_) => NativeWorkflowOperationInput.recordC(request, "issuedWorkContext").flatMap(_context_json_c).map(Some(_))
+        } else Consequence.success(Option.empty[Json])
+    } yield BoundAction(request, Submission(session, value, reference.map(_reference), facts.map(_reference), evidence, issued),
       original, creation, configuration, instances, continuations, definition, target)
   }
 
@@ -225,6 +241,8 @@ private[smworkflow] object NativeWorkflowResultInput {
           ContinuationIdentity(value.continuationIdentity.value)))
           .getOrElse(_invalid("result session has no pending assignment"))
         assigned <- target.load(storage, identity, context)
+        _ <- if (target.operation == GoalTaskNativeRun.completionOperation)
+          _admit_task_context_c(storage, current, assigned, submission, context) else Consequence.unit
         submitted <- _result_c(assigned, submission)
         operation <- original match {
           case receiver: Receiver => receiver.createResultOperationRequestC(BoundAction.this.request, submitted)
@@ -246,6 +264,35 @@ private[smworkflow] object NativeWorkflowResultInput {
       }
     }
   }
+
+  private def _context_json_c(record: Record): Consequence[Json] = for {
+    text <- record.toJsonStringC
+    json <- io.circe.parser.parse(text).fold(e => _invalid(e.message), Consequence.success)
+    normalized <- GoalPhaseNativeMetadata.normalizePublicJson(json).fold(_invalid(_), Consequence.success)
+  } yield normalized
+
+  /** Correlates a result with its issued request; it authenticates no worker.
+    * Recovery history survives ordinary checkpoint and completion progression. */
+  private def _admit_task_context_c(storage: WorkflowComponentStorage, current: InstanceRecord,
+    assigned: Assigned, submission: Submission, context: ExecutionContext): Consequence[Unit] = for {
+    adapter <- storage.bindWorkOrderSupersessionC(GoalTaskNativeRun.completionOperation,
+      GoalTaskNativeRun.inputCodec, GoalTaskMalformedIssuedWorkRecovery.checkpointCodec)
+    recovered = current.history.filter(_.causation.value.startsWith(GoalTaskMalformedIssuedWorkRecovery.resumeCause))
+    _ <- recovered.foldLeft(Consequence.unit) { (prior, entry) => prior.flatMap { _ =>
+      val old = entry.causation.value.stripPrefix(GoalTaskMalformedIssuedWorkRecovery.resumeCause)
+      adapter.loadRetainedC(ContinuationIdentity(old), current.identity)(using context).flatMap {
+        case Some(saved) if saved.receipt.nextRevision == entry.revision &&
+          saved.receipt.payload.direction.target.sessionId == current.identity.value => Consequence.unit
+        case _ => _invalid("Task recovery history has no matching committed disposition")
+      }
+    } }
+    _ <- submission.issuedContext match {
+      case Some(value) if assigned.issuedContext.contains(value) => Consequence.unit
+      case Some(_) => _invalid("Task result issuedWorkContext differs from the actual current issued request")
+      case None if recovered.nonEmpty => _invalid("A recovered Task result requires its actual issuedWorkContext")
+      case None => Consequence.unit
+    }
+  } yield ()
 
   private def _result_c(assigned: Assigned, submission: Submission): Consequence[ContinuationResult[Value]] = {
     val request = assigned.request

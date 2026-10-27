@@ -12,7 +12,7 @@ import GoalPhaseRuntimeRepairControl as R
   * review before submitting events. These values are NOT permission tokens.
   * Semantic replies carry no stage, cursor, command or closure receipt.
   * @since   Oct.  6, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseOrderedProgression {
@@ -64,17 +64,34 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     given Encoder[Commit] = deriveEncoder
     given Decoder[Commit] = deriveDecoder
   }
+  final case class StepCommitChain(originalParent: Snapshot, partial: Commit, completion: Commit)
+  object StepCommitChain {
+    given Encoder[StepCommitChain] = deriveEncoder
+    given Decoder[StepCommitChain] = deriveDecoder
+  }
+  def validStepCommitChain(value: StepCommitChain): Boolean = value != null &&
+    validSnapshot(value.originalParent) && validCommit(value.partial) && validCommit(value.completion) &&
+    value.partial.parent == value.originalParent.head && value.completion.parent == value.partial.identity &&
+    Vector(value.originalParent.head, value.partial.identity, value.completion.identity).distinct.size == 3 &&
+    value.partial.tree != value.completion.tree
   final case class ClosedStep(step: String, commit: Commit, review: Option[String],
-    admission: Option[GoalPhaseStepAssessment.Admission] = None)
+    admission: Option[GoalPhaseStepAssessment.Admission] = None,
+    partialCompletion: Option[StepCommitChain] = None)
   object ClosedStep {
     def apply(step: String, commit: Commit, review: String): ClosedStep = new ClosedStep(step, commit, Some(review))
     given Encoder[ClosedStep] = deriveEncoder[ClosedStep].mapJson(_.mapObject(_.filter {
-      case ("admission", value) => !value.isNull
+      case ("admission" | "partialCompletion", value) => !value.isNull
       case _ => true
     }))
-    given Decoder[ClosedStep] = deriveDecoder
+    private val _decoder: Decoder[ClosedStep] = deriveDecoder
+    given Decoder[ClosedStep] = Decoder.instance(cursor => _decoder(cursor).flatMap(value =>
+      if (!cursor.downField("partialCompletion").focus.exists(_.isNull) && value.partialCompletion.forall(c =>
+          validStepCommitChain(c) && c.completion == value.commit)) Right(value)
+      else Left(io.circe.DecodingFailure("Closed Step partial chain is malformed or crossed", cursor.history))))
   }
   def validStepAcceptance(step: ClosedStep): Boolean = step != null && step.review != null && step.admission != null &&
+    step.partialCompletion != null && step.partialCompletion.forall(chain => validStepCommitChain(chain) &&
+      chain.completion == step.commit) &&
     ((step.review.exists(text) && step.admission.isEmpty) || (step.review.isEmpty &&
       step.admission.exists(GoalPhaseStepAssessment.validAdmission)))
   enum Stage {
@@ -123,6 +140,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
   /** Durable intent must have committed before the native executor runs. */
   final case class ClosureIntentSaved(snapshot: Snapshot, identity: String) extends Event
   final case class ClosureUnknown(identity: String) extends Event
+  final case class StepPartialCompletionObserved(intent: String, chain: StepCommitChain,
+    expectedTree: String, eofCorrections: Vector[String]) extends Event
   final case class StepCommitObserved(intent: String, commit: Commit) extends Event
   final case class StepEofCorrectionCommitObserved(intent: String, commit: Commit, paths: Vector[String]) extends Event
   /** tip is the reviewed ordered-Step tip; a native child may subsequently
@@ -280,6 +299,24 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         else invalid("initial Phase check repair has no reservable ordinary batch")
     } yield next
 
+    /** The native owner separately proves a complete genuinely terminated
+      * InvalidReport receipt and appends its own immutable admission. Historical
+      * ChecksObserved(false) remains Decision; this reserves one NEW batch.
+      */
+    private[admission] def continueStepTestReportRepairC(failedReceipt: String,
+      directive: RepairDirective): Consequence[State] = for {
+      _ <- if (text(failedReceipt) && !failedReceipt.exists(_.isControl) && _valid_directive(directive) &&
+          stage == Stage.Decision && decisionSource.contains(Stage.Validation) &&
+          decision.contains("Selected native checks failed: " + failedReceipt) && !phaseWide && !documentDecision &&
+          pendingRepair.isEmpty && closureIntent.isEmpty && reviewEvidence.isEmpty &&
+          candidate.exists(validSnapshot) && completed.map(_.step) == plan.steps.take(cursor).map(_.identity) &&
+          completed.forall(validStepAcceptance) && releaseCommit.isEmpty && repositoryReceipt.isEmpty &&
+          repairControl.exists(_.policy == R.version) && repairs < effectiveRepairLimit && generation < Long.MaxValue)
+        Consequence.unit else invalid("Step test report repair requires its exact failed Step Decision and remaining runtime allowance")
+      next <- _reserve_repair_c(directive, failedReceipt, "Step test report repair allowance exhausted", comparable = false)
+      _ <- if (next.stage == Stage.Repair) Consequence.unit else invalid("Step test report repair has no reservable ordinary batch")
+    } yield next
+
     /** Business context only: this projection grants no issue or execution authority. */
     def protectedStepCount(issued: Boolean): Int = cursor +
       (if (cursor < plan.steps.size && (stage != Stage.Implementation || issued)) 1 else 0)
@@ -350,6 +387,21 @@ private[smworkflow] object GoalPhaseOrderedProgression {
             next.copy(purpose = prior.purpose, checks = prior.checks) == prior
           }) Consequence.unit
         else invalid("Remaining Plan adoption must preserve the accepted prefix, every Step scope and closure policy")
+    } yield new State(proposed, Stage.Implementation, cursor, generation + 1, repairs, base, completed,
+      None, None, None, None, None, repositoryReceipt, None, None,
+      documentDecision = false, ordinaryRepairs = ordinaryRepairs, pendingRepair = None,
+      stepAdmission = None, releaseCommit = releaseCommit, repairControl = repairControl, repairObservations = repairObservations)
+
+    /** Direction only: the native owner separately binds the actual Component,
+      * finite host registration and independently admitted Human directive.
+      */
+    private[admission] def adoptCurrentInventoryRevisionC(proposed: Plan, evidence: String): Consequence[State] = for {
+      _ <- if (text(evidence) && !evidence.exists(_.isControl) && stage == Stage.Decision &&
+          !documentDecision && pendingRepair.isEmpty && closureIntent.isEmpty && phaseReviewedCandidate.isEmpty &&
+          cursor == completed.size && cursor < plan.steps.size && generation < Long.MaxValue &&
+          decisionSource.exists(Set(Stage.Implementation, Stage.Repair))) Consequence.unit
+        else invalid("Current inventory adoption requires its independent Human directive and unanswered current implementation or repair Decision")
+      _ <- currentInventoryPathsC(plan, proposed, step.identity)
     } yield new State(proposed, Stage.Implementation, cursor, generation + 1, repairs, base, completed,
       None, None, None, None, None, repositoryReceipt, None, None,
       documentDecision = false, ordinaryRepairs = ordinaryRepairs, pendingRepair = None,
@@ -631,6 +683,14 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           closureIntent.contains(intent) && validCommit(commit) && commit.parent == candidateBase.head &&
           candidate.exists(_.tree == commit.tree) && commit.identity != candidateBase.head && generation < Long.MaxValue =>
         _close_step_c(commit)
+      case StepPartialCompletionObserved(intent, chain, expected, paths) if stage == Stage.Closing && !phaseWide &&
+          closureIntent.contains(intent) && checksReceipt.nonEmpty && (reviewEvidence.nonEmpty || stepAdmission.nonEmpty) &&
+          validStepCommitChain(chain) && chain.originalParent == candidateBase &&
+          chain.completion.tree == expected && oid(expected) && candidate.exists(c =>
+            c.tree == expected || (paths != null && paths.nonEmpty)) &&
+          paths != null && paths.size <= 256 && paths.distinct == paths && paths.forall(value => path(value) &&
+            step.ownedPaths.exists(owner => value == owner || value.startsWith(owner + "/"))) && generation < Long.MaxValue =>
+        _close_step_c(chain.completion, Some(chain))
       case StepEofCorrectionCommitObserved(intent, commit, paths) if stage == Stage.Closing && !phaseWide &&
           closureIntent.contains(intent) && checksReceipt.nonEmpty && (reviewEvidence.nonEmpty || stepAdmission.nonEmpty) &&
           validCommit(commit) && commit.parent == candidateBase.head && commit.identity != candidateBase.head && generation < Long.MaxValue &&
@@ -691,8 +751,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       case _ => invalid("event differs from the Workflow-assigned ordered Phase frontier")
     }
 
-    private def _close_step_c(commit: Commit): Consequence[State] = {
-      val closed = completed :+ ClosedStep(step.identity, commit, reviewEvidence, stepAdmission)
+    private def _close_step_c(commit: Commit, chain: Option[StepCommitChain] = None): Consequence[State] = {
+      val closed = completed :+ ClosedStep(step.identity, commit, reviewEvidence, stepAdmission, chain)
       val nextcursor = cursor + 1
       Consequence.success(new State(plan,
         if (nextcursor == plan.steps.size) Stage.PhaseInspection else Stage.Implementation,
@@ -765,6 +825,32 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         !prior.conditions.exists(_.identity == condition.identity)) Consequence.unit
       else invalid("Review continuation requires one fresh required Step condition; exclusions cannot be promoted")
   } yield condition
+
+  /** Literal append only; no directory expansion or overlapping additions. */
+  private[admission] def currentInventoryPathsC(current: Plan, proposed: Plan, stepIdentity: String):
+      Consequence[Vector[String]] = for {
+    _ <- validatePlanC(current)
+    _ <- GoalPhaseAcceptanceBoundary.savedPlanC(current)
+    _ <- validatePlanC(proposed)
+    _ <- GoalPhaseAcceptanceBoundary.savedPlanC(proposed)
+    index = current.steps.indexWhere(_.identity == stepIdentity)
+    _ <- if (index >= 0 && proposed.steps.size == current.steps.size && proposed.revision != current.revision)
+      Consequence.unit else invalid("Current inventory requires the same Step set and a fresh Plan revision")
+    prior = current.steps(index)
+    next = proposed.steps(index)
+    added = next.ownedPaths.drop(prior.ownedPaths.size)
+    _ <- if (added.nonEmpty && next.ownedPaths.take(prior.ownedPaths.size) == prior.ownedPaths &&
+        proposed.copy(revision = current.revision, steps = proposed.steps.updated(index, prior)) == current &&
+        next.copy(ownedPaths = prior.ownedPaths) == prior &&
+        added.forall(value => RepositorySyncNativeConflictInput.relative(value) &&
+          !value.exists(c => c.isControl || "*?[]{}".contains(c)) &&
+          !prior.ownedPaths.exists(owner => _inventory_overlap(owner, value))) &&
+        added.indices.forall(i => !added.take(i).exists(_inventory_overlap(_, added(i))))) Consequence.unit
+      else invalid("Current inventory may only append finite unique uncovered literal paths; every other Plan value stays exact")
+  } yield added
+
+  private def _inventory_overlap(left: String, right: String): Boolean =
+    left == right || left.startsWith(right + "/") || right.startsWith(left + "/")
 
   def validatePlanC(plan: Plan): Consequence[Unit] = {
     if (plan == null || !Vector(plan.identity, plan.revision, plan.phase, plan.repository).forall(text) ||

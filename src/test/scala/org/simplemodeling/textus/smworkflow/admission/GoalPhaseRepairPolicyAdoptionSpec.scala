@@ -17,7 +17,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Exact wires and real isolated same-Session mechanical direction replay.
   * Every direction is specification-owned, never genuine live Human consent.
   * @since   Oct. 25, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -67,6 +67,29 @@ final class GoalPhaseRepairPolicyAdoptionSpec extends AnyWordSpec with GivenWhen
   }
 
   "Exact repair policy contracts" should {
+    "E67 retain a partial-chain completed prefix and consumed repair counters in policy targets and directions" in {
+      Given("docs/spec/goal-phase-closure-recovery.md R8 E67: a formally admitted completed prefix with actual P/C/D metadata")
+      val target = _completed_target
+      val first = target.completed.head
+      val partial = O.Commit("9" * 40, _base.head, "8" * 40)
+      val completion = first.commit.copy(parent = partial.identity)
+      val chain = O.StepCommitChain(_base, partial, completion)
+      val retained = target.copy(completed = target.completed.updated(0, first.copy(commit = completion, partialCompletion = Some(chain))))
+      val direction = A.Direction(retained, "AdoptRuntimePolicy", _reference, "Keep exact completed prefix")
+      When("the existing policy target public projection and immutable direction roundtrip")
+      val decoded = take(A.targetC(A.targetRecord(retained)))
+      val saved = A.codec.decode(A.codec.encode(direction))
+      Then("the chain and the original actual parent survive without a counter reset or invented direct parent")
+      decoded shouldBe retained
+      saved shouldBe Right(direction)
+      decoded.repairProgress shouldBe target.repairProgress
+      decoded.completed.head.commit.parent shouldBe partial.identity
+      decoded.completed.head.partialCompletion shouldBe Some(chain)
+      val forged = retained.copy(completed = retained.completed.updated(0,
+        retained.completed.head.copy(partialCompletion = Some(chain.copy(completion = completion.copy(parent = _base.head))))))
+      A.decodeTarget(forged.asJson).isLeft shouldBe true
+    }
+
     "project a reviewless completed prefix publicly while retaining exact internal Target Direction and evidence binding bytes" in {
       Given("D4-PUBLIC-TARGET-01: two formally admitted completed Steps, a later current Step, nonzero counts and current candidate checks")
       val target = _completed_target

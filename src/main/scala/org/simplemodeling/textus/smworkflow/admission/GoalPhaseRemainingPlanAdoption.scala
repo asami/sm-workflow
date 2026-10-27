@@ -24,7 +24,7 @@ import GoalPhaseDocumentSource as D
 /** New Human direction for future work, separately from the unanswered old
   * question. All effects belong to the owning native guarded transaction.
   * @since   Oct. 20, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseRemainingPlanAdoption {
@@ -34,7 +34,20 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
   val message = "Adopt only the remaining unaccepted work using an independently admitted actual Human directive. " +
     "The original unanswered question is retained as superseded-by-adoption, without an answer. " +
     "Accepted Steps, commits, reviews, base and repair history remain. Review continuation adds one required Step condition " +
-    "for newly issued and future unaccepted work and consumes one ordinary repair. No check, Submit, Advance or commit runs here."
+    "for newly issued and future unaccepted work and consumes one ordinary repair. Current primary-Component inventory adoption " +
+    "only appends explicitly registered literal paths to the current Step, preserves all conditions and consumes no repair. " +
+    "Host staging ordinals and current-Step Git selection require separate normal registration. No check, Submit, Advance or commit runs here."
+
+  final case class CurrentInventoryTarget(componentInstance: String, stepIdentity: String,
+    appendedPaths: Vector[String], candidatePaths: Vector[String])
+  object CurrentInventoryTarget {
+    given Encoder[CurrentInventoryTarget] = deriveEncoder
+    private val _decoder: Decoder[CurrentInventoryTarget] = deriveDecoder
+    given Decoder[CurrentInventoryTarget] = Decoder.instance(cursor => _decoder(cursor).flatMap(value =>
+      if (_valid_inventory_target(value) && cursor.value.asObject.exists(_.keys.toSet ==
+          Set("componentInstance", "stepIdentity", "appendedPaths", "candidatePaths"))) Right(value)
+      else Left(DecodingFailure("Current inventory target is incomplete", cursor.history))))
+  }
 
   final case class ReviewRepairTarget(issueIdentity: String, conditionIdentity: String,
     candidate: O.Snapshot, checksReceipt: String)
@@ -50,14 +63,15 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
   final case class Target(sessionId: String, questionIdentity: String, sourceRevision: String, pendingRevision: String,
     plan: O.Plan, base: O.Snapshot, completed: Vector[O.ClosedStep], generation: Long,
     repairProgress: GoalPhaseRepairProgress.Snapshot, requestingResult: ContextReference, captured: R.Captured,
-    reviewRepair: Option[ReviewRepairTarget] = None)
+    reviewRepair: Option[ReviewRepairTarget] = None, currentInventory: Option[CurrentInventoryTarget] = None)
   object Target {
     given Encoder[Target] = deriveEncoder[Target].mapJson(_.mapObject(fields =>
-      if (fields("reviewRepair").exists(_.isNull)) fields.remove("reviewRepair") else fields))
+      Vector("reviewRepair", "currentInventory").foldLeft(fields)((saved, key) =>
+        if (saved(key).exists(_.isNull)) saved.remove(key) else saved)))
     private val _decoder: Decoder[Target] = deriveDecoder
     given Decoder[Target] = Decoder.instance { cursor =>
-      if (cursor.downField("reviewRepair").focus.exists(_.isNull))
-        Left(DecodingFailure("Review repair must be omitted or a valid target", cursor.history))
+      if (Vector("reviewRepair", "currentInventory").exists(key => cursor.downField(key).focus.exists(_.isNull)))
+        Left(DecodingFailure("Remaining Plan metadata must be omitted or a valid target", cursor.history))
       else _decoder(cursor).flatMap(value => if (_validate_target_c(value).isSuccess) Right(value)
         else Left(DecodingFailure("Remaining Plan target is invalid", cursor.history)))
     }
@@ -86,6 +100,8 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
         reference != null && _exact(reference.identity) && _exact(reference.revision)) Consequence.unit
       else F.invalid("remaining Plan directive requires its actual target, participant, reference and rationale")
     _ <- _validate_target_c(target)
+    _ <- if (target.currentInventory.forall(_.componentInstance == component)) Consequence.unit
+      else F.invalid("Current inventory directive crosses its actual Component instance")
   } yield Json.obj("componentInstance" -> Json.fromString(component), "remainingPlanAdoption" -> Json.obj(
     "target" -> target.asJson, "directive" -> Json.obj("rationale" -> Json.fromString(rationale),
       "participant" -> Json.fromString(participant), "reference" -> Json.obj(
@@ -129,6 +145,11 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
           ". Adopt required condition " + condition.identity + ": " + condition.description +
           ". scope=step applies to newly issued and future unaccepted ImplementStep, RepairStep and ReviewStep work; " +
           "historically accepted work keeps its original contract."
+      } + target.currentInventory.fold("") { inventory =>
+        " Current Component " + inventory.componentInstance + ", Step " + inventory.stepIdentity +
+          "; append " + inventory.appendedPaths.mkString(", ") + ". Registered candidatePaths/staging ordinals: " +
+          inventory.candidatePaths.zipWithIndex.map((path, index) => (index + 1).toString + "=" + path).mkString(", ") +
+          ". Preserve earlier ordinals and completed-Step Git selections; current-Step selection must include the appended paths."
       })
 
   def adoptC(source: H.Source, d: F.Declaration, core: ActionCall.Core, input: V.GoalPhaseRemainingPlanAdoptionInput):
@@ -183,10 +204,13 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
   private[admission] def reconstructC(source: H.Source, payload: Payload, sourceRevision: InstanceRevision,
     nextRevision: InstanceRevision): Consequence[Selected] = for {
         target <- Consequence.success(payload.target)
+        _ <- _validate_target_c(target)
         pending <- GoalPhaseNativeHistory.prefixC(source.session.current, sourceRevision)
         _ <- if (_matches(source, target, pending) && payload.participant == source.session.participantIdentity)
           Consequence.unit else F.invalid("retained remaining Plan adoption crosses its original actual source")
         _ <- validateDocumentsC(source.controller, target.captured, source.documents)
+        _ <- if (target.currentInventory.isEmpty || target.captured.documents == source.documents) Consequence.unit
+          else F.invalid("Current inventory adoption cannot revise document acceptance")
         review <- _review_target_c(source, target.captured.plan)
         _ <- if (review == target.reviewRepair) Consequence.unit
           else F.invalid("retained remaining Plan adoption crosses its actual Review issue, condition, candidate or checks")
@@ -206,6 +230,8 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
     } yield proposal.plan.copy(effectiveAcceptance = source.controller.plan.effectiveAcceptance.map(boundary =>
       boundary.copy(conditions = boundary.conditions :+ GoalPhaseAcceptanceBoundary.EffectiveCondition(
         condition.identity, condition.scope, condition.required, condition.description, "adopted"))))
+      else if (proposal.plan.steps.map(_.ownedPaths) != source.controller.plan.steps.map(_.ownedPaths))
+        Consequence.success(proposal.plan.copy(effectiveAcceptance = source.controller.plan.effectiveAcceptance))
       else GoalPhaseAcceptanceBoundary.captureC(d.projectAcceptance, proposal.plan)
     documents <- source.documents match {
       case None => Consequence.success(Option.empty[D.Bound])
@@ -217,10 +243,24 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
     captured = R.Captured(proposal, plan, documents)
     _ <- validateDocumentsC(source.controller, captured, source.documents)
     review <- _review_target_c(source, plan)
+    inventory <- if (plan.steps.map(_.ownedPaths) == source.controller.plan.steps.map(_.ownedPaths))
+      Consequence.success(Option.empty[CurrentInventoryTarget]) else for {
+      _ <- if (source.controller.cursor == source.controller.completed.size && source.controller.cursor < plan.steps.size &&
+          review.isEmpty && d.input.repositoryIdentity == source.controller.plan.repository)
+        Consequence.unit else F.invalid("Current inventory requires the actual current Step and same host repository")
+      step = source.controller.plan.steps(source.controller.cursor).identity
+      added <- O.currentInventoryPathsC(source.controller.plan, plan, step)
+      metadata = CurrentInventoryTarget(core.component.get.core.instanceId.canonicalKey, step, added, d.candidatePaths)
+      _ <- if (_valid_inventory_target(metadata)) Consequence.unit
+        else F.invalid("Every appended current inventory path requires explicit finite host candidatePaths registration")
+    } yield Some(metadata)
     target = Target(source.from.identity.value, H.identity(source).value, source.from.revision.value.toString,
       pending.revision.value.toString, source.controller.plan, source.controller.base, source.controller.completed,
-      source.controller.generation, GoalPhaseRepairProgress.snapshot(source.controller), source.result.resultReference, captured, review)
+      source.controller.generation, GoalPhaseRepairProgress.snapshot(source.controller), source.result.resultReference, captured, review, inventory)
+    _ <- _validate_target_c(target)
     _ <- _adopted_c(source, target, "description-eligibility", "Read-only description eligibility")
+    _ <- if (inventory.isEmpty || captured.documents == source.documents) Consequence.unit
+      else F.invalid("Current inventory adoption cannot revise document acceptance")
     _ <- plan.steps.drop(source.controller.cursor).foldLeft(Consequence.unit) { (prior, step) =>
       prior.flatMap(_ => GoalPhaseNativeValidation.selectedChecksC(d, plan, Some(step.identity)).map(_ => ()))
     }
@@ -230,12 +270,13 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
   } yield target
 
   private def _adopted_c(source: H.Source, target: Target, evidence: String, rationale: String): Consequence[O.State] =
-    target.reviewRepair match {
-      case Some(_) if source.controller.decisionSource.contains(O.Stage.Review) =>
+    (target.reviewRepair, target.currentInventory) match {
+      case (None, Some(_)) => source.controller.adoptCurrentInventoryRevisionC(target.captured.plan, evidence)
+      case (Some(_), None) if source.controller.decisionSource.contains(O.Stage.Review) =>
         val result = source.result.result.value
         source.controller.adoptRemainingReviewRevisionC(target.captured.plan, evidence,
           O.RepairDirective(_single_line(result.summary + " / Human remaining Plan direction: " + rationale), result.findings))
-      case None if !source.controller.decisionSource.contains(O.Stage.Review) =>
+      case (None, None) if !source.controller.decisionSource.contains(O.Stage.Review) =>
         source.controller.adoptRemainingRevisionC(target.captured.plan, evidence)
       case _ => F.invalid("remaining Plan adoption requires Review repair metadata exactly on the Review branch")
     }
@@ -283,15 +324,38 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
     } yield Some(target)
 
   private def _validate_target_c(target: Target): Consequence[Unit] = for {
-    _ <- if (target != null && target.reviewRepair != null && target.reviewRepair.forall(_valid_review_target)) Consequence.unit
+    _ <- if (target != null && target.reviewRepair != null && target.reviewRepair.forall(_valid_review_target) &&
+        target.currentInventory != null && target.currentInventory.forall(_valid_inventory_target) &&
+        !(target.reviewRepair.nonEmpty && target.currentInventory.nonEmpty)) Consequence.unit
       else F.invalid("remaining Plan target is incomplete")
     _ <- R.validateCapturedC(target.captured)
+    _ <- O.validatePlanC(target.plan)
+    _ <- if (target.currentInventory.nonEmpty ||
+        target.plan.steps.map(_.ownedPaths) == target.captured.plan.steps.map(_.ownedPaths)) Consequence.unit
+      else F.invalid("A changed current inventory requires its exact typed metadata")
+    _ <- target.currentInventory.fold(Consequence.unit) { inventory => for {
+      _ <- if (target.completed != null && target.completed.size < target.plan.steps.size &&
+          target.plan.steps(target.completed.size).identity == inventory.stepIdentity &&
+          target.completed.map(_.step) == target.plan.steps.take(target.completed.size).map(_.identity)) Consequence.unit
+        else F.invalid("Current inventory target crosses the immutable completed prefix or current Step")
+      added <- O.currentInventoryPathsC(target.plan, target.captured.plan, inventory.stepIdentity)
+      _ <- if (added == inventory.appendedPaths) Consequence.unit
+        else F.invalid("Current inventory target differs from its exact literal Plan append")
+    } yield () }
     _ <- target.reviewRepair.fold(Consequence.unit) { review => for {
       condition <- O.reviewRepairConditionC(target.plan, target.captured.proposal.plan)
       _ <- if (condition.identity == review.conditionIdentity) Consequence.unit
         else F.invalid("Review repair target names a different added condition")
     } yield () }
   } yield ()
+
+  private def _valid_inventory_target(value: CurrentInventoryTarget): Boolean = value != null &&
+    _exact(value.componentInstance) && _exact(value.stepIdentity) && value.appendedPaths != null &&
+    value.appendedPaths.nonEmpty && value.appendedPaths.size <= 256 &&
+    value.appendedPaths.distinct == value.appendedPaths && value.candidatePaths != null &&
+    value.candidatePaths.nonEmpty && value.candidatePaths.size <= 256 && value.candidatePaths.distinct == value.candidatePaths &&
+    value.candidatePaths.forall(path => _exact(path) && RepositorySyncNativeConflictInput.relative(path) &&
+      !path.exists(c => "*?[]{}".contains(c))) && value.appendedPaths.forall(value.candidatePaths.contains)
 
   private def _valid_review_target(value: ReviewRepairTarget): Boolean = value != null &&
     value.issueIdentity != null && value.issueIdentity.matches("issue-[1-9][0-9]{0,4}") &&

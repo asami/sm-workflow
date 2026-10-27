@@ -1,5 +1,63 @@
 # GoalTask public runtime contract
 
+`GoalTaskService.describeGoalTaskMalformedIssuedWorkRecovery` reads an exact
+active native WorkOrder and its original business checkpoint. Its input is the
+Session and old continuation identity. Eligibility requires both missing
+`reasoningClass` and missing `disposition`; valid and partially classified issues
+are refused. The description freezes the complete original native frontier,
+immutable issue, participant, business input, base, checks, evidence, counters,
+current corrected requirement and mapping/origin. The concrete DTO carries this
+target as opaque JSON text so property-name conversion cannot rewrite native
+fields or arbitrary profile-control keys.
+
+`recoverGoalTaskMalformedIssuedWork` re-reads that target and requires independently
+provisioned evidence under `goal-task-malformed-issued-work-recovery`. The closed
+choices are `AuthorizeOneNewAttemptAcceptingUnresolvedEffects` and `Defer`.
+Authentication, a source locator, passive preparation, issuer configuration,
+Available/unclaimed state and missing logs provide no Human consent or
+nonexecution proof. The evidence Reader binds the exact target, participant,
+Human source/reference, answer and occurrence time. Known native claimed or
+completed work is refused even with Human evidence. No covering external
+nonexecution provider is implemented here; this route retains effects as UNKNOWN.
+
+Recovery uses the CNCF managed WorkOrder supersession transaction to retain a
+typed checkpoint while marking the immutable old issue Superseded and appending
+an unsuspended native frontier. The exact entity revision from the compared
+inspection is a mandatory transaction precondition, so a concurrent claim/release
+cycle is refused even if the continuation returns to Available. It executes no Git, SBT, implementation, review,
+Submit or commit. Defer changes no native state. Only a verified transaction is
+success; conditional refusal and transaction uncertainty propagate from CNCF.
+After any failed or interrupted response, collect the same target's retained
+disposition before deciding whether another operation is needed; a failed
+response is never proof of rollback.
+
+Ordinary `advanceGoalTask` collects the checkpoint, saves unchanged business
+state and issues once through the existing corrected issue path. A changed
+mapping/origin is refused. The replacement's retained context references the
+actual predecessor at issuance; no future ID is returned as an issued successor.
+Repeated Advance redisplays the actual suspended request. Repeated recovery
+collects the committed disposition, including after replacement completion, and
+reports a successor only after reading its actual retained issue. Native
+completion rejects late old results. Start, accepted Submit replay, counter
+reset and successful-effect replay are not recovery mechanisms.
+
+Task review evidence preparation accepts family `GoalTask`, kind `review`, an
+actual `GoalTaskView` and a `GoalTaskWorkResult`. It uses the existing independent
+StandaloneReview port semantics while requiring Task business input and the
+exact Task completion identity. Runtime completion still excludes all
+implementation workers and requires independently provisioned review evidence.
+
+Task Submit accepts optional typed `issuedWorkContext`. Any supplied context must
+match the actual current issue's complete identity, revision, Session, contracts,
+context and execution requirement. Once durable native history contains a
+verified committed WorkOrder recovery, this parameter is required on every
+subsequent Task Submit, including after completion, later progression and physical
+reopen. The original Request's context must accompany its result; callers must
+never renew a delayed result's target. Legacy Tasks without recovery history may
+omit it. This is request correlation, not worker authentication or review evidence.
+The finite caller helper forwards the actual Task Request's context automatically;
+submission metadata cannot supply or replace it.
+
 Date: 2026-10-27 (Asia/Tokyo)
 Status: P67-T2 source implementation; native validation, actual Task commit episode and installed acceptance pending
 

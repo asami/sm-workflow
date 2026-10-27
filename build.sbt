@@ -70,8 +70,15 @@ lazy val root = project
         val selected = LabelledTests.select((Test / fullClasspath).value.files,
           (Test / classDirectory).value, version.value, request.purpose, candidates, request.exact, request.containing)
         streams.value.log.info(s"Labelled execution: purpose=${request.purpose} suites=${selected.size} operations=${selected.map(_.definition.selectors.length).sum} runtime=${selected.exists(_.requiresRuntime)}")
-        // Keep names bound to each suite; never pass a global union of -t names.
-        val runs = Def.sequential(LabelledTests.arguments(selected).map(arguments => (Test / labelledTestExecution).toTask(arguments)))
+        // One ordinary SBT execution produces its genuine aggregate report.
+        // Definitions retain their own metadata-selected TestSelector arrays.
+        val execution = Def.valueStrict(LabelledTests.execute(selected, (Test / loadedTestFrameworks).value,
+          loader, (Test / labelledTestExecution / testExecution).value, streams.value.log))
+        val resultLogger = (Test / labelledTestExecution / testResultLogger).value
+        val log = streams.value.log
+        val runs = Def.task {
+          resultLogger.run(log, execution.value, "Test / labelledTestExecution")
+        }
         val prepared = if (selected.exists(_.requiresRuntime)) Def.taskDyn {
           cozyPrepareRuntime.value
           prepareTestArtifacts.value
@@ -89,7 +96,7 @@ lazy val root = project
 
     skillSourceFiles := {
       val sourceRoot = baseDirectory.value / "skills"
-      val names = Seq("sm-goal-phase", "sm-split-phase", "sm-repository-sync")
+      val names = Seq("sm-goal-phase", "sm-split-phase", "sm-repository-sync", "sm-test-fix", "sm-goal-task", "sm-review-fix")
       val skills = names.map { name =>
         val source = sourceRoot / name / "SKILL.md"
         if (!source.isFile) sys.error("Missing component-owned skill source: " + source)
@@ -98,6 +105,11 @@ lazy val root = project
       val contracts = Seq(
         "docs/spec/native-host-execution.md",
         "docs/spec/caller-information.md",
+        "docs/spec/task-fix-delivery.md",
+        "docs/spec/standalone-fix-runtime.md",
+        "docs/spec/standalone-fix-acceptance.md",
+        "docs/spec/goal-task-runtime.md",
+        "docs/spec/standalone-review-fix-runtime.md",
         "docs/spec/goal-phase-acceptance-boundary.md",
         "docs/spec/goal-phase-purpose-repair.md",
         "docs/spec/goal-phase-release-repair-continuation.md",

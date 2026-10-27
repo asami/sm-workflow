@@ -97,3 +97,14 @@ is closed by source fixtures.
 Use focused behavior checks for changed admission and routing, plus one connected
 real request. Reuse prior producer evidence. Documentation alone does not establish
 that these entrypoints exist, are installed or have passed the checklist.
+
+## P67-T4 source delivery boundary
+
+The [Task/FIX delivery contract](../spec/task-fix-delivery.md) supplies matching
+thin skill sources and passive public result/adoption preparations. Their exact
+caller observations retain destination state and distinct owners; they grant no
+consent, effect or requester acceptance. Actual installed and authorized
+existing-chat evidence is pending. Keep active Sessions pinned: this consumer's
+v3 GoalPhase closure codec cannot adopt retained v4 partial completion. Source
+CAR ABI reconciliation is outside this Step's owned paths. See the
+[English source handoff](../journal/2026/10/2026-10-27-phase-6.7-t4-source-handoff.md).

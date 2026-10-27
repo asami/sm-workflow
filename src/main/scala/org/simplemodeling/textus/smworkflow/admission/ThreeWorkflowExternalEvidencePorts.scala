@@ -16,11 +16,16 @@ import NativeExternalEvidence.Purpose
   * effect scope is distinct from review/Human semantic attestation. No factory
   * actor, dummy verifier, success default or reply-decoded authority is used.
   * @since   Oct.  7, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: NativeExternalEvidence.Reader) {
   import ThreeWorkflowExternalEvidencePorts.*
+  val goalTaskMalformedIssuedWorkRecovery: GoalTaskMalformedIssuedWorkRecovery.EvidencePort =
+    new GoalTaskMalformedIssuedWorkRecovery.EvidencePort {
+      def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
+        _admit_evidence_c(core, Purpose.GoalTaskMalformedIssuedWorkRecovery, key(reference.identity, reference.revision), binding)
+    }
   val splitStart: SplitPhaseTypedStartHumanVerification.EvidencePort = new SplitPhaseTypedStartHumanVerification.EvidencePort {
     def admitC(core: ActionCall.Core, lookupIdentity: String, target: Json) =
       _admit_evidence_c(core, Purpose.SplitStart, lookupIdentity, target)
@@ -49,7 +54,8 @@ private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: Nativ
   val goalReview: GoalPhaseNativeReview.EvidencePort = new GoalPhaseNativeReview.EvidencePort {
     override def admitStandaloneC(core: ActionCall.Core, input: StandaloneFixExecution.Work,
       submitted: ContinuationResult[StandaloneFixExecution.Result]) = for {
-      _ <- if (input.kind == "Review" && submitted.evidence.workerIdentity.exists(_.nonEmpty)) Consequence.unit
+      _ <- if (input.kind == "Review" && submitted.evidence.workerIdentity.exists(_.nonEmpty) &&
+        submitted.result.typeIdentity == (if (input.state.input.task.nonEmpty) "GoalTaskWorkResult" else "StandaloneFixWorkResult")) Consequence.unit
         else Consequence.securityPermissionDenied("Standalone review has no actual independent worker")
       binding = _review_target(core, "standalone-review", input.asJson, submitted, submitted.result.value.asJson)
       _ <- _admit_evidence_c(core, Purpose.StandaloneReview,

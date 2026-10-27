@@ -10,7 +10,7 @@ import org.goldenport.protocol.spec.ServiceDefinition
   * The standard launcher uses ThreeWorkflowRuntimeParameters after CNCF bootstrap.
   * Parameter data selects storage/targets/policies, never independent authority ports.
   * @since   Oct.  6, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowLauncherAssembly {
@@ -34,6 +34,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
   val publishedMcpOperations: Set[String] = Set(
     "GoalTaskService.startGoalTask", "GoalTaskService.advanceGoalTask",
     "GoalTaskService.submitGoalTaskWorkResult", "GoalTaskService.resolveGoalTaskDiagnosticInformation",
+    "GoalTaskService.describeGoalTaskMalformedIssuedWorkRecovery", "GoalTaskService.recoverGoalTaskMalformedIssuedWork",
     "StandaloneFixService.startStandaloneReviewFix",
     "StandaloneFixService.startStandaloneFix", "StandaloneFixService.advanceStandaloneFix",
     "StandaloneFixService.submitStandaloneFixWorkResult", "StandaloneFixService.resolveStandaloneFixDiagnosticInformation",

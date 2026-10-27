@@ -14,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Passive preparation of managed review input using the existing v7 codec.
   * The independent reviewer owns the review and provisioning of the returned row.
   * @since   Oct. 14, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 object NativeReviewPreparation {
@@ -77,7 +77,20 @@ object NativeReviewPreparation {
 
   private[smworkflow] def standaloneC(context: V.WorkflowReviewContext, result: V.StandaloneFixWorkResult,
     reference: V.WorkflowArtifactReference, execution: V.WorkflowExecutionEvidence,
-    issuer: String, occurredAt: Instant): Consequence[Prepared] = for {
+    issuer: String, occurredAt: Instant): Consequence[Prepared] =
+    boundedC(context, result, reference, execution, issuer, occurredAt, false)
+
+  /** Task shares the independent review port, but retains its own completion type. */
+  private[smworkflow] def taskC(context: V.WorkflowReviewContext, result: V.GoalTaskWorkResult,
+    reference: V.WorkflowArtifactReference, execution: V.WorkflowExecutionEvidence,
+    issuer: String, occurredAt: Instant): Consequence[Prepared] =
+    boundedC(context, V.StandaloneFixWorkResult(result.outcome, result.summary, result.findings,
+      result.conditions.map(c => V.StandaloneFixCondition(c.identity, c.satisfied, c.detail)),
+      result.unresolvedQuestions, result.diagnosticRepair, result.fixAssessment, Vector.empty), reference, execution, issuer, occurredAt, true)
+
+  private def boundedC(context: V.WorkflowReviewContext, result: V.StandaloneFixWorkResult,
+    reference: V.WorkflowArtifactReference, execution: V.WorkflowExecutionEvidence,
+    issuer: String, occurredAt: Instant, task: Boolean): Consequence[Prepared] = for {
     assessment <- GoalPhaseFixAssessment.internalReportC(result.fixAssessment)
     diagnosis <- org.simplemodeling.textus.smworkflow.admission.IncrementalSbtDiagnosisRepair.fromPublicC(result.diagnosticRepair)
     value = StandaloneFixExecution.Result(result.outcome, result.summary, result.findings,
@@ -86,8 +99,11 @@ object NativeReviewPreparation {
     rawWork <- _json_c(context.target)
     workJson <- GoalPhaseNativeMetadata.normalizePublicJson(rawWork).fold(Consequence.stateConflict(_), Consequence.success)
     work <- workJson.as[StandaloneFixExecution.Work].fold(e => Consequence.stateConflict(e.message), Consequence.success)
+    _ <- if (work.state.input.task.nonEmpty == task) Consequence.unit
+      else Consequence.stateConflict("Review family differs from the actual retained business request")
     _ <- StandaloneFixExecution.admitResultC(work, value)
-    prepared <- _prepare_c(context, NativeExternalEvidence.Purpose.StandaloneReview, StandaloneFixNativeRun.resultCodec.typeIdentity,
+    prepared <- _prepare_c(context, NativeExternalEvidence.Purpose.StandaloneReview,
+      if (task) "GoalTaskWorkResult" else StandaloneFixNativeRun.resultCodec.typeIdentity,
       reference, execution, issuer, occurredAt, value.asJson)
   } yield prepared
 

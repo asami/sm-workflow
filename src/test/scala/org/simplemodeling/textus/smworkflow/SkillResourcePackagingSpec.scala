@@ -11,16 +11,20 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 25, 2026
+ * @version Oct. 27, 2026
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  private val _skill_paths = Vector("sm-goal-phase", "sm-split-phase", "sm-repository-sync")
+  private val _skill_paths = Vector("sm-goal-phase", "sm-split-phase", "sm-repository-sync", "sm-test-fix", "sm-goal-task", "sm-review-fix")
     .map(name => s"skills/$name/SKILL.md")
   private val _contract_paths = Vector(
     "docs/spec/native-host-execution.md",
     "docs/spec/caller-information.md",
+    "docs/spec/task-fix-delivery.md",
+    "docs/spec/standalone-fix-runtime.md",
+    "docs/spec/goal-task-runtime.md",
+    "docs/spec/standalone-review-fix-runtime.md",
     "docs/spec/goal-phase-acceptance-boundary.md",
     "docs/spec/goal-phase-release-repair-continuation.md",
     "docs/spec/goal-phase-dependency-scope.md",
@@ -33,16 +37,16 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
     "scripts/native-goal-authority.py",
     "scripts/migrate-runtime-caller-format.py"
   )
-  private val _supporting_paths = Vector("docs/spec/goal-phase-purpose-repair.md")
+  private val _supporting_paths = Vector("docs/spec/goal-phase-purpose-repair.md", "docs/spec/standalone-fix-acceptance.md")
   private val _distribution_paths = _skill_paths ++ _contract_paths ++ _caller_paths ++ _supporting_paths
 
   "Component-owned skill resources" should {
-    "retain exactly the three public semantic skill sources in the actual component JAR" in {
+    "retain exactly the six public semantic skill sources in the actual component JAR" in {
       Given("the official packageBin component artifact and the independently readable authoring sources")
       val artifact = Paths.get("target/scala-3.3.8/textus-sm-workflow_3-0.1.0-SNAPSHOT.jar")
       withClue("Run packageBin before this artifact acceptance spec: ")(Files.isRegularFile(artifact) shouldBe true)
       val prefix = "META-INF/sm-workflow/skills/"
-      val names = Vector("sm-goal-phase", "sm-split-phase", "sm-repository-sync")
+      val names = Vector("sm-goal-phase", "sm-split-phase", "sm-repository-sync", "sm-test-fix", "sm-goal-task", "sm-review-fix")
       val expected = names.map(name => s"$prefix$name/SKILL.md")
       val jar = new JarFile(artifact.toFile)
       try {
@@ -61,7 +65,7 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
       } finally jar.close()
     }
 
-    "retain identical bytes for exactly fifteen distribution files in the standalone ZIP and component JAR" in {
+    "retain identical bytes for exactly twenty-three distribution files in the standalone ZIP and component JAR" in {
       Given("the actual skillBundle ZIP, packageBin JAR and independent authoring sources")
       val archive = Paths.get("target/sm-workflow-skills-0.1.0-SNAPSHOT.zip")
       val artifact = Paths.get("target/scala-3.3.8/textus-sm-workflow_3-0.1.0-SNAPSHOT.jar")
@@ -80,7 +84,7 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
           val packagedpaths = jar.entries().asScala
             .filter(entry => !entry.isDirectory && entry.getName.startsWith("META-INF/sm-workflow/"))
             .map(_.getName.stripPrefix("META-INF/sm-workflow/")).toVector
-          Then("both distribution namespaces contain exactly fifteen files with authoring and JAR byte equality")
+          Then("both distribution namespaces contain exactly twenty-three files with authoring and JAR byte equality")
           entries.map(_.getName).sorted shouldBe _distribution_paths.sorted
           packagedpaths.sorted shouldBe _distribution_paths.sorted
           _distribution_paths.foreach { path =>
@@ -122,7 +126,8 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
         val acceptancebody = try new String(acceptance.readAllBytes(), UTF_8) finally acceptance.close()
         val supporting = markdownlink.findAllMatchIn(acceptancebody).map(_.group(1)).map(_.takeWhile(_ != '#'))
           .filter(_ == "goal-phase-purpose-repair.md").map(reference => Paths.get("docs/spec").resolve(reference).toString).toSet
-        supporting shouldBe _supporting_paths.toSet
+        supporting shouldBe Set("docs/spec/goal-phase-purpose-repair.md")
+        _supporting_paths.foreach(packagedpaths should contain(_))
         supporting.foreach(packagedpaths should contain(_))
       } finally zip.close()
     }
