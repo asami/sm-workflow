@@ -1,5 +1,22 @@
 # sm-workflow incremental-use roadmap
 
+Tool-neutral validation allocated 2026-10-28:
+[Phase 18](phase-18.md) / [checklist](phase-18-checklist.md) extends the Phase 6.7
+shared execution baseline alongside Phase 17, without inserting a gate into
+the existing primary roadmap. Common SBT validation and persistence work can
+proceed alongside CNCF Phase 117; Flutter integration requires its qualified
+delivery. Phase 18 owns consumer acceptance, not tool-specific CNCF DSLs.
+
+AI operating profiles and lightweight metrics adopted 2026-10-27:
+[Phase 6.10](phase-6.10.md) follows 6.9 with standard/current, cost and quality
+profiles and a logical sm-goal-phase profile parameter. At Phase close, show
+start/end source-line counts, signed net increase and already acquired tokens per
+positive net source step, with coverage/N/A reasons and no added AI calls.
+Preserve active configuration/work/results; Phase 9 owns model evaluation and
+Phase 13 owns usage acquisition. See the [specification](../spec/ai-operating-profiles.md),
+[checklist](phase-6.10-checklist.md) and
+[English handoff](../journal/2026/10/2026-10-27-phase-6.10-ai-operating-profiles-handoff.md).
+
 Assembly-free installed startup correction adopted 2026-10-27:
 [AF-S1–5](assembly-free-startup-correction.md) consumes CNCF's ordinary standalone
 wiring correction, removes residual fixed-file assumptions from helper sources
@@ -32,7 +49,7 @@ and delegated delivery; Phase 7 composes the qualified routes. See the
 
 
 Commit/recovery standardization adopted 2026-10-26:
-[Phase 6.8](phase-6.8.md) follows active Phase 6.7; Phase 6.9 then precedes Phase 7.
+[Phase 6.8](phase-6.8.md) follows active Phase 6.7; Phases 6.9 and 6.10 then precede Phase 7.
 Reuse the bounded P67-T1 repair, purpose-based authorization and completed-result
 collection; finish common authority/recovery, configurable automatic commit
 hygiene and Step/release/RepositorySync integration. Document SHA and fixed file
@@ -390,10 +407,13 @@ and connects the skills; Phase 6.3 starts gradual real use after integrated acce
 This replaces the earlier plan to start skill-based use after Phase 5.
 
 Build a small usable system, start using it, and grow it from actual development
-needs. The current rollout is **Phase 2 -> Phase 5 / Phase 5.1 -> Phase 5.2 -> Phase 5.3 -> Phase 6 -> Phase 6.1 -> Phase 6.2 -> Phase 6.3 -> Phase 6.4 -> Phase 6.5 -> Phase 6.6 -> Phase 6.7 -> Phase 6.8 -> Phase 6.9 -> Phase 7 -> Phase 8**.
+needs. The current rollout is **Phase 2 -> Phase 5 / Phase 5.1 -> Phase 5.2 -> Phase 5.3 -> Phase 6 -> Phase 6.1 -> Phase 6.2 -> Phase 6.3 -> Phase 6.4 -> Phase 6.5 -> Phase 6.6 -> Phase 6.7 -> Phase 6.8 -> Phase 6.9 -> Phase 6.10 -> Phase 7 -> Phase 8**.
 Phase 17 extends Task/FIX after 6.7; its number does not require all Phases 8–16
 to finish first. Only the specific workspace/investigation integrations consume
 their relevant Phase 7/14 capabilities.
+Phase 18 extends validation after the 6.7 shared execution baseline; it does not
+wait for all Phases 8–17. Its Flutter integration depends on CNCF Phase 117 delivery,
+while common SBT and persistence work can proceed in parallel with that producer.
 Phase numbers do not require Phases 3 and 4 to precede Phase 5.
 
 Revised 2026-10-09: [Phase 5.1](phase-5.1.md) names the connected correction for
@@ -423,8 +443,10 @@ in Phase 6, using the corrected runtime contract.
 | [6.7: Ad hoc Task and standalone FIX](phase-6.7.md) | sm-test-fix -> sm-goal-task -> sm-review-fix -> real separate-chat delivery | Single repository; conditional fix review, integrated Task review/commit; [checklist](phase-6.7-checklist.md) |
 | [6.8: Commit recovery and delegated delivery](phase-6.8.md) | Common authority/commit recovery, mechanical hygiene and independent sm-delegate-task | Shared execution; mandatory delegate commit, required publication/return; retain test-fix/goal-task contracts and active 6.7 |
 | [6.9: Runtime-owned RepositorySync](phase-6.9.md) | Clean synchronization, impact-selected validation/review and dirty purpose-based commits | Runtime-owned main route; reuse 6.8 commit/recovery; Phase 7 composes it across repositories |
+| [6.10: AI operating profiles and lightweight metrics](phase-6.10.md) | Standard/current, cost, quality selection; start/end source counts and observed tokens per net source step | No live config switch or extra AI calls; preserve issued work; comparison stays in 9 and usage acquisition in 13 |
 | [7: Multi-repository synchronization and artifact overlay](phase-7.md) | Synchronize/validate the workspace and consumer artifact selections using CNCF-discovered project purpose/feature queries | Full practical GoalPhase adoption with related-project management; retain local-development/sync/artifact ownership and existing overlay acceptance |
 | [17: Task and standalone FIX extensions](phase-17.md) | Wider inputs, dirty/focused/full options, multi-unit composition and authorized investigation/related-project integration | Reuse 6.7 without rebuilding it; [checklist](phase-17-checklist.md); Phase 7/14 dependencies are scenario-specific |
+| [18: Tool-neutral validation and Flutter](phase-18.md) | Common validation results, retained SBT semantics and Flutter integration | After the 6.7 execution baseline; Flutter W4–W5 consume CNCF Phase 117; [checklist](phase-18-checklist.md); no new gate for 6.8–7 |
 | [8: Runtime extensions and practical closure](phase-8.md) | Resolve necessary Phase 2 carryover and needs found during use | Reassess necessity, finish selected work and close this rollout |
 | [11: Common Journal and trial skills](phase-11.md) | Actual common record/read/find, accepted Finding recording, packaged/deployed skills and Phase 6.4 trial-host connection | Short priority delivery before remaining 6.4 work; no 6.4 archive or 7–10 completion dependency |
 | [11.1: Journal decisions, issues and handoffs](phase-11.1.md) | Related semantic records, correction/history, state/query and bounded batch management | Reuse 11 independently; not a prerequisite for the 6.4 trial |
