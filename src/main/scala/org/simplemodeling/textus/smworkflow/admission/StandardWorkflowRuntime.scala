@@ -20,7 +20,7 @@ import org.simplemodeling.textus.smworkflow.value.{GoalPhaseStartInput, Reposito
 /** Standard composition contains policies and logical destinations, never a
   * selected Phase or Plan. Read actual Start input or the retained native run
   * only when its Operation executes, within that call's ordinary storage/UoW.
-  * @since Oct. 27, 2026
+  * @since   Oct. 27, 2026
   * @version Oct. 27, 2026
   */
 private[smworkflow] object StandardWorkflowRuntime {
@@ -155,7 +155,8 @@ private[smworkflow] object StandardWorkflowRuntime {
     request: Request, core: ActionCall.Core): Consequence[spec.ServiceDefinition] = for {
     definition <- RepositorySyncDefinitionBinding.bindC
     p = shared.persistence
-    input <- if (request.operation == "startRepositorySync") NativeWorkflowOperationInput.valueC[RepositorySyncStartInput](request, "input")
+    target <- targetC(creation)
+    selectedInput <- if (request.operation == "startRepositorySync") StandardRepositorySyncIntent.inputC(request, target).map(_ -> true)
       else for {
         session <- NativeWorkflowOperationInput.textC(request, "sessionId")
         context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(session))
@@ -165,12 +166,12 @@ private[smworkflow] object StandardWorkflowRuntime {
         retained <- starts.loadRetainedC(RepositorySyncManagedFetch.reference(session, "start"))(using context)
         selected <- retained.flatMap(_.receipt.payload.value.context).map(Consequence.success)
           .getOrElse(invalid("Session has no native RepositorySync Start"))
-      } yield RepositorySyncStartInput(selected.repositoryIdentity, selected.localBranch, selected.trackingRemote,
-        selected.trackingBranch, selected.remoteEndpointIdentity, selected.syncMode)
-    target <- targetC(creation)
+      } yield (RepositorySyncStartInput(selected.repositoryIdentity, selected.localBranch, selected.trackingRemote,
+        selected.trackingBranch, selected.remoteEndpointIdentity, selected.syncMode), StandardRepositorySyncIntent.owns(selected))
+    input = selectedInput._1
     classifications <- RepositorySyncNativeExecution.resolveC(parameters)
     declaration = RepositorySyncManagedFetch.Declaration(p.configuration, p.instances, p.continuations, input,
-      target, shared.profiles, shared.origin, classifications, shared.journal)
+      target, shared.profiles, shared.origin, classifications, shared.journal, runtimeCleanSync = selectedInput._2)
     // Before review use actual conflicts; afterwards use that issued review's
     // retained candidate paths so staging does not erase the repair scope.
     paths <- if (request.operation == "startRepositorySync") Consequence.success(Set.empty[String])
@@ -178,17 +179,19 @@ private[smworkflow] object StandardWorkflowRuntime {
     service <- RepositorySyncManagedServiceAssembly.bindRuntimeC(creation, declaration, nativeProgression = true,
       conflictPolicy = RepositorySyncNativeConflictInput.Policy(paths), validationPolicy = Some(repositoryValidation),
       nativeReview = Some(RepositorySyncNativeMergeReview.Installation(repositoryReview, shared.ports.repositoryReview)),
-      convergence = Some(shared.ports.convergence),
+      convergence = Some(if (selectedInput._2) StandardRepositorySyncIntent.authority else shared.ports.convergence),
       humanConflict = if (paths.isEmpty) None else Some(RepositorySyncHumanConflict.Installation(shared.ports.repositoryHuman)),
       repositoryContinuation = Some(RepositorySyncValidationContinuation.Installation(shared.ports.repositoryValidationContinuation)))
     selected <- RuntimeGitSelections.repositoryC(NativeWorkflowSessionInput.repository(
-      NativeWorkflowResultInput.repository(service, creation, declaration, definition), creation, declaration, definition), paths)
-  } yield selected
+      NativeWorkflowResultInput.repository(service, creation, declaration, definition), creation, declaration, definition, runtimeIntent = true), paths)
+  } yield StandardRepositorySyncIntent.bindInput(selected, input)
 
   private def repositoryPathsC(declaration: RepositorySyncManagedFetch.Declaration,
     definition: DefinitionBinding, request: Request, core: ActionCall.Core): Consequence[Set[String]] = for {
     identity <- NativeWorkflowOperationInput.textC(request, "sessionId")
-    session <- RepositorySyncManagedFetch.sessionC(identity, declaration, definition, core)
+    context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(identity))
+    selectedcore = core.copy(executionContext = context)
+    session <- RepositorySyncManagedFetch.sessionC(identity, declaration, definition, selectedcore)
     boundary = session.started.current.history.reverseIterator.flatMap(_.suspension).find { value =>
       val name = value.continuationIdentity.value
       name.startsWith(identity + ":native-review:") || name.startsWith(identity + ":native-triage:")
@@ -197,11 +200,11 @@ private[smworkflow] object StandardWorkflowRuntime {
       case Some(value) => for {
         issued <- session.storage.bindIssuedC(RepositorySyncNativeMergeReviewContinuation.completionOperation,
           RepositorySyncNativeMergeReview.inputCodec)
-        retained <- issued.loadC(org.goldenport.cncf.workflow.ContinuationIdentity(value.continuationIdentity.value))(using core.executionContext)
+        retained <- issued.loadC(org.goldenport.cncf.workflow.ContinuationIdentity(value.continuationIdentity.value))(using context)
         work <- retained.map(Consequence.success).getOrElse(invalid("Native merge review input is missing"))
         input <- NativeWorkflowOperationOutput.workInputC(work)
       } yield input.changedPaths.toSet
-      case None => WorkflowManagedProcessExecution.executeGitC(core,
+      case None => WorkflowManagedProcessExecution.executeGitC(selectedcore,
         org.goldenport.cncf.processexecution.GitOperation.UnmergedIndex).flatMap(_.valueC).map(_.map(_.path.value).toSet)
     }
   } yield paths
@@ -248,11 +251,11 @@ private[smworkflow] object StandardWorkflowRuntime {
       case _ => invalid("No managed repository execution profile is configured for this RuntimeRoot")
     }
     repositories <- raw.hcursor.get[Vector[Json]]("gitRepositories").fold(e => invalid(e.message), Consequence.success)
-    repository <- repositories.find(_.hcursor.get[String]("target").contains("sm-workflow-repository"))
-      .map(Consequence.success).getOrElse(invalid("Managed profile has no sm-workflow repository target"))
+    repository <- uniqueC(repositories.filter(_.hcursor.get[String]("target").contains("sm-workflow-repository")),
+      "Managed profile requires exactly one sm-workflow repository target")
     workspaces <- raw.hcursor.get[Vector[Json]]("workspaces").fold(e => invalid(e.message), Consequence.success)
-    workspace <- workspaces.find(_.hcursor.get[String]("identity").contains("sm-workflow-repository"))
-      .map(Consequence.success).getOrElse(invalid("Managed repository workspace is absent"))
+    workspace <- uniqueC(workspaces.filter(_.hcursor.get[String]("identity").contains("sm-workflow-repository")),
+      "Managed profile requires exactly one repository workspace")
     root <- workspace.hcursor.get[String]("root").fold(e => invalid(e.message), Consequence.success)
     branch <- repository.hcursor.get[String]("localBranch").fold(e => invalid(e.message), Consequence.success)
     remote <- repository.hcursor.get[String]("remote").fold(e => invalid(e.message), Consequence.success)
@@ -296,5 +299,8 @@ private[smworkflow] object StandardWorkflowRuntime {
   private def repositoryReview = RepositorySyncNativeMergeReview.Policy("merge-review", 1)
   private def repositoryValidation = RepositorySyncNativeMergeValidation.Policy("repository-checks", 1, "required",
     "Run the standard repository test before accepting a merge", Vector(RepositorySyncNativeMergeValidation.Check("test", 1)))
+  private def uniqueC(values: Vector[Json], message: String): Consequence[Json] =
+    if (values.size == 1) Consequence.success(values.head) else invalid(message)
+
   private def invalid[A](message: String): Consequence[A] = Consequence.configurationInvalid(message)
 }

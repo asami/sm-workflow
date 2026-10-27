@@ -40,7 +40,8 @@ private[smworkflow] object RepositorySyncManagedFetch {
     journalPolicy: Option[DevelopmentJournal.Policy] = None,
     commitHygieneMode: String = CommitHygiene.autoFix,
     hygieneStagingPaths: Vector[String] = Vector.empty,
-    completionRecords: Option[CompletionRecords.Policy] = None)
+    completionRecords: Option[CompletionRecords.Policy] = None,
+    runtimeCleanSync: Boolean = false)
   final case class StartContext(selectionIdentity: String, invocationIdentity: String,
     participantIdentity: String, repositoryIdentity: String, localBranch: String,
     trackingRemote: String, trackingBranch: String, remoteEndpointIdentity: String, syncMode: String)
@@ -81,7 +82,8 @@ private[smworkflow] object RepositorySyncManagedFetch {
         d.instances == d.continuations || d.input == null || d.target == null || d.target.root == null ||
         !d.target.root.isAbsolute || d.target.root.normalize != d.target.root ||
         d.input.localBranch != d.target.localBranch || d.input.trackingRemote != d.target.remote ||
-        d.input.trackingBranch != d.target.remoteBranch)
+        d.input.trackingBranch != d.target.remoteBranch ||
+        (d.runtimeCleanSync && d.input.remoteEndpointIdentity != d.target.endpoint))
       invalid("host storage/tracking declaration differs")
     else for {
       _ <- CommitHygiene.decodeC(d.commitHygieneMode)

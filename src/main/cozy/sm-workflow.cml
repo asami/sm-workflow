@@ -5418,6 +5418,11 @@ on = local-state-preserved
 
 ##### TRANSITION
 
+to = Converged
+on = native-convergence-observed
+
+##### TRANSITION
+
 to = IntegrationValidated
 on = completion-records-prepared
 

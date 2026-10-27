@@ -1,6 +1,6 @@
 # Phase 6.9 acceptance checklist
 
-Status: pending. Planning is not implementation or installed acceptance.
+Status: pending. S1 source/specification is authored; runtime checks and installed acceptance are outstanding.
 Owner: [Phase 6.9](phase-6.9.md).
 Contract: [runtime orchestration](../spec/repository-sync-runtime-orchestration.md).
 
@@ -44,3 +44,6 @@ Contract: [runtime orchestration](../spec/repository-sync-runtime-orchestration.
   periodic checks; retained results and delivery are collected once.
 - [ ] P69-14 (S5): One integrated review and English Phase 7 handoff report actual
   qualification and limitations. No new 6.7/6.8 acceptance obligation is added.
+
+See the [S1 reuse and evidence map](../notes/phase-6.9-s1-evidence-map.md) for the
+connected standard clean route and explicit qualification limits.

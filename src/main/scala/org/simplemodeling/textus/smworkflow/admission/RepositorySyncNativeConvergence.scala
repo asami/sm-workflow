@@ -59,8 +59,12 @@ private[smworkflow] object RepositorySyncNativeConvergence {
         CompletionRecords.selected(store.declaration.completionRecords, "repository-sync", store.context.repositoryIdentity).isEmpty)
       Consequence.success(accepted.copy(payload = accepted.payload.copy(finalTip = Some(accepted.payload.after.get.head))))
       else commitC(store, accepted, authority)
-    pushed <- pushC(store, accepted, committed, authority)
-    fetched <- finalFetchC(store, accepted, pushed, authority)
+    // Equal and fast-forward already have the advertised remote tip. Observe
+    // actual convergence without creating a push or another fetch intent.
+    observedOnly = store.declaration.runtimeCleanSync && accepted.payload.mergeHead.isEmpty &&
+      accepted.payload.method.exists(Set("equal", "fast-forward"))
+    pushed <- if (observedOnly) Consequence.success(committed) else pushC(store, accepted, committed, authority)
+    fetched <- if (observedOnly) Consequence.success(pushed) else finalFetchC(store, accepted, pushed, authority)
     actual <- convergedC(store, fetched)
     finalStage <- store.saveC("converged", "native-convergence-observed", fetched.record,
       fetched.payload.copy(stage = "Converged", after = Some(actual)))

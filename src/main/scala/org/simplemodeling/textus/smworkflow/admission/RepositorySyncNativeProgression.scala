@@ -150,7 +150,7 @@ private[smworkflow] object RepositorySyncNativeProgression {
           }
           source <- RepositorySyncNativeMergeValidation.integrationSourceC(original)
           policy <- validationpolicy.map(Consequence.success).getOrElse(invalid("validation bindings are not installed"))
-          _ <- RepositorySyncNativeMergeValidation.completedC(value, source, policy, merge = false)
+          _ <- RepositorySyncNativeMergeValidation.completedC(value, source, integrationPolicy(declaration, policy), merge = false)
           _ <- if (value.payload.stage == "IntegrationValidated" && value.payload.mergeHead.isEmpty &&
               session.started.current.suspension.isEmpty) Consequence.unit
             else invalid("retained integration validation crosses its genuine source or current host policy")
@@ -176,6 +176,8 @@ private[smworkflow] object RepositorySyncNativeProgression {
     review: Option[RepositorySyncNativeMergeReviewContinuation.Port],
     convergence: Option[RepositorySyncNativeConvergence.AuthorityPort],
     repair: Option[RepositorySyncNativeMergeRepairContinuation.Port]): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
+    _ <- if (!store.declaration.runtimeCleanSync || observed.dirty.isEmpty) Consequence.unit
+      else invalid("clean sync local preparation is unfinished: staged, unstaged or untracked changes require purpose-based acceptance; existing work is preserved")
     preserved <- RepositorySyncNativePreservation.preserveC(store, fetched, observed)
     integrated <- RepositorySyncNativeIntegration.integrateC(store, preserved)
     detail = if (integrated.payload.stage == "MergeConflicted")
@@ -188,7 +190,7 @@ private[smworkflow] object RepositorySyncNativeProgression {
       else if (integrated.payload.stage == "PendingMergePrepared")
         pendingMergeC(store, integrated, validationPolicy, review, convergence, "", repair)
       else if (integrated.payload.stage == "Integrated" && validationPolicy.nonEmpty) for {
-        checked <- RepositorySyncNativeMergeValidation.advanceIntegratedC(store, integrated, validationPolicy.get)
+        checked <- RepositorySyncNativeMergeValidation.advanceIntegratedC(store, integrated, integrationPolicy(store.declaration, validationPolicy.get))
         wire <- if (checked.payload.stage == "IntegrationValidated" && convergence.nonEmpty)
           RepositorySyncNativeConvergence.advanceC(store, checked, convergence.get)
           else Consequence.success(NativeWorkflowOperationOutput.repositoryWait(checked.record.identity.value,
@@ -198,6 +200,13 @@ private[smworkflow] object RepositorySyncNativeProgression {
       } yield wire
       else Consequence.success(NativeWorkflowOperationOutput.repositoryWait(integrated.record.identity.value, detail, integrated.payload.stage))
   } yield wire
+
+  private def integrationPolicy(declaration: Fetch.Declaration,
+    mergePolicy: RepositorySyncNativeMergeValidation.Policy): RepositorySyncNativeMergeValidation.Policy =
+    if (declaration.runtimeCleanSync) RepositorySyncNativeMergeValidation.Policy(
+      "clean-repository-sync", 1, "explicit-no-product-tests",
+      "Equal, local-ahead and fast-forward create no program merge candidate; retain structural Git checks only.", Vector.empty)
+    else mergePolicy
 
   private[admission] def pendingMergeC(store: Store, pending: Stage,
     validation: Option[RepositorySyncNativeMergeValidation.Policy],
