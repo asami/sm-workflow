@@ -134,3 +134,10 @@ Contract: [commit completion and recovery](../spec/commit-completion-and-recover
 
 Reuse applicable prior tests; add tests only for changed boundaries.
 No item adds a completion condition to active Phase 6.7.
+
+C3 source-authorship note (2026-10-27): the issued `P68-C3` implementation adds
+`CommitHygieneSpec` and the shared bounded policy described in
+[the combined specification](../spec/commit-completion-and-recovery.md#mechanical-commit-hygiene).
+Affected partial staging is preserved by a specific no-write diagnostic; no
+partial-index correction is claimed. These unchecked conditions await native
+validation and independent review; broader C4 closure remains open.

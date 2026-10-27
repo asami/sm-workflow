@@ -1659,13 +1659,15 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             case Some(value) if value.payload.commit.isEmpty => for {
               message <- if (value.payload.check.exists(_.findings.nonEmpty)) Consequence.success(
                 "Paths: " + value.payload.check.get.eofPaths.mkString(", ") + ". " + value.payload.check.get.findings.mkString("; ") +
-                  ". Correct selected staged content before the next ordinary Advance.")
+                  ". " + value.payload.hygiene.map(h => "mode=" + h.mode + "; " + h.diagnostic + ". ").getOrElse("") +
+                  "Correct selected staged content before the next ordinary Advance.")
                 else GoalPhaseNativeClosure.waitMessageC(source, d, core, cursor.from, cursor.controller)
               waiting <- F.waitC(value.record, if (value.payload.check.exists(_.findings.nonEmpty))
                 "Selected Step index check failed" else "Selected Step commit remains open", message)
             } yield NativeWorkflowOperationOutput.withFindingRecording(waiting, cursor.findings)
-            case Some(_) => _wait_cursor_c(cursor, "Actual ordered Step commit is retained; whole-Phase closure remains unfinished.")
-              .flatMap(_after_native_c(source, cursor, _, core))
+            case Some(value) => _wait_cursor_c(cursor, "Actual ordered Step commit is retained; whole-Phase closure remains unfinished.")
+              .flatMap(_after_native_c(source, cursor, _, core)).map(result => result.copy(message = result.message +
+                value.payload.hygiene.map(h => " Commit hygiene mode=" + h.mode + "; " + h.outcome + ": " + h.diagnostic + ".").getOrElse("")))
           }
         } yield wire
       case O.Stage.PhaseClosing if N.phasePaths(cursor.findings).nonEmpty && cursor.recordingCandidate.isEmpty => for {

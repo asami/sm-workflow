@@ -24,7 +24,7 @@ import WorkflowManagedProcessExecution as Process
   * client stage command, SQL provider or component-owned process is used.
   * Fetch and DB commits are separate effects: an uncertain call never retries.
   * @since   Oct.  6, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncManagedFetch {
@@ -37,7 +37,9 @@ private[smworkflow] object RepositorySyncManagedFetch {
     executionProfiles: Option[WorkflowExecutionProfileMapping] = None,
     executionOrigin: Option[GoalPhaseNativeExecution.Origin] = None,
     executionClassifications: Option[RepositorySyncNativeExecution.Classifications] = None,
-    journalPolicy: Option[DevelopmentJournal.Policy] = None)
+    journalPolicy: Option[DevelopmentJournal.Policy] = None,
+    commitHygieneMode: String = CommitHygiene.autoFix,
+    hygieneStagingPaths: Vector[String] = Vector.empty)
   final case class StartContext(selectionIdentity: String, invocationIdentity: String,
     participantIdentity: String, repositoryIdentity: String, localBranch: String,
     trackingRemote: String, trackingBranch: String, remoteEndpointIdentity: String, syncMode: String)
@@ -81,6 +83,9 @@ private[smworkflow] object RepositorySyncManagedFetch {
         d.input.trackingBranch != d.target.remoteBranch)
       invalid("host storage/tracking declaration differs")
     else for {
+      _ <- CommitHygiene.decodeC(d.commitHygieneMode)
+      _ <- if (d.hygieneStagingPaths != null && d.hygieneStagingPaths.distinct == d.hygieneStagingPaths) Consequence.unit
+        else invalid("Commit hygiene staging declaration is missing or duplicated")
       _ <- d.configuration.validateC
       _ <- DevelopmentJournal.validatePolicyC(d.journalPolicy, d.instances, d.continuations)
       _ <- RepositorySyncNativeExecution.validateC(d.executionClassifications, d.executionProfiles, d.executionOrigin)

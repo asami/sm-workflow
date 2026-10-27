@@ -5339,6 +5339,11 @@ on = integration-started
 
 ##### TRANSITION
 
+to = Integrating
+on = commit-hygiene-planned
+
+##### TRANSITION
+
 to = Integrated
 on = integration-observed
 

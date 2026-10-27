@@ -13,7 +13,7 @@ import RepositorySyncNativeProgressStore.*
 /** Public owning advance's deterministic connection. Configuration, not the
   * caller, selects this installed route. A nonterminal result is not convergence.
   * @since   Oct.  6, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeProgression {
@@ -204,7 +204,10 @@ private[smworkflow] object RepositorySyncNativeProgression {
     review: Option[RepositorySyncNativeMergeReviewContinuation.Port],
     convergence: Option[RepositorySyncNativeConvergence.AuthorityPort], namespace: String,
     repair: Option[RepositorySyncNativeMergeRepairContinuation.Port] = None):
-      Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = validation match {
+      Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = if (pending.payload.hygiene.exists(h =>
+        Set("diagnostic", "remaining-findings")(h.outcome))) Consequence.success(NativeWorkflowOperationOutput.repositoryWait(store.identity,
+      pending.payload.hygiene.map(h => "Commit hygiene mode=" + h.mode + ": " + h.diagnostic + "; " + h.findings.mkString("; ")).get,
+      pending.payload.stage)) else validation match {
     case Some(policy) if policy.assessment.nonEmpty => for {
       checked <- RepositorySyncNativeMergeValidation.advanceC(store, pending, policy, namespace)
       assessed <- if (checked.payload.stage == "MergeValidated")

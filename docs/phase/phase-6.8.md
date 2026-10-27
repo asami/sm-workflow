@@ -200,3 +200,17 @@ Preserve Sessions, original bases, accepted work, failure/UNKNOWN history,
 repair counts and successful checks. Keep explicit exclusions, including the
 current P67 real-Session decision reserved for its owner. Do not edit active 6.7
 acceptance, live plan or staged recovery documents to adopt this future Phase.
+
+### C3 implementation source — 2026-10-27
+
+Native Session `15e4adbe862418c95b8fb7c6a1374155`, Plan 1 issued P68-C3
+from `014-c1c2-closure-advance` after accepted C1/C2 commit
+`e45fdd2243d46c7bf8f7d68d79e864e0520df97b`. C3 source adds typed
+`sm-workflow.commit.hygiene.mode` (default `auto-fix`, diagnostic-only `error`),
+a retained managed CML terminal-LF preparation plan, and focused
+`CommitHygieneSpec` runtime examples. Affected partially staged CML receives the
+explicit no-write limitation described in the combined specification. Step
+closure, release candidate preparation and pending merge preparation use the
+shared policy. Source authorship alone is not compilation, test execution,
+installed qualification or Phase acceptance; checklist conditions remain open.
+Broader C4 completion-record closure and caller qualification remain separate.

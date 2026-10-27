@@ -23,7 +23,7 @@ import RepositorySyncManagedGitObservation as G
   * the Subsystem's canonical store and managed Git execution. No private pool,
   * controller digest or AI-supplied plan admission is introduced.
   * @since   Oct.  6, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeRun {
@@ -66,7 +66,8 @@ private[smworkflow] object GoalPhaseNativeRun {
     dependencySourceRevision: Option[GoalPhaseDependencySourceRevision.Installation] = None,
     dependencySourceRevisions: Vector[GoalPhaseDependencyValidation.Binding] = Vector.empty,
     dependencySourceConsumptions: Vector[GoalPhaseDependencySourceRevision.Consumption] = Vector.empty,
-    localPublication: Option[LocalPublicationRuntime.Policy] = None)
+    localPublication: Option[LocalPublicationRuntime.Policy] = None,
+    commitHygieneMode: String = CommitHygiene.autoFix)
   final case class SelectedPlan(selectionIdentity: String, participantIdentity: String,
     plan: O.Plan, documents: Option[GoalPhaseDocumentSource.Bound] = None)
   trait PlanPort {
@@ -228,7 +229,7 @@ private[smworkflow] object GoalPhaseNativeRun {
           !RepositorySyncNativeConflictInput.relative(p.developmentCandidate) ||
           !p.hygiene.endsWith(".md") || !p.developmentCandidate.endsWith(".md")))
       invalid("native ordered host declaration is incomplete")
-    else CommonEvidence.validatePolicyC(d.evidencePolicy, Vector(d.instances, d.continuations) ++ d.journalPolicy.map(_.collection)).flatMap(_ =>
+    else CommitHygiene.decodeC(d.commitHygieneMode).flatMap(_ => CommonEvidence.validatePolicyC(d.evidencePolicy, Vector(d.instances, d.continuations) ++ d.journalPolicy.map(_.collection))).flatMap(_ =>
       DevelopmentJournal.validatePolicyC(d.journalPolicy, d.instances, d.continuations)).flatMap(_ =>
       GoalPhaseAcceptanceBoundary.validateProjectOptionC(d.projectAcceptance)).flatMap(_ =>
       GoalPhaseNativeExecution.validatePairC(d.executionProfiles, d.executionOrigin)).flatMap(_ =>

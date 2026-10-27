@@ -85,7 +85,8 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
     val target = Programs.Target(directory.resolve("repository"), "main", "origin", "main", directory.resolve("upstream.git").toString)
     val messages = goal.closure.programs.map(p => "Goal Step " + p.step)
     val selections = goal.closure.programs.map(program => Vector(program.step + ".txt", _hygiene, _candidates) ++
-      Option.when(program.step == "step-2" && goal.candidatePaths.contains(_inventory_path))(_inventory_path))
+      Option.when(program.step == "step-2" && goal.candidatePaths.contains(_inventory_path))(_inventory_path) ++
+      Option.when(goal.candidatePaths.contains("model.cml"))("model.cml"))
     val normalgit = TypedGitHostPlanFixture.plan(target, goalPaths = goal.candidatePaths, goalMessages = messages,
       goalSelections = selections)
     val denied = if (denygit) normalgit.hcursor.get[Vector[Json]]("gitPrograms").toOption.get
@@ -115,14 +116,16 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
   private def _episode(directory: Path, initialize: Boolean = false, selected: O.Plan = _plan(), denygit: Boolean = false,
     selectedPolicy: Option[R.Policy] = Some(_policy), interrupt: Boolean = false,
     journal: Option[NativeWorkflowCliFixture.JournalHost] = None,
-    journalInterruption: Option[String] = None, evidence: Boolean = false, inventory: Boolean = false)(task: Episode => Unit): Unit = {
+    journalInterruption: Option[String] = None, evidence: Boolean = false, inventory: Boolean = false,
+    hygiene: Boolean = false, hygieneMode: Option[String] = None)(task: Episode => Unit): Unit = {
     val acknowledge: String => Consequence[Unit] = point =>
       if (interrupt && point.startsWith("goal-recording-candidate-prepared:") || journalInterruption.contains(point))
         Consequence.stateConflict("SPECIFICATION-OWNED interruption before actual staging") else Consequence.unit
     val parameters = selectedPolicy.map(_configured).getOrElse(Map.empty) ++ journal.toVector.flatMap(_.values) ++ (if (!denygit) Map.empty else Map(
       "textus.subsystem.process-execution.plan" -> _process_plan(directory, _host(directory).goal, denygit = true).noSpaces)) ++
-      (if (evidence) _evidence_values(directory) else Map.empty)
-    val host = _host(directory)
+      (if (evidence) _evidence_values(directory) else Map.empty) ++ hygieneMode.map(CommitHygiene.declaration.name -> _)
+    val initialhost = _host(directory)
+    val host = if (hygiene) initialhost.copy(goal = initialhost.goal.copy(candidatePaths = initialhost.goal.candidatePaths :+ "model.cml")) else initialhost
     val selectedhost = if (inventory) host.copy(goal = host.goal.copy(candidatePaths = host.goal.candidatePaths :+ _inventory_path)) else host
     _with_runtime_(directory, "FindingRecording", Some(selectedhost), parameters,
       goalAcknowledgement = Some(acknowledge)) { (owner, component, actor, prepare) =>
@@ -198,6 +201,45 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
     * The directive, review and dependency request are specification-owned inputs.
     * The first Step commit, pending question and native SQL history are actual.
     */
+  /** New C3 integration only; predecessor examples are not inherited/rerun. */
+  private[admission] def qualifyCommitHygiene(): Unit = Vector(None, Some("auto-fix")).foreach { mode =>
+    val directory = _root()
+    val selected = _plan(two = true)
+    val plan = selected.copy(steps = selected.steps.updated(0,
+      selected.steps.head.copy(ownedPaths = selected.steps.head.ownedPaths :+ "model.cml")))
+    _episode(directory, initialize = true, selected = plan, selectedPolicy = None, hygiene = true, hygieneMode = mode) { e =>
+      val id = e.start()
+      e.advance(id)
+      val implementation = e.work(id)
+      Files.writeString(directory.resolve("repository/model.cml"), "component Example {}\n\n")
+      Files.writeString(directory.resolve("repository/step-1.txt"), "Assigned source.\n")
+      e.submit(implementation)
+      val review = e.advance(id)
+      e.submit(e.work(id), Some(review), "accept")
+      val waiting = e.advance(id)
+      e.authority(id, waiting)
+      val before = e.observe().head
+      val checks = _checks(directory)
+      val next = e.advance(id)
+      next.work.get.kind shouldBe "ImplementStep"
+      next.work.get.stepIdentity shouldBe Some("step-2")
+      val committed = e.observe().head
+      committed should not be before
+      e.commit(committed).parents shouldBe Vector(before)
+      Files.readString(directory.resolve("repository/model.cml")) shouldBe "component Example {}\n"
+      _checks(directory) shouldBe checks
+      val pending = e.work(id)
+      val redisplayed = e.advance(id)
+      // Closure reports its correction once; redisplay retains the same pending work.
+      next.message shouldBe redisplayed.message +
+        " Commit hygiene mode=auto-fix; corrected: Supported CML correction rechecked cleanly."
+      redisplayed.copy(message = next.message) shouldBe next
+      e.work(id) shouldBe pending
+      _checks(directory) shouldBe checks
+      e.observe().head shouldBe committed
+    }
+  }
+
   private[admission] def qualifyRemainingPlanAdoption(narrator: GivenWhenThen): Unit = {
     _qualify_remaining_plan(narrator, inventory = false)
     _qualify_remaining_plan(narrator, inventory = true)

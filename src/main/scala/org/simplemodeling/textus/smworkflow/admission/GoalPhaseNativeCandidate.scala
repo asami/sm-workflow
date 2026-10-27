@@ -39,7 +39,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     dependencySourceGuard: Option[GoalPhaseDependencySourceRevision.Guard] = None,
     dependencySourceStages: Vector[GoalPhaseDependencySourceRevision.StageFact] = Vector.empty,
     dependencySourceCapture: Option[GoalPhaseDependencySourceRevision.Capture] = None,
-    dependencySourceScope: Option[GoalPhaseDependencySourceRevision.ScopeSuccessor] = None)
+    dependencySourceScope: Option[GoalPhaseDependencySourceRevision.ScopeSuccessor] = None,
+    hygiene: Option[CommitHygiene.Record] = None)
   final case class StepEvidence(step: String, candidate: O.Snapshot, changedPaths: Vector[String], diff: String,
     commit: O.Commit, eofCorrections: Vector[String], partialCompletion: Option[O.StepCommitChain] = None)
   object StepEvidence {
@@ -56,7 +57,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
   object Payload {
     given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
       case ("continuation" | "stepEvidence" | "dependencyAdmission" | "dependency" | "dependencyOrigin" |
-          "dependencySourceDirection" | "dependencySourceGuard" | "dependencySourceCapture" | "dependencySourceScope", value) => !value.isNull
+          "dependencySourceDirection" | "dependencySourceGuard" | "dependencySourceCapture" | "dependencySourceScope" | "hygiene", value) => !value.isNull
       case ("dependencyStaged" | "dependencySourceStages", value) => !value.asArray.exists(_.isEmpty)
       case _ => true
     }))
@@ -70,8 +71,9 @@ private[smworkflow] object GoalPhaseNativeCandidate {
       val valid = cursor.value.asObject.exists(_.keys.forall(Set("sourceRevision", "step", "selectedPaths",
         "stagedPaths", "candidate", "changedPaths", "diff", "continuation", "stepEvidence", "dependencyAdmission",
         "dependencyStaged", "dependency", "dependencyOrigin", "dependencySourceDirection", "dependencySourceGuard",
-        "dependencySourceStages", "dependencySourceCapture", "dependencySourceScope"))) && !Vector("continuation", "stepEvidence", "dependencyAdmission", "dependency", "dependencyOrigin",
-          "dependencySourceDirection", "dependencySourceGuard", "dependencySourceCapture", "dependencySourceScope").exists(name => cursor.downField(name).focus.exists(_.isNull)) &&
+        "dependencySourceStages", "dependencySourceCapture", "dependencySourceScope", "hygiene"))) && !Vector("continuation", "stepEvidence", "dependencyAdmission", "dependency", "dependencyOrigin",
+          "dependencySourceDirection", "dependencySourceGuard", "dependencySourceCapture", "dependencySourceScope", "hygiene").exists(name => cursor.downField(name).focus.exists(_.isNull)) &&
+        value.hygiene != null && value.hygiene.forall(CommitHygiene.valid) &&
         GoalPhaseDependencySourceRevision.candidateValid(value) &&
         value.dependencyAdmission != null && value.dependencyAdmission.forall(GoalPhaseDependencyValidation.admissionValid) &&
         value.dependencyStaged != null && value.dependencyStaged.distinct == value.dependencyStaged &&
@@ -226,7 +228,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     else F.waitC(selected.record, if (whole) "Whole-Phase candidate inspection" else "Ordered Step candidate inspection",
       if (selected.payload.candidate.nonEmpty)
         "Actual selected candidate tree and diff are saved. Native checks, independent review and Step/Phase closure remain unfinished."
-      else "A native candidate effect has no recorded completed candidate. Its uncertainty is retained; no automatic replay is granted.")
+      else selected.payload.hygiene.map(h => "Commit hygiene mode=" + h.mode + ": " + h.diagnostic).getOrElse(
+        "A native candidate effect has no recorded completed candidate. Its uncertainty is retained; no automatic replay is granted."))
   } yield wire
 
   private def _inspect_c(store: Store): Consequence[Saved] = for {
@@ -278,9 +281,45 @@ private[smworkflow] object GoalPhaseNativeCandidate {
       store.loadC, store.saveC, store.acknowledgeC, store.dependencyChain)
     dependency <- GoalPhaseDependencySourceRevision.captureC(store.core, store.controller, legacyDependency,
       store.loadC, store.saveC, store.acknowledgeC)
-    candidate <- if (dependency.payload.stagedPaths == dependency.payload.selectedPaths) _observe_c(store, dependency, parent)
+    prepared <- if (store.whole && store.controller.releaseRepairActive) _release_hygiene_c(store, dependency, parent)
+      else Consequence.success(dependency)
+    candidate <- if (prepared.payload.hygiene.exists(h => Set("diagnostic", "remaining-findings")(h.outcome)))
+      Consequence.success(prepared)
+      else if (prepared.payload.stagedPaths == prepared.payload.selectedPaths) _observe_c(store, prepared, parent)
       else Consequence.success(staged)
   } yield candidate
+
+  /** Release preparation precedes capture/checks/review, keeping the accepted
+    * release candidate exact. Its original suffix plan is retained before writes.
+    */
+  private def _release_hygiene_c(store: Store, staged: Saved, parent: O.Snapshot): Consequence[Saved] = for {
+    finished <- store.loadC("commit-hygiene-result")
+    previous <- store.loadC("commit-hygiene-plan")
+    prepared <- finished.orElse(previous) match {
+      case Some(value) => Consequence.success(value)
+      case None => for {
+        id <- GitObjectId.parseC(parent.head)
+        check <- E.executeGitC(store.core, GitOperation.CheckPendingIndex(id)).flatMap(_.valueC)
+        plan <- CommitHygiene.planC(store.core, store.d.commitHygieneMode, check,
+          store.ownedPaths, store.d.candidatePaths, parent.tree)
+        saved <- store.saveC("commit-hygiene-plan", staged.record, staged.payload.copy(hygiene = Some(plan)))
+      } yield saved
+    }
+    result <- prepared.payload.hygiene match {
+      case Some(plan) if plan.outcome == "planned" => for {
+        _ <- store.inspectPinnedC(parent)
+        _ <- CommitHygiene.applyC(store.core, plan)
+        id <- GitObjectId.parseC(parent.head)
+        check <- E.executeGitC(store.core, GitOperation.CheckPendingIndex(id)).flatMap(_.valueC)
+        saved <- store.saveC("commit-hygiene-result", prepared.record, prepared.payload.copy(hygiene = Some(plan.copy(
+          outcome = if (check.findingKeys.isEmpty) "corrected" else "remaining-findings",
+          findings = check.findingKeys.toVector.sorted,
+          diagnostic = if (check.findingKeys.isEmpty) "Release CML preparation rechecked cleanly before candidate capture"
+            else "One release CML preparation pass completed; remaining findings prevent commit"))))
+      } yield saved
+      case _ => Consequence.success(prepared)
+    }
+  } yield result
 
   /** Whole-Phase recovery never repeats preparation, source normalization or staging. */
   private def _recover_whole_observation_c(store: Store,

@@ -101,6 +101,28 @@ operations, not a shell/Python repair subprocess. Preserve unrelated changes and
 partial staging; never stage an entire file just to include a hygiene correction
 when that would include unrelated edits.
 
+The first supported automatic correction is a fully staged, explicitly registered
+selected `.cml` regular file, with complete UTF-8 LF text and an EOF-only typed
+finding. Test, fixture, expected-output, golden and snapshot directories are
+excluded. Empty/all-newline files, CRLF, NUL content and other whitespace findings
+remain diagnostic. Mode `100644` or `100755` and every nonterminal byte survive.
+
+When an affected CML file has a worktree version different from its index, the
+current typed Git selection cannot repair only the index suffix. Return the
+specific partial-staging diagnostic without writing or staging anything; retain
+both versions and unrelated paths. This is a supported no-write limitation,
+not partial-index correction.
+
+The selected Step owner retains the actual negative check and its original blob
+plan before applying the bounded suffix pass within the same Advance. Exact
+postconditions permit re-entry without rewriting, while changed third values
+refuse. A clean input receives no write. One recheck either permits the ordinary
+single commit or retains remaining findings without a product FIX. Release
+preparation applies the same policy before capturing its candidate for checks
+and review. Pending RepositorySync merges apply it before selected merge
+validation, retaining the observed local and remote parents; the existing merge
+commit owner remains responsible for convergence.
+
 Reuse applicable compile/test/review results for this established correction,
 retaining their original targets and the actual correction relationship.
 Normalization alone requires no AI call, independent review, whole-suite test

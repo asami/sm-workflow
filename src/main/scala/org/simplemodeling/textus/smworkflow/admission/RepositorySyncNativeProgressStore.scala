@@ -17,7 +17,7 @@ import RepositorySyncManagedGitObservation as Git
 /** Per-call metadata binding only. Every transition borrows canonical shared
   * storage; Git effects are not captured in the DB completion transaction.
   * @since   Oct.  6, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   */
 private[smworkflow] object RepositorySyncNativeProgressStore {
   val schema = "sm-workflow.repository-sync-native-progress.v3"
@@ -27,7 +27,8 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     validation: Option[RepositorySyncNativeMergeValidation.State] = None,
     finalTip: Option[String] = None, assessment: Option[RepositorySyncMergeAssessment.Result] = None,
     repairContext: Option[RepositorySyncNativeMergeReview.RepairContext] = None,
-    continuation: Option[RepositorySyncValidationContinuation.Direction] = None)
+    continuation: Option[RepositorySyncValidationContinuation.Direction] = None,
+    hygiene: Option[CommitHygiene.Record] = None)
   final case class Stage(record: InstanceRecord, payload: Payload)
   final case class Candidate(namespace: String, pending: Stage)
   def candidateKey(namespace: String, key: String): String =
@@ -36,7 +37,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
   private given Decoder[RepositorySyncNativeMergeValidation.State] = Decoder.instance(cursor =>
     RepositorySyncNativeMergeValidation.stateCodec.decode(cursor.value).left.map(reason => DecodingFailure(reason, cursor.history)))
   private given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
-    case ("assessment" | "repairContext" | "continuation", value) => !value.isNull
+    case ("assessment" | "repairContext" | "continuation" | "hygiene", value) => !value.isNull
     case _ => true
   }))
   private given Decoder[Payload] = deriveDecoder
@@ -48,6 +49,8 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
       version <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
       _ <- Either.cond(version == schema, (), "Native progress schema differs")
       payload <- wire.hcursor.get[Payload]("payload").left.map(_.message)
+      _ <- Either.cond(!wire.hcursor.downField("payload").downField("hygiene").focus.exists(_.isNull) &&
+        payload.hygiene != null && payload.hygiene.forall(CommitHygiene.valid), (), "Invalid commit hygiene receipt")
     } yield payload
   }
 

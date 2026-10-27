@@ -61,7 +61,8 @@ private[smworkflow] object GoalPhaseNativeClosure {
   final case class Change(path: String, mode: String, oldBlob: String, newBlob: String)
   final case class Payload(input: Input, ordinal: Int, commit: Option[O.Commit], attempt: Int = 0,
     check: Option[Precheck] = None, changes: Vector[Change] = Vector.empty,
-    partialCompletion: Option[O.StepCommitChain] = None)
+    partialCompletion: Option[O.StepCommitChain] = None,
+    hygiene: Option[CommitHygiene.Record] = None)
   object Payload {
     given Encoder[Payload] = Encoder.instance { value =>
       Json.obj((Vector("input" -> value.input.asJson, "ordinal" -> value.ordinal.asJson,
@@ -69,7 +70,8 @@ private[smworkflow] object GoalPhaseNativeClosure {
         (if (value.attempt == 0) Vector.empty else Vector("attempt" -> value.attempt.asJson)) ++
         value.check.toVector.map(actual => "check" -> actual.asJson) ++
         (if (value.changes.isEmpty) Vector.empty else Vector("changes" -> value.changes.asJson)) ++
-        value.partialCompletion.toVector.map(chain => "partialCompletion" -> chain.asJson))*)
+        value.partialCompletion.toVector.map(chain => "partialCompletion" -> chain.asJson) ++
+        value.hygiene.toVector.map(hygiene => "hygiene" -> hygiene.asJson))*)
     }
     given Decoder[Payload] = Decoder.instance { cursor =>
       for {
@@ -83,11 +85,13 @@ private[smworkflow] object GoalPhaseNativeClosure {
         }
         changes <- cursor.value.asObject.flatMap(_("changes")).fold[Decoder.Result[Vector[Change]]](Right(Vector.empty[Change]))(_.as[Vector[Change]])
         chain <- cursor.get[Option[O.StepCommitChain]]("partialCompletion")
+        hygiene <- cursor.get[Option[CommitHygiene.Record]]("hygiene")
         _ <- Either.cond(attempt >= 0 && check.forall(_valid_precheck) && _valid_changes(changes) &&
           !cursor.downField("partialCompletion").focus.exists(_.isNull) &&
+          !cursor.downField("hygiene").focus.exists(_.isNull) && hygiene.forall(CommitHygiene.valid) &&
           chain.forall(c => O.validStepCommitChain(c) && c.originalParent == input.parent && commit.contains(c.completion)), (),
           io.circe.DecodingFailure("invalid native Step closure attempt facts", cursor.history))
-      } yield Payload(input, ordinal, commit, attempt, check, changes, chain)
+      } yield Payload(input, ordinal, commit, attempt, check, changes, chain, hygiene)
     }
   }
   final case class Saved(record: InstanceRecord, payload: Payload, controller: O.State,
@@ -180,6 +184,8 @@ private[smworkflow] object GoalPhaseNativeClosure {
         result <- authority match {
           case false => Consequence.success(Option.empty[Saved])
           case true => for {
+            _ <- progress.failed.lastOption.flatMap(_.payload.hygiene).filter(_.outcome == "planned")
+              .fold(Consequence.unit)(CommitHygiene.applyC(core, _))
             _ <- store.preconditionsC
             differences <- E.goalIndexChangesC(core, store.ordinal, store.input.candidate.tree)
             changes <- store.admitChangesC(progress.failed, differences)
@@ -189,14 +195,22 @@ private[smworkflow] object GoalPhaseNativeClosure {
               else F.invalid("selected Step precheck has no complete typed finding facts")
             check = Precheck(actual.findingKeys.toVector.sorted, actual.eofBlankLinePaths.toVector.map(_.value).sorted,
               actual.onlyEofBlankLines)
-            _ <- if (_valid_precheck(check) && (check.findings.isEmpty || changes.isEmpty)) Consequence.unit
+            _ <- if (_valid_precheck(check)) Consequence.unit
               else F.invalid("nonclean selected check cannot retain a changed reviewed candidate")
+            hygiene <- CommitHygiene.planC(core, d.commitHygieneMode, actual,
+              controller.plan.steps(controller.cursor).ownedPaths, d.candidatePaths, store.input.parent.tree,
+              progress.failed.exists(_.payload.hygiene.exists(_.corrections.nonEmpty)))
+            effective = if (check.findings.isEmpty) progress.failed.lastOption.flatMap(_.payload.hygiene)
+              .filter(_.corrections.nonEmpty).map(_.copy(outcome = "corrected", findings = Vector.empty, diagnostic = "Supported CML correction rechecked cleanly")).getOrElse(hygiene)
+              else hygiene
             attempt = progress.nextAttempt.get
-            payload = Payload(store.input, store.ordinal, None, attempt, Some(check), changes)
+            payload = Payload(store.input, store.ordinal, None, attempt, Some(check),
+              if (check.findings.isEmpty) changes else Vector.empty, hygiene = Some(effective))
             checked <- store.saveC(_attempt_key("check-result", attempt), progress.record, "Closing", payload)
-            saved <- if (check.findings.nonEmpty) Consequence.success(Saved(checked, payload, controller))
-              else store.commitC(checked, payload)
-          } yield Some(saved)
+            saved <- if (hygiene.outcome == "planned") advanceC(session, d, core, from, controller, acknowledge, dependencyPreconditions)
+              else if (check.findings.nonEmpty) Consequence.success(Some(Saved(checked, payload, controller)))
+              else store.commitC(checked, payload).map(Some(_))
+          } yield saved
         }
         } yield result
       } yield closed
@@ -565,6 +579,9 @@ private[smworkflow] object GoalPhaseNativeClosure {
       root <- G.rootC(core)
       native <- G.inspectC(core)
       actual = native.observed
+      _ <- CommitHygiene.partialDiagnostic(actual.dirty, actual.dirty.filter(p =>
+        _owned_paths.exists(covers(_, p.path)) && CommitHygiene.supported(p.path) && p.index != ' ').map(_.path))
+        .fold(Consequence.unit)(F.invalid(_))
       _ <- if (root == d.target.root.toString && native.mergeHead.isEmpty && actual.branch == d.target.localBranch &&
           actual.head == input.parent.head && actual.tree == input.parent.tree &&
           GoalPhaseNativeCandidateBoundary.scopedDirty(actual.dirty, _owned_paths, true)) Consequence.unit
