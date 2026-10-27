@@ -49,7 +49,7 @@ class SmWorkflowInstallationSpec(unittest.TestCase):
         # Then the payload and portable installer are reproducible and complete.
         self.assertEqual(self.archive.read_bytes(), second.read_bytes())
         with zipfile.ZipFile(self.archive) as archive:
-            self.assertEqual(len(archive.namelist()), 32)
+            self.assertEqual(len(archive.namelist()), 36)
             self.assertIn(tools.INSTALLER, archive.namelist())
             for member in archive.infolist():
                 expected = 0o644
@@ -67,7 +67,7 @@ class SmWorkflowInstallationSpec(unittest.TestCase):
         # When the transported installer loads and installs that product archive.
         self.payload = tools.load_bundle(self.archive)
         # Then structural entries create no extra payload or installation targets.
-        self.assertEqual(self.install(), 42)
+        self.assertEqual(self.install(), 47)
         self.assertEqual(self.install(), 0)
 
     def test_unexpected_or_duplicate_archive_directories_are_rejected(self):
@@ -93,7 +93,7 @@ class SmWorkflowInstallationSpec(unittest.TestCase):
         first = self.install()
         second = self.install()
         # Then only the selected files and links are added, once.
-        self.assertEqual(first, 42)
+        self.assertEqual(first, 47)
         self.assertEqual(second, 0)
         self.assertEqual(other.read_bytes(), b'existing unrelated definition')
         self.assertEqual(config.read_bytes(), b'existing config and credentials are not install targets')

@@ -86,9 +86,15 @@ private[smworkflow] object NativeWorkflowResultInput {
         value.unresolvedQuestions, diagnosis, assessment, StandaloneReviewFix.dispositions(value.reviewDispositions)))))
 
   def task(service: spec.ServiceDefinition, creation: ComponentCreate,
-    host: BoundedWorkRuntime.Host, definition: DefinitionBinding): spec.ServiceDefinition =
+    host: BoundedWorkRuntime.Host, definition: DefinitionBinding, engine: BoundedWorkNativeRun = GoalTaskNativeRun): spec.ServiceDefinition =
     _service(service, creation, host.configuration, host.instances, host.continuations, definition,
-      Vector(_work(GoalTaskNativeRun.completionOperation, GoalTaskNativeRun.inputCodec, request => for {
+      Vector(_work(engine.completionOperation, engine.inputCodec, request => if (engine.delegation) for {
+        value <- NativeWorkflowOperationInput.valueC[V.DelegateTaskWorkResult](request, "result")
+        assessment <- GoalPhaseFixAssessment.internalReportC(value.fixAssessment)
+        diagnosis <- IncrementalSbtDiagnosisRepair.fromPublicC(value.diagnosticRepair)
+      } yield StandaloneFixExecution.Result(value.outcome, value.summary, value.findings,
+        value.conditions.toVector.map(c => StandaloneFixExecution.Condition(c.identity, c.satisfied, c.detail)),
+        value.unresolvedQuestions, diagnosis, assessment) else for {
         value <- NativeWorkflowOperationInput.valueC[V.GoalTaskWorkResult](request, "result")
         assessment <- GoalPhaseFixAssessment.internalReportC(value.fixAssessment)
         diagnosis <- IncrementalSbtDiagnosisRepair.fromPublicC(value.diagnosticRepair)

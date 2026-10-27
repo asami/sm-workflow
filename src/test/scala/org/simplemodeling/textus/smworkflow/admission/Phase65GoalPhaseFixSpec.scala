@@ -11,7 +11,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Retained Final receipt boundaries, separate from actual CLI effect evidence.
   * @since   Oct. 24, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -137,13 +137,28 @@ final class Phase65GoalPhaseFixSpec extends AnyWordSpec with Matchers with Given
         _intent.copy(execution = Some(_execution.copy(outcome = "unknown"))),
         _intent.copy(execution = Some(_execution.copy(exitCode = Some(1)))),
         _intent.copy(execution = Some(_execution.copy(selectedPaths = Vector("outside.txt")))),
-        _intent.copy(commit = Some(_commit)),
         _intent.copy(execution = Some(_execution), commit = Some(_commit.copy(parent = _oid('e')))),
         _intent.copy(execution = Some(_execution), commit = Some(_commit.copy(tree = _oid('f')))))
       When("those receipts are read through the normal retained codec")
       val results = invalid.map(value => C.codec.decode(C.codec.encode(value)))
       Then("none can advance the accepted release target")
-      results.foreach(_.isLeft shouldBe true)
+      results.zipWithIndex.foreach { (result, index) =>
+        withClue(s"invalid receipt index=$index: ") { result.isLeft shouldBe true }
+      }
+      And("ordinary retained admission requires the actual successful execution, even for a decodable commit-shaped payload")
+      val unobserved = _intent.copy(commit = Some(_commit))
+      C.codec.decode(C.codec.encode(unobserved)) shouldBe Right(unobserved)
+      unobserved.execution shouldBe None
+      C.resultFollowsExecution(_intent, unobserved, reconciled = false) shouldBe false
+      val failed = _intent.copy(execution = Some(_execution.copy(outcome = "failed", exitCode = Some(1))))
+      C.resultFollowsExecution(failed, failed.copy(commit = Some(_commit)), reconciled = false) shouldBe false
+      val succeeded = _intent.copy(execution = Some(_execution))
+      C.resultFollowsExecution(succeeded, succeeded.copy(commit = Some(_commit)), reconciled = false) shouldBe true
+      C.resultFollowsExecution(succeeded, unobserved, reconciled = false) shouldBe false
+      And("the explicit reconciled chain preserves absent process observation instead of inventing execution success")
+      C.resultFollowsExecution(_intent, unobserved, reconciled = true) shouldBe true
+      C.resultFollowsExecution(_intent, unobserved.copy(ordinal = 3), reconciled = true) shouldBe false
+      C.resultFollowsExecution(unobserved, unobserved, reconciled = true) shouldBe false
     }
   }
 }

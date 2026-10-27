@@ -22,7 +22,7 @@ private[smworkflow] object NativeRetainedWorkRecoveryPreparation {
     occurredAt: Instant): Consequence[Prepared] = for {
     _ <- if (description != null && answer != null && reference != null && execution != null &&
       description.outcome == "decision-required" && description.externalEffects == "UNKNOWN" &&
-      description.choices == R.choices && description.recoveryOperation == R.recoveryOperation &&
+      (description.choices == R.recoveryChoices || description.choices == R.choices) && description.recoveryOperation == R.recoveryOperation &&
       reference == answer.reference && execution.workerIdentity.contains(participant) &&
       participant == answer.participant && exact(issuer) && occurredAt != null) Consequence.unit
       else Consequence.stateConflict("Task recovery preparation requires its actual description, Human reference, matching worker, issuer and time")
@@ -31,9 +31,15 @@ private[smworkflow] object NativeRetainedWorkRecoveryPreparation {
     _ <- if (target == supplied && description.sessionId == target.sessionId && answer.sessionId == target.sessionId &&
       answer.oldContinuationId == target.oldContinuationId && description.componentInstance == target.componentInstance)
       Consequence.unit else Consequence.stateConflict("Task recovery preparation crosses the exact described target")
-    binding <- R.bindingC(description.componentInstance, target, answer.choice, answer.rationale, participant,
+    nonexecution = answer.choice == R.nonexecutionChoice
+    _ <- if (!nonexecution || description.choices.contains(R.nonexecutionChoice)) Consequence.unit
+      else Consequence.stateConflict("Legacy description does not offer covering nonexecution")
+    binding <- if (nonexecution) R.nonexecutionBindingC(description.componentInstance, target, answer.rationale, participant,
       ContextReference(reference.identity, reference.revision))
-    purpose = NativeExternalEvidence.Purpose.GoalTaskMalformedIssuedWorkRecovery
+      else R.bindingC(description.componentInstance, target, answer.choice, answer.rationale, participant,
+        ContextReference(reference.identity, reference.revision))
+    purpose = if (nonexecution) NativeExternalEvidence.Purpose.GoalTaskMalformedIssuedWorkNonexecution
+      else NativeExternalEvidence.Purpose.GoalTaskMalformedIssuedWorkRecovery
     identity = ThreeWorkflowExternalEvidencePorts.key(reference.identity, reference.revision)
     encoded <- NativeExternalEvidence.encodeStorageC(NativeExternalEvidence.Evidence(NativeExternalEvidence.schema,
       purpose.identity, identity, reference.identity, reference.revision, issuer, participant, binding, occurredAt.toString))

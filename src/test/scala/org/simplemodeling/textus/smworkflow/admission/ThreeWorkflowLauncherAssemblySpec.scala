@@ -33,14 +33,16 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
 
   "Native three-workflow launcher composition" should {
     "publish only actual generated native operation identities rather than guessed skill-stage names" in {
-      Given("the five generated CML provided-operation declarations and generated Journal and Evidence services")
+      Given("the six generated CML provided-operation declarations and generated Journal, Evidence and completion-record services")
       val generated = Vector(domain.statemachine.providedapi.GoalPhaseWorkflowStateMachineProvidedApi1.workflow,
         domain.statemachine.providedapi.SplitPhaseWorkflowStateMachineProvidedApi2.workflow,
         domain.statemachine.providedapi.RepositorySyncWorkflowStateMachineProvidedApi3.workflow,
         domain.statemachine.providedapi.StandaloneFixWorkflowStateMachineProvidedApi4.workflow,
-        domain.statemachine.providedapi.GoalTaskWorkflowStateMachineProvidedApi5.workflow)
+        domain.statemachine.providedapi.GoalTaskWorkflowStateMachineProvidedApi5.workflow,
+        domain.statemachine.providedapi.DelegateTaskWorkflowStateMachineProvidedApi6.workflow)
       When("the native launcher publication set is compared with the generated operations")
-      val declared = generated.flatMap(_.providedOperations.map(o => s"${o.service}.${o.name}")).toSet ++
+      val declared = SmWorkflowComponent.CompletionRecordClosureServiceService.operations.operations.toVector
+        .map(o => s"${SmWorkflowComponent.CompletionRecordClosureServiceService.name}.${o.name}").toSet ++ generated.flatMap(_.providedOperations.map(o => s"${o.service}.${o.name}")).toSet ++
         SmWorkflowComponent.JournalServiceService.operations.operations.toVector.map(o => s"${SmWorkflowComponent.JournalServiceService.name}.${o.name}") ++
         SmWorkflowComponent.EvidenceServiceService.operations.operations.toVector.map(o => s"${SmWorkflowComponent.EvidenceServiceService.name}.${o.name}") ++
         SmWorkflowComponent.DevelopmentObservationServiceService.operations.operations.toVector.map(o =>
@@ -48,6 +50,10 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
         SmWorkflowComponent.LocalPublicationServiceService.operations.operations.toVector.map(o =>
           s"${SmWorkflowComponent.LocalPublicationServiceService.name}.${o.name}")
       val expected = Set(
+        "DelegateTaskService.startDelegateTask", "DelegateTaskService.advanceDelegateTask",
+        "DelegateTaskService.submitDelegateTaskWorkResult", "DelegateTaskService.resolveDelegateTaskDiagnosticInformation",
+        "DelegateTaskDeliveryService.observeDelegateTaskDelivery", "DelegateTaskDeliveryService.describeDelegateTaskAdoption",
+        "CompletionRecordClosureService.describeCompletionRecordClosure", "CompletionRecordClosureService.advanceCompletionRecordClosure",
         "GoalTaskService.startGoalTask", "GoalTaskService.advanceGoalTask",
         "GoalTaskService.submitGoalTaskWorkResult", "GoalTaskService.resolveGoalTaskDiagnosticInformation",
         "GoalTaskService.describeGoalTaskMalformedIssuedWorkRecovery", "GoalTaskService.recoverGoalTaskMalformedIssuedWork",

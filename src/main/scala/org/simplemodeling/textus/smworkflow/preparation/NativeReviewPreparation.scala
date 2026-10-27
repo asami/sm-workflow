@@ -88,6 +88,13 @@ object NativeReviewPreparation {
       result.conditions.map(c => V.StandaloneFixCondition(c.identity, c.satisfied, c.detail)),
       result.unresolvedQuestions, result.diagnosticRepair, result.fixAssessment, Vector.empty), reference, execution, issuer, occurredAt, true)
 
+  private[smworkflow] def delegateC(context: V.WorkflowReviewContext, result: V.DelegateTaskWorkResult,
+    reference: V.WorkflowArtifactReference, execution: V.WorkflowExecutionEvidence,
+    issuer: String, occurredAt: Instant): Consequence[Prepared] =
+    boundedC(context, V.StandaloneFixWorkResult(result.outcome, result.summary, result.findings,
+      result.conditions.map(c => V.StandaloneFixCondition(c.identity, c.satisfied, c.detail)),
+      result.unresolvedQuestions, result.diagnosticRepair, result.fixAssessment, Vector.empty), reference, execution, issuer, occurredAt, true)
+
   private def boundedC(context: V.WorkflowReviewContext, result: V.StandaloneFixWorkResult,
     reference: V.WorkflowArtifactReference, execution: V.WorkflowExecutionEvidence,
     issuer: String, occurredAt: Instant, task: Boolean): Consequence[Prepared] = for {
@@ -103,7 +110,7 @@ object NativeReviewPreparation {
       else Consequence.stateConflict("Review family differs from the actual retained business request")
     _ <- StandaloneFixExecution.admitResultC(work, value)
     prepared <- _prepare_c(context, NativeExternalEvidence.Purpose.StandaloneReview,
-      if (task) "GoalTaskWorkResult" else StandaloneFixNativeRun.resultCodec.typeIdentity,
+      if (work.state.input.delegation.nonEmpty) "DelegateTaskWorkResult" else if (task) "GoalTaskWorkResult" else StandaloneFixNativeRun.resultCodec.typeIdentity,
       reference, execution, issuer, occurredAt, value.asJson)
   } yield prepared
 

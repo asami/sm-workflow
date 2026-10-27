@@ -11,12 +11,12 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 27, 2026
+ * @version Oct. 28, 2026
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  private val _skill_paths = Vector("sm-goal-phase", "sm-split-phase", "sm-repository-sync", "sm-test-fix", "sm-goal-task", "sm-review-fix")
+  private val _skill_paths = Vector("sm-goal-phase", "sm-split-phase", "sm-repository-sync", "sm-test-fix", "sm-goal-task", "sm-review-fix", "sm-delegate-task")
     .map(name => s"skills/$name/SKILL.md")
   private val _contract_paths = Vector(
     "docs/spec/native-host-execution.md",
@@ -25,16 +25,19 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
     "docs/spec/task-fix-delivery.md",
     "docs/spec/standalone-fix-runtime.md",
     "docs/spec/goal-task-runtime.md",
+        "docs/spec/delegate-task.md",
+        "docs/spec/native-delegate-task-caller.md",
+        "docs/spec/commit-completion-and-recovery.md",
     "docs/spec/standalone-review-fix-runtime.md",
     "docs/spec/goal-phase-acceptance-boundary.md",
     "docs/spec/goal-phase-release-repair-continuation.md",
     "docs/spec/goal-phase-dependency-scope.md",
     "docs/spec/goal-phase-dependency-source-revision.md",
     "docs/spec/repository-sync-validation-continuation.md",
+    "docs/spec/native-goal-command-task.md",
     "docs/spec/goal-phase-validation-metadata.md"
   )
   private val _caller_paths = Vector(
-    "docs/spec/native-goal-command-task.md",
     "docs/spec/runtime-caller-format-migration.md",
     "scripts/native-goal-command.py",
     "scripts/native-goal-authority.py",
@@ -49,12 +52,12 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
     Paths.get(if (path == "install-sm-workflow.py") "scripts/sm-workflow-tools.py" else path)
 
   "Component-owned skill resources" should {
-    "retain exactly the six public semantic skill sources in the actual component JAR" in {
+    "retain exactly the seven public semantic skill sources in the actual component JAR" in {
       Given("the official packageBin component artifact and the independently readable authoring sources")
       val artifact = Paths.get("target/scala-3.3.8/textus-sm-workflow_3-0.1.0-SNAPSHOT.jar")
       withClue("Run packageBin before this artifact acceptance spec: ")(Files.isRegularFile(artifact) shouldBe true)
       val prefix = "META-INF/sm-workflow/skills/"
-      val names = Vector("sm-goal-phase", "sm-split-phase", "sm-repository-sync", "sm-test-fix", "sm-goal-task", "sm-review-fix")
+      val names = Vector("sm-goal-phase", "sm-split-phase", "sm-repository-sync", "sm-test-fix", "sm-goal-task", "sm-review-fix", "sm-delegate-task")
       val expected = names.map(name => s"$prefix$name/SKILL.md")
       val jar = new JarFile(artifact.toFile)
       try {

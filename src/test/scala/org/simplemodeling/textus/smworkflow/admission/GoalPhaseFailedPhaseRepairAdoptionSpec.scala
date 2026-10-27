@@ -17,7 +17,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Pure wire/preparation evidence. The native suite owns real failure proof.
   * @since   Oct. 23, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -121,7 +121,7 @@ final class GoalPhaseFailedPhaseRepairAdoptionSpec extends AnyWordSpec with Matc
         recorded.copy(programs = recorded.programs :+ recorded.programs.head),
         recorded.copy(programs = recorded.programs :+ GoalPhaseNativeClosure.StepProgram("S3", 2)),
         recorded.copy(programs = recorded.programs :+ GoalPhaseNativeClosure.StepProgram("S3", 0)),
-        recorded.copy(programs = recorded.programs :+ GoalPhaseNativeClosure.StepProgram("S3", 65)),
+        recorded.copy(programs = recorded.programs :+ GoalPhaseNativeClosure.StepProgram("S3", 66)),
         recorded.copy(programs = recorded.programs :+ GoalPhaseNativeClosure.StepProgram("", 3)),
         recorded.copy(programs = recorded.programs :+ null), null)
       When("retained traversal reconciles each crossed host and each invalid recorded or current policy")

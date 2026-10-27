@@ -1,6 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
+import io.circe.syntax.*
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -124,6 +125,21 @@ final class GoalPhaseNativeCandidateBoundarySpec extends AnyWordSpec with Matche
   }
 
   "Historical terminal candidate hygiene compatibility" should {
+    "retain active hygiene preparation without treating progress as a completed candidate" in {
+      Given("a bounded pending correction and the diagnostic results used by the active hygiene runtime")
+      val plan = CommitHygiene.Record("auto-fix", "planned", Vector("eof-blank-lines"),
+        Vector(CommitHygiene.Correction("src/model.cml", "100644", _oid(11), 1)), "pending", _oid(12))
+      val records = Vector(plan, plan.copy(outcome = "remaining-findings"),
+        plan.copy(outcome = "diagnostic", corrections = Vector.empty, originalIndex = ""))
+      When("the merged codec decodes active records alongside historical terminal receipts")
+      val payload = GoalPhaseNativeCandidate.Payload("1", "S1", Vector.empty, Vector.empty, None, Vector.empty, None)
+      val decoded = records.map(record => GoalPhaseNativeCandidate.codec.decode(
+        GoalPhaseNativeCandidate.codec.encode(payload.copy(hygiene = Some(record)))))
+      Then("progress remains typed and round trips without inventing a candidate or losing the bounded plan")
+      decoded.map(_.toOption.get.hygiene) shouldBe records.map(Some(_))
+      decoded.foreach(_.toOption.get.candidate shouldBe None)
+    }
+
     "round trip clean receipts in either historical mode without changing their raw evidence" in {
       Given("completed clean metadata with empty corrections and supported optional original index facts")
       val receipts = Vector(
@@ -135,8 +151,8 @@ final class GoalPhaseNativeCandidateBoundarySpec extends AnyWordSpec with Matche
       val encoded = decoded.map(GoalPhaseNativeCandidate.codec.encode)
       Then("the complete wire and exact historical JSON remain unchanged, including through payload copies")
       encoded shouldBe wires
-      decoded.map(_.hygiene) shouldBe receipts.map(Some(_))
-      decoded.map(_.copy(sourceRevision = "2").hygiene) shouldBe receipts.map(Some(_))
+      decoded.map(_.hygiene.map(_.asJson)) shouldBe receipts.map(Some(_))
+      decoded.map(_.copy(sourceRevision = "2").hygiene.map(_.asJson)) shouldBe receipts.map(Some(_))
     }
 
     "round trip corrected receipts with both Git object lengths and the finite correction limit" in {
@@ -151,7 +167,7 @@ final class GoalPhaseNativeCandidateBoundarySpec extends AnyWordSpec with Matche
       When("the codec reads and writes completed historical correction evidence")
       val decoded = wires.map(GoalPhaseNativeCandidate.codec.decode(_).toOption.get)
       Then("raw paths, modes, object IDs and ordinals survive without granting or executing an operation")
-      decoded.map(_.hygiene) shouldBe receipts.map(Some(_))
+      decoded.map(_.hygiene.map(_.asJson)) shouldBe receipts.map(Some(_))
       decoded.map(GoalPhaseNativeCandidate.codec.encode) shouldBe wires
     }
 

@@ -71,6 +71,26 @@ final class ValidationTestPolicySpec extends AnyWordSpec with Matchers with Give
   }
 
   "Canonical discovery through the build bridge" should {
+    "honor an explicit installed suite while retaining automatic discovery exclusions" in {
+      Given("the actual explicit-only installed qualification and an ordinary local suite")
+      val root = Path.of(getClass.getProtectionDomain.getCodeSource.getLocation.toURI).toRealPath().toString
+      val installed = classOf[NativePhase68DeliveryCliSpec].getName
+      val declared = new NativePhase68DeliveryCliSpec().testNames
+      val local = getClass.getName
+      val heavy = classOf[NativeGoalDependencyValidationCliSpec].getName
+      When("the bridge selects explicit names and automatic FULL or HEAVY purposes without executing bodies")
+      val explicit = LabelledTestSelection.select(root, "test", "EXPLICIT", Array(installed))
+      val full = LabelledTestSelection.select(root, "test", "FULL", Array(installed, local))
+      val expensive = LabelledTestSelection.select(root, "test", "HEAVY", Array(installed, heavy))
+      Then("all installed registrations are explicitly runnable and retain their runtime classification")
+      declared.size shouldBe 5
+      explicit.map(row => row(0) -> row(1)).toSet shouldBe declared.map(installed -> _)
+      explicit.forall(_(2) == "true") shouldBe true
+      And("automatic selections preserve their normal memberships and do not acquire the installed suite")
+      full.map(_(0)).toSet shouldBe Set(local)
+      expensive.map(_(0)).toSet shouldBe Set(heavy)
+    }
+
     "retain exact-name and substring selection as suite-local operations through the real bridge" in {
       val root = Path.of(getClass.getProtectionDomain.getCodeSource.getLocation.toURI).toRealPath().toString
       val report = classOf[GoalPhaseStepTestReportRepairSpec].getName

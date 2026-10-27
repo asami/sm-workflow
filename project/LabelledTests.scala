@@ -102,7 +102,8 @@ object LabelledTests {
       catch { case error: java.lang.reflect.InvocationTargetException => throw error.getCause }
       val selected = rows.groupBy(_(0))
       definitions.flatMap { definition => selected.get(definition.name).map { operations =>
-        Selected(new TestDefinition(definition.name, definition.fingerprint, definition.explicitlySpecified,
+        Selected(new TestDefinition(definition.name, definition.fingerprint,
+          purpose == "EXPLICIT" || definition.explicitlySpecified,
           operations.map(row => new TestSelector(row(1))).toArray),
           operations.filter(_(2) == "true").map(_(1)).toSet)
       }}

@@ -1,12 +1,17 @@
 # Phase 6.8: Commit Recovery and Delegated Delivery
 
-Status: planned; no implementation or acceptance claimed by this plan.
+Status: in progress; C1/C2, C3, D1/D2 and C4/D3 accepted at their issued Step scope; C5/D4 source alignment authored, installed/live qualification and Phase acceptance pending.
 Planned: 2026-10-26 (Asia/Tokyo)
 Owner: sm-workflow development
+Native Start: Session `15e4adbe862418c95b8fb7c6a1374155`, Plan revision `1`,
+base `e3bf444d2e7369c25ca596cba0533f8562f07fa5`; retained task artifacts
+`target/sm-workflow/runtime-phase-6.8-20261027/target/sm-workflow/tasks/phase-6.8-01a1555d-b4a7-7be3-8232-5396c2f5e293/002-start/`
+and `003-advance/`. Startup is not validation or acceptance evidence.
 Sequence: Phase 6.7 -> Phase 6.8 -> Phase 6.9 -> Phase 6.10 -> Phase 7
 Specification: [commit completion and recovery](../spec/commit-completion-and-recovery.md)
 Delegation contract: [sm-delegate-task](../spec/delegate-task.md)
 Checklist: [P68 acceptance](phase-6.8-checklist.md)
+Current delivery: [C5/D4 qualification and successor handoff](../journal/2026/10/2026-10-27-phase-6.8-caller-delivery-handoff.md)
 Handoff: [development adoption](../journal/2026/10/2026-10-26-phase-6.8-commit-recovery-handoff.md)
 
 ## Purpose and active-work boundary
@@ -196,3 +201,33 @@ Preserve Sessions, original bases, accepted work, failure/UNKNOWN history,
 repair counts and successful checks. Keep explicit exclusions, including the
 current P67 real-Session decision reserved for its owner. Do not edit active 6.7
 acceptance, live plan or staged recovery documents to adopt this future Phase.
+
+### C3 implementation source — 2026-10-27
+
+Native Session `15e4adbe862418c95b8fb7c6a1374155`, Plan 1 issued P68-C3
+from `014-c1c2-closure-advance` after accepted C1/C2 commit
+`e45fdd2243d46c7bf8f7d68d79e864e0520df97b`. C3 source adds typed
+`sm-workflow.commit.hygiene.mode` (default `auto-fix`, diagnostic-only `error`),
+a retained managed CML terminal-LF preparation plan, and focused
+`CommitHygieneSpec` runtime examples. Affected partially staged CML receives the
+explicit no-write limitation described in the combined specification. Step
+closure, release candidate preparation and pending merge preparation use the
+shared policy. Source authorship alone is not compilation, test execution,
+installed qualification or Phase acceptance; checklist conditions remain open.
+Broader C4 completion-record closure and caller qualification remain separate.
+
+
+### D1/D2 implementation source — 2026-10-27
+
+Native Session `15e4adbe862418c95b8fb7c6a1374155`, Plan 1 issued P68-D1D2
+at `019-c3-closure-advance`, after accepted C3
+`22c0be2914bf290970991276bcf5376b070f7a82`. The independent DelegateTask
+CML/service/DTO route shares the bounded native execution, continuation, repair,
+check, conditional review, selected local commit and retained publication owners.
+Requester/destination transport and independently host-admitted artifact attachment
+remain distinct from actual host activation and consumer checks. The focused
+`DelegateTaskWorkflowSpec` source covers the main route, no-change and re-entry;
+its authorship is not execution or installed acceptance. Details are in the
+[public contract](../spec/delegate-task.md#source-connection-for-p68-d1d2--2026-10-27).
+The one authorized new isolated cross-chat sample remains pending; neither the old
+P67 fixture nor old live Task is changed. All Phase acceptance remains unchecked.

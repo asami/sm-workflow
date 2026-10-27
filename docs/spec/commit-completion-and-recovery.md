@@ -101,6 +101,28 @@ operations, not a shell/Python repair subprocess. Preserve unrelated changes and
 partial staging; never stage an entire file just to include a hygiene correction
 when that would include unrelated edits.
 
+The first supported automatic correction is a fully staged, explicitly registered
+selected `.cml` regular file, with complete UTF-8 LF text and an EOF-only typed
+finding. Test, fixture, expected-output, golden and snapshot directories are
+excluded. Empty/all-newline files, CRLF, NUL content and other whitespace findings
+remain diagnostic. Mode `100644` or `100755` and every nonterminal byte survive.
+
+When an affected CML file has a worktree version different from its index, the
+current typed Git selection cannot repair only the index suffix. Return the
+specific partial-staging diagnostic without writing or staging anything; retain
+both versions and unrelated paths. This is a supported no-write limitation,
+not partial-index correction.
+
+The selected Step owner retains the actual negative check and its original blob
+plan before applying the bounded suffix pass within the same Advance. Exact
+postconditions permit re-entry without rewriting, while changed third values
+refuse. A clean input receives no write. One recheck either permits the ordinary
+single commit or retains remaining findings without a product FIX. Release
+preparation applies the same policy before capturing its candidate for checks
+and review. Pending RepositorySync merges apply it before selected merge
+validation, retaining the observed local and remote parents; the existing merge
+commit owner remains responsible for convergence.
+
 Reuse applicable compile/test/review results for this established correction,
 retaining their original targets and the actual correction relationship.
 Normalization alone requires no AI call, independent review, whole-suite test
@@ -205,3 +227,64 @@ Step, release and RepositorySync share preparation/recovery policy with their
 own acceptance boundaries. Phase 7 consumes this owner. Runtime-owned
 publishLocal remains the publication owner, including necessity and result
 collection; no AI publication runner is introduced.
+
+
+## Explicit completion record destinations
+
+`sm-workflow.completion.records` is an optional structured policy with `targets`.
+Each target names an exact `family`, `scope`, and nonempty `paths` vector. Families
+are `step`, `phase`, `goal-task`, `delegate-task`, and `repository-sync`. A Step
+scope is its selected Step identity; a Phase scope is the selected Phase identity;
+a bounded Task scope is its original request identity; a RepositorySync scope is
+its original repository identity. Omission selects no additional destination.
+The runtime does not infer a journal filename or promote Step completion to Phase
+completion.
+
+The current clerical projection requires existing tracked regular UTF-8 Markdown
+files inside both the adopted ownership and host staging registrations. It
+preserves the accepted file bytes/mode and appends the accepted scope and actual
+validation/review references. A native owner checkpoint retains exact before and
+after bytes before managed file application. Re-entry accepts only those bytes,
+refuses concurrent edits, and admits only the exact projected tree delta. This
+preparation reuses accepted checks/review and consumes no product FIX batch.
+Final commit identities remain in runtime receipts rather than causing another
+tracked document update. Optional semantic English narrative still belongs to
+issued semantic work and its normal Submit; this clerical policy grants no
+independent semantic authorship after Terminal.
+
+Step records coalesce with the selected implementation commit. Task/delegate
+records use the existing selected commit owner and preserve the standalone FIX
+uncommitted contract. Phase records use the explicitly registered `phase-release`
+program. RepositorySync requires the host's selected Git operations named
+`repository-completion-records`, with exact registered paths and each path in
+`hygieneStagingPaths`; ordinary host parameter resolution currently supplies that
+staging inventory from the selected Goal candidate paths. The runtime refuses a
+missing selection. It never constructs a Git executable or grants a capability.
+A clean RepositorySync creates a selected record commit when required; a pending
+merge adds records to the existing native merge commit and preserves its two
+ordered native parents. Actual push and final-fetch intents are collected on
+re-entry, and an unresolved intent does not cause another effect.
+
+## Older terminal record closure
+
+`CompletionRecordClosureService.describeCompletionRecordClosure` is a passive
+public description of a supported completed Phase/Task/delegate owner. It returns
+the exact native terminal target and accepted source. The matching advance
+operation requires that target, its original terminal revision, and an independently
+admitted `completion-record-closure-continuation` evidence reference. Passive
+preparation, target fields, and configuration are not authority.
+
+The consumer uses CNCF's managed terminal closure continuation to append explicit
+same-owner provenance and a checkpoint while retaining the historical Completed
+event and accepted payload. Existing definition progression remains required.
+Subsequent managed record writes and selected commits retain their intent/results;
+unknown execution is collected rather than replayed. An attributable direct-child
+record commit may be collected only after exact record-delta proof. Ordinary
+Advance displays the retained closure state. A later native result, stale target,
+crossed owner or missing independent authority refuses. The current consumer
+supports the attributable local Phase completion format and existing committed
+Task/delegate terminal payloads; a Phase completed through a different terminal
+format must not be silently reconstructed or treated as qualified.
+
+These are source contracts. Installed generation, focused managed execution,
+independent review, artifact selection and activation remain separate evidence.

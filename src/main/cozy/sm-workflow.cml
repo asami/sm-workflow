@@ -5350,6 +5350,11 @@ on = integration-started
 
 ##### TRANSITION
 
+to = Integrating
+on = commit-hygiene-planned
+
+##### TRANSITION
+
 to = Integrated
 on = integration-observed
 
@@ -5410,6 +5415,21 @@ to = LocalStatePreserved
 on = local-state-preserved
 
 #### IntegrationValidated
+
+##### TRANSITION
+
+to = IntegrationValidated
+on = completion-records-prepared
+
+##### TRANSITION
+
+to = IntegrationValidated
+on = completion-records-applied
+
+##### TRANSITION
+
+to = NativeCommitPreparing
+on = native-commit-prepared
 
 ##### TRANSITION
 
@@ -5536,10 +5556,30 @@ on = native-review-rejected
 
 ##### TRANSITION
 
+to = ReviewAccepted
+on = completion-records-prepared
+
+##### TRANSITION
+
+to = ReviewAccepted
+on = completion-records-applied
+
+##### TRANSITION
+
 to = NativeCommitPreparing
 on = native-commit-prepared
 
 #### MergeAdmitted
+
+##### TRANSITION
+
+to = MergeAdmitted
+on = completion-records-prepared
+
+##### TRANSITION
+
+to = MergeAdmitted
+on = completion-records-applied
 
 ##### TRANSITION
 
@@ -9602,6 +9642,34 @@ WorkflowStandaloneReviewFixStartPreparationInput
 
 WorkflowPreparedImport
 
+#### prepareDelegateTaskStart
+
+##### DESCRIPTION
+
+Prepare only the explicitly selected ad hoc Task business request and its normal selection import, without a Phase or Plan. The returned import grants no execution authority.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+WorkflowDelegateTaskStartPreparationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowDelegateTaskStartPreparationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowPreparedImport
+
 #### prepareGoalTaskStart
 
 ##### DESCRIPTION
@@ -9774,7 +9842,7 @@ WorkflowPreparedImport
 
 ##### DESCRIPTION
 
-Passively prepare the explicitly selected Authority input. Read only the declared absolute local file: URI references in the executing call. Return existing structured datastore rows without provisioning or workflow transition. Supplied metadata grants no authority.
+Passively prepare the explicitly selected Authority input: a closing Wait or an explicit original-purpose inventory authority context. Read only the declared absolute local file: URI references in the executing call. Return existing structured datastore rows without provisioning or workflow transition. Supplied metadata grants no authority; independent host admission remains required.
 
 ##### TYPE
 
@@ -10713,7 +10781,7 @@ Ad hoc single-repository development from journal or direct instructions. Native
 
 ##### DESCRIPTION
 
-Exact retained malformed Task target only. External effects remain UNKNOWN. Genuine independent Human direction permits one later ordinary Advance issue; Defer permits none. No work, Git or SBT executes during recovery.
+Exact retained malformed Task target only. Independent covering host nonexecution evidence permits unchanged preparation continuation. Otherwise genuine independent Human direction permits one later ordinary Advance issue while external effects remain UNKNOWN; Defer permits none. Any previous native claim requires observation/result collection. No work, Git or SBT executes during recovery.
 
 ##### TYPE
 
@@ -10741,7 +10809,7 @@ GoalTaskMalformedIssuedWorkRecoveryDescriptionResult
 
 ##### DESCRIPTION
 
-Exact retained malformed Task target only. External effects remain UNKNOWN. Genuine independent Human direction permits one later ordinary Advance issue; Defer permits none. No work, Git or SBT executes during recovery.
+Exact retained malformed Task target only. Independently admitted covering nonexecution continues unchanged preparation with NOT_EXECUTED; the distinct genuine Human new-attempt choice retains UNKNOWN. Defer permits no issue. Prior native claims, stale frontiers and late old results refuse. Retirement and canonical checkpoint recovery use managed atomic guards; later ordinary Advance owns the corrected issue. No work, Git or SBT executes during recovery.
 
 ##### TYPE
 
@@ -11178,3 +11246,776 @@ One original finding identity with fixed, not-applicable or unresolved outcome; 
 | recoveryOperation | string | 1 |
 | externalEffects | string | 1 |
 | successorContinuationId | string | ? |
+
+
+# VALUE
+
+## DelegateTaskInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| repositoryIdentity | string | 1 |
+| requestIdentity | string | 1 |
+| objective | string | 1 |
+| ownedPaths | string | + |
+| checks | string | + |
+| conditions | string | + |
+| sourceReferences | WorkflowArtifactReference | + |
+| reviewRequired | boolean | 1 |
+| kind | string | 1 |
+| scalaLint | string | 1 |
+| repairLimit | int | 1 |
+| sourceKind | string | 1 |
+| dependencies | string | * |
+| delegation | DelegateTaskContract | 1 |
+
+## DelegateTaskAdvanceInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+## DelegateTaskWorkRequest
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| session | string | 1 |
+| sourceRevision | string | 1 |
+| kind | string | 1 |
+| state | record | 1 |
+
+## DelegateTaskCondition
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| satisfied | boolean | 1 |
+| detail | string | 1 |
+
+## DelegateTaskWorkResult
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| outcome | string | 1 |
+| summary | string | 1 |
+| findings | string | * |
+| conditions | DelegateTaskCondition | + |
+| unresolvedQuestions | string | * |
+| diagnosticRepair | record | ? |
+| fixAssessment | GoalPhaseFixAssessment | ? |
+
+## DelegateTaskView
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| kind | string | 1 |
+| message | string | 1 |
+| state | record | ? |
+| work | record | ? |
+| issuedWorkContext | WorkflowIssuedWorkContext | ? |
+| submitOperation | string | ? |
+| submitSessionId | string | ? |
+| resultType | string | ? |
+| diagnostics | record | * |
+| reviewContext | WorkflowReviewContext | ? |
+
+# WORKFLOW
+
+## DelegateTaskWorkflow
+
+version = delegate-task-business-operation-v1
+
+### COMPOSITE-STATEMACHINE
+
+#### CONSTITUENT
+
+##### task
+
+state-machine = DelegateTaskLifecycle
+subject = delegateWork
+subject-type = DelegateTaskWorkRequest
+
+#### STATE
+
+##### Pending
+
+##### Running
+
+##### Accepted
+
+#### DERIVATION
+
+##### pending
+
+state = Pending
+when = task.Idle
+
+##### running
+
+state = Running
+when = task.Running
+
+##### accepted
+
+state = Accepted
+when = task.Accepted
+
+#### INITIAL
+
+task.Idle
+
+#### ACTION
+
+##### ImplementDelegateTask
+
+kind = OPERATION
+operation = implementDelegateTask
+input = task.subject
+
+##### RepairDelegateTask
+
+kind = OPERATION
+operation = repairDelegateTask
+input = task.subject
+
+##### ReviewDelegateTask
+
+kind = JUDGMENT
+operation = reviewDelegateTask
+input = task.subject
+goal = task-repair-review
+context = assigned-task-candidate-and-selected-checks
+candidate = assigned-task-repair
+alternative = accept
+alternative = repair
+alternative = decision-needed
+criteria = adopted-objective-and-owned-path-coverage
+criteria = independent-reviewer-evidence
+criteria = unresolved-test-meaning-remains-unaccepted
+expected-result = task-review-disposition
+rationale = review-rationale
+evidence = retained-selected-validation
+evidence-scope = assigned-task-candidate
+evidence-freshness = assigned-work-revision
+evidence-provenance = independently-admitted-reviewer
+
+##### AdmitDelegateTaskReview
+
+kind = ADMISSION
+operation = admitDelegateTaskReview
+input = task.subject
+candidate-action = ReviewDelegateTask
+effect = LOCAL
+transaction = REQUIRED
+idempotency = NOT_REQUIRED
+
+### REQUIRED-OPERATION
+
+#### delegate-task-implementation-capability
+
+action = ImplementDelegateTask
+
+#### delegate-task-repair-capability
+
+action = RepairDelegateTask
+
+#### delegate-task-review-capability
+
+action = ReviewDelegateTask
+
+### OPERATION
+
+#### startDelegateTask
+
+operation = DelegateTaskService.startDelegateTask
+
+#### advanceDelegateTask
+
+operation = DelegateTaskService.advanceDelegateTask
+
+#### submitDelegateTaskWorkResult
+
+operation = DelegateTaskService.submitDelegateTaskWorkResult
+
+#### resolveDelegateTaskDiagnosticInformation
+
+operation = DelegateTaskService.resolveDelegateTaskDiagnosticInformation
+
+#### observeDelegateTaskDelivery
+
+operation = DelegateTaskDeliveryService.observeDelegateTaskDelivery
+
+#### describeDelegateTaskAdoption
+
+operation = DelegateTaskDeliveryService.describeDelegateTaskAdoption
+
+# STATE-MACHINE
+
+## DelegateTaskLifecycle
+
+### STATE
+
+#### Idle
+
+##### TRANSITION
+
+to = Running
+on = task-started
+
+#### Running
+
+##### TRANSITION
+
+to = Running
+on = task-progress
+
+##### TRANSITION
+
+to = Accepted
+on = task-accepted
+
+#### Accepted
+
+# SERVICE
+
+## DelegateTaskService
+
+### DESCRIPTION
+
+Independent single-request existing-chat delegation. Reuse the shared bounded WorkOrder, execution/profile preflight, validation, repair, conditional review and native selected commit owner. Required runtime-owned publication precedes return readiness; requester dispatch, returned source and artifact adoption retain their own correlated Sessions.
+
+### OPERATION
+
+#### resolveDelegateTaskDiagnosticInformation
+
+##### DESCRIPTION
+
+Resolve the shared finite reasoned NeedInformation batch for the exact pending Task development. Retained delivery is reused without rereading sources. The shared diagnostic DTO name is historical; no Phase or Step is created or required.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseDiagnosticInformationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseDiagnosticInformationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseDiagnosticInformationResult
+
+#### startDelegateTask
+
+##### DESCRIPTION
+
+Start an idempotent single-repository Task for the selected participant, owned paths and development objective. Native WorkOrder, managed validation, conditional independent review and a typed selected local commit own later completion.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | DelegateTaskInput | 1 |
+| selectionId | string | 1 |
+| participant | string | 1 |
+| idempotencyKey | string | 1 |
+| sessionId | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskView
+
+#### advanceDelegateTask
+
+##### DESCRIPTION
+
+Advance the retained Task through native WorkOrder, fresh candidate observation, selected validation, conditional independent review and typed selected local commit. Reuse pending issued work. Required publishLocal uses the existing publication owner after local commit; unknown effects are retained without replay. Caller transport, result receipt and requester adoption remain separate public observations.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskAdvanceInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskView
+
+#### submitDelegateTaskWorkResult
+
+##### DESCRIPTION
+
+Admit a semantic result for the exact retained Task WorkOrder and supplied independent completion evidence. Any issuedWorkContext must match the actual issued identity, revision, session, contracts and context; it is required after durable supersession history. Submission does not run checks or commit changes.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskWorkResult
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| result | DelegateTaskWorkResult | 1 |
+| issuedWorkContext | WorkflowIssuedWorkContext | ? |
+| resultReference | WorkflowArtifactReference | 1 |
+| completionFacts | WorkflowArtifactReference | * |
+| executionEvidence | WorkflowExecutionEvidence | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskView
+
+# SERVICE
+
+## DelegateTaskRepairService
+
+### DESCRIPTION
+
+Repair only the exact assigned Task findings and owned paths. Return a semantic work result for fresh native candidate observation, validation and independent review without resetting retained repair counters.
+
+### OPERATION
+
+#### repairDelegateTask
+
+##### DESCRIPTION
+
+Repair only the assigned Task findings and owned paths and return a semantic work result. Preserve retained counters and history; fresh candidate observation, selected checks and independent review remain required.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskWorkRequest
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskWorkResult
+
+# SERVICE
+
+## DelegateTaskReviewService
+
+### DESCRIPTION
+
+Independently review the exact assigned Task candidate and return identified findings or acceptance. Preserve worker independence and Task identity; review does not perform repairs, validation or the selected local commit.
+
+### OPERATION
+
+#### reviewDelegateTask
+
+##### DESCRIPTION
+
+Independently review the exact assigned Task candidate and return identified findings or acceptance. Do not repair it, relabel Task work as standalone work or replace native selected checks and closure evidence.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskWorkRequest
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskWorkResult
+
+# SERVICE
+
+## DelegateTaskSemanticAdmissionService
+
+### DESCRIPTION
+
+Native Task completion admits the assigned review against the retained work and candidate through the shared StandaloneFixExecution.admitResultC. This semantic admission neither executes validation nor commits source changes.
+
+### OPERATION
+
+#### admitDelegateTaskReview
+
+##### DESCRIPTION
+
+Admit the independently completed Task review against the exact retained work and candidate through native semantic admission. This operation neither executes validation nor commits source changes.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskWorkRequest
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskView
+
+
+# SERVICE
+
+## DelegateTaskImplementationService
+
+### DESCRIPTION
+
+Implement the exact assigned Task objective within its owned repository paths and return a semantic work result. Native candidate observation, validation, independent review and selected local commit remain separate workflow steps.
+
+### OPERATION
+
+#### implementDelegateTask
+
+##### DESCRIPTION
+
+Implement only the assigned Task objective and owned paths, then return a semantic work result. Native candidate observation, selected checks, independent review and local commit remain separate workflow steps.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskWorkRequest
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskWorkResult
+
+
+
+# VALUE
+
+## DelegateTaskContract
+
+### DESCRIPTION
+
+Independent single available existing-chat request. Complete adopted input binds owners, Component, existing authorization references, permitted operations and literal exclusions. Role is requester or destination. Transport observations do not establish execution, publication or consumer activation.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| requesterIdentity | string | 1 |
+| destinationIdentity | string | 1 |
+| returnDestination | string | 1 |
+| componentIdentity | string | 1 |
+| role | string | 1 |
+| validationScope | string | 1 |
+| permittedOperations | string | + |
+| exclusions | string | * |
+| authorizationReferences | WorkflowArtifactReference | + |
+| publicationTarget | string | ? |
+| artifactCoordinates | string | * |
+| consumerInstructions | string | 1 |
+
+## DelegateTaskObservationInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| event | string | 1 |
+| sourceReference | WorkflowArtifactReference | 1 |
+| destinationSessionId | string | ? |
+| result | record | ? |
+| artifactSelection | record | ? |
+| rationale | string | 1 |
+
+# SERVICE
+
+## DelegateTaskDeliveryService
+
+### DESCRIPTION
+
+Record actual authorized caller transport observations or requester attachment/adoption against the exact retained request. Destination development, commit, publication, returned result and consumer adoption remain distinct; no transport or artifact activation effect is implied by a label.
+
+### OPERATION
+
+#### describeDelegateTaskAdoption
+
+##### DESCRIPTION
+
+Read the exact requester result/selection adoption target for independently admitted host evidence. No transport, activation, work, Git or SBT effect is performed.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskAdvanceInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskAdoptionContext
+
+
+#### observeDelegateTaskDelivery
+
+##### DESCRIPTION
+
+Observe actual dispatch, result receipt or return, and requester adoption of an attributable artifact selection. Re-entry reuses the same observation; crossed owners, destination Session or changed delivered source refuse. Transport acknowledgements never become successful development evidence.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskObservationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | DelegateTaskObservationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskView
+
+# VALUE
+
+## WorkflowDelegateTaskStartPreparationInput
+
+- input-kind :: COMMAND
+
+### DESCRIPTION
+
+Explicit ad hoc Task request selection metadata and absolute local file: URI reference. Supplied facts authenticate no origin and grant no effect.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | string | 1 |
+| selectionId | string | 1 |
+| participant | string | 1 |
+| origin | string | 1 |
+| idempotencyKey | string | 1 |
+| selectionCollection | string | 1 |
+
+
+# VALUE
+
+## DelegateTaskAdoptionContext
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| componentInstance | string | 1 |
+| sessionId | string | 1 |
+| sourceRevision | string | 1 |
+| target | record | 1 |
+
+
+# VALUE
+
+## CompletionRecordClosureInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| family | string | 1 |
+| terminalRevision | string | ? |
+| target | record | ? |
+| authorityReference | WorkflowArtifactReference | ? |
+
+## DescribeCompletionRecordClosureInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | CompletionRecordClosureInput | 1 |
+
+## AdvanceCompletionRecordClosureInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | CompletionRecordClosureInput | 1 |
+
+## CompletionRecordClosureView
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| scope | string | 1 |
+| identity | string | 1 |
+| kind | string | 1 |
+| terminalRevision | string | 1 |
+| target | record | 1 |
+| recordCommit | string | ? |
+| message | string | 1 |
+
+# SERVICE
+
+## CompletionRecordClosureService
+
+### DESCRIPTION
+
+Continue required completion records through the original owner and native Session, retaining the historical Terminal, acceptance, base, checks and repair counts. Exact independent authority precedes the managed terminal continuation. This route issues no semantic work, Start, accepted Submit, publication or remote synchronization.
+
+### OPERATION
+
+#### describeCompletionRecordClosure
+
+##### DESCRIPTION
+
+Read the actual Completed same-owner target and attributable accepted source. Description is passive and grants no continuation or commit authority. Standalone FIX is excluded.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DescribeCompletionRecordClosureInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | CompletionRecordClosureInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+CompletionRecordClosureView
+
+#### advanceCompletionRecordClosure
+
+##### DESCRIPTION
+
+Admit the exact independently authorized target, retain the original Terminal, prepare and apply exact record bytes, collect an attributable existing commit or perform only the missing selected record commit, persist closure and return its scope. Unknown commit effects are collected without replay. Exact redelivery returns the retained receipt.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+AdvanceCompletionRecordClosureInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | CompletionRecordClosureInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+CompletionRecordClosureView

@@ -72,7 +72,8 @@ private[admission] object TypedGitHostPlanFixture {
       } ++ goalMessages.zip(goalSelections).zipWithIndex.flatMap { case ((message, paths), index) =>
         val selection = Some("goal-step-" + (index + 1))
         Vector(declaration(GitOperationKind.CheckSelectedIndex, selection, paths = paths),
-          declaration(GitOperationKind.SelectedIndexChanges, selection, paths = paths)) ++
+          declaration(GitOperationKind.SelectedIndexChanges, selection, paths = paths),
+          declaration(GitOperationKind.TreeEntries, selection, paths = paths)) ++
           (if (!commitIdentity) Vector.empty else Vector(declaration(GitOperationKind.CommitSelected,
             selection, message = Some(message), paths = paths)))
       }

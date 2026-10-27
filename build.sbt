@@ -129,7 +129,7 @@ lazy val root = project
 
     skillSourceFiles := {
       val sourceRoot = baseDirectory.value / "skills"
-      val names = Seq("sm-goal-phase", "sm-split-phase", "sm-repository-sync", "sm-test-fix", "sm-goal-task", "sm-review-fix")
+      val names = Seq("sm-goal-phase", "sm-split-phase", "sm-repository-sync", "sm-test-fix", "sm-goal-task", "sm-review-fix", "sm-delegate-task")
       val skills = names.map { name =>
         val source = sourceRoot / name / "SKILL.md"
         if (!source.isFile) sys.error("Missing component-owned skill source: " + source)
@@ -143,6 +143,9 @@ lazy val root = project
         "docs/spec/standalone-fix-runtime.md",
         "docs/spec/standalone-fix-acceptance.md",
         "docs/spec/goal-task-runtime.md",
+        "docs/spec/delegate-task.md",
+        "docs/spec/native-delegate-task-caller.md",
+        "docs/spec/commit-completion-and-recovery.md",
         "docs/spec/standalone-review-fix-runtime.md",
         "docs/spec/goal-phase-acceptance-boundary.md",
         "docs/spec/goal-phase-purpose-repair.md",

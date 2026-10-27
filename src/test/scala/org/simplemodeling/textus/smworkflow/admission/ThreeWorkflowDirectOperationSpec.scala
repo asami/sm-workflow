@@ -43,7 +43,7 @@ import SplitPhaseTypedStartFixture as F
   * Input/evidence rows are test data, not a production human interaction channel.
   * No launcher, CLI command, fabricated history or direct SQLite write is used.
   * @since   Oct.  7, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -752,7 +752,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
                 else if (Vector("start", "describe", "recover", "adopt", "admit", "continue", "resolve").exists(operation.name.startsWith)) "input"
                 else "sessionId")
             if (Set("describeGoalPhaseValidationRepair", "adoptGoalPhaseValidationRepair",
-                "recoverGoalPhaseWholePhaseCandidate", "describeGoalPhaseReleaseRepairContinuation",
+                "recoverGoalPhaseCandidate", "recoverGoalPhaseWholePhaseCandidate", "describeGoalPhaseReleaseRepairContinuation",
                 "recoverGoalPhaseReleaseRepairContinuation").contains(operation.name)) {
               operation.specification.request.parameters.map(_.name) shouldBe Vector("input", "inputResource")
               operation.specification.request.parameters.map(_.domain.multiplicity) shouldBe

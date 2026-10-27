@@ -20,7 +20,7 @@ import GoalPhaseDependencyValidation.given
   * command grants or a declaration that any review/Human result was admitted.
   * Storage/process bootstrap has already been performed by the owning Subsystem.
   * @since   Oct.  7, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowLauncherAssembly.RuntimeCompositionDecoder {
@@ -112,7 +112,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
     GoalPhaseRuntimeParameters.declarations ++ Vector(definition, WorkflowExecutionProfileParameters.declaration,
       GoalPhaseNativeExecution.declaration, GoalPhaseAcceptanceBoundary.declaration, GoalPhaseFindingRecording.declaration,
       RepositorySyncNativeExecution.declaration, SplitPhaseNativeExecution.declaration, DevelopmentJournal.declaration, CommonEvidence.declaration,
-      completionPolicy, validationRepairCallerSource, developmentObservation, LocalPublicationRuntime.declaration)
+      completionPolicy, validationRepairCallerSource, developmentObservation, LocalPublicationRuntime.declaration, CommitHygiene.declaration, CompletionRecords.declaration)
   lazy val factory = new SmWorkflowConfiguredComponentFactory(declarations, Vector.empty,
     bindServicesC, ThreeWorkflowLauncherAssembly.publishedMcpOperations)
 
@@ -157,10 +157,13 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
       evidencepolicy <- CommonEvidence.resolvePolicyC(parameters, Vector(persistence.instances, persistence.continuations) ++ journalpolicy.map(_.collection))
       observation <- parameters.resolve(developmentObservation).map(_.value)
       publication <- parameters.resolve(LocalPublicationRuntime.declaration).map(_.value)
+      hygiene <- CommitHygiene.resolveC(parameters)
+      records <- parameters.resolve(CompletionRecords.declaration).map(_.value)
       target <- targetC(settings.target)
       evidence <- NativeExternalEvidence.bindC(creation.configuration, persistence)
       repository = RepositorySyncManagedFetch.Declaration(persistence.configuration, persistence.instances,
-        persistence.continuations, settings.repository.input, target, executionprofiles, executionorigin, repositoryclassifications, journalpolicy)
+        persistence.continuations, settings.repository.input, target, executionprofiles, executionorigin, repositoryclassifications, journalpolicy,
+        hygiene, settings.goal.candidatePaths, records)
       ports = new ThreeWorkflowExternalEvidencePorts(evidence)
       closure = GoalPhaseNativeRepositoryClosure.Installation(repository,
         ports.phaseClosure, settings.repository.validation, ports.convergence,
@@ -188,7 +191,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
         Some(GoalPhaseRepairPolicyAdoption.Installation(ports.repairPolicyAdoption)),
         Some(GoalPhaseSourceHistoryNormalization.Installation(ports.sourceHistoryNormalization)),
         Some(GoalPhaseDependencySourceRevision.Installation(ports.dependencySourceRevision)),
-        settings.goal.dependencySourceRevisions, settings.goal.dependencySourceConsumptions, publication)
+        settings.goal.dependencySourceRevisions, settings.goal.dependencySourceConsumptions, publication, hygiene, records)
       _ <- if (settings.goal.dependencyValidation.forall(GoalPhaseDependencyValidation.bindingValid)) Consequence.unit
         else Consequence.configurationInvalid("Goal dependency validation binding is invalid")
       _ <- GoalPhaseNativeRun.validateC(goal)

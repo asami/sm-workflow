@@ -17,7 +17,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Host configuration and component-managed facts for the one publication path.
   * There is no shell, external AI execution runner or caller-selected argv here.
   * @since   Oct. 26, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object LocalPublicationRuntime {
@@ -92,6 +92,14 @@ private[smworkflow] object LocalPublicationRuntime {
       .getOrElse(Consequence.configurationInvalid("Publication target is not declared by this host"))
     participant = SecuritySubject.from(core.executionContext.security).subjectId
     result <- LocalPublication.ensureC(input, target, participant, _port(core, policy))
+  } yield result
+
+  def ensureDeliveryC(core: ActionCall.Core, policy: Policy, input: LocalPublication.Input): Consequence[LocalPublication.Result] = for {
+    _ <- validateC(policy)
+    target <- policy.targets.find(_.identity == input.targetIdentity).map(Consequence.success)
+      .getOrElse(Consequence.configurationInvalid("Publication target is not declared by this host"))
+    participant = SecuritySubject.from(core.executionContext.security).subjectId
+    result <- LocalPublication.ensureDeliveryC(input, target, participant, _port(core, policy))
   } yield result
 
   def collectC(core: ActionCall.Core, policy: Policy, input: LocalPublication.Input): Consequence[Option[LocalPublication.Result]] = for {

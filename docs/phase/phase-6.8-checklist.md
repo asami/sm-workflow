@@ -1,8 +1,18 @@
 # Phase 6.8 acceptance checklist
 
-Status: pending; planning is not implementation or acceptance.
+Status: in progress; source implementation is not qualification or Phase acceptance. All acceptance items remain unchecked.
 Owner: [Phase 6.8](phase-6.8.md).
 Contract: [commit completion and recovery](../spec/commit-completion-and-recovery.md).
+
+The existing Session has accepted four issued Steps through C4/D3, committed as
+`c5ae41601accbea83d2d46378b0f8ac0fae67f8b`. Its selected completion-record suite
+passed 8/8 and delegation suite 3/3; the conditional assessment admitted that
+candidate without executing a separate Step review. These are scoped retained
+facts, not acceptance of all 33 Phase conditions. C5/D4's installed suite and
+seven-skill distribution are authored; no execution result is claimed here.
+Actual D2 dispatch, destination execution/publication, returned result and consumer
+adoption/activation remain outstanding. See the
+[qualification handoff](../journal/2026/10/2026-10-27-phase-6.8-caller-delivery-handoff.md).
 
 - [ ] P68-01 (C1): Map actual P67/PA/SHR/RRC/ROBS/Git evidence to reused
   capabilities and gaps; no duplicate work or unsupported completion claims.
@@ -134,3 +144,21 @@ Contract: [commit completion and recovery](../spec/commit-completion-and-recover
 
 Reuse applicable prior tests; add tests only for changed boundaries.
 No item adds a completion condition to active Phase 6.7.
+
+C3 source-authorship note (2026-10-27): the issued `P68-C3` implementation adds
+`CommitHygieneSpec` and the shared bounded policy described in
+[the combined specification](../spec/commit-completion-and-recovery.md#mechanical-commit-hygiene).
+Affected partial staging is preserved by a specific no-write diagnostic; no
+partial-index correction is claimed. These unchecked conditions await native
+validation and independent review; broader C4 closure remains open.
+
+
+D1/D2 source-authorship note (2026-10-27): the actual issued `P68-D1D2`
+adds independent DelegateTask input/result/CML/service operations through the
+shared bounded runtime. Its focused executable spec describes actual fixture
+checks/commit/publication, no-change/redelivery, independent requester attachment
+admission and FULL contrasts. No validation was executed by the implementation
+owner. Requester attachment explicitly does not certify host activation or
+consumer checks. The authorized installed cross-chat sample, actual selection/use
+evidence and Phase acceptance remain pending; no item above is checked by source
+authorship. See [the public connection](../spec/delegate-task.md#source-connection-for-p68-d1d2--2026-10-27).

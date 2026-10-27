@@ -384,19 +384,19 @@ final class GoalPhaseNativeClosureSpec extends AnyWordSpec with Matchers with Gi
   }
 
   "Explicit selected host declarations" should {
-    "bind exactly three selected kinds per Step and fixed blob/tree reads without cross-Step paths" in {
+    "bind exactly four selected kinds per Step and fixed blob/tree reads without cross-Step paths" in {
       Given("two exact per-Step owned vectors, shared approved document and their separate messages")
       val selections = Vector(_paths, Vector("docs/check.md", "docs/next.md"))
       When("the public host fixture emits canonical typed Git JSON")
       val plan = TypedGitHostPlanFixture.plan(_host, kinds = TypedGitHostPlanFixture.observations,
         goalPaths = _paths, goalMessages = Vector("Step one", "Step two"), goalSelections = selections)
       val declarations = _declarations(plan)
-      val selectedkinds = Set("commit-selected", "check-selected-index", "selected-index-changes")
+      val selectedkinds = Set("commit-selected", "check-selected-index", "selected-index-changes", "tree-entries")
       Then("each bounded declaration contains only its selected Step vector and the exact public field set")
       selections.zipWithIndex.foreach { (paths, index) =>
         val selected = declarations.filter(_.hcursor.get[String]("selectionId").toOption.contains("goal-step-" + (index + 1)))
         selected.map(_.hcursor.get[String]("operation").toOption.get).toSet shouldBe selectedkinds
-        selected.size shouldBe 3
+        selected.size shouldBe 4
         selected.foreach { value =>
           value.hcursor.get[Vector[String]]("selectedPaths").toOption.get shouldBe paths
           value.asObject.get.keys.toSet shouldBe Set("target", "operation", "capability", "identity", "gitExecutable",
@@ -404,7 +404,7 @@ final class GoalPhaseNativeClosureSpec extends AnyWordSpec with Matchers with Gi
             "selectedPaths", "commitMessage", "limits", "environment")
         }
       }
-      declarations.filter(value => selectedkinds(value.hcursor.get[String]("operation").toOption.get)).size shouldBe 6
+      declarations.filter(value => selectedkinds(value.hcursor.get[String]("operation").toOption.get)).size shouldBe 8
       declarations.map(_.hcursor.get[String]("operation").toOption.get).toSet should contain allOf ("blob-content", "tree-changes")
       TypedGitHostPlanFixture.limits.hcursor.get[Int]("argumentCount").toOption.get shouldBe 512
       declarations.filterNot(value => selectedkinds(value.hcursor.get[String]("operation").toOption.get))
@@ -432,8 +432,8 @@ final class GoalPhaseNativeClosureSpec extends AnyWordSpec with Matchers with Gi
         commitIdentity = false, denied = Set(denied))
       val selected = _declarations(plan).filter(_.hcursor.get[String]("selectionId").toOption.contains("goal-step-1"))
       val capabilities = plan.hcursor.get[Vector[Json]]("grants").toOption.get.head.hcursor.get[Vector[String]]("capabilities").toOption.get
-      Then("both selected checks retain the exact vector while commit and the denied grant remain absent")
-      selected.map(_.hcursor.get[String]("operation").toOption.get).toSet shouldBe Set("check-selected-index", "selected-index-changes")
+      Then("all three selected reads retain the exact vector while commit and the denied grant remain absent")
+      selected.map(_.hcursor.get[String]("operation").toOption.get).toSet shouldBe Set("check-selected-index", "selected-index-changes", "tree-entries")
       selected.foreach(_.hcursor.get[Vector[String]]("selectedPaths").toOption.get shouldBe _paths)
       capabilities should not contain denied
       Given("a pure startup host with neither messages nor selections")

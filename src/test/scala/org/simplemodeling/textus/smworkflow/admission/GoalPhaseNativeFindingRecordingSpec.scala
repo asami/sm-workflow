@@ -84,8 +84,9 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
   private def _process_plan(directory: Path, goal: ThreeWorkflowRuntimeParameters.Goal, denygit: Boolean = false): Json = {
     val target = Programs.Target(directory.resolve("repository"), "main", "origin", "main", directory.resolve("upstream.git").toString)
     val messages = goal.closure.programs.map(p => "Goal Step " + p.step)
-    val selections = goal.closure.programs.map(program => Vector(program.step + ".txt", _hygiene, _candidates) ++
-      Option.when(program.step == "step-2" && goal.candidatePaths.contains(_inventory_path))(_inventory_path))
+    val selections = goal.closure.programs.map(program => (if (program.step == GoalPhaseNativeReleaseClosure.programIdentity) Vector(_hygiene, _candidates) else Vector(program.step + ".txt", _hygiene, _candidates)) ++
+      Option.when(program.step == "step-2" && goal.candidatePaths.contains(_inventory_path))(_inventory_path) ++
+      Option.when(goal.candidatePaths.contains("model.cml"))("model.cml"))
     val normalgit = TypedGitHostPlanFixture.plan(target, goalPaths = goal.candidatePaths, goalMessages = messages,
       goalSelections = selections)
     val denied = if (denygit) normalgit.hcursor.get[Vector[Json]]("gitPrograms").toOption.get
@@ -115,14 +116,21 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
   private def _episode(directory: Path, initialize: Boolean = false, selected: O.Plan = _plan(), denygit: Boolean = false,
     selectedPolicy: Option[R.Policy] = Some(_policy), interrupt: Boolean = false,
     journal: Option[NativeWorkflowCliFixture.JournalHost] = None,
-    journalInterruption: Option[String] = None, evidence: Boolean = false, inventory: Boolean = false)(task: Episode => Unit): Unit = {
+    journalInterruption: Option[String] = None, evidence: Boolean = false, inventory: Boolean = false,
+    hygiene: Boolean = false, hygieneMode: Option[String] = None, completionRecords: Option[CompletionRecords.Policy] = None, releaseRecords: Boolean = false,
+    completionPolicy: Option[String] = None)(task: Episode => Unit): Unit = {
     val acknowledge: String => Consequence[Unit] = point =>
       if (interrupt && point.startsWith("goal-recording-candidate-prepared:") || journalInterruption.contains(point))
         Consequence.stateConflict("SPECIFICATION-OWNED interruption before actual staging") else Consequence.unit
     val parameters = selectedPolicy.map(_configured).getOrElse(Map.empty) ++ journal.toVector.flatMap(_.values) ++ (if (!denygit) Map.empty else Map(
       "textus.subsystem.process-execution.plan" -> _process_plan(directory, _host(directory).goal, denygit = true).noSpaces)) ++
-      (if (evidence) _evidence_values(directory) else Map.empty)
-    val host = _host(directory)
+      (if (evidence) _evidence_values(directory) else Map.empty) ++ hygieneMode.map(CommitHygiene.declaration.name -> _) ++
+      completionRecords.map(p => CompletionRecords.declaration.name -> summon[io.circe.Encoder[CompletionRecords.Policy]].apply(p).noSpaces) ++
+      completionPolicy.map(ThreeWorkflowRuntimeParameters.completionPolicy.name -> _)
+    val basehost = _host(directory)
+    val initialhost = if (releaseRecords) basehost.copy(goal = basehost.goal.copy(closure = basehost.goal.closure.copy(
+      programs = basehost.goal.closure.programs :+ GoalPhaseNativeClosure.StepProgram(GoalPhaseNativeReleaseClosure.programIdentity, 3)))) else basehost
+    val host = if (hygiene) initialhost.copy(goal = initialhost.goal.copy(candidatePaths = initialhost.goal.candidatePaths :+ "model.cml")) else initialhost
     val selectedhost = if (inventory) host.copy(goal = host.goal.copy(candidatePaths = host.goal.candidatePaths :+ _inventory_path)) else host
     _with_runtime_(directory, "FindingRecording", Some(selectedhost), parameters,
       goalAcknowledgement = Some(acknowledge)) { (owner, component, actor, prepare) =>
@@ -198,14 +206,131 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
     * The directive, review and dependency request are specification-owned inputs.
     * The first Step commit, pending question and native SQL history are actual.
     */
+  /** New C3 integration only; predecessor examples are not inherited/rerun. */
+  private[admission] def qualifyCompletionRecords(narrator: GivenWhenThen): Unit = {
+    val directory = _root()
+    val policy = CompletionRecords.Policy(Vector(CompletionRecords.Target("step", "step-1", Vector(_hygiene))))
+    narrator.Given("an actual native Step with accepted source/checks/review and explicitly owned required records")
+    _episode(directory, initialize = true, selected = _plan(two = true), selectedPolicy = None, completionRecords = Some(policy)) { e =>
+      val id = e.start()
+      e.collectPublication(id).status shouldBe "not-configured"
+      e.advance(id)
+      Files.writeString(directory.resolve("repository/step-1.txt"), "Accepted implementation and completion records share a commit.\n")
+      e.submit(e.work(id))
+      val review = e.advance(id)
+      e.submit(e.work(id), Some(review), "accept")
+      val waiting = e.advance(id)
+      e.authority(id, waiting)
+      val before = e.observe().head
+      val checks = _checks(directory)
+      narrator.When("ordinary Advance performs runtime-owned record projection before the selected local commit")
+      val next = e.advance(id)
+      narrator.Then("one actual commit closes only this Step and reuses successful verification")
+      next.work.get.stepIdentity shouldBe Some("step-2")
+      val after = e.observe().head
+      e.commit(after).parents shouldBe Vector(before)
+      Files.readString(directory.resolve("repository").resolve(_hygiene)) should include (
+        "<!-- sm-workflow completion " + id + " step step-1 -->")
+      e.current(id).lifecycle shouldBe Lifecycle.Active
+      _checks(directory) shouldBe checks
+      e.advance(id).issuedWorkContext shouldBe next.issuedWorkContext
+      e.observe().head shouldBe after
+    }
+  }
+
+  private[admission] def qualifyPhaseCompletionRecords(narrator: GivenWhenThen): Unit = {
+    val directory = _root()
+    val policy = CompletionRecords.Policy(Vector(CompletionRecords.Target("phase", _input.phaseIdentity, Vector(_candidates))))
+    narrator.Given("completed Step commits and an independently accepted Phase source with a required Phase record")
+    _episode(directory, initialize = true, selectedPolicy = None, completionRecords = Some(policy), releaseRecords = true,
+      completionPolicy = Some(GoalPhasePostCompletionSync.localPolicy)) { e =>
+      val (id, display, review) = _phase_review(e)
+      val source = _business(review).candidate.get
+      e.submit(review, Some(display), "accept")
+      val waiting = e.advance(id)
+      val checks = _checks(directory)
+      e.authority(id, waiting)
+      narrator.When("normal Advance owns the exact Phase record projection and explicit release commit")
+      var result = e.advance(id)
+      for (_ <- 1 to 4 if result.kind != "Terminal") {
+        if (result.authorityContext.nonEmpty) e.authority(id, result)
+        result = e.advance(id)
+      }
+      narrator.Then("one release child commit precedes Terminal and accepted checks are reused")
+      withClue("Actual Phase closure result: " + result.toRecord().toString + "\n") {
+        result.kind shouldBe "Terminal"
+      }
+      result.completion.get.synchronization.state shouldBe "deferred"
+      result.completion.get.synchronization.childSessionId shouldBe None
+      e.commit(e.observe().head).parents shouldBe Vector(source.head)
+      Files.readString(directory.resolve("repository").resolve(_candidates)) should include(
+        "<!-- sm-workflow completion " + id + " phase " + _input.phaseIdentity + " -->")
+      _checks(directory) shouldBe checks
+      e.current(id).lifecycle shouldBe Lifecycle.Completed
+      val head = e.observe().head
+      e.advance(id).kind shouldBe "Terminal"
+      e.observe().head shouldBe head
+    }
+  }
+
+  private[admission] def qualifyCommitHygiene(): Unit = Vector(None, Some("auto-fix")).foreach { mode =>
+    val directory = _root()
+    val selected = _plan(two = true)
+    val plan = selected.copy(steps = selected.steps.updated(0,
+      selected.steps.head.copy(ownedPaths = selected.steps.head.ownedPaths :+ "model.cml")))
+    _episode(directory, initialize = true, selected = plan, selectedPolicy = None, hygiene = true, hygieneMode = mode) { e =>
+      val id = e.start()
+      e.advance(id)
+      val implementation = e.work(id)
+      Files.writeString(directory.resolve("repository/model.cml"), "component Example {}\n\n")
+      Files.writeString(directory.resolve("repository/step-1.txt"), "Assigned source.\n")
+      e.submit(implementation)
+      val review = e.advance(id)
+      e.submit(e.work(id), Some(review), "accept")
+      val waiting = e.advance(id)
+      e.authority(id, waiting)
+      val before = e.observe().head
+      val checks = _checks(directory)
+      val next = e.advance(id)
+      next.work.get.kind shouldBe "ImplementStep"
+      next.work.get.stepIdentity shouldBe Some("step-2")
+      val committed = e.observe().head
+      committed should not be before
+      e.commit(committed).parents shouldBe Vector(before)
+      Files.readString(directory.resolve("repository/model.cml")) shouldBe "component Example {}\n"
+      _checks(directory) shouldBe checks
+      val pending = e.work(id)
+      val redisplayed = e.advance(id)
+      // Closure reports its correction once; redisplay retains the same pending work.
+      next.message shouldBe redisplayed.message +
+        " Commit hygiene mode=auto-fix; corrected: Supported CML correction rechecked cleanly."
+      redisplayed.copy(message = next.message) shouldBe next
+      e.work(id) shouldBe pending
+      _checks(directory) shouldBe checks
+      e.observe().head shouldBe committed
+    }
+  }
+
   private[admission] def qualifyRemainingPlanAdoption(narrator: GivenWhenThen): Unit = {
     _qualify_remaining_plan(narrator, inventory = false)
     _qualify_remaining_plan(narrator, inventory = true)
   }
-  private def _qualify_remaining_plan(narrator: GivenWhenThen, inventory: Boolean): Unit = {
+  private[admission] def qualifyRetainedInventoryAuthority(narrator: GivenWhenThen): Unit =
+    _qualify_remaining_plan(narrator, inventory = true, retainedAuthority = true)
+
+  private def _qualify_remaining_plan(narrator: GivenWhenThen, inventory: Boolean, retainedAuthority: Boolean = false): Unit = {
     narrator.Given("docs/spec/goal-phase-remaining-plan-adoption.md R13–R16 E3: an actual two-Step Session with its first Step accepted and committed; Human inputs are SPECIFICATION-OWNED")
     val directory = _root()
-    val initial = _plan(two = true)
+    val basic = _plan(two = true)
+    val initial = if (retainedAuthority) basic.copy(acceptance = Some(GoalPhaseAcceptanceBoundary.Adoption(
+      "Deliver the selected Component behavior", Vector(GoalPhaseAcceptanceBoundary.Condition(
+        "selected-behavior", "phase", true, "Preserve the selected Component behavior"))))) else basic
+    val raw = initial.copy(revision = "remaining-2", steps = initial.steps.updated(1,
+      if (inventory) initial.steps(1).copy(ownedPaths = initial.steps(1).ownedPaths :+ _inventory_path)
+      else initial.steps(1).copy(purpose = "Use operation-owned Evidence for the remaining Step")))
+    val revision = GoalPhasePlanRevision.Proposal("spec-new-contract", "2",
+      "Necessary inventory for the unchanged selected contract", raw)
+    val proposal = GoalPhasePlanRevision.publicProposal(Some(revision)).get
     var session = ""
     var original = Option.empty[InstanceRecord]
     var question = Option.empty[WorkflowInteraction[GoalPhaseOrderedHumanDecision.Input, Nothing]]
@@ -223,23 +348,26 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       Files.writeString(directory.resolve("repository/step-2.txt"), "Second Step requiring a correction.\n")
       e.submit(e.work(session))
       val review = e.advance(session)
-      e.submit(e.work(session), Some(review), "repair", findings = Vector("Correct the second Step before acceptance"))
+      val reviewWork = e.work(session)
+      val purposeSources = Option.when(retainedAuthority) {
+        val contract = _business(reviewWork).purposeRepair.get
+        Vector[GoalPhasePurposeRepair.Source](GoalPhasePurposeRepair.StepPurpose(1, contract.stepIdentity,
+          "SPECIFICATION-OWNED defect in the selected second Step before acceptance", Vector("step-2.txt")))
+      }
+      e.submit(reviewWork, Some(review), "repair", findings = Vector("Correct the second Step before acceptance"),
+        repairFindingSources = purposeSources)
       e.advance(session).work.get.kind shouldBe "RepairStep"
       val dependency = GoalPhaseDependencyScope.Proposal("spec-old-dependency", "1", "REPAIR",
         GoalPhaseDependencyScope.Component("SmWorkflow", "sm-workflow", "repository"),
         GoalPhaseDependencyScope.Component("OtherComponent", "other-library", "repository"),
         ContextReference("old-usage", "1"), "Old proposed dependency contract needs reconsideration",
         Vector("src/old.scala"), Vector("Old dependency acceptance"), Vector(ContextReference("step-2", "1")), Vector.empty)
-      e.submit(e.work(session), outcome = "decision-needed", dependencyProposal = Some(dependency))
+      e.submit(e.work(session), outcome = "decision-needed", dependencyProposal = Option.unless(retainedAuthority)(dependency),
+        planRevision = Option.when(retainedAuthority)(revision))
       e.advance(session)
       question = Some(e.question(session))
       val before = e.current(session)
       original = Some(before)
-      val raw = initial.copy(revision = "remaining-2", steps = initial.steps.updated(1,
-        if (inventory) initial.steps(1).copy(ownedPaths = initial.steps(1).ownedPaths :+ _inventory_path)
-        else initial.steps(1).copy(purpose = "Use operation-owned Evidence for the remaining Step")))
-      val proposal = GoalPhasePlanRevision.publicProposal(Some(GoalPhasePlanRevision.Proposal(
-        "spec-new-contract", "2", "Actual new direction replaces the unaccepted future contract", raw))).get
       narrator.When("public description captures the actual unanswered frontier and proposed remaining contract")
       val description = e.invoke[V.GoalPhaseRemainingPlanDescriptionResult](GoalPhaseRemainingPlanAdoption.describeOperation,
         List(Property("input", V.GoalPhaseRemainingPlanDescriptionInput(session, proposal).toRecord(), None)))
@@ -282,8 +410,9 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       _same_instance(e.current(session), before)
       e.question(session) shouldBe question.get
       narrator.When("the specification host records the matching separately observed directive and public adoption runs")
-      e.prepareRemaining(description, input)
-      val crossed = _request_(input.copy(rationale = "A different unobserved directive"))
+      if (retainedAuthority) e.prepareInventoryAuthority(description, input) else e.prepareRemaining(description, input)
+      val crossed = if (retainedAuthority) _request_(input.copy(reference = V.WorkflowArtifactReference("absent-source", "1")))
+        else _request_(input.copy(rationale = "A different unobserved directive"))
       if (inventory) {
         val metadata = captured.currentInventory.get
         _request_(input.copy(target = GoalPhaseRemainingPlanAdoption.targetRecord(captured.copy(
@@ -340,6 +469,21 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       narrator.Then("the stale answer refuses without changing the resumed native history")
       stale.isSuccess shouldBe false
       _same_instance(e.current(session), before)
+      if (retainedAuthority) {
+        Files.createDirectories(directory.resolve("repository").resolve(_inventory_path).getParent)
+        Files.writeString(directory.resolve("repository").resolve(_inventory_path), "{\"selectedApi\":true}\n")
+        e.submit(e.work(session))
+        val review = e.advance(session)
+        e.submit(e.work(session), Some(review), "accept")
+        val closing = e.advance(session)
+        e.authority(session, closing)
+        e.advance(session)
+        val committed = e.observe()
+        committed.head should not be target.get.completed.head.commit.identity
+        e.commit(committed.head).parents shouldBe Vector(target.get.completed.head.commit.identity)
+        e.advance(session)
+        e.observe().head shouldBe committed.head
+      }
     }
   }
 
@@ -487,6 +631,10 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
     def call(operation: String, properties: List[Property]) = owner.executeOperationResponseInContext(
       Request.of(component = component.name, service = "GoalPhaseService", operation = operation, properties = properties), actor)
     def invoke[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A = read_value[A](take(call(operation, properties)))
+    def collectPublication(id: String): V.LocalPublicationResult = read_value[V.LocalPublicationResult](take(
+      owner.executeOperationResponseInContext(Request.of(component = component.name, service = "LocalPublicationService",
+        operation = "collectLocalPublication", properties = List(Property("input", Record.data("requestIdentity" -> "spec-owner-publication-preflight",
+          "targetIdentity" -> "unconfigured-target", "ownerSessionId" -> id), None))), actor)))
     def start(proposal: Option[String] = None): String = invoke[V.GoalPhaseStartResult]("startGoalPhase", NativeWorkflowOperationInputFixture.goal(_input, proposal)).sessionId
     def advance(id: String): V.GoalPhaseAdvanceResult = invoke[V.GoalPhaseAdvanceResult]("advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(id))
     def current(id: String): InstanceRecord = {
@@ -527,9 +675,27 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
           "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))
         _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)
       } yield ())
+    def prepareInventoryAuthority(description: V.GoalPhaseRemainingPlanDescriptionResult, input: V.GoalPhaseRemainingPlanAdoptionInput): Unit =
+      prepare(call => for {
+        target <- GoalPhaseRemainingPlanAdoption.targetC(description.target)
+        boundary = GoalPhaseInventoryAuthority.Boundary(description.componentInstance, target.sessionId, "participant",
+          target.plan.repository, target.plan.identity, target.currentInventory.get.stepIdentity,
+          target.plan.steps.find(_.identity == target.currentInventory.get.stepIdentity).get.purpose,
+          ContextReference("specification-original-purpose", "1"), target.plan.effectiveAcceptance.get.usage.get,
+          target.plan.effectiveAcceptance.get.conditions.asJson, GoalPhaseInventoryAuthority.operations, Vector("excluded"))
+        prepared <- NativeAuthorityPreparation.goalC(V.WorkflowAuthorityContext(GoalPhaseInventoryAuthority.purpose,
+          description.componentInstance, GoalPhaseNativeMetadata.record(boundary.asJson)), input.reference,
+          "participant", "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))
+        _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)
+      } yield ())
     def observe(): RepositorySyncManagedGitObservation.Observed = {
       var value = Option.empty[RepositorySyncManagedGitObservation.Observed]
       prepare(call => call.observeC().map(v => { value = Some(v); () }))
+      value.get
+    }
+    def commit(identity: String): RepositorySyncManagedGitObservation.Commit = {
+      var value = Option.empty[RepositorySyncManagedGitObservation.Commit]
+      prepare(call => RepositorySyncManagedGitObservation.commitC(call.core, identity).map(v => { value = Some(v); () }))
       value.get
     }
     def index(): String = {
@@ -539,7 +705,9 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
     }
     def submit(work: WorkflowInteraction[S.Request, Nothing], display: Option[V.GoalPhaseAdvanceResult] = None,
       outcome: String = "completed", observations: Option[R.Observations] = None, findings: Vector[String] = Vector.empty,
-      dependencyProposal: Option[GoalPhaseDependencyScope.Proposal] = None): ContinuationResult[S.Result] = {
+      dependencyProposal: Option[GoalPhaseDependencyScope.Proposal] = None,
+      planRevision: Option[GoalPhasePlanRevision.Proposal] = None,
+      repairFindingSources: Option[Vector[GoalPhasePurposeRepair.Source]] = None): ContinuationResult[S.Result] = {
       val order = _request(work)
       val assigned = _business(work)
       val reports = assigned.issues.filter(_ => assigned.kind != "ImplementStep").map { state =>
@@ -553,16 +721,15 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
         GoalPhaseAcceptanceBoundary.applicable(boundary, assigned.kind).map(condition => GoalPhaseAcceptanceBoundary.Observation(
           condition.identity, if (condition.required) "satisfied" else "unsatisfied", "SPECIFICATION-OWNED " + condition.description)), Vector.empty))
       val value = S.Result(outcome, "SPECIFICATION-OWNED assigned semantic response", findings, acceptance = acceptance, issueReport = reports,
-        reviewObservations = observations, dependencyProposal = dependencyProposal)
+        reviewObservations = observations, dependencyProposal = dependencyProposal, planRevision = planRevision,
+        repairFindingSources = repairFindingSources)
       val reference = ContextReference("specification-recording-" + assigned.kind, order.expectedRevision.value)
       val evidence = ExecutionEvidence(Vector(reference), Some(if (assigned.kind.startsWith("Review")) "specification-reviewer" else "participant"))
       val result = ContinuationResult(work.handle, order.runId, order.continuationId, order.expectedRevision, order.context.snapshot,
         TypedValue(S.resultCodec.typeIdentity, value), reference, Vector.empty, evidence)
       if (assigned.kind.startsWith("Review")) prepare(call => for {
         prepared <- NativeReviewPreparation.goalC(display.get.work.get.review.get.reviewContext.get,
-          V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings, GoalPhaseAcceptanceBoundary.publicReport(value.acceptance), None, GoalPhaseFixIssues.publicReport(value.issueReport), None,
-            R.publicObservations(value.reviewObservations), None,
-            value.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson)), None, dependencyValidation = GoalPhaseDependencyValidation.publicSelection(value.dependencyValidation), diagnosticRepair = None), V.WorkflowArtifactReference(reference.identity, reference.revision),
+          NativeWorkflowOperationInputFixture.goalWorkResult(value), V.WorkflowArtifactReference(reference.identity, reference.revision),
           V.WorkflowExecutionEvidence(Vector(V.WorkflowArtifactReference(reference.identity, reference.revision)), evidence.workerIdentity, None, None),
           "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))
         _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)

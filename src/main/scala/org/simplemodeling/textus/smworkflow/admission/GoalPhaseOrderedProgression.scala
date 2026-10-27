@@ -12,7 +12,7 @@ import GoalPhaseRuntimeRepairControl as R
   * review before submitting events. These values are NOT permission tokens.
   * Semantic replies carry no stage, cursor, command or closure receipt.
   * @since   Oct.  6, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseOrderedProgression {
@@ -158,6 +158,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
   final case class StepPartialCompletionObserved(intent: String, chain: StepCommitChain,
     expectedTree: String, eofCorrections: Vector[String]) extends Event
   final case class StepCommitObserved(intent: String, commit: Commit) extends Event
+  final case class StepPreparedCommitObserved(intent: String, commit: Commit, paths: Vector[String]) extends Event
   final case class StepEofCorrectionCommitObserved(intent: String, commit: Commit, paths: Vector[String]) extends Event
   /** tip is the reviewed ordered-Step tip; a native child may subsequently
     * integrate upstream history. The adapter proves this tip remains an ancestor
@@ -410,14 +411,15 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       stepAdmission = None, releaseCommit = releaseCommit, repairControl = repairControl, repairObservations = repairObservations)
 
     /** Direction only: the native owner separately binds the actual Component,
-      * finite host registration and independently admitted Human directive.
+      * finite host registration and independently admitted original-purpose
+      * authority or Human directive.
       */
     private[admission] def adoptCurrentInventoryRevisionC(proposed: Plan, evidence: String): Consequence[State] = for {
       _ <- if (text(evidence) && !evidence.exists(_.isControl) && stage == Stage.Decision &&
           !documentDecision && pendingRepair.isEmpty && closureIntent.isEmpty && phaseReviewedCandidate.isEmpty &&
           cursor == completed.size && cursor < plan.steps.size && generation < Long.MaxValue &&
           decisionSource.exists(Set(Stage.Implementation, Stage.Repair))) Consequence.unit
-        else invalid("Current inventory adoption requires its independent Human directive and unanswered current implementation or repair Decision")
+        else invalid("Current inventory adoption requires admitted authority and its unanswered current implementation or repair Decision")
       _ <- currentInventoryPathsC(plan, proposed, step.identity)
     } yield new State(proposed, Stage.Implementation, cursor, generation + 1, repairs, base, completed,
       None, None, None, None, None, repositoryReceipt, None, None,
@@ -663,7 +665,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           checksReceipt.nonEmpty && reviewEvidence.nonEmpty && validSnapshot(reviewed) && validSnapshot(value) &&
           reviewed.head == tip && value.head == tip && reviewed.tree != value.tree && paths != null && paths.nonEmpty &&
           paths.size <= 256 && paths.distinct == paths && paths.forall(p => path(p) && p.endsWith(".md")) &&
-          plan.steps.forall(step => paths.forall(step.ownedPaths.contains)) =>
+          plan.steps.forall(step => paths.forall(p => StandaloneFixExecution.owned(p, step.ownedPaths))) =>
         success(Stage.PhaseClosing, newCandidate = Some(value), newPhaseReviewed = Some(reviewed), newPhasePaths = paths)
       case IncompleteChecksObserved(value, selected, receipt) if candidate.contains(value) &&
           selected == checks && text(receipt) && (stage == Stage.Validation || stage == Stage.PhaseValidation) =>
@@ -757,12 +759,19 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           paths.distinct == paths && paths.forall(value => path(value) &&
             step.ownedPaths.exists(owner => value == owner || value.startsWith(owner + "/"))) =>
         _close_step_c(commit)
+      case StepPreparedCommitObserved(intent, commit, paths) if stage == Stage.Closing && !phaseWide &&
+          closureIntent.contains(intent) && checksReceipt.nonEmpty && (reviewEvidence.nonEmpty || stepAdmission.nonEmpty) &&
+          validCommit(commit) && commit.parent == candidateBase.head && commit.identity != candidateBase.head && generation < Long.MaxValue &&
+          candidate.exists(_.tree != commit.tree) && paths != null && paths.nonEmpty && paths.size <= 256 &&
+          paths.distinct == paths && paths.forall(value => path(value) &&
+            step.ownedPaths.exists(owner => value == owner || value.startsWith(owner + "/"))) =>
+        _close_step_c(commit)
       case PhaseLocallyCompleted(snapshot, commits, review) if stage == Stage.PhaseClosing &&
           cursor == plan.steps.size && completed.map(_.step) == plan.steps.map(_.identity) &&
           candidate.contains(snapshot) && snapshot == tipSnapshot && phaseReviewedCandidate.isEmpty &&
           phaseRecordingPaths.isEmpty && checksReceipt.nonEmpty && reviewEvidence.contains(review) &&
           commits == completed.map(_.commit) => success(Stage.Closed)
-      case ReleaseCommitObserved(commit) if stage == Stage.PhaseClosing && releaseRepairActive && releaseCommit.isEmpty &&
+      case ReleaseCommitObserved(commit) if stage == Stage.PhaseClosing && (releaseRepairActive || (phaseReviewedCandidate.nonEmpty && phaseRecordingPaths.nonEmpty)) && releaseCommit.isEmpty &&
           closureIntent.isEmpty && checksReceipt.nonEmpty && reviewEvidence.nonEmpty && validCommit(commit) &&
           commit.parent == tipSnapshot.head && commit.identity != tipSnapshot.head &&
           candidate.exists(c => c.head == tipSnapshot.head && c.tree == commit.tree && c.tree != tipSnapshot.tree) =>

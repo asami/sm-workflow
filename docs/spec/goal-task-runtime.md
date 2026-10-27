@@ -11,14 +11,17 @@ target as opaque JSON text so property-name conversion cannot rewrite native
 fields or arbitrary profile-control keys.
 
 `recoverGoalTaskMalformedIssuedWork` re-reads that target and requires independently
-provisioned evidence under `goal-task-malformed-issued-work-recovery`. The closed
-choices are `AuthorizeOneNewAttemptAcceptingUnresolvedEffects` and `Defer`.
+provisioned evidence under `goal-task-malformed-issued-work-recovery`. The Human choices are `AuthorizeOneNewAttemptAcceptingUnresolvedEffects` and `Defer`.
+`ContinueWithCoveringNonexecution` instead requires the independently admitted
+`goal-task-malformed-issued-work-nonexecution` observation for the exact old issue
+and its original caller source locators; it does not infer nonexecution from status.
 Authentication, a source locator, passive preparation, issuer configuration,
 Available/unclaimed state and missing logs provide no Human consent or
 nonexecution proof. The evidence Reader binds the exact target, participant,
 Human source/reference, answer and occurrence time. Known native claimed or
-completed work is refused even with Human evidence. No covering external
-nonexecution provider is implemented here; this route retains effects as UNKNOWN.
+completed work is refused even with Human evidence. A covering nonexecution observation retains effects as NOT_EXECUTED; the Human
+new-attempt path retains effects as UNKNOWN. The host must actually provide the
+corresponding independent admission; caller JSON is not that evidence.
 
 Recovery uses the CNCF managed WorkOrder supersession transaction to retain a
 typed checkpoint while marking the immutable old issue Superseded and appending

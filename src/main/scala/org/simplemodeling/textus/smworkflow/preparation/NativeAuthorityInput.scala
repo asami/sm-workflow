@@ -10,7 +10,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Finite conversion of explicit closing Wait and operator metadata to standard
   * StartupImport input. Encoding authenticates no origin and grants no effect.
   * @since   Oct. 14, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeAuthorityInput {
@@ -23,13 +23,18 @@ private[smworkflow] object NativeAuthorityInput {
         occurred <- NativePreparationInput.instantC(options("occurred-at"))
         _ <- NativePreparationInput.collectionC(options("collection"))
         request <- NativePreparationInput.readC(options("request"), readText)
-        output <- summon[ValueReader[V.GoalPhaseAdvanceResult]].readC(request)
-        _ <- if (output.kind == "Wait" && output.authorityContext != null && output.authorityContext.size == 1) {
-          Consequence.unit
-        } else { _invalid("request must be a Wait with exactly one closing authority context") }
+        context <- summon[ValueReader[V.GoalPhaseAdvanceResult]].readC(request).toOption match {
+          case Some(output) if output.kind == "Wait" && output.authorityContext != null && output.authorityContext.size == 1 =>
+            Consequence.success(output.authorityContext.get)
+          case _ => summon[ValueReader[V.WorkflowAuthorityContext]].readC(request).flatMap { value =>
+            if (value.purpose == org.simplemodeling.textus.smworkflow.admission.GoalPhaseInventoryAuthority.purpose)
+              Consequence.success(value)
+            else _invalid("request must be a closing Wait or an explicit original-purpose inventory authority context")
+          }
+        }
         referenceRecord <- NativePreparationInput.readC(options("reference"), readText)
         reference <- summon[ValueReader[V.WorkflowArtifactReference]].readC(referenceRecord)
-        prepared <- NativeAuthorityPreparation.goalC(output.authorityContext.get, reference,
+        prepared <- NativeAuthorityPreparation.goalC(context, reference,
           options("participant"), options("issuer"), occurred)
         payload <- prepared.record.getString(NativeExternalEvidence.storageField).map(Consequence.success)
           .getOrElse(_invalid("prepared row has no native payload"))

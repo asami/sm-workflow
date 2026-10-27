@@ -226,7 +226,14 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
 
     def advanceC(identity: String, core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
       retained <- F.retainedSessionC(identity, d, definition, core)
-      completed <- GoalPhasePostCompletionSync.retainedC(retained, d, core, acknowledgement)
+      closure <- CompletionRecordContinuation.retainedC(retained.storage, retained.current, core)
+      completed <- closure match {
+        case Some(value) => Consequence.success(Some(NativeWorkflowOperationOutput.goalWait(identity,
+          "Completion scope " + value.scope + " " + value.identity + "; original terminal " + value.terminalRevision +
+            "; record commit " + value.recordCommit.getOrElse("unfinished") + ". " + value.message,
+          "completion-record-closure").copy(kind = value.kind, outcome = Some(if (value.kind == "Terminal") "completed" else "incomplete"))))
+        case None => GoalPhasePostCompletionSync.retainedC(retained, d, core, acknowledgement)
+      }
       result <- completed match {
         case Some(value) => Consequence.success(value)
         case None => _advance_retained_c(identity, retained, core)
@@ -1359,7 +1366,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       case O.Stage.PhaseClosing if entry.causation.value.startsWith("ordered-release-closure:") => for {
         retained <- GoalPhaseNativeReleaseClosure.retainedC(source, d, core, cursor.from, cursor.controller)
         located <- retained match {
-          case None => _paused_c(source, cursor,
+          case None => _paused_c(source, cursor.copy(repositoryFrontier = Some(cursor.from)),
             "Final Release commit has an unresolved intent or uncollected actual result; no automatic replay.")
           case Some(value) => _walk_c(source, cursor.copy(from = value.record, controller = value.controller),
             soughtwork, soughthuman, soughtrecording, core, historyonly)
@@ -1374,7 +1381,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             next <- _walk_c(source, cursor.copy(from = record, controller = state,
               recordingCandidate = Some(value.copy(record = record))), soughtwork, soughthuman, soughtrecording, core, historyonly)
           } yield next
-          case Some(value) => _paused_c(source, cursor.copy(recordingCandidate = Some(value)),
+          case Some(value) => _paused_c(source, cursor.copy(recordingCandidate = Some(value), repositoryFrontier = Some(cursor.from)),
             "Phase recording staging has a retained partial or unknown intent. No automatic replay or closure follows.")
           case None => F.invalid("recording candidate history has no retained actual inspection")
         }
@@ -1625,6 +1632,14 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           case Paused(cursor, _, true) => GoalPhaseNativeRepositoryClosure.advanceC(source, d, core,
             cursor.repositoryFrontier.getOrElse(cursor.from), cursor.controller, acknowledgement, cursor.documentpolicy, N.managementPaths(cursor.findings))
             .map(NativeWorkflowOperationOutput.withFindingRecording(_, cursor.findings))
+          case Paused(cursor, _, false) if cursor.recordingCandidate.exists(s => s.payload.records.nonEmpty && s.payload.finalCandidate.isEmpty) =>
+            C.advanceC(source, d, core, cursor.repositoryFrontier.getOrElse(cursor.from), cursor.controller, cursor.findings, acknowledgement)
+              .flatMap(saved => F.waitC(saved.record, "Phase records retained", "Continue missing local closure without replay"))
+              .flatMap(_after_native_c(source, cursor, _, core))
+          case Paused(cursor, _, false) if cursor.repositoryFrontier.nonEmpty && cursor.controller.stage == O.Stage.PhaseClosing &&
+              source.current.causation.value.startsWith("ordered-release-closure:") =>
+            GoalPhaseNativeReleaseClosure.advanceC(source, d, core, cursor.repositoryFrontier.get, cursor.controller, acknowledgement)
+              .flatMap(_after_native_c(source, cursor, _, core))
           case Paused(cursor, reason, false) => _wait_cursor_c(cursor, reason)
           case Frontier(cursor) => _frontier_c(source, cursor, core)
         }
@@ -1765,16 +1780,18 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             case Some(value) if value.payload.commit.isEmpty => for {
               message <- if (value.payload.check.exists(_.findings.nonEmpty)) Consequence.success(
                 "Paths: " + value.payload.check.get.eofPaths.mkString(", ") + ". " + value.payload.check.get.findings.mkString("; ") +
-                  ". Correct selected staged content before the next ordinary Advance.")
+                  ". " + value.payload.hygiene.map(h => "mode=" + h.mode + "; " + h.diagnostic + ". ").getOrElse("") +
+                  "Correct selected staged content before the next ordinary Advance.")
                 else GoalPhaseNativeClosure.waitMessageC(source, d, core, cursor.from, cursor.controller)
               waiting <- F.waitC(value.record, if (value.payload.check.exists(_.findings.nonEmpty))
                 "Selected Step index check failed" else "Selected Step commit remains open", message)
             } yield NativeWorkflowOperationOutput.withFindingRecording(waiting, cursor.findings)
-            case Some(_) => _wait_cursor_c(cursor, "Actual ordered Step commit is retained; whole-Phase closure remains unfinished.")
-              .flatMap(_after_native_c(source, cursor, _, core))
+            case Some(value) => _wait_cursor_c(cursor, "Actual ordered Step commit is retained; whole-Phase closure remains unfinished.")
+              .flatMap(_after_native_c(source, cursor, _, core)).map(result => result.copy(message = result.message +
+                value.payload.hygiene.map(h => " Commit hygiene mode=" + h.mode + "; " + h.outcome + ": " + h.diagnostic + ".").getOrElse("")))
           }
         } yield wire
-      case O.Stage.PhaseClosing if N.phasePaths(cursor.findings).nonEmpty && cursor.recordingCandidate.isEmpty => for {
+      case O.Stage.PhaseClosing if (N.phasePaths(cursor.findings).nonEmpty || CompletionRecords.selected(d.completionRecords, "phase", cursor.controller.plan.phase).nonEmpty) && cursor.recordingCandidate.isEmpty => for {
         saved <- C.advanceC(source, d, core, cursor.from, cursor.controller, cursor.findings, acknowledgement)
         fallback <- _wait_cursor_c(cursor, if (saved.payload.finalCandidate.nonEmpty)
           "Actual Phase recording candidate is retained; repository closure remains unfinished."

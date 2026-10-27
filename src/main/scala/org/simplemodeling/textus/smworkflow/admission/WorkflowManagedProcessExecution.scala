@@ -221,6 +221,7 @@ private[smworkflow] object WorkflowManagedProcessExecution {
       case GitOperation.CommitSelected(selection) => git_commit_selected(target, selection)
       case GitOperation.CheckSelectedIndex(selection, parent) => git_check_selected_index(target, selection, parent)
       case GitOperation.SelectedIndexChanges(selection, parent) => git_selected_index_changes(target, selection, parent)
+      case GitOperation.TreeEntries(tree, selection) => git_tree_entries(target, tree, selection)
       case GitOperation.TreeChanges(before, after) => git_tree_changes(target, before, after)
       case GitOperation.TreeEntries(tree, selection) => git_tree_entries(target, tree, selection)
     }

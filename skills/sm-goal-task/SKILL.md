@@ -111,3 +111,11 @@ supported workflow, checks affected integration and supplies its own actual
 semantic result. Return commit versus uncommitted truth and remaining gaps.
 Installed and cross-chat acceptance require actual retained evidence; source
 fixtures, dispatch acknowledgement and tool exit zero do not establish them.
+
+For an actually malformed historical Task WorkOrder, use the public description
+and recovery operations in the runtime contract. Preserve its exact target and
+original sources. A fresh classified issue is ineligible. ContinueWithCoveringNonexecution
+requires independent exact host evidence; AuthorizeOneNewAttemptAcceptingUnresolvedEffects
+requires genuine Human direction and keeps UNKNOWN. Neither Available nor missing logs
+prove nonexecution. Recovery supersedes only the eligible issue; a separate Advance
+owns the corrected issue. Collect a retained disposition before another action.

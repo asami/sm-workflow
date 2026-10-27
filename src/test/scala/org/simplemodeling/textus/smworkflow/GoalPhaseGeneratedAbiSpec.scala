@@ -13,7 +13,7 @@ import org.simplemodeling.textus.smworkflow.value.GoalPhaseStartInput
 
 /**
  * @since   Oct.  6, 2026
- * @version Oct. 26, 2026
+ * @version Oct. 27, 2026
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -65,7 +65,7 @@ final class GoalPhaseGeneratedAbiSpec extends AnyWordSpec with Matchers with Giv
       Given("a declared Phase/repository input and the session returned by a Start execution")
       val start = admission.NativeWorkflowOperationInputFixture.goal(GoalPhaseStartInput("phase-5.3", "sm-workflow"))
       val advance = admission.NativeWorkflowOperationInputFixture.advance("goal-execution-1")
-      val optionaltransport = Set("recoverGoalPhaseWholePhaseCandidate", "describeGoalPhaseValidationRepair",
+      val optionaltransport = Set("recoverGoalPhaseCandidate", "recoverGoalPhaseWholePhaseCandidate", "describeGoalPhaseValidationRepair",
         "adoptGoalPhaseValidationRepair", "describeGoalPhaseReleaseRepairContinuation", "recoverGoalPhaseReleaseRepairContinuation")
       When("the generated Start and Advance readers construct actions from named parameters")
       val started = operations(0).createOperationRequest(request(operations(0), start))
@@ -77,9 +77,9 @@ final class GoalPhaseGeneratedAbiSpec extends AnyWordSpec with Matchers with Giv
       started.isSuccess shouldBe true
       advanced.isSuccess shouldBe true
       absent.foreach { (operation, result) => withClue(operation.specification.name) { result.isSuccess shouldBe false } }
-      And("only the five declared optional transport pairs permit inert generated request syntax without business admission")
+      And("only the six declared optional transport pairs permit inert generated request syntax without business admission")
       optionaloperations.map(_.specification.name).toSet shouldBe optionaltransport
-      optionaloperations should have size 5
+      optionaloperations should have size 6
       optionaloperations.foreach { operation =>
         withClue(operation.specification.name) {
           operation.specification.request.parameters.map(_.name) shouldBe Vector("input", "inputResource")

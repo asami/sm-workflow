@@ -13,7 +13,7 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
   * The standard launcher uses ThreeWorkflowRuntimeParameters after CNCF bootstrap.
   * Parameter data selects storage/targets/policies, never independent authority ports.
   * @since   Oct.  6, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowLauncherAssembly {
@@ -35,6 +35,10 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
   }
 
   val publishedMcpOperations: Set[String] = Set(
+    "DelegateTaskService.startDelegateTask", "DelegateTaskService.advanceDelegateTask",
+    "DelegateTaskService.submitDelegateTaskWorkResult", "DelegateTaskService.resolveDelegateTaskDiagnosticInformation",
+    "CompletionRecordClosureService.describeCompletionRecordClosure", "CompletionRecordClosureService.advanceCompletionRecordClosure",
+    "DelegateTaskDeliveryService.observeDelegateTaskDelivery", "DelegateTaskDeliveryService.describeDelegateTaskAdoption",
     "GoalTaskService.startGoalTask", "GoalTaskService.advanceGoalTask",
     "GoalTaskService.submitGoalTaskWorkResult", "GoalTaskService.resolveGoalTaskDiagnosticInformation",
     "GoalTaskService.describeGoalTaskMalformedIssuedWorkRecovery", "GoalTaskService.recoverGoalTaskMalformedIssuedWork",
@@ -67,6 +71,8 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     * Their handlers are composed from the real run when invoked.
     */
   def deferredDeclarations: Vector[ServiceDefinition] = Vector(
+    SmWorkflowComponent.DelegateTaskServiceService, SmWorkflowComponent.DelegateTaskDeliveryServiceService,
+    SmWorkflowComponent.CompletionRecordClosureServiceService,
     SmWorkflowComponent.StandaloneFixServiceService, SmWorkflowComponent.GoalTaskServiceService,
     SmWorkflowComponent.GoalPhaseServiceService, SmWorkflowComponent.SplitPhaseServiceService,
     SmWorkflowComponent.RepositorySyncServiceService, SmWorkflowComponent.JournalServiceService,
@@ -101,6 +107,9 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
       goal <- GoalPhaseNativeServiceAssembly.bindRuntimeC(creation, host.goal)
       standalone <- StandaloneFixService.bindC(creation, host.goal)
       task <- GoalTaskService.bindC(creation, host.goal)
+      delegate <- DelegateTaskService.bindC(creation, host.goal)
+      delivery <- DelegateTaskDeliveryService.bindC(creation, host.goal)
+      records <- CompletionRecordContinuation.bindC(creation, host.goal)
       sync <- RepositorySyncManagedServiceAssembly.bindRuntimeC(creation, repository.declaration.copy(journalPolicy = host.goal.journalPolicy),
         nativeProgression = true, conflictPolicy = repository.conflicts,
         validationPolicy = Some(repository.validation), nativeReview = repository.review,
@@ -112,7 +121,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
       goalCatalog <- GoalPhaseRuntimeCatalog.loadC()
       repositoryDefinition <- RepositorySyncDefinitionBinding.bindC
     } yield Vector(
-      standalone, task,
+      standalone, task, delegate, delivery, records,
       NativeWorkflowSessionInput.goal(NativeWorkflowResultInput.goal(goal, creation, host.goal, goalCatalog.definition),
         creation, host.goal, goalCatalog.definition),
       NativeWorkflowSessionInput.split(NativeWorkflowResultInput.split(split, creation, host.split, host.splitCatalog.definition),

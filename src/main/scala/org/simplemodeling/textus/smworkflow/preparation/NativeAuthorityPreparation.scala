@@ -10,7 +10,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Passive preparation of explicit Step/Phase permission input.
   * The responsible operator owns authorization and trusted provisioning.
   * @since   Oct. 14, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   */
 object NativeAuthorityPreparation {
   final case class Prepared(recordIdentity: String, record: Record)
@@ -27,18 +27,24 @@ object NativeAuthorityPreparation {
         _exact(participant) && _exact(issuer) && occurredAt != null) {
       Consequence.unit
     } else { _invalid("requires explicit context, owner, scope, reference, participant, issuer and time") }
-    purpose <- Vector(NativeExternalEvidence.Purpose.StepClosure, NativeExternalEvidence.Purpose.PhaseClosure)
+    purpose <- Vector(NativeExternalEvidence.Purpose.StepClosure, NativeExternalEvidence.Purpose.PhaseClosure,
+      NativeExternalEvidence.Purpose.InventoryAuthority)
       .find(_.identity == context.purpose).map(Consequence.success).getOrElse(_invalid("has an unsupported purpose"))
     text <- context.scope.toJsonStringC
     scopeJson <- io.circe.parser.parse(text).fold(error => _invalid(error.message), Consequence.success)
-    projected <- _project_c(scopeJson, if (purpose == NativeExternalEvidence.Purpose.StepClosure) _step_names else _phase_names)
+    projected <- if (purpose == NativeExternalEvidence.Purpose.InventoryAuthority)
+      org.simplemodeling.textus.smworkflow.admission.GoalPhaseNativeMetadata.normalizePublicJson(scopeJson)
+        .fold(_invalid, Consequence.success)
+      else _project_c(scopeJson, if (purpose == NativeExternalEvidence.Purpose.StepClosure) _step_names else _phase_names)
     scope <- if (purpose == NativeExternalEvidence.Purpose.StepClosure) projected.hcursor.downField("admission").focus match {
       case Some(value) if !value.isNull => GoalPhaseNativeMetadata.normalizePublicJson(value)
         .fold(_invalid, actual => Consequence.success(projected.mapObject(_.add("admission", actual))))
       case _ => Consequence.success(projected)
     } else Consequence.success(projected)
-    instance <- _string_c(scope, "instance")
-    revision <- _string_c(scope, "sourceRevision")
+    instance <- if (purpose == NativeExternalEvidence.Purpose.InventoryAuthority) Consequence.success(reference.identity)
+      else _string_c(scope, "instance")
+    revision <- if (purpose == NativeExternalEvidence.Purpose.InventoryAuthority) Consequence.success(reference.revision)
+      else _string_c(scope, "sourceRevision")
     identity = ThreeWorkflowExternalEvidencePorts.key(instance, revision)
     binding = Json.obj("componentInstance" -> Json.fromString(context.componentInstance), "scope" -> scope)
     evidence = NativeExternalEvidence.Evidence(NativeExternalEvidence.schema, purpose.identity, identity,

@@ -101,7 +101,9 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
         .focus.getOrElse(fail("Missing exports"))
       val services = Vector("StandaloneFixService", "StandaloneFixRepairService", "StandaloneFixReviewService",
         "StandaloneFixSemanticAdmissionService", "GoalTaskService", "GoalTaskRepairService", "GoalTaskReviewService",
-        "GoalTaskSemanticAdmissionService", "GoalTaskImplementationService", "NativeWorkflowPreparationService")
+        "GoalTaskSemanticAdmissionService", "GoalTaskImplementationService", "NativeWorkflowPreparationService",
+        "DelegateTaskService", "DelegateTaskRepairService", "DelegateTaskReviewService",
+        "DelegateTaskSemanticAdmissionService", "DelegateTaskImplementationService", "DelegateTaskDeliveryService")
 
       When("the complete selected public Operation signatures are compared with their source declarations")
       services.foreach { service =>
@@ -122,13 +124,14 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
       }
 
       Then("every related value retains field order, types, multiplicity and requiredness without an extra envelope")
-      val values = Vector("StandaloneFix", "GoalTask").flatMap(prefix =>
+      val values = Vector("StandaloneFix", "GoalTask", "DelegateTask").flatMap(prefix =>
         Vector("Input", "AdvanceInput", "WorkRequest", "Condition", "WorkResult", "View").map(prefix + _)) ++
         Vector("StandaloneReviewFixInput", "StandaloneReviewFixFinding", "StandaloneReviewFixDisposition",
           "WorkflowStandaloneFixStartPreparationInput", "WorkflowStandaloneReviewFixStartPreparationInput",
           "WorkflowGoalTaskStartPreparationInput", "WorkflowCallerExecutionPrepareInput", "WorkflowCallerExecutionRecordInput",
           "WorkflowCallerExecutionState", "WorkflowTaskFixDeliveryPreparationInput", "WorkflowTaskFixDelivery",
-          "WorkflowTaskFixAdoptionPreparationInput", "WorkflowTaskFixAdoption")
+          "WorkflowTaskFixAdoptionPreparationInput", "WorkflowTaskFixAdoption", "DelegateTaskContract",
+          "DelegateTaskObservationInput", "DelegateTaskAdoptionContext", "WorkflowDelegateTaskStartPreparationInput")
       values.foreach { name =>
         val fields = "(?m)^\\| (\\w+) \\| ([\\w.]+) \\| ([1?*+]) \\|".r.findAllMatchIn(sections(name)).map { m =>
           Json.obj("name" -> Json.fromString(m.group(1)), "type" -> Json.fromString(m.group(2)),
@@ -181,6 +184,7 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
       And("passive import, execution, delivery and caller-information Operations expose distinct concrete inputs and outputs")
       val preparation = Map("prepareStandaloneFixStart" -> "WorkflowStandaloneFixStartPreparationInput", "prepareGoalStart" -> "WorkflowGoalStartPreparationInput",
         "prepareStandaloneReviewFixStart" -> "WorkflowStandaloneReviewFixStartPreparationInput", "prepareGoalTaskStart" -> "WorkflowGoalTaskStartPreparationInput",
+        "prepareDelegateTaskStart" -> "WorkflowDelegateTaskStartPreparationInput",
         "prepareRepositoryStart" -> "WorkflowRepositoryStartPreparationInput", "prepareSplitStart" -> "WorkflowSplitStartPreparationInput",
         "prepareRepositoryEffect" -> "WorkflowRepositoryEffectPreparationInput", "prepareAuthority" -> "WorkflowAuthorityPreparationInput",
         "prepareEvidence" -> "WorkflowEvidencePreparationInput")

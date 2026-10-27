@@ -16,7 +16,7 @@ import tomllib
 import zipfile
 
 SKILLS = ('sm-goal-phase', 'sm-repository-sync', 'sm-split-phase',
-          'sm-goal-task', 'sm-test-fix', 'sm-review-fix')
+          'sm-goal-task', 'sm-test-fix', 'sm-review-fix', 'sm-delegate-task')
 ROLES = ('analysis', 'design', 'implementation', 'repair', 'review')
 AGENTS = tuple('sm_workflow_' + role for role in ROLES)
 DOCS = ('native-host-execution', 'runtime-owned-local-publication', 'goal-phase-acceptance-boundary',
@@ -25,7 +25,8 @@ DOCS = ('native-host-execution', 'runtime-owned-local-publication', 'goal-phase-
         'caller-information', 'runtime-caller-format-migration',
         'goal-phase-dependency-source-revision', 'repository-sync-validation-continuation',
         'goal-task-runtime', 'task-fix-delivery', 'standalone-fix-runtime',
-        'standalone-fix-acceptance', 'standalone-review-fix-runtime')
+        'standalone-fix-acceptance', 'standalone-review-fix-runtime',
+        'delegate-task', 'native-delegate-task-caller', 'commit-completion-and-recovery')
 SCRIPTS = ('native-goal-command.py', 'native-goal-authority.py', 'migrate-runtime-caller-format.py')
 PAYLOAD_PATHS = (tuple('skills/' + name + '/SKILL.md' for name in SKILLS)
                  + tuple('docs/spec/' + name + '.md' for name in DOCS)

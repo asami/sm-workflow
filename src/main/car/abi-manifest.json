@@ -104,6 +104,27 @@
         },
         {
           "name": "LocalPublicationService"
+        },
+        {
+          "name": "CompletionRecordClosureService"
+        },
+        {
+          "name": "DelegateTaskService"
+        },
+        {
+          "name": "DelegateTaskRepairService"
+        },
+        {
+          "name": "DelegateTaskReviewService"
+        },
+        {
+          "name": "DelegateTaskSemanticAdmissionService"
+        },
+        {
+          "name": "DelegateTaskImplementationService"
+        },
+        {
+          "name": "DelegateTaskDeliveryService"
         }
       ],
       "operations": [
@@ -680,6 +701,97 @@
           "kind": "COMMAND",
           "input": "LocalPublicationCollectionInput",
           "output": "LocalPublicationResult"
+        },
+        {
+          "service": "CompletionRecordClosureService",
+          "name": "describeCompletionRecordClosure",
+          "kind": "COMMAND",
+          "input": "DescribeCompletionRecordClosureInput",
+          "output": "CompletionRecordClosureView"
+        },
+        {
+          "service": "CompletionRecordClosureService",
+          "name": "advanceCompletionRecordClosure",
+          "kind": "COMMAND",
+          "input": "AdvanceCompletionRecordClosureInput",
+          "output": "CompletionRecordClosureView"
+        },
+        {
+          "service": "DelegateTaskService",
+          "name": "resolveDelegateTaskDiagnosticInformation",
+          "kind": "COMMAND",
+          "input": "GoalPhaseDiagnosticInformationInput",
+          "output": "GoalPhaseDiagnosticInformationResult"
+        },
+        {
+          "service": "DelegateTaskService",
+          "name": "startDelegateTask",
+          "kind": "COMMAND",
+          "input": "DelegateTaskInput",
+          "output": "DelegateTaskView"
+        },
+        {
+          "service": "DelegateTaskService",
+          "name": "advanceDelegateTask",
+          "kind": "COMMAND",
+          "input": "DelegateTaskAdvanceInput",
+          "output": "DelegateTaskView"
+        },
+        {
+          "service": "DelegateTaskService",
+          "name": "submitDelegateTaskWorkResult",
+          "kind": "COMMAND",
+          "input": "DelegateTaskWorkResult",
+          "output": "DelegateTaskView"
+        },
+        {
+          "service": "DelegateTaskRepairService",
+          "name": "repairDelegateTask",
+          "kind": "COMMAND",
+          "input": "DelegateTaskWorkRequest",
+          "output": "DelegateTaskWorkResult"
+        },
+        {
+          "service": "DelegateTaskReviewService",
+          "name": "reviewDelegateTask",
+          "kind": "COMMAND",
+          "input": "DelegateTaskWorkRequest",
+          "output": "DelegateTaskWorkResult"
+        },
+        {
+          "service": "DelegateTaskSemanticAdmissionService",
+          "name": "admitDelegateTaskReview",
+          "kind": "COMMAND",
+          "input": "DelegateTaskWorkRequest",
+          "output": "DelegateTaskView"
+        },
+        {
+          "service": "DelegateTaskImplementationService",
+          "name": "implementDelegateTask",
+          "kind": "COMMAND",
+          "input": "DelegateTaskWorkRequest",
+          "output": "DelegateTaskWorkResult"
+        },
+        {
+          "service": "DelegateTaskDeliveryService",
+          "name": "describeDelegateTaskAdoption",
+          "kind": "COMMAND",
+          "input": "DelegateTaskAdvanceInput",
+          "output": "DelegateTaskAdoptionContext"
+        },
+        {
+          "service": "DelegateTaskDeliveryService",
+          "name": "observeDelegateTaskDelivery",
+          "kind": "COMMAND",
+          "input": "DelegateTaskObservationInput",
+          "output": "DelegateTaskView"
+        },
+        {
+          "service": "NativeWorkflowPreparationService",
+          "name": "prepareDelegateTaskStart",
+          "kind": "COMMAND",
+          "input": "WorkflowDelegateTaskStartPreparationInput",
+          "output": "WorkflowPreparedImport"
         }
       ],
       "types": [
@@ -6680,6 +6792,480 @@
               "type": "Record",
               "multiplicity": "?",
               "required": false
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "repositoryIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "requestIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "objective",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "ownedPaths",
+              "type": "string",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "checks",
+              "type": "string",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "conditions",
+              "type": "string",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "sourceReferences",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "reviewRequired",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "kind",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "scalaLint",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "repairLimit",
+              "type": "int",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sourceKind",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "dependencies",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "delegation",
+              "type": "DelegateTaskContract",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskAdvanceInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskWorkRequest",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "session",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sourceRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "kind",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "state",
+              "type": "record",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskCondition",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "satisfied",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "detail",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskWorkResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "summary",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "findings",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "conditions",
+              "type": "DelegateTaskCondition",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "unresolvedQuestions",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "diagnosticRepair",
+              "type": "record",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "fixAssessment",
+              "type": "GoalPhaseFixAssessment",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskView",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "kind",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "state",
+              "type": "record",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "work",
+              "type": "record",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "issuedWorkContext",
+              "type": "WorkflowIssuedWorkContext",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "submitOperation",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "submitSessionId",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "resultType",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "diagnostics",
+              "type": "record",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "reviewContext",
+              "type": "WorkflowReviewContext",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskContract",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "requesterIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "destinationIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "returnDestination",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "componentIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "role",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "validationScope",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "permittedOperations",
+              "type": "string",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "exclusions",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "authorizationReferences",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "+",
+              "required": true
+            },
+            {
+              "name": "publicationTarget",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "artifactCoordinates",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "consumerInstructions",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskObservationInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "event",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sourceReference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "destinationSessionId",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "result",
+              "type": "record",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "artifactSelection",
+              "type": "record",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowDelegateTaskStartPreparationInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "input",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "origin",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionCollection",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskAdoptionContext",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "componentInstance",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sourceRevision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "record",
+              "multiplicity": "1",
+              "required": true
             }
           ]
         }
