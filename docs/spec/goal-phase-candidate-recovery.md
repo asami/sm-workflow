@@ -195,3 +195,56 @@ and checks exact scope/grants/bases/index/diff. Completed captures are freshness
 checked and referenced, not recaptured under the direction's source revision.
 Ordinary separate Advance, selected validation, independent review and closure retain
 their owners; no additional workflow or automatic replay is introduced.
+
+## Complete Resource input
+
+The existing `recoverGoalPhaseCandidate` Operation accepts exactly one of optional
+`input` and optional `inputResource`. Inline input retains the same generated
+`GoalPhaseCandidateRecoveryInput`. Resource input is an absolute local `file:` URL
+containing that complete DTO, including its entire target. No argument-file
+expansion, shortened target, separate Operation or new recovery controller is used.
+Both/neither selectors, remote/relative URLs, authorities, queries and fragments
+refuse; malformed inline input never falls back to Resource.
+
+Binding selects the Source without I/O. The owning synchronous ProcedureActionCall
+acquires Resource text in UTF-8 through `read_resource_text`, with existing file-root
+admission, finite read limits and stream ownership. The shared transport acquires
+a Record and rejects explicit JSON nulls. The owning Operation normalizes public
+wire names with collision refusal, requires exactly `sessionId`, `target`, `choice`,
+`rationale`, `reference` and exactly `identity`, `revision` within `reference`,
+then uses the unchanged generated DTO reader and explicit choice/rationale/reference
+checks. This business-key admission does not change the shared reader. Unknown,
+aliased, explicit-null or malformed business fields refuse. Missing/denied files,
+invalid UTF-8 and an input above the configured byte limit refuse before recovery.
+A file is transport only: independent exact-target Human evidence is still required.
+The default Resource ceiling is not changed; hosts select a compatible finite limit
+through ordinary `textus.resource.read.max-bytes` and ordinary file roots.
+
+The added `NativeWorkflowResourceInputSpec` scenarios specify exclusive binding
+without I/O, complete DTO equality and one Resource read, plus a named property
+matrix of malformed/nonobject/empty JSON, unknown keys, top-level and nested nulls,
+and alias collisions. Each mutation must differ from the actual serialized valid
+DTO and refuse through both inline and Resource transport plus the owning validator.
+Physical cases invoke the actual recovery Operation with the ordinary configured
+Resource actor: missing in-root file, existing outside-root file, malformed UTF-8,
+business refusals and finite byte-cap overflow. A valid acquired target for an absent
+Session must instead reach the existing missing-native-Start admission. These cases
+neither replace the reader nor create native recovery authority.
+
+The large native CLI scenario selects a dense enumerated business Plan through
+public preparation before Start, then reaches an unresolved dependency stage using
+ordinary Operations and typed Git. It asserts that the runtime-produced complete
+target and complete input are at least 7,074,260 bytes, and that the complete input
+remains below 16,777,216 bytes. It emits both actual byte sizes when executed. No
+JSON whitespace padding, truncated target or fabricated stored Session supplies the
+size. The scenario specifies byte-minus-one refusal and exact-byte admission,
+specification-owned independent ReviseWork evidence, duplicate refusal, the next
+semantic generation in the same Session, retained original Plan/base/completed prefix and repair
+counts, both repositories' source/index bytes, and every old candidate receipt,
+including UNKNOWN/unconfirmed dependency intent. An opt-in installed run selects
+the same external executable for the public preparation and Goal operations.
+
+The source scenarios are authored but remain uncompiled and unexecuted pending
+parent-owned focused validation, independent integrated review and installed-image
+qualification. The bounds and outcomes above are required assertions, not measured
+qualification results. Fixture evidence is never real consumer consent.

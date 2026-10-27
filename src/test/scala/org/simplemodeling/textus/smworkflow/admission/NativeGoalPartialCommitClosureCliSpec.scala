@@ -263,6 +263,138 @@ final class NativeGoalPartialCommitClosureCliSpec extends AnyWordSpec with Match
     episode
   }
 
+  "E3 installed current inventory old to new continuation" should afterWord(
+    "in spec:goal-phase-remaining-plan-adoption, example:E3, rules:R13,R14,R15,R16, phase:P67-T4-INV01") {
+    "retain an old image partial chain while explicit new host registration and atomic adoption enable the current ABI path" in {
+      Given("docs/spec/goal-phase-remaining-plan-adoption.md R13–R16 E3: explicit old/new installation roots and an actual old-image P→C→D episode; every semantic, review and Human input is SPECIFICATION-OWNED")
+      val previous = _selected_image("smworkflow.spec.inventoryPreviousInstallations")
+      val qualified = _selected_image("smworkflow.spec.inventoryInstallations")
+      qualified should not be previous
+      val episode = _partial("inventory-old-new", Some(previous))
+      val recovery = episode.recover()
+      val oldnextcall = episode.advance()
+      val oldnext = oldnextcall.business[V.GoalPhaseAdvanceResult]
+      oldnext.work.get.kind shouldBe "ImplementStep"
+      val original = oldnext.work.get
+      val chain = original.completed.head.partialCompletion.get
+      chain.originalParent shouldBe V.GoalPhaseNativeSnapshot(recovery.parent.head, recovery.parent.tree)
+      chain.partial.identity shouldBe recovery.observation.head
+      val oldclosures = episode.payloads("sm-workflow.goal-phase-native-step-closure.v4")
+      oldclosures.size shouldBe 1
+      val oldcandidates = episode.payloads("sm-workflow.goal-phase-native-candidate.v2")
+      val originalreceipts = episode.receipts.toSet
+      val inventory = "src/main/car/abi-manifest.json"
+      original.selectedPlan.steps(1).ownedPaths should not contain inventory
+      When("the old issued implementation reports the exact scope gap and ordinary Advance issues an unanswered question")
+      episode.submit(oldnext, V.GoalPhaseWorkResult("decision-needed", "SPECIFICATION-OWNED ABI inventory is outside the current Step", Vector.empty,
+        None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None), "inventory-scope-gap")
+      val oldquestioncall = episode.advance()
+      val oldquestion = oldquestioncall.business[V.GoalPhaseAdvanceResult]
+      Then("the old image retains a real unanswered Human without adding file ownership or running another check")
+      oldquestion.kind shouldBe "Human"
+      val beforechecks = episode.checks
+      val oldhead = episode.git(Vector("rev-parse", "HEAD"))
+      val beforeadoption = episode.receipts.toSet
+      When("a separate process selects the explicit new image and the fixture host appends candidate staging and current-Step Git registration")
+      episode.installations = Some(qualified)
+      val updatedhost = episode.host.copy(goal = episode.host.goal.copy(candidatePaths = _paths :+ inventory))
+      val configfile = episode.scenario.root.resolve(".textus/config.json")
+      val priorconfig = parse(Files.readString(configfile)).toOption.get
+      Files.writeString(configfile, priorconfig.mapObject(_.add("sm-workflow.runtime.definition",
+        Json.fromString(ThreeWorkflowRuntimeParameters.encode(updatedhost).noSpaces))).noSpaces)
+      episode.select(_paths, candidatePaths = _paths :+ inventory, secondSelection = Vector("docs/two.md", inventory))
+      val nextplan = episode.plan.copy(revision = "inventory-2", effectiveAcceptance = None,
+        steps = episode.plan.steps.updated(1, episode.plan.steps(1).copy(
+          ownedPaths = episode.plan.steps(1).ownedPaths :+ inventory)))
+      val proposal = GoalPhasePlanRevision.publicProposal(Some(GoalPhasePlanRevision.Proposal("spec-inventory", "1",
+        "SPECIFICATION-OWNED explicitly add the ABI inventory in the same Component", nextplan))).get
+      val describedcall = episode.goal(GoalPhaseRemainingPlanAdoption.describeOperation, Vector("--input", _json(
+        V.GoalPhaseRemainingPlanDescriptionInput(episode.session, proposal))))
+      val description = describedcall.business[V.GoalPhaseRemainingPlanDescriptionResult]
+      val target = take(GoalPhaseRemainingPlanAdoption.targetC(description.target))
+      def publicPlan(value: O.Plan): V.GoalPhaseOrderedPlan = V.GoalPhaseOrderedPlan(
+        value.identity, value.revision, value.phase, value.repository,
+        value.steps.map(step => V.GoalPhaseOrderedStep(step.identity, step.purpose, step.ownedPaths,
+          step.dependencies, step.checks, step.actionPolicy.map(policy => GoalPhaseNativeMetadata.record(policy.asJson)))),
+        value.phaseChecks, value.repairLimit, GoalPhaseAcceptanceBoundary.publicAdoption(value.acceptance),
+        GoalPhaseAcceptanceBoundary.publicEffective(value.effectiveAcceptance))
+      Then("the new description reconstructs the exact old base, chain, counts and Plan while binding only the explicit inventory delta")
+      describedcall.invocation.pid should not be oldquestioncall.invocation.pid
+      target.plan.copy(effectiveAcceptance = None) shouldBe episode.plan
+      publicPlan(target.plan) shouldBe original.selectedPlan
+      V.GoalPhaseNativeSnapshot(target.base.head, target.base.tree) shouldBe original.originalBase
+      target.completed.map(NativeWorkflowOperationOutput.goalClosedStep) shouldBe original.completed
+      Some(GoalPhaseRepairProgress.publicSnapshot(target.repairProgress)) shouldBe oldquestion.repairProgress
+      oldquestion.repairProgress shouldBe oldnext.repairProgress
+      target.currentInventory.get.appendedPaths shouldBe Vector(inventory)
+      target.currentInventory.get.candidatePaths shouldBe (_paths :+ inventory)
+      target.currentInventory.get.stepIdentity shouldBe "step-2"
+      target.currentInventory.get.componentInstance shouldBe description.componentInstance
+      target.captured.plan.effectiveAcceptance shouldBe target.plan.effectiveAcceptance
+      episode.payloads("sm-workflow.goal-phase-native-step-closure.v4") shouldBe oldclosures
+      episode.payloads("sm-workflow.goal-phase-native-candidate.v2") shouldBe oldcandidates
+      episode.checks shouldBe beforechecks
+      val reference = V.WorkflowArtifactReference("spec-inventory-human", "1")
+      val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("participant"), None, None)
+      val input = V.GoalPhaseRemainingPlanAdoptionInput(episode.session, description.target, proposal,
+        "SPECIFICATION-OWNED independently observed new inventory direction; the old Human remains unanswered", reference)
+      def adopt(value: V.GoalPhaseRemainingPlanAdoptionInput): F.Result = episode.goal(
+        GoalPhaseRemainingPlanAdoption.adoptionOperation, Vector("--input", _json(value)))
+      When("public adoption is attempted before separate fixture-owned Human evidence admission")
+      val missing = adopt(input)
+      Then("the exact target alone grants no adoption")
+      missing.exitCode should not be 0
+      episode.receipts.toSet shouldBe beforeadoption
+      When("passive evidence preparation and normal import bind the independently observed Human target, then public adoption runs atomically")
+      episode.prepare("prepareEvidence", V.WorkflowEvidencePreparationInput("GoalPhase", "remaining-plan-adoption",
+        describedcall.invocation.stdout.toUri.toASCIIString, episode.file("inventory-direction", input),
+        episode.file("inventory-reference", reference), episode.file("inventory-execution", execution),
+        "normal-development-host", Instant.now().toString, "entity:smworkflow.cli.host_evidence", Some("participant")))
+      adopt(input).business[V.GoalPhaseRemainingPlanAdoptionResult].accepted shouldBe true
+      Then("adoption retains every old receipt and performs no implementation, check or commit")
+      episode.receipts.toSet should contain allElementsOf originalreceipts
+      episode.git(Vector("rev-parse", "HEAD")) shouldBe oldhead
+      episode.checks shouldBe beforechecks
+      adopt(input).exitCode should not be 0
+      When("a separate new-image Advance reenters and issues ordinary implementation with the appended inventory")
+      val newcall = episode.advance()
+      val next = newcall.business[V.GoalPhaseAdvanceResult]
+      Then("the original completed contract and chain stay exact and the new path belongs only to current work")
+      newcall.invocation.pid should not be describedcall.invocation.pid
+      next.work.get.kind shouldBe "ImplementStep"
+      next.work.get.stepIdentity shouldBe Some("step-2")
+      next.work.get.selectedPlan shouldBe publicPlan(target.captured.plan)
+      next.work.get.originalBase shouldBe original.originalBase
+      next.work.get.completed shouldBe original.completed
+      next.repairProgress shouldBe oldnext.repairProgress
+      // WorkView does not publish generation; pure E3 asserts the exact +1 transition.
+      episode.advance().business[V.GoalPhaseAdvanceResult] shouldBe next
+      episode.payloads("sm-workflow.goal-phase-native-step-closure.v4") shouldBe oldclosures
+      episode.payloads("sm-workflow.goal-phase-native-candidate.v2") shouldBe oldcandidates
+      When("the assigned fixture work changes exactly its current document and ABI, then ordinary checks, review and scoped commit run")
+      Files.createDirectories(episode.repository.resolve("src/main/car"))
+      Files.writeString(episode.repository.resolve(inventory), "{\"specificationOwned\":true}\n")
+      Files.writeString(episode.repository.resolve("docs/two.md"), "accepted two\nABI inventory consumed\n")
+      episode.submit(next, _result("completed"), "inventory-implementation")
+      val review = episode.advance()
+      review.business[V.GoalPhaseAdvanceResult].work.get.kind shouldBe "ReviewStep"
+      episode.checks.size should be > beforechecks.size
+      episode.review(review, "inventory-review")
+      val closing = episode.advance()
+      episode.authority(closing, "inventory-authority")
+      val phase = episode.advance().business[V.GoalPhaseAdvanceResult]
+      Then("the new path is actually committed and fresh installed reentry retains the old partial chain and original base")
+      phase.work.get.kind shouldBe "ReviewPhase"
+      phase.work.get.completed.head.partialCompletion shouldBe Some(chain)
+      phase.work.get.completed(1).commit.parent shouldBe oldhead
+      phase.work.get.originalBase shouldBe original.originalBase
+      episode.git(Vector("show", "HEAD:" + inventory)) shouldBe "{\"specificationOwned\":true}"
+      episode.advance().business[V.GoalPhaseAdvanceResult] shouldBe phase
+      episode.payloads("sm-workflow.goal-phase-native-step-closure.v4") shouldBe oldclosures
+      episode.payloads("sm-workflow.goal-phase-native-candidate.v2").toSet should contain allElementsOf oldcandidates
+    }
+  }
+
   "E1 installed bounded partial completion" should afterWord(
     "in spec:goal-phase-closure-recovery, example:E1, rules:R7,R8, phase:P67-T1-CB01") {
     "retain one actual partial append one completion and preserve the chain through reentry journal next Step and Phase" in {

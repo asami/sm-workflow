@@ -340,3 +340,28 @@ expectations for these contracts. Targeted pure specifications are not installed
 acceptance or a production availability claim. Parent validation and the actual
 selected staging → EOF failure → correction → one commit → next Step episode,
 plus aggregate validation and Phase review, retain their existing obligations.
+
+## Complete selection and bounded partial completion
+
+Before a new ordinary Step commit intent and again at its effect boundary, the
+owner retains the actual `CheckSelectedIndex` result and its typed
+`GitExecutionResult.selectedPaths`. Full `PendingPaths(originalParent)` and the
+full candidate-to-index tree comparison prove that all required accepted paths
+are covered by that exact or directory selection and still within Step
+ownership. CNCF's no-renames pending delta includes both old and new names;
+dirty rename facts must also retain both names. Incomplete selection fails
+preparation without committing or consuming a semantic repair. The host keeps
+its fixed matching check/change/commit declarations; there is no whole-index
+fallback or configuration/argv reconstruction.
+
+The sole two-commit exception is the explicitly described and independently
+Human-bound `CompletePartialCommit` contract in
+[selected Step closure recovery R7/R8](goal-phase-closure-recovery.md#r7--known-successful-partial-commit-completion).
+A saved succeeded/Exited(0) original effect and exact native containment prove
+P→C with an accepted staged remainder T. Separate ordinary Advance may append
+one D with actual native parent C and tree T. Immutable completion intent and
+actual execution precede a v4 closure receipt retaining P→C→D. Ordinary v3
+closure keeps its one direct-parent predicate. No representation changes D's
+parent to P. Unknown completion intent never replays and an actual failed
+completion grants no retry. Later Step/Phase tips use D while completed history,
+StepEvidence and public/journal projections retain the full typed chain.

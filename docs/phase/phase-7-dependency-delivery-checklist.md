@@ -15,12 +15,13 @@ evidence. A checkbox is a delivery obligation, not a separate review ceremony.
 - [ ] P7-DD-03: Request redelivery/reconnection reuses retained identity/result;
   waiting, explicit hold/cancel and resume preserve queue history without
   duplicate execution or silent reorder. Self-queue dependency cannot deadlock.
-- [ ] P7-DD-04: A small defect uses sm-fix plus explicitly selected local commit
-  and publishLocal, then real consumer integration. No repeat commit/publication
-  permission question within unchanged admitted scope.
-- [ ] P7-DD-05: An ad hoc request uses sm-goal-task and a Phase request uses
-  sm-goal-phase; both return accepted development/commits/publishLocal outcomes.
-  Reuse applicable existing execution evidence; no duplicate lifecycle.
+- [ ] P7-DD-04: A small defect uses Phase 6.8 delegation/shared execution with
+  impact-selected verification, mandatory local commit and required publishLocal,
+  then real consumer integration. No repeat permission within unchanged scope.
+- [ ] P7-DD-05: An ad hoc request uses the independent delegation route without
+  altering test-fix/goal-task contracts; an explicit Phase uses existing GoalPhase
+  composition. Return accepted development/commit/publication outcomes and reuse
+  applicable evidence without a duplicate lifecycle.
 - [ ] P7-DD-06: Larger delivery attempts best-effort repository sync after local
   publication, with one applicable attempt/result. Failed/deferred/unknown sync
   neither revokes local delivery nor creates a blocking automatic retry loop.

@@ -297,7 +297,13 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
       valueFields("GoalPhaseFindingRecordingSubmissionResult") shouldBe Vector("sessionId", "accepted", "outcome", "message")
       valueFields("GoalPhaseWorkResult") shouldBe Vector("outcome", "summary", "findings", "acceptance", "fixAssessment",
         "issueReport", "planRevision", "reviewObservations")
-      valueFields("GoalPhaseAdvanceResult").takeRight(3) shouldBe Vector("validation", "repairProgress", "findingRecording")
+      valueFields("GoalPhaseAdvanceResult").takeRight(4) shouldBe Vector("validation", "repairProgress", "findingRecording", "localPublication")
+      names("LocalPublicationService") should contain theSameElementsAs Vector("ensureLocalPublication", "collectLocalPublication")
+      text(operation("LocalPublicationService", "ensureLocalPublication"), "input") shouldBe "LocalPublicationInput"
+      text(operation("LocalPublicationService", "collectLocalPublication"), "input") shouldBe "LocalPublicationCollectionInput"
+      Vector("ensureLocalPublication", "collectLocalPublication").foreach { name =>
+        text(operation("LocalPublicationService", name), "output") shouldBe "LocalPublicationResult"
+      }
 
       And("the ordinary development observation ABI exports two bounded typed inputs without storage selectors")
       names("DevelopmentObservationService") should contain theSameElementsAs Vector("readDevelopmentState", "readDevelopmentHistory")

@@ -1,5 +1,18 @@
 # Phase 7: Multi-Repository Synchronization and Development Artifact Overlay
 
+## Commit/recovery predecessor — 2026-10-26
+
+The planned rollout is Phase 6.7 -> [Phase 6.8](phase-6.8.md) ->
+[Phase 6.9](phase-6.9.md) -> Phase 7.
+Consume 6.9's clean/dirty single-repository orchestration and impact-selected
+validation under the [runtime contract](../spec/repository-sync-runtime-orchestration.md).
+Do not recreate caller-side preparation or treat UPDATED alone as a FULL gate.
+Consume 6.8's qualified common authority, commit preparation and result/recovery
+owner for related-project delivery. Do not rebuild it or introduce per-file,
+document-SHA or per-normalization Human/AI gates. Retain Phase 7's original
+FIFO, dependency modes, artifact/subtree and synchronization acceptance. This
+allocation does not stop the current P67 repair or enlarge 6.7 acceptance.
+
 ## Dependency development delivery priority — 2026-10-26
 
 Adopt [three dependency modes and delivery](../spec/dependency-development-delivery.md):
@@ -9,15 +22,19 @@ The English [handoff](../journal/2026/10/2026-10-26-phase-7-dependency-developme
 records the user direction and preservation rules.
 
 Assigned-chat work completes through local commit and successful publishLocal.
-Small defects use sm-fix with explicit commit/publication delivery; larger ad hoc
-development uses sm-goal-task; Phase development uses sm-goal-phase. Larger work
+Small defects and larger ad hoc work use Phase 6.8's independent
+[sm-delegate-task](../spec/delegate-task.md) route, with shared runtime execution
+and impact-selected verification. Do not wrap or change test-fix/goal-task
+contracts. Explicit Phase development uses the existing sm-goal-phase contract. Larger work
 then attempts best-effort sm-repository-sync, with development/local publication
 and synchronization reported separately. A failed/deferred sync does not revoke
 local delivery or consumer usability.
 
 Phase 6.7 supplies single-request Task/FIX execution and initial chat handoff.
-Phase 7 owns mode selection, durable FIFO, delivery policy, consumer adoption,
-subtree/workspace selection and synchronization. Do not add these queue/three-mode
+Phase 6.8 supplies single-request delegated execution, mandatory commit, required
+publication and returned-result adoption. Phase 7 owns mode selection, durable
+FIFO, related-project delivery policy, consumer integration, subtree/workspace
+selection and synchronization, reusing that route. Do not add these queue/three-mode
 requirements to ongoing 6.6/6.7 acceptance. Existing GoalPhase execution is reused.
 Phase 17 retains optional Task/FIX breadth and is not an initial dependency.
 
@@ -29,8 +46,8 @@ acceptance; the new ordinary publishLocal route is not overlay acceptance.
 
 | Order | Work | Connected evidence |
 | --- | --- | --- |
-| 1 | Reconcile accepted 6.7 execution and existing authorization/publication/result contracts; configure fixed/chat/subtree mode and one producer/consumer | Fixed-mode refusal is truthful; actual contract gaps are bounded |
-| 2 | Assigned-chat small defect -> existing fix -> local commit -> publishLocal -> result return -> consumer integration | P7-DD-04/07/08 main route with actual installed execution |
+| 1 | Reconcile accepted 6.7 execution, qualified 6.8 commit/recovery, 6.9 synchronization and existing publication contracts; configure fixed/chat/subtree mode and one producer/consumer | Fixed-mode refusal is truthful; actual contract gaps are bounded |
+| 2 | Assigned-chat small defect -> 6.8 delegation/shared engine -> local commit -> publishLocal -> result return -> consumer integration | P7-DD-04/07/08 main route with actual installed execution |
 | 3 | Runtime FIFO for two requests; Task/Phase deliveries and post-publication best-effort sync using existing C operations | Ordering, retained results and nonblocking failed/deferred sync; no AI queue controller |
 | 4 | Managed subtree development and sync target registration; reuse A/B resource/artifact selection and C dependency-order synchronization | Explicit origin/destination and isolated consumer selection; no general worktree use before qualification |
 | 5 | Complete remaining B/C, all P7-DD/DAO and original workspace scenarios, then D integrated review/upstream closure | Preserve existing validation; no duplicate whole-route qualification for unchanged behavior |
@@ -393,7 +410,7 @@ hashes, full-content copies or tamper/unchanged-state certificates.
 
 Overlay operations are distinct from Git synchronization and do not implicitly
 publish, select, push or prune merely because a repository was synchronized.
-Phase 7's Git full-test policy below remains unchanged. An explicit dependency
+Phase 7's Git validation policy below consumes the Phase 6.9 impact rules. An explicit dependency
 selection change additionally requires affected regeneration, compilation and
 relevant tests even with unchanged Git revisions; unchanged Git alone does not
 prove an unchanged dependency environment. Publication/set creation alone is not
@@ -481,20 +498,30 @@ RepositorySync records a typed result for every repository sufficient to disting
 - CONFLICT — synchronization cannot be completed without resolution;
 - FAILED — synchronization itself failed.
 
-The implementation MAY refine UPDATED into fast-forward/merge/rebase-related facts when useful, but validation policy is based on the semantic fact that external changes were incorporated, not on a particular Git command.
+The implementation MAY refine UPDATED into fast-forward/merge/rebase-related facts when useful. Validation selection consumes the Phase 6.9 integration semantics and actual program/dependency impact; UPDATED alone does not require product tests.
 
 A fetch with no incorporated working-branch change is not UPDATED.
 
 ## Validation policy
 
-1. Every related repository with result UPDATED MUST receive its full test.
-2. Related repositories without incorporated remote changes MUST NOT receive a full test merely as a precaution.
-3. Full tests for independent UPDATED related repositories MAY run concurrently.
-4. The root project full test MUST wait until every required related-repository full test succeeds.
-5. If one or more related-repository full tests fail, the root full test MUST NOT be reported as validation of the synchronized dependency set. The Workflow remains unresolved with explicit failure evidence.
-6. If the root project itself is UPDATED, it requires a full test.
-7. If any related repository is UPDATED, the root project requires a full test even when the root repository itself was unchanged, because the effective dependency baseline of the root project changed.
-8. Therefore, when neither the root nor any related repository incorporates remote changes, synchronization completes without a precautionary full test.
+The Phase 6.9 target replaces the earlier UPDATED-implies-FULL rule. Historical
+validation results remain unchanged; qualification/adoption is still required.
+
+1. Each repository consumes the clean/dirty Phase 6.9 route. Equal, push-only and
+   fast-forward need no additional product test solely for synchronization.
+2. A document-only merge with no program-input impact needs no FULL. Program-
+   affecting integration selects uncovered focused/FULL coverage by actual impact
+   and reuses applicable validation/review, not by UPDATED or merge status alone.
+3. Phase 7 additionally assesses actual changes to the root's consumed dependency
+   or overlay selection. A changed selected dependency can require root validation
+   even when its source is unchanged; a provider document update or unselected
+   source change does not automatically change the consumed dependency baseline.
+4. Run only required uncovered dependency checks, concurrently when independent,
+   before dependent root checks. FULL applies only where that impact requires it.
+5. Failed or unknown required dependency validation cannot establish successful
+   root integration. Preserve completed results and the actual unresolved scope.
+6. Unchanged applicable inputs and mere Git synchronization add no precautionary
+   full test. HEAVY remains separately selected under the existing contract.
 
 ## Managed validation across repositories and overlays (2026-10-06)
 

@@ -2,7 +2,9 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
 import io.circe.generic.auto.*
+import io.circe.syntax.*
 import io.circe.parser.parse
+import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.{Files, Path}
 import java.sql.DriverManager
 import java.util.concurrent.TimeUnit
@@ -27,13 +29,19 @@ import SplitPhaseExplicitPartitionFixture.take
   * The existing normal-host acknowledgement hook arranges interruption only.
   * No private row is seeded or changed; all Human input is specification-owned.
   * @since   Oct. 22, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeGoalCandidateRecoveryCliSpec extends AnyWordSpec with NativeGoalSourceHistoryCliFixture
     with ThreeWorkflowManagedRepositoryFixture {
+  override protected def goal_selected_paths(goal: ThreeWorkflowRuntimeParameters.Goal): Vector[Vector[String]] =
+    if (goal.closure.programs.map(_.step) == Vector("step-1", "step-2") &&
+        goal.candidatePaths == Vector("value.txt", "docs/phase.md"))
+      Vector(goal.candidatePaths, Vector("docs/phase.md"))
+    else super.goal_selected_paths(goal)
+
   private lazy val _catalog = take(WorkflowInstanceRecordJsonV1.catalogC(Vector(take(GoalPhaseRuntimeCatalog.loadC()).definition)))
   private def _json(value: RecordPresentable): String = take(value.toRecord().toJsonStringC)
 
@@ -43,6 +51,12 @@ final class NativeGoalCandidateRecoveryCliSpec extends AnyWordSpec with NativeGo
       case None => if (service == "GoalPhaseService") scenario.call("command", operation, arguments)
         else scenario.prepareHostInput(operation, take(new org.goldenport.record.io.RecordDecoder().json(arguments(1))))
       case Some(value) =>
+        // Select this isolated host's existing assembly before its first Start.
+        val config = scenario.root.resolve(".textus/config.json")
+        val parameters = parse(Files.readString(config)).toOption.get
+        if (parameters.hcursor.get[String]("textus.assembly.descriptor").toOption.isEmpty)
+          Files.writeString(config, parameters.mapObject(_.add("textus.assembly.descriptor",
+            Json.fromString(scenario.root.resolve(".textus/assembly.yaml").toString))).noSpaces)
         val executable = Path.of(value)
         executable.isAbsolute shouldBe true
         Files.isRegularFile(executable) shouldBe true
@@ -60,6 +74,8 @@ final class NativeGoalCandidateRecoveryCliSpec extends AnyWordSpec with NativeGo
     _goal(fixture, R.describeOperation, Vector("--sessionId", fixture.request.sessionId))
   private def _recover(fixture: Implemented, input: V.GoalPhaseCandidateRecoveryInput): F.Result =
     _goal(fixture, R.recoveryOperation, Vector("--input", _json(input)))
+  private def _recover_resource(fixture: Implemented, path: Path): F.Result =
+    _goal(fixture, R.recoveryOperation, Vector("--inputResource", path.toUri.toASCIIString))
   private def _implemented(name: String, settings: Map[String, Json] = enabledSettings,
     text: String = changedText): Implemented = {
     val fixture = implemented(name, settings, text = text, command = Some((scenario, operation, arguments) =>
@@ -154,12 +170,19 @@ final class NativeGoalCandidateRecoveryCliSpec extends AnyWordSpec with NativeGo
   private def _raw_receipt_bytes(fixture: Implemented, identity: String): Vector[String] =
     _stored_json(fixture).filter(raw => parse(raw).toOption.exists(
       _.hcursor.downField("reference").get[String]("identity").contains(identity))).sorted
+  private def _candidate_prefix_bytes(fixture: Implemented): Vector[String] =
+    _stored_json(fixture).filter(raw => parse(raw).toOption.exists(
+      _.hcursor.downField("reference").get[String]("identity").toOption.exists(
+        _.startsWith(fixture.request.sessionId + ":ordered-candidate:")))).sorted
 
   private def _prepare(fixture: Implemented, described: F.Result, description: V.GoalPhaseCandidateRecoveryDescriptionResult,
     choice: String, identity: String): V.GoalPhaseCandidateRecoveryInput = {
     val directory = Files.createTempDirectory(fixture.scenario.root, "candidate-human-")
     val reference = V.WorkflowArtifactReference(identity, "1")
-    val answer = V.GoalPhaseCandidateRecoveryAnswer(choice, "Independent fixture Human accepts one new observation with old UNKNOWN termination-unconfirmed retained")
+    val rationale = if (choice == "ReviseWork")
+      "Independent fixture Human requests new same-Step semantic revision with every old UNKNOWN termination-unconfirmed effect retained"
+      else "Independent fixture Human accepts one new observation with old UNKNOWN termination-unconfirmed retained"
+    val answer = V.GoalPhaseCandidateRecoveryAnswer(choice, rationale)
     val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("participant"), None, None)
     def _file_(name: String, value: RecordPresentable): String = {
       val path = directory.resolve(name + ".json")
@@ -175,6 +198,169 @@ final class NativeGoalCandidateRecoveryCliSpec extends AnyWordSpec with NativeGo
     val current = parse(Files.readString(config)).toOption.get
     Files.writeString(config, current.mapObject(_.add("textus.import.data.file", Json.fromString(prepared.invocation.stdout.toString))).noSpaces)
     V.GoalPhaseCandidateRecoveryInput(fixture.request.sessionId, description.target, choice, answer.rationale, reference)
+  }
+
+  /** Select a large business Plan before native Start, then reach a genuine
+    * unresolved dependency stage through ordinary Operations and typed Git.
+    * The public target is produced by the runtime, never fabricated or padded.
+    */
+  private def _resource_revision_fixture(): Implemented = {
+    import GoalPhaseDependencyValidation as D
+    import GoalPhaseDependencyValidation.given
+    val scenario = F.freshDependency("candidate-resource-native-large-revision")
+    configure(scenario, Map("textus.resource.read.max-bytes" -> Json.fromString("16777216"),
+      "textus.resource.url.file.roots" -> Json.fromString(scenario.root.toString)))
+    val requirements = (1 to 68000).map(i =>
+      s"Requirement $i: preserve the selected source, independent evidence, completed effects and original base").mkString("; ")
+    val plan = scenario.plan.copy(steps = scenario.plan.steps.updated(0,
+      scenario.plan.steps.head.copy(purpose = requirements)))
+    Files.writeString(scenario.root.resolve("goal-plan.json"), plan.asJson.noSpaces)
+    // The public preparation result alone selects this Plan before the first Start.
+    val config = scenario.root.resolve(".textus/config.json")
+    val parameters = parse(Files.readString(config)).toOption.get
+    Files.writeString(config, parameters.mapObject(_.remove("textus.import.data.file")).noSpaces)
+    val selected = _call(scenario, "NativeWorkflowPreparationService", "prepareGoalStart",
+      Vector("--input", _json(scenario.selectedGoalPreparationInput)))
+    selected.exitCode shouldBe 0
+    scenario.selectPreparedImport(selected)
+    def _invoke_(operation: String, arguments: Vector[String]) = _call(scenario, "GoalPhaseService", operation, arguments)
+    def _submit_(request: V.GoalPhaseAdvanceResult, result: Json, reference: String) =
+      _invoke_(request.submitOperation.get, Vector("--sessionId", request.submitSessionId.get,
+        "--result", result.noSpaces, "--resultReference", _json(V.WorkflowArtifactReference(reference, "1"))))
+        .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+    def _save_(name: String, value: RecordPresentable): String = {
+      val path = scenario.root.resolve(name + ".json")
+      Files.writeString(path, _json(value))
+      path.toUri.toASCIIString
+    }
+    val task = scenario.ownTask("candidate-resource-revision")
+    val started = _invoke_("startGoalPhase", Vector("--input", scenario.input.noSpaces)).business[V.GoalPhaseStartResult]
+    scenario.retain(task, started)
+    def _advance_() = _invoke_("advanceGoalPhase", Vector("--sessionId", started.sessionId))
+    val original = _advance_().business[V.GoalPhaseAdvanceResult]
+    original.work.get.selectedPlan shouldBe F.publicPlan(plan)
+    val binding = scenario.host.goal.dependencyValidation.get
+    val proposal = GoalPhaseDependencyScope.Proposal("resource-dependency-scope", "1", "IMPLEMENTATION",
+      binding.requester, binding.dependency, org.goldenport.cncf.workflow.ContextReference("resource-linked-api", "1"),
+      "SPECIFICATION-OWNED linked dependency change", binding.paths, Vector("Validate the exact dependency candidate"),
+      Vector(org.goldenport.cncf.workflow.ContextReference(binding.step, "1")), Vector.empty)
+    _submit_(original, Json.obj("outcome" -> "decision-needed".asJson, "summary" -> "Fixture dependency scope".asJson,
+      "findings" -> Json.arr(), "dependencyProposal" -> proposal.asJson), "resource-dependency-proposal")
+    val asked = _advance_()
+    val question = asked.business[V.GoalPhaseAdvanceResult]
+    val answer = V.GoalPhaseOrderedDecisionAnswer("ApproveDependencyScope", "SPECIFICATION-OWNED linked unit")
+    val reference = V.WorkflowArtifactReference("resource-dependency-approval", "1")
+    val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("specification-owned-human-answer"), None, None)
+    val evidence = V.WorkflowEvidencePreparationInput("GoalPhase", "human", asked.invocation.stdout.toUri.toASCIIString,
+      _save_("dependency-answer", answer), _save_("dependency-reference", reference), _save_("dependency-execution", execution),
+      "normal-development-host", "2026-10-07T00:00:00Z", "entity:smworkflow.cli.host_evidence", Some("participant"))
+    val prepared = _call(scenario, "NativeWorkflowPreparationService", "prepareEvidence", Vector("--input", _json(evidence)))
+    prepared.exitCode shouldBe 0
+    scenario.selectPreparedImport(prepared)
+    _invoke_(question.submitOperation.get, Vector("--sessionId", question.submitSessionId.get, "--answer", _json(answer),
+      "--resultReference", _json(reference), "--executionEvidence", _json(execution)))
+      .business[V.GoalPhaseOrderedDecisionSubmissionResult].accepted shouldBe true
+    val resumed = _advance_().business[V.GoalPhaseAdvanceResult]
+    val selection = D.Selection(org.goldenport.cncf.workflow.ContextReference(binding.identity, binding.revision.toString),
+      Vector(D.ApprovalReference(org.goldenport.cncf.workflow.ContextReference(proposal.identity, proposal.revision),
+        org.goldenport.cncf.workflow.ContextReference(reference.identity, reference.revision))))
+    val source = Path.of(scenario.host.target.root).resolve("value.txt")
+    Files.writeString(source, "expected\n")
+    Files.writeString(scenario.root.resolve("dependency/repository/value.txt"), "expected\n")
+    _submit_(resumed, Json.obj("outcome" -> "completed".asJson, "summary" -> "Fixture linked semantic work".asJson,
+      "findings" -> Json.arr(), "dependencyValidation" -> selection.asJson), "resource-linked-completion")
+    val fixture = Implemented(scenario, task, resumed, source)
+    _interrupt(fixture, "goal-dependency-stage-prepared:value.txt")
+    fixture
+  }
+
+  "Native GoalPhase candidate recovery Resource input" should {
+    "admit a complete native multi-megabyte target through Resource and retain genuine ReviseWork semantics" in {
+      Given("an isolated native Session with a large selected business Plan and an actual unknown dependency stage")
+      val fixture = _resource_revision_fixture()
+      val before = _current(fixture)
+      val receipts = _completed_bytes(fixture)
+      val prefix = _candidate_prefix_bytes(fixture)
+      val source = fileBytes(fixture.source)
+      val index = indexBytes(fixture.scenario)
+      val dependencyroot = Path.of(fixture.scenario.host.goal.dependencyValidation.get.root)
+      val dependencysource = fileBytes(dependencyroot.resolve("value.txt"))
+      val dependencyindex = fileBytes(dependencyroot.resolve(".git/index"))
+      val described = _describe(fixture)
+      val description = described.business[V.GoalPhaseCandidateRecoveryDescriptionResult]
+      val target = take(R.targetC(description.target))
+      description.choices shouldBe Vector("ReviseWork", "Defer")
+      target.oldObservationOutcome shouldBe "UNKNOWN"
+      target.oldObservationTermination shouldBe "termination-unconfirmed"
+      val input = _prepare(fixture, described, description, "ReviseWork", "resource-revision-independent-human")
+      val path = fixture.scenario.root.resolve("complete candidate input.json")
+      val completeinput = _json(input)
+      Files.writeString(path, completeinput, UTF_8)
+      val bytes = Files.size(path)
+      val targetbytes = take(description.target.toJsonStringC).getBytes(UTF_8).length.toLong
+      info(s"Complete native candidate recovery input: $bytes bytes; complete native target: $targetbytes bytes")
+      bytes should be >= 7074260L
+      bytes should be < 16777216L
+      targetbytes should be >= 7074260L
+      targetbytes should be < bytes
+      val config = fixture.scenario.root.resolve(".textus/config.json")
+      def _limit_(n: Long): Unit = {
+        val parameters = parse(Files.readString(config)).toOption.get
+        Files.writeString(config, parameters.mapObject(_.add("textus.resource.read.max-bytes", n.toString.asJson)).noSpaces)
+      }
+      When("the normal Resource owner receives the complete input one byte above its selected finite limit")
+      _limit_(bytes - 1)
+      _recover_resource(fixture, path).exitCode should not be 0
+      Then("acquisition refuses without changing the frontier or completed effects")
+      _current(fixture) shouldBe before
+      _completed_bytes(fixture) shouldBe receipts
+      _candidate_prefix_bytes(fixture) shouldBe prefix
+      fileBytes(fixture.source) shouldBe source
+      indexBytes(fixture.scenario) shouldBe index
+      fileBytes(dependencyroot.resolve("value.txt")) shouldBe dependencysource
+      fileBytes(dependencyroot.resolve(".git/index")) shouldBe dependencyindex
+      When("the finite limit admits the exact complete input and the genuine independent Human direction")
+      _limit_(bytes)
+      val recovered = _recover_resource(fixture, path)
+      val result = recovered.business[V.GoalPhaseCandidateRecoveryResult]
+      val directed = _current(fixture)
+      Then("ReviseWork appends only its native direction and retains old effects base prefix and repair counts")
+      result.outcome shouldBe "revision-work-authorized"
+      result.accepted shouldBe true
+      result.sessionId shouldBe fixture.request.sessionId
+      directed.revision shouldBe before.revision.next
+      directed.history.dropRight(1) shouldBe before.history
+      _completed_bytes(fixture) shouldBe receipts
+      _candidate_prefix_bytes(fixture) shouldBe prefix
+      fileBytes(fixture.source) shouldBe source
+      indexBytes(fixture.scenario) shouldBe index
+      fileBytes(dependencyroot.resolve("value.txt")) shouldBe dependencysource
+      fileBytes(dependencyroot.resolve(".git/index")) shouldBe dependencyindex
+      executions(fixture.scenario) shouldBe empty
+      Files.exists(fixture.scenario.root.resolve("dependency/sbt-executions.txt")) shouldBe false
+      When("the same Resource is supplied again and ordinary Advance issues the new semantic generation")
+      _recover_resource(fixture, path).exitCode should not be 0
+      _current(fixture) shouldBe directed
+      val issued = _advance(fixture).business[V.GoalPhaseAdvanceResult]
+      Then("duplicate admission refuses and the same Session Plan base completed prefix and repair counts continue")
+      issued.sessionId shouldBe fixture.request.sessionId
+      issued.work.get.kind shouldBe "ImplementStep"
+      issued.work.get.stepIdentity shouldBe fixture.request.work.get.stepIdentity
+      issued.issuedWorkContext.get.continuationId shouldBe fixture.request.sessionId + ":ordered-implementation:" + directed.revision.value.toString
+      issued.work.get.selectedPlan shouldBe fixture.request.work.get.selectedPlan
+      issued.work.get.originalBase shouldBe fixture.request.work.get.originalBase
+      issued.work.get.completed shouldBe fixture.request.work.get.completed
+      issued.repairProgress shouldBe fixture.request.repairProgress
+      issued.issuedWorkContext.get.continuationId should not be fixture.request.issuedWorkContext.get.continuationId
+      _completed_bytes(fixture) shouldBe receipts
+      _candidate_prefix_bytes(fixture) shouldBe prefix
+      fileBytes(fixture.source) shouldBe source
+      indexBytes(fixture.scenario) shouldBe index
+      fileBytes(dependencyroot.resolve("value.txt")) shouldBe dependencysource
+      fileBytes(dependencyroot.resolve(".git/index")) shouldBe dependencyindex
+      executions(fixture.scenario) shouldBe empty
+      Files.exists(fixture.scenario.root.resolve("dependency/sbt-executions.txt")) shouldBe false
+    }
   }
   private def _describe_continuation(fixture: Implemented): F.Result =
     _goal(fixture, K.describeOperation, Vector("--sessionId", fixture.request.sessionId))

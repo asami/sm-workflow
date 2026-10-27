@@ -152,7 +152,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     stepTestReportRepair: Option[U.Saved] = None,
     dependencyChain: DependencyChain = _empty_dependency_chain,
     dependencySourceDirection: Option[GoalPhaseDependencySourceRevision.Direction] = None,
-    diagnoses: Vector[IncrementalSbtDiagnosisRepair.Prior] = Vector.empty)
+    diagnoses: Vector[IncrementalSbtDiagnosisRepair.Prior] = Vector.empty,
+    consumptionDirection: Option[GoalPhaseDependencySourceRevision.Direction] = None)
   private sealed trait Located
   private final case class Frontier(cursor: Cursor) extends Located
   private final case class Work(prepared: Prepared) extends Located
@@ -390,6 +391,13 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           _ <- cursor.dependencyChain.resolveC(predecessor)
         } yield GoalPhaseDependencySourceRevision.Source(value, predecessor,
           cursor.dependencyChain.accepted.map(a => GoalPhaseDependencySourceRevision.Ancestor(a.capture, a.closureRevision)))
+        case Human(value, _, cursor) if cursor.consumptionDirection.isEmpty && cursor.dependencySourceDirection.nonEmpty => for {
+          original <- Consequence.success(cursor.dependencySourceDirection.get)
+          _ <- if (value.input.stepIdentity.contains(original.target.step)) Consequence.unit
+            else F.invalid("consumption succession requires the original source Step")
+          _ <- cursor.dependencyChain.sourceC(original)
+        } yield GoalPhaseDependencySourceRevision.Source(value, original.target.predecessor,
+          original.target.ancestors, Some(original), cursor.dependencyApprovals)
         case _ => F.invalid("source revision requires the actual unanswered dependency Decision")
       }
     } yield selected
@@ -873,7 +881,12 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             } else adopted match {
               case Some(value) => for {
                 _ <- value.dependencySourceDirection.fold(Consequence.unit) { direction =>
-                  if (cursor.dependencySourceDirection.isEmpty && cursor.dependencyAdmission.contains(direction.target.predecessor) &&
+                  if (direction.target.runtime.nonEmpty) cursor.dependencySourceDirection match {
+                    case Some(original) if cursor.consumptionDirection.isEmpty &&
+                        GoalPhaseDependencySourceRevision.runtimeSuccessorValid(original, direction, cursor.dependencyApprovals) =>
+                      cursor.dependencyChain.sourceC(original)
+                    case _ => F.invalid("consumption direction crosses the original source or actual native approvals")
+                  } else if (cursor.dependencySourceDirection.isEmpty && cursor.dependencyAdmission.contains(direction.target.predecessor) &&
                       direction.target.ancestors == cursor.dependencyChain.accepted.map(a =>
                         GoalPhaseDependencySourceRevision.Ancestor(a.capture, a.closureRevision)))
                     cursor.dependencyChain.resolveC(direction.target.predecessor)
@@ -884,7 +897,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                 result <- _walk_c(source, cursor.copy(from = value.record, controller = value.controller,
                   documents = value.documents, documentpolicy = policy, candidate = None, validation = None,
                   decisioncontext = value.decisionContext, recordingCandidate = None,
-                  dependencySourceDirection = value.dependencySourceDirection.orElse(cursor.dependencySourceDirection)),
+                  dependencySourceDirection = value.dependencySourceDirection.filter(_.target.runtime.isEmpty).orElse(cursor.dependencySourceDirection),
+                  consumptionDirection = value.dependencySourceDirection.filter(_.target.runtime.nonEmpty).orElse(cursor.consumptionDirection)),
                   soughtwork, soughthuman, soughtrecording, core, historyonly)
               } yield result
               case None => if (soughthuman.contains(H.identity(decision))) Consequence.success[Located](Human(decision, cursor.findings, cursor))
@@ -1141,6 +1155,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                 value.payload.dependencyAdmission == (if (sourceDirection.nonEmpty) None else cursor.dependencyAdmission.filter(a =>
                 cursor.controller.plan.steps.lift(cursor.controller.cursor).exists(_.identity == a.binding.step)))) Consequence.unit
               else F.invalid("candidate omitted or replaced its adopted dependency obligation")
+            _ <- if (sourceDirection.forall(direction => GoalPhaseDependencySourceRevision.scopeAuthenticated(
+                direction, value.payload.dependencySourceScope, cursor.dependencyApprovals, cursor.consumptionDirection))) Consequence.unit
+              else F.invalid("source scope differs from actual native dependency approvals")
             _ <- value.payload.dependencySourceCapture.fold(Consequence.unit) { capture =>
               if (capture.sessionId == source.current.identity.value && capture.primaryBase == cursor.controller.base &&
                   capture.plan == ContextReference(cursor.controller.plan.identity, cursor.controller.plan.revision) &&
@@ -1594,7 +1611,11 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         else if (cursor.controller.stage == O.Stage.InspectCandidate && d.candidatePaths.isEmpty ||
             cursor.controller.stage == O.Stage.PhaseInspection && d.phaseValidationPolicy.isEmpty && cursor.wholePhaseCandidateRecovery.isEmpty)
           _wait_cursor_c(cursor, "Native candidate inspection is not installed; selected work and Phase remain open.")
-        else GoalPhaseNativeCandidate.advanceC(source, d, core, cursor.from, cursor.controller, acknowledgement,
+        else cursor.dependencySourceDirection.filter(direction =>
+          cursor.controller.plan.steps.lift(cursor.controller.cursor).exists(_.identity == direction.target.step))
+          .fold(Consequence.success(Option.empty[GoalPhaseDependencySourceRevision.ScopeSuccessor]))(direction =>
+            GoalPhaseDependencySourceRevision.scopeC(direction, cursor.dependencyApprovals, d, cursor.consumptionDirection))
+          .flatMap(scope => GoalPhaseNativeCandidate.advanceC(source, d, core, cursor.from, cursor.controller, acknowledgement,
           runValidation = false, documentPolicy = cursor.documentpolicy,
           recordingPaths = N.managementPaths(cursor.findings), completedCandidates = cursor.completedCandidates,
           sourceHistoryRecovery = cursor.sourceHistoryContinuation, candidateObservation = cursor.candidateObservation,
@@ -1605,7 +1626,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             cursor.controller.plan.steps.lift(cursor.controller.cursor).exists(_.identity == direction.target.step))) None else cursor.dependencyAdmission.filter(a =>
             cursor.controller.plan.steps.lift(cursor.controller.cursor).exists(_.identity == a.binding.step)),
           dependencyChain = Some(cursor.dependencyChain), dependencySourceDirection = cursor.dependencySourceDirection.filter(direction =>
-            cursor.controller.plan.steps.lift(cursor.controller.cursor).exists(_.identity == direction.target.step)))
+            cursor.controller.plan.steps.lift(cursor.controller.cursor).exists(_.identity == direction.target.step)),
+          dependencySourceScope = scope))
           .flatMap(_after_native_c(source, cursor, _, core))
       case O.Stage.Validation | O.Stage.PhaseValidation =>
         if ((if (cursor.controller.stage == O.Stage.PhaseValidation) d.phaseValidationPolicy else d.validationPolicy).isEmpty)
@@ -1803,7 +1825,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         input = _request(source, cursor, semantic, context, checkfailure)
         draft <- _prepare_assigned_c(source, input, cursor.from, cursor.controller,
           if (_is_review(input) || input.kind == "TriageStep") cursor.candidate else None, cursor.documentpolicy, cursor.findings,
-          cursor.dependencyApprovals, cursor.dependencyAdmission, cursor.dependencyChain, cursor.dependencySourceDirection)
+          cursor.dependencyApprovals, cursor.dependencyAdmission, cursor.dependencyChain, cursor.dependencySourceDirection,
+          cursor.consumptionDirection)
         plan <- _issue_assigned_c(draft.copy(validation = cursor.validation), core)
         wire <- NativeWorkflowOperationOutput.goalWorkRequestC(plan.work, core)
       } yield NativeWorkflowOperationOutput.withFindingRecording(wire.copy(validation =
@@ -1964,7 +1987,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       dependencyapprovals: Vector[GoalPhaseDependencyValidation.Approval] = Vector.empty,
       dependencyadmission: Option[GoalPhaseDependencyValidation.Admission] = None,
       dependencychain: DependencyChain = _empty_dependency_chain,
-      dependencysourcedirection: Option[GoalPhaseDependencySourceRevision.Direction] = None): Consequence[Prepared] = for {
+      dependencysourcedirection: Option[GoalPhaseDependencySourceRevision.Direction] = None,
+      consumptiondirection: Option[GoalPhaseDependencySourceRevision.Direction] = None): Consequence[Prepared] = for {
       _ <- GoalPhaseRepairProgress.validateOptionC(input.repairProgress)
       _ <- GoalPhaseAcceptanceBoundary.savedPlanC(input.selectedPlan)
       required <- S.requiredC(input.kind)
@@ -1972,6 +1996,10 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       requirement <- _requirement_c(input, required, independent)
       documents <- GoalPhaseDocumentSource.instructionsC(input.documents, input.stepIdentity)
       sources <- GoalPhaseNativeValidation.sourceInstructionsC(d, input.selectedPlan, input.stepIdentity)
+      sourcescope <- (if (consumptiondirection.nonEmpty) dependencysourcedirection.map(direction =>
+        GoalPhaseDependencySourceRevision.scopeC(direction, dependencyapprovals, d, consumptiondirection))
+        .getOrElse(Consequence.success(Option.empty[GoalPhaseDependencySourceRevision.ScopeSuccessor]))
+        else Consequence.success(candidate.flatMap(_.payload.dependencySourceScope)))
       inventorybinding <- if (input.decisionContext.flatMap(_.inventoryContinuation).nonEmpty)
         I.bindingC(input, d.dependencyValidation,
           dependencyadmission.filter(admission => input.stepIdentity.contains(admission.binding.step)))
@@ -1994,12 +2022,13 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         (if (input.kind == "TriageStep") "" else if (dependencysourcedirection.exists(direction =>
             input.stepIdentity.contains(direction.target.step))) {
           val direction = dependencysourcedirection.get
-          val binding = direction.target.binding
+          val binding = GoalPhaseDependencySourceRevision.bindingOf(direction, sourcescope)
           " Native source direction " + direction.directive.identity + "@" + direction.directive.revision +
             " selects dependency binding " + binding.identity + "@" + binding.revision + " at " + binding.root +
             " branch " + binding.branch + ", original source HEAD " + binding.base.head + ", paths " + binding.paths.mkString(", ") +
-            ". Preserve excluded paths " + direction.target.proposal.excludedPaths.mkString(", ") +
-            ". This is pending qualification, not a new approval or accepted Step. Existing native capture, fresh selected checks, independent review and closure remain required. " +
+            ". Preserve excluded paths " + GoalPhaseDependencySourceRevision.exclusionsOf(direction, sourcescope).mkString(", ") +
+            ". This original direction remains immutable. Later actual native dependency approvals require an independently declared inventory and mode successor before fresh candidate effects; the new candidate and capture retain its exact approval coverage. " +
+            "This is pending qualification, not a new approval or accepted Step. Existing native capture, fresh selected checks, independent review and closure remain required. " +
             "Do not select the historical source binding, forge dependencyAdmission or transfer old check results to these bytes. Omit dependencyValidation to retain this native direction."
         } else
           GoalPhaseDependencyValidation.instructions(inventorybinding,

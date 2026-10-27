@@ -5,6 +5,14 @@ Status: adopted planning contract; implementation and installed acceptance pendi
 Owner: [Phase 7](../phase/phase-7.md)
 Acceptance: [dependency delivery checklist](../phase/phase-7-dependency-delivery-checklist.md)
 
+## Phase 6.8 delivery predecessor — 2026-10-27
+
+[sm-delegate-task](delegate-task.md) supplies an independent single-request
+contract in Phase 6.8. It reuses the common execution engine without calling
+sm-test-fix/goal-task as wrapper children or changing their validation/completion
+contracts. Runtime owns verification scope, mandatory commit, required publication
+and result return/adoption. Phase 7 adds modes, durable FIFO and workspace breadth.
+
 ## Three configured modes
 
 Select a mode per participating dependency Component, rather than deriving it
@@ -37,13 +45,15 @@ Use existing typed WorkOrder/Continuation and storage; no skill-owned queue ledg
 
 | Request | Destination execution | Required delivery | Post-delivery synchronization |
 | --- | --- | --- | --- |
-| Small defect | sm-test-fix or sm-review-fix | Repair, focused validation, required conditional review, local commit, publishLocal | Only when selected by the request |
-| Larger ad hoc development | sm-goal-task | Task acceptance including integrated review, local commit, publishLocal | Best-effort sm-repository-sync |
+| Small defect | Independent delegation Workflow through sm-delegate-task; shared repair engine | Impact-selected focused/FULL validation, required review, local commit, publishLocal | Only when selected by the request |
+| Larger ad hoc development | Independent delegation Workflow through sm-delegate-task; shared development engine | Delegated acceptance and required integrated review, local commit, publishLocal | Best-effort sm-repository-sync |
 | Explicit Phase development | sm-goal-phase | Actual Phase completion, local commits, publishLocal | Best-effort sm-repository-sync |
 
 Size is selected from the requested outcome, not an automatic file-count threshold.
-Standalone fix still defaults to no commit; the cross-chat request explicitly
-selects commit and publishLocal as its delivery policy. Task/Phase local completion
+Standalone fix keeps its own no-implicit-commit contract and goal-task keeps its
+own test/review/commit contract. Neither is extended by this delegation route.
+Delegate completion requires a local commit (or applicable existing commit for
+no-change), with publishLocal additionally required for dependency delivery. Task/Phase local completion
 and delivery publication remain distinct recorded outcomes. The initial request
 carries the necessary authorization, so ordinary in-scope commit/publication
 does not create another permission question. Preserve actual human restrictions
@@ -132,8 +142,9 @@ source, any newly published artifact is a separate attributed delivery.
 
 [Phase 6.7](../phase/phase-6.7.md) provides one Task/fix execution, conditional
 inner review, integrated Task review/commit and the initial existing-chat handoff.
-Phase 7 configures the three modes, FIFO, selected commit/publication delivery,
-consumer adoption and synchronization. Phase 7 also reuses existing GoalPhase;
+Phase 6.8 supplies independent delegated execution and mandatory commit/selected
+publication/return/adoption. Phase 7 configures the three modes, FIFO and related-
+project adoption/synchronization using that qualified route. Phase 7 also reuses existing GoalPhase;
 it does not reimplement Phase development in 6.7.
 
 [Phase 17](../phase/phase-17.md) retains optional Task/FIX source, selection and

@@ -10,6 +10,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.TypedValue
+import org.goldenport.convert.ValueReader
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
@@ -26,7 +27,7 @@ import D.given
 /** Independent Human direction for one new observation after fully recorded staging.
   * Old process settlement remains unknown; no completed effect is replayed.
   * @since   Oct. 22, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseCandidateRecovery {
@@ -550,29 +551,51 @@ private[smworkflow] object GoalPhaseCandidateRecovery {
     def createOperationRequest(request: Request): Consequence[OperationRequest] =
       if (request == null || !request.service.contains("GoalPhaseService") ||
           request.operation != (if (describe) describeOperation else recoveryOperation)) _invalid("Operation identity differs")
-      else if (describe) NativeWorkflowOperationInput.textC(request, "sessionId").map(identity => Action(request, identity, None, port))
-      else NativeWorkflowOperationInput.valueC[V.GoalPhaseCandidateRecoveryInput](request, "input").flatMap { input =>
-        if (input == null || !_exact(input.sessionId) || input.reference == null || !Vector("AuthorizeNewObservation", "ReviseWork", "Defer").contains(input.choice) ||
-            !_text(input.rationale) || !_exact(input.reference.identity) || !_exact(input.reference.revision))
-          _invalid("input requires an explicit Human direction and reference")
-        else Consequence.success(Action(request, input.sessionId, Some(input), port))
-      }
+      else if (describe) NativeWorkflowOperationInput.textC(request, "sessionId").map(identity => Action(request, Some(identity), None, port))
+      else NativeWorkflowResourceInput.selectC[Record](request)
+        .map(source => Action(request, None, Some(source), port))
   }
-  private final case class Action(request: Request, sessionId: String, input: Option[V.GoalPhaseCandidateRecoveryInput],
+  private final case class Action(request: Request, description: Option[String],
+    input: Option[NativeWorkflowResourceInput.Source[Record]],
     port: GoalPhaseNativeWorkContinuation.Port) extends CommandAction {
     override def commandExecutionMode = CommandExecutionMode.Sync
     def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
       val core = c
       def execute(): Consequence[OperationResponse] = for {
-        context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(sessionId))
+        recovered <- input.fold(Consequence.success(Option.empty[V.GoalPhaseCandidateRecoveryInput]))(source =>
+          NativeWorkflowResourceInput.readC(source, reference => read_resource_text(reference,
+            Some(java.nio.charset.StandardCharsets.UTF_8))).flatMap(recoveryInputC).flatMap { value =>
+            if (value == null || !_exact(value.sessionId) || value.reference == null ||
+                !Vector("AuthorizeNewObservation", "ReviseWork", "Defer").contains(value.choice) ||
+                !_text(value.rationale) || !_exact(value.reference.identity) || !_exact(value.reference.revision))
+              _invalid("input requires an explicit Human direction and reference")
+            else Consequence.success(Some(value))
+          })
+        session <- description.orElse(recovered.map(_.sessionId)).map(Consequence.success)
+          .getOrElse(_invalid("Session is absent"))
+        context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(session))
         selected = core.copy(executionContext = context)
-        result <- input match {
-          case None => port.describeCandidateRecoveryC(sessionId, selected).map(NativeWorkflowOperationOutput.response(_))
+        result <- recovered match {
+          case None => port.describeCandidateRecoveryC(session, selected).map(NativeWorkflowOperationOutput.response(_))
           case Some(value) => port.recoverCandidateC(value, selected).map(NativeWorkflowOperationOutput.response(_))
         }
       } yield result
     }
   }
+  /** Admit this Operation's exact business keys before the generated DTO reader.
+    * Resource acquisition and JSON null refusal remain with the shared transport.
+    */
+  private[admission] def recoveryInputC(record: Record): Consequence[V.GoalPhaseCandidateRecoveryInput] = for {
+    json <- if (record == null) _invalid("input business record is absent") else record.toJsonStringC.flatMap(text =>
+      io.circe.parser.parse(text).left.map(_.message).flatMap(GoalPhaseNativeMetadata.normalizePublicJson)
+        .fold(_invalid(_), Consequence.success))
+    _ <- if (json.asObject.exists(fields => fields.keys.toSet ==
+        Set("sessionId", "target", "choice", "rationale", "reference") && fields.values.forall(!_.isNull)) &&
+        json.hcursor.downField("reference").focus.exists(_.asObject.exists(fields =>
+          fields.keys.toSet == Set("identity", "revision") && fields.values.forall(!_.isNull)))) Consequence.unit
+      else _invalid("input requires exactly its non-null business and reference keys")
+    value <- summon[ValueReader[V.GoalPhaseCandidateRecoveryInput]].readC(GoalPhaseNativeMetadata.record(json))
+  } yield value
   private def _closed[A](keys: Set[String], decoder: Decoder[A]): Decoder[A] = Decoder.instance(c =>
     if (c.value.asObject.exists(_.keys.toSet == keys)) decoder(c)
     else Left(DecodingFailure("Candidate recovery fields differ", c.history)))

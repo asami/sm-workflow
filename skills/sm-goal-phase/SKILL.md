@@ -5,6 +5,20 @@ description: Route explicit Phase start/resume requests through the caller and p
 
 # GoalPhase semantic work
 
+## Runtime-owned local publication
+
+`publishLocal` always runs through sm-workflow `LocalPublicationService`, including
+explicit user requests and dependency refresh. The runtime decides necessity,
+executes typed SBT within UoW, retains actual outcomes and returns to the owning
+workflow. Do not create a standalone publication/SBT runner intake. Answer only
+an actual issued build-relevance question; unchanged already authorized effects
+do not need another blanket publication approval. Use `collectLocalPublication`
+to recover a response without replay. Confirmed nonstart preparation may continue;
+rejection, started/unknown and actual publication failure keep their distinct
+results. Never use a different route to bypass a policy refusal. Follow the
+[runtime-owned local publication contract](../../docs/spec/runtime-owned-local-publication.md).
+
+
 Use the existing CNCF operation entry/client: native CLI, REST or direct
 configured Operation. An existing caller MCP entry may be available but is not
 required and does not imply a new wrapper. The Workflow issues the work, scope,
@@ -16,6 +30,16 @@ the exact human selection. Missing binding or selection is not permission to
 manufacture a Start request or run a replacement workflow.
 
 ## Runtime-owned repair and stop decisions
+
+For command preparation or delegated delivery that is confirmed unexecuted,
+follow the common unstarted-execution recovery contract linked from the installed
+`cncf-command-execution` skill. Reuse existing approval for unchanged targets,
+operations and effects with unconsumed permission; do not add a Human gate for
+preparation correction or runner replacement. Preserve Session, base, history,
+repair counts and successful results. Use the runtime's public continuation
+when it owns the operation; no private-state edits, re-Start or accepted Submit
+replay. A provider safety/policy refusal, permission denial or uncertain execution
+does not qualify. Do not ask the user to approve bypassing such a refusal.
 
 New `ReviewPhase` assignments with captured
 `releaseRepairContract: sm-workflow.phase-release-repair.v1` use ordinary
