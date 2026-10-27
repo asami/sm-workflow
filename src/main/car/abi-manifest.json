@@ -104,6 +104,9 @@
         },
         {
           "name": "LocalPublicationService"
+        },
+        {
+          "name": "CompletionRecordClosureService"
         }
       ],
       "operations": [
@@ -680,6 +683,20 @@
           "kind": "COMMAND",
           "input": "LocalPublicationCollectionInput",
           "output": "LocalPublicationResult"
+        },
+        {
+          "service": "CompletionRecordClosureService",
+          "name": "describeCompletionRecordClosure",
+          "kind": "COMMAND",
+          "input": "DescribeCompletionRecordClosureInput",
+          "output": "CompletionRecordClosureView"
+        },
+        {
+          "service": "CompletionRecordClosureService",
+          "name": "advanceCompletionRecordClosure",
+          "kind": "COMMAND",
+          "input": "AdvanceCompletionRecordClosureInput",
+          "output": "CompletionRecordClosureView"
         }
       ],
       "types": [

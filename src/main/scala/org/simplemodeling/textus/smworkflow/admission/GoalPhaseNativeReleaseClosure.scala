@@ -21,7 +21,7 @@ import WorkflowManagedProcessExecution as E
   * The existing Phase authority and an explicit fixed local commit program are
   * both required. An unresolved intent is retained, never blindly replayed.
   * @since   Oct. 24, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeReleaseClosure {
@@ -64,25 +64,28 @@ private[smworkflow] object GoalPhaseNativeReleaseClosure {
       e.stderr != null && e.stderr.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 32768 &&
       e.selectedPaths != null && e.selectedPaths.nonEmpty && e.selectedPaths.size <= 256 &&
       e.selectedPaths.distinct == e.selectedPaths && B.pathsOwned(e.selectedPaths, value.input.plan.steps.flatMap(_.ownedPaths).distinct)) &&
-    value.commit.forall(c => c != null && value.execution.exists(e => e.outcome == "succeeded" && e.exitCode.contains(0)) &&
+    value.commit.forall(c => c != null &&
       Vector(c.identity, c.parent, c.tree).forall(v => v != null && v.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")) &&
       c.parent == value.parent.head && c.identity != c.parent && c.tree == value.input.candidate.tree)
-  def needed(controller: O.State): Boolean = controller.stage == O.Stage.PhaseClosing && controller.releaseRepairActive &&
+  def needed(controller: O.State): Boolean = controller.stage == O.Stage.PhaseClosing && (controller.releaseRepairActive || controller.phaseRecordingPaths.nonEmpty) &&
     controller.candidate.exists(_.tree != controller.tipSnapshot.tree)
 
   def retainedC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     from: InstanceRecord, controller: O.State): Consequence[Option[Saved]] = for {
     store <- _store_c(session, d, core, from, controller, _ => Consequence.unit)
-    saved <- store.loadC("committed")
+    ordinary <- store.loadC("committed")
+    reconciled <- store.loadC("reconciled")
+    saved = ordinary.orElse(reconciled)
     result <- saved.fold(Consequence.success(Option.empty[Saved])) { value => for {
       intent <- store.loadC("intent").flatMap(_.map(Consequence.success).getOrElse(F.invalid("release commit lost its original intent")))
-      execution <- store.loadC("execution").flatMap(_.map(Consequence.success).getOrElse(F.invalid("release commit lost its actual execution")))
+      execution <- store.loadC("execution")
       _ <- store.adjacentC(from, intent, "intent")
-      _ <- store.adjacentC(intent.record, execution, "execution")
-      _ <- store.adjacentC(execution.record, value, "committed")
-      _ <- if (intent.payload == store.initial && execution.payload.commit.isEmpty &&
-          execution.payload.execution.exists(e => e.outcome == "succeeded" && e.exitCode.contains(0)) &&
-          value.payload.copy(commit = None) == execution.payload) Consequence.unit
+      _ <- execution.fold(Consequence.unit)(store.adjacentC(intent.record, _, "execution"))
+      predecessor = execution.getOrElse(intent)
+      _ <- store.adjacentC(predecessor.record, value, if (reconciled.nonEmpty) "reconciled" else "committed")
+      _ <- if (intent.payload == store.initial && predecessor.payload.commit.isEmpty &&
+          (reconciled.nonEmpty || predecessor.payload.execution.exists(e => e.outcome == "succeeded" && e.exitCode.contains(0))) &&
+          value.payload.copy(commit = None) == predecessor.payload) Consequence.unit
         else F.invalid("release commit changes its admitted intent or actual execution")
       commit <- value.payload.commit.map(Consequence.success).getOrElse(F.invalid("committed release receipt has no commit"))
       next <- controller.acceptC(O.ReleaseCommitObserved(commit))
@@ -94,8 +97,28 @@ private[smworkflow] object GoalPhaseNativeReleaseClosure {
     store <- _store_c(session, d, core, from, controller, acknowledge)
     prior <- store.loadC("intent")
     wire <- prior match {
-      case Some(value) => F.waitC(value.record, "Release commit has an existing intent",
-        "Retain its actual result or uncertainty; no automatic commit replay or semantic work follows.")
+      case Some(value) => for {
+        execution <- store.loadC("execution")
+        current = execution.getOrElse(value)
+        observed <- G.inspectC(core)
+        root <- G.rootC(core)
+        native <- G.commitC(core, observed.observed.head)
+        qualified = root == d.target.root.toString && observed.mergeHead.isEmpty &&
+          observed.observed.branch == d.target.localBranch && native.identity != store.initial.parent.head &&
+          native.parents == Vector(store.initial.parent.head) && native.tree == store.input.candidate.tree &&
+          observed.observed.dirty.forall(p => !store.owned.exists(o => _covers(o, p.path) || p.renamedFrom.exists(_covers(o, _)))) &&
+          B.scopedDirty(observed.observed.dirty, store.owned, true)
+        response <- if (!qualified) F.waitC(current.record, "Release commit remains unresolved",
+          "Accepted work and actual failed/unknown execution are retained. Observe the existing effect; no commit replay.")
+        else for {
+          granted <- d.repositoryClosure.map(_.authority.isGrantedC(core, store.input)).getOrElse(Consequence.success(false))
+          _ <- if (granted) Consequence.unit else F.invalid("Release result collection awaits its retained Phase authority")
+          payload = current.payload.copy(commit = Some(O.Commit(native.identity, store.initial.parent.head, native.tree)))
+          _ <- controller.acceptC(O.ReleaseCommitObserved(payload.commit.get))
+          saved <- store.saveC("reconciled", current.record, payload)
+          response <- F.waitC(saved.record, "Actual release commit collected", "Original effect and accepted checks/review retained; continue local closure without replay.")
+        } yield response
+      } yield response
       case None => for {
         authority <- d.repositoryClosure.map(_.authority.isGrantedC(core, store.input)).getOrElse(Consequence.success(false))
         result <- if (!authority) for {

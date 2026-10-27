@@ -67,7 +67,8 @@ private[smworkflow] object GoalPhaseNativeRun {
     dependencySourceRevisions: Vector[GoalPhaseDependencyValidation.Binding] = Vector.empty,
     dependencySourceConsumptions: Vector[GoalPhaseDependencySourceRevision.Consumption] = Vector.empty,
     localPublication: Option[LocalPublicationRuntime.Policy] = None,
-    commitHygieneMode: String = CommitHygiene.autoFix)
+    commitHygieneMode: String = CommitHygiene.autoFix,
+    completionRecords: Option[CompletionRecords.Policy] = None)
   final case class SelectedPlan(selectionIdentity: String, participantIdentity: String,
     plan: O.Plan, documents: Option[GoalPhaseDocumentSource.Bound] = None)
   trait PlanPort {
@@ -229,7 +230,7 @@ private[smworkflow] object GoalPhaseNativeRun {
           !RepositorySyncNativeConflictInput.relative(p.developmentCandidate) ||
           !p.hygiene.endsWith(".md") || !p.developmentCandidate.endsWith(".md")))
       invalid("native ordered host declaration is incomplete")
-    else CommitHygiene.decodeC(d.commitHygieneMode).flatMap(_ => CommonEvidence.validatePolicyC(d.evidencePolicy, Vector(d.instances, d.continuations) ++ d.journalPolicy.map(_.collection))).flatMap(_ =>
+    else d.completionRecords.fold(Consequence.unit)(CompletionRecords.validateC).flatMap(_ => CommitHygiene.decodeC(d.commitHygieneMode)).flatMap(_ => CommonEvidence.validatePolicyC(d.evidencePolicy, Vector(d.instances, d.continuations) ++ d.journalPolicy.map(_.collection))).flatMap(_ =>
       DevelopmentJournal.validatePolicyC(d.journalPolicy, d.instances, d.continuations)).flatMap(_ =>
       GoalPhaseAcceptanceBoundary.validateProjectOptionC(d.projectAcceptance)).flatMap(_ =>
       GoalPhaseNativeExecution.validatePairC(d.executionProfiles, d.executionOrigin)).flatMap(_ =>
@@ -260,6 +261,8 @@ private[smworkflow] object GoalPhaseNativeRun {
       if (core == null || core.executionContext == null || core.action == null || core.action.request == null ||
           !(core.action.request.service.contains("DevelopmentObservationService") &&
             Set("readDevelopmentState", "readDevelopmentHistory")(core.action.request.operation) ||
+            core.action.request.service.contains("LocalPublicationService") &&
+            Set("ensureLocalPublication", "collectLocalPublication")(core.action.request.operation) ||
             core.action.request.service.contains("GoalPhaseService") &&
           Set(startOperation.operation, advanceOperation.operation, completionOperation.operation,
             IncrementalSbtDiagnosisInformation.operation,

@@ -19,13 +19,13 @@ import WorkflowManagedProcessExecution as E
 /** Stage only retained Phase recording destinations after accepted source review.
   * Unknown effects retain their intent and never replay on reconstruction.
   * @since   Oct. 18, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeRecordingCandidate {
   final case class Payload(sourceRevision: String, reviewedCandidate: O.Snapshot,
     assignedPaths: Vector[String], selectedPaths: Vector[String], stagedPaths: Vector[String],
-    finalCandidate: Option[O.Snapshot], changedPaths: Vector[String])
+    finalCandidate: Option[O.Snapshot], changedPaths: Vector[String], records: Option[CompletionRecords.Plan] = None)
   final case class Saved(record: InstanceRecord, payload: Payload)
   private[admission] val codec = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "GoalPhaseNativeRecordingCandidateReceipt"
@@ -58,6 +58,7 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
     store <- _store_c(session, d, core, from, controller, findings, acknowledge)
     prior <- store.retainedC
     saved <- prior match {
+      case Some(value) if value.payload.records.nonEmpty && value.payload.finalCandidate.isEmpty => _finish_c(store, value)
       case Some(value) => Consequence.success(value)
       case None => _inspect_c(store)
     }
@@ -68,11 +69,16 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
     _ <- if (controller.stage == O.Stage.PhaseClosing && controller.closureIntent.isEmpty &&
         controller.phaseReviewedCandidate.isEmpty && controller.candidate.nonEmpty &&
         controller.checksReceipt.nonEmpty && controller.reviewEvidence.nonEmpty &&
-        findings.completed.exists(_.request.stepIdentity.isEmpty) && findings.pending.isEmpty &&
+        (findings.completed.exists(_.request.stepIdentity.isEmpty) || CompletionRecords.selected(d.completionRecords, "phase", controller.plan.phase).nonEmpty) && findings.pending.isEmpty &&
         from.currentProgression.contains(ProgressionReference("phase.PhaseClosing")) && from.suspension.isEmpty)
       Consequence.unit else F.invalid("recording candidate requires actual completed Phase recording before repository intent")
-    paths = N.phasePaths(findings)
-    _ <- N.validatePathsC(paths, controller.plan, d.candidatePaths)
+    completionPaths = CompletionRecords.selected(d.completionRecords, "phase", controller.plan.phase)
+    _ <- if (completionPaths.forall(p => d.candidatePaths.contains(p) && controller.plan.steps.forall(s => StandaloneFixExecution.owned(p, s.ownedPaths)))) Consequence.unit
+      else F.invalid("completion paths must be registered and owned by the accepted Phase")
+    _ <- if (completionPaths.isEmpty || d.closureInstallation.exists(_.policy.programs.exists(_.step == GoalPhaseNativeReleaseClosure.programIdentity)))
+      Consequence.unit else F.invalid("Phase completion records require the existing host-fixed phase-release commit owner")
+    paths = (N.phasePaths(findings) ++ completionPaths).distinct
+    _ <- N.validatePathsC(N.phasePaths(findings), controller.plan, d.candidatePaths)
     adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
   } yield new Store(adapter, session, d, core, from, controller, paths, acknowledge)
 
@@ -81,7 +87,7 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
     index <- G.indexTreeC(store.core)
     _ <- if (index == store.reviewed.tree) Consequence.unit
       else F.invalid("recording candidate index differs from the actual reviewed source before staging")
-    selected = store.assigned.filter(path => actual.dirty.exists(p => p.path == path || p.renamedFrom.contains(path)))
+    selected = store.assigned.filter(path => store.completionPaths.contains(path) || actual.dirty.exists(p => p.path == path || p.renamedFrom.contains(path)))
     initial <- store.saveC("inspection", store.from, Payload(store.from.revision.value.toString,
       store.reviewed, store.assigned, selected, Vector.empty, None, Vector.empty))
     staged <- selected.zipWithIndex.foldLeft(Consequence.success(initial)) { case (prior, (path, index)) => for {
@@ -96,6 +102,24 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
         current.payload.copy(stagedPaths = current.payload.stagedPaths :+ path))
       _ <- store.ackC("goal-recording-candidate-recorded:" + path)
     } yield saved }
+    prepared <- if (store.completionPaths.isEmpty) Consequence.success(staged) else for {
+      index <- G.indexTreeC(store.core)
+      selection <- org.goldenport.cncf.processexecution.GitSelectionId.parseC("goal-step-" + store.releaseOrdinal)
+      plan <- CompletionRecords.captureC(store.core, store.from.identity.value, "phase", store.controller.plan.phase, index,
+        (store.controller.checksReceipt.toVector ++ store.controller.reviewEvidence.toVector).distinct,
+        store.completionPaths, store.controller.plan.steps.flatMap(_.ownedPaths).distinct, store.d.candidatePaths, selection)
+      prepared <- store.saveC("completion-plan", staged.record, staged.payload.copy(records = Some(plan)))
+    } yield prepared
+    result <- _finish_c(store, prepared)
+  } yield result
+
+  private def _finish_c(store: Store, staged: Saved): Consequence[Saved] = for {
+    _ <- staged.payload.records.fold(Consequence.unit)(CompletionRecords.applyC(store.core, _))
+    index <- G.indexTreeC(store.core)
+    _ <- staged.payload.records.fold(Consequence.unit)(p => for {
+      changes <- CompletionRecords.deltaC(store.core, p, index)
+      _ <- CompletionRecords.admitActualC(store.core, p, changes)
+    } yield ())
     actual <- store.inspectC(staged.payload.stagedPaths)
     _ <- if (GoalPhaseNativeCandidateBoundary.scopedDirty(actual.dirty, store.stagedScope, true)) Consequence.unit
       else F.invalid("recording candidate retains unstaged or unsupported paths")
@@ -124,6 +148,8 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
     val d: F.Declaration, val core: ActionCall.Core, val from: InstanceRecord, val controller: O.State,
     val assigned: Vector[String], acknowledge: String => Consequence[Unit]) {
     val reviewed = controller.candidate.get
+    val completionPaths = CompletionRecords.selected(d.completionRecords, "phase", controller.plan.phase)
+    val releaseOrdinal = d.closureInstallation.toVector.flatMap(_.policy.programs).find(_.step == GoalPhaseNativeReleaseClosure.programIdentity).map(_.ordinal).getOrElse(0)
     // Release FIX is already staged, checked and reviewed. It may coexist with
     // recording edits only while its index content remains exactly that tree.
     val stagedScope = (assigned ++ (if (controller.releaseRepairActive)
@@ -167,10 +193,19 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
             }
           } yield next
         }}
-        finalsaved <- _load_c("candidate")
-        selected <- finalsaved match {
+        completion <- _load_c("completion-plan")
+        prepared <- completion match {
           case None => Consequence.success(staged)
           case Some(value) if value.record.revision == staged.record.revision.next &&
+              value.payload.copy(records = None) == staged.payload && value.payload.records.exists(p => CompletionRecords.valid(p) &&
+                p.session == from.identity.value && p.family == "phase" && p.scope == controller.plan.phase &&
+                p.files.map(_.path) == completionPaths) => Consequence.success(value)
+          case _ => F.invalid("completion plan has no contiguous scoped record predecessor")
+        }
+        finalsaved <- _load_c("candidate")
+        selected <- finalsaved match {
+          case None => Consequence.success(prepared)
+          case Some(value) if value.record.revision == prepared.record.revision.next &&
               staged.payload.stagedPaths == staged.payload.selectedPaths && value.payload.stagedPaths == staged.payload.stagedPaths &&
               value.payload.selectedPaths == staged.payload.selectedPaths => observedC(controller, value.payload).map(_ => value)
           case _ => F.invalid("final recording candidate has no contiguous complete staging prefix")

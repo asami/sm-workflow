@@ -14,6 +14,7 @@ import org.goldenport.cncf.workflow.*
 import org.goldenport.protocol.{Property, Request}
 import org.goldenport.record.Record
 import org.scalatest.wordspec.AnyWordSpec
+import org.scalatest.GivenWhenThen
 import org.simplemodeling.textus.smworkflow.{SmWorkflowComponent, value as V}
 import org.simplemodeling.textus.smworkflow.preparation.{NativeDelegateTaskStartInput, NativeDelegateTaskAdoptionPreparation}
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms as Programs
@@ -28,7 +29,7 @@ import SplitPhaseExplicitPartitionFixture.take
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
-final class DelegateTaskWorkflowSpec extends AnyWordSpec with ThreeWorkflowManagedRepositoryFixture {
+final class DelegateTaskWorkflowSpec extends AnyWordSpec with GivenWhenThen with ThreeWorkflowManagedRepositoryFixture {
   private val _checks = Vector(GoalPhaseNativeValidation.Check("compile", 1, T.Kind.Compile),
     GoalPhaseNativeValidation.Check("focused", 2, T.Kind.TestOnly))
   private val _suite = "org.simplemodeling.textus.smworkflow.p62authored.LineWriterSpec"
@@ -42,7 +43,7 @@ final class DelegateTaskWorkflowSpec extends AnyWordSpec with ThreeWorkflowManag
   private def _input(role: String, request: String, publish: Boolean = true): V.DelegateTaskInput = {
     val c = _contract(role, publish)
     V.DelegateTaskInput("sm-workflow", request, "Author focused behavioral coverage for the existing LineWriter",
-      NonEmptyVector.of("src/test/scala"), NonEmptyVector.of("compile", "focused"), NonEmptyVector.of("behavior"),
+      NonEmptyVector.of("src/test/scala", "docs/delegate.md"), NonEmptyVector.of("compile", "focused"), NonEmptyVector.of("behavior"),
       NonEmptyVector.of(V.WorkflowArtifactReference("specification-adopted-source", "1")), false, "code", "off", 10,
       "direct-instruction", Vector.empty, V.DelegateTaskContract(c.requesterIdentity, c.destinationIdentity, c.returnDestination,
         c.componentIdentity, c.role, c.validationScope, NonEmptyVector.fromVectorUnsafe(c.permittedOperations), c.exclusions,
@@ -60,6 +61,8 @@ final class DelegateTaskWorkflowSpec extends AnyWordSpec with ThreeWorkflowManag
     Files.createDirectories(root.resolve("repository/src/test/scala"))
     Files.writeString(root.resolve("repository/src/test/scala/ProductCheck.scala"), "object ProductCheck {}\n")
     Files.writeString(root.resolve("repository/value.txt"), "preserved baseline\n")
+    Files.createDirectories(root.resolve("repository/docs"))
+    Files.writeString(root.resolve("repository/docs/delegate.md"), "# Accepted delegated work\n")
     Files.writeString(root.resolve("repository/build.sbt"), Files.readString(root.resolve("repository/build.sbt")) +
       "\norganization := \"org.example\"\nname := \"p68-delegate-fixture\"\nversion := \"0.0.1-SNAPSHOT\"\n" +
       "publishLocal := { val result = publishLocal.value; IO.append(file(\"../publication-count.txt\"), \"published\\n\"); result }\n")
@@ -72,7 +75,7 @@ final class DelegateTaskWorkflowSpec extends AnyWordSpec with ThreeWorkflowManag
   override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
     def array(j: Json, k: String) = j.hcursor.get[Vector[Json]](k).toOption.get
     val git = TypedGitHostPlanFixture.plan(Programs.Target(root.resolve("repository"), "main", "origin", "main", root.resolve("upstream.git").toString),
-      goalPaths = goal.candidatePaths, goalMessages = Vector("Delegate scoped result"), goalSelections = Vector(Vector("src/test/scala")))
+      goalPaths = goal.candidatePaths, goalMessages = Vector("Delegate scoped result"), goalSelections = Vector(Vector(_test, "docs/delegate.md")))
       .mapObject(fields => fields.add("gitPrograms", Json.fromValues(fields("gitPrograms").get.asArray.get.map { program =>
         program.hcursor.get[String]("selectionId").toOption match {
           case Some("goal-step-1") => program.mapObject(_.add("selectionId", "delegate-task".asJson))
@@ -105,9 +108,13 @@ final class DelegateTaskWorkflowSpec extends AnyWordSpec with ThreeWorkflowManag
     "use public native work focused checks local commit publication return and separate requester adoption without duplicate effects" in {
       val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/sm-workflow/work/delegate-task").toAbsolutePath), "episode-").toRealPath()
       val original = ThreeWorkflowNormalHostFixture.definition(root)
-      val host = original.copy(goal = original.goal.copy(candidatePaths = Vector("src/test/scala"),
+      val host = original.copy(goal = original.goal.copy(candidatePaths = Vector("src/test/scala", "docs/delegate.md"),
         stepValidation = original.goal.stepValidation.copy(checks = _checks)))
-      _with_runtime_(root, "Delegate", Some(host), _parameters) { (owner, component, actor, prepare) =>
+      val recordPolicy = """{"targets":[{"family":"delegate-task","scope":"single-selected-request","paths":["docs/delegate.md"]}]}"""
+      var legacySession = ""
+      var implementationCommit = ""
+      Given("one specification-owned request with mandatory completion records and a later legacy no-change request")
+      _with_runtime_(root, "Delegate", Some(host), _parameters + (CompletionRecords.declaration.name -> recordPolicy)) { (owner, component, actor, prepare) =>
         prepare(_.setupC(_setup_commands_(root, "Delegate").size))
         def invoke(operation: String, properties: List[Property], delivery: Boolean = false): V.DelegateTaskView =
           read_value[V.DelegateTaskView](take(owner.executeOperationResponseInContext(Request.of(component = component.name,
@@ -167,6 +174,7 @@ final class DelegateTaskWorkflowSpec extends AnyWordSpec with ThreeWorkflowManag
         requester.sessionId should not be destination.sessionId
         val dispatched = observe(requester.sessionId, "dispatch-observed", destination.sessionId)
         _state(dispatched).stage shouldBe "AwaitResult"
+        When("the normal destination route accepts its checks and closes the selected implementation")
         val returned = implement(destination, changed = true)
         returned.kind shouldBe "Return"
         val state = _state(returned)
@@ -184,6 +192,12 @@ final class DelegateTaskWorkflowSpec extends AnyWordSpec with ThreeWorkflowManag
         state.automaticCount shouldBe 0
         state.delivery.flatMap(_.publication).map(_.status) shouldBe Some("published")
         val commit = state.commit.get
+        implementationCommit = commit.identity
+        Then("the same local commit contains the exact completion record without another validation batch")
+        val recordText = Files.readString(root.resolve("repository/docs/delegate.md"))
+        recordText should include ("<!-- sm-workflow completion " + destination.sessionId + " delegate-task single-selected-request -->")
+        recordText should include ("Evidence: validation:compile")
+        recordText should not include (commit.identity)
         val publications = Files.readString(root.resolve("publication-count.txt"))
         val executions = Files.readString(root.resolve("sbt-executions.txt"))
         _state(advance(destination.sessionId)) shouldBe state
@@ -220,11 +234,80 @@ final class DelegateTaskWorkflowSpec extends AnyWordSpec with ThreeWorkflowManag
         // A fresh legitimate no-change request executes its actual required checks,
         // retains the existing commit and reuses the applicable publication.
         val nochange = implement(start(_input("destination", "no-change-request"), "no-change"), changed = false)
+        legacySession = nochange.sessionId
         _state(nochange).commit.get.identity shouldBe commit.identity
         _state(nochange).commitExecution shouldBe None
         _state(nochange).candidate.get.paths shouldBe empty
         _state(nochange).delivery.flatMap(_.publication).map(_.status) shouldBe Some("unnecessary")
         Files.readString(root.resolve("publication-count.txt")) shouldBe publications
+        observe(nochange.sessionId, "return-observed", nochange.sessionId).kind shouldBe "Terminal"
+      }
+      Given("an older Completed destination with accepted verification and no required record at that time")
+      val legacyPolicy = """{"targets":[{"family":"delegate-task","scope":"no-change-request","paths":["docs/delegate.md"]}]}"""
+      val originalChecks = Files.readString(root.resolve("sbt-executions.txt"))
+      val originalPublications = Files.readString(root.resolve("publication-count.txt"))
+      _with_runtime_(root, "Delegate", Some(host), _parameters + (CompletionRecords.declaration.name -> legacyPolicy)) { (owner, component, actor, prepare) =>
+        def call[A: org.goldenport.convert.ValueReader](name: String, input: V.CompletionRecordClosureInput): A =
+          read_value[A](take(owner.executeOperationResponseInContext(Request.of(component = component.name,
+            service = "CompletionRecordClosureService", operation = name, properties = List(Property("input", input, None))), actor)))
+        var originalTerminal = Option.empty[org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceRecord]
+        prepare(_.delegateCurrentC(org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceIdentity(legacySession)).map(value => { originalTerminal = Some(value); () }))
+        val description = call[V.CompletionRecordClosureView]("describeCompletionRecordClosure",
+          V.CompletionRecordClosureInput(legacySession, "delegate-task", None, None, None))
+        val describedTarget = take(CompletionRecordContinuation.publicTargetC(description.target))
+        describedTarget.hcursor.downField("source").get[String]("progression") shouldBe Right("Running")
+        val acceptedText = describedTarget.hcursor.downField("source").get[String]("accepted").toOption.get
+        val acceptedSource = parser.parse(acceptedText).toOption.get
+        acceptedSource.hcursor.get[String]("schemaVersion") shouldBe Right("sm-workflow.delegate-task.v1")
+        acceptedSource.hcursor.downField("payload").downField("state").downField("input").get[String]("requestIdentity") shouldBe Right("no-change-request")
+        acceptedSource.hcursor.downField("payload").downField("state").downField("commit").get[String]("identity") shouldBe Right(implementationCommit)
+        val reference = V.WorkflowArtifactReference("specification-legacy-closure-authority", "1")
+        val input = V.CompletionRecordClosureInput(legacySession, "delegate-task", Some(description.terminalRevision), Some(description.target), Some(reference))
+        owner.executeOperationResponseInContext(Request.of(component = component.name, service = "CompletionRecordClosureService",
+          operation = "advanceCompletionRecordClosure", properties = List(Property("input", input, None))), actor).isSuccess shouldBe false
+        prepare { setup => for {
+          prepared <- org.simplemodeling.textus.smworkflow.preparation.NativeCompletionRecordClosurePreparation.prepareC(description, input,
+            reference, V.WorkflowExecutionEvidence(Vector(reference), Some("participant"), None, None), "participant", "normal-development-host",
+            setup.executionContext.clock.instant().minusSeconds(1))
+          _ <- setup.createC("host_evidence", prepared.recordIdentity, prepared.record)
+        } yield () }
+        When("the specification-owned independent host admits the exact same-owner closure target")
+        val result = call[V.CompletionRecordClosureView]("advanceCompletionRecordClosure", input)
+        Then("only the outstanding record is committed and the original terminal and successful work remain retained")
+        result.kind shouldBe "Terminal"
+        result.recordCommit should not be Some(implementationCommit)
+        call[V.CompletionRecordClosureView]("advanceCompletionRecordClosure", input) shouldBe result
+        prepare(_.delegateCurrentC(org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceIdentity(legacySession)).map { value =>
+          value.history.take(originalTerminal.get.history.size) shouldBe originalTerminal.get.history
+          value.history(originalTerminal.get.history.size).currentProgression.map(_.value) shouldBe Some("Running")
+          value.identity shouldBe originalTerminal.get.identity
+          // Each native load rebuilds its catalog binding; retain the exact
+          // admitted definition contract rather than its JVM object identity.
+          val actualdefinition = value.definition
+          val originaldefinition = originalTerminal.get.definition
+          (actualdefinition.workflowIdentity, actualdefinition.workflowRevision,
+            actualdefinition.sourceCorrelation, actualdefinition.producerAbiIdentity,
+            actualdefinition.workflowAbiIdentity, actualdefinition.bootstrapAbiIdentity,
+            actualdefinition.producerRevision) shouldBe
+            (originaldefinition.workflowIdentity, originaldefinition.workflowRevision,
+              originaldefinition.sourceCorrelation, originaldefinition.producerAbiIdentity,
+              originaldefinition.workflowAbiIdentity, originaldefinition.bootstrapAbiIdentity,
+              originaldefinition.producerRevision)
+          value.correlation shouldBe originalTerminal.get.correlation
+          value.lifecycle shouldBe org.goldenport.cncf.workflow.WorkflowInstancePersistence.Lifecycle.Completed
+          ()
+        })
+        val stale = input.copy(terminalRevision = Some((description.terminalRevision.toLong + 1L).toString))
+        owner.executeOperationResponseInContext(Request.of(component = component.name, service = "CompletionRecordClosureService",
+          operation = "advanceCompletionRecordClosure", properties = List(Property("input", stale, None))), actor).isSuccess shouldBe false
+        Files.readString(root.resolve("sbt-executions.txt")) shouldBe originalChecks
+        Files.readString(root.resolve("publication-count.txt")) shouldBe originalPublications
+        Files.readString(root.resolve("repository/docs/delegate.md")) should include (
+          "<!-- sm-workflow completion " + legacySession + " delegate-task no-change-request -->")
+        val ordinary = read_value[V.DelegateTaskView](take(owner.executeOperationResponseInContext(Request.of(component = component.name,
+          service = "DelegateTaskService", operation = "advanceDelegateTask", properties = List(Property("sessionId", legacySession, None))), actor)))
+        ordinary.kind shouldBe "Terminal"
+        ordinary.message should include ("Completion scope delegate-task no-change-request")
       }
     }
     "keep explicit broad scope conditional review and missing-profile refusal separate from sibling contracts" in {
@@ -233,6 +316,13 @@ final class DelegateTaskWorkflowSpec extends AnyWordSpec with ThreeWorkflowManag
       val broad = input.copy(delegation = input.delegation.map(_.copy(validationScope = "broad")))
       S.startC(broad, "participant", _checks).isSuccess shouldBe false
       val full = _checks :+ GoalPhaseNativeValidation.Check("FULL", 3, T.Kind.Test)
+      When("broad impact needs FULL in addition to the admitted focused acceptance")
+      val selected = take(DelegateTask.selectChecksC(broad, full))
+      Then("runtime selects the installed FULL binding while retaining the adopted explicit checks")
+      selected shouldBe full
+      take(S.startC(broad, "participant", selected)).input shouldBe broad
+      take(DelegateTask.selectChecksC(input, full)) shouldBe _checks
+      DelegateTask.selectChecksC(broad, _checks).isSuccess shouldBe false
       take(S.startC(broad.copy(checks = full.map(_.identity)), "participant", full)).selected shouldBe full
       DelegateTaskNativeRun.preflightExecutionC(input, None, None).isSuccess shouldBe false
       val mapping = take(BoundedWorkExecutionAdmissionFixture.mappingC())

@@ -28,17 +28,19 @@ private[smworkflow] object BoundedWorkRuntime {
     profiles: Option[WorkflowExecutionProfileMapping], origin: Option[GoalPhaseNativeExecution.Origin],
     review: Option[GoalPhaseNativeReview.EvidencePort],
     evidence: Option[CommonEvidence.Policy], journal: Option[DevelopmentJournal.Policy],
-    publication: Option[LocalPublicationRuntime.Policy] = None, hygieneMode: String = CommitHygiene.autoFix)
+    publication: Option[LocalPublicationRuntime.Policy] = None, hygieneMode: String = CommitHygiene.autoFix,
+    completionRecords: Option[CompletionRecords.Policy] = None)
   def host(d: GoalPhaseNativeRun.Declaration): Host = Host(d.configuration, d.instances, d.continuations,
     d.input.repositoryIdentity, d.target.root.toString, d.target.localBranch, d.candidatePaths,
-    d.validationPolicy.toVector.flatMap(_.checks), d.executionProfiles, d.executionOrigin, d.reviewInstallation.map(_.evidence), d.evidencePolicy, d.journalPolicy, d.localPublication, d.commitHygieneMode)
+    d.validationPolicy.toVector.flatMap(_.checks), d.executionProfiles, d.executionOrigin, d.reviewInstallation.map(_.evidence), d.evidencePolicy, d.journalPolicy, d.localPublication, d.commitHygieneMode, d.completionRecords)
   final case class Payload(state: S.State, root: String, branch: String, baseHead: String,
     implementationWorker: Option[String] = None, unrelated: Option[Vector[G.DirtyPath]] = None, implementationWorkers: Option[Vector[String]] = None,
-    supersededWork: Option[String] = None, hygiene: Option[CommitHygiene.Record] = None)
+    supersededWork: Option[String] = None, hygiene: Option[CommitHygiene.Record] = None,
+    records: Option[CompletionRecords.Plan] = None)
   private given Encoder[G.DirtyPath] = deriveEncoder
   private given Decoder[G.DirtyPath] = deriveDecoder
   given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
-    case ("unrelated" | "implementationWorkers" | "supersededWork" | "hygiene", value) => !value.isNull
+    case ("unrelated" | "implementationWorkers" | "supersededWork" | "hygiene" | "records", value) => !value.isNull
     case _ => true
   }))
   given Decoder[Payload] = deriveDecoder
@@ -93,9 +95,13 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     HistoryEntry(HistorySequence(from.history.size.toLong + 1), from.revision.next, if (accepted) Lifecycle.Completed else Lifecycle.Active,
       if (accepted) None else Some(ProgressionReference(if (task) "task.Running" else "fix.Running")), from.correlation,
       CausationReference(cause), from.derivedCompositeOccurrence, from.committedPredecessor, None)
+  private def recordPaths(h: Host, payload: Payload): Vector[String] = if (!task || payload.state.input.delegation.exists(_.role == "requester")) Vector.empty
+    else CompletionRecords.selected(h.completionRecords, wire, payload.state.input.requestIdentity)
+  private def closureComplete(h: Host, payload: Payload): Boolean = terminal(payload.state.stage) &&
+    !(payload.state.stage == "NoChange" && recordPaths(h, payload).nonEmpty && payload.records.isEmpty)
   def saveC(h: Host, storage: WorkflowComponentStorage, from: InstanceRecord, payload: Payload,
     core: ActionCall.Core): Consequence[InstanceRecord] = for {
-    projection <- if (terminal(payload.state.stage)) recordEvidenceObservedC(h, core,
+    projection <- if (closureComplete(h, payload)) recordEvidenceObservedC(h, core,
       from.identity.value, from.revision.next.value,
       Json.obj("state" -> payload.state.asJson, "workflowRevision" -> Json.fromLong(from.revision.next.value)),
       "completion", "passed").map(Some(_)) else Consequence.success(None)
@@ -104,7 +110,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     mechanical <- storage.bindMechanicalC(advanceOperation, stateCodec)
     saved <- mechanical.executeC(WorkflowMechanicalTransition.Intent(h.configuration,
       reference(from.identity.value, from.revision.next.value), from, from.revision,
-      history(from, "standalone-state:" + from.revision.next.value, terminal(payload.state.stage)),
+      history(from, "standalone-state:" + from.revision.next.value, closureComplete(h, payload)),
       TypedValue(stateCodec.typeIdentity, selected)), empty)(using core.executionContext)
   } yield saved.receipt.next
   def loadPayloadC(storage: WorkflowComponentStorage, id: String, revision: Long,
@@ -159,7 +165,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     _ <- GoalPhaseParticipantAdmission.admitC(participant, core.executionContext)
     _ <- if (input.repositoryIdentity == h.repository && input.ownedPaths.forall(p => h.paths.contains(p))) Consequence.unit
       else invalid("Requested repository/paths exceed the configured host bindings")
-    selected = input.checks.flatMap(id => h.checks.find(_.identity == id))
+    selected <- if (delegation) DelegateTask.selectChecksC(input, h.checks) else Consequence.success(input.checks.flatMap(id => h.checks.find(_.identity == id)))
     initialstate <- S.startC(input, participant, selected)
     state = if (input.delegation.exists(_.role == "requester")) initialstate.copy(stage = "DispatchReady", delivery = Some(DelegateTask.Delivery()),
       message = "One authorized existing-chat dispatch is ready for the caller; no transport or destination work is implied") else initialstate
@@ -222,7 +228,15 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
       case Some(value) if value.definition == definition => Consequence.success(value)
       case _ => invalid("No standalone instance belongs to this exact definition")
     }
-    result <- current.suspension match {
+    closure <- if (task) CompletionRecordContinuation.retainedC(storage, current, core) else Consequence.success(None)
+    result <- closure match {
+      case Some(value) => for {
+        raw <- value.target.toJsonStringC.flatMap(s => io.circe.parser.parse(s).fold(e => invalid(e.message), Consequence.success))
+        source <- raw.hcursor.downField("source").downField("accepted").downField("payload").get[Json]("state").fold(e => invalid(e.message), Consequence.success)
+        state <- recordC(source.deepMerge(Json.obj("localClosure" -> raw)))
+      } yield V.StandaloneFixView(id, value.kind, "Completion scope " + value.scope + " " + value.identity + "; " + value.message,
+        Some(state), None, None, None, None, None, Vector.empty, None)
+      case None => current.suspension match {
       case Some(suspension) => for {
         issued <- storage.bindIssuedC(completionOperation, inputCodec)
         actual <- issued.loadC(ContinuationIdentity(suspension.continuationIdentity.value))(using core.executionContext)
@@ -258,6 +272,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
         _ <- GoalPhaseParticipantAdmission.admitC(payload.state.participant, core.executionContext)
         response <- progressC(h, definition, storage, state, payload, core, 0)
       } yield response
+    }
     }
   } yield result
 
@@ -311,8 +326,16 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
         response <- progressC(h, definition, store, saved, payload.copy(state = next), core, depth + 1)
       } yield response
       case "Repair" | "Review" | "Implement" => issueC(h, store, record, payload, core)
+      case "RecordsReady" if task => recordsC(h, store, record, payload, core)
+      case "NoChange" if task && recordPaths(h, payload).nonEmpty && payload.records.isEmpty => commitC(h, store, record, payload, core)
       case "CommitReady" => commitC(h, store, record, payload, core)
       case "CommitIntent" | "CommitUnknown" => reconcileC(h, store, record, payload, core)
+      case "CommitFailed" if task && s.commitExecution.exists(e => e.termination == "exited" && e.exitCode.exists(_ != 0)) => for {
+        _ <- freshC(payload, core)
+        next = payload.copy(state = s.copy(stage = "CommitReady", message = "Confirmed ended failed commit; unchanged accepted candidate continues under retained authority"))
+        saved <- saveC(h, store, record, next, core)
+        result <- commitC(h, store, saved, next, core)
+      } yield result
       case "CommitFailed" => Consequence.success(view(record, s, "Incomplete", s.message))
       case "Completed" | "NoChange" if delegation => deliverC(h, store, record, payload, core)
       case "HygieneReady" if delegation => hygieneC(h, store, record, payload, core)
@@ -370,6 +393,45 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
   /** The logical selection must be registered in the actual CNCF host. The
     * Task never substitutes a Phase Step's commit selection or invents consent. */
   private def commitC(h: Host, store: WorkflowComponentStorage, from: InstanceRecord, payload: Payload,
+    core: ActionCall.Core): Consequence[V.StandaloneFixView] = for {
+    result <- if (recordPaths(h, payload).nonEmpty && payload.records.isEmpty) for {
+      _ <- freshC(payload, core)
+      selection <- GitSelectionId.parseC(wire)
+      candidate <- payload.state.candidate.map(Consequence.success).getOrElse(invalid("Record preparation has no accepted candidate"))
+      plan <- CompletionRecords.captureC(core, from.identity.value, wire, payload.state.input.requestIdentity, candidate.tree,
+        (payload.state.receipts.map(r => "validation:" + r.identity) ++ payload.state.reviewReference.toVector.map(r => r.identity + "@" + r.revision) ++ payload.state.evidenceReferences.map(r => r.identity + "@" + r.revision)).distinct,
+        recordPaths(h, payload), payload.state.input.ownedPaths, h.paths, selection)
+      retained = payload.copy(records = Some(plan), state = payload.state.copy(stage = "RecordsReady", message = "Accepted work retained; exact completion records prepared before local closure"))
+      prepared <- saveC(h, store, from, retained, core)
+      result <- recordsC(h, store, prepared, retained, core)
+    } yield result else commitPreparedC(h, store, from, payload, core)
+  } yield result
+
+  private def recordsC(h: Host, store: WorkflowComponentStorage, from: InstanceRecord, payload: Payload,
+    core: ActionCall.Core): Consequence[V.StandaloneFixView] = for {
+    plan <- payload.records.filter(p => CompletionRecords.valid(p) && p.session == from.identity.value && p.family == wire &&
+      p.scope == payload.state.input.requestIdentity && p.files.map(_.path) == recordPaths(h, payload))
+      .map(Consequence.success).getOrElse(invalid("Record application has no exact retained owner/selection"))
+    _ <- implementationFreshC(payload, core)
+    _ <- CompletionRecords.applyC(core, plan)
+    tree <- G.indexTreeC(core)
+    changes <- CompletionRecords.deltaC(core, plan, tree)
+    _ <- CompletionRecords.admitActualC(core, plan, changes)
+    candidate <- payload.state.candidate.filter(_.tree == plan.acceptedTree).map(Consequence.success)
+      .getOrElse(invalid("Record application changed the accepted candidate"))
+    next = payload.state.copy(stage = "CommitReady", candidate = Some(candidate.copy(tree = tree,
+      paths = (candidate.paths ++ changes.map(_.path.value)).distinct)), message = "Exact completion records applied; acceptance and successful checks reused")
+    retained = payload.copy(state = next)
+    saved <- saveC(h, store, from, retained, core)
+    result <- if (next.candidate.exists(_.paths.isEmpty)) {
+      val unchanged = next.copy(stage = "NoChange")
+      saveC(h, store, saved, retained.copy(state = unchanged), core).flatMap(r =>
+        if (delegation) progressC(h, from.definition, store, r, retained.copy(state = unchanged), core, 0)
+        else Consequence.success(view(r, unchanged, "Terminal", "Existing committed records and accepted no-change work retained")))
+    } else commitPreparedC(h, store, saved, retained, core)
+  } yield result
+
+  private def commitPreparedC(h: Host, store: WorkflowComponentStorage, from: InstanceRecord, payload: Payload,
     core: ActionCall.Core): Consequence[V.StandaloneFixView] = for {
     _ <- freshC(payload, core)
     selection <- GitSelectionId.parseC(if (delegation) "delegate-task" else "goal-task")
@@ -461,7 +523,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
       case Some(target) => h.publication.map { policy => for {
         selected <- policy.targets.find(t => t.identity == target && t.component == contract.componentIdentity && t.workspace == "sm-workflow-repository")
           .map(Consequence.success).getOrElse(invalid("Publication target does not own this delegated Component/workspace"))
-        result <- LocalPublicationRuntime.ensureC(core, policy, DelegateTask.publicationInput(from.identity.value, payload.state))
+        result <- LocalPublicationRuntime.ensureDeliveryC(core, policy, DelegateTask.publicationInput(from.identity.value, payload.state))
       } yield Some(result) }.getOrElse(invalid("Required runtime-owned publication capability is not configured"))
     }
     ready = publication.forall(_.ready)

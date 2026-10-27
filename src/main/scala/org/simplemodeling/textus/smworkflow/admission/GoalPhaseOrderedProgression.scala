@@ -143,6 +143,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
   final case class StepPartialCompletionObserved(intent: String, chain: StepCommitChain,
     expectedTree: String, eofCorrections: Vector[String]) extends Event
   final case class StepCommitObserved(intent: String, commit: Commit) extends Event
+  final case class StepPreparedCommitObserved(intent: String, commit: Commit, paths: Vector[String]) extends Event
   final case class StepEofCorrectionCommitObserved(intent: String, commit: Commit, paths: Vector[String]) extends Event
   /** tip is the reviewed ordered-Step tip; a native child may subsequently
     * integrate upstream history. The adapter proves this tip remains an ancestor
@@ -605,7 +606,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           checksReceipt.nonEmpty && reviewEvidence.nonEmpty && validSnapshot(reviewed) && validSnapshot(value) &&
           reviewed.head == tip && value.head == tip && reviewed.tree != value.tree && paths != null && paths.nonEmpty &&
           paths.size <= 256 && paths.distinct == paths && paths.forall(p => path(p) && p.endsWith(".md")) &&
-          plan.steps.forall(step => paths.forall(step.ownedPaths.contains)) =>
+          plan.steps.forall(step => paths.forall(p => StandaloneFixExecution.owned(p, step.ownedPaths))) =>
         success(Stage.PhaseClosing, newCandidate = Some(value), newPhaseReviewed = Some(reviewed), newPhasePaths = paths)
       case IncompleteChecksObserved(value, selected, receipt) if candidate.contains(value) &&
           selected == checks && text(receipt) && (stage == Stage.Validation || stage == Stage.PhaseValidation) =>
@@ -699,12 +700,19 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           paths.distinct == paths && paths.forall(value => path(value) &&
             step.ownedPaths.exists(owner => value == owner || value.startsWith(owner + "/"))) =>
         _close_step_c(commit)
+      case StepPreparedCommitObserved(intent, commit, paths) if stage == Stage.Closing && !phaseWide &&
+          closureIntent.contains(intent) && checksReceipt.nonEmpty && (reviewEvidence.nonEmpty || stepAdmission.nonEmpty) &&
+          validCommit(commit) && commit.parent == candidateBase.head && commit.identity != candidateBase.head && generation < Long.MaxValue &&
+          candidate.exists(_.tree != commit.tree) && paths != null && paths.nonEmpty && paths.size <= 256 &&
+          paths.distinct == paths && paths.forall(value => path(value) &&
+            step.ownedPaths.exists(owner => value == owner || value.startsWith(owner + "/"))) =>
+        _close_step_c(commit)
       case PhaseLocallyCompleted(snapshot, commits, review) if stage == Stage.PhaseClosing &&
           cursor == plan.steps.size && completed.map(_.step) == plan.steps.map(_.identity) &&
           candidate.contains(snapshot) && snapshot == tipSnapshot && phaseReviewedCandidate.isEmpty &&
           phaseRecordingPaths.isEmpty && checksReceipt.nonEmpty && reviewEvidence.contains(review) &&
           commits == completed.map(_.commit) => success(Stage.Closed)
-      case ReleaseCommitObserved(commit) if stage == Stage.PhaseClosing && releaseRepairActive && releaseCommit.isEmpty &&
+      case ReleaseCommitObserved(commit) if stage == Stage.PhaseClosing && (releaseRepairActive || (phaseReviewedCandidate.nonEmpty && phaseRecordingPaths.nonEmpty)) && releaseCommit.isEmpty &&
           closureIntent.isEmpty && checksReceipt.nonEmpty && reviewEvidence.nonEmpty && validCommit(commit) &&
           commit.parent == tipSnapshot.head && commit.identity != tipSnapshot.head &&
           candidate.exists(c => c.head == tipSnapshot.head && c.tree == commit.tree && c.tree != tipSnapshot.tree) =>

@@ -196,6 +196,13 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
           case Some(record) => Consequence.success(record)
           case None => Consequence.stateConflict("Specification has no Operation-created RepositorySync instance")
         }
+    def delegateCurrentC(identity: InstanceIdentity): Consequence[InstanceRecord] =
+      DelegateTaskRuntimeCatalog.loadC().flatMap(definition => CallScopedWorkflowInstances.managed(_configuration_, definition,
+        _collection_("instances"), _collection_("continuations"))
+        .loadForCallC(_configuration_, identity, core)).flatMap {
+          case Some(record) => Consequence.success(record)
+          case None => Consequence.stateConflict("Specification has no Operation-created DelegateTask instance")
+        }
     def repositoryWorkC[A](identity: InstanceIdentity, operation: StateMachineOperationIdentity,
       codec: WorkflowResultJsonV1.PayloadCodec[A]): Consequence[WorkflowInteraction[A, Nothing]] = for {
       current <- currentC(identity)

@@ -92,7 +92,7 @@ private[smworkflow] object StandaloneFixExecution {
   def startC(input: Input, participant: String, selected: Vector[Check]): Consequence[State] = for {
     _ <- inputC(input)
     _ <- input.delegation.fold(Consequence.unit)(_ => DelegateTask.checksC(input, selected))
-    _ <- if (text(participant) && selected != null && selected.forall(_ != null) && selected.map(_.identity) == input.checks &&
+    _ <- if (text(participant) && selected != null && selected.forall(_ != null) && (if (input.delegation.nonEmpty) DelegateTask.selectedChecksValid(input, selected) else selected.map(_.identity) == input.checks) &&
       selected.forall(c => c != null && c.ordinal > 0 && c.ordinal <= 16 && c.dependency.isEmpty)) Consequence.unit
       else invalid("checks must resolve exactly to the admitted host bindings")
   } yield State(input, participant, if (input.task.nonEmpty) "Implement" else "Inspect", 1, selected, None, Vector.empty, 0, 0,

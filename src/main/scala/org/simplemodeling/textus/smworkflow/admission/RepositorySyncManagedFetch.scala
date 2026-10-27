@@ -39,7 +39,8 @@ private[smworkflow] object RepositorySyncManagedFetch {
     executionClassifications: Option[RepositorySyncNativeExecution.Classifications] = None,
     journalPolicy: Option[DevelopmentJournal.Policy] = None,
     commitHygieneMode: String = CommitHygiene.autoFix,
-    hygieneStagingPaths: Vector[String] = Vector.empty)
+    hygieneStagingPaths: Vector[String] = Vector.empty,
+    completionRecords: Option[CompletionRecords.Policy] = None)
   final case class StartContext(selectionIdentity: String, invocationIdentity: String,
     participantIdentity: String, repositoryIdentity: String, localBranch: String,
     trackingRemote: String, trackingBranch: String, remoteEndpointIdentity: String, syncMode: String)
@@ -84,6 +85,7 @@ private[smworkflow] object RepositorySyncManagedFetch {
       invalid("host storage/tracking declaration differs")
     else for {
       _ <- CommitHygiene.decodeC(d.commitHygieneMode)
+      _ <- d.completionRecords.fold(Consequence.unit)(CompletionRecords.validateC)
       _ <- if (d.hygieneStagingPaths != null && d.hygieneStagingPaths.distinct == d.hygieneStagingPaths) Consequence.unit
         else invalid("Commit hygiene staging declaration is missing or duplicated")
       _ <- d.configuration.validateC

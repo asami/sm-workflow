@@ -9,7 +9,7 @@ import org.goldenport.cncf.processexecution.*
 /** Local publication is workflow work. The caller supplies only an identified
   * semantic answer; the runtime owns necessity, admission, execution and results.
   * @since   Oct. 26, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object LocalPublication {
@@ -166,7 +166,7 @@ private[smworkflow] object LocalPublication {
   /** A resumed check needs current applicability, while old public requests
     * remain immutable history. Actual target-attempt order chooses its successor.
     */
-  def ensurePrerequisiteC(input: Input, target: Target, participant: String, port: Port): Consequence[Result] =
+  def ensurePrerequisiteC(input: Input, target: Target, participant: String, port: Port, retryFailed: Boolean = false): Consequence[Result] =
     for {
       prior <- _prerequisite_c(input, target, participant, port)
       retained <- prior._2.fold(Consequence.success(Option.empty[Result]))(request =>
@@ -174,13 +174,24 @@ private[smworkflow] object LocalPublication {
       latest <- _latest_c(target, port)
       source <- port.sourceC(target)
       selected = prior._2 match {
-        case Some(request) if retained.forall(!_.ready) || (source == request.source && latest._2.exists(r =>
+        case Some(request) if !(retryFailed && retained.exists(confirmedFailed) && source == request.source) && (retained.forall(!_.ready) || (source == request.source && latest._2.exists(r =>
             r.request == request || (r.status == "published" && r.request.source.clean &&
-              r.request.source.head == request.source.head))) => request.input.copy(answer = input.answer)
+              r.request.source.head == request.source.head)))) => request.input.copy(answer = input.answer)
         case _ => input.copy(requestIdentity = input.requestIdentity + ":prerequisite:" + prior._1)
       }
       result <- ensureC(selected, target, participant, port)
     } yield result
+
+  private def confirmedFailed(result: Result): Boolean = result.status == "failed" && result.process.exists(raw =>
+    WorkflowSbtCapture.decode(raw).toOption.exists(p => WorkflowSbtCapture.exitCode(p).exists(_ != 0)))
+  def ensureDeliveryC(input: Input, target: Target, participant: String, port: Port): Consequence[Result] = for {
+    original <- collectC(input, target, participant, port)
+    result <- original match {
+      case Some(value) if confirmedFailed(value) => ensurePrerequisiteC(input, target, participant, port, retryFailed = true)
+      case Some(value) => Consequence.success(value)
+      case None => ensureC(input, target, participant, port)
+    }
+  } yield result
 
   /** Read this prerequisite's actual decision requests, including decisions
     * that skipped or asked for semantics and therefore created no target effect.

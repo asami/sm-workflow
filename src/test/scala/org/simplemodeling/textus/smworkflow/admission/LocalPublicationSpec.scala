@@ -15,7 +15,7 @@ import LocalPublication.*
 /** Pure decision and continuation contracts. Supplied process facts are test
   * data; actual CLI/UoW execution is qualified separately.
   * @since   Oct. 26, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -46,6 +46,36 @@ final class LocalPublicationSpec extends AnyWordSpec with Matchers with GivenWhe
   private def _ensure(m: Memory, identity: String = "request", explicit: Boolean = false,
     answer: Option[Answer] = None): Result = take(LocalPublication.ensureC(
     Input(identity, _target.identity, Some("same-retained-session"), explicit, answer), _target, "actor", m))
+
+  /** Invoked by the selected completion suite; all effect observations are fixture-owned. */
+  def qualifyDeliveryContinuation(narrator: GivenWhenThen): Unit = {
+    narrator.Given("a delivery publication whose actual process ended with a nonzero exit")
+    val m = new Memory
+    val input = Input("retained-delivery", _target.identity, Some("same-retained-session"))
+    m.next = _observed(ProcessExecutionTermination.Exited(9))
+    val failed = take(ensureDeliveryC(input, _target, "actor", m))
+    failed.status shouldBe "failed"
+    narrator.When("the same delivery resumes and the separately retained successor succeeds")
+    m.next = _observed(ProcessExecutionTermination.Exited(0))
+    val successful = take(ensureDeliveryC(input, _target, "actor", m))
+    successful.status shouldBe "published"
+    take(ensureDeliveryC(input, _target, "actor", m)) shouldBe successful
+    narrator.Then("the failed result remains collectible and successful publication is not replayed")
+    m.starts shouldBe 2
+    take(collectC(input, _target, "actor", m)) shouldBe Some(failed)
+
+    narrator.Given("a delivery whose execution intent has no retained result")
+    val pending = new Memory
+    val original = take(ensureDeliveryC(input, _target, "actor", pending))
+    val resultKey = pending.rows.collectFirst { case (key, value) if key.endsWith(":result") &&
+      value.hcursor.downField("request").get[Input]("input").toOption.contains(original.request.input) => key }.get
+    pending.rows.remove(resultKey)
+    narrator.When("delivery resumes without an actual terminal process result")
+    val uncertain = take(ensureDeliveryC(input, _target, "actor", pending))
+    narrator.Then("uncertainty remains retained and no second publication starts")
+    uncertain.status shouldBe "uncertain"
+    pending.starts shouldBe 1
+  }
 
   "Runtime-owned publication" should {
     "observe a new source change after a ready successor skipped without publishing" in {

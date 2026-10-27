@@ -227,3 +227,64 @@ Step, release and RepositorySync share preparation/recovery policy with their
 own acceptance boundaries. Phase 7 consumes this owner. Runtime-owned
 publishLocal remains the publication owner, including necessity and result
 collection; no AI publication runner is introduced.
+
+
+## Explicit completion record destinations
+
+`sm-workflow.completion.records` is an optional structured policy with `targets`.
+Each target names an exact `family`, `scope`, and nonempty `paths` vector. Families
+are `step`, `phase`, `goal-task`, `delegate-task`, and `repository-sync`. A Step
+scope is its selected Step identity; a Phase scope is the selected Phase identity;
+a bounded Task scope is its original request identity; a RepositorySync scope is
+its original repository identity. Omission selects no additional destination.
+The runtime does not infer a journal filename or promote Step completion to Phase
+completion.
+
+The current clerical projection requires existing tracked regular UTF-8 Markdown
+files inside both the adopted ownership and host staging registrations. It
+preserves the accepted file bytes/mode and appends the accepted scope and actual
+validation/review references. A native owner checkpoint retains exact before and
+after bytes before managed file application. Re-entry accepts only those bytes,
+refuses concurrent edits, and admits only the exact projected tree delta. This
+preparation reuses accepted checks/review and consumes no product FIX batch.
+Final commit identities remain in runtime receipts rather than causing another
+tracked document update. Optional semantic English narrative still belongs to
+issued semantic work and its normal Submit; this clerical policy grants no
+independent semantic authorship after Terminal.
+
+Step records coalesce with the selected implementation commit. Task/delegate
+records use the existing selected commit owner and preserve the standalone FIX
+uncommitted contract. Phase records use the explicitly registered `phase-release`
+program. RepositorySync requires the host's selected Git operations named
+`repository-completion-records`, with exact registered paths and each path in
+`hygieneStagingPaths`; ordinary host parameter resolution currently supplies that
+staging inventory from the selected Goal candidate paths. The runtime refuses a
+missing selection. It never constructs a Git executable or grants a capability.
+A clean RepositorySync creates a selected record commit when required; a pending
+merge adds records to the existing native merge commit and preserves its two
+ordered native parents. Actual push and final-fetch intents are collected on
+re-entry, and an unresolved intent does not cause another effect.
+
+## Older terminal record closure
+
+`CompletionRecordClosureService.describeCompletionRecordClosure` is a passive
+public description of a supported completed Phase/Task/delegate owner. It returns
+the exact native terminal target and accepted source. The matching advance
+operation requires that target, its original terminal revision, and an independently
+admitted `completion-record-closure-continuation` evidence reference. Passive
+preparation, target fields, and configuration are not authority.
+
+The consumer uses CNCF's managed terminal closure continuation to append explicit
+same-owner provenance and a checkpoint while retaining the historical Completed
+event and accepted payload. Existing definition progression remains required.
+Subsequent managed record writes and selected commits retain their intent/results;
+unknown execution is collected rather than replayed. An attributable direct-child
+record commit may be collected only after exact record-delta proof. Ordinary
+Advance displays the retained closure state. A later native result, stale target,
+crossed owner or missing independent authority refuses. The current consumer
+supports the attributable local Phase completion format and existing committed
+Task/delegate terminal payloads; a Phase completed through a different terminal
+format must not be silently reconstructed or treated as qualified.
+
+These are source contracts. Installed generation, focused managed execution,
+independent review, artifact selection and activation remain separate evidence.

@@ -89,6 +89,19 @@ private[smworkflow] object DelegateTask {
   /** Deterministic scope admission independent of sibling skills. Broad/full
     * requests retain FULL as well as focused behavior; no HEAVY substitution.
     */
+  def selectChecksC(input: S.Input, available: Vector[GoalPhaseNativeValidation.Check]): Consequence[Vector[GoalPhaseNativeValidation.Check]] = {
+    val explicit = input.checks.flatMap(id => available.find(_.identity == id))
+    if (explicit.map(_.identity) != input.checks) invalid("required check has no installed binding")
+    else if (input.delegation.exists(_.validationScope == "broad") && !explicit.exists(_.kind == WorkflowSbtValidation.Kind.Test)) {
+      val full = available.filter(_.kind == WorkflowSbtValidation.Kind.Test)
+      if (full.size != 1) invalid("broad uncovered impact requires one unambiguous installed FULL binding")
+      else Consequence.success(explicit ++ full)
+    } else Consequence.success(explicit)
+  }
+  def selectedChecksValid(input: S.Input, selected: Vector[GoalPhaseNativeValidation.Check]): Boolean =
+    selected.filter(c => input.checks.contains(c.identity)).map(_.identity) == input.checks &&
+      selected.filterNot(c => input.checks.contains(c.identity)).forall(c => input.delegation.exists(_.validationScope == "broad") &&
+        c.kind == WorkflowSbtValidation.Kind.Test) && selected.map(_.identity).distinct.size == selected.size
   def checksC(input: S.Input, selected: Vector[GoalPhaseNativeValidation.Check]): Consequence[Unit] = {
     val contract = input.delegation.get
     val kinds = selected.map(_.kind).toSet

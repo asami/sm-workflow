@@ -28,7 +28,8 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     finalTip: Option[String] = None, assessment: Option[RepositorySyncMergeAssessment.Result] = None,
     repairContext: Option[RepositorySyncNativeMergeReview.RepairContext] = None,
     continuation: Option[RepositorySyncValidationContinuation.Direction] = None,
-    hygiene: Option[CommitHygiene.Record] = None)
+    hygiene: Option[CommitHygiene.Record] = None,
+    records: Option[CompletionRecords.Plan] = None)
   final case class Stage(record: InstanceRecord, payload: Payload)
   final case class Candidate(namespace: String, pending: Stage)
   def candidateKey(namespace: String, key: String): String =
@@ -37,7 +38,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
   private given Decoder[RepositorySyncNativeMergeValidation.State] = Decoder.instance(cursor =>
     RepositorySyncNativeMergeValidation.stateCodec.decode(cursor.value).left.map(reason => DecodingFailure(reason, cursor.history)))
   private given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
-    case ("assessment" | "repairContext" | "continuation" | "hygiene", value) => !value.isNull
+    case ("assessment" | "repairContext" | "continuation" | "hygiene" | "records", value) => !value.isNull
     case _ => true
   }))
   private given Decoder[Payload] = deriveDecoder

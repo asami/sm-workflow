@@ -194,3 +194,27 @@ selection/use qualification remain pending on their public runtime owners; no
 old Session or P67 fixture is migrated by this connection. D3/D4 and C4/C5 retain
 their remaining failure, completion-record, installed/help and live acceptance
 work.
+
+
+## Completion records and delivery continuation
+
+An explicit `sm-workflow.completion.records` target with family `delegate-task`
+and the original request identity selects existing owned Markdown destinations.
+Their evidence-backed clerical updates are prepared in the shared bounded owner
+before local closure and coalesce with the implementation commit when possible.
+No-change requests keep their applicable implementation commit and create a record
+commit only when an explicitly required record is missing. This does not change
+the standalone FIX contract or authorize a new semantic narrative after Terminal.
+
+Broad impact selects the uniquely installed `FULL` Test binding in addition to
+explicit focused acceptance checks. Localized impact does not add FULL merely
+because delegation or publication occurs. Missing or ambiguous required bindings
+refuse before issuing unusable work. Existing check ordering retains compile
+failure short-circuiting; FULL and HEAVY remain distinct bindings.
+
+Delivery publication uses the existing LocalPublication decision/execution/result
+contract. A retained successful result is collected, a confirmed nonzero terminal
+failure may receive a retained successor for the same delivery source, and a live
+or unknown result is not replayed. Accepted implementation, checks, review,
+original failure and local commit survive this continuation. Publication is an
+artifact outcome; requester adoption and consumer activation are separate facts.

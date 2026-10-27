@@ -29,6 +29,7 @@ private[smworkflow] object NativeExternalEvidence {
   enum Purpose(val identity: String) {
     case SplitStart extends Purpose(SplitPhaseTypedStartHumanVerification.purpose)
     case SplitAnswer extends Purpose(SplitPhaseHumanAnswerVerification.purpose)
+    case CompletionRecordClosure extends Purpose(CompletionRecordContinuation.purpose)
     case DelegateAdoption extends Purpose("delegate-task-requester-artifact-adoption")
     case StandaloneReview extends Purpose("standalone-fix-independent-review")
     case GoalTaskMalformedIssuedWorkRecovery extends Purpose("goal-task-malformed-issued-work-recovery")
@@ -185,6 +186,9 @@ private[smworkflow] object NativeExternalEvidence {
     _ <- if (purpose == Purpose.RepositoryEffect) {
       if (selected.hcursor.downField("scope").get[String]("participant").contains(value.participant)) Consequence.unit
       else Consequence.securityPermissionDenied("Host effect authority belongs to another selected participant")
+    } else if (purpose == Purpose.CompletionRecordClosure) {
+      if (selected.hcursor.downField("completionRecordClosure").get[String]("participant").contains(value.participant)) Consequence.unit
+      else Consequence.securityPermissionDenied("Closure authority belongs to another participant")
     } else if (purpose == Purpose.DelegateAdoption) {
       val target = selected.hcursor.downField("delegateAdoption").downField("target")
       val observation = selected.hcursor.downField("delegateAdoption").downField("observation")
@@ -258,6 +262,7 @@ private[smworkflow] object NativeExternalEvidence {
       case Purpose.GoalTaskMalformedIssuedWorkNonexecution => GoalTaskMalformedIssuedWorkRecovery.selectNonexecutionBinding(value)
       case Purpose.InventoryAuthority => GoalPhaseInventoryAuthority.select(value)
       case Purpose.RepositoryEffect | Purpose.StepClosure | Purpose.PhaseClosure => NativeAuthorityScope.select(purpose, value)
+      case Purpose.CompletionRecordClosure => CompletionRecordContinuation.selectBinding(value)
       case Purpose.DelegateAdoption => DelegateTask.selectAdoptionBinding(value)
       case Purpose.StandaloneReview | Purpose.GoalReview | Purpose.RepositoryReview => NativeReviewScope.select(purpose, value)
       case Purpose.GoalHuman | Purpose.RepositoryHuman => NativeHumanDecisionScope.select(purpose, value)

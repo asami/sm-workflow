@@ -5407,6 +5407,21 @@ on = local-state-preserved
 
 ##### TRANSITION
 
+to = IntegrationValidated
+on = completion-records-prepared
+
+##### TRANSITION
+
+to = IntegrationValidated
+on = completion-records-applied
+
+##### TRANSITION
+
+to = NativeCommitPreparing
+on = native-commit-prepared
+
+##### TRANSITION
+
 to = NativePushPreparing
 on = native-push-prepared
 
@@ -5530,10 +5545,30 @@ on = native-review-rejected
 
 ##### TRANSITION
 
+to = ReviewAccepted
+on = completion-records-prepared
+
+##### TRANSITION
+
+to = ReviewAccepted
+on = completion-records-applied
+
+##### TRANSITION
+
 to = NativeCommitPreparing
 on = native-commit-prepared
 
 #### MergeAdmitted
+
+##### TRANSITION
+
+to = MergeAdmitted
+on = completion-records-prepared
+
+##### TRANSITION
+
+to = MergeAdmitted
+on = completion-records-applied
 
 ##### TRANSITION
 
@@ -11851,3 +11886,121 @@ Explicit ad hoc Task request selection metadata and absolute local file: URI ref
 | sessionId | string | 1 |
 | sourceRevision | string | 1 |
 | target | record | 1 |
+
+
+# VALUE
+
+## CompletionRecordClosureInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| family | string | 1 |
+| terminalRevision | string | ? |
+| target | record | ? |
+| authorityReference | WorkflowArtifactReference | ? |
+
+## DescribeCompletionRecordClosureInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | CompletionRecordClosureInput | 1 |
+
+## AdvanceCompletionRecordClosureInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | CompletionRecordClosureInput | 1 |
+
+## CompletionRecordClosureView
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| scope | string | 1 |
+| identity | string | 1 |
+| kind | string | 1 |
+| terminalRevision | string | 1 |
+| target | record | 1 |
+| recordCommit | string | ? |
+| message | string | 1 |
+
+# SERVICE
+
+## CompletionRecordClosureService
+
+### DESCRIPTION
+
+Continue required completion records through the original owner and native Session, retaining the historical Terminal, acceptance, base, checks and repair counts. Exact independent authority precedes the managed terminal continuation. This route issues no semantic work, Start, accepted Submit, publication or remote synchronization.
+
+### OPERATION
+
+#### describeCompletionRecordClosure
+
+##### DESCRIPTION
+
+Read the actual Completed same-owner target and attributable accepted source. Description is passive and grants no continuation or commit authority. Standalone FIX is excluded.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DescribeCompletionRecordClosureInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | CompletionRecordClosureInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+CompletionRecordClosureView
+
+#### advanceCompletionRecordClosure
+
+##### DESCRIPTION
+
+Admit the exact independently authorized target, retain the original Terminal, prepare and apply exact record bytes, collect an attributable existing commit or perform only the missing selected record commit, persist closure and return its scope. Unknown commit effects are collected without replay. Exact redelivery returns the retained receipt.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+AdvanceCompletionRecordClosureInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | CompletionRecordClosureInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+CompletionRecordClosureView
