@@ -1,5 +1,15 @@
 # Explicit bounded Plan revision
 
+The separate [Phase acceptance deferral contract](goal-phase-acceptance-deferral.md)
+adds the explicit `phase-acceptance-deferral` saved revision scope for an
+all-closed PhaseReview decision. It permits only adopted Phase conditions to
+change from required to optional, through the existing independent Human answer
+boundary, and returns to fresh PhaseReview with the checked candidate retained.
+The historical ordinary and `remaining-purpose` routes described below retain
+their existing guards; their scope descriptions do not define this additional
+branch. Deferral preserves unmet observations and does not establish acceptance
+or closure.
+
 ## Remaining-purpose semantic continuation (R17–R19, E4)
 
 R17. `captureC` retains its strict current-Step and whole-Phase corrective-Step

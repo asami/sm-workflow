@@ -424,6 +424,27 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       documentDecision = false, ordinaryRepairs = ordinaryRepairs, pendingRepair = None,
       stepAdmission = None, releaseCommit = releaseCommit, repairControl = repairControl, repairObservations = repairObservations)
 
+    /** Explicit direction changes only the outstanding adopted Phase boundary.
+      * Successful checks and the immutable accepted prefix remain actual evidence.
+      */
+    private[admission] def adoptPhaseAcceptanceDeferralC(proposed: Plan, evidence: String): Consequence[State] = for {
+      _ <- if (text(evidence) && !evidence.exists(_.isControl) && stage == Stage.Decision &&
+          decisionSource.contains(Stage.PhaseReview) && cursor == plan.steps.size && cursor == completed.size &&
+          completed.map(_.step) == plan.steps.map(_.identity) && completed.forall(s =>
+            validStepAcceptance(s) && validCommit(s.commit)) &&
+          completed.zipWithIndex.forall { (s, i) => s.partialCompletion.map(_.originalParent.head).getOrElse(s.commit.parent) ==
+            (if (i == 0) base.head else completed(i - 1).commit.identity) } &&
+          validSnapshot(base) && candidate.exists(validSnapshot) && checksReceipt.exists(text) &&
+          !documentDecision && pendingRepair.isEmpty && closureIntent.isEmpty && phaseReviewedCandidate.isEmpty &&
+          phaseRecordingPaths.isEmpty && releaseCommit.isEmpty && !policyRepairPending &&
+          repairControl.flatMap(_.stop).isEmpty && generation < Long.MaxValue) Consequence.unit
+        else invalid("Phase acceptance deferral requires actual Human direction at the exact checked all-closed Phase review Decision")
+      _ <- phaseAcceptanceDeferralConditionsC(plan, proposed)
+    } yield new State(proposed, Stage.PhaseReview, cursor, generation + 1, repairs, base, completed,
+      candidate, checksReceipt, None, closureIntent, None, repositoryReceipt, repairDirective, None,
+      documentDecision, ordinaryRepairs, pendingRepair, phaseReviewedCandidate, phaseRecordingPaths,
+      candidateParent, stepAdmission, releaseCommit, repairControl, policyRepairPending, repairObservations)
+
     /** Continue the already reserved phase repair with an exact inventory append.
       * No additional repair batch is consumed and no past acceptance is changed.
       */
@@ -891,6 +912,35 @@ private[smworkflow] object GoalPhaseOrderedProgression {
 
   private def _inventory_overlap(left: String, right: String): Boolean =
     left == right || left.startsWith(right + "/") || right.startsWith(left + "/")
+
+  /** Return the exact ordered adopted IDs whose required flag is deferred.
+    * Both inputs are saved Plans; later project configuration is never selected.
+    */
+  private[admission] def phaseAcceptanceDeferralConditionsC(previous: Plan, proposed: Plan): Consequence[Vector[String]] = for {
+    _ <- validatePlanC(previous)
+    _ <- GoalPhaseAcceptanceBoundary.savedPlanC(previous)
+    _ <- validatePlanC(proposed)
+    _ <- GoalPhaseAcceptanceBoundary.savedPlanC(proposed)
+    _ <- if (previous.acceptance.nonEmpty && proposed.acceptance.nonEmpty &&
+        previous.effectiveAcceptance.nonEmpty && proposed.effectiveAcceptance.nonEmpty &&
+        previous.revision != proposed.revision && proposed.copy(revision = previous.revision,
+          acceptance = previous.acceptance, effectiveAcceptance = previous.effectiveAcceptance) == previous)
+      Consequence.unit else invalid("Phase acceptance deferral requires saved adopted boundaries and an otherwise unchanged fresh Plan")
+    prior = previous.acceptance.get
+    next = proposed.acceptance.get
+    _ <- if (next.usage == prior.usage && next.conditions.size == prior.conditions.size &&
+        next.conditions.zip(prior.conditions).forall { (n, p) =>
+          n == p || (p.scope == "phase" && p.required && !n.required && n.copy(required = true) == p)
+        }) Consequence.unit else invalid("Phase acceptance deferral may only change adopted phase required true to false")
+    changed = prior.conditions.zip(next.conditions).collect { case (p, n) if p != n => p.identity }
+    effective = previous.effectiveAcceptance.get
+    _ <- if (changed.nonEmpty && changed.forall(id => prior.conditions.find(_.identity == id).exists(raw =>
+        effective.conditions.exists(c => c.identity == id && c.scope == raw.scope && c.required &&
+          c.description == raw.description && c.source == "adopted"))) &&
+        proposed.effectiveAcceptance.contains(effective.copy(conditions = effective.conditions.map(c =>
+          if (changed.contains(c.identity)) c.copy(required = false) else c)))) Consequence.unit
+      else invalid("Phase acceptance deferral must retain exact selected defaults and defer only matching required adopted conditions")
+  } yield changed
 
   private[admission] def phaseRepairInventoryPathsC(current: Plan, proposed: Plan): Consequence[Vector[String]] = for {
     _ <- validatePlanC(current)

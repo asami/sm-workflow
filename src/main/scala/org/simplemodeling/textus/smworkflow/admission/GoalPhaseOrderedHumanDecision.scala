@@ -136,13 +136,16 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
         "ordered Decision capture differs from its requesting proposal")
       _ <- Either.cond(captured.forall(selected => R.validateCapturedScopeC(work.selectedPlan,
         work.completed.size, selected).isSuccess), (), "ordered Decision capture crosses its saved scope")
-      _ <- captured.filter(_.revisionScope.nonEmpty).fold[Either[String, Unit]](Right(())) { selected =>
+      _ <- captured.filter(_.revisionScope.contains(R.remainingPurposeScope)).fold[Either[String, Unit]](Right(())) { selected =>
         val cursor = work.completed.size
         Either.cond(Set("ImplementStep", "RepairStep")(work.kind) && result.outcome == "decision-needed" &&
           work.stepIdentity == work.selectedPlan.steps.lift(cursor).map(_.identity) &&
           R.validateRemainingPurposeC(work.selectedPlan, cursor, selected.plan).isSuccess, (),
           "ordered Decision remaining-purpose capture differs from its actual semantic work")
       }
+      _ <- captured.fold[Either[String, Unit]](Right(()))(selected =>
+        Either.cond(R.validatePhaseAcceptanceDeferralSourceC(work, result, selected).isSuccess, (),
+          "ordered Decision Phase acceptance deferral differs from its actual review result"))
     } yield Input(work, ContextReference(identity, revision), result, reason, progress, captured, recovery, occurred)
   }
   val answerCodec: WorkflowResultJsonV1.PayloadCodec[Answer] = new WorkflowResultJsonV1.PayloadCodec[Answer] {
@@ -362,6 +365,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       required <- requiredC
       bundle = ContextBundle(if (input.sourceHistoryRecovery.nonEmpty) GoalPhaseSourceHistoryRecovery.message
         else if (input.result.dependencyProposal.nonEmpty) "Answer only the saved exact bounded dependency scope proposal"
+        else if (input.planRevision.exists(_.revisionScope.contains(R.phaseAcceptanceDeferralScope))) _phase_acceptance_deferral_notice(input)
         else if (input.planRevision.exists(_.revisionScope.contains(R.remainingPurposeScope))) _remaining_purpose_notice(input)
         else if (input.planRevision.nonEmpty) "Answer only the saved complete bounded Plan revision proposal"
         else if (source.controller.pendingRepair.nonEmpty) "Answer only the runtime repair budget or convergence stop for this unchanged Step or Release scope"
@@ -389,6 +393,8 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
           "notice" -> Json.fromString(if (input.sourceHistoryRecovery.nonEmpty) GoalPhaseSourceHistoryRecovery.message
           else if (input.result.dependencyProposal.nonEmpty)
             "ApproveDependencyScope selects only this exact proposed linked work unit, its acceptance and dependent work. RejectDependencyScope rejects that proposal. Both resume the same semantic frontier with the actual answer reference; all effect, target and acceptance authorities still apply. Review remains read-only and neither direction executes dependency work."
+          else if (input.planRevision.exists(_.revisionScope.contains(R.phaseAcceptanceDeferralScope)))
+            _phase_acceptance_deferral_notice(input) + " AdoptPlanRevision selects only this exact saved deferral. RejectPlanRevision retains the original Plan. Defer and Cancel keep the decision paused."
           else if (input.planRevision.exists(_.revisionScope.contains(R.remainingPurposeScope)))
             _remaining_purpose_notice(input) + " AdoptPlanRevision selects this exact saved remaining-purpose capture. RejectPlanRevision retains the original Plan. Both preserve history and counts; subsequent work, checks and independent review retain their existing authorities."
           else if (input.planRevision.nonEmpty)
@@ -429,8 +435,11 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
                   captured <- R.captureDocumentsC(source.controller, proposal, d.projectAcceptance, previous, imported)
                 } yield captured
               }
-              checks = captured.plan.steps(source.controller.cursor).checks
-              _ <- if (checks.nonEmpty && d.validationPolicy.exists(policy =>
+              _ <- R.validatePhaseAcceptanceDeferralSourceC(source.input, source.result.result.value, captured)
+              phasedeferral = captured.revisionScope.contains(R.phaseAcceptanceDeferralScope)
+              checks = if (phasedeferral) captured.plan.phaseChecks else captured.plan.steps(source.controller.cursor).checks
+              policy = if (phasedeferral) d.phaseValidationPolicy else d.validationPolicy
+              _ <- if (checks.nonEmpty && policy.exists(policy =>
                   checks.forall(identity => policy.checks.exists(_.identity == identity)))) Consequence.unit
                 else F.invalid("Plan revision checks must match the declared selected-Step validation policy")
             } yield Some(captured)
@@ -469,6 +478,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       _ <- input.planRevision.fold(Consequence.unit) { captured => for {
         _ <- admitRevisionSourceC(source.controller, source.input.kind, input.result, source.documents)
         _ <- R.validateDocumentsC(source.controller, captured, source.documents)
+        _ <- R.validatePhaseAcceptanceDeferralSourceC(input.work, input.result, captured)
         // Saved questions consume their own acceptance selection, never later host defaults/check policy.
         _ <- R.adoptedC(source.controller, captured, "saved-proposal-eligibility")
       } yield () }
@@ -492,6 +502,8 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       event = result.result.value.choice match {
         case "AuthorizeNewAttempt" => "human-source-history-new-attempt"
         case "Defer" if input.sourceHistoryRecovery.nonEmpty => "human-source-history-deferred"
+        case "AdoptPlanRevision" if input.planRevision.exists(_.revisionScope.contains(R.phaseAcceptanceDeferralScope)) =>
+          "human-phase-acceptance-deferral-adopted"
         case "AdoptPlanRevision" => "human-plan-revision-adopted"
         case "ResumeAssignedWork" | "ContinueRepairs" | "RejectPlanRevision" | "ApproveDependencyScope" | "RejectDependencyScope" => (if (source.controller.documentDecision) "human-document-resumed-"
           else "human-semantic-resumed-") + state.stage.toString
@@ -540,6 +552,12 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
     else F.invalid("ordered Human answer choice or rationale is invalid")
   private def _continues(choice: String): Boolean =
     Set("ResumeAssignedWork", "ContinueRepairs", "AdoptPlanRevision", "RejectPlanRevision", "ApproveDependencyScope", "RejectDependencyScope", "AuthorizeNewAttempt")(choice)
+  private def _phase_acceptance_deferral_notice(input: Input): String = {
+    val ids = O.phaseAcceptanceDeferralConditionsC(input.work.selectedPlan, input.planRevision.get.plan).toOption.get
+    "Answer only the saved Phase acceptance deferral; exact deferred condition IDs: " + ids.mkString(", ") +
+      ". Excluded conditions remain unverified. Prior unmet observations and successful checks are retained. " +
+      "Fresh independent Phase review and normal closure are still owed."
+  }
   private def _remaining_purpose_notice(input: Input): String = {
     val selected = input.planRevision.get
     val changed = input.work.selectedPlan.steps.zip(selected.plan.steps).drop(input.work.completed.size)

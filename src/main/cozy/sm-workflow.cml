@@ -3594,6 +3594,11 @@ on = human-plan-revision-adopted
 
 ##### TRANSITION
 
+to = PhaseReview
+on = human-phase-acceptance-deferral-adopted
+
+##### TRANSITION
+
 to = Implementation
 on = human-document-resumed-Implementation
 

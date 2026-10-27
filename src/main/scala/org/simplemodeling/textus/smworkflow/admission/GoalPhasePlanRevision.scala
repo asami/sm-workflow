@@ -43,6 +43,7 @@ private[smworkflow] object GoalPhasePlanRevision {
 
   val remainingPurposeScope = "remaining-purpose"
   val phaseRepairInventoryScope = "phase-repair-inventory"
+  val phaseAcceptanceDeferralScope = "phase-acceptance-deferral"
   final case class Captured(proposal: Proposal, plan: O.Plan, documents: Option[D.Bound] = None,
     revisionScope: Option[String] = None)
   object Captured {
@@ -121,10 +122,10 @@ private[smworkflow] object GoalPhasePlanRevision {
       "captured Plan differs from its explicit raw proposal")
     _ <- _check(value.documents != null, "captured documents Option is null")
     _ <- _check(value.revisionScope != null && value.revisionScope.forall(scope =>
-      Set(remainingPurposeScope, phaseRepairInventoryScope)(scope)),
+      Set(remainingPurposeScope, phaseRepairInventoryScope, phaseAcceptanceDeferralScope)(scope)),
       "captured revision scope is invalid")
-    _ <- _check(!value.revisionScope.contains(remainingPurposeScope) || value.documents.isEmpty,
-      "remaining-purpose cannot replace selected documents")
+    _ <- _check(!value.revisionScope.exists(Set(remainingPurposeScope, phaseAcceptanceDeferralScope)) || value.documents.isEmpty,
+      "remaining-purpose and Phase acceptance deferral require absent selected documents")
     _ <- value.documents.fold(Consequence.unit)(_documents_c(value.plan, _))
   } yield ()
 
@@ -145,7 +146,20 @@ private[smworkflow] object GoalPhasePlanRevision {
     documents: Option[D.Bound] = None): Consequence[Captured] = for {
     _ <- _check(controller != null && documents != null, "semantic capture source is absent")
     _ <- validateProposalC(proposal)
-    captured <- if (proposal.plan.phaseRepairInventory != controller.plan.phaseRepairInventory) for {
+    captured <- if (controller.stage == O.Stage.Decision && controller.decisionSource.contains(O.Stage.PhaseReview) &&
+        controller.cursor == controller.plan.steps.size && controller.completed.size == controller.plan.steps.size &&
+        proposal.plan.steps.size == controller.plan.steps.size && proposal.plan.acceptance != controller.plan.acceptance) for {
+      _ <- _check(documents.isEmpty, "Phase acceptance deferral requires absent selected documents")
+      _ <- _check(controller.plan.acceptance.nonEmpty && proposal.plan.acceptance.nonEmpty,
+        "Phase acceptance deferral requires raw adopted conditions")
+      changed = controller.plan.acceptance.get.conditions.zip(proposal.plan.acceptance.get.conditions)
+        .collect { case (prior, next) if prior != next => prior.identity }
+      plan = proposal.plan.copy(effectiveAcceptance = controller.plan.effectiveAcceptance.map(effective =>
+        effective.copy(conditions = effective.conditions.map(condition =>
+          if (changed.contains(condition.identity)) condition.copy(required = false) else condition))))
+      selected = Captured(proposal, plan, revisionScope = Some(phaseAcceptanceDeferralScope))
+      _ <- adoptedC(controller, selected, "proposal-eligibility")
+    } yield selected else if (proposal.plan.phaseRepairInventory != controller.plan.phaseRepairInventory) for {
       plan <- Consequence.success(proposal.plan.copy(effectiveAcceptance = controller.plan.effectiveAcceptance))
       selected = Captured(proposal, plan, documents, Some(phaseRepairInventoryScope))
       _ <- validateCapturedC(selected)
@@ -182,9 +196,12 @@ private[smworkflow] object GoalPhasePlanRevision {
     _ <- validateCapturedC(captured)
     _ <- O.validatePlanC(previous)
     _ <- captured.revisionScope match {
+      case Some(`phaseAcceptanceDeferralScope`) => O.phaseAcceptanceDeferralConditionsC(previous, captured.plan).map(_ => ())
       case Some(`phaseRepairInventoryScope`) => O.phaseRepairInventoryPathsC(previous, captured.plan).map(_ => ())
       case Some(`remainingPurposeScope`) => validateRemainingPurposeC(previous, cursor, captured.plan)
-      case None => _check(previous.phaseRepairInventory == captured.plan.phaseRepairInventory &&
+      case None => _check(!(cursor == previous.steps.size && captured.plan.steps.size == previous.steps.size &&
+          captured.plan.acceptance != previous.acceptance) &&
+        previous.phaseRepairInventory == captured.plan.phaseRepairInventory &&
         !_future_purpose_changed(previous, cursor, captured.plan),
         "future purpose changes require explicit remaining-purpose scope")
       case _ => _check(false, "captured revision scope is invalid")
@@ -221,7 +238,9 @@ private[smworkflow] object GoalPhasePlanRevision {
   def adoptedC(controller: O.State, captured: Captured, evidence: String): Consequence[O.State] = for {
     _ <- validateCapturedC(captured)
     _ <- _check(controller != null, "controller is absent")
+    _ <- validateCapturedScopeC(controller.plan, controller.cursor, captured)
     adopted <- captured.revisionScope match {
+      case Some(`phaseAcceptanceDeferralScope`) => controller.adoptPhaseAcceptanceDeferralC(captured.plan, evidence)
       case Some(`phaseRepairInventoryScope`) => controller.adoptPhaseRepairInventoryC(captured.plan, evidence)
       case None => controller.adoptRevisionC(captured.plan, evidence)
       case Some(`remainingPurposeScope`) => for {
@@ -237,6 +256,31 @@ private[smworkflow] object GoalPhasePlanRevision {
       case _ => Consequence.stateConflict("GoalPhase Plan revision scope is invalid")
     }
   } yield adopted
+
+  /** Eligibility from the actual requesting business result, never Human consent. */
+  def validatePhaseAcceptanceDeferralSourceC(work: GoalPhaseNativeWork.Request,
+    result: GoalPhaseNativeWork.Result, captured: Captured): Consequence[Unit] = for {
+    _ <- validateCapturedC(captured)
+    _ <- if (!captured.revisionScope.contains(phaseAcceptanceDeferralScope)) Consequence.unit else for {
+      _ <- _check(work != null && result != null, "Phase acceptance deferral source is absent")
+      _ <- O.validatePlanC(work.selectedPlan)
+      _ <- _check(work != null && result != null && work.kind == "ReviewPhase" && work.stepIdentity != null &&
+        work.stepIdentity.isEmpty && work.completed != null &&
+        work.completed.map(_.step) == work.selectedPlan.steps.map(_.identity) && work.completed.forall(O.validStepAcceptance) &&
+        work.candidate != null && work.candidate.exists(s => s != null &&
+          s.head != null && s.tree != null && s.head.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})") && s.tree.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")) &&
+        work.checksReceipt != null && work.checksReceipt.exists(_reason) &&
+        result.outcome == "decision-needed" && result.findings != null && result.findings.nonEmpty &&
+        result.findings.forall(_reason) && result.planRevision.contains(captured.proposal) &&
+        work.documents != null && work.documents.isEmpty,
+        "Phase acceptance deferral requires its exact actual all-closed ReviewPhase decision and proposal")
+      changed <- O.phaseAcceptanceDeferralConditionsC(work.selectedPlan, captured.plan)
+      _ <- A.admitC(work.selectedPlan, work.kind, result)
+      _ <- _check(result.acceptance.exists(report => changed.forall(id => report.conditions.exists(observation =>
+        observation.identity == id && Set("unsatisfied", "not-evaluated")(observation.status)))),
+        "Every deferred condition requires its actual prior unsatisfied or not-evaluated observation")
+    } yield ()
+  } yield ()
 
   private def _documents_c(plan: O.Plan, value: D.Bound): Consequence[Unit] = for {
     _ <- D.instructionsC(Some(value), None)

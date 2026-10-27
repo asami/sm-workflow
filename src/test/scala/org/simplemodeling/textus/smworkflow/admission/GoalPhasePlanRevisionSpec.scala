@@ -370,6 +370,138 @@ final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with Giv
       reference, Vector.empty, ExecutionEvidence(Vector(reference), Some("specification-independent-reviewer")))
   }
 
+  private def _deferral_review: O.State = {
+    val raw = _raw.copy(acceptance = Some(_adoption.copy(conditions = _adoption.conditions :+
+      A.Condition("closure", "phase", true, "Explicit adopted Phase verification"))))
+    val initial = _take(O.startC(_take(A.captureC(Some(_project), raw)), _base))
+    val reviewed = _review_phase(_close_step(_close_first(initial), "f" * 40, "e" * 40))
+    val repair = _take(reviewed.acceptC(O.ReviewAdmitted(_key(reviewed), reviewed.candidate.get,
+      reviewed.checksReceipt.get, "SPECIFICATION-OWNED independent Phase repair", O.ReviewOutcome.Repair,
+      Some(O.RepairDirective("Correct integration", Vector("Unmet Phase verification"))), allowPhaseRepair = true)))
+    val implemented = _take(repair.acceptC(O.SemanticCompleted(_key(repair), "SPECIFICATION-OWNED phase repair")))
+    _review_phase(implemented)
+  }
+  private def _deferral_proposal(review: O.State): Proposal = _proposal(review.plan.copy(revision = "deferral-2",
+    effectiveAcceptance = None, acceptance = review.plan.acceptance.map(a => a.copy(conditions = a.conditions.map(c =>
+      if (c.identity == "closure") c.copy(required = false) else c)))))
+  private def _deferral_result(review: O.State): S.Result = _phase_result(review).copy(
+    summary = "SPECIFICATION-OWNED unmet verification remains deferred", planRevision = Some(_deferral_proposal(review)))
+
+  "E1 explicit Phase acceptance deferral" should afterWord(
+    "in spec:goal-phase-acceptance-deferral, example:E1, rules:R1,R2,R3,R4, phase:P68-PLAN-DEFERRAL-01") {
+    "retain successful checks all closed Steps and consumed repair history before fresh Phase review" in {
+      Given("docs/spec/goal-phase-acceptance-deferral.md R1–R4 E1: actual-shaped independent unmet Phase review after one normal reserved repair")
+      val review = _deferral_review
+      val request = _review_request(review)
+      val result = _deferral_result(review)
+      val paused = _take(GoalPhaseNativeReview.completedStateC(result, "SPECIFICATION-OWNED phase finding", review))
+      val prior = _take(GoalPhaseNativeReview.retainPriorC(Vector.empty, request, _submitted(request, result)))
+      When("fresh structural capture retains saved defaults and explicit fixture Human direction adopts only the deferral")
+      val captured = _take(captureSemanticProposalC(paused, result.planRevision.get,
+        Some(A.Project(Vector(A.Condition("later", "phase", true, "Later default must not be captured"))))))
+      val input = GoalPhaseOrderedHumanDecision.Input(request, ContextReference("spec-review", "1"), result,
+        paused.decision.get, Some(GoalPhaseRepairProgress.snapshot(paused)), Some(captured))
+      val decoded = GoalPhaseOrderedHumanDecision.inputCodec.decode(GoalPhaseOrderedHumanDecision.inputCodec.encode(input))
+      val adopted = _take(adoptedC(paused, captured, "SPECIFICATION-OWNED exact independent Human answer"))
+      Then("a new ReviewPhase uses Plan2 and the same checked candidate with all prior unmet observations and counters retained")
+      captured.revisionScope shouldBe Some(phaseAcceptanceDeferralScope)
+      _take(O.phaseAcceptanceDeferralConditionsC(paused.plan, captured.plan)) shouldBe Vector("closure")
+      validatePhaseAcceptanceDeferralSourceC(request, result, captured) shouldBe Consequence.unit
+      decoded shouldBe Right(input)
+      captured.asJson.as[Captured] shouldBe Right(captured)
+      adopted.stage shouldBe O.Stage.PhaseReview
+      adopted.next.asInstanceOf[O.Semantic].key.kind shouldBe O.WorkKind.ReviewPhase
+      adopted.generation shouldBe paused.generation + 1
+      adopted.completed shouldBe paused.completed
+      adopted.base shouldBe paused.base
+      adopted.candidate shouldBe paused.candidate
+      adopted.checksReceipt shouldBe paused.checksReceipt
+      adopted.repositoryReceipt shouldBe paused.repositoryReceipt
+      adopted.repairs shouldBe 1
+      adopted.ordinaryRepairs shouldBe paused.ordinaryRepairs
+      adopted.repairControl shouldBe paused.repairControl
+      adopted.repairObservations shouldBe paused.repairObservations
+      adopted.repairDirective shouldBe paused.repairDirective
+      adopted.reviewEvidence shouldBe None
+      adopted.decision shouldBe None
+      adopted.decisionSource shouldBe None
+      adopted.closureIntent shouldBe None
+      prior.head.result shouldBe result
+      result.acceptance.get.conditions.find(_.identity == "closure").get.status shouldBe "unsatisfied"
+      request.selectedPlan shouldBe review.plan
+      captureC(paused, result.planRevision.get, Some(_project)) shouldBe a[Consequence.Failure[?]]
+      paused.refreshedC(captured.plan, issued = true) shouldBe a[Consequence.Failure[?]]
+      review.refreshedC(captured.plan, issued = true).toOption.exists(_.isLeft) shouldBe true
+      adoptedC(adopted, captured, "duplicate-direction") shouldBe a[Consequence.Failure[?]]
+    }
+
+    "admit 64-character candidate Git object IDs and refuse malformed head or tree IDs" in {
+      Given("an actual-shaped SPECIFICATION-OWNED unmet Phase review and its exact captured deferral")
+      val review = _deferral_review
+      val request = _review_request(review)
+      val result = _deferral_result(review)
+      val paused = _take(GoalPhaseNativeReview.completedStateC(result, "SPECIFICATION-OWNED review", review))
+      val captured = _take(captureSemanticProposalC(paused, result.planRevision.get, None))
+      val candidate = O.Snapshot("a" * 64, "b" * 64)
+      val invalidids = Vector("a" * 63, "a" * 65, "g" * 64)
+      val malformed = invalidids.flatMap(id => Vector(candidate.copy(head = id), candidate.copy(tree = id)))
+      When("the pure source guard checks the supported candidate shape and each malformed head or tree")
+      val admitted = validatePhaseAcceptanceDeferralSourceC(request.copy(candidate = Some(candidate)), result, captured)
+      val refused = malformed.map(value =>
+        validatePhaseAcceptanceDeferralSourceC(request.copy(candidate = Some(value)), result, captured))
+      Then("64-character head and tree IDs are admitted while 63-character 65-character and invalid hexadecimal IDs refuse")
+      admitted shouldBe Consequence.unit
+      refused.foreach(_ shouldBe a[Consequence.Failure[?]])
+    }
+
+    "refuse crossed scope evidence proposals observations and every unrelated contract mutation" in {
+      Given("docs/spec/goal-phase-acceptance-deferral.md R1–R4 E1: the exact all-closed checked Phase decision and saved deferral")
+      val review = _deferral_review
+      val request = _review_request(review)
+      val result = _deferral_result(review)
+      val paused = _take(GoalPhaseNativeReview.completedStateC(result, "SPECIFICATION-OWNED review", review))
+      val captured = _take(captureSemanticProposalC(paused, result.planRevision.get, None))
+      val next = captured.plan
+      val adoption = next.acceptance.get
+      val effective = next.effectiveAcceptance.get
+      When("a caller crosses the frozen business delta or changes its actual result source")
+      val invalid = Vector(next.copy(revision = paused.plan.revision), next.copy(phase = "other"),
+        next.copy(identity = "other"), next.copy(repository = "other"), next.copy(repairLimit = 3),
+        next.copy(phaseChecks = Vector("other")), next.copy(phaseReviewClassification = None),
+        next.copy(phaseRepairInventory = Vector("other.scala")), next.copy(steps = next.steps.reverse),
+        next.copy(steps = next.steps.updated(0, next.steps.head.copy(purpose = "Changed accepted purpose"))),
+        next.copy(acceptance = Some(adoption.copy(usage = "Changed usage"))),
+        next.copy(acceptance = Some(adoption.copy(conditions = adoption.conditions.reverse))),
+        next.copy(acceptance = Some(adoption.copy(conditions = adoption.conditions.map(_.copy(scope = "all"))))),
+        next.copy(acceptance = Some(adoption.copy(conditions = adoption.conditions.map(_.copy(description = "Changed"))))),
+        next.copy(acceptance = Some(adoption.copy(conditions = adoption.conditions.map(_.copy(required = true))))),
+        next.copy(effectiveAcceptance = Some(effective.copy(conditions = effective.conditions.map(_.copy(source = "project"))))),
+        next.copy(effectiveAcceptance = Some(effective.copy(conditions = effective.conditions.reverse))),
+        paused.plan.copy(revision = "no-op"))
+      val reports = Vector(None, Some(A.Report(Vector.empty, Vector.empty)), result.acceptance.map(report =>
+        report.copy(conditions = report.conditions.map(_.copy(status = "satisfied")))))
+      Then("no invalid source or delta supplies consent or changes the paused controller")
+      invalid.foreach(plan => O.phaseAcceptanceDeferralConditionsC(paused.plan, plan) shouldBe a[Consequence.Failure[?]])
+      reports.foreach(report => validatePhaseAcceptanceDeferralSourceC(request, result.copy(acceptance = report), captured)
+        shouldBe a[Consequence.Failure[?]])
+      Vector("", "\n", "crossed\nanswer", null).foreach(evidence =>
+        adoptedC(paused, captured, evidence) shouldBe a[Consequence.Failure[?]])
+      Vector(None, Some(remainingPurposeScope), Some(phaseRepairInventoryScope)).foreach(scope =>
+        adoptedC(paused, captured.copy(revisionScope = scope), "spec-answer") shouldBe a[Consequence.Failure[?]])
+      validatePhaseAcceptanceDeferralSourceC(request.copy(kind = "ReviewStep", stepIdentity = Some("S2")), result, captured) shouldBe a[Consequence.Failure[?]]
+      validatePhaseAcceptanceDeferralSourceC(request.copy(completed = request.completed.dropRight(1)), result, captured) shouldBe a[Consequence.Failure[?]]
+      validatePhaseAcceptanceDeferralSourceC(request.copy(candidate = None), result, captured) shouldBe a[Consequence.Failure[?]]
+      validatePhaseAcceptanceDeferralSourceC(request, result.copy(findings = Vector.empty), captured) shouldBe a[Consequence.Failure[?]]
+      validatePhaseAcceptanceDeferralSourceC(request, result.copy(planRevision = Some(captured.proposal.copy(reason = "crossed"))), captured) shouldBe a[Consequence.Failure[?]]
+      adoptedC(review, captured, "spec-answer") shouldBe a[Consequence.Failure[?]]
+      adoptedC(_decision(_start), captured, "spec-answer") shouldBe a[Consequence.Failure[?]]
+      validateCapturedC(captured.copy(documents = Some(_documents()))) shouldBe a[Consequence.Failure[?]]
+      val notevaluated = result.copy(acceptance = result.acceptance.map(report => report.copy(conditions = report.conditions.map(o =>
+        if (o.identity == "closure") o.copy(status = "not-evaluated") else o))))
+      validatePhaseAcceptanceDeferralSourceC(request, notevaluated, captured) shouldBe Consequence.unit
+    }
+  }
+
   "Pure complete Plan revision" should {
     "apply an explicit remaining contract only to future work while preserving accepted prefix and nonzero repair counts" in {
       Given("an accepted first Step and a second-Step repair Decision with retained original acceptance")
