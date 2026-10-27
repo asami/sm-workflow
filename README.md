@@ -137,6 +137,13 @@ items from remaining application work.
 
 ## Prepared development entry
 
+The installed `sm-workflow` command uses the component's packaged defaults.
+Help needs no `.textus/config.json` or selected Phase/Plan; use
+`sm-workflow --runtime-root /path/to/repository --help` after installation.
+Storage paths and the standard managed Git/SBT profile are derived from the
+actual runtime root, repository and installed tools. Real Phase/Plan input is
+supplied at Start. Explicit host configuration remains an override option.
+
 The existing development server entry is `scripts/run-server.sh`:
 
 ```sh

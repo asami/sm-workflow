@@ -161,6 +161,15 @@ private[smworkflow] object GoalTaskMalformedIssuedWorkRecovery {
   } yield ()
 
   /** Only invoked by ordinary Advance after a committed unsuspension. */
+  private[admission] def retainedInputC(storage: WorkflowComponentStorage, current: InstanceRecord,
+    core: ActionCall.Core): Consequence[S.Input] = for {
+    adapter <- storage.bindWorkOrderSupersessionC(N.completionOperation, N.inputCodec, checkpointCodec)
+    retained <- adapter.loadRetainedC(ContinuationIdentity(current.causation.value.stripPrefix(resumeCause)),
+      current.identity)(using core.executionContext).flatMap(
+      _.map(Consequence.success).getOrElse(N.invalid("Recovery checkpoint is absent")))
+  } yield retained.receipt.payload.direction.target.business.state.input
+
+  /** The owning Advance retains all existing recovery authority checks. */
   def resumeC(h: Host, storage: WorkflowComponentStorage, current: InstanceRecord,
     core: ActionCall.Core): Consequence[InstanceRecord] = for {
     adapter <- storage.bindWorkOrderSupersessionC(N.completionOperation, N.inputCodec, checkpointCodec)

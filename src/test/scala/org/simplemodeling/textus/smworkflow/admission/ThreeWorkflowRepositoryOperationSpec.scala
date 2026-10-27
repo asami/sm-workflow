@@ -332,6 +332,7 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
     def execute(): Consequence[OperationResponse] = task(this).map(_ => OperationResponse.Scalar("specification-setup"))
   }
   protected def local_subject_capabilities: Vector[String] = Vector("user")
+  protected def standard_runtime: Boolean = false
 
   protected def _with_runtime_(root: Path, scenario: String,
     host: Option[ThreeWorkflowRuntimeParameters.Definition] = None,
@@ -345,7 +346,7 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
     val repository = if (conflict_path(scenario).nonEmpty) original.repository.copy(
       conflicts = RepositorySyncNativeConflictInput.Policy(conflict_path(scenario).toSet)) else original.repository
     val settings = original.copy(target = original.target.copy(root = root.resolve("repository").toString), repository = repository)
-    val raw = ThreeWorkflowNormalHostFixture.values(root) ++ Map(
+    val configured = ThreeWorkflowNormalHostFixture.values(root) ++ Map(
       ThreeWorkflowRuntimeParameters.completionPolicy.name -> goal_completion_policy,
       "sm-workflow.runtime.definition" -> ThreeWorkflowRuntimeParameters.encode(settings).noSpaces,
       "textus.subsystem.user-mode" -> "standalone", "textus.datastore.kind" -> "sqlite",
@@ -357,6 +358,7 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
         "continuation-collection" -> _collection_("continuations").print)
         .map((key, value) => ("sm-workflow.goal-phase.persistence." + key) -> value) ++
       hostParameters // Explicit specification-owned configuration selected before this episode boots.
+    val raw = if (standard_runtime) configured - ThreeWorkflowRuntimeParameters.definition.name else configured
     val directory = Files.createDirectories(root.resolve(".textus"))
     Files.writeString(directory.resolve("config.json"), Json.obj(raw.toVector.map((key, value) => key -> Json.fromString(value))*).noSpaces)
     Files.writeString(directory.resolve("assembly.yaml"),
@@ -410,7 +412,10 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
         })
       }
       val factory = new SmWorkflowConfiguredComponentFactory(ThreeWorkflowRuntimeParameters.declarations, Vector.empty,
-        (creation, parameters, resolved) => for {
+        (creation, parameters, resolved) => if (standard_runtime)
+          ThreeWorkflowRuntimeParameters.bindServicesC(creation, parameters, resolved).map(_ :+
+            spec.ServiceDefinition("SpecificationSetup", spec.OperationDefinitionGroup(NonEmptyVector.of(probe))))
+        else for {
           host <- ThreeWorkflowRuntimeParameters.decodeC(creation, parameters, resolved)
           services <- ThreeWorkflowLauncherAssembly.bindC(creation, host)(using resolved)
           observed <- nativeAcknowledgement match {

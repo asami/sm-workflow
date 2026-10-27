@@ -15,17 +15,21 @@ import DevelopmentOperationalView as V
 
 /** Ordinary provided, authenticated Operations; fixed safe facts only.
   * @since Oct. 25, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author ASAMI, Tomoharu
   */
 private[smworkflow] object DevelopmentObservationService {
   private val _declared = SmWorkflowComponent.DevelopmentObservationServiceService
   def bind(declaration: GoalPhaseNativeRun.Declaration, definition: DefinitionBinding): spec.ServiceDefinition =
     NativeWorkflowDescriptionMetadata.service(_declared, spec.OperationDefinitionGroup(NonEmptyVector.of(
-      new ReadOperation(false, declaration, definition), new ReadOperation(true, declaration, definition))))
+      new ReadOperation(false, Some(declaration), Some(definition)), new ReadOperation(true, Some(declaration), Some(definition)))))
 
-  private final class ReadOperation(history: Boolean, declaration: GoalPhaseNativeRun.Declaration,
-    definition: DefinitionBinding) extends spec.OperationDefinition {
+  def bindNotConfigured: spec.ServiceDefinition =
+    NativeWorkflowDescriptionMetadata.service(_declared, spec.OperationDefinitionGroup(NonEmptyVector.of(
+      new ReadOperation(false, None, None), new ReadOperation(true, None, None))))
+
+  private final class ReadOperation(history: Boolean, declaration: Option[GoalPhaseNativeRun.Declaration],
+    definition: Option[DefinitionBinding]) extends spec.OperationDefinition {
     val specification = NativeWorkflowDescriptionMetadata.operation(
       if (history) _declared.ReadDevelopmentHistoryOperation else _declared.ReadDevelopmentStateOperation)
     def createOperationRequest(request: Request): Consequence[OperationRequest] =
@@ -38,11 +42,13 @@ private[smworkflow] object DevelopmentObservationService {
       }
   }
   private final case class ReadAction(request: Request, input: Json, history: Boolean,
-    declaration: GoalPhaseNativeRun.Declaration, definition: DefinitionBinding) extends CommandAction {
+    declaration: Option[GoalPhaseNativeRun.Declaration], definition: Option[DefinitionBinding]) extends CommandAction {
     override def commandExecutionMode = CommandExecutionMode.Sync
     def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
       val core = c
-      def execute(): Consequence[OperationResponse] = readC(input, history, declaration, definition, core)
+      def execute(): Consequence[OperationResponse] = declaration.map(value => readC(input, history, value, definition.get, core))
+        .getOrElse(Consequence.success(V.response(if (V.decodeRequestC(input, history).isSuccess) "not-configured" else "invalid",
+          core.executionContext.clock.instant())))
         .map(value => OperationResponse.RecordResponse(GoalPhaseNativeMetadata.record(value)))
     }
   }

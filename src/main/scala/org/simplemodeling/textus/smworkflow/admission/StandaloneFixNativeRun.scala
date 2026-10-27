@@ -113,6 +113,34 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean) {
       .getOrElse(invalid("Current frontier has no canonical standalone checkpoint"))
   } yield payload
 
+  /** Recompose a standard host from its actual native input, without selecting
+    * a new Task/Phase or requiring a globally configured business request.
+    */
+  private[admission] def retainedInputC(storage: WorkflowComponentStorage, id: String,
+    core: ActionCall.Core): Consequence[S.Input] = for {
+    context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(id))
+    selected = core.copy(executionContext = context)
+    instances <- storage.bindInstancesC()(using context)
+    current <- instances.loadC(InstanceIdentity(id))(using context).flatMap(
+      _.map(Consequence.success).getOrElse(invalid("Session has no retained bounded work")))
+    input <- current.suspension match {
+      case Some(suspension) => for {
+        issued <- storage.bindIssuedC(completionOperation, inputCodec)
+        work <- issued.loadC(ContinuationIdentity(suspension.continuationIdentity.value))(using context)
+          .flatMap(_.map(Consequence.success).getOrElse(invalid("Retained bounded work input is absent")))
+        value <- NativeWorkflowOperationOutput.workInputC(work)
+      } yield value.state.input
+      case None if task && current.causation.value.startsWith(GoalTaskMalformedIssuedWorkRecovery.resumeCause) =>
+        GoalTaskMalformedIssuedWorkRecovery.retainedInputC(storage, current, selected)
+      case None =>
+        val revision = if (current.causation.value.startsWith("standalone-completed:"))
+          scala.util.Try(current.causation.value.stripPrefix("standalone-completed:").takeWhile(_ != ':').toLong).toOption
+        else Some(current.revision.value)
+        revision.map(value => loadPayloadC(storage, id, value, selected).map(_.state.input))
+          .getOrElse(invalid("Retained bounded work revision is malformed"))
+    }
+  } yield input
+
   /** Semantic intent only; the configured runtime owns concrete profile selection. */
   private[admission] def executionRequirementC(input: S.Input, stage: String): Consequence[ExecutionRequirement] = {
     import GoalPhaseWorkClassification.*

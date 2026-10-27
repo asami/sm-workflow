@@ -369,6 +369,36 @@ private[smworkflow] object GoalPhaseRepairInventoryContinuation {
   private[admission] def retainedCandidatePathsC(recorded: Vector[String], current: Vector[String]): Consequence[Vector[String]] =
     _check(_paths(recorded) && _paths(current) && current.take(recorded.size) == recorded,
       "current host changes the complete recorded candidatePaths ordinal prefix").map(_ => recorded)
+
+  /** Bootstrap only standard composition's finite data. The caller must then
+    * traverse the sole native walker, which authenticates every receipt and
+    * its complete semantic/Human lineage before binding an executable service.
+    */
+  private[admission] def runtimeCandidatePathsC(session: F.Session, initial: Vector[String],
+    core: ActionCall.Core): Consequence[Vector[String]] =
+    session.current.history.filter(entry => entry.causation.value == causation ||
+      entry.causation.value.startsWith(humanCausationPrefix)).foldLeft(Consequence.success(initial)) { (prior, entry) => for {
+      paths <- prior
+      before <- GoalPhaseNativeHistory.prefixC(session.current, InstanceRevision(entry.revision.value - 1))
+      value <- if (entry.causation.value == causation) for {
+        adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
+        retained <- adapter.loadRetainedC(WorkflowMechanicalTransition.Reference(
+          session.current.identity.value + _namespace + before.revision.value, "1"))(using core.executionContext)
+        receipt <- retained.map(Consequence.success).getOrElse(F.invalid("runtime inventory receipt is absent"))
+        _ <- _check(receipt.receipt.next.revision == entry.revision, "runtime inventory crosses its native successor")
+      } yield receipt.receipt.payload.value
+      else for {
+        identity <- before.suspension.map(value => Consequence.success(org.goldenport.cncf.workflow.ContinuationIdentity(value.continuationIdentity.value)))
+          .getOrElse(F.invalid("runtime inventory has no original Human suspension"))
+        adapter <- session.storage.bindDecisionSupersessionC(H.completionOperation, H.inputCodec, codec)
+        retained <- adapter.loadRetainedC(identity, session.current.identity)(using core.executionContext)
+        receipt <- retained.map(Consequence.success).getOrElse(F.invalid("runtime inventory Human receipt is absent"))
+        _ <- _check(receipt.receipt.nextRevision == entry.revision, "runtime Human inventory crosses its native successor")
+      } yield receipt.receipt.payload
+      _ <- _check(value.target.sessionId == session.current.identity.value && targetValid(value.target),
+        "runtime inventory belongs to another native Session")
+      _ <- retainedCandidatePathsC(paths, value.target.candidatePaths)
+    } yield value.target.candidatePaths }
   private def _paths(values: Vector[String]): Boolean = values != null && values.nonEmpty && values.size <= 256 &&
     values.distinct == values && values.forall(value => _exact(value) && RepositorySyncNativeConflictInput.relative(value) &&
       !value.exists(c => "*?[]{}".contains(c)))

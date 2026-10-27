@@ -24,7 +24,8 @@ private[smworkflow] object WorkflowManagedProcessExecution {
     _ <- if (core != null && core.executionContext != null && operation != null) Consequence.unit
       else Consequence.stateConflict("Workflow typed Git owning call or intent is absent")
     workspace <- WorkspaceId.parseC(workspaceIdentity)
-    target = GitTarget(workspace)
+    target = GitTarget(workspace, if (workspaceIdentity == "sm-workflow-repository")
+      RuntimeGitSelections.selected(core, operation) else None)
     execution = new Execution(core)
     result <- execution.runGitC(execution.prepareGit(target, operation))
     _ <- if (result != null && result.target == target && result.operation == operation) Consequence.unit
@@ -140,7 +141,7 @@ private[smworkflow] object WorkflowManagedProcessExecution {
 
   /** The host fixes the selected Step's message and commit identity. */
   def commitGoalStepC(core: ActionCall.Core, ordinal: Int): Consequence[GitExecutionResult[Unit]] = for {
-    _ <- _ordinal_c(ordinal, 64)
+    _ <- _ordinal_c(ordinal, 65)
     selection <- GitSelectionId.parseC("goal-step-" + ordinal)
     result <- executeGitC(core, GitOperation.CommitSelected(selection))
   } yield result
@@ -152,7 +153,7 @@ private[smworkflow] object WorkflowManagedProcessExecution {
 
   private[admission] def checkGoalIndexPreparationC(core: ActionCall.Core, ordinal: Int,
     parent: String): Consequence[GoalIndexPreparation] = for {
-    _ <- _ordinal_c(ordinal, 64)
+    _ <- _ordinal_c(ordinal, 65)
     selection <- GitSelectionId.parseC("goal-step-" + ordinal)
     selected <- GitObjectId.parseC(parent)
     result <- executeGitC(core, GitOperation.CheckSelectedIndex(selection, selected))
@@ -162,7 +163,7 @@ private[smworkflow] object WorkflowManagedProcessExecution {
   } yield GoalIndexPreparation(value, result.selectedPaths.map(_.value))
 
   def goalIndexChangesC(core: ActionCall.Core, ordinal: Int, parent: String): Consequence[Vector[GitTreeChange]] = for {
-    _ <- _ordinal_c(ordinal, 64)
+    _ <- _ordinal_c(ordinal, 65)
     selection <- GitSelectionId.parseC("goal-step-" + ordinal)
     selected <- GitObjectId.parseC(parent)
     result <- executeGitC(core, GitOperation.SelectedIndexChanges(selection, selected))

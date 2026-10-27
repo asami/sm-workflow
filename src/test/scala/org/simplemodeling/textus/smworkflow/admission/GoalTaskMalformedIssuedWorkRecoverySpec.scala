@@ -216,6 +216,15 @@ final class GoalTaskMalformedIssuedWorkRecoverySpec extends AnyWordSpec with Mat
       // Closing/reopening the owning runtime also closes/reopens physical SQLite.
       withEpisode(directory) { e =>
         e.recover(direction.get).outcome shouldBe "already-recovered"
+        // Standard deferred composition reads the existing recovery source;
+        // only the subsequent ordinary Advance performs the actual recovery.
+        val before = e.current(session)
+        e.project(call => for {
+          storage <- call.taskStorageC()
+          retained <- native.retainedInputC(storage, session, call.core)
+          _ = retained shouldBe target.get.business.state.input
+        } yield ())
+        assertSameNativeRecord(e.current(session), before)
         val issued = e.advance(session)
         issued.kind shouldBe "Request"
         val id = issued.issuedWorkContext.get.continuationId

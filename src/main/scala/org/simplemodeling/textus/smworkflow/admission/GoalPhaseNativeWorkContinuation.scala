@@ -165,6 +165,49 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
 
   final class Port private[GoalPhaseNativeWorkContinuation](d: F.Declaration, definition: DefinitionBinding,
     acknowledgement: String => Consequence[Unit]) {
+    /** Invocation-local standard composition reads history, never advances it.
+      * Fixed host declarations do not use this projection or gain new paths.
+      */
+    private[admission] def runtimeBindingC(identity: String, core: ActionCall.Core,
+      proposal: Option[GoalPhasePlanRevision.Proposal]): Consequence[(O.Plan, Vector[String])] = for {
+      source <- F.retainedSessionC(identity, d, definition, core)
+      paths <- K.runtimeCandidatePathsC(source, d.candidatePaths, core)
+      selected <- new Port(d.copy(candidatePaths = paths), definition, acknowledgement)
+        ._runtime_binding_c(source, core, proposal)
+    } yield selected
+
+    private def _runtime_binding_c(source: F.Session, core: ActionCall.Core,
+      proposal: Option[GoalPhasePlanRevision.Proposal]): Consequence[(O.Plan, Vector[String])] = for {
+      initial <- _initial_cursor_c(source)
+      located <- _walk_c(source, initial, None, None, None, core, historyonly = true)
+      controller = located match {
+        case Frontier(value) => value.controller
+        case Work(value) => value.controller
+        case Human(value, _, _) => value.controller
+        case LocatedRecording(value) => value.controller
+        case Paused(value, _, _) => value.controller
+      }
+      inventory <- located match {
+        case Frontier(cursor) => K.selectC(source, cursor.from, cursor.controller, cursor.lastresult)
+        case Human(human, _, cursor) if proposal.exists(_.plan.phaseRepairInventory != controller.plan.phaseRepairInventory) =>
+          _phase_inventory_human_source_c(source, cursor, human, None).map(Some(_))
+        case Paused(cursor, _, false) if cursor.deferredHuman.nonEmpty &&
+            proposal.exists(_.plan.phaseRepairInventory != controller.plan.phaseRepairInventory) =>
+          _phase_inventory_human_source_c(source, cursor, cursor.deferredHuman.get.human, cursor.deferredHuman).map(Some(_))
+        case _ => Consequence.success(Option.empty[K.Source])
+      }
+      paths <- inventory match {
+        case None => Consequence.success((d.candidatePaths ++ controller.plan.phaseOwnedPaths).distinct)
+        case Some(value) => for {
+          selected <- proposal.orElse(value.result.result.value.planRevision).map(Consequence.success)
+            .getOrElse(F.invalid("runtime inventory lost its actual proposal"))
+          appended <- O.phaseRepairInventoryPathsC(controller.plan, selected.plan)
+          paths = (d.candidatePaths ++ controller.plan.phaseOwnedPaths ++ appended).distinct
+          _ <- K.targetForC(value, d.copy(candidatePaths = paths), core, selected)
+        } yield paths
+      }
+    } yield (controller.plan, paths)
+
     def diagnosticInformationC(input: org.simplemodeling.textus.smworkflow.value.GoalPhaseDiagnosticInformationInput,
       core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseDiagnosticInformationResult] = for {
       _ <- IncrementalSbtDiagnosisInformation.validateC(input)

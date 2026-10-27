@@ -15,17 +15,21 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** The public caller selects a declared target and returns bounded semantics.
   * Process selection, effect admission, completion and recollection are runtime work.
   * @since   Oct. 26, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object LocalPublicationService {
   private val _declared = SmWorkflowComponent.LocalPublicationServiceService
   def bind(d: GoalPhaseNativeRun.Declaration, definition: DefinitionBinding): spec.ServiceDefinition =
-    NativeWorkflowDescriptionMetadata.service(_declared, spec.OperationDefinitionGroup(NonEmptyVector.of(
-      new Operation(false, d, definition), new Operation(true, d, definition))))
+    bind(d.localPublication, (id, core) => GoalPhaseNativeRun.retainedSessionC(id, d, definition, core).map(_ => ()))
 
-  private final class Operation(collect: Boolean, d: GoalPhaseNativeRun.Declaration,
-    definition: DefinitionBinding) extends spec.OperationDefinition {
+  def bind(policy: Option[LocalPublicationRuntime.Policy],
+    owner: (String, ActionCall.Core) => Consequence[Unit]): spec.ServiceDefinition =
+    NativeWorkflowDescriptionMetadata.service(_declared, spec.OperationDefinitionGroup(NonEmptyVector.of(
+      new Operation(false, policy, owner), new Operation(true, policy, owner))))
+
+  private final class Operation(collect: Boolean, policy: Option[LocalPublicationRuntime.Policy],
+    owner: (String, ActionCall.Core) => Consequence[Unit]) extends spec.OperationDefinition {
     val specification = NativeWorkflowDescriptionMetadata.operation(if (collect)
       _declared.CollectLocalPublicationOperation else _declared.EnsureLocalPublicationOperation)
     def createOperationRequest(request: Request): Consequence[OperationRequest] =
@@ -36,17 +40,16 @@ private[smworkflow] object LocalPublicationService {
         else LocalPublication.decodeInputC(DevelopmentOperationalView.json(record)).flatMap(input =>
           if (collect && input.answer.nonEmpty) Consequence.valueInvalid("Collection accepts no semantic answer")
           else Consequence.success(input))
-      }.map(input => CallAction(request, input, collect, d, definition))
+      }.map(input => CallAction(request, input, collect, policy, owner))
   }
   private final case class CallAction(request: Request, input: LocalPublication.Input, collect: Boolean,
-    d: GoalPhaseNativeRun.Declaration, definition: DefinitionBinding) extends CommandAction {
+    policy: Option[LocalPublicationRuntime.Policy], owner: (String, ActionCall.Core) => Consequence[Unit]) extends CommandAction {
     override def commandExecutionMode = CommandExecutionMode.Sync
     def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
       val core = c
       def execute(): Consequence[OperationResponse] = for {
-        _ <- input.ownerSessionId.fold(Consequence.unit)(id =>
-          GoalPhaseNativeRun.retainedSessionC(id, d, definition, core).map(_ => ()))
-        result <- d.localPublication match {
+        _ <- input.ownerSessionId.fold(Consequence.unit)(id => owner(id, core))
+        result <- policy match {
           case None => Consequence.success(V.LocalPublicationResult("not-configured", "No publication target is configured", None))
           case Some(policy) =>
             val value = if (collect) LocalPublicationRuntime.collectC(core, policy, input)

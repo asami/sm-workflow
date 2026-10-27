@@ -5,6 +5,9 @@ import org.goldenport.cncf.component.{Component, ComponentCreate}
 import org.goldenport.cncf.config.{ComponentInitializationParameters, ComponentParameterKey, ComponentParameterPathRoute}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.protocol.spec.ServiceDefinition
+import org.goldenport.protocol.spec as spec
+import cats.data.NonEmptyVector
+import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 
 /** Native three-service host composition, not a compatibility or unavailable-port fallback.
   * The standard launcher uses ThreeWorkflowRuntimeParameters after CNCF bootstrap.
@@ -59,6 +62,19 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     "RepositorySyncService.startRepositorySync", "RepositorySyncService.advanceRepositorySync",
     "RepositorySyncService.submitRepositorySyncWorkResult", "RepositorySyncService.submitNativeMergeReview",
     "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitNativeMergeRepair")
+
+  /** Only implemented public Operations, using their generated CML contracts.
+    * Their handlers are composed from the real run when invoked.
+    */
+  def deferredDeclarations: Vector[ServiceDefinition] = Vector(
+    SmWorkflowComponent.StandaloneFixServiceService, SmWorkflowComponent.GoalTaskServiceService,
+    SmWorkflowComponent.GoalPhaseServiceService, SmWorkflowComponent.SplitPhaseServiceService,
+    SmWorkflowComponent.RepositorySyncServiceService, SmWorkflowComponent.JournalServiceService,
+    SmWorkflowComponent.EvidenceServiceService, SmWorkflowComponent.DevelopmentObservationServiceService,
+    SmWorkflowComponent.LocalPublicationServiceService).map { service =>
+    NativeWorkflowDescriptionMetadata.service(service, spec.OperationDefinitionGroup(NonEmptyVector.fromVectorUnsafe(
+      service.operations.operations.toVector.filter(operation => publishedMcpOperations(service.name + "." + operation.name)))))
+  }
 
   def factory(declarations: Vector[ComponentParameterKey[?]], routes: Vector[ComponentParameterPathRoute],
     host: RuntimeCompositionDecoder): Component.BundleFactory = {

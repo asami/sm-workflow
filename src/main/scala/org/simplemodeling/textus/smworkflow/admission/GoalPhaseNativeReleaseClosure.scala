@@ -21,7 +21,7 @@ import WorkflowManagedProcessExecution as E
   * The existing Phase authority and an explicit fixed local commit program are
   * both required. An unresolved intent is retained, never blindly replayed.
   * @since   Oct. 24, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeReleaseClosure {
@@ -57,7 +57,7 @@ private[smworkflow] object GoalPhaseNativeReleaseClosure {
   private def _valid(value: Payload): Boolean = value != null && value.input != null && value.input.plan != null &&
     value.input.plan.steps != null && value.input.candidate != null && value.parent != null &&
     Vector(value.parent.head, value.parent.tree).forall(v => v != null && v.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")) &&
-    value.ordinal > 0 && value.ordinal <= 64 && value.execution != null && value.commit != null &&
+    value.ordinal > 0 && value.ordinal <= 65 && value.execution != null && value.commit != null &&
     value.execution.forall(e => e != null && Set("succeeded", "failed", "incomplete", "invalid-output",
       "conflict-observation-required")(e.outcome) && e.termination != null && e.termination.nonEmpty &&
       e.exitCode != null && (e.outcome != "succeeded" || e.exitCode.contains(0)) &&

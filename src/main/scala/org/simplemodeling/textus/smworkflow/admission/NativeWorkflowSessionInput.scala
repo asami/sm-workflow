@@ -19,18 +19,19 @@ import org.simplemodeling.textus.smworkflow.value.SplitPhasePartitionContextRefe
   * entry; Advance addresses its native state and owning context directly.
   * Actor/capabilities/UoW and the shared storage owner are not replaced.
   * @since   Oct. 10, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 27, 2026
   */
 private[smworkflow] object NativeWorkflowSessionInput {
   private type Advance = InstanceRecord => NativeWorkflowAdvanceInput.Resolved
   private type Selections = ActionCall.Core => Consequence[ProfileSelectionDataStorePort]
 
   def goal(service: spec.ServiceDefinition, creation: ComponentCreate,
-    declaration: GoalPhaseNativeRun.Declaration, definition: DefinitionBinding): spec.ServiceDefinition =
+    declaration: GoalPhaseNativeRun.Declaration, definition: DefinitionBinding,
+    selectedStart: Option[ProfileStartAdmission.Selection] = None): spec.ServiceDefinition =
     _service(service, creation, declaration.configuration, declaration.instances, declaration.continuations, definition,
       "startGoalPhase", "advanceGoalPhase", instance => NativeWorkflowAdvanceInput.Goal(instance.identity.value),
       NativeWorkflowStartInput.Kind.GoalPhase, _ =>
-        GoalPhaseNativeInputReadPolicy.bindC(creation.configuration, declaration).map(_.selections))
+        GoalPhaseNativeInputReadPolicy.bindC(creation.configuration, declaration).map(_.selections), selectedStart)
 
   def repository(service: spec.ServiceDefinition, creation: ComponentCreate,
     declaration: RepositorySyncManagedFetch.Declaration, definition: DefinitionBinding): spec.ServiceDefinition =
@@ -58,11 +59,11 @@ private[smworkflow] object NativeWorkflowSessionInput {
   private def _service(service: spec.ServiceDefinition, creation: ComponentCreate, configuration: Configuration,
     instances: DataStore.CollectionId, continuations: DataStore.CollectionId, definition: DefinitionBinding,
     start: String, advance: String, resolve: Advance, kind: NativeWorkflowStartInput.Kind,
-    selections: Selections): spec.ServiceDefinition = {
+    selections: Selections, selectedStart: Option[ProfileStartAdmission.Selection] = None): spec.ServiceDefinition = {
     val operations = service.operations.operations.toVector.map { operation =>
       if (operation.name == start || operation.name == advance)
         new Operation(operation, creation, configuration, instances, continuations, definition,
-          operation.name == start, resolve, kind, selections)
+          operation.name == start, resolve, kind, selections, selectedStart)
       else operation
     }
     NativeWorkflowDescriptionMetadata.service(service,
@@ -72,7 +73,7 @@ private[smworkflow] object NativeWorkflowSessionInput {
   private final class Operation(original: spec.OperationDefinition, creation: ComponentCreate,
     configuration: Configuration, instances: DataStore.CollectionId, continuations: DataStore.CollectionId,
     definition: DefinitionBinding, start: Boolean, resolve: Advance, kind: NativeWorkflowStartInput.Kind,
-    selections: Selections) extends spec.OperationDefinition {
+    selections: Selections, selectedStart: Option[ProfileStartAdmission.Selection]) extends spec.OperationDefinition {
     val specification = NativeWorkflowDescriptionMetadata.operation(original)
     def createOperationRequest(request: Request): Consequence[OperationRequest] =
       if (request == null || request.operation != original.name || !request.service.contains(kind.operation.service))
@@ -82,14 +83,15 @@ private[smworkflow] object NativeWorkflowSessionInput {
           .flatMap(NativeWorkflowStartInput.fromRecordC(kind, _)).map(Some(_))
         else Consequence.success(Option.empty[NativeWorkflowStartInput.BusinessInput])
         input.map(value => BoundAction(request, value, original, creation, configuration, instances,
-          continuations, definition, resolve, kind, selections))
+          continuations, definition, resolve, kind, selections, selectedStart))
       }
   }
 
   private final case class BoundAction(request: Request, input: Option[NativeWorkflowStartInput.BusinessInput],
     original: spec.OperationDefinition, creation: ComponentCreate, configuration: Configuration,
     instances: DataStore.CollectionId, continuations: DataStore.CollectionId, definition: DefinitionBinding,
-    resolve: Advance, kind: NativeWorkflowStartInput.Kind, selections: Selections) extends CommandAction {
+    resolve: Advance, kind: NativeWorkflowStartInput.Kind, selections: Selections,
+    selectedStart: Option[ProfileStartAdmission.Selection]) extends CommandAction {
     override def commandExecutionMode = CommandExecutionMode.Sync
     def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
       val core = c
@@ -100,10 +102,11 @@ private[smworkflow] object NativeWorkflowSessionInput {
         context <- contextC(executionContext, Some(session))
         selectedcore = core.copy(executionContext = context)
         operation <- input match {
-          case Some(business) => for {
-            reader <- selections(selectedcore)
-            participant = SecuritySubject.from(context.security).subjectId
-            selected <- reader.loadForBusinessC(business, participant, selectedcore).flatMap {
+          case Some(business) =>
+            val participant = SecuritySubject.from(context.security).subjectId
+            for {
+            selected <- selectedStart.map(value => Consequence.success(Some(value))).getOrElse(
+              selections(selectedcore).flatMap(_.loadForBusinessC(business, participant, selectedcore))).flatMap {
               case Some(value) => Consequence.success(value)
               case None => Consequence.stateConflict("Workflow Start has no admitted host business entry")
             }

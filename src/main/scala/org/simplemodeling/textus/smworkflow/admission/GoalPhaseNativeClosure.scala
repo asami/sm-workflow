@@ -29,8 +29,8 @@ private[smworkflow] object GoalPhaseNativeClosure {
   final case class StepProgram(step: String, ordinal: Int)
   final case class Policy(identity: String, revision: Int, programs: Vector[StepProgram]) {
     def validateC: Consequence[Unit] = if (id(identity) && revision > 0 && programs != null &&
-        programs.nonEmpty && programs.size <= 64 && programs.forall(p => p != null && id(p.step) &&
-          p.ordinal > 0 && p.ordinal <= 64) && programs.map(_.step).distinct.size == programs.size &&
+        programs.nonEmpty && programs.size <= 65 && programs.forall(p => p != null && id(p.step) &&
+          p.ordinal > 0 && p.ordinal <= 65) && programs.map(_.step).distinct.size == programs.size &&
         programs.map(_.ordinal).distinct.size == programs.size) Consequence.unit
       else F.invalid("native Step closure host policy is incomplete")
   }

@@ -18,7 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  1, 2026
- * @version Oct. 24, 2026
+ * @version Oct. 27, 2026
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -112,18 +112,33 @@ final class GoalPhaseRuntimeParametersSpec extends AnyWordSpec with Matchers wit
       result.continuations shouldBe org.goldenport.cncf.datastore.DataStore.CollectionId.EntityStore(_delivery)
     }
 
-    "reject every missing required setting instead of choosing defaults" in {
-      Given("otherwise complete settings with each required key separately absent")
-      val variants = _valid.keys.toVector.map(name => name -> (_valid - name))
-      When("each incomplete configuration is assembled")
-      val results = variants.map { case (name, values) => name -> _decode(values) }
-      Then("all seven omissions fail before a configured component is returned")
-      results.size shouldBe 7
-      results.foreach { case (name, result) => withClue(name)(result shouldBe a[Consequence.Failure[?]]) }
+    "use component-owned logical storage defaults with no user configuration" in {
+      Given("a canonical component with no user-provided persistence settings")
+      When("the normal parameter resolver assembles its logical persistence")
+      val result = _take(_decode(Map.empty))
+      Then("it selects the standard store and separate collections without opening a private provider")
+      result.configuration.workflowStore shouldBe NamedWorkflowStore("workflow", WorkflowStoreIdentity("sm-workflow"))
+      result.configuration.migrationPolicy shouldBe MigrationPolicy("v1")
+      result.configuration.retentionPolicy shouldBe RetentionPolicy("v1")
+      result.configuration.leasePolicy shouldBe LeasePolicy("v1")
+      result.instances shouldBe GoalPhaseRuntimeParameters.defaultInstances
+      result.continuations shouldBe GoalPhaseRuntimeParameters.defaultContinuations
+      result.instances should not be result.continuations
+    }
+
+    "default only omitted logical settings while preserving explicit overrides" in {
+      Given("a custom physical-independent storage identity with no repeated standard settings")
+      When("normal initialization receives only that override")
+      val result = _take(_decode(Map(GoalPhaseRuntimeParameters.storeIdentity.name ->
+        ConfigurationValue.StringValue("existing-project-store"))))
+      Then("the existing project identity is retained and the other settings use component defaults")
+      result.configuration.workflowStore shouldBe NamedWorkflowStore("workflow", WorkflowStoreIdentity("existing-project-store"))
+      result.instances shouldBe GoalPhaseRuntimeParameters.defaultInstances
+      result.continuations shouldBe GoalPhaseRuntimeParameters.defaultContinuations
     }
 
     "reject blanks whitespace and nonstring values without coercion" in {
-      Given("each required key replaced by invalid string or nonstring values")
+      Given("each optional override supplied with an invalid string or nonstring value")
       val invalid = Vector(ConfigurationValue.StringValue(""), ConfigurationValue.StringValue(" "),
         ConfigurationValue.StringValue(" padded "), ConfigurationValue.NumberValue(BigDecimal(3)),
         ConfigurationValue.BooleanValue(true), ConfigurationValue.NullValue)
@@ -148,12 +163,12 @@ final class GoalPhaseRuntimeParametersSpec extends AnyWordSpec with Matchers wit
       results.foreach(_ shouldBe a[Consequence.Failure[?]])
     }
 
-    "reject missing parameter snapshots without reconstructing authority" in {
-      Given("null or undeclared logical parameter snapshots")
+    "reject missing or undeclared parameter snapshots without reconstructing authority" in {
+      Given("a missing snapshot or one without the declared component keys")
       When("logical persistence declaration decoding is requested")
       val results = Vector(GoalPhaseRuntimeParameters.decodeC(null),
         GoalPhaseRuntimeParameters.decodeC(ComponentInitializationParameters.empty))
-      Then("all remain configuration failures rather than default or human-authorized starts")
+      Then("absence of the canonical snapshot remains a configuration failure")
       results.foreach(_ shouldBe a[Consequence.Failure[?]])
     }
   }
