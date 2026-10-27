@@ -31,6 +31,16 @@ manufacture a Start request or run a replacement workflow.
 
 ## Runtime-owned repair and stop decisions
 
+For command preparation or delegated delivery that is confirmed unexecuted,
+follow the common unstarted-execution recovery contract linked from the installed
+`cncf-command-execution` skill. Reuse existing approval for unchanged targets,
+operations and effects with unconsumed permission; do not add a Human gate for
+preparation correction or runner replacement. Preserve Session, base, history,
+repair counts and successful results. Use the runtime's public continuation
+when it owns the operation; no private-state edits, re-Start or accepted Submit
+replay. A provider safety/policy refusal, permission denial or uncertain execution
+does not qualify. Do not ask the user to approve bypassing such a refusal.
+
 New `ReviewPhase` assignments with captured
 `releaseRepairContract: sm-workflow.phase-release-repair.v1` use ordinary
 runtime-owned Release repair within the unchanged Plan. Execute only the issued

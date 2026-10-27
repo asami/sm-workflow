@@ -36,7 +36,7 @@ private[admission] object DependencySourceRevisionSpecificationFixture {
 
 /** Fresh pure source-selection fixtures do not claim actual Human evidence.
   * @since   Oct. 26, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -445,6 +445,384 @@ final class GoalPhaseDependencySourceRevisionSpec extends AnyWordSpec with Match
       Then("the strict guard codec refuses the contradictory content selection")
       modes.isLeft shouldBe true
       overlap.isLeft shouldBe true
+    }
+  }
+
+  "An actual approved source inventory successor" should {
+    def _fixture_(): (R.Direction, R.ScopeSuccessor, R.Capture) = {
+      import DependencySourceRevisionSpecificationFixture as F
+      import DependencyValidationSpecificationFixture as D
+      val path = "src/main/scala/Additional.scala"
+      val approval = D.approvals.head.copy(proposal = D.approvals.head.proposal.copy(
+        identity = "additional-source-proposal", paths = Vector(path),
+        acceptance = Vector("Qualify the additional source through the existing checks")),
+        decision = ContextReference("additional-actual-decision-fixture", "1"))
+      val binding = F.binding.copy(revision = F.binding.revision + 1, paths = F.binding.paths :+ path)
+      val consumption = F.proposal.consumption.copy(expectedModes = F.proposal.consumption.expectedModes :+
+        R.ExpectedMode(path, "100644"))
+      val scope = R.ScopeSuccessor(R.scopeSchema, F.direction.directive, binding, Vector(approval), consumption,
+        F.proposal.coverage :+ R.Coverage(approval.decision, approval.proposal.acceptance, binding.checks.map(_.identity)))
+      val guard = F.before.copy(selectedFiles = F.before.selectedFiles :+ R.fileIdentity(path, bytes("object Additional\n")))
+      val capture = F.capture.copy(schemaVersion = R.scopeCaptureSchema, generation = 3, sourceRevision = "30",
+        preStageGuard = guard, postStageGuard = guard, scope = Some(scope))
+      (F.direction, scope, capture)
+    }
+
+    // Specification data only: no actual image, independent Human or qualification is claimed.
+    def _runtime_fixture_(): (R.Direction, R.Direction, R.ScopeSuccessor, R.Capture) = {
+      val (original, prior, captured) = _fixture_()
+      val identity = "b1901b58-3218-4aa1-9f9e-b57eb94e625c"
+      val directory = "/specification/installations/" + identity
+      val installation = R.RuntimeSelection(identity, "d56bf541-5133-4156-91e0-3a06ac0d88db",
+        directory + "/runtime-installation.json",
+        Vector(R.RuntimeArtifact(org.goldenport.cncf.cli.InstalledRuntimeDistribution.ROOT_COORDINATE,
+          directory + "/runtime/0000.jar", "/specification/publication/cncf.jar")),
+        org.goldenport.cncf.cli.InstalledRuntimeDistribution.COMPONENT_IDENTITY,
+        R.RuntimeArtifact(org.goldenport.cncf.cli.InstalledRuntimeDistribution.COMPONENT_COORDINATE,
+          directory + "/components/textus-sm-workflow.car", "/specification/publication/sm-workflow.car"))
+      val consumption = prior.consumption.copy(runtimeImage = identity,
+        manifestReference = ContextReference("cncf-installed-runtime:" + identity, "1"))
+      val proposal = original.target.proposal.copy(binding = ContextReference(prior.binding.identity, prior.binding.revision.toString),
+        coverage = prior.coverage, consumption = consumption)
+      val target = original.target.copy(schemaVersion = R.runtimeSchema, questionIdentity = "runtime-consumption-question",
+        sourceRevision = "31", pendingRevision = "32", generation = 3,
+        requestingResult = ContextReference("runtime-consumption-request", "1"), proposal = proposal,
+        binding = prior.binding, preStageGuard = captured.preStageGuard,
+        runtime = Some(R.RuntimeSuccession(original.directive, prior.approvals, installation)))
+      val next = R.Direction(target, ContextReference("runtime-independent-direction-fixture", "1"),
+        original.participant, "Specification-owned bounded installed image selection")
+      val scope = prior.copy(schemaVersion = R.runtimeScopeSchema, consumption = consumption, consumptionDirection = Some(next))
+      (original, next, scope, captured.copy(generation = 4, sourceRevision = "38", scope = Some(scope)))
+    }
+
+    def _exclusion_fixture_(): (R.Direction, R.Direction, R.ScopeSuccessor, R.Capture) = {
+      val (previous, runtime, prior, captured) = _runtime_fixture_()
+      val oldpaths = Vector("docs/old-1.md", "docs/old-2.md", "docs/old-3.md", "docs/old-4.md")
+      val addedpaths = Vector("docs/design/configuration.md", "docs/phase/README.md", "docs/journal/handoff.md",
+        "docs/phase/startup.md", "docs/spec/startup.md")
+      val oldguard = previous.target.preStageGuard.copy(excludedFiles = oldpaths.map(R.fileIdentity(_, bytes("old\n"))))
+      val oldproposal = previous.target.proposal.copy(excludedPaths = oldpaths,
+        consumption = previous.target.proposal.consumption.copy(nonInputExclusions = oldpaths))
+      val original = previous.copy(target = previous.target.copy(proposal = oldproposal, preStageGuard = oldguard))
+      val consumption = prior.consumption.copy(nonInputExclusions = oldpaths ++ addedpaths)
+      val guard = runtime.target.preStageGuard.copy(excludedFiles = oldguard.excludedFiles ++
+        addedpaths.map(R.fileIdentity(_, bytes("additional unrelated owner\n"))))
+      val target = runtime.target.copy(schemaVersion = R.exclusionSchema, proposal = runtime.target.proposal.copy(
+        excludedPaths = oldpaths ++ addedpaths, consumption = consumption), preStageGuard = guard,
+        exclusionSuccession = Some(R.ExclusionSuccession(R.exclusionSuccessionSchema, original.directive, oldpaths, addedpaths)))
+      val next = runtime.copy(target = target)
+      val scope = prior.copy(schemaVersion = R.exclusionScopeSchema, consumption = consumption, consumptionDirection = Some(next))
+      (original, next, scope, captured.copy(schemaVersion = R.exclusionCaptureSchema, direction = original,
+        preStageGuard = guard, postStageGuard = guard, scope = Some(scope)))
+    }
+
+    "round trip closed non-input exclusion target scope and capture without upgrading v1 or v2 encodings" in {
+      Given("four retained exclusions and five independently declared additions accompanying one runtime successor")
+      val (original, next, scope, capture) = _exclusion_fixture_()
+      val (_, runtime, runtimescope, runtimecapture) = _runtime_fixture_()
+      val oldwire = original.target.asJson
+      val runtimewire = runtime.target.asJson
+      val wire = next.target.asJson
+      When("the closed readers receive complete values or null missing unknown and mixed-version fields")
+      val invalid = Vector(wire.mapObject(_.remove("runtime")), wire.mapObject(_.remove("exclusionSuccession")),
+        wire.mapObject(_.add("exclusionSuccession", Json.Null)), wire.mapObject(_.add("runtime", Json.Null)),
+        wire.mapObject(_.add("schemaVersion", R.runtimeSchema.asJson)),
+        runtimewire.mapObject(_.add("exclusionSuccession", next.target.exclusionSuccession.get.asJson)),
+        oldwire.mapObject(_.add("exclusionSuccession", Json.Null)),
+        wire.mapObject(_.add("exclusionSuccession", next.target.exclusionSuccession.get.asJson.mapObject(_.add("unknown", Json.True)))))
+      Then("v3 is explicit and old encodings retain their omitted optional field and fixed semantics")
+      oldwire.hcursor.downField("exclusionSuccession").focus shouldBe None
+      runtimewire.hcursor.downField("exclusionSuccession").focus shouldBe None
+      oldwire.as[R.Target] shouldBe Right(original.target)
+      runtimewire.as[R.Target] shouldBe Right(runtime.target)
+      runtimescope.asJson.as[R.ScopeSuccessor] shouldBe Right(runtimescope)
+      runtimecapture.asJson.as[R.Capture] shouldBe Right(runtimecapture)
+      wire.as[R.Target] shouldBe Right(next.target)
+      scope.asJson.as[R.ScopeSuccessor] shouldBe Right(scope)
+      capture.asJson.as[R.Capture] shouldBe Right(capture)
+      invalid.forall(_.as[R.Target].isLeft) shouldBe true
+      scope.copy(schemaVersion = R.runtimeScopeSchema).asJson.as[R.ScopeSuccessor].isLeft shouldBe true
+      capture.copy(schemaVersion = R.scopeCaptureSchema).asJson.as[R.Capture].isLeft shouldBe true
+      scope.asJson.mapObject(_.remove("consumptionDirection")).as[R.ScopeSuccessor].isLeft shouldBe true
+      original.target.asJson shouldBe oldwire
+      runtime.target.asJson shouldBe runtimewire
+    }
+
+    "refuse non-input exclusion removal reorder overlap duplicate unsafe paths and a second succession" in {
+      Given("a closed append-only successor anchored to the actual original Direction and native approvals")
+      val (original, next, scope, _) = _exclusion_fixture_()
+      val succession = next.target.exclusionSuccession.get
+      def _next_(value: R.ExclusionSuccession): R.Direction = next.copy(target = next.target.copy(exclusionSuccession = Some(value)))
+      When("a caller crosses the original exclusion boundary or repeats the transition")
+      val invalid = Vector(_next_(succession.copy(parent = ContextReference("foreign", "1"))),
+        _next_(succession.copy(previousExclusions = succession.previousExclusions.reverse)),
+        _next_(succession.copy(previousExclusions = succession.previousExclusions.drop(1))),
+        _next_(succession.copy(addedPaths = Vector.empty)),
+        _next_(succession.copy(addedPaths = succession.addedPaths :+ succession.addedPaths.head)),
+        _next_(succession.copy(addedPaths = Vector("../outside"))),
+        _next_(succession.copy(addedPaths = Vector(next.target.binding.paths.head))),
+        next.copy(target = next.target.copy(runtime = None)))
+      val unqualified = scope.copy(consumption = scope.consumption.copy(nonInputExclusions = succession.previousExclusions))
+      Then("only exact E0 plus nonempty new additions with runtime and independent consumption is valid")
+      R.runtimeSuccessorValid(original, next, scope.approvals) shouldBe true
+      invalid.map(R.runtimeSuccessorValid(original, _, scope.approvals)) shouldBe Vector.fill(invalid.size)(false)
+      R.scopeValid(original, unqualified) shouldBe false
+      R.runtimeSuccessorValid(next, next.copy(directive = ContextReference("second", "1")), scope.approvals) shouldBe false
+      R.runtimeSuccessorValid(original, next, Vector.empty) shouldBe false
+    }
+
+    "project all nine non-input exclusion guards through first capture later staging and candidate recovery" in {
+      Given("a v3 native scope with immutable original Direction and exact nine-file guard")
+      val (original, next, scope, capture) = _exclusion_fixture_()
+      val guard = capture.preStageGuard
+      val changed = guard.copy(excludedFiles = guard.excludedFiles.updated(4, R.fileIdentity(guard.excludedFiles(4).path, bytes("drift\n"))))
+      val absent = guard.copy(excludedFiles = guard.excludedFiles.updated(4, R.fileIdentity(guard.excludedFiles(4).path, None)))
+      val staged = guard.copy(indexTree = "f" * 40, excludedEntries = Vector(R.Entry(guard.excludedFiles(4).path, "100755", "e" * 40)))
+      val payload = GoalPhaseNativeCandidate.Payload(capture.sourceRevision, scope.binding.step, Vector("docs/phase.md"),
+        Vector.empty, None, Vector.empty, None, dependencySourceDirection = Some(original), dependencySourceScope = Some(scope),
+        dependencySourceGuard = Some(guard), dependencySourceCapture = Some(capture))
+      When("first and subsequent captures compare effective qualification rather than original E0")
+      val allowed = Vector(R.captureBaseValid(original, capture.generation, guard, Some(scope)),
+        R.captureBaseValid(original, capture.generation, changed, Some(scope)),
+        R.captureBaseValid(original, capture.generation + 1, absent, Some(scope)),
+        R.captureBaseValid(original, capture.generation + 1, staged, Some(scope)),
+        R.guardModesValid(original, guard.copy(excludedFiles = guard.excludedFiles.take(4)), Some(scope)))
+      Then("the effective scope authenticates exact exclusions and refuses byte presence staged-mode and inventory drift")
+      allowed shouldBe Vector(true, false, false, false, false)
+      R.exclusionsOf(original, Some(scope)) shouldBe next.target.proposal.excludedPaths
+      R.qualificationOf(original, Some(scope)) shouldBe next
+      R.scopeAuthenticated(original, Some(scope), scope.approvals, Some(next)) shouldBe true
+      R.scopeAuthenticated(original, Some(scope), scope.approvals) shouldBe false
+      R.candidateValid(payload) shouldBe true
+      GoalPhaseNativeCandidate.codec.decode(GoalPhaseNativeCandidate.codec.encode(payload)) shouldBe Right(payload)
+      R.candidateValid(payload.copy(dependencySourceGuard = Some(changed))) shouldBe false
+      R.stageTransitionValid(guard, changed, guard.selectedFiles.head.path, Vector.empty) shouldBe false
+      R.stageTransitionValid(guard, staged, guard.selectedFiles.head.path, Vector.empty) shouldBe false
+      original.target.proposal.excludedPaths should have size 4
+    }
+
+    "retain non-input exclusion source fact prefixes and UNKNOWN outcomes without replay in recovery" in {
+      Given("a v3 committed capture after completed primary staging in the same source generation")
+      import GoalPhaseCandidateRecovery as Recovery
+      import GoalPhaseNativeCandidate as C
+      import GoalPhaseOrderedProgression as O
+      val (original, next, scope, capture) = _exclusion_fixture_()
+      val started = take(O.startC(original.target.plan, original.target.primaryBase))
+      def _completed_(state: O.State): O.State = take(state.acceptC(O.SemanticCompleted(
+        state.next.asInstanceOf[O.Semantic].key, "Specification-owned implementation")))
+      def _revised_(state: O.State): O.State = take(state.acceptC(O.CandidateWorkRevisionAdmitted(
+        ContextReference("noninput-revision-" + state.generation, "1"), "Specification-owned revision")))
+      val controller = _completed_(_revised_(_completed_(_revised_(_completed_(_revised_(_completed_(started)))))))
+      val paths = original.target.plan.steps.head.ownedPaths
+      val inspection = C.Payload(capture.sourceRevision, scope.binding.step, paths, Vector.empty, None, Vector.empty, None,
+        dependencySourceDirection = Some(original), dependencySourceScope = Some(scope))
+      def _identity_(key: String): String = original.target.sessionId + ":ordered-candidate:" + capture.sourceRevision + ":" + key
+      val stage = Recovery.StagePair(0, _identity_("stage-intent-0"), "1", "40", _identity_("stage-result-0"), "1", "41",
+        inspection, inspection.copy(stagedPaths = paths))
+      val guarded = stage.result.copy(dependencySourceGuard = Some(capture.preStageGuard))
+      val keys = Vector("dependency-source-inspection", "dependency-source-observation-intent", "dependency-source-observation-result")
+      val payloads = Vector(guarded, guarded, guarded.copy(dependencySourceCapture = Some(capture)))
+      val prefix = keys.zip(payloads).zipWithIndex.map { case ((key, payload), index) =>
+        Recovery.DependencyFact(key, _identity_(key), "1", (42 + index).toString, payload)
+      }
+      val target = Recovery.RecoveryTarget(original.target.sessionId, Recovery.controllerSnapshot(controller),
+        "goal-phase", "1", "participant", capture.sourceRevision, "44", "/fixture/primary", "main", paths, Vector.empty,
+        _identity_("inspection"), "1", "39", inspection, WorkflowSourceHistoryRule.Selection("none", None),
+        Vector.empty, Vector(stage), "UNKNOWN", "termination-unconfirmed", prefix)
+      When("the existing recovery owner authenticates the retained prefix and an E0-only substituted guard")
+      val allowed = (0 to prefix.size).map(n => Recovery.dependencyPrefixValid(target.copy(
+        dependencyPrefix = prefix.take(n), frontierRevision = (41 + n).toString))).toVector
+      val stale = guarded.copy(dependencySourceGuard = Some(capture.preStageGuard.copy(
+        excludedFiles = capture.preStageGuard.excludedFiles.take(next.target.exclusionSuccession.get.previousExclusions.size))))
+      Then("all actual v3 facts remain attributable and no old E0 projection or fresh observation is admitted")
+      controller.generation shouldBe capture.generation
+      allowed shouldBe Vector.fill(4)(true)
+      Recovery.dependencyPrefixValid(target.copy(dependencyPrefix = prefix.updated(0, prefix.head.copy(payload = stale)))) shouldBe false
+      Recovery.preparedPayload(target).dependencySourceCapture shouldBe Some(capture)
+      Recovery.observationAllowed(target) shouldBe false
+      target.oldObservationTermination shouldBe "termination-unconfirmed"
+    }
+
+    "retain the original direction while covering the approved file and historical alias" in {
+      Given("fixture native approvals for the same dependency through its adopted historical workspace relation")
+      val (direction, scope, capture) = _fixture_()
+      When("the effective source is projected from a separately versioned scope")
+      val binding = R.bindingOf(capture)
+      Then("the old direction is unchanged and the new acceptance has its own exact coverage")
+      R.scopeValid(direction, scope) shouldBe true
+      R.captureValid(capture) shouldBe true
+      binding.paths shouldBe (direction.target.binding.paths :+ "src/main/scala/Additional.scala")
+      direction.target.binding.revision should be < binding.revision
+      scope.coverage.take(direction.target.proposal.coverage.size) shouldBe direction.target.proposal.coverage
+      R.scopeAuthenticated(direction, Some(scope), scope.approvals) shouldBe true
+      R.scopeAuthenticated(direction, Some(scope), Vector.empty) shouldBe false
+      R.scopeAuthenticated(direction, None, scope.approvals) shouldBe false
+      R.scopeAuthenticated(direction, None, Vector.empty) shouldBe true
+    }
+
+    "refuse source replacement, unapproved files, excluded files and changed program or mode declarations" in {
+      Given("a valid successor and the independent declaration it actually selects")
+      val (direction, scope, _) = _fixture_()
+      val wrongapproval = scope.approvals.head.copy(proposal = scope.approvals.head.proposal.copy(
+        dependency = scope.approvals.head.proposal.dependency.copy(workspace = "foreign-workspace")))
+      When("a structural successor tries to change a fixed source boundary")
+      val invalid = Vector(
+        scope.copy(binding = scope.binding.copy(root = "/foreign/source")),
+        scope.copy(binding = scope.binding.copy(paths = scope.binding.paths :+ "unapproved.txt")),
+        scope.copy(binding = scope.binding.copy(base = scope.binding.base.copy(head = "f" * 40))),
+        scope.copy(approvals = Vector(wrongapproval)),
+        scope.copy(consumption = scope.consumption.copy(programs = scope.consumption.programs.map(_.copy(program = "foreign-program")))),
+        scope.copy(consumption = scope.consumption.copy(expectedModes = scope.consumption.expectedModes.updated(0,
+          scope.consumption.expectedModes.head.copy(mode = "100755")))),
+        scope.copy(coverage = scope.coverage.dropRight(1)))
+      Then("all substitutions refuse without changing the old direction or legacy admission")
+      invalid.map(R.scopeValid(direction, _)) shouldBe Vector.fill(invalid.size)(false)
+    }
+
+    "keep legacy bytes readable and require a distinct closed scope capture version" in {
+      Given("the legacy direction capture and a later scope capture")
+      import DependencySourceRevisionSpecificationFixture as F
+      val (_, scope, capture) = _fixture_()
+      val legacy = F.capture.asJson
+      When("their versioned capture codecs decode original and contradictory inputs")
+      val invalid = Vector(
+        legacy.mapObject(_.add("scope", Json.Null)),
+        capture.copy(schemaVersion = R.schema).asJson,
+        capture.copy(scope = None).asJson,
+        capture.asJson.mapObject(_.add("unexpected", Json.True)),
+        capture.asJson.mapObject(_.add("scope", scope.asJson.mapObject(_.add("unexpected", Json.True)))))
+      Then("legacy encoding has no new field and only the complete new version decodes")
+      legacy.hcursor.downField("scope").focus shouldBe None
+      legacy.as[R.Capture] shouldBe Right(F.capture)
+      capture.asJson.as[R.Capture] shouldBe Right(capture)
+      invalid.forall(_.as[R.Capture].isLeft) shouldBe true
+      F.capture.asJson shouldBe legacy
+    }
+
+    "carry the scope through the native candidate envelope without upgrading an old receipt" in {
+      Given("a candidate whose source selection has an authentic-shaped later scope")
+      val (_, scope, capture) = _fixture_()
+      val payload = GoalPhaseNativeCandidate.Payload("30", scope.binding.step, Vector("docs/phase.md"),
+        Vector.empty, None, Vector.empty, None, dependencySourceDirection = Some(capture.direction),
+        dependencySourceScope = Some(scope))
+      val legacy = payload.copy(dependencySourceScope = None)
+      When("the ordinary candidate codec emits each version and receives a crossed envelope")
+      val wire = GoalPhaseNativeCandidate.codec.encode(payload)
+      val oldwire = GoalPhaseNativeCandidate.codec.encode(legacy)
+      Then("the new scope has an explicit version while historical receipt encoding remains unchanged")
+      wire.hcursor.get[String]("schemaVersion") shouldBe Right("sm-workflow.goal-phase-native-candidate.v3")
+      oldwire.hcursor.get[String]("schemaVersion") shouldBe Right("sm-workflow.goal-phase-native-candidate.v2")
+      GoalPhaseNativeCandidate.codec.decode(wire) shouldBe Right(payload)
+      GoalPhaseNativeCandidate.codec.decode(oldwire) shouldBe Right(legacy)
+      GoalPhaseNativeCandidate.codec.decode(wire.mapObject(_.add("schemaVersion",
+        Json.fromString("sm-workflow.goal-phase-native-candidate.v2")))).isLeft shouldBe true
+      GoalPhaseNativeCandidate.codec.decode(wire.mapObject(_.add("unexpected", Json.True))).isLeft shouldBe true
+      R.candidateValid(payload.copy(dependencySourceDirection = None)) shouldBe false
+    }
+
+    "retain the declared new-file mode and the old exclusion guard during fresh repair" in {
+      Given("a later capture whose source scope includes one new regular file")
+      val (direction, scope, capture) = _fixture_()
+      val path = scope.binding.paths.last
+      val changed = capture.preStageGuard.copy(selectedEntries = Vector(R.Entry(path, "100755", "e" * 40)))
+      val exclusions = capture.preStageGuard.copy(excludedFiles = Vector.empty)
+      When("freshness compares actual index modes or unrelated excluded content")
+      val allowed = Vector(R.captureBaseValid(direction, 3, capture.preStageGuard, Some(scope)),
+        R.captureBaseValid(direction, 3, changed, Some(scope)),
+        R.captureBaseValid(direction, 3, exclusions, Some(scope)))
+      Then("only the independently declared mode and preserved exclusion identity are valid")
+      allowed shouldBe Vector(true, false, false)
+    }
+
+    "require an actual reconstructed consumption direction for changed runtime labels" in {
+      Given("specification-shaped original and bounded successor directions over the same source")
+      val (original, next, scope, capture) = _runtime_fixture_()
+      val before = original.asJson
+      When("structural scope validation is separated from native direction authentication")
+      val valid = R.scopeValid(original, scope)
+      val authenticated = R.scopeAuthenticated(original, Some(scope), scope.approvals, Some(next))
+      val unsupported = R.scopeAuthenticated(original, Some(scope), scope.approvals)
+      val changedlabels = scope.copy(schemaVersion = R.scopeSchema, consumptionDirection = None)
+      Then("only the exact native direction can authenticate the changed image and manifest")
+      valid shouldBe true
+      authenticated shouldBe true
+      unsupported shouldBe false
+      R.scopeAuthenticated(original, None, scope.approvals, Some(next)) shouldBe false
+      R.scopeValid(original, changedlabels) shouldBe false
+      R.captureValid(capture) shouldBe true
+      R.consumptionOf(capture) shouldBe next.target.proposal.consumption
+      capture.direction.asJson shouldBe before
+    }
+
+    "refuse crossed runtime associations, source boundaries and native decisions" in {
+      Given("a bounded successor with an explicit parent and exact native approvals")
+      val (original, next, scope, _) = _runtime_fixture_()
+      val runtime = next.target.runtime.get
+      val target = next.target
+      val differentindex = (if (target.predecessorGuard.indexTree.head == 'e') "f" else "e") * target.predecessorGuard.indexTree.length
+      When("a successor changes the retained parent, fixed fields or actual approval coverage")
+      val crossed = Vector(
+        next.copy(target = target.copy(runtime = Some(runtime.copy(parent = ContextReference("other-parent", "1"))))),
+        next.copy(target = target.copy(runtime = Some(runtime.copy(approvals = Vector.empty)))),
+        next.copy(target = target.copy(primaryBase = target.primaryBase.copy(head = "f" * 40))),
+        next.copy(target = target.copy(binding = target.binding.copy(root = "/other/source"))),
+        next.copy(target = target.copy(proposal = target.proposal.copy(consumption = scope.consumption.copy(
+          programs = scope.consumption.programs.map(_.copy(program = "other-program")))))),
+        next.copy(target = target.copy(proposal = target.proposal.copy(consumption = scope.consumption.copy(
+          manifestReference = ContextReference("cncf-installed-runtime:other-image", "1"))))),
+        next.copy(target = target.copy(predecessorGuard = target.predecessorGuard.copy(indexTree = differentindex))),
+        next.copy(participant = "another-participant"), next.copy(directive = original.directive))
+      val allowed = crossed.map(R.runtimeSuccessorValid(original, _, scope.approvals))
+      val inventedapproval = scope.approvals.head.copy(decision = ContextReference("invented-other-decision", "1"))
+      Then("all crossings refuse and a matching shape cannot manufacture the real history")
+      allowed shouldBe Vector.fill(crossed.size)(false)
+      R.runtimeSuccessorValid(original, next, Vector(inventedapproval)) shouldBe false
+      R.runtimeSuccessorValid(original, next, Vector.empty) shouldBe false
+    }
+
+    "preserve legacy target and disposition encodings while strictly versioning the successor" in {
+      Given("legacy source direction and new runtime target specification values")
+      val (original, next, scope, capture) = _runtime_fixture_()
+      val oldwire = original.target.asJson
+      val wire = next.target.asJson
+      val disposition = GoalPhaseLegacyPurposeRepairContinuation.DependencySourceRevision(next)
+      When("the existing Record and stored disposition owners decode both closed target versions")
+      val decoded = R.targetC(R.targetRecord(next.target))
+      val stored = GoalPhaseLegacyPurposeRepairContinuation.storageCodec.encode(disposition)
+      val invalid = Vector(wire.mapObject(_.remove("runtime")), wire.mapObject(_.add("runtime", Json.Null)),
+        wire.mapObject(_.add("schemaVersion", R.schema.asJson)),
+        wire.mapObject(_.add("unexpected", Json.True)), oldwire.mapObject(_.add("runtime", Json.Null)))
+      Then("old bytes omit new fields and neither missing nor contradictory new data is upgraded")
+      oldwire.hcursor.downField("runtime").focus shouldBe None
+      oldwire.as[R.Target] shouldBe Right(original.target)
+      SplitPhaseExplicitPartitionFixture.take(decoded) shouldBe next.target
+      wire.as[R.Target] shouldBe Right(next.target)
+      invalid.forall(_.as[R.Target].isLeft) shouldBe true
+      GoalPhaseLegacyPurposeRepairContinuation.storageCodec.decode(stored) shouldBe Right(disposition)
+      scope.asJson.as[R.ScopeSuccessor] shouldBe Right(scope)
+      scope.asJson.mapObject(_.add("consumptionDirection", Json.Null)).as[R.ScopeSuccessor].isLeft shouldBe true
+      scope.copy(schemaVersion = R.scopeSchema).asJson.as[R.ScopeSuccessor].isLeft shouldBe true
+      capture.asJson.as[R.Capture] shouldBe Right(capture)
+      original.target.asJson shouldBe oldwire
+    }
+
+    "refuse unsupported installed profiles and source drift after qualified runtime selection" in {
+      Given("an installed-profile specification observation and its exact selected source guard")
+      val (original, next, scope, capture) = _runtime_fixture_()
+      val installation = next.target.runtime.get.installation
+      When("the profile, manifest association or selected source bytes differ")
+      val unsupported = Vector(installation.copy(installation = "mutable-selector"),
+        installation.copy(manifest = "/other/runtime-installation.json"), installation.copy(modules = Vector.empty),
+        installation.copy(componentIdentity = "another-component"),
+        installation.copy(modules = installation.modules.map(_.copy(path = "/foreign/module.jar"))))
+      val changed = capture.preStageGuard.copy(selectedFiles = capture.preStageGuard.selectedFiles.map(_.copy(sha256 = "f" * 64)))
+      val results = Vector(R.captureBaseValid(original, 4, capture.preStageGuard, Some(scope)),
+        R.captureBaseValid(original, 4, changed, Some(scope)), R.captureBaseValid(original, 5, changed, Some(scope)))
+      Then("only the original real-profile association and fixed qualified source bytes are eligible")
+      unsupported.map(R.runtimeSelectionValid) shouldBe Vector.fill(unsupported.size)(false)
+      R.runtimeMatches(installation, scope.consumption.copy(runtimeImage = "other-image")) shouldBe false
+      R.runtimeMatches(installation, scope.consumption.copy(manifestReference = ContextReference("other-manifest", "1"))) shouldBe false
+      results shouldBe Vector(true, false, false)
     }
   }
 }

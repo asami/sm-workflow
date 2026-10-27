@@ -1,5 +1,11 @@
 # Normal three-workflow runtime composition
 
+Current startup direction: [assembly-free runtime startup](assembly-free-runtime-startup.md).
+Local assembly files and descriptor overrides in the examples below are optional
+deployment choices, not prerequisites for installed sm-workflow. The
+[correction plan](../phase/assembly-free-startup-correction.md) tracks remaining
+runtime wiring and helper drift without changing active Session acceptance.
+
 Terminology revision 2026-10-23: apply [runtime/caller terminology](runtime-caller-terminology.md).
 The composition described here is a RuntimeComposition, not a network host or
 the Codex caller. Its configuration is selected from RuntimeRoot. Old type/key

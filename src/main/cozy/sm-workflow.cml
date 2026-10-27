@@ -6040,7 +6040,9 @@ GoalPhaseCandidateRecoveryDescriptionResult
 
 ##### DESCRIPTION
 
-Admit a fresh independent Human binding to the exact current candidate-recovery target, choice, rationale, participant and reference. AuthorizeNewObservation appends one durable mechanical direction at the final stage-result frontier without effects or controller changes. Defer authenticates and preserves the frontier. A separate ordinary Advance persists its own observation intent before any File/Git effect and performs only one remaining candidate observation, including typed IndexTree/write-tree, with unchanged history policy, saved history text, parent, branch, root and index scope. Completed staging and history are never repeated. Failed new observation retains its intent and cannot auto retry. The old process remains UNKNOWN; earlier Submit or support permission is not this Human consent. Missing, crossed, stale and duplicate evidence refuses.
+Supply exactly one of input or inputResource. inputResource is an absolute local file URL for the same complete GoalPhaseCandidateRecoveryInput, acquired through the ordinary Resource owner during execution with existing roots and finite read limits. Transport selection performs no I/O and grants no recovery authority. Admit a fresh independent Human binding to the exact current candidate-recovery target, choice, rationale, participant and reference. AuthorizeNewObservation appends one durable mechanical direction at the final stage-result frontier without effects or controller changes. Defer authenticates and preserves the frontier. A separate ordinary Advance persists its own observation intent before any File/Git effect and performs only one remaining candidate observation, including typed IndexTree/write-tree, with unchanged history policy, saved history text, parent, branch, root and index scope. Completed staging and history are never repeated. Failed new observation retains its intent and cannot auto retry. The old process remains UNKNOWN; earlier Submit or support permission is not this Human consent. Missing, crossed, stale and duplicate evidence refuses.
+
+After acquisition, require exactly the non-null business keys sessionId, target, choice, rationale and reference, and exactly identity and revision inside reference, before the unchanged generated DTO reader and semantic admission. Unknown keys and alias collisions refuse through the owning Operation.
 
 ##### TYPE
 
@@ -6056,7 +6058,8 @@ GoalPhaseCandidateRecoveryInput
 
 | name | type | multiplicity |
 |------+------|--------------|
-| input | GoalPhaseCandidateRecoveryInput | 1 |
+| input | GoalPhaseCandidateRecoveryInput | ? |
+| inputResource | string | ? |
 
 ##### OUTPUT
 
@@ -6182,6 +6185,8 @@ GoalPhaseSourceHistoryRecoveryResult
 
 Describe the exact current unanswered implementation or repair Human Decision, its retained dependency predecessor and proposed source selection. Observe selected and excluded regular-file bytes with managed File Identity reads and native Git index/status guards. Preserve original primary base, accepted prefix, approvals and repair history. Return only an exact target and the choices AdoptDependencySourceRevision and Defer. Typed observation can run IndexTree; no staging, source normalization, check, commit, Submit, Advance or adoption runs here.
 
+The bounded installed-runtime successor may append an exact independently declared non-input exclusion scope in a closed version-3 target. Retain the original Direction and ordered exclusions; require nonempty disjoint additions, actual later scope approvals and the current immutable installed distribution. The independent host owns semantic non-input qualification for every declared build/check program. Document suffixes and caller assertions supply no qualification. Version-1 and version-2 targets keep their fixed-exclusion meaning; there is no exclusion-only route or repeated upgrade chain.
+
 ##### TYPE
 
 COMMAND
@@ -6209,6 +6214,8 @@ GoalPhaseDependencySourceRevisionDescriptionResult
 ##### DESCRIPTION
 
 Adopt one independently observed Human source-selection direction for the exact described current target. Re-observe managed selected/excluded bytes, Git and native frontier; refuse stale, crossed, live, unresolved or uncertain effects. Append through the existing Decision supersession owner without answering the old question, replacing original primary base, refunding repairs or accepting new bytes. Defer stores nothing. Only later ordinary Advance, fresh inherited checks, independent review and ordinary closure can qualify a successor. No check, staging, Submit, Advance, commit or publication is run by adoption.
+
+For the version-3 combined runtime and non-input exclusion successor, independent actual Human evidence must admit the whole exact target. Preserve every original exclusion and append only its exact independently declared additions; recompute all selected and excluded byte/index guards at adoption. Fresh capture, checks, review and closure consume that same effective scope. Keep original Direction, completed Steps, repair counters and failure/UNKNOWN history unchanged. This bounded adoption grants no old-stage replay or non-input semantic proof.
 
 ##### TYPE
 

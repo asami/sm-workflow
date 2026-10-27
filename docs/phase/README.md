@@ -1,5 +1,47 @@
 # sm-workflow incremental-use roadmap
 
+Assembly-free installed startup correction adopted 2026-10-27:
+[AF-S1–5](assembly-free-startup-correction.md) consumes CNCF's ordinary standalone
+wiring correction, removes residual fixed-file assumptions from helper sources
+and installation guidance, and qualifies preserved-Session adoption. It adds no
+acceptance gate to active Phase 6.7 or CBD Phase 12 and does not alter 6.8/6.9.
+See the [English handoff](../journal/2026/10/2026-10-27-assembly-free-startup-handoff.md).
+
+Completion-record closure adopted 2026-10-27: [Phase 6.8 C2/C4](phase-6.8.md)
+owns required completion records and local commits through scoped Terminal.
+Stage completion leaves its enclosing Phase active when appropriate. No external
+post-Terminal commit skill or repeat FULL is required for established record facts.
+See [P68-23–27](phase-6.8-checklist.md) and the
+[English handoff](../journal/2026/10/2026-10-27-phase-6.8-terminal-record-closure-handoff.md).
+
+Delegated delivery adopted 2026-10-27: [Phase 6.8 D1–D4](phase-6.8.md) adds
+[sm-delegate-task](../spec/delegate-task.md) as an independent entry using the
+shared execution engine. Keep test-fix/goal-task contracts unchanged. Runtime
+selects verification and owns mandatory local commit, required publishLocal,
+result return and consumer adoption. Phase 7 adds FIFO/modes/workspace breadth.
+See the [English handoff](../journal/2026/10/2026-10-27-phase-6.8-delegate-task-handoff.md).
+
+RepositorySync optimization adopted 2026-10-27: [Phase 6.9](phase-6.9.md) owns
+both clean automatic synchronization and dirty purpose-based commits. Establish
+equal/push/fast-forward first, then impact-selected merge validation and dirty
+commit preparation joining that route. Keep sync optimization in 6.9, separate from 6.8 commit/recovery/hygiene
+and delegated delivery; Phase 7 composes the qualified routes. See the
+[contract](../spec/repository-sync-runtime-orchestration.md),
+[checklist](phase-6.9-checklist.md) and
+[English handoff](../journal/2026/10/2026-10-27-phase-6.9-repository-sync-handoff.md).
+
+
+Commit/recovery standardization adopted 2026-10-26:
+[Phase 6.8](phase-6.8.md) follows active Phase 6.7; Phase 6.9 then precedes Phase 7.
+Reuse the bounded P67-T1 repair, purpose-based authorization and completed-result
+collection; finish common authority/recovery, configurable automatic commit
+hygiene and Step/release/RepositorySync integration. Document SHA and fixed file
+inventories are not approval gates. Keep 6.7 acceptance and its restoration
+independent of 6.8; retain Sessions, history, counts, evidence and explicit real
+recovery consent boundaries. See the [checklist](phase-6.8-checklist.md),
+[target contract](../spec/commit-completion-and-recovery.md) and
+[English handoff](../journal/2026/10/2026-10-26-phase-6.8-commit-recovery-handoff.md).
+
 Dependency delivery adopted 2026-10-26: [Phase 7](phase-7.md#dependency-development-delivery-priority--2026-10-26)
 owns fixed dependencies, FIFO requests to assigned development chats, and managed
 development subtrees. Assigned-chat delivery includes local commit and publishLocal;
@@ -348,7 +390,7 @@ and connects the skills; Phase 6.3 starts gradual real use after integrated acce
 This replaces the earlier plan to start skill-based use after Phase 5.
 
 Build a small usable system, start using it, and grow it from actual development
-needs. The current rollout is **Phase 2 -> Phase 5 / Phase 5.1 -> Phase 5.2 -> Phase 5.3 -> Phase 6 -> Phase 6.1 -> Phase 6.2 -> Phase 6.3 -> Phase 6.4 -> Phase 6.5 -> Phase 6.6 -> Phase 6.7 -> Phase 7 -> Phase 8**.
+needs. The current rollout is **Phase 2 -> Phase 5 / Phase 5.1 -> Phase 5.2 -> Phase 5.3 -> Phase 6 -> Phase 6.1 -> Phase 6.2 -> Phase 6.3 -> Phase 6.4 -> Phase 6.5 -> Phase 6.6 -> Phase 6.7 -> Phase 6.8 -> Phase 6.9 -> Phase 7 -> Phase 8**.
 Phase 17 extends Task/FIX after 6.7; its number does not require all Phases 8–16
 to finish first. Only the specific workspace/investigation integrations consume
 their relevant Phase 7/14 capabilities.
@@ -379,6 +421,8 @@ in Phase 6, using the corrected runtime contract.
 | [6.5: Conditional Actions and workflow quality optimization](phase-6.5.md) | GoalPhase no-AI admission/FIX -> RepositorySync clean merge admission -> SplitPhase unknown-only/context reuse; applicable lint and conditional review | After 6.4 and before 7; preserve active execution; optional Luna, no LLM evaluation or wait for Phase 9/10 |
 | [6.6: Incremental SBT failure diagnosis](phase-6.6.md) | Structured diagnosis, batched information and repair/focused validation | Preserve ongoing implementation, accepted work and existing evidence |
 | [6.7: Ad hoc Task and standalone FIX](phase-6.7.md) | sm-test-fix -> sm-goal-task -> sm-review-fix -> real separate-chat delivery | Single repository; conditional fix review, integrated Task review/commit; [checklist](phase-6.7-checklist.md) |
+| [6.8: Commit recovery and delegated delivery](phase-6.8.md) | Common authority/commit recovery, mechanical hygiene and independent sm-delegate-task | Shared execution; mandatory delegate commit, required publication/return; retain test-fix/goal-task contracts and active 6.7 |
+| [6.9: Runtime-owned RepositorySync](phase-6.9.md) | Clean synchronization, impact-selected validation/review and dirty purpose-based commits | Runtime-owned main route; reuse 6.8 commit/recovery; Phase 7 composes it across repositories |
 | [7: Multi-repository synchronization and artifact overlay](phase-7.md) | Synchronize/validate the workspace and consumer artifact selections using CNCF-discovered project purpose/feature queries | Full practical GoalPhase adoption with related-project management; retain local-development/sync/artifact ownership and existing overlay acceptance |
 | [17: Task and standalone FIX extensions](phase-17.md) | Wider inputs, dirty/focused/full options, multi-unit composition and authorized investigation/related-project integration | Reuse 6.7 without rebuilding it; [checklist](phase-17-checklist.md); Phase 7/14 dependencies are scenario-specific |
 | [8: Runtime extensions and practical closure](phase-8.md) | Resolve necessary Phase 2 carryover and needs found during use | Reassess necessity, finish selected work and close this rollout |

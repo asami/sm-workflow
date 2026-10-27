@@ -27,7 +27,7 @@ import org.goldenport.cncf.validation.ValidationDiscoveryV1 as D
   * plan check identities select host bindings, never commands from AI. Intent
   * commits precede each external effect. Unknown results are not replayed.
   * @since   Oct.  6, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeValidation {
@@ -299,8 +299,8 @@ private[smworkflow] object GoalPhaseNativeValidation {
     _ <- GoalPhaseNativeFindingRecording.validatePathsC(recordingpaths, controller.plan, d.candidatePaths)
     step = if (whole) None else Some(controller.plan.steps(controller.cursor).identity)
     primary <- selectedChecksC(d, controller.plan, step)
-    consumptions = (dependencyChain.toVector.flatMap(_.acceptedSources.map(_.capture.direction.target.proposal.consumption)) ++
-      candidate.payload.dependencySourceCapture.map(_.direction.target.proposal.consumption)).distinct
+    consumptions = (dependencyChain.toVector.flatMap(_.acceptedSources.map(entry => GoalPhaseDependencySourceRevision.consumptionOf(entry.capture))) ++
+      candidate.payload.dependencySourceCapture.map(GoalPhaseDependencySourceRevision.consumptionOf)).distinct
     _ <- if (consumptions.size <= 1 && primary.forall(c => consumptions.forall(route =>
         route.programs.exists(p => p.check == c.identity && p.kind == c.kind.wire)))) Consequence.unit
       else F.invalid("primary checks have no unambiguous admitted source-consumption programs")
@@ -448,7 +448,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
 
   private def _source_program(check: Check, payload: Payload): Option[GoalPhaseDependencySourceRevision.CheckProgram] =
     (if (check.dependency.isEmpty) payload.sourceConsumption
-      else payload.dependencySource.map(_.direction.target.proposal.consumption))
+      else payload.dependencySource.map(GoalPhaseDependencySourceRevision.consumptionOf))
       .flatMap(_.programs.find(p => p.check == check.identity && p.kind == check.kind.wire))
 
   private def _attempt_target_c(check: Check, workspace: Option[String], target: SbtTarget,
@@ -1130,7 +1130,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
     payload.dependency != null && payload.dependency.forall(GoalPhaseDependencyValidation.captureValid) &&
     payload.dependencySource != null && payload.dependencySource.forall(GoalPhaseDependencySourceRevision.captureValid) &&
     payload.sourceConsumption != null && payload.sourceConsumption.forall(GoalPhaseDependencySourceRevision.consumptionValid) &&
-    payload.dependencySource.forall(c => payload.sourceConsumption.contains(c.direction.target.proposal.consumption)) &&
+    payload.dependencySource.forall(c => payload.sourceConsumption.contains(GoalPhaseDependencySourceRevision.consumptionOf(c))) &&
     payload.sourceConsumption.forall(route => payload.selected.filter(_.dependency.isEmpty).forall(check =>
       route.programs.exists(p => p.check == check.identity && p.kind == check.kind.wire) &&
       (payload.receipts ++ payload.stopped).filter(_.identity == check.identity).forall(receipt =>

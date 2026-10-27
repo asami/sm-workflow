@@ -1,5 +1,13 @@
 # Native client and task-private skill installation
 
+Startup correction adopted 2026-10-27: the
+[assembly-free runtime contract](assembly-free-runtime-startup.md) governs current
+installation. A consumer need not create `.textus/assembly.yaml` or a fixed-name
+config file merely to use sm-workflow. Older assembly-based recipes below are
+explicit override examples, not mandatory setup. Runtime wiring correction and
+residual helper cleanup remain [OPEN](../phase/assembly-free-startup-correction.md);
+preserve working Sessions until the replacement is qualified.
+
 For the practical setup and task sequence, start with
 [the three-skills start-of-use guide](../notes/three-skills-start-of-use.md).
 The Phase 6.3 supported tiers are ordinary split planning, synchronization of one
@@ -155,8 +163,9 @@ a stale bundle or add the JVM test classpath to the native runtime.
 
 ## Admit the owning host
 
-The host has its own absolute working directory, `.textus/config.json` and
-selected `.textus/assembly.yaml`. Follow the
+Select the runtime's actual working directory and ordinary admitted configuration
+sources. Neither `.textus/config.json` nor `.textus/assembly.yaml` is a mandatory
+filename. An assembly is used only when deliberately selected. Follow the
 [normal host configuration](normal-three-workflow-host.md#host-configuration)
 for common Workflow persistence, typed `sm-workflow.host.definition`, selected
 record/plan destinations, separate evidence declarations and actual Subsystem
@@ -164,8 +173,10 @@ storage/process plans. Select the official development component with
 `--component-dev-dir <primary>`; its production `impl.ComponentFactory` owns
 the three-family composition.
 
-The assembly owns a stable subsystem identity and standalone user mode, with
-convention authentication and an explicit `local_subject`. The effective normal
+In the explicit assembly recipe, the assembly supplies subsystem identity and
+standalone user mode, convention authentication and `local_subject`. The
+assembly-free route uses installed composition and normal configuration instead.
+The effective normal
 standalone identity must agree with the selected input participant. Existing
 HOME standalone-user profiles participate in normal framework resolution; an
 incompatible or malformed profile is a prerequisite failure. Do not override
@@ -353,6 +364,8 @@ connection qualification, and PHASE-6.3 retains aggregate validation ownership.
 
 ## Use the normal native entry
 
+The command below illustrates an intentionally selected assembly override; omit
+that option for the qualified normal assembly-free route.
 Run each call from the owning host directory so normal host files are resolved.
 The following illustrative local Start supplies named business input and one
 usable execution proposal. Use the host's actual admitted phase/repository:

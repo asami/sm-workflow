@@ -1,5 +1,15 @@
 # Native pending-merge validation
 
+## Phase 6.9 target allocation — 2026-10-27
+
+The adopted [runtime-owned synchronization contract](repository-sync-runtime-orchestration.md)
+is delivered by [Phase 6.9](../phase/phase-6.9.md), for both clean and dirty entry.
+It replaces blanket sync-triggered product tests/reviews with impact selection
+and applicable result reuse, and handles large diffs through evidence access
+rather than size-only Human gates. Existing implementation/evidence statements
+below retain their historical scope until qualified public adoption.
+
+
 Date: 2026-10-06. Parent-owned connected implementation; acceptance remains open.
 
 Current connected CML selection is `repository-sync-native-merge-validation-v7`;

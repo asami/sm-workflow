@@ -23,7 +23,7 @@ import GoalPhaseDependencyValidation.given
   * the CML candidate-observed edge. Git staging cannot roll back with storage.
   * An intent without its actual recorded result is retained, never replayed.
   * @since   Oct.  6, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeCandidate {
@@ -38,7 +38,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     dependencySourceDirection: Option[GoalPhaseDependencySourceRevision.Direction] = None,
     dependencySourceGuard: Option[GoalPhaseDependencySourceRevision.Guard] = None,
     dependencySourceStages: Vector[GoalPhaseDependencySourceRevision.StageFact] = Vector.empty,
-    dependencySourceCapture: Option[GoalPhaseDependencySourceRevision.Capture] = None)
+    dependencySourceCapture: Option[GoalPhaseDependencySourceRevision.Capture] = None,
+    dependencySourceScope: Option[GoalPhaseDependencySourceRevision.ScopeSuccessor] = None)
   final case class StepEvidence(step: String, candidate: O.Snapshot, changedPaths: Vector[String], diff: String,
     commit: O.Commit, eofCorrections: Vector[String], partialCompletion: Option[O.StepCommitChain] = None)
   object StepEvidence {
@@ -55,7 +56,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
   object Payload {
     given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
       case ("continuation" | "stepEvidence" | "dependencyAdmission" | "dependency" | "dependencyOrigin" |
-          "dependencySourceDirection" | "dependencySourceGuard" | "dependencySourceCapture", value) => !value.isNull
+          "dependencySourceDirection" | "dependencySourceGuard" | "dependencySourceCapture" | "dependencySourceScope", value) => !value.isNull
       case ("dependencyStaged" | "dependencySourceStages", value) => !value.asArray.exists(_.isEmpty)
       case _ => true
     }))
@@ -69,8 +70,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
       val valid = cursor.value.asObject.exists(_.keys.forall(Set("sourceRevision", "step", "selectedPaths",
         "stagedPaths", "candidate", "changedPaths", "diff", "continuation", "stepEvidence", "dependencyAdmission",
         "dependencyStaged", "dependency", "dependencyOrigin", "dependencySourceDirection", "dependencySourceGuard",
-        "dependencySourceStages", "dependencySourceCapture"))) && !Vector("continuation", "stepEvidence", "dependencyAdmission", "dependency", "dependencyOrigin",
-          "dependencySourceDirection", "dependencySourceGuard", "dependencySourceCapture").exists(name => cursor.downField(name).focus.exists(_.isNull)) &&
+        "dependencySourceStages", "dependencySourceCapture", "dependencySourceScope"))) && !Vector("continuation", "stepEvidence", "dependencyAdmission", "dependency", "dependencyOrigin",
+          "dependencySourceDirection", "dependencySourceGuard", "dependencySourceCapture", "dependencySourceScope").exists(name => cursor.downField(name).focus.exists(_.isNull)) &&
         GoalPhaseDependencySourceRevision.candidateValid(value) &&
         value.dependencyAdmission != null && value.dependencyAdmission.forall(GoalPhaseDependencyValidation.admissionValid) &&
         value.dependencyStaged != null && value.dependencyStaged.distinct == value.dependencyStaged &&
@@ -97,13 +98,18 @@ private[smworkflow] object GoalPhaseNativeCandidate {
   }
   private[admission] val codec = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "GoalPhaseNativeCandidateReceipt"
-    def encode(value: Payload): Json = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-candidate.v2"),
+    def encode(value: Payload): Json = Json.obj("schemaVersion" -> Json.fromString(
+      if (value.dependencySourceScope.nonEmpty) "sm-workflow.goal-phase-native-candidate.v3" else "sm-workflow.goal-phase-native-candidate.v2"),
       "payload" -> value.asJson)
     def decode(value: Json): Either[String, Payload] = for {
       wire <- Option(value).toRight("ordered candidate is missing")
       schema <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
-      _ <- Either.cond(schema == "sm-workflow.goal-phase-native-candidate.v2", (), "ordered candidate schema differs")
+      _ <- Either.cond(Set("sm-workflow.goal-phase-native-candidate.v2", "sm-workflow.goal-phase-native-candidate.v3")(schema), (), "ordered candidate schema differs")
+      _ <- Either.cond(schema != "sm-workflow.goal-phase-native-candidate.v3" ||
+        wire.asObject.exists(_.keys.toSet == Set("schemaVersion", "payload")), (), "ordered candidate scope envelope has unknown fields")
       payload <- wire.hcursor.get[Payload]("payload").left.map(_.message)
+      _ <- Either.cond((schema == "sm-workflow.goal-phase-native-candidate.v3") == payload.dependencySourceScope.nonEmpty,
+        (), "ordered candidate scope version differs")
     } yield payload
   }
   final case class Saved(record: InstanceRecord, payload: Payload)
@@ -184,7 +190,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     dependencyAdmission: Option[GoalPhaseDependencyValidation.Admission] = None,
     dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None,
     sourceHistoryNormalization: Option[GoalPhaseSourceHistoryNormalization.Target] = None,
-    dependencySourceDirection: Option[GoalPhaseDependencySourceRevision.Direction] = None): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
+    dependencySourceDirection: Option[GoalPhaseDependencySourceRevision.Direction] = None,
+    dependencySourceScope: Option[GoalPhaseDependencySourceRevision.ScopeSuccessor] = None): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
     whole <- Consequence.success(controller.cursor == controller.plan.steps.size)
     inspection = if (whole) "PhaseInspection" else "InspectCandidate"
     _ <- if (controller.stage.toString == inspection &&
@@ -198,7 +205,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
     store = new Store(adapter, session, from, controller, d, core, acknowledgement, documentPolicy, recordingPaths, completedCandidates,
       sourceHistoryRecovery, dependencyAdmission = dependencyAdmission, dependencyChain = dependencyChain,
-      sourceHistoryNormalization = sourceHistoryNormalization, dependencySourceDirection = dependencySourceDirection)
+      sourceHistoryNormalization = sourceHistoryNormalization, dependencySourceDirection = dependencySourceDirection,
+      dependencySourceScope = dependencySourceScope)
     complete <- store.loadC("candidate")
     selected <- complete match {
       case Some(value) => store.completedC(value)
@@ -222,6 +230,11 @@ private[smworkflow] object GoalPhaseNativeCandidate {
   } yield wire
 
   private def _inspect_c(store: Store): Consequence[Saved] = for {
+    _ <- store.dependencySourceScope.fold(Consequence.unit) { scope =>
+      store.dependencySourceDirection.filter(GoalPhaseDependencySourceRevision.scopeValid(_, scope))
+        .map(direction => GoalPhaseDependencySourceRevision.preflightC(store.core, direction, Some(scope)))
+        .getOrElse(F.invalid("source scope has no exact adopted direction"))
+    }
     reused <- store.reusePrefixC
     actual <- store.inspectC
     continuation <- if (store.whole) Consequence.success(Option.empty[O.CandidateContinuation])
@@ -238,7 +251,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     history <- GoalPhaseNativeSourceHistory.prepareC(store.core, historypaths.filterNot(reused.contains))
     initial = Payload(store.from.revision.value.toString, store.scopeIdentity,
       paths, Vector.empty, None, Vector.empty, None, continuation,
-      dependencyAdmission = store.dependencyAdmission, dependencySourceDirection = store.dependencySourceDirection)
+      dependencyAdmission = store.dependencyAdmission, dependencySourceDirection = store.dependencySourceDirection,
+      dependencySourceScope = store.dependencySourceScope)
     selected <- store.saveC("inspection", store.from, initial)
     _ <- if (store.whole) store.acknowledgeC("goal-whole-phase-candidate-inspected") else Consequence.unit
     normalized <- GoalPhaseNativeSourceHistory.advanceC(store.session, store.d, store.core, store.from,
@@ -494,7 +508,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     val dependencyAdmission: Option[GoalPhaseDependencyValidation.Admission] = None,
     val dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None,
     val sourceHistoryNormalization: Option[GoalPhaseSourceHistoryNormalization.Target] = None,
-    val dependencySourceDirection: Option[GoalPhaseDependencySourceRevision.Direction] = None) {
+    val dependencySourceDirection: Option[GoalPhaseDependencySourceRevision.Direction] = None,
+    val dependencySourceScope: Option[GoalPhaseDependencySourceRevision.ScopeSuccessor] = None) {
     val plan = controller.plan
     val whole = controller.cursor == plan.steps.size
     val scopeIdentity = if (whole) "phase:" + plan.phase else plan.steps(controller.cursor).identity

@@ -1,5 +1,15 @@
 # SM Repository Sync Workflow Definition
 
+## Phase 6.9 target update — 2026-10-27
+
+[Phase 6.9](../phase/phase-6.9.md) owns clean runtime-only synchronization and
+purpose-based dirty commits under the [new target contract](../spec/repository-sync-runtime-orchestration.md).
+This supersedes the automatic full-state checkpoint and unconditional merge
+review/test wording below for that delivery. Dirty work uses accepted coherent
+purpose commits before the common clean route. Historical results and active
+Sessions remain intact; this note does not claim implementation or adoption.
+
+
 Status: normative design input for `RepositorySyncWorkflow`
 
 Source workflow: legacy `cncf-repository-sync` skill

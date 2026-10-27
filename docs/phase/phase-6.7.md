@@ -10,6 +10,13 @@ Handoff: [delivery allocation](../journal/2026/10/2026-10-26-phase-6.7-task-fix-
 
 ## Purpose and priority
 
+Follow-on allocation (2026-10-26): [Phase 6.8](phase-6.8.md) standardizes
+commit completion, authority carry-forward, recovery and configurable hygiene
+after this Phase and before Phase 7. It reuses the bounded P67-T1 repair and
+its actual evidence. This adds no P67 acceptance item and does not delay the
+current restoration or change its explicit real-Session consent boundary.
+Preserve the current execution plan, staged work, Session/history/counts/results.
+
 Enable an authorized development or repair request to be delivered to another
 existing chat as one coherent outcome. The destination uses sm-workflow to own
 validation, repair progression, acceptance and selected closure; the requesting

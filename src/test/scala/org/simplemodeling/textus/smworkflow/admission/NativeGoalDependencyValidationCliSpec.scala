@@ -21,7 +21,7 @@ import GoalPhaseDependencyValidation.given
 /** Ordinary CLI specifications. All semantic submissions and Human evidence are
   * SPECIFICATION-OWNED; no production adoption, installed qualification or acceptance is claimed.
   * @since   Oct. 24, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -128,6 +128,12 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
     bindingTransform: D.Binding => D.Binding = value => value, legacySuccessor: Boolean = false,
     assessmentpolicy: Option[GoalPhaseStepAssessment.Policy] = None, sourceRevisionFixture: Boolean = false): Selected = {
     val scenario = F.freshDependency(name, denial, bindingTransform)
+    // Both ordinary launchers select this fresh host's existing assembly. The
+    // installed entry changes cwd only; host configuration owns its descriptor.
+    val hostconfig = scenario.root.resolve(".textus/config.json")
+    val hostparameters = parse(Files.readString(hostconfig)).toOption.get
+    Files.writeString(hostconfig, hostparameters.mapObject(_.add("textus.assembly.descriptor",
+      scenario.root.resolve(".textus/assembly.yaml").toString.asJson)).noSpaces)
     if (sourceRevisionFixture) {
       // Arrange this isolated primary's genuine source-project consumption before
       // Start. The later host route supplies the new root; no Session is edited.
@@ -238,6 +244,9 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
     val parameters = parse(Files.readString(config)).toOption.get.asObject.get.toVector.map { (key, value) =>
       key -> value.asString.getOrElse(value.noSpaces)
     }.toMap
+    val installedparameters = if (sys.props.contains("smworkflow.spec.installedCommand")) Map(
+      org.goldenport.cncf.config.RuntimeConfig.installedRuntimeManifestKey -> sys.props.get("smworkflow.spec.runtimeManifest")
+        .getOrElse(fail("Installed interruption requires the selected actual runtime manifest"))) else Map.empty[String, String]
     var observed = Vector.empty[String]
     val acknowledgement: String => Consequence[Unit] = value => {
       observed :+= value
@@ -245,7 +254,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
     }
     val actualHost = SplitPhaseExplicitPartitionFixture.take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(
       parse(parameters("sm-workflow.runtime.definition")).toOption.get))
-    try _with_runtime_(scenario.root, "Goal", Some(actualHost), hostParameters = parameters,
+    try _with_runtime_(scenario.root, "Goal", Some(actualHost), hostParameters = parameters ++ installedparameters,
       goalAcknowledgement = Some(acknowledgement), componentInstance = "default") { (owner, component, actor, _) =>
       owner.executeOperationResponseInContext(Request.of(component = component.name, service = "GoalPhaseService",
         operation = "advanceGoalPhase", properties = NativeWorkflowOperationInputFixture.advance(selected.original.sessionId)), actor)
@@ -526,16 +535,21 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
       .add("grants", Json.arr(Json.obj(
       "componentId" -> org.simplemodeling.textus.smworkflow.SmWorkflowComponent.componentId.name.asJson,
       "capabilities" -> capabilities.asJson))))
-    val revised = host.copy(goal = host.goal.copy(dependencySourceRevisions = Vector(replacement),
-      dependencySourceConsumptions = Vector(consumption)))
+    val revisions = host.goal.dependencySourceRevisions.filterNot(binding =>
+      binding.identity == replacement.identity && binding.revision == replacement.revision) :+ replacement
+    val revised = host.copy(goal = host.goal.copy(dependencySourceRevisions = revisions,
+      dependencySourceConsumptions = (host.goal.dependencySourceConsumptions :+ consumption).distinct))
+    SplitPhaseExplicitPartitionFixture.take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(
+      ThreeWorkflowRuntimeParameters.encode(revised))) shouldBe revised
     Files.writeString(path, config.mapObject(_.add("sm-workflow.runtime.definition",
       ThreeWorkflowRuntimeParameters.encode(revised).noSpaces.asJson)
       .add("textus.subsystem.process-execution.plan", processes.noSpaces.asJson)).noSpaces)
   }
 
   "A new dependency source through ordinary public operations" should {
-    for (mode <- Vector("selected-changes", "committed")) {
-      s"freshly qualify $mode in a different clone and preserve the accepted prefix and unrelated index" in {
+    for ((mode, extendscope, exclusionappend) <- Vector(("selected-changes", false, false), ("committed", false, false),
+        ("selected-changes", true, false), ("selected-changes", true, true))) {
+      s"freshly qualify $mode in a different clone and preserve the accepted prefix and unrelated index${if (extendscope) " with an approved scope successor" else ""}${if (exclusionappend) " and a non-input exclusion succession" else ""}" in {
         import GoalPhaseDependencySourceRevision as R
         import org.goldenport.cncf.processexecution.GitOperation
         Given("a genuinely accepted first dependency Step and a retained failed check of the admitted second Step")
@@ -575,6 +589,11 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
 
         val root = Files.createDirectories(scenario.root.resolve("revised-source"))
         val repository = root.resolve("repository")
+        val exclusion = "unrelated.md"
+        val exclusions = if (exclusionappend) Vector(exclusion, "docs/old-tracked.md", "docs/old-untracked.md", "docs/old-partial.md")
+          else Vector(exclusion)
+        val additions = Vector("docs/design/configuration-binding.md", "docs/phase/README.md",
+          "docs/journal/startup-handoff.md", "docs/phase/startup-correction.md", "docs/spec/standalone-startup.md")
         def setup(arguments: String*): Unit = SplitPhaseExplicitPartitionFixture.take(_run_setup_command_(
           Vector("--no-optional-locks", "--no-replace-objects", "-c", "core.hooksPath=/dev/null",
             "-c", "core.fsmonitor=false", "-c", "gc.auto=0") ++ arguments))
@@ -588,13 +607,27 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
         Files.writeString(scenario.root.resolve("source-manifest.txt"), "specification-immutable-image\n")
         Files.writeString(repository.resolve("inherited.txt"), "accepted first-Step input\n")
         Files.writeString(repository.resolve("current.txt"), "new source baseline\n")
+        if (exclusionappend) {
+          Given("private fixture documents with retained and future tracked baselines independent of source ownership")
+          Vector(exclusions(1), exclusions(3), additions(0), additions(1)).foreach { path =>
+            Files.createDirectories(repository.resolve(path).getParent)
+            Files.writeString(repository.resolve(path), "other owner baseline\n")
+            setup("-C", repository.toString, "add", "--", path)
+          }
+        }
         setup("-C", repository.toString, "add", "--", "build.sbt", "value.txt", "inherited.txt", "current.txt", "src/main/scala/SourceRevisionMarker.scala")
         setup("-C", repository.toString, "-c", "user.name=Source Revision Specification",
           "-c", "user.email=source@example.invalid", "commit", "--no-verify", "--no-gpg-sign",
           "-m", "Specification-owned different source base")
-        val exclusion = "unrelated.md"
         Files.writeString(repository.resolve(exclusion), "another owner's staged document\n")
         setup("-C", repository.toString, "add", "--", exclusion)
+        if (exclusionappend) {
+          Files.writeString(repository.resolve(exclusions(1)), "other owner tracked edit\n")
+          Files.writeString(repository.resolve(exclusions(2)), "other owner untracked document\n")
+          Files.writeString(repository.resolve(exclusions(3)), "other owner staged portion\n")
+          setup("-C", repository.toString, "add", "--", exclusions(3))
+          Files.writeString(repository.resolve(exclusions(3)), "other owner unstaged portion\n")
+        }
         if (mode == "selected-changes") Files.writeString(repository.resolve("current.txt"), "new selected source delta\n")
 
         val provisional = prefix.binding.copy(revision = 2, root = repository.toRealPath().toString,
@@ -602,7 +635,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
           paths = Vector("value.txt", "inherited.txt", "current.txt"))
         val consumption = R.Consumption(provisional.requester.workspace, provisional.root,
           "specification-immutable-image", ContextReference("specification-immutable-manifest", "1"),
-          Vector(exclusion), provisional.paths.map(R.ExpectedMode(_, "100644")),
+          exclusions, provisional.paths.map(R.ExpectedMode(_, "100644")),
           (scenario.host.goal.stepValidation.checks ++ scenario.host.goal.phaseValidation.checks).distinct.map(check =>
             R.CheckProgram(check.identity, "sm-workflow-repository-validation-" + check.ordinal, check.kind.wire,
               "sm-workflow-repository-validation-" + check.ordinal)) ++ provisional.checks.map(check =>
@@ -619,7 +652,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
         val coverage = (prefix.first.admission.approvals.map(a => R.Coverage(a.decision, a.proposal.acceptance,
           replacement.checks.map(_.identity))) :+ currentApproval).distinct
         val proposal = R.Proposal(R.schema, ContextReference(replacement.identity, "2"), mode,
-          Vector(exclusion), coverage, consumption)
+          exclusions, coverage, consumption)
         val build = repository.resolve("build.sbt")
         val buildBytes = Files.readAllBytes(build)
         Files.writeString(build, "\n// caller-owned dirty build input\n", StandardOpenOption.APPEND)
@@ -668,7 +701,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
           _submit(scenario, work, result, V.WorkflowArtifactReference(reference, "1"))
             .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
         }
-        if (mode == "selected-changes") {
+        if (mode == "selected-changes" && !extendscope) {
           // The same bytes and M status cannot authorize a different executable
           // mode. Its completed Git effect has no accepted source result.
           repository.resolve("current.txt").toFile.setExecutable(true, false) shouldBe true
@@ -700,6 +733,12 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
           reconciled.excludedEntries shouldBe retainedIndex.excludedEntries
           completeSource(revised, "source-revision-completion")
         } else completeSource(resumed, "source-revision-completion")
+        if (exclusionappend) {
+          When("the ordinary candidate result is saved but its acknowledgement is interrupted")
+          _interrupt(selected, "goal-candidate-observed")
+          Then("the next public Advance collects the completed original source prefix rather than replaying staging")
+          _executions(root) shouldBe empty
+        }
         val review = scenario.advance(selected.task)
         val request = review.business[V.GoalPhaseAdvanceResult]
         request.work.get.kind shouldBe "ReviewStep"
@@ -720,14 +759,312 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
         capture.stagedPaths shouldBe (if (mode == "committed") Vector.empty else replacement.paths)
         _executions(root).size shouldBe 1
         Files.readAllBytes(prefix.firstReview.invocation.stdout).toVector shouldBe originalFirstReview
-        When("ordinary independent review and Step closure advance to whole-Phase validation")
-        val phaseReview = _close_step(selected, review, "source-revision-second").business[V.GoalPhaseAdvanceResult]
+        var finalreview = review
+        var finalcapture = capture
+        if (extendscope) {
+          When("ordinary independent review requests additional source work in the adopted dependency")
+          _review(selected, review, Vector("Qualify the required additional dependency source"), artifact = "source-scope")
+            .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+          val additionalrepair = scenario.advance(selected.task).business[V.GoalPhaseAdvanceResult]
+          additionalrepair.work.get.kind shouldBe "RepairStep"
+          val additionalpath = "src/main/scala/AdditionalSource.scala"
+          val additionalproposal = _second_proposal(prefix.binding).copy(identity = "source-additional-approved-proposal",
+            discovery = "REPAIR", paths = Vector(additionalpath),
+            reason = "SPECIFICATION-OWNED required source in the already adopted dependency",
+            acceptance = Vector("Validate the additional file through the same dependency checks"))
+          val pending = additionalrepair.work.get.issues.get.issues.filter(_.status != "RESOLVED").map(issue =>
+            V.GoalPhaseIssueDisposition(issue.identity, "BLOCKED", "SPECIFICATION-OWNED additional scope request", None))
+          _submit(scenario, additionalrepair, Json.obj("outcome" -> "decision-needed".asJson,
+            "summary" -> "SPECIFICATION-OWNED extra dependency source scope".asJson, "findings" -> Json.arr(),
+            "dependencyProposal" -> additionalproposal.asJson,
+            "issueReport" -> json(V.GoalPhaseIssueReport(pending).toRecord())),
+            V.WorkflowArtifactReference("source-additional-scope-request", "1"))
+            .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+          val questionoutput = scenario.advance(selected.task)
+          val question = questionoutput.business[V.GoalPhaseAdvanceResult]
+          question.kind shouldBe "Human"
+          val answer = V.GoalPhaseOrderedDecisionAnswer("ApproveDependencyScope", "SPECIFICATION-OWNED actual additional file")
+          val reference = V.WorkflowArtifactReference("source-additional-actual-approval", "1")
+          _provision(selected, questionoutput, "human", answer, reference)
+          val evidence = V.WorkflowExecutionEvidence(Vector(reference), Some("participant"), None, None)
+          scenario.call("command", question.submitOperation.get, Vector("--sessionId", question.submitSessionId.get,
+            "--answer", json(answer.toRecord()).noSpaces, "--resultReference", json(reference.toRecord()).noSpaces,
+            "--executionEvidence", json(evidence.toRecord()).noSpaces))
+            .business[V.GoalPhaseOrderedDecisionSubmissionResult].accepted shouldBe true
+          val scopedrepair = scenario.advance(selected.task).business[V.GoalPhaseAdvanceResult]
+          Files.writeString(repository.resolve(additionalpath), "object AdditionalSource\n")
+          val scopebinding = replacement.copy(revision = replacement.revision + 1, paths = replacement.paths :+ additionalpath)
+          var scopeconsumption = consumption.copy(expectedModes = consumption.expectedModes :+ R.ExpectedMode(additionalpath, "100644"))
+          val scopecoverage = capture.direction.target.proposal.coverage :+ R.Coverage(
+            ContextReference(reference.identity, reference.revision), additionalproposal.acceptance, scopebinding.checks.map(_.identity))
+          def _proposal_(): R.Proposal = proposal.copy(binding = ContextReference(scopebinding.identity, scopebinding.revision.toString),
+            excludedPaths = scopeconsumption.nonInputExclusions, coverage = scopecoverage, consumption = scopeconsumption)
+          _source_host(selected, scopebinding, scopeconsumption)
+          val nativebefore = _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, scopedrepair.sessionId))
+          When("the caller requests another source direction without a real unanswered Human frontier")
+          val premature = scenario.call("command", R.describeOperation, Vector("--input",
+            json(V.GoalPhaseDependencySourceRevisionDescriptionInput(scopedrepair.sessionId,
+              GoalPhaseNativeMetadata.record(_proposal_().asJson)).toRecord()).noSpaces))
+          Then("the existing public route refuses without inventing a Human or replacing the original direction")
+          premature.exitCode should not be 0
+          _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, scopedrepair.sessionId)) shouldBe nativebefore
+          var scopedwork = scopedrepair
+          var actualruntime = Option.empty[R.Direction]
+          var effectiveguard = capture.postStageGuard
+          if (sys.props.contains("smworkflow.spec.installedCommand")) {
+            Given("the actual immutable installed profile selected for this installed-route specification")
+            val manifest = sys.props.get("smworkflow.spec.runtimeManifest")
+              .getOrElse(fail("Installed source-consumption qualification requires its actual manifest input"))
+            val installation = SplitPhaseExplicitPartitionFixture.take(
+              org.goldenport.cncf.cli.InstalledRuntimeDistribution.readC(Path.of(manifest)))
+            scopeconsumption = scopeconsumption.copy(runtimeImage = installation.installationId.toString,
+              manifestReference = ContextReference("cncf-installed-runtime:" + installation.installationId, "1"))
+            _source_host(selected, scopebinding, scopeconsumption)
+            val blocked = scopedrepair.work.get.issues.toVector.flatMap(_.issues).filter(_.status != "RESOLVED").map(issue =>
+              V.GoalPhaseIssueDisposition(issue.identity, "BLOCKED", "SPECIFICATION-OWNED installed consumption direction", None))
+            When("the actual issued work requests a decision and ordinary Advance issues its new Human")
+            val requested = _submit(scenario, scopedrepair, Json.obj("outcome" -> "decision-needed".asJson,
+              "summary" -> "SPECIFICATION-OWNED bounded runtime consumption succession".asJson, "findings" -> Json.arr(),
+              "issueReport" -> json(V.GoalPhaseIssueReport(blocked).toRecord())),
+              V.WorkflowArtifactReference("runtime-consumption-request", "1"))
+            Then("the semantic request is accepted through its existing completion owner")
+            requested.business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+            val runtimehuman = scenario.advance(selected.task).business[V.GoalPhaseAdvanceResult]
+            runtimehuman.kind shouldBe "Human"
+            if (exclusionappend) {
+              Given("five additional non-input documents declared only by the independent fixture host")
+              additions.foreach(path => Files.createDirectories(repository.resolve(path).getParent))
+              Files.writeString(repository.resolve(additions(0)), "other owner tracked addition\n")
+              Files.writeString(repository.resolve(additions(1)), "other owner staged addition\n")
+              setup("-C", repository.toString, "add", "--", additions(1))
+              Files.writeString(repository.resolve(additions(1)), "other owner unstaged addition\n")
+              additions.drop(2).foreach(path => Files.writeString(repository.resolve(path), "other owner untracked addition\n"))
+              scopeconsumption = scopeconsumption.copy(nonInputExclusions = exclusions ++ additions)
+              When("the exact non-input exclusion consumption has not been independently registered")
+              val unregistered = scenario.call("command", R.describeOperation, Vector("--input",
+                json(V.GoalPhaseDependencySourceRevisionDescriptionInput(runtimehuman.sessionId,
+                  GoalPhaseNativeMetadata.record(_proposal_().asJson)).toRecord()).noSpaces))
+              Then("the public description refuses without treating document suffixes as qualification")
+              unregistered.exitCode should not be 0
+              _source_host(selected, scopebinding, scopeconsumption)
+              val foreignpath = repository.resolve("unowned-build-input.txt")
+              When("a path outside selected ownership and E1 enters the actual index")
+              Files.writeString(foreignpath, "unowned fixture input\n")
+              setup("-C", repository.toString, "add", "--", "unowned-build-input.txt")
+              val foreign = scenario.call("command", R.describeOperation, Vector("--input",
+                json(V.GoalPhaseDependencySourceRevisionDescriptionInput(runtimehuman.sessionId,
+                  GoalPhaseNativeMetadata.record(_proposal_().asJson)).toRecord()).noSpaces))
+              Then("the real Git and File UoW guards refuse an unbounded index addition")
+              foreign.exitCode should not be 0
+              setup("-C", repository.toString, "reset", "HEAD", "--", "unowned-build-input.txt")
+              Files.delete(foreignpath)
+              When("the registered non-input exclusion proposal removes an original exclusion")
+              val removed = _proposal_().copy(excludedPaths = scopeconsumption.nonInputExclusions.drop(1),
+                consumption = scopeconsumption.copy(nonInputExclusions = scopeconsumption.nonInputExclusions.drop(1)))
+              val invalid = scenario.call("command", R.describeOperation, Vector("--input",
+                json(V.GoalPhaseDependencySourceRevisionDescriptionInput(runtimehuman.sessionId,
+                  GoalPhaseNativeMetadata.record(removed.asJson)).toRecord()).noSpaces))
+              Then("a caller cannot silently reinterpret the original exclusion guard")
+              invalid.exitCode should not be 0
+            }
+            val describedruntime = scenario.call("command", R.describeOperation, Vector("--input",
+              json(V.GoalPhaseDependencySourceRevisionDescriptionInput(runtimehuman.sessionId,
+                GoalPhaseNativeMetadata.record(_proposal_().asJson)).toRecord()).noSpaces))
+            val runtimeDescription = describedruntime.business[V.GoalPhaseDependencySourceRevisionDescriptionResult]
+            val runtimeTarget = SplitPhaseExplicitPartitionFixture.take(R.targetC(runtimeDescription.target))
+            runtimeTarget.schemaVersion shouldBe (if (exclusionappend) R.exclusionSchema else R.runtimeSchema)
+            runtimeTarget.runtime.get.parent shouldBe capture.direction.directive
+            runtimeTarget.runtime.get.installation.installation shouldBe installation.installationId.toString
+            runtimeTarget.runtime.get.installation.manifest shouldBe installation.manifest.toString
+            val runtimeReference = V.WorkflowArtifactReference("runtime-consumption-independent-direction", "1")
+            val runtimeInput = V.GoalPhaseDependencySourceRevisionAdoptionInput(runtimehuman.sessionId,
+              runtimeDescription.target, "AdoptDependencySourceRevision", "SPECIFICATION-OWNED actual installed route", runtimeReference)
+            val unadmitted = _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, runtimehuman.sessionId))
+            if (exclusionappend) {
+              runtimeTarget.exclusionSuccession.get.previousExclusions shouldBe exclusions
+              runtimeTarget.exclusionSuccession.get.addedPaths shouldBe additions
+              runtimeTarget.exclusionSuccession.get.parent shouldBe capture.direction.directive
+              effectiveguard = runtimeTarget.preStageGuard
+              val savedbytes = Files.readAllBytes(repository.resolve(additions.head))
+              When("an added excluded document changes bytes after the exact description")
+              Files.writeString(repository.resolve(additions.head), "same status different owner bytes\n")
+              val drifted = scenario.call("command", R.adoptionOperation, Vector("--input", json(runtimeInput.toRecord()).noSpaces))
+              Then("adoption re-observes E1 and refuses without changing native history or the index")
+              drifted.exitCode should not be 0
+              _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, runtimehuman.sessionId)) shouldBe unadmitted
+              Files.write(repository.resolve(additions.head), savedbytes)
+            }
+            When("matching new runtime labels have no independently provisioned exact-target evidence")
+            val refused = scenario.call("command", R.adoptionOperation, Vector("--input", json(runtimeInput.toRecord()).noSpaces))
+            Then("adoption refuses and retains the actual native frontier")
+            refused.exitCode should not be 0
+            _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, runtimehuman.sessionId)) shouldBe unadmitted
+            When("the specification's ordinary independent host provisions the exact public target")
+            _provision(selected, describedruntime, "dependency-source-revision", runtimeInput, runtimeReference)
+            val adopted = scenario.call("command", R.adoptionOperation, Vector("--input", json(runtimeInput.toRecord()).noSpaces))
+            Then("only normal independent admission records the actual direction")
+            adopted.business[V.GoalPhaseDependencySourceRevisionAdoptionResult].accepted shouldBe true
+            actualruntime = Some(R.Direction(runtimeTarget, ContextReference(runtimeReference.identity, runtimeReference.revision),
+              "participant", runtimeInput.rationale))
+            scopedwork = scenario.advance(selected.task).business[V.GoalPhaseAdvanceResult]
+            scopedwork.sessionId shouldBe scopedrepair.sessionId
+            scopedwork.repairProgress shouldBe scopedrepair.repairProgress
+            scopedwork.work.get.originalBase shouldBe scopedrepair.work.get.originalBase
+            scopedwork.work.get.completed shouldBe scopedrepair.work.get.completed
+            if (exclusionappend) {
+              Then("ordinary separate Advance displays the effective inherited non-input exclusion inventory")
+              val instructions = json(scopedwork.work.get.toRecord()).noSpaces
+              (exclusions ++ additions).foreach(path => instructions should include(path))
+              val repeated = scenario.call("command", R.adoptionOperation, Vector("--input", json(runtimeInput.toRecord()).noSpaces))
+              repeated.exitCode should not be 0
+            }
+          }
+          completeSource(scopedwork, "source-additional-completed-repair")
+          val configpath = scenario.root.resolve(".textus/config.json")
+          val config = parse(Files.readString(configpath)).toOption.get
+          val plan = parse(config.hcursor.get[String]("textus.subsystem.process-execution.plan").toOption.get).toOption.get
+          val programs = plan.hcursor.get[Vector[Json]]("gitPrograms").toOption.get
+          val missing = programs.filter(program =>
+            program.hcursor.get[String]("target").toOption.contains(scopebinding.dependency.workspace) &&
+              program.hcursor.get[String]("selectionId").toOption.contains("goal-path-4"))
+          missing should have size 1
+          val missingcapabilities = missing.map(_.hcursor.get[String]("capability").toOption.get).toSet
+          val grants = plan.hcursor.get[Vector[Json]]("grants").toOption.get.map(grant => grant.mapObject(_.add(
+            "capabilities", Json.fromValues(grant.hcursor.get[Vector[String]]("capabilities").toOption.get
+              .filterNot(missingcapabilities).map(_.asJson)))))
+          val incomplete = plan.mapObject(_.add("gitPrograms", Json.fromValues(programs.filterNot(missing.contains)))
+            .add("grants", Json.fromValues(grants)))
+          Files.writeString(configpath, config.mapObject(_.add("textus.subsystem.process-execution.plan", incomplete.noSpaces.asJson)).noSpaces)
+          val untouched = _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, scopedrepair.sessionId))
+          val primaryroot = Path.of(scenario.host.target.root)
+          val guarded = Vector(primaryroot.resolve(".git/index"), primaryroot.resolve(".git/refs/heads/main"),
+            primaryroot.resolve("docs/phase.md"), repository.resolve(additionalpath))
+          val guardbytes = guarded.map(path => Files.readAllBytes(path).toVector)
+          When("the successor is declared but its actual last selected-stage capability is absent")
+          scenario.advance(selected.task).exitCode should not be 0
+          Then("framework admission refuses before new primary history or staging receipts")
+          _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, scopedrepair.sessionId)) shouldBe untouched
+          guarded.map(path => Files.readAllBytes(path).toVector) shouldBe guardbytes
+          _executions(root).size shouldBe 1
+          When("the specification host restores its exact selected-stage registration")
+          _source_host(selected, scopebinding, scopeconsumption)
+          var interruptednative = Option.empty[Map[String, String]]
+          var interruptedguard = Option.empty[R.Guard]
+          var interruptedindices = Option.empty[Vector[Vector[Byte]]]
+          val indexpaths = Vector(primaryroot.resolve(".git/index"), repository.resolve(".git/index"))
+          if (exclusionappend && actualruntime.nonEmpty) {
+            Given("the completed V3 semantic work and exact installed profile with all selected-stage capabilities restored")
+            val excludedbytes = (exclusions ++ additions).map(path => Files.readAllBytes(repository.resolve(path)).toVector)
+            val priorchecks = _executions(root)
+            When("the actual V3 candidate is saved and its ordinary acknowledgement is interrupted")
+            _interrupt(selected, "goal-candidate-observed")
+            val observed = _native_fixture(scenario)(R.observeC(_, scopebinding, exclusions ++ additions))
+            interruptedguard = Some(observed)
+            interruptedindices = Some(indexpaths.map(path => Files.readAllBytes(path).toVector))
+            interruptednative = Some(_native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, scopedrepair.sessionId)).toMap)
+            Then("the saved result retains all nine exclusions and no fresh checks have run before collection")
+            observed.excludedFiles shouldBe effectiveguard.excludedFiles
+            observed.excludedEntries shouldBe effectiveguard.excludedEntries
+            (exclusions ++ additions).map(path => Files.readAllBytes(repository.resolve(path)).toVector) shouldBe excludedbytes
+            _executions(root) shouldBe priorchecks
+            When("ordinary installed public Advance collects that actual saved V3 candidate")
+          }
+          finalreview = scenario.advance(selected.task)
+          val scopedreview = finalreview.business[V.GoalPhaseAdvanceResult]
+          Then("ordinary continuation reaches fresh checks and ReviewStep without another source-adoption Human")
+          scopedreview.work.get.kind shouldBe "ReviewStep"
+          scopedreview.repairProgress shouldBe scopedrepair.repairProgress
+          scopedreview.work.get.originalBase shouldBe scopedwork.work.get.originalBase
+          scopedreview.work.get.completed shouldBe scopedwork.work.get.completed
+          val scopedvalidation = GoalPhaseNativeMetadata.normalizePublicJson(json(scopedreview.work.get.review.get.dependencyValidations.last))
+            .fold(fail(_), identity)
+          finalcapture = scopedvalidation.hcursor.get[R.Capture]("capture").fold(error => fail(error.message), identity)
+          finalcapture.direction shouldBe capture.direction
+          finalcapture.scope.get.consumptionDirection shouldBe actualruntime
+          R.consumptionOf(finalcapture) shouldBe scopeconsumption
+          finalcapture.scope.get.approvals.map(_.decision) shouldBe Vector(ContextReference(reference.identity, reference.revision))
+          R.bindingOf(finalcapture) shouldBe scopebinding
+          finalcapture.stagedPaths shouldBe scopebinding.paths
+          finalcapture.postStageGuard.excludedFiles shouldBe effectiveguard.excludedFiles
+          finalcapture.postStageGuard.excludedEntries shouldBe effectiveguard.excludedEntries
+          if (exclusionappend && actualruntime.nonEmpty) {
+            import org.goldenport.cncf.workflow.{WorkflowInstanceRecordJsonV1, WorkflowMechanicalTransition, WorkflowMechanicalTransitionJsonV1}
+            finalcapture.schemaVersion shouldBe R.exclusionCaptureSchema
+            finalcapture.scope.get.schemaVersion shouldBe R.exclusionScopeSchema
+            finalcapture.postStageGuard.excludedFiles.map(_.path) shouldBe (exclusions ++ additions)
+            Then("collection preserves the actual V3 source capture index and every completed source-stage fact")
+            interruptedguard shouldBe Some(finalcapture.postStageGuard)
+            indexpaths.map(path => Files.readAllBytes(path).toVector) shouldBe interruptedindices.get
+            val beforecollection = interruptednative.get
+            val aftercollection = _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, scopedrepair.sessionId)).toMap
+            val sourcekeys = Vector("dependency-source-inspection") ++ scopebinding.paths.indices.flatMap(index =>
+              Vector("dependency-source-stage-intent-" + index, "dependency-source-stage-result-" + index)) ++
+              Vector("dependency-source-observation-intent", "dependency-source-observation-result", "candidate")
+            def _source_identity_(key: String): String = SplitPhaseExplicitPartitionFixture.take(WorkflowMechanicalTransition.keyC(
+              WorkflowMechanicalTransition.Reference(scopedrepair.sessionId + ":ordered-candidate:" + finalcapture.sourceRevision + ":" + key, "1")))
+            sourcekeys.foreach { key =>
+              val identity = _source_identity_(key)
+              beforecollection.get(identity) should not be empty
+              aftercollection.get(identity) shouldBe beforecollection.get(identity)
+            }
+            val candidaterow = parse(beforecollection(_source_identity_("candidate"))).fold(error => fail(error.message), identity)
+            val candidatebytes = candidaterow.hcursor.get[String]("mechanicalPayload").fold(error => fail(error.message), identity)
+            candidatebytes should startWith("cncf.workflow-json.v1:")
+            val catalog = SplitPhaseExplicitPartitionFixture.take(GoalPhaseRuntimeCatalog.loadC())
+            val definitions = SplitPhaseExplicitPartitionFixture.take(WorkflowInstanceRecordJsonV1.catalogC(Vector(catalog.definition)))
+            val savedcandidate = SplitPhaseExplicitPartitionFixture.take(WorkflowMechanicalTransitionJsonV1.decodeC(
+              candidatebytes.stripPrefix("cncf.workflow-json.v1:"), definitions, GoalPhaseNativeCandidate.codec)).payload.value
+            savedcandidate.dependencySourceDirection shouldBe Some(capture.direction)
+            savedcandidate.dependencySourceScope shouldBe finalcapture.scope
+            savedcandidate.dependencySourceCapture shouldBe Some(finalcapture)
+            savedcandidate.dependencySourceStages.map(_.path) shouldBe scopebinding.paths
+            savedcandidate.dependencySourceStages.foreach { fact =>
+              R.stageFactValid(fact) shouldBe true
+              fact.before.excludedFiles shouldBe effectiveguard.excludedFiles
+              fact.after.excludedFiles shouldBe effectiveguard.excludedFiles
+              fact.before.excludedEntries shouldBe effectiveguard.excludedEntries
+              fact.after.excludedEntries shouldBe effectiveguard.excludedEntries
+            }
+            _executions(root).size shouldBe 2
+            val ownerbytes = Files.readAllBytes(repository.resolve(additions.head))
+            When("an added excluded document drifts before independent review completion")
+            Files.writeString(repository.resolve(additions.head), "other owner review-time byte drift\n")
+            val refusedreview = _review(selected, finalreview, artifact = "noninput-exclusion-drift")
+            Then("freshness refuses that completion without rerunning checks or absorbing the owner edit")
+            refusedreview.exitCode should not be 0
+            _executions(root).size shouldBe 2
+            Files.write(repository.resolve(additions.head), ownerbytes)
+            val retained = _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, scopedrepair.sessionId))
+            When("the retained review is collected again through ordinary native re-entry")
+            val collected = scenario.advance(selected.task).business[V.GoalPhaseAdvanceResult]
+            Then("the same issued work and complete source facts are retained without duplicate staging or adoption")
+            collected.issuedWorkContext shouldBe scopedreview.issuedWorkContext
+            _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, scopedrepair.sessionId)) shouldBe retained
+            _executions(root).size shouldBe 2
+          }
+          _executions(root).size shouldBe 2
+          Files.readAllBytes(prefix.firstReview.invocation.stdout).toVector shouldBe originalFirstReview
+        }
+        val finalrequest = finalreview.business[V.GoalPhaseAdvanceResult].work.get
+        val reviewissues = finalrequest.issues.toVector.flatMap(_.issues).filter(issue =>
+          issue.source == "REVIEW" && finalrequest.stepIdentity.contains(issue.step) &&
+            Set(finalrequest.selectedPlan.repository, replacement.dependency.repository)(issue.repository))
+        reviewissues.map(_.summary) shouldBe (if (extendscope)
+          Vector("Qualify the required additional dependency source") else Vector.empty)
+        val resolvedreport = Option.when(extendscope)(V.GoalPhaseIssueReport(reviewissues.map(issue =>
+          V.GoalPhaseIssueDisposition(issue.identity, "RESOLVED",
+            "SPECIFICATION-OWNED independent confirmation of the newly qualified additional source", None))))
+        When("ordinary independent review explicitly resolves its actual issue and Step closure advances to whole-Phase validation")
+        val phaseReview = _close_step(selected, finalreview, "source-revision-second", resolvedreport)
+          .business[V.GoalPhaseAdvanceResult]
         val finalIndex = _native_fixture(scenario)(core => WorkflowManagedProcessExecution.executeGitC(core,
           GitOperation.IndexTree, replacement.dependency.workspace).flatMap(_.valueC))
         Then("the freshly qualified source route remains in use and unrelated index content is unchanged")
         phaseReview.work.get.kind shouldBe "ReviewPhase"
+        reviewissues.foreach(issue => phaseReview.work.get.issues.get.issues.find(_.identity == issue.identity)
+          .map(_.status) shouldBe Some("RESOLVED"))
         Files.readString(repository.resolve(exclusion)) shouldBe "another owner's staged document\n"
-        finalIndex.value shouldBe capture.postStageGuard.indexTree
+        finalIndex.value shouldBe finalcapture.postStageGuard.indexTree
       }
     }
   }

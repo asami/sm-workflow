@@ -246,7 +246,7 @@ private[smworkflow] object GoalPhaseNativeDependencyValidation {
     revised: Option[GoalPhaseDependencySourceRevision.Capture] = None):
     Consequence[Vector[GoalPhaseNativeValidation.Check]] = if (revised.nonEmpty) {
     val value = revised.get
-    val binding = value.direction.target.binding
+    val binding = GoalPhaseDependencySourceRevision.bindingOf(value)
     val combined = primary ++ binding.checks.map(_.copy(dependency = Some(binding.identity)))
     if (capture.isEmpty && GoalPhaseDependencySourceRevision.captureValid(value) && combined.size <= 16 &&
         combined.map(_.identity).distinct.size == combined.size && combined.map(_.ordinal).distinct.size == combined.size &&
@@ -265,10 +265,10 @@ private[smworkflow] object GoalPhaseNativeDependencyValidation {
     revised: Option[GoalPhaseDependencySourceRevision.Capture] = None): Consequence[Option[String]] =
     if (revised.nonEmpty && check.dependency.nonEmpty) {
       val source = revised.get
-      val binding = source.direction.target.binding
+      val binding = GoalPhaseDependencySourceRevision.bindingOf(source)
       if (capture.isEmpty && GoalPhaseDependencySourceRevision.captureValid(source) && check.dependency.contains(binding.identity) &&
           binding.checks.exists(_.copy(dependency = Some(binding.identity)) == check))
-        Consequence.success(Some(source.direction.target.proposal.consumption.programs
+        Consequence.success(Some(GoalPhaseDependencySourceRevision.consumptionOf(source).programs
           .find(p => p.check == check.identity && p.kind == check.kind.wire)
           .map(_.workspace).getOrElse(binding.dependency.workspace)))
       else D.invalid("check has no exact captured revised-source binding")
