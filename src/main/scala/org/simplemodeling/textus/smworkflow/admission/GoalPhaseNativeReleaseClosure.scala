@@ -63,7 +63,7 @@ private[smworkflow] object GoalPhaseNativeReleaseClosure {
       e.exitCode != null && (e.outcome != "succeeded" || e.exitCode.contains(0)) &&
       e.stderr != null && e.stderr.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 32768 &&
       e.selectedPaths != null && e.selectedPaths.nonEmpty && e.selectedPaths.size <= 256 &&
-      e.selectedPaths.distinct == e.selectedPaths && B.pathsOwned(e.selectedPaths, value.input.plan.steps.flatMap(_.ownedPaths).distinct)) &&
+      e.selectedPaths.distinct == e.selectedPaths && value.input.plan.phasePathsOwned(e.selectedPaths)) &&
     value.commit.forall(c => c != null && value.execution.exists(e => e.outcome == "succeeded" && e.exitCode.contains(0)) &&
       Vector(c.identity, c.parent, c.tree).forall(v => v != null && v.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")) &&
       c.parent == value.parent.head && c.identity != c.parent && c.tree == value.input.candidate.tree)
@@ -147,7 +147,7 @@ private[smworkflow] object GoalPhaseNativeReleaseClosure {
   private final class Store(adapter: WorkflowManagedMechanicalTransition[Payload], session: F.Session,
     d: F.Declaration, core: ActionCall.Core, from: InstanceRecord, controller: O.State,
     val input: R.Input, val ordinal: Int, acknowledge: String => Consequence[Unit]) {
-    val owned = controller.plan.steps.flatMap(_.ownedPaths).distinct
+    val owned = controller.plan.phaseOwnedPaths
     val initial = Payload(input, controller.tipSnapshot, ordinal)
     private def _reference(role: String) = WorkflowMechanicalTransition.Reference(from.identity.value +
       ":ordered-release-closure:" + from.revision.value + ":" + role, "1")
@@ -186,8 +186,10 @@ private[smworkflow] object GoalPhaseNativeReleaseClosure {
       _ <- if (root == d.target.root.toString && finalroot == root && before == after && before.mergeHead.isEmpty &&
           before.observed.branch == d.target.localBranch && before.observed.head == initial.parent.head &&
           before.observed.tree == initial.parent.tree && tree == input.candidate.tree && index == tree &&
-          B.scopedDirty(before.observed.dirty, owned, true) && B.pathsOwned(pending.map(_.value), owned) &&
-          selected.selectedPaths.nonEmpty && B.pathsOwned(selected.selectedPaths.map(_.value), owned) &&
+          B.scopedDirty(before.observed.dirty, owned, true) && controller.plan.phasePathsOwned(pending.map(_.value)) &&
+          before.observed.dirty.filter(B.touches(_, controller.plan.phaseRepairInventory)).forall(p =>
+            controller.plan.phasePathsOwned((Vector(p.path) ++ p.renamedFrom.toVector).distinct)) &&
+          selected.selectedPaths.nonEmpty && controller.plan.phasePathsOwned(selected.selectedPaths.map(_.value)) &&
           pending.forall(p => selected.selectedPaths.exists(s => _covers(s.value, p.value))) &&
           check.findingKeys.isEmpty && differences.isEmpty) Consequence.unit
         else F.invalid("Final commit preconditions differ from accepted candidate, scope or physical selection")
@@ -195,7 +197,7 @@ private[smworkflow] object GoalPhaseNativeReleaseClosure {
     def executionC(result: GitExecutionResult[Unit]): Consequence[Execution] = for {
       selection <- GitSelectionId.parseC("goal-step-" + ordinal)
       _ <- if (result.operation == GitOperation.CommitSelected(selection) && result.target.workspaceId.value == "sm-workflow-repository" &&
-          result.selectedPaths.nonEmpty && B.pathsOwned(result.selectedPaths.map(_.value), owned)) Consequence.unit
+          result.selectedPaths.nonEmpty && controller.plan.phasePathsOwned(result.selectedPaths.map(_.value))) Consequence.unit
         else F.invalid("Final commit result belongs to another operation or selection")
       process = result.processResult
       exit = process.termination match { case ProcessExecutionTermination.Exited(code) => Some(code); case _ => None }

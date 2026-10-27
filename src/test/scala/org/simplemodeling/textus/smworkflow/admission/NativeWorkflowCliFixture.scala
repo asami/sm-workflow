@@ -40,7 +40,7 @@ private[admission] object NativeWorkflowCliFixture {
       value.steps.map(s => V.GoalPhaseOrderedStep(s.identity, s.purpose, s.ownedPaths, s.dependencies, s.checks,
         s.actionPolicy.map(p => { import io.circe.syntax.*; GoalPhaseNativeMetadata.record(p.asJson) }))),
       value.phaseChecks, value.repairLimit, A.publicAdoption(value.acceptance),
-      A.publicEffective(value.effectiveAcceptance))
+      A.publicEffective(value.effectiveAcceptance), value.phaseRepairInventory)
 
   final case class Invocation(argv: Vector[String], pid: Long, stdout: Path, stderr: Path) {
     def logs: String = s"argv=$argv; pid=$pid; stdout=$stdout; stderr=$stderr\n" +

@@ -31,13 +31,28 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     steps: Vector[Step], phaseChecks: Vector[String], repairLimit: Int = 10,
     phaseReviewClassification: Option[GoalPhaseWorkClassification.Classification] = None,
     acceptance: Option[GoalPhaseAcceptanceBoundary.Adoption] = None,
-    effectiveAcceptance: Option[GoalPhaseAcceptanceBoundary.Effective] = None)
+    effectiveAcceptance: Option[GoalPhaseAcceptanceBoundary.Effective] = None,
+    phaseRepairInventory: Vector[String] = Vector.empty) {
+    def phaseOwnedPaths: Vector[String] = (steps.flatMap(_.ownedPaths) ++ phaseRepairInventory).distinct
+    def phasePathsOwned(paths: Vector[String]): Boolean =
+      paths != null && paths.distinct == paths && paths.forall(path =>
+        steps.exists(_.ownedPaths.exists(owner => path == owner || path.startsWith(owner + "/"))) ||
+          phaseRepairInventory.contains(path))
+  }
   object Plan {
     given Encoder[Plan] = deriveEncoder[Plan].mapJson(_.mapObject(_.filter {
       case ("phaseReviewClassification" | "acceptance" | "effectiveAcceptance", value) => !value.isNull
+      case ("phaseRepairInventory", value) => !value.asArray.exists(_.isEmpty)
       case _ => true
     }))
-    given Decoder[Plan] = deriveDecoder
+    private val _decoder: Decoder[Plan] = deriveDecoder
+    given Decoder[Plan] = Decoder.instance { cursor =>
+      val selected = if (cursor.downField("phaseRepairInventory").succeeded) cursor.value
+        else cursor.value.mapObject(_.add("phaseRepairInventory", Json.arr()))
+      _decoder.decodeJson(selected).flatMap(value =>
+        if (_valid_phase_inventory(value.phaseRepairInventory)) Right(value)
+        else Left(io.circe.DecodingFailure("Phase repair inventory requires finite unique literal relative paths", cursor.history)))
+    }
   }
   final case class Snapshot(head: String, tree: String)
   object Snapshot {
@@ -341,6 +356,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       _ <- if (proposed.revision != plan.revision && proposed.identity == plan.identity &&
           proposed.phase == plan.phase && proposed.repository == plan.repository &&
           proposed.repairLimit == plan.repairLimit && proposed.phaseChecks == plan.phaseChecks &&
+          proposed.phaseRepairInventory == plan.phaseRepairInventory &&
           proposed.phaseReviewClassification == plan.phaseReviewClassification) Consequence.unit
         else invalid("Plan adoption must retain Plan identity, Phase, repository and closure policy")
       _ <- if (current &&
@@ -381,6 +397,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       _ <- if (proposed.revision != plan.revision && proposed.identity == plan.identity &&
           proposed.phase == plan.phase && proposed.repository == plan.repository &&
           proposed.repairLimit == plan.repairLimit && proposed.phaseChecks == plan.phaseChecks &&
+          proposed.phaseRepairInventory == plan.phaseRepairInventory &&
           proposed.phaseReviewClassification == plan.phaseReviewClassification &&
           proposed.steps.size == plan.steps.size && proposed.steps.take(cursor) == plan.steps.take(cursor) &&
           proposed.steps.drop(cursor).zip(plan.steps.drop(cursor)).forall { (next, prior) =>
@@ -406,6 +423,25 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       None, None, None, None, None, repositoryReceipt, None, None,
       documentDecision = false, ordinaryRepairs = ordinaryRepairs, pendingRepair = None,
       stepAdmission = None, releaseCommit = releaseCommit, repairControl = repairControl, repairObservations = repairObservations)
+
+    /** Continue the already reserved phase repair with an exact inventory append.
+      * No additional repair batch is consumed and no past acceptance is changed.
+      */
+    private[admission] def adoptPhaseRepairInventoryC(proposed: Plan, evidence: String): Consequence[State] = for {
+      _ <- if (text(evidence) && !evidence.exists(_.isControl) &&
+          (stage == Stage.Repair || (stage == Stage.Decision && decisionSource.contains(Stage.Repair))) &&
+          cursor == plan.steps.size && cursor == completed.size &&
+          completed.map(_.step) == plan.steps.map(_.identity) && completed.forall(validStepAcceptance) &&
+          repairs > 0 && repairs <= effectiveRepairLimit && repairDirective.exists(_valid_directive) &&
+          pendingRepair.isEmpty && !policyRepairPending && repairControl.flatMap(_.stop).isEmpty &&
+          !documentDecision && closureIntent.isEmpty && phaseReviewedCandidate.isEmpty &&
+          phaseRecordingPaths.isEmpty && releaseCommit.isEmpty && generation < Long.MaxValue) Consequence.unit
+        else invalid("Phase repair inventory requires the all-closed active reserved phase repair and no stop or closure frontier")
+      _ <- phaseRepairInventoryPathsC(plan, proposed)
+    } yield new State(proposed, Stage.Repair, cursor, generation + 1, repairs, base, completed,
+      None, None, None, None, None, repositoryReceipt, repairDirective, None,
+      documentDecision = false, ordinaryRepairs = ordinaryRepairs, pendingRepair = None,
+      repairControl = repairControl, repairObservations = repairObservations)
 
     /** Eligibility only. The native owner binds the actual Review finding and
       * new condition to an independently admitted Human directive. This consumes
@@ -485,6 +521,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       _ <- if (proposed.identity == plan.identity && proposed.revision != plan.revision &&
           proposed.phase == plan.phase && proposed.repository == plan.repository &&
           proposed.repairLimit == plan.repairLimit && proposed.phaseChecks == plan.phaseChecks &&
+          proposed.phaseRepairInventory == plan.phaseRepairInventory &&
           proposed.phaseReviewClassification == plan.phaseReviewClassification &&
           proposed.acceptance == plan.acceptance && proposed.effectiveAcceptance == plan.effectiveAcceptance &&
           proposed.steps.size == plan.steps.size + 1 && proposed.steps.take(plan.steps.size) == plan.steps &&
@@ -513,6 +550,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         Option.when(proposed.phase != plan.phase)("phase"),
         Option.when(proposed.repository != plan.repository)("repository"),
         Option.when(proposed.repairLimit != plan.repairLimit)("repair-limit"),
+        Option.when(proposed.phaseRepairInventory != plan.phaseRepairInventory)("phase-repair-inventory"),
         Option.when(proposed.steps.take(cursor) != plan.steps.take(cursor))("completed-steps"),
         Option.when(protectedcount > cursor && proposed.steps.lift(cursor) != plan.steps.lift(cursor))("issued-step"),
         Option.when(phaselocked && proposed.steps != plan.steps)("phase-scope"),
@@ -792,6 +830,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
 
   def startC(plan: Plan, initial: Snapshot, repairPolicy: Option[String] = None): Consequence[State] = for {
     _ <- validatePlanC(plan)
+    _ <- if (plan.phaseRepairInventory.isEmpty) Consequence.unit
+      else invalid("A new Plan cannot start with unadmitted Phase repair inventory")
     _ <- if (validSnapshot(initial)) Consequence.unit else invalid("native initial Git snapshot is missing")
     _ <- if (repairPolicy != null && repairPolicy.forall(_ == R.version)) Consequence.unit
       else invalid("runtime repair policy is unsupported")
@@ -852,9 +892,27 @@ private[smworkflow] object GoalPhaseOrderedProgression {
   private def _inventory_overlap(left: String, right: String): Boolean =
     left == right || left.startsWith(right + "/") || right.startsWith(left + "/")
 
+  private[admission] def phaseRepairInventoryPathsC(current: Plan, proposed: Plan): Consequence[Vector[String]] = for {
+    _ <- validatePlanC(current)
+    _ <- GoalPhaseAcceptanceBoundary.savedPlanC(current)
+    _ <- validatePlanC(proposed)
+    _ <- GoalPhaseAcceptanceBoundary.savedPlanC(proposed)
+    added = proposed.phaseRepairInventory.drop(current.phaseRepairInventory.size)
+    _ <- if (proposed.revision != current.revision && added.nonEmpty &&
+        proposed.phaseRepairInventory.take(current.phaseRepairInventory.size) == current.phaseRepairInventory &&
+        proposed.copy(revision = current.revision, phaseRepairInventory = current.phaseRepairInventory) == current &&
+        added.forall(value => !current.phaseOwnedPaths.exists(_inventory_overlap(_, value))) &&
+        added.indices.forall(i => !added.take(i).exists(_inventory_overlap(_, added(i))))) Consequence.unit
+      else invalid("Phase repair inventory may only append uncovered exact literal paths at a fresh revision; every other Plan value stays exact")
+  } yield added
+
+  private def _valid_phase_inventory(values: Vector[String]): Boolean = values != null && values.size <= 256 &&
+    values.distinct == values && values.forall(value => path(value) && value.trim == value &&
+      !value.exists(c => c.isControl || "*?[]{}".contains(c)))
+
   def validatePlanC(plan: Plan): Consequence[Unit] = {
     if (plan == null || !Vector(plan.identity, plan.revision, plan.phase, plan.repository).forall(text) ||
-        plan.steps == null || plan.steps.isEmpty || plan.steps.size > 64 ||
+        plan.steps == null || plan.steps.isEmpty || plan.steps.size > 64 || !_valid_phase_inventory(plan.phaseRepairInventory) ||
         !identities(plan.phaseChecks) || plan.phaseChecks.isEmpty || plan.repairLimit < 0 || plan.repairLimit > 64 ||
         plan.phaseReviewClassification == null || plan.phaseReviewClassification.exists(value =>
           value == null || value.kind != GoalPhaseWorkClassification.Kind.REVIEW || value.validateC.toOption.isEmpty))

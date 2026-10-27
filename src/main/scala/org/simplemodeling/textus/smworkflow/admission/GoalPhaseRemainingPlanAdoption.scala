@@ -107,7 +107,10 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
       "participant" -> Json.fromString(participant), "reference" -> Json.obj(
         "identity" -> Json.fromString(reference.identity), "revision" -> Json.fromString(reference.revision)))))
 
-  def selectBinding(value: Json): Either[String, Json] = for {
+  def selectBinding(value: Json): Either[String, Json] =
+    if (Option(value).exists(_.hcursor.downField("remainingPlanAdoption").downField("target").downField("schemaVersion").succeeded))
+      GoalPhaseRepairInventoryContinuation.selectBinding(value)
+    else for {
     supplied <- Option(value).toRight("remaining Plan directive binding is absent")
     component <- supplied.hcursor.get[String]("componentInstance").left.map(_.message)
     target <- supplied.hcursor.downField("remainingPlanAdoption").get[Target]("target").left.map(_.message)

@@ -1293,6 +1293,7 @@ OperationResult
 | repairLimit | int | 1 |
 | acceptance | GoalPhaseAcceptanceAdoption | ? |
 | effectiveAcceptance | GoalPhaseEffectiveAcceptanceBoundary | ? |
+| phaseRepairInventory | string | * |
 
 ## GoalPhaseAcceptanceCondition
 
@@ -3565,6 +3566,11 @@ on = dependency-inventory-continued-Implementation
 
 to = Repair
 on = dependency-inventory-continued-Repair
+
+##### TRANSITION
+
+to = Repair
+on = phase-repair-inventory-continued
 
 ##### TRANSITION
 

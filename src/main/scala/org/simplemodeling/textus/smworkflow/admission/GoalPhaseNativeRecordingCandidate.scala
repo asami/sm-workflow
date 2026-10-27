@@ -42,7 +42,8 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
   def observedC(controller: O.State, payload: Payload): Consequence[O.State] = payload.finalCandidate match {
     case Some(value) if value == payload.reviewedCandidate && payload.changedPaths.isEmpty => Consequence.success(controller)
     case Some(value) if payload.changedPaths.nonEmpty && payload.changedPaths.distinct == payload.changedPaths &&
-        payload.changedPaths.forall(payload.assignedPaths.contains) && payload.changedPaths.forall(payload.stagedPaths.contains) =>
+        payload.changedPaths.forall(payload.assignedPaths.contains) && payload.changedPaths.forall(payload.stagedPaths.contains) &&
+        controller.plan.phasePathsOwned(payload.changedPaths) =>
       controller.acceptC(O.PhaseFindingRecordsObserved(payload.reviewedCandidate, value, payload.changedPaths))
     case _ => F.invalid("recording candidate has no bounded actual final observation")
   }
@@ -102,8 +103,7 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
     tree <- G.indexTreeC(store.core)
     parent <- GitObjectId.parseC(store.reviewed.head)
     global <- E.executeGitC(store.core, GitOperation.PendingPaths(parent)).flatMap(_.valueC)
-    _ <- if (GoalPhaseNativeCandidateBoundary.pathsOwned(global.map(_.value),
-        store.controller.plan.steps.flatMap(_.ownedPaths).distinct)) Consequence.unit
+    _ <- if (store.controller.plan.phasePathsOwned(global.map(_.value))) Consequence.unit
       else F.invalid("recording candidate includes an unrelated index delta")
     reviewed <- GitObjectId.parseC(store.reviewed.tree)
     nativepaths <- E.executeGitC(store.core, GitOperation.PendingPaths(reviewed)).flatMap(_.valueC)
@@ -127,7 +127,7 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
     // Release FIX is already staged, checked and reviewed. It may coexist with
     // recording edits only while its index content remains exactly that tree.
     val stagedScope = (assigned ++ (if (controller.releaseRepairActive)
-      controller.plan.steps.flatMap(_.ownedPaths) else controller.phaseRecordingPaths)).distinct
+      controller.plan.phaseOwnedPaths else controller.phaseRecordingPaths)).distinct
     private def _reference(key: String) = WorkflowMechanicalTransition.Reference(from.identity.value +
       ":ordered-recording-candidate:" + from.revision.value + ":" + key, "1")
     private def _load_c(key: String): Consequence[Option[Saved]] = adapter.loadRetainedC(_reference(key))(using core.executionContext).flatMap {
@@ -193,6 +193,8 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
             stagedScope, false) &&
           GoalPhaseNativeCandidateBoundary.scopedDirty(actual.dirty.filterNot(p =>
             GoalPhaseNativeCandidateBoundary.touches(p, assigned)), stagedScope, true) &&
+          actual.dirty.filter(GoalPhaseNativeCandidateBoundary.touches(_, controller.plan.phaseRepairInventory)).forall(p =>
+            controller.plan.phasePathsOwned((Vector(p.path) ++ p.renamedFrom.toVector).distinct)) &&
           delta.forall(p => staged.contains(p.value) && assigned.contains(p.value)))
         Consequence.unit else F.invalid("recording candidate has unexpected edits or changed root, branch or completed-Step tip")
     } yield actual

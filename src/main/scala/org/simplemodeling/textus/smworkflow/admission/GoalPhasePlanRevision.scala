@@ -42,6 +42,7 @@ private[smworkflow] object GoalPhasePlanRevision {
     value => D.instructionsC(Some(value), None).map(_ => ()))
 
   val remainingPurposeScope = "remaining-purpose"
+  val phaseRepairInventoryScope = "phase-repair-inventory"
   final case class Captured(proposal: Proposal, plan: O.Plan, documents: Option[D.Bound] = None,
     revisionScope: Option[String] = None)
   object Captured {
@@ -95,6 +96,8 @@ private[smworkflow] object GoalPhasePlanRevision {
       json <- io.circe.parser.parse(text).fold(error => Consequence.stateConflict(error.message), Consequence.success)
       normalized <- normalizeJsonC(json)
       proposal <- normalized.as[Proposal].fold(error => Consequence.stateConflict(error.message), Consequence.success)
+      _ <- _check(proposal.plan.phaseRepairInventory.isEmpty || normalized == proposal.asJson,
+        "Phase repair inventory proposal requires exactly its complete canonical non-null fields")
     } yield Some(proposal) }
 
   def publicProposal(value: Option[Proposal]): Option[Record] =
@@ -117,9 +120,10 @@ private[smworkflow] object GoalPhasePlanRevision {
     _ <- _check(value.plan.copy(effectiveAcceptance = None) == value.proposal.plan,
       "captured Plan differs from its explicit raw proposal")
     _ <- _check(value.documents != null, "captured documents Option is null")
-    _ <- _check(value.revisionScope != null && value.revisionScope.forall(_ == remainingPurposeScope),
+    _ <- _check(value.revisionScope != null && value.revisionScope.forall(scope =>
+      Set(remainingPurposeScope, phaseRepairInventoryScope)(scope)),
       "captured revision scope is invalid")
-    _ <- _check(value.revisionScope.isEmpty || value.documents.isEmpty,
+    _ <- _check(!value.revisionScope.contains(remainingPurposeScope) || value.documents.isEmpty,
       "remaining-purpose cannot replace selected documents")
     _ <- value.documents.fold(Consequence.unit)(_documents_c(value.plan, _))
   } yield ()
@@ -141,7 +145,12 @@ private[smworkflow] object GoalPhasePlanRevision {
     documents: Option[D.Bound] = None): Consequence[Captured] = for {
     _ <- _check(controller != null && documents != null, "semantic capture source is absent")
     _ <- validateProposalC(proposal)
-    captured <- if (_future_purpose_changed(controller.plan, controller.cursor, proposal.plan)) for {
+    captured <- if (proposal.plan.phaseRepairInventory != controller.plan.phaseRepairInventory) for {
+      plan <- Consequence.success(proposal.plan.copy(effectiveAcceptance = controller.plan.effectiveAcceptance))
+      selected = Captured(proposal, plan, documents, Some(phaseRepairInventoryScope))
+      _ <- validateCapturedC(selected)
+      _ <- controller.adoptPhaseRepairInventoryC(plan, "proposal-eligibility")
+    } yield selected else if (_future_purpose_changed(controller.plan, controller.cursor, proposal.plan)) for {
       _ <- _check(documents.isEmpty, "remaining-purpose requires absent selected documents")
       _ <- _check(proposal.plan.acceptance == controller.plan.acceptance,
         "remaining-purpose must retain raw acceptance")
@@ -173,8 +182,10 @@ private[smworkflow] object GoalPhasePlanRevision {
     _ <- validateCapturedC(captured)
     _ <- O.validatePlanC(previous)
     _ <- captured.revisionScope match {
+      case Some(`phaseRepairInventoryScope`) => O.phaseRepairInventoryPathsC(previous, captured.plan).map(_ => ())
       case Some(`remainingPurposeScope`) => validateRemainingPurposeC(previous, cursor, captured.plan)
-      case None => _check(!_future_purpose_changed(previous, cursor, captured.plan),
+      case None => _check(previous.phaseRepairInventory == captured.plan.phaseRepairInventory &&
+        !_future_purpose_changed(previous, cursor, captured.plan),
         "future purpose changes require explicit remaining-purpose scope")
       case _ => _check(false, "captured revision scope is invalid")
     }
@@ -211,6 +222,7 @@ private[smworkflow] object GoalPhasePlanRevision {
     _ <- validateCapturedC(captured)
     _ <- _check(controller != null, "controller is absent")
     adopted <- captured.revisionScope match {
+      case Some(`phaseRepairInventoryScope`) => controller.adoptPhaseRepairInventoryC(captured.plan, evidence)
       case None => controller.adoptRevisionC(captured.plan, evidence)
       case Some(`remainingPurposeScope`) => for {
         _ <- validateRemainingPurposeC(controller.plan, controller.cursor, captured.plan)

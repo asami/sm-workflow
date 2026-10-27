@@ -41,12 +41,14 @@ private[smworkflow] object IncrementalSbtDiagnosisInformation {
   final case class FailureContext(sourceRevision: String, candidate: GoalPhaseOrderedProgression.Snapshot,
     selected: Vector[GoalPhaseNativeValidation.Check], receipts: Vector[RepositorySyncNativeMergeValidation.Receipt])
   final case class WorkContext(ownedPaths: Vector[String], failure: Option[FailureContext],
-    candidate: Option[GoalPhaseOrderedProgression.Snapshot])
+    candidate: Option[GoalPhaseOrderedProgression.Snapshot],
+    phasePlan: Option[GoalPhaseOrderedProgression.Plan] = None)
   private def context(work: GoalPhaseNativeWork.Request): WorkContext = WorkContext(
     work.stepIdentity.flatMap(id => work.selectedPlan.steps.find(_.identity == id)).map(_.ownedPaths)
-      .getOrElse(work.selectedPlan.steps.flatMap(_.ownedPaths)),
+      .getOrElse(work.selectedPlan.phaseOwnedPaths),
     work.checkFailure.map(f => FailureContext(f.validation.sourceRevision, f.validation.candidate,
-      f.validation.selected, f.validation.receipts)), failedCandidate(work))
+      f.validation.selected, f.validation.receipts)), failedCandidate(work),
+    Option.when(work.stepIdentity.isEmpty)(work.selectedPlan))
 
   trait SourceReader {
     def readC(path: String): Consequence[Option[String]]
@@ -141,7 +143,8 @@ private[smworkflow] object IncrementalSbtDiagnosisInformation {
     else if (s.kind == "source-file") {
       val owners = work.ownedPaths
       val path = s.path.get
-      if (!WorkspaceFilePath.parseC(path).isSuccess || !owners.exists(p => path == p || path.startsWith(p + "/")))
+      val owned = work.phasePlan.fold(owners.exists(p => path == p || path.startsWith(p + "/")))(_.phasePathsOwned(Vector(path)))
+      if (!WorkspaceFilePath.parseC(path).isSuccess || !owned)
         Consequence.success(_missing(s, "Source is outside this work's selected repository ownership; no read attempted"))
       else Consequence.success(files.readC(path).map {
         case None => _missing(s, "Managed File reports no text")

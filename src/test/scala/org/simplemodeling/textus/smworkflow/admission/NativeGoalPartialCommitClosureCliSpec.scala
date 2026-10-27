@@ -317,7 +317,7 @@ final class NativeGoalPartialCommitClosureCliSpec extends AnyWordSpec with Match
         value.steps.map(step => V.GoalPhaseOrderedStep(step.identity, step.purpose, step.ownedPaths,
           step.dependencies, step.checks, step.actionPolicy.map(policy => GoalPhaseNativeMetadata.record(policy.asJson)))),
         value.phaseChecks, value.repairLimit, GoalPhaseAcceptanceBoundary.publicAdoption(value.acceptance),
-        GoalPhaseAcceptanceBoundary.publicEffective(value.effectiveAcceptance))
+        GoalPhaseAcceptanceBoundary.publicEffective(value.effectiveAcceptance), value.phaseRepairInventory)
       Then("the new description reconstructs the exact old base, chain, counts and Plan while binding only the explicit inventory delta")
       describedcall.invocation.pid should not be oldquestioncall.invocation.pid
       target.plan.copy(effectiveAcceptance = None) shouldBe episode.plan

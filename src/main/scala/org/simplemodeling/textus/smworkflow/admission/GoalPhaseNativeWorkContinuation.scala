@@ -23,6 +23,7 @@ import GoalPhaseNativeReviewCompletion as Q
 import GoalPhaseInitialPhaseCheckRepair as J
 import GoalPhaseDependencyInventoryContinuation as I
 import GoalPhaseStepTestReportRepair as U
+import GoalPhaseRepairInventoryContinuation as K
 
 /** Ordered implementation, repair and review work and their provided result are installed
   * together. Canonical atomic suspension/completion owns all writes. No result
@@ -153,7 +154,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     dependencyChain: DependencyChain = _empty_dependency_chain,
     dependencySourceDirection: Option[GoalPhaseDependencySourceRevision.Direction] = None,
     diagnoses: Vector[IncrementalSbtDiagnosisRepair.Prior] = Vector.empty,
-    consumptionDirection: Option[GoalPhaseDependencySourceRevision.Direction] = None)
+    consumptionDirection: Option[GoalPhaseDependencySourceRevision.Direction] = None,
+    phaseInventory: Option[K.Saved] = None, deferredHuman: Option[K.Deferred] = None)
   private sealed trait Located
   private final case class Frontier(cursor: Cursor) extends Located
   private final case class Work(prepared: Prepared) extends Located
@@ -271,11 +273,15 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
 
     def describeRemainingPlanC(input: org.simplemodeling.textus.smworkflow.value.GoalPhaseRemainingPlanDescriptionInput,
       core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseRemainingPlanDescriptionResult] =
-      _remaining_plan_source_c(input.sessionId, core).flatMap(GoalPhaseRemainingPlanAdoption.describeC(_, d, core, input.proposal))
+      K.selectsProposalC(input.proposal).flatMap {
+        case true => _phase_inventory_source_c(input.sessionId, core).flatMap(K.describeC(_, d, core, input.proposal))
+        case false => _remaining_plan_source_c(input.sessionId, core).flatMap(GoalPhaseRemainingPlanAdoption.describeC(_, d, core, input.proposal))
+      }
 
     def adoptRemainingPlanC(input: org.simplemodeling.textus.smworkflow.value.GoalPhaseRemainingPlanAdoptionInput,
       core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseRemainingPlanAdoptionResult] =
-      _remaining_plan_source_c(input.sessionId, core).flatMap(GoalPhaseRemainingPlanAdoption.adoptC(_, d, core, input))
+      if (K.selectsTarget(input.target)) _phase_inventory_source_c(input.sessionId, core).flatMap(K.adoptC(_, d, core, input))
+      else _remaining_plan_source_c(input.sessionId, core).flatMap(GoalPhaseRemainingPlanAdoption.adoptC(_, d, core, input))
 
     def describeReviewPurposeRepairC(identity: String, core: ActionCall.Core):
       Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseReviewPurposeRepairDescriptionResult] =
@@ -378,6 +384,31 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         case _ => F.invalid("remaining Plan adoption requires its actual unanswered semantic Human frontier")
       }
     } yield selected
+
+    private def _phase_inventory_source_c(identity: String, core: ActionCall.Core): Consequence[K.Source] = for {
+      source <- F.retainedSessionC(identity, d, definition, core)
+      initial <- _initial_cursor_c(source)
+      located <- _walk_c(source, initial, None, None, None, core, historyonly = true)
+      selected <- located match {
+        case Human(human, _, cursor) => _phase_inventory_human_source_c(source, cursor, human, None)
+        case Paused(cursor, _, false) if cursor.deferredHuman.nonEmpty =>
+          _phase_inventory_human_source_c(source, cursor, cursor.deferredHuman.get.human, cursor.deferredHuman)
+        case _ => F.invalid("Phase inventory requires its exact unanswered or accepted-Defer phase repair Human frontier")
+      }
+      _ <- if (selected.frontier == source.current) Consequence.unit else F.invalid("Phase inventory frontier is stale")
+    } yield selected
+
+    private def _phase_inventory_human_source_c(source: F.Session, cursor: Cursor, human: H.Source,
+      deferred: Option[K.Deferred]): Consequence[K.Source] = cursor.lastresult match {
+      case Some((input, result)) => K.sourceC(source, human.from, human.controller, input, result, Some(human), deferred)
+      case None => F.invalid("Phase inventory lost its actual semantic request and result")
+    }
+
+    private def _phase_inventory_cursor(cursor: Cursor, saved: K.Saved): Cursor =
+      cursor.copy(from = saved.record, controller = saved.controller, phaseInventory = Some(saved), deferredHuman = None,
+        candidate = None, validation = None, decisioncontext = None, recordingCandidate = None,
+        inspectionSource = None, candidateObservation = None, candidateObservationContinuation = None,
+        wholePhaseCandidateRecovery = None)
 
     private def _dependency_source_revision_source_c(identity: String, core: ActionCall.Core):
       Consequence[GoalPhaseDependencySourceRevision.Source] = for {
@@ -867,7 +898,13 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
               GoalPhaseRepairPolicyAdoption.retainedC(GoalPhaseRepairPolicyAdoption.Source(source, pending,
                 cursor.controller, Some(decision), Some(decision.input -> decision.result)), core).map(Some(_))
               else Consequence.success(Option.empty[GoalPhaseRepairPolicyAdoption.Resumed])
-            adopted <- if (policy.nonEmpty || decision.sourceHistoryRecovery.nonEmpty) Consequence.success(Option.empty[GoalPhaseRemainingPlanAdoption.Selected])
+            inventory <- if (policy.isEmpty && cursor.controller.releaseRepairActive &&
+                cursor.controller.decisionSource.contains(O.Stage.Repair) && policyfollowing.exists(entry =>
+                  entry.causation.value.startsWith(K.humanCausationPrefix) &&
+                    entry.currentProgression.contains(ProgressionReference("phase.Repair"))))
+              _phase_inventory_human_source_c(source, cursor, decision, None).flatMap(K.retainedC(_, d, core))
+              else Consequence.success(Option.empty[K.Saved])
+            adopted <- if (policy.nonEmpty || inventory.nonEmpty || decision.sourceHistoryRecovery.nonEmpty) Consequence.success(Option.empty[GoalPhaseRemainingPlanAdoption.Selected])
               else GoalPhaseRemainingPlanAdoption.retainedC(decision, core, Some(d))
             result <- if (normalization.nonEmpty) {
               val saved = normalization.get
@@ -878,7 +915,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
               val resumed = policy.get
               _walk_c(source, cursor.copy(from = resumed.record, controller = resumed.controller),
                 soughtwork, soughthuman, soughtrecording, core, historyonly)
-            } else adopted match {
+            } else if (inventory.nonEmpty)
+              _walk_c(source, _phase_inventory_cursor(cursor, inventory.get), soughtwork, soughthuman, soughtrecording, core, historyonly)
+            else adopted match {
               case Some(value) => for {
                 _ <- value.dependencySourceDirection.fold(Consequence.unit) { direction =>
                   if (direction.target.runtime.nonEmpty) cursor.dependencySourceDirection match {
@@ -905,6 +944,10 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
               else port.retainedC(decision, core).flatMap {
                 case None => Consequence.success[Located](Human(decision, cursor.findings, cursor))
                 case Some((state, next, answer, input)) => for {
+                  deferred <- if (answer.result.value.choice == "Defer" && cursor.controller.releaseRepairActive &&
+                      cursor.controller.decisionSource.contains(O.Stage.Repair) && decision.sourceHistoryRecovery.isEmpty &&
+                      decision.result.result.value.dependencyProposal.isEmpty)
+                    K.deferredC(decision, next, answer).map(Some(_)) else Consequence.success(Option.empty[K.Deferred])
                   documents <- if (answer.result.value.choice == "AdoptPlanRevision")
                     input.planRevision.map(value => Consequence.success(value.documents))
                       .getOrElse(F.invalid("retained adoption has no saved captured proposal"))
@@ -912,7 +955,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                   _ <- if (answer.result.value.choice == "AdoptPlanRevision")
                     cursor.documentpolicy.fold(Consequence.unit)(_.validateC(state.plan, d.candidatePaths))
                     else Consequence.unit
-                  resumed = cursor.copy(from = next, controller = state, documents = documents,
+                  resumed = cursor.copy(from = next, controller = state, documents = documents, deferredHuman = deferred,
                     dependencyApprovals = if (answer.result.value.choice == "ApproveDependencyScope")
                       cursor.dependencyApprovals :+ GoalPhaseDependencyValidation.Approval(
                         cursor.controller.plan.steps.lift(cursor.controller.cursor).map(_.identity)
@@ -932,7 +975,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                     decisioncontext = if (cursor.controller.documentDecision || input.sourceHistoryRecovery.nonEmpty) cursor.decisioncontext else Some(
                       S.DecisionContext(decision.result.result.value, answer.result.value.choice, answer.result.value.rationale,
                         Some(answer.resultReference))))
-                  result <- if (Set("ResumeAssignedWork", "ContinueRepairs", "AdoptPlanRevision", "RejectPlanRevision", "ApproveDependencyScope", "RejectDependencyScope", "AuthorizeNewAttempt")(answer.result.value.choice))
+                  following <- GoalPhaseNativeHistory.nextC(source.current, next)
+                  result <- if (Set("ResumeAssignedWork", "ContinueRepairs", "AdoptPlanRevision", "RejectPlanRevision", "ApproveDependencyScope", "RejectDependencyScope", "AuthorizeNewAttempt")(answer.result.value.choice) ||
+                      (deferred.nonEmpty && following.exists(_.causation.value == K.causation)))
                     _walk_c(source, resumed, soughtwork, soughthuman, soughtrecording, core, historyonly)
                   else Consequence.success[Located](Paused(resumed, if (answer.result.value.choice == "Defer")
                     "Human deferred this decision. No automatic question, work, command or closure follows."
@@ -979,6 +1024,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                       candidate = if (clear) None else cursor.candidate,
                       validation = if (clear) None else cursor.validation,
                       initialPhaseRepair = if (prepared.input.kind == "ReviewPhase") None else cursor.initialPhaseRepair,
+                      phaseInventory = if (prepared.input.kind == "RepairStep" && state.stage != O.Stage.Decision) None else cursor.phaseInventory,
                       lastresult = Some(prepared.input -> value.completion.result), decisioncontext = None,
                       validationRepair = if (prepared.input.kind == "ImplementStep") None else cursor.validationRepair,
                       issues = issues, findings = findings, priorReviews = priorreviews,
@@ -1033,6 +1079,17 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         retained <- I.retainedC(source, core, selected).flatMap(_.map(Consequence.success)
           .getOrElse(F.invalid("inventory history has no exact retained native receipt")))
         result <- _walk_c(source, _inventory_cursor(cursor, retained),
+          soughtwork, soughthuman, soughtrecording, core, historyonly)
+      } yield result
+      case O.Stage.Decision if entry.causation.value == K.causation => for {
+        selected <- cursor.deferredHuman match {
+          case Some(deferred) => _phase_inventory_human_source_c(source, cursor, deferred.human, Some(deferred))
+          case None => K.selectC(source, cursor.from, cursor.controller, cursor.lastresult).flatMap(
+            _.map(Consequence.success).getOrElse(F.invalid("Phase inventory history has no actual typed repair proposal")))
+        }
+        retained <- K.retainedC(selected, d, core).flatMap(_.map(Consequence.success)
+          .getOrElse(F.invalid("Phase inventory history has no exact retained native receipt")))
+        result <- _walk_c(source, _phase_inventory_cursor(cursor, retained),
           soughtwork, soughthuman, soughtrecording, core, historyonly)
       } yield result
       case O.Stage.Decision if entry.causation.value == J.causation => for {
@@ -1437,6 +1494,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
 
         case _ => F.invalid("review has no actual current candidate and passed native checks")
       }
+      case "RepairStep" if cursor.phaseInventory.nonEmpty => Consequence.success(None)
       case "RepairStep" if _step_test_report_provenance(cursor).nonEmpty => Consequence.success(None)
       case "RepairStep" if _initial_phase_provenance(cursor).nonEmpty => Consequence.success(None)
       case "RepairStep" if cursor.validation.exists(_.payload.outcome.exists(
@@ -1459,7 +1517,10 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     }
 
     private def _check_failure_context_c(cursor: Cursor, kind: String): Consequence[Option[S.CheckFailureContext]] =
-      if (kind == "RepairStep" && _step_test_report_provenance(cursor).nonEmpty)
+      if (kind == "RepairStep" && cursor.phaseInventory.nonEmpty)
+        cursor.phaseInventory.get.actualRequest.checkFailure.map(value => Consequence.success(Some(value)))
+          .getOrElse(F.invalid("Phase inventory receipt lost its genuine checked failure context"))
+      else if (kind == "RepairStep" && _step_test_report_provenance(cursor).nonEmpty)
         (cursor.candidate, cursor.validation) match {
           case (Some(candidate), Some(validation)) if candidate.payload.diff.nonEmpty =>
             S.checkFailureContextC(candidate.payload.changedPaths, candidate.payload.diff.get, validation.payload,
@@ -1693,7 +1754,11 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         else _wait_cursor_c(cursor, "Whole-Phase checks and review are retained; repository closure remains unavailable.")
       case O.Stage.Decision => for {
         initial <- _initial_phase_repair_source_c(cursor)
-        wire <- initial match {
+        inventory <- K.selectC(source, cursor.from, cursor.controller, cursor.lastresult)
+        wire <- if (inventory.nonEmpty) K.advanceC(inventory.get, d, core).flatMap { saved =>
+          F.waitC(saved.record, "Phase repair inventory continued", K.message)
+            .flatMap(_after_native_c(source, cursor, _, core))
+        } else initial match {
           case Some(selected) => J.advanceC(source, d, core, selected).flatMap { saved =>
             F.waitC(saved.record, "First whole-Phase check repair admitted",
               "Original failed checks remain retained; one ordinary Release repair batch is reserved. Fresh checks and independent Phase review remain required.")

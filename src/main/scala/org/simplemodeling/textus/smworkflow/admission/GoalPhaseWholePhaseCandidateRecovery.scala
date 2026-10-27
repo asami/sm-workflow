@@ -144,7 +144,10 @@ private[smworkflow] object GoalPhaseWholePhaseCandidateRecovery {
       p.worktree != null && p.worktree.length == 1 && RepositorySyncNativeConflictInput.relative(p.path) &&
       p.renamedFrom != null && p.renamedFrom.forall(RepositorySyncNativeConflictInput.relative)) &&
     snapshot.dirty.map(_.path).distinct.size == snapshot.dirty.size &&
-    B.scopedDirty(snapshot.dirty.map(p => G.DirtyPath(p.index.head, p.worktree.head, p.path, p.renamedFrom)), t.managementPaths, true)
+    B.scopedDirty(snapshot.dirty.map(p => G.DirtyPath(p.index.head, p.worktree.head, p.path, p.renamedFrom)), t.managementPaths, true) &&
+    snapshot.dirty.filter(p => t.controller.plan.phaseRepairInventory.exists(owner =>
+      B.covers(owner, p.path) || p.renamedFrom.exists(B.covers(owner, _)))).forall(p =>
+        t.controller.plan.phasePathsOwned((Vector(p.path) ++ p.renamedFrom.toVector).distinct))
 
   def validTarget(t: Target): Boolean = scala.util.Try(_valid_target(t)).getOrElse(false)
   private def _valid_target(t: Target): Boolean = t != null &&
@@ -166,7 +169,7 @@ private[smworkflow] object GoalPhaseWholePhaseCandidateRecovery {
     t.candidatePaths != null && t.candidatePaths.distinct == t.candidatePaths && t.managementPaths != null &&
     t.managementPaths.distinct == t.managementPaths && t.recordingPaths != null && t.recordingPaths.distinct == t.recordingPaths &&
     (t.candidatePaths ++ t.managementPaths).forall(RepositorySyncNativeConflictInput.relative) &&
-    t.controller.plan.steps.flatMap(_.ownedPaths).forall(t.candidatePaths.contains) &&
+    t.controller.plan.phaseOwnedPaths.forall(t.candidatePaths.contains) &&
     t.documentPolicy != null && t.documentPolicy.forall(_.validateC(t.controller.plan, t.candidatePaths).isSuccess) &&
     GoalPhaseNativeFindingRecording.validatePathsC(t.recordingPaths, t.controller.plan, t.candidatePaths).isSuccess &&
     t.managementPaths == (t.documentPolicy.toVector.flatMap(_.paths) ++ t.recordingPaths).distinct &&

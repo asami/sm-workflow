@@ -4,7 +4,7 @@ import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.ContextReference
 import org.goldenport.record.Record
-import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseRemainingPlanAdoption, NativeExternalEvidence, ThreeWorkflowExternalEvidencePorts}
+import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseRemainingPlanAdoption, GoalPhaseRepairInventoryContinuation, NativeExternalEvidence, ThreeWorkflowExternalEvidencePorts}
 import org.simplemodeling.textus.smworkflow.value as V
 
 /** Passive preparation of independently observed new Human direction, never an
@@ -25,13 +25,19 @@ object NativeRemainingPlanPreparation {
         execution.workerIdentity.contains(participant) &&
         _exact(participant) && _exact(issuer) && occurredAt != null) Consequence.unit
       else Consequence.stateConflict("Remaining Plan preparation requires the actual description, new directive input, matching worker, reference, issuer and time")
-    target <- GoalPhaseRemainingPlanAdoption.targetC(description.target)
-    supplied <- GoalPhaseRemainingPlanAdoption.targetC(input.target)
-    proposal <- org.simplemodeling.textus.smworkflow.admission.GoalPhasePlanRevision.fromPublicProposalC(Some(input.proposal))
-    _ <- if (target == supplied && target.sessionId == description.sessionId && proposal.contains(target.captured.proposal)) Consequence.unit
-      else Consequence.stateConflict("Remaining Plan directive crosses its described target or selected proposal")
-    binding <- GoalPhaseRemainingPlanAdoption.bindingC(description.componentInstance, target, input.rationale,
-      participant, ContextReference(reference.identity, reference.revision))
+    binding <- if (GoalPhaseRepairInventoryContinuation.selectsTarget(description.target) ||
+        GoalPhaseRepairInventoryContinuation.selectsTarget(input.target))
+      GoalPhaseRepairInventoryContinuation.preparationBindingC(description, input, participant,
+        ContextReference(reference.identity, reference.revision))
+    else for {
+      target <- GoalPhaseRemainingPlanAdoption.targetC(description.target)
+      supplied <- GoalPhaseRemainingPlanAdoption.targetC(input.target)
+      proposal <- org.simplemodeling.textus.smworkflow.admission.GoalPhasePlanRevision.fromPublicProposalC(Some(input.proposal))
+      _ <- if (target == supplied && target.sessionId == description.sessionId && proposal.contains(target.captured.proposal)) Consequence.unit
+        else Consequence.stateConflict("Remaining Plan directive crosses its described target or selected proposal")
+      selected <- GoalPhaseRemainingPlanAdoption.bindingC(description.componentInstance, target, input.rationale,
+        participant, ContextReference(reference.identity, reference.revision))
+    } yield selected
     purpose = NativeExternalEvidence.Purpose.RemainingPlanAdoption
     identity = ThreeWorkflowExternalEvidencePorts.key(reference.identity, reference.revision)
     encoded <- NativeExternalEvidence.encodeStorageC(NativeExternalEvidence.Evidence(NativeExternalEvidence.schema, purpose.identity,

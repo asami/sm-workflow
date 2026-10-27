@@ -257,7 +257,7 @@ private[smworkflow] object NativeWorkflowOperationOutput {
       value.steps.map(s => V.GoalPhaseOrderedStep(s.identity, s.purpose, s.ownedPaths, s.dependencies, s.checks,
         s.actionPolicy.map(p => GoalPhaseNativeMetadata.record(p.asJson)))),
       value.phaseChecks, value.repairLimit, GoalPhaseAcceptanceBoundary.publicAdoption(value.acceptance),
-      GoalPhaseAcceptanceBoundary.publicEffective(value.effectiveAcceptance))
+      GoalPhaseAcceptanceBoundary.publicEffective(value.effectiveAcceptance), value.phaseRepairInventory)
   private def _goal_snapshot(value: GoalPhaseOrderedProgression.Snapshot): V.GoalPhaseNativeSnapshot =
     V.GoalPhaseNativeSnapshot(value.head, value.tree)
   private def _goal_check(value: RepositorySyncNativeMergeValidation.Receipt): V.GoalPhaseNativeCheckReceipt =

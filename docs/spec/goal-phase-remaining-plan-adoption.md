@@ -1,5 +1,11 @@
 # Explicit adoption of a remaining Plan
 
+The distinct [Phase repair inventory continuation](goal-phase-repair-inventory-continuation.md)
+reuses these public Operations only with its explicit closed schema target. It
+preserves all accepted Steps and supports the actual ordinary phase-repair Human
+or its accepted Defer through its own native lineage and receipt owner. The
+ordinary, Review and current-Step target contracts below remain separate.
+
 ## Accepted proposal before question issuance (R17–R19, E4)
 
 R17. The ordinary Human owner may now issue a closed `remaining-purpose` capture

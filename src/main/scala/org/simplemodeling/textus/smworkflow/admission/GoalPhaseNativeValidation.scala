@@ -145,7 +145,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
     if (!policy.exists(_.checks.exists(_.metadata.exists(_.source.nonEmpty)))) Consequence.success("")
     else for {
       selected <- selectedChecksC(d, plan, step)
-      owned = step.fold(plan.steps.flatMap(_.ownedPaths).distinct)(identity => plan.steps.find(_.identity == identity).get.ownedPaths)
+      owned = step.fold(plan.phaseOwnedPaths)(identity => plan.steps.find(_.identity == identity).get.ownedPaths)
       instructions <- L.instructionsC(selected, step.getOrElse("phase:" + plan.phase), owned, d.candidatePaths)
     } yield instructions
   }
@@ -306,7 +306,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
       else F.invalid("primary checks have no unambiguous admitted source-consumption programs")
     selected <- GoalPhaseNativeDependencyValidation.checksC(primary, candidate.payload.dependency, candidate.payload.dependencySourceCapture)
     scope = step.getOrElse("phase:" + controller.plan.phase)
-    owned = if (whole) controller.plan.steps.flatMap(_.ownedPaths).distinct else controller.plan.steps(controller.cursor).ownedPaths
+    owned = if (whole) controller.plan.phaseOwnedPaths else controller.plan.steps(controller.cursor).ownedPaths
     _ <- L.bindingsC(selected, scope, owned, d.candidatePaths)
     frontier = from.getOrElse(candidate.record)
     _ <- frontier.validateC
@@ -514,7 +514,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
     val base = candidate.payload.continuation.map(_.parent).getOrElse(controller.candidateBase)
     val whole = controller.cursor == plan.steps.size
     val checks = if (whole) plan.phaseChecks else plan.steps(controller.cursor).checks
-    val ownedPaths = if (whole) plan.steps.flatMap(_.ownedPaths).distinct else plan.steps(controller.cursor).ownedPaths
+    val ownedPaths = if (whole) plan.phaseOwnedPaths else plan.steps(controller.cursor).ownedPaths
     val managementPaths = (documentPolicy.toVector.flatMap(_.paths) ++ recordingPaths).distinct
     val validationStage = if (whole) "PhaseValidation" else "Validation"
     val reviewStage = if (whole) "PhaseReview" else "Review"
@@ -759,19 +759,23 @@ private[smworkflow] object GoalPhaseNativeValidation {
       _ <- if (root == d.target.root.toString && actual.branch == d.target.localBranch &&
           actual.head == parent.head && actual.head == initial.candidate.head && actual.tree == parent.tree &&
           tree == initial.candidate.tree && candidate.payload.selectedPaths == candidate.payload.stagedPaths &&
-          (!whole || (if (controller.releaseRepairActive) B.pathsOwned(candidate.payload.selectedPaths, ownedPaths)
+          (!whole || (if (controller.releaseRepairActive) plan.phasePathsOwned(candidate.payload.selectedPaths)
             else candidate.payload.selectedPaths.forall(managementPaths.contains))) &&
-          B.scopedDirty(actual.dirty, scoped, true)) Consequence.unit
+          B.scopedDirty(actual.dirty, scoped, true) && (!whole ||
+            actual.dirty.filter(B.touches(_, plan.phaseRepairInventory)).forall(p =>
+              plan.phasePathsOwned((Vector(p.path) ++ p.renamedFrom.toVector).distinct)))) Consequence.unit
         else F.invalid("actual native candidate cannot establish the selected check preconditions")
       oid <- GitObjectId.parseC(parent.head)
       paths <- E.executeGitC(core, GitOperation.PendingPaths(oid)).flatMap(_.valueC)
-      _ <- if (B.pathsOwned(paths.map(_.value), scoped)) Consequence.unit
+      _ <- if (B.pathsOwned(paths.map(_.value), scoped) && (!whole || plan.phasePathsOwned(paths.map(_.value)))) Consequence.unit
         else F.invalid("native validation includes an unrelated index delta")
       after <- G.observeC(core)
       index <- G.indexTreeC(core)
       afterroot <- G.rootC(core)
       _ <- if (afterroot == root && after.branch == actual.branch && after.head == parent.head && after.tree == parent.tree &&
-          index == initial.candidate.tree && B.scopedDirty(after.dirty, scoped, true)) Consequence.unit
+          index == initial.candidate.tree && B.scopedDirty(after.dirty, scoped, true) && (!whole ||
+            after.dirty.filter(B.touches(_, plan.phaseRepairInventory)).forall(p =>
+              plan.phasePathsOwned((Vector(p.path) ++ p.renamedFrom.toVector).distinct)))) Consequence.unit
         else F.invalid("native validation frontier drifted during observation")
     } yield ()
     def acknowledgeC(stage: String): Consequence[Unit] = acknowledgement(stage) match {

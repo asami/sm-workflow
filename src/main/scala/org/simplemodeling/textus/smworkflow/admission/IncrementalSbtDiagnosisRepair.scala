@@ -88,7 +88,7 @@ private[smworkflow] object IncrementalSbtDiagnosisRepair {
           val stepchecks = work.stepIdentity.flatMap(id => work.selectedPlan.steps.find(_.identity == id)).map(_.checks)
             .getOrElse(work.selectedPlan.phaseChecks)
           val owners = work.stepIdentity.flatMap(id => work.selectedPlan.steps.find(_.identity == id)).map(_.ownedPaths)
-            .getOrElse(work.selectedPlan.steps.flatMap(_.ownedPaths))
+            .getOrElse(work.selectedPlan.phaseOwnedPaths)
           // The retained native vector also contains separately admitted dependency
           // checks. Match the public primary selection and the adopted Step scope;
           // dependency execution remains mandatory in native validation, not in this
@@ -97,7 +97,8 @@ private[smworkflow] object IncrementalSbtDiagnosisRepair {
           val behavioral = GoalPhaseNativeMetadata.declaredIdentities(primary.filter(c =>
             c.kind == WorkflowSbtValidation.Kind.Test || c.kind == WorkflowSbtValidation.Kind.TestOnly))
           manifest.sourceRevision == validation.sourceRevision && manifest.candidate == validation.candidate &&
-            manifest.ownedPaths.forall(path => owners.exists(p => path == p || path.startsWith(p + "/"))) &&
+            (if (work.stepIdentity.isEmpty) work.selectedPlan.phasePathsOwned(manifest.ownedPaths)
+              else manifest.ownedPaths.forall(path => owners.exists(p => path == p || path.startsWith(p + "/")))) &&
             GoalPhaseNativeMetadata.declaredIdentities(primary) == stepchecks &&
             manifest.checks.forall(stepchecks.contains) && manifest.checks.exists(behavioral.contains) &&
             primary.filter(_.kind == WorkflowSbtValidation.Kind.Compile).forall(c => manifest.checks.contains(c.identity)) &&
