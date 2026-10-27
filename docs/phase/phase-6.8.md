@@ -1,6 +1,6 @@
 # Phase 6.8: Commit Recovery and Delegated Delivery
 
-Status: in progress; C1/C2 and C3 accepted at their issued Step scope; D1/D2 source authored, qualification and Phase acceptance pending.
+Status: in progress; C1/C2, C3, D1/D2 and C4/D3 accepted at their issued Step scope; C5/D4 source alignment authored, installed/live qualification and Phase acceptance pending.
 Planned: 2026-10-26 (Asia/Tokyo)
 Owner: sm-workflow development
 Native Start: Session `15e4adbe862418c95b8fb7c6a1374155`, Plan revision `1`,
@@ -11,6 +11,7 @@ Sequence: Phase 6.7 -> Phase 6.8 -> Phase 6.9 -> Phase 7
 Specification: [commit completion and recovery](../spec/commit-completion-and-recovery.md)
 Delegation contract: [sm-delegate-task](../spec/delegate-task.md)
 Checklist: [P68 acceptance](phase-6.8-checklist.md)
+Current delivery: [C5/D4 qualification and successor handoff](../journal/2026/10/2026-10-27-phase-6.8-caller-delivery-handoff.md)
 Handoff: [development adoption](../journal/2026/10/2026-10-26-phase-6.8-commit-recovery-handoff.md)
 
 ## Purpose and active-work boundary

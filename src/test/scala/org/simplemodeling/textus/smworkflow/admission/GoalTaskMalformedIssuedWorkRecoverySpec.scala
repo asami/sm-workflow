@@ -97,11 +97,11 @@ final class GoalTaskMalformedIssuedWorkRecoverySpec extends AnyWordSpec with Mat
       result.get
     }
     def provision(description: V.GoalTaskMalformedIssuedWorkRecoveryDescriptionResult, choice: String,
-      name: String): V.GoalTaskMalformedIssuedWorkRecoveryInput = {
+      name: String, rationale: String = "Specification-owned exact-target direction; no actual Human consent claimed"): V.GoalTaskMalformedIssuedWorkRecoveryInput = {
       val reference = V.WorkflowArtifactReference("specification-human-" + name, "1")
       val answer = V.GoalTaskMalformedIssuedWorkRecoveryInput(description.sessionId,
         take(R.targetC(description.target)).oldContinuationId, description.target, choice,
-        "Specification-owned exact-target direction; no actual Human consent claimed", "participant", reference)
+        rationale, "participant", reference)
       project(call => for {
         prepared <- NativeRetainedWorkRecoveryPreparation.prepareC(description, answer, reference,
           V.WorkflowExecutionEvidence(Vector(reference), Some("participant"), None, None), "participant",
@@ -165,8 +165,9 @@ final class GoalTaskMalformedIssuedWorkRecoverySpec extends AnyWordSpec with Mat
       (started.sessionId, old)
     }
   }
-  private def withEpisode(root: Path)(body: Episode => Unit): Unit =
-    _with_runtime_(root, "TaskRecovery", hostParameters = BoundedWorkExecutionAdmissionFixture.parameters) {
+  private def withEpisode(root: Path, componentinstance: String = "repository-spec")(body: Episode => Unit): Unit =
+    _with_runtime_(root, "TaskRecovery", hostParameters = BoundedWorkExecutionAdmissionFixture.parameters,
+      componentInstance = componentinstance) {
       (owner, component, actor, project) => body(new Episode(root, owner, component, actor, project))
     }
   private def root(): Path = Files.createTempDirectory(Files.createDirectories(
@@ -179,6 +180,126 @@ final class GoalTaskMalformedIssuedWorkRecoverySpec extends AnyWordSpec with Mat
     def canonical(record: InstanceRecord): Json =
       io.circe.parser.parse(take(WorkflowInstanceRecordJsonV1.encodeC(record))).toOption.get
     canonical(actual) shouldBe canonical(expected)
+  }
+
+  /** The managed view and public CLI use different Record naming projections.
+    * Compare every issued-context member through the ordinary public codec. */
+  private def assertSameIssuedContext(actual: Option[V.WorkflowIssuedWorkContext],
+    expected: Option[V.WorkflowIssuedWorkContext]): Unit = {
+    def canonical(value: Option[V.WorkflowIssuedWorkContext]): Option[Json] = value.map { context =>
+      val json = io.circe.parser.parse(take(context.toRecord().toJsonStringC)).toOption.get
+      GoalPhaseNativeMetadata.normalizePublicJson(json).toOption.get
+    }
+    canonical(actual) shouldBe canonical(expected)
+  }
+
+  /** Focused installed qualification reuses the existing managed historical
+    * issuer and trusted specification host. The actual public describe/recover/
+    * Advance/Submit calls below are independent installed CLI processes. No raw
+    * workflow row is seeded or edited and no real user Task is selected.
+    */
+  private[admission] def qualifyInstalledRecovery(scenario: NativeWorkflowCliFixture.Scenario,
+    executable: Path, installations: Path, covering: Boolean): Unit = {
+    import StandaloneFixExecution.given
+    val choice = if (covering) R.nonexecutionChoice else R.choices.head
+    val effects = if (covering) "NOT_EXECUTED" else "UNKNOWN"
+    var session = ""
+    var old = ""
+    var original = Option.empty[WorkflowInteraction[StandaloneFixExecution.Work, Nothing]]
+    var before = Option.empty[InstanceRecord]
+    var oldbinding = Option.empty[V.WorkflowIssuedWorkContext]
+    def register(): Unit = {
+      val assembly = scenario.root.resolve(".textus/assembly.yaml")
+      val text = Files.readString(assembly)
+      require(text.contains("components: []"), "Register only the retained specification-owned normal host")
+      Files.writeString(assembly, text.replace("components: []",
+        "components:\n  - namespace: org.simplemodeling.textus\n    id: SmWorkflow\n    version: 0.1.0-SNAPSHOT"))
+    }
+    def json(value: org.goldenport.record.RecordPresentable): String = take(value.toRecord().toJsonStringC)
+    def call(operation: String, parameters: Vector[String]): NativeWorkflowCliFixture.Result =
+      scenario.callInstalled(executable, "GoalTaskService", operation, parameters, Some(installations),
+        Some(scenario.root.resolve(".textus/assembly.yaml")))
+    def advance(): V.GoalTaskView = call("advanceGoalTask", Vector("--sessionId", session)).business[V.GoalTaskView]
+    withEpisode(scenario.root, componentinstance = "default") { e =>
+      val started = e.startMalformed()
+      session = started._1
+      old = started._2
+      original = Some(e.issue(old))
+      before = Some(e.current(session))
+    }
+    register()
+    oldbinding = advance().issuedWorkContext
+    oldbinding.get.continuationId shouldBe old
+    val description = call("describeGoalTaskMalformedIssuedWorkRecovery", Vector("--input",
+      json(V.GoalTaskMalformedIssuedWorkRecoveryDescriptionInput(session, old))))
+      .business[V.GoalTaskMalformedIssuedWorkRecoveryDescriptionResult]
+    description.sessionId shouldBe session
+    description.outcome shouldBe "decision-required"
+    description.externalEffects shouldBe "UNKNOWN"
+    val target = take(R.targetC(description.target))
+    val absent = V.GoalTaskMalformedIssuedWorkRecoveryInput(session, old, description.target, choice,
+      "SPECIFICATION input alone is not independently admitted evidence", "participant",
+      V.WorkflowArtifactReference("specification-no-admission", "1"))
+    call("recoverGoalTaskMalformedIssuedWork", Vector("--input", json(absent))).exitCode should not be 0
+    advance().issuedWorkContext shouldBe oldbinding
+    var direction = Option.empty[V.GoalTaskMalformedIssuedWorkRecoveryInput]
+    withEpisode(scenario.root, componentinstance = "default") { e =>
+      // Only this independently trusted fixture host provisions its admitted
+      // SPECIFICATION Human source, never an asserted real chat/user event.
+      direction = Some(e.provision(description, choice, "installed-" + effects.toLowerCase,
+        if (covering) "SPECIFICATION-OWNED independent host observation covers this exact fixture issue and caller sources; no external executor was invoked"
+        else "SPECIFICATION-OWNED exact-target Human branch qualification; no actual user consent is claimed and external effects remain UNKNOWN"))
+      e.issue(old) shouldBe original.get
+      assertSameNativeRecord(e.current(session), before.get)
+    }
+    register()
+    val recovered = call("recoverGoalTaskMalformedIssuedWork", Vector("--input", json(direction.get)))
+      .business[V.GoalTaskMalformedIssuedWorkRecoveryDescriptionResult]
+    recovered.outcome shouldBe "recovered-awaiting-advance"
+    recovered.externalEffects shouldBe effects
+    recovered.successorContinuationId shouldBe None
+    val successor = advance()
+    successor.kind shouldBe "Request"
+    successor.sessionId shouldBe session
+    val binding = successor.issuedWorkContext.get
+    binding.continuationId should not be old
+    binding.executionRequirement.getString("reasoning_class")
+      .orElse(binding.executionRequirement.getString("reasoningClass")) shouldBe Some("DesignStandard")
+    binding.executionRequirement.getRecord("disposition") should not be empty
+    val workjson = io.circe.parser.parse(take(successor.work.get.toJsonStringC)).toOption.get
+    val normalized = GoalPhaseNativeMetadata.normalizePublicJson(workjson).toOption.get
+    normalized.hcursor.get[StandaloneFixExecution.State]("state").toOption.get shouldBe target.business.state
+    val redisplayed = advance()
+    redisplayed.issuedWorkContext shouldBe successor.issuedWorkContext
+    redisplayed.work shouldBe successor.work
+    val collected = call("recoverGoalTaskMalformedIssuedWork", Vector("--input", json(direction.get)))
+      .business[V.GoalTaskMalformedIssuedWorkRecoveryDescriptionResult]
+    collected.outcome shouldBe "already-recovered"
+    collected.successorContinuationId shouldBe Some(binding.continuationId)
+    collected.externalEffects shouldBe effects
+    val result = V.GoalTaskWorkResult("completed", "SPECIFICATION delayed original result; must remain unaccepted",
+      Vector.empty, NonEmptyVector.one(V.GoalTaskCondition("objective", true, "Specification-owned semantic result")),
+      Vector.empty, None, None)
+    val reference = V.WorkflowArtifactReference("specification-delayed-original-result", "1")
+    val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("specification-implementer"), None,
+      Some(V.WorkflowExecutionObservation("INLINE", BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity,
+        BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity, BoundedWorkExecutionAdmissionFixture.profile.identity)))
+    val late = call("submitGoalTaskWorkResult", Vector("--sessionId", session, "--result", json(result),
+      "--resultReference", json(reference), "--executionEvidence", json(execution), "--issuedWorkContext", json(oldbinding.get)))
+    late.exitCode should not be 0
+    advance().issuedWorkContext shouldBe successor.issuedWorkContext
+    withEpisode(scenario.root, componentinstance = "default") { e =>
+      val retained = e.retained(session, old)
+      retained.receipt.payload.direction.target.business shouldBe target.business
+      retained.receipt.payload.externalEffects shouldBe effects
+      e.issue(old) shouldBe original.get
+      val current = e.current(session)
+      current.history.take(before.get.history.size) shouldBe before.get.history
+      current.suspension should not be empty
+      assertSameIssuedContext(e.advance(session).issuedWorkContext, successor.issuedWorkContext)
+    }
+    register()
+    advance().issuedWorkContext shouldBe successor.issuedWorkContext
   }
 
   "Managed public Task recovery" should {

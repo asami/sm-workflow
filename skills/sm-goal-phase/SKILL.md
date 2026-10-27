@@ -994,3 +994,10 @@ command route for operational work; the client connection remains lightweight.
 ## Caller information
 
 Follow [caller information return](../../docs/spec/caller-information.md). When the runtime requests an attributable observation, keep the original issuedWorkContext and exact source locator. Use observations already available to this caller or its ordinary public tools. Return available, partial or unavailable through prepare-information/record-information with --runtime-root. Display the kind, source reference, availability and retained continuation; preserve raw source in its artifact rather than paraphrasing it as proof. This return performs no Submit, recovery or Advance and confers no Human consent. Never start another model or source provider to acquire this information.
+
+Completion record continuation uses the [shared closure contract](../../docs/spec/commit-completion-and-recovery.md).
+An accepted original Terminal retains its caller scope; missing records or publication
+do not authorize replaying development, successful validation or accepted Submit.
+Use the exact public description and independently admitted continuation authority;
+UNKNOWN effects remain UNKNOWN until observed. Standalone FIX keeps its own
+uncommitted completion contract.

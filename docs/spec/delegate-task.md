@@ -1,9 +1,11 @@
 # Delegated development and delivery
 
 Date: 2026-10-27
-Status: adopted target contract; implementation and installed qualification pending.
+Status: D1–D3 source routes delivered; C5 distribution alignment authored; installed and actual cross-chat qualification pending.
 Owner: [Phase 6.8](../phase/phase-6.8.md), D1–D4.
-Public skill: `sm-delegate-task` (planned, not yet installed by this document).
+Public skill: [sm-delegate-task](../../skills/sm-delegate-task/SKILL.md), packaged by the Component.
+Finite caller: [public operations and host bindings](native-delegate-task-caller.md).
+Source packaging does not establish actual installation.
 
 ## Independent entry, shared execution
 
@@ -19,8 +21,9 @@ diagnostic information, validation selection, conditional assessment/review,
 integrated acceptance, typed Git/SBT, Journal/Evidence and result collection.
 Add only the delegation business lifecycle and thin caller adapter; no second
 executor, FIX controller, publication runner or skill-owned state machine.
-Concrete public Operation/DTO names are to be defined in CML during development,
-not inferred from the skill name. Generate the normal ABI/help/resources there.
+Concrete public Operation/DTO names are declared in CML: DelegateTaskService,
+DelegateTaskDeliveryService and NativeWorkflowPreparationService.prepareDelegateTaskStart.
+Use their normal ABI/help/resources and the finite caller contract.
 
 ## Request and ownership
 

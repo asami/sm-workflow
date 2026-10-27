@@ -7,8 +7,8 @@ import org.simplemodeling.textus.smworkflow.admission.ValidationTestPolicy
 
 /** Java-only handback for the Scala 2 SBT build, using the Scala 3 CNCF producer.
   * This adapter owns no suite catalog, annotation interpreter or metadata merge.
-  * @since Oct. 24, 2026
-  * @version Oct. 24, 2026
+  * @since   Oct. 24, 2026
+  * @version Oct. 27, 2026
   */
 object LabelledTestSelection {
   def select(root: String, revision: String, purpose: String, suites: Array[String],
@@ -19,8 +19,11 @@ object LabelledTestSelection {
       Path.of(root).toRealPath(), "org.simplemodeling.textus.smworkflow")))
     val inventory = D.discoverC(scope, loader).fold(
       failure => throw new IllegalStateException(s"Canonical CNCF test discovery failed: $failure"), identity)
-    val candidates = suites.toSet.filterNot(name => Class.forName(name, false, loader)
-      .isAnnotationPresent(classOf[DoNotDiscover]))
+    // DoNotDiscover excludes automatic purpose discovery, not a caller's actual
+    // explicit suite selection. Metadata and nonempty-operation admission still
+    // apply to every explicitly selected suite below.
+    val candidates = suites.toSet.filter(name => purpose == "EXPLICIT" ||
+      !Class.forName(name, false, loader).isAnnotationPresent(classOf[DoNotDiscover]))
     val relevant = inventory.operations.filter(operation => candidates(operation.selector.suiteClassName))
     val missing = candidates -- relevant.map(_.selector.suiteClassName).toSet
     val diagnostics = inventory.diagnostics.filter(d => candidates(d.source) ||

@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  private val _skill_paths = Vector("sm-goal-phase", "sm-split-phase", "sm-repository-sync", "sm-test-fix", "sm-goal-task", "sm-review-fix")
+  private val _skill_paths = Vector("sm-goal-phase", "sm-split-phase", "sm-repository-sync", "sm-test-fix", "sm-goal-task", "sm-review-fix", "sm-delegate-task")
     .map(name => s"skills/$name/SKILL.md")
   private val _contract_paths = Vector(
     "docs/spec/native-host-execution.md",
@@ -25,6 +25,9 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
     "docs/spec/task-fix-delivery.md",
     "docs/spec/standalone-fix-runtime.md",
     "docs/spec/goal-task-runtime.md",
+        "docs/spec/delegate-task.md",
+        "docs/spec/native-delegate-task-caller.md",
+        "docs/spec/commit-completion-and-recovery.md",
     "docs/spec/standalone-review-fix-runtime.md",
     "docs/spec/goal-phase-acceptance-boundary.md",
     "docs/spec/goal-phase-release-repair-continuation.md",
@@ -42,12 +45,12 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
   private val _distribution_paths = _skill_paths ++ _contract_paths ++ _caller_paths ++ _supporting_paths
 
   "Component-owned skill resources" should {
-    "retain exactly the six public semantic skill sources in the actual component JAR" in {
+    "retain exactly the seven public semantic skill sources in the actual component JAR" in {
       Given("the official packageBin component artifact and the independently readable authoring sources")
       val artifact = Paths.get("target/scala-3.3.8/textus-sm-workflow_3-0.1.0-SNAPSHOT.jar")
       withClue("Run packageBin before this artifact acceptance spec: ")(Files.isRegularFile(artifact) shouldBe true)
       val prefix = "META-INF/sm-workflow/skills/"
-      val names = Vector("sm-goal-phase", "sm-split-phase", "sm-repository-sync", "sm-test-fix", "sm-goal-task", "sm-review-fix")
+      val names = Vector("sm-goal-phase", "sm-split-phase", "sm-repository-sync", "sm-test-fix", "sm-goal-task", "sm-review-fix", "sm-delegate-task")
       val expected = names.map(name => s"$prefix$name/SKILL.md")
       val jar = new JarFile(artifact.toFile)
       try {
@@ -140,7 +143,7 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
       val probe = probeRoot.resolve("repacked.zip")
       Files.isRegularFile(original) shouldBe true
       withClue("Run checkSkillBundleReproducibility before this scenario: ")(Files.isRegularFile(probe) shouldBe true)
-      When("the complete ZIP bytes and all fifteen copied sources, timestamps and original authoring bytes are read")
+      When("the complete ZIP bytes and all declared copied sources, timestamps and original authoring bytes are read")
       val originalBytes = Files.readAllBytes(original).toVector
       val probeBytes = Files.readAllBytes(probe).toVector
       val copies = _distribution_paths.map { path =>

@@ -187,6 +187,7 @@ Public skills distributed with this component use only the `sm-*` namespace:
 | `sm-test-fix` | `StandaloneFixWorkflow` |
 | `sm-review-fix` | `StandaloneFixWorkflow` (original findings) |
 | `sm-goal-task` | `GoalTaskWorkflow` |
+| `sm-delegate-task` | `DelegateTaskWorkflow` |
 
 These are the skill-bundle naming/binding contract, not a claim that Phase 1
 installs the production skill bundle. Public `sm-*` skills are designed to return
@@ -195,6 +196,11 @@ their command/CLI wiring and real integration are Phase 6 work, without invoking
 depending on legacy `cncf-*` skills. Existing `cncf-*` skills remain unchanged for
 long-term compatible parallel operation; shared development execution helpers
 are not the distributed public skill interface.
+
+Delegation uses [finite public operations and ordinary host bindings](docs/spec/native-delegate-task-caller.md).
+An authorized existing-chat transport, destination local commit, runtime publication,
+returned result, requester artifact attachment and actual consumer activation retain
+separate attributable outcomes. The adapter adds no queue or publication executor.
 
 ## Historical application-contract evidence
 

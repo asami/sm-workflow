@@ -4,6 +4,16 @@ Status: in progress; source implementation is not qualification or Phase accepta
 Owner: [Phase 6.8](phase-6.8.md).
 Contract: [commit completion and recovery](../spec/commit-completion-and-recovery.md).
 
+The existing Session has accepted four issued Steps through C4/D3, committed as
+`c5ae41601accbea83d2d46378b0f8ac0fae67f8b`. Its selected completion-record suite
+passed 8/8 and delegation suite 3/3; the conditional assessment admitted that
+candidate without executing a separate Step review. These are scoped retained
+facts, not acceptance of all 33 Phase conditions. C5/D4's installed suite and
+seven-skill distribution are authored; no execution result is claimed here.
+Actual D2 dispatch, destination execution/publication, returned result and consumer
+adoption/activation remain outstanding. See the
+[qualification handoff](../journal/2026/10/2026-10-27-phase-6.8-caller-delivery-handoff.md).
+
 - [ ] P68-01 (C1): Map actual P67/PA/SHR/RRC/ROBS/Git evidence to reused
   capabilities and gaps; no duplicate work or unsupported completion claims.
 - [ ] P68-02 (C1): Necessary same-purpose file additions/document revisions

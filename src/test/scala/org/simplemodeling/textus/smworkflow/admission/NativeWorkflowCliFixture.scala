@@ -422,7 +422,7 @@ private[admission] object NativeWorkflowCliFixture {
       require(!Files.exists(stdout) && !Files.exists(stderr), "Owned invocation logs must not replace previous outputs")
       val builder = new ProcessBuilder(argv.asJava).directory(root.toFile)
         .redirectOutput(stdout.toFile).redirectError(stderr.toFile)
-      if (sys.props.get("smworkflow.spec.installedCommand").contains(argv.head))
+      if (installations.nonEmpty || sys.props.get("smworkflow.spec.installedCommand").contains(argv.head))
         installations.map(_.toString).orElse(sys.props.get("smworkflow.spec.installations")).foreach(value =>
           builder.environment().put("SM_WORKFLOW_INSTALLATIONS", value))
       if (argv.head == "/usr/bin/git") {
