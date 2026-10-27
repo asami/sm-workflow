@@ -314,6 +314,42 @@ trials remain developer-owned reference work and are not required evidence.
 
 Completion also requires evidence that out-of-boundary assurance work is distinguished from genuine non-convergence and cannot cause an automatic repair/escalation loop.
 
+
+## 2026-10-27: Terra adoption and takeover policy (design refinement)
+
+Terra is an initial routing-profile candidate, not a new Workflow action type or a hardcoded model dependency. Preserve the already accepted Phase 6/6.1/6.2/6.3 execution and review contracts; the active implementation work here is Phase 9 provider routing.
+
+Initial *configurable* mapping hypothesis (not an automatic policy change):
+
+| Work / scope | Primary | Takeover candidate |
+| --- | --- | --- |
+| Parent orchestration | Sol High | Astra when warranted |
+| Implementation, single file | Terra High | Sol Medium |
+| Implementation, single file with deep local complexity | Terra XHigh | Sol High |
+| Implementation, multiple files | Sol Medium | Sol High |
+| Implementation, multiple components or architectural change | Sol High | Astra when warranted |
+| Local compile/fix | Terra Medium or High | Sol Medium / High |
+| Local review | Terra High when semantic review is required | Sol High |
+| Phase/final semantic review | Sol High / XHigh | Astra when warranted |
+
+Use already available WorkOrder/plan scope and ExecutionRequirement. Do not add an AI classifier solely to count files. Multi-file changes are a useful default routing signal, not proof of complexity; repetitive multi-file edits may still use Terra. A single-file architecture decision may require Sol. Config determines model IDs, reasoning effort and fallback candidates; Workflow state semantics stay provider-neutral. No mandatory benchmark, feedback system or Terra adapter is introduced as a prerequisite.
+
+Takeover triggers remain (a) provider-declared DECLINED and (b) runtime-observed non-convergence. BLOCKED remains a distinct upstream/human decision, not automatic escalation. Do not force a Terra High -> Terra XHigh -> Sol Medium -> Sol High ladder; choose the next admitted profile based on failure class and requirements. Scope growth alone is not non-convergence. Preserve the same semantic WorkOrder, candidate, evidence, consumed repair history and Admission boundary.
+
+### Counter interpretation at takeover
+
+A newly selected provider/profile begins a new *provider-local* attempt and non-convergence observation window: reset only provider-local attempt and consecutive-stall counters so that the incoming provider is judged on its own progress. Retain the WorkOrder-wide cumulative attempts, repair history, existing automatic-Fix counting window, and the absolute ten-Fix hard limit. Switching must not reset, refund or extend that shared limit. This is a design clarification of provider-local accounting, **not** a second authoritative repair ledger or permission for unlimited provider hopping.
+
+If takeover leaves too little remaining automatic repair allowance, early non-convergence detection should avoid consuming the budget on futile retries. When the shared limit is exhausted, follow the existing explicit human approval/reset contract; do not silently allocate extra cycles to Sol. Future policy may consider a separately approved takeover window, but it is not adopted here.
+
+### Acceptance checks
+
+- A config change alone can select Terra High for single-file work and Sol Medium for multi-file work, without changing Workflow semantics.
+- DECLINED and observed non-convergence both route to an admitted alternate profile; BLOCKED does not.
+- Provider-local attempt/stall counters restart at takeover while WorkOrder cumulative history and the shared ten-Fix hard limit remain unchanged.
+- The next provider receives the actual remaining allowance, validation evidence and WorkOrder identity.
+- No routing-only LLM call, unconditional CAR lint, or additional mandatory review is introduced.
+
 ## Non-goals
 
 - autonomous online learning of routing policy;
