@@ -9759,7 +9759,7 @@ WorkflowPreparedImport
 
 ##### DESCRIPTION
 
-Passively prepare the explicitly selected Authority input. Read only the declared absolute local file: URI references in the executing call. Return existing structured datastore rows without provisioning or workflow transition. Supplied metadata grants no authority.
+Passively prepare the explicitly selected Authority input: a closing Wait or an explicit original-purpose inventory authority context. Read only the declared absolute local file: URI references in the executing call. Return existing structured datastore rows without provisioning or workflow transition. Supplied metadata grants no authority; independent host admission remains required.
 
 ##### TYPE
 
@@ -10698,7 +10698,7 @@ Ad hoc single-repository development from journal or direct instructions. Native
 
 ##### DESCRIPTION
 
-Exact retained malformed Task target only. External effects remain UNKNOWN. Genuine independent Human direction permits one later ordinary Advance issue; Defer permits none. No work, Git or SBT executes during recovery.
+Exact retained malformed Task target only. Independent covering host nonexecution evidence permits unchanged preparation continuation. Otherwise genuine independent Human direction permits one later ordinary Advance issue while external effects remain UNKNOWN; Defer permits none. Any previous native claim requires observation/result collection. No work, Git or SBT executes during recovery.
 
 ##### TYPE
 
@@ -10726,7 +10726,7 @@ GoalTaskMalformedIssuedWorkRecoveryDescriptionResult
 
 ##### DESCRIPTION
 
-Exact retained malformed Task target only. External effects remain UNKNOWN. Genuine independent Human direction permits one later ordinary Advance issue; Defer permits none. No work, Git or SBT executes during recovery.
+Exact retained malformed Task target only. Independently admitted covering nonexecution continues unchanged preparation with NOT_EXECUTED; the distinct genuine Human new-attempt choice retains UNKNOWN. Defer permits no issue. Prior native claims, stale frontiers and late old results refuse. Retirement and canonical checkpoint recovery use managed atomic guards; later ordinary Advance owns the corrected issue. No work, Git or SBT executes during recovery.
 
 ##### TYPE
 

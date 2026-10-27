@@ -21,7 +21,7 @@ import GoalPhasePlanRevision as R
   * completion records direction only; owning advance issues any subsequent work.
   * The older closure-Human contract is deliberately not used for ordered work.
   * @since   Oct.  7, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseOrderedHumanDecision {
@@ -456,7 +456,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
         _ <- admitRevisionSourceC(source.controller, source.input.kind, input.result, source.documents)
         _ <- R.validateDocumentsC(source.controller, captured, source.documents)
         // Saved questions consume their own acceptance selection, never later host defaults/check policy.
-        _ <- R.adoptedC(source.controller, captured, "saved-proposal-eligibility")
+        _ <- R.eligibleC(source.controller, captured)
       } yield () }
     } yield input
 

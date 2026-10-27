@@ -25,6 +25,8 @@ private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: Nativ
     new GoalTaskMalformedIssuedWorkRecovery.EvidencePort {
       def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
         _admit_evidence_c(core, Purpose.GoalTaskMalformedIssuedWorkRecovery, key(reference.identity, reference.revision), binding)
+      override def admitNonexecutionC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
+        _admit_evidence_c(core, Purpose.GoalTaskMalformedIssuedWorkNonexecution, key(reference.identity, reference.revision), binding)
     }
   val splitStart: SplitPhaseTypedStartHumanVerification.EvidencePort = new SplitPhaseTypedStartHumanVerification.EvidencePort {
     def admitC(core: ActionCall.Core, lookupIdentity: String, target: Json) =
@@ -109,6 +111,7 @@ private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: Nativ
       _admit_evidence_c(core, Purpose.CandidateObservationContinuation, key(reference.identity, reference.revision), binding)
   }
   val remainingPlanAdoption: GoalPhaseRemainingPlanAdoption.EvidencePort = new GoalPhaseRemainingPlanAdoption.EvidencePort {
+    override def inventoryAuthorityC(core: ActionCall.Core, reference: ContextReference) = reader.inventoryAuthorityC(core, reference)
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
       _admit_evidence_c(core, Purpose.RemainingPlanAdoption, key(reference.identity, reference.revision), binding)
   }

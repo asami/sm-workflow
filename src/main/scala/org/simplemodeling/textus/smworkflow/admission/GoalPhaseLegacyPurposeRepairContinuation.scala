@@ -25,7 +25,7 @@ import GoalPhaseRemainingPlanAdoption as A
   * and unanswered question. The native disposition family retains its old outer
   * identity; the exact inner version and origin own the new business meaning.
   * @since   Oct. 24, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseLegacyPurposeRepairContinuation {
@@ -82,7 +82,8 @@ private[smworkflow] object GoalPhaseLegacyPurposeRepairContinuation {
     }
     def decode(value: Json): Either[String, StoredDisposition] = Option(value).toRight("Decision disposition is absent").flatMap { supplied =>
       if (supplied.hcursor.downField("schemaVersion").focus.isEmpty) {
-        if (_keys(supplied, Set("target", "directive", "participant", "rationale")))
+        if (_keys(supplied, Set("target", "directive", "participant", "rationale")) ||
+          _keys(supplied, Set("target", "directive", "participant", "rationale", "inventoryAuthority")))
           A.codec.decode(supplied).map(ExistingRemainingPlan(_))
         else Left("Old Decision disposition has contradictory or unknown fields")
       } else if (supplied.hcursor.get[String]("schemaVersion").contains(GoalPhaseDependencySourceRevision.schema)) for {

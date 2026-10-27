@@ -15,7 +15,7 @@ import GoalPhaseDocumentPlan as P
 /** Pure complete-Plan proposal and the question owner's captured business input.
   * Neither value certifies consent, transport integrity or execution authority.
   * @since   Oct. 18, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhasePlanRevision {
@@ -122,8 +122,7 @@ private[smworkflow] object GoalPhasePlanRevision {
     captured = Captured(proposal, plan)
     _ <- validateCapturedC(captured)
     _ <- _check(controller != null, "controller is absent")
-    // Eligibility only: this pure discarded transition is never Human evidence.
-    _ <- controller.adoptRevisionC(captured.plan, "proposal-eligibility")
+    _ <- eligibleC(controller, captured)
   } yield captured
 
   def captureDocumentsC(controller: O.State, proposal: Proposal, project: Option[A.Project],
@@ -146,6 +145,20 @@ private[smworkflow] object GoalPhasePlanRevision {
       case (Some(prior), Some(selected)) => _compatible_documents_c(controller, captured.plan, prior, selected)
       case _ => _check(false, "captured document presence differs from its predecessor")
     }
+  } yield ()
+
+  /** Describing or retaining a proposal is not authority to adopt it. Exact
+    * current inventory may reach its pending question so the separate public
+    * supersession owner can authenticate a Human directive or retained boundary.
+    * Ordinary AdoptPlanRevision continues to use its unchanged stricter guard.
+    */
+  def eligibleC(controller: O.State, captured: Captured): Consequence[Unit] = for {
+    _ <- validateCapturedC(captured)
+    _ <- _check(controller != null, "controller is absent")
+    _ <- if (controller.cursor < controller.plan.steps.size && captured.plan.steps.size == controller.plan.steps.size &&
+        captured.plan.steps.map(_.ownedPaths) != controller.plan.steps.map(_.ownedPaths))
+      controller.adoptCurrentInventoryRevisionC(captured.plan, "proposal-eligibility").map(_ => ())
+      else controller.adoptRevisionC(captured.plan, "proposal-eligibility").map(_ => ())
   } yield ()
 
   def adoptedC(controller: O.State, captured: Captured, evidence: String): Consequence[O.State] = for {

@@ -1,8 +1,12 @@
 # Phase 6.8: Commit Recovery and Delegated Delivery
 
-Status: planned; no implementation or acceptance claimed by this plan.
+Status: in progress; C1/C2 source implementation assigned, qualification and Phase acceptance pending.
 Planned: 2026-10-26 (Asia/Tokyo)
 Owner: sm-workflow development
+Native Start: Session `15e4adbe862418c95b8fb7c6a1374155`, Plan revision `1`,
+base `e3bf444d2e7369c25ca596cba0533f8562f07fa5`; retained task artifacts
+`target/sm-workflow/runtime-phase-6.8-20261027/target/sm-workflow/tasks/phase-6.8-01a1555d-b4a7-7be3-8232-5396c2f5e293/002-start/`
+and `003-advance/`. Startup is not validation or acceptance evidence.
 Sequence: Phase 6.7 -> Phase 6.8 -> Phase 6.9 -> Phase 7
 Specification: [commit completion and recovery](../spec/commit-completion-and-recovery.md)
 Delegation contract: [sm-delegate-task](../spec/delegate-task.md)

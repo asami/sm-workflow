@@ -13,7 +13,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Named public business parameters, never a native continuation envelope.
   * The one TypedValue[Json] helper below is host selection data only.
   * @since   Oct. 11, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationInputFixture {
@@ -47,13 +47,18 @@ private[smworkflow] object NativeWorkflowOperationInputFixture {
     Property("completionFacts", result.completionFacts.map(_reference), None), Property("executionEvidence", evidence, None)) ++
     (if (omitReference) Nil else List(Property("resultReference", _reference(result.resultReference), None)))
 
+  def goalWorkResult(result: GoalPhaseNativeWork.Result): V.GoalPhaseWorkResult =
+    V.GoalPhaseWorkResult(result.outcome, result.summary, result.findings,
+      GoalPhaseAcceptanceBoundary.publicReport(result.acceptance), GoalPhaseFixAssessment.publicReport(result.fixAssessment),
+      GoalPhaseFixIssues.publicReport(result.issueReport), GoalPhasePlanRevision.publicProposal(result.planRevision),
+      GoalPhaseFindingRecording.publicObservations(result.reviewObservations), GoalPhaseDependencyScope.publicProposal(result.dependencyProposal),
+      result.completionConditions.map(value => GoalPhaseNativeMetadata.record(value.asJson)),
+      GoalPhasePurposeRepair.publicSources(result.repairFindingSources),
+      dependencyValidation = GoalPhaseDependencyValidation.publicSelection(result.dependencyValidation), diagnosticRepair = None)
+
   private def _business_c(value: NativeWorkflowResultInput.Value): Consequence[(String, RecordPresentable)] = value match {
     case result: GoalPhaseFindingRecording.Result => Consequence.success("result" -> NativeWorkflowOperationOutput.goalRecordingResult(result))
-    case result: GoalPhaseNativeWork.Result => Consequence.success("result" ->
-      V.GoalPhaseWorkResult(result.outcome, result.summary, result.findings,
-        GoalPhaseAcceptanceBoundary.publicReport(result.acceptance), GoalPhaseFixAssessment.publicReport(result.fixAssessment), GoalPhaseFixIssues.publicReport(result.issueReport),
-        GoalPhasePlanRevision.publicProposal(result.planRevision), GoalPhaseFindingRecording.publicObservations(result.reviewObservations), None,
-        result.completionConditions.map(value => GoalPhaseNativeMetadata.record(value.asJson)), None, dependencyValidation = GoalPhaseDependencyValidation.publicSelection(result.dependencyValidation), diagnosticRepair = None))
+    case result: GoalPhaseNativeWork.Result => Consequence.success("result" -> goalWorkResult(result))
     case answer: GoalPhaseOrderedHumanDecision.Answer => Consequence.success("answer" ->
       V.GoalPhaseOrderedDecisionAnswer(answer.choice, answer.rationale))
     case result: SplitPhaseExplicitPartitionSemantic.Judgment => Consequence.success("result" ->

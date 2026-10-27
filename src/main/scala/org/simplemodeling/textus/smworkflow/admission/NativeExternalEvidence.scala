@@ -31,6 +31,8 @@ private[smworkflow] object NativeExternalEvidence {
     case SplitAnswer extends Purpose(SplitPhaseHumanAnswerVerification.purpose)
     case StandaloneReview extends Purpose("standalone-fix-independent-review")
     case GoalTaskMalformedIssuedWorkRecovery extends Purpose("goal-task-malformed-issued-work-recovery")
+    case GoalTaskMalformedIssuedWorkNonexecution extends Purpose("goal-task-malformed-issued-work-nonexecution")
+    case InventoryAuthority extends Purpose(GoalPhaseInventoryAuthority.purpose)
     case GoalReview extends Purpose("goal-phase-independent-review")
     case RepositoryReview extends Purpose("repository-sync-independent-review")
     case StepClosure extends Purpose("goal-phase-step-closure")
@@ -124,6 +126,30 @@ private[smworkflow] object NativeExternalEvidence {
     }
 
   final class Reader private[NativeExternalEvidence] (val declaration: Declaration) {
+    /** Discover only an explicitly addressed original authority source. The
+      * caller must subsequently evaluate coverage; this is no latest-row lookup.
+      */
+    def inventoryAuthorityC(core: ActionCall.Core, reference: org.goldenport.cncf.workflow.ContextReference):
+        Consequence[Option[GoalPhaseInventoryAuthority.Boundary]] = for {
+      record <- ManagedInputRecordRead.loadNativeEvidenceC(core, declaration.storeName, declaration.collection,
+        recordIdentity(Purpose.InventoryAuthority, ThreeWorkflowExternalEvidencePorts.key(reference.identity, reference.revision)))
+      boundary <- record match {
+        case None => Consequence.success(Option.empty[GoalPhaseInventoryAuthority.Boundary])
+        case Some(record) => for {
+          raw <- record.getString(storageField).map(Consequence.success).getOrElse(
+            Consequence.stateConflict("Retained authority source has no typed payload"))
+          value <- decodeStorageC(raw)
+          current <- decodeDeclarationC(core.component.get.subsystem.get.configuration)
+          _ <- observeValidatedC(value, current, Purpose.InventoryAuthority,
+            ThreeWorkflowExternalEvidencePorts.key(reference.identity, reference.revision), value.binding, core.executionContext.clock.instant())
+          _ <- if (value.reference == reference.identity && value.revision == reference.revision) Consequence.unit
+            else Consequence.securityPermissionDenied("Retained authority crosses its original source reference")
+          selected <- value.binding.hcursor.downField("scope").as[GoalPhaseInventoryAuthority.Boundary]
+            .fold(error => Consequence.stateConflict(error.message), Consequence.success)
+        } yield Some(selected)
+      }
+    } yield boundary
+
     def loadC(core: ActionCall.Core, purpose: Purpose, identity: String,
       binding: Json): Consequence[Option[Observed]] = for {
       record <- ManagedInputRecordRead.loadNativeEvidenceC(core, declaration.storeName, declaration.collection,
@@ -169,8 +195,13 @@ private[smworkflow] object NativeExternalEvidence {
           selected.hcursor.downField("humanAttestation").downField("answer").downField("reference").get[String]("identity").contains(value.reference) &&
           selected.hcursor.downField("humanAttestation").downField("answer").downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
       else Consequence.securityPermissionDenied("Independent Human attestation belongs to another actual participant or answer reference")
-    } else if (purpose == Purpose.GoalTaskMalformedIssuedWorkRecovery) {
-      val answer = selected.hcursor.downField("goalTaskMalformedIssuedWorkRecovery").downField("answer")
+    } else if (purpose == Purpose.InventoryAuthority) {
+      if (selected.hcursor.downField("scope").get[String]("participant").contains(value.participant)) Consequence.unit
+      else Consequence.securityPermissionDenied("Inventory authority crosses its actual original participant")
+    } else if (purpose == Purpose.GoalTaskMalformedIssuedWorkRecovery || purpose == Purpose.GoalTaskMalformedIssuedWorkNonexecution) {
+      val answer = if (purpose == Purpose.GoalTaskMalformedIssuedWorkRecovery)
+        selected.hcursor.downField("goalTaskMalformedIssuedWorkRecovery").downField("answer")
+        else selected.hcursor.downField("goalTaskMalformedIssuedWorkNonexecution").downField("observation")
       if (answer.get[String]("participant").contains(value.participant) &&
           answer.downField("reference").get[String]("identity").contains(value.reference) &&
           answer.downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
@@ -216,6 +247,8 @@ private[smworkflow] object NativeExternalEvidence {
   private def selectedC(purpose: Purpose, value: Json): Consequence[Json] = {
     val selected = purpose match {
       case Purpose.GoalTaskMalformedIssuedWorkRecovery => GoalTaskMalformedIssuedWorkRecovery.selectBinding(value)
+      case Purpose.GoalTaskMalformedIssuedWorkNonexecution => GoalTaskMalformedIssuedWorkRecovery.selectNonexecutionBinding(value)
+      case Purpose.InventoryAuthority => GoalPhaseInventoryAuthority.select(value)
       case Purpose.RepositoryEffect | Purpose.StepClosure | Purpose.PhaseClosure => NativeAuthorityScope.select(purpose, value)
       case Purpose.StandaloneReview | Purpose.GoalReview | Purpose.RepositoryReview => NativeReviewScope.select(purpose, value)
       case Purpose.GoalHuman | Purpose.RepositoryHuman => NativeHumanDecisionScope.select(purpose, value)

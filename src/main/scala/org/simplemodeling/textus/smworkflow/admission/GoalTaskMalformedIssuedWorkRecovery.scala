@@ -31,7 +31,9 @@ private[smworkflow] object GoalTaskMalformedIssuedWorkRecovery {
   val recoveryOperation = "recoverGoalTaskMalformedIssuedWork"
   val resumeCause = "goal-task-malformed-issued-work-recovered:"
   val choices = Vector("AuthorizeOneNewAttemptAcceptingUnresolvedEffects", "Defer")
-  val limitation = "External effects remain UNKNOWN. No covering nonexecution provider is installed by this route. " +
+  val nonexecutionChoice = "ContinueWithCoveringNonexecution"
+  val recoveryChoices = choices :+ nonexecutionChoice
+  val limitation = "External effects remain UNKNOWN unless independent host evidence covers the exact original issue and caller sources. " +
     "Available, unclaimed, initial revision and missing logs do not prove nonexecution. " +
     "A known native claim or completed result cannot be overridden. Recovery issues no work; a later ordinary Advance owns one new issue."
 
@@ -47,7 +49,44 @@ private[smworkflow] object GoalTaskMalformedIssuedWorkRecovery {
   val checkpointCodec = N.codec[Checkpoint]("GoalTaskMalformedIssuedWorkRecoveryCheckpoint")
   trait EvidencePort {
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json): Consequence[Unit]
+    def admitNonexecutionC(core: ActionCall.Core, reference: ContextReference, binding: Json): Consequence[Unit] =
+      Consequence.securityPermissionDenied("No independent covering nonexecution observation is installed")
   }
+
+  /** The entire issue, native frontier, original caller sources and correction
+    * are selected by the owner. Serialization is not observation: only the
+    * separately admitted host event can establish this negative execution fact.
+    */
+  def nonexecutionBindingC(owner: String, target: Target, rationale: String,
+    participant: String, reference: ContextReference): Consequence[Json] = for {
+    _ <- bindingC(owner, target, choices.head, rationale, participant, reference)
+    _ <- if (target.business.state.input.sourceReferences.nonEmpty) Consequence.unit
+      else N.invalid("Covering nonexecution requires the original caller source locators")
+  } yield Json.obj("componentInstance" -> owner.asJson,
+    "goalTaskMalformedIssuedWorkNonexecution" -> Json.obj("target" -> target.asJson,
+      "observation" -> Json.obj("source" -> "IndependentHostObservation".asJson,
+        "outcome" -> "NotExecuted".asJson, "choice" -> nonexecutionChoice.asJson,
+        "callerSources" -> target.business.state.input.sourceReferences.asJson,
+        "rationale" -> rationale.asJson, "participant" -> participant.asJson,
+        "reference" -> reference.asJson)))
+
+  def selectNonexecutionBinding(value: Json): Either[String, Json] = for {
+    owner <- value.hcursor.get[String]("componentInstance").left.map(_.message)
+    scope = value.hcursor.downField("goalTaskMalformedIssuedWorkNonexecution")
+    raw <- scope.get[Json]("target").left.map(_.message)
+    target <- decodeTarget(raw)
+    observation = scope.downField("observation")
+    rationale <- observation.get[String]("rationale").left.map(_.message)
+    participant <- observation.get[String]("participant").left.map(_.message)
+    reference <- observation.get[ContextReference]("reference").left.map(_.message)
+    binding <- nonexecutionBindingC(owner, target, rationale, participant, reference).toOption
+      .toRight("Invalid covering nonexecution observation")
+    _ <- Either.cond(value == binding, (), "Nonexecution observation crosses its exact sources or contains unsupported fields")
+  } yield binding
+
+  def checkpointAdmitted(value: Checkpoint): Boolean = value != null && value.direction != null &&
+    ((value.externalEffects == "UNKNOWN" && value.direction.choice == choices.head) ||
+      (value.externalEffects == "NOT_EXECUTED" && value.direction.choice == nonexecutionChoice))
 
   private def exact(value: String): Boolean = value != null && value.nonEmpty && value.trim == value && !value.exists(_.isControl)
   def missingBoth(requirement: ExecutionRequirement): Boolean = requirement != null &&
@@ -102,7 +141,8 @@ private[smworkflow] object GoalTaskMalformedIssuedWorkRecovery {
     pending <- adapter.inspectC(ContinuationIdentity(old), InstanceIdentity(session))(using core.executionContext)
       .flatMap(_.map(Consequence.success).getOrElse(N.invalid("Exact active pending Task issue is absent")))
     _ <- if (pending.current.definition == definition && pending.current.lifecycle == Lifecycle.Active &&
-      pending.continuation.status == ContinuationRuntimePersistence.Status.Available && pending.continuation.claimId.isEmpty)
+      pending.continuation.status == ContinuationRuntimePersistence.Status.Available && pending.continuation.claimId.isEmpty &&
+      pending.entityRevision.value == 1L)
       Consequence.unit else N.invalid("Known native execution or changed definition requires result collection, not supersession")
     order <- pending.issued.current match {
       case order: WorkflowContinuation.WorkOrder[S.Work] if missingBoth(order.requirement) => Consequence.success(order)
@@ -168,8 +208,8 @@ private[smworkflow] object GoalTaskMalformedIssuedWorkRecovery {
     retained <- adapter.loadRetainedC(ContinuationIdentity(old), current.identity)(using core.executionContext)
       .flatMap(_.map(Consequence.success).getOrElse(N.invalid("Recovery checkpoint is absent")))
     checkpoint = retained.receipt.payload
-    _ <- if (retained.receipt.nextRevision == current.revision && checkpoint.externalEffects == "UNKNOWN" &&
-      checkpoint.direction.choice == choices.head && checkpoint.direction.target.oldContinuationId == old)
+    _ <- if (retained.receipt.nextRevision == current.revision && checkpointAdmitted(checkpoint) &&
+      checkpoint.direction.target.oldContinuationId == old)
       Consequence.unit else N.invalid("Recovery checkpoint does not authorize this one ordinary reissue")
     _ <- GoalPhaseParticipantAdmission.admitC(checkpoint.direction.target.participant, core.executionContext)
     _ <- correctionCurrentC(h, storage, old, current.identity.value, core)
@@ -208,7 +248,8 @@ private[smworkflow] object GoalTaskMalformedIssuedWorkRecovery {
                 i.sessionId == t.sessionId && i.oldContinuationId == t.oldContinuationId) Consequence.unit
                 else N.invalid("Repeated recovery crosses the committed target")), _ => Consequence.unit)
               successor <- successorC(storage, saved, selected)
-              result <- outputC(saved.receipt.payload.direction.target, "already-recovered", limitation, successor)
+              result <- outputC(saved.receipt.payload.direction.target, "already-recovered",
+                recoveryMessage(saved.receipt.payload.externalEffects), successor, saved.receipt.payload.externalEffects)
             } yield result
             case None => for {
               observed <- observeC(h, storage, definition, session, old, selected)
@@ -220,16 +261,21 @@ private[smworkflow] object GoalTaskMalformedIssuedWorkRecovery {
                   _ <- if (expected == actual && input.participant == actual.participant) Consequence.unit
                     else N.invalid("Recovery target changed; describe and obtain fresh independent Human direction")
                   reference = ContextReference(input.reference.identity, input.reference.revision)
-                  binding <- bindingC(owner(selected), actual, input.choice, input.rationale, input.participant, reference)
-                  _ <- evidence.admitC(selected, reference, binding)
+                  nonexecution = input.choice == nonexecutionChoice
+                  binding <- if (nonexecution) nonexecutionBindingC(owner(selected), actual, input.rationale, input.participant, reference)
+                    else bindingC(owner(selected), actual, input.choice, input.rationale, input.participant, reference)
+                  _ <- if (nonexecution) evidence.admitNonexecutionC(selected, reference, binding)
+                    else evidence.admitC(selected, reference, binding)
                   result <- if (input.choice == "Defer") outputC(actual, "deferred", "No new attempt authorized. " + limitation)
                     else for {
                       current <- Consequence.success(observed.current)
                       entry = N.history(current, resumeCause + old)
-                      checkpoint = Checkpoint(Direction(actual, input.choice, input.rationale, input.participant, reference), "UNKNOWN")
+                      effects = if (nonexecution) "NOT_EXECUTED" else "UNKNOWN"
+                      checkpoint = Checkpoint(Direction(actual, input.choice, input.rationale, input.participant, reference), effects)
                       committed <- adapter.executeC(ContinuationIdentity(old), current.revision, observed.entityRevision, current, entry,
                         TypedValue(checkpointCodec.typeIdentity, checkpoint))(using context)
-                      response <- outputC(committed.receipt.payload.direction.target, "recovered-awaiting-advance", limitation)
+                      response <- outputC(committed.receipt.payload.direction.target, "recovered-awaiting-advance",
+                        recoveryMessage(effects), externalEffects = effects)
                     } yield response
                 } yield result
               }
@@ -257,8 +303,14 @@ private[smworkflow] object GoalTaskMalformedIssuedWorkRecovery {
     }
   } yield result
 
-  private def outputC(target: Target, outcome: String, message: String, successor: Option[String] = None): Consequence[OperationResponse] =
+  private def recoveryMessage(effects: String): String = if (effects == "NOT_EXECUTED")
+    "Independent host evidence covers nonexecution of the exact original issue and caller sources. " +
+      "Retirement issues no work; one ordinary Advance continues the unchanged authorized preparation."
+    else limitation
+
+  private def outputC(target: Target, outcome: String, message: String, successor: Option[String] = None,
+    externalEffects: String = "UNKNOWN"): Consequence[OperationResponse] =
     Consequence.success(NativeWorkflowOperationOutput.response(
       V.GoalTaskMalformedIssuedWorkRecoveryDescriptionResult(target.sessionId, target.componentInstance, outcome,
-        message, target.asJson.noSpaces, choices, recoveryOperation, "UNKNOWN", successor)))
+        message, target.asJson.noSpaces, recoveryChoices, recoveryOperation, externalEffects, successor)))
 }

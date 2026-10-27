@@ -393,14 +393,15 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       stepAdmission = None, releaseCommit = releaseCommit, repairControl = repairControl, repairObservations = repairObservations)
 
     /** Direction only: the native owner separately binds the actual Component,
-      * finite host registration and independently admitted Human directive.
+      * finite host registration and independently admitted original-purpose
+      * authority or Human directive.
       */
     private[admission] def adoptCurrentInventoryRevisionC(proposed: Plan, evidence: String): Consequence[State] = for {
       _ <- if (text(evidence) && !evidence.exists(_.isControl) && stage == Stage.Decision &&
           !documentDecision && pendingRepair.isEmpty && closureIntent.isEmpty && phaseReviewedCandidate.isEmpty &&
           cursor == completed.size && cursor < plan.steps.size && generation < Long.MaxValue &&
           decisionSource.exists(Set(Stage.Implementation, Stage.Repair))) Consequence.unit
-        else invalid("Current inventory adoption requires its independent Human directive and unanswered current implementation or repair Decision")
+        else invalid("Current inventory adoption requires admitted authority and its unanswered current implementation or repair Decision")
       _ <- currentInventoryPathsC(plan, proposed, step.identity)
     } yield new State(proposed, Stage.Implementation, cursor, generation + 1, repairs, base, completed,
       None, None, None, None, None, repositoryReceipt, None, None,

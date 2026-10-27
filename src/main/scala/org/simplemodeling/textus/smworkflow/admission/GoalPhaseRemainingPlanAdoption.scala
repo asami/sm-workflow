@@ -31,7 +31,7 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
   val purpose = "goal-phase-remaining-plan-adoption"
   val describeOperation = "describeGoalPhaseRemainingPlan"
   val adoptionOperation = "adoptGoalPhaseRemainingPlan"
-  val message = "Adopt only the remaining unaccepted work using an independently admitted actual Human directive. " +
+  val message = "Adopt only the remaining unaccepted work using an independently admitted actual Human directive, or a covering retained original-purpose inventory authority source. " +
     "The original unanswered question is retained as superseded-by-adoption, without an answer. " +
     "Accepted Steps, commits, reviews, base and repair history remain. Review continuation adds one required Step condition " +
     "for newly issued and future unaccepted work and consumes one ordinary repair. Current primary-Component inventory adoption " +
@@ -76,12 +76,15 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
         else Left(DecodingFailure("Remaining Plan target is invalid", cursor.history)))
     }
   }
-  final case class Payload(target: Target, directive: ContextReference, participant: String, rationale: String)
+  final case class Payload(target: Target, directive: ContextReference, participant: String, rationale: String,
+    inventoryAuthority: Option[GoalPhaseInventoryAuthority.Boundary] = None)
   final case class Selected(controller: O.State, record: InstanceRecord, documents: Option[D.Bound],
     decisionContext: Option[GoalPhaseNativeWork.DecisionContext] = None,
     dependencySourceDirection: Option[GoalPhaseDependencySourceRevision.Direction] = None)
   trait EvidencePort {
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json): Consequence[Unit]
+    def inventoryAuthorityC(core: ActionCall.Core, reference: ContextReference): Consequence[Option[GoalPhaseInventoryAuthority.Boundary]] =
+      Consequence.success(None)
   }
   final case class Installation(evidence: EvidencePort) {
     def validateC: Consequence[Unit] = if (evidence != null) Consequence.unit
@@ -122,14 +125,19 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
 
   private[admission] val codec: WorkflowResultJsonV1.PayloadCodec[Payload] = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "GoalPhaseRemainingPlanAdoption"
-    def encode(value: Payload): Json = value.asJson
+    def encode(value: Payload): Json = value.asJson.mapObject(fields =>
+      if (value.inventoryAuthority.isEmpty) fields.remove("inventoryAuthority") else fields)
     def decode(value: Json): Either[String, Payload] = for {
       supplied <- Option(value).toRight("remaining Plan adoption is absent")
       payload <- supplied.as[Payload].left.map(_.message)
+      _ <- Either.cond(!supplied.hcursor.downField("inventoryAuthority").focus.contains(Json.Null),
+        (), "Inventory authority must be omitted or explicit")
       _ <- Either.cond(payload != null && payload.target != null && payload.directive != null &&
         _exact(payload.directive.identity) && _exact(payload.directive.revision) && _exact(payload.participant) && _text(payload.rationale),
         (), "remaining Plan adoption is incomplete")
       _ <- _validate_target_c(payload.target).map[Either[String, Unit]](_ => Right(())).fold(error => Left(error.toString), result => result)
+      _ <- Either.cond(payload.inventoryAuthority != null && payload.inventoryAuthority.forall(GoalPhaseInventoryAuthority.valid),
+        (), "Retained inventory authority is invalid")
     } yield payload
   }
 
@@ -164,13 +172,24 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
     reference = ContextReference(input.reference.identity, input.reference.revision)
     binding <- bindingC(core.component.get.core.instanceId.canonicalKey, actual, input.rationale,
       source.session.participantIdentity, reference)
-    _ <- installation.evidence.admitC(core, reference, binding)
+    authority <- if (actual.currentInventory.nonEmpty) installation.evidence.inventoryAuthorityC(core, reference)
+      else Consequence.success(Option.empty[GoalPhaseInventoryAuthority.Boundary])
+    _ <- authority match {
+      case Some(value) => for {
+        _ <- if (source.result.result.value.dependencyProposal.isEmpty &&
+          source.result.result.value.planRevision.contains(actual.captured.proposal)) Consequence.unit
+          else F.invalid("Retained authority may supersede only its actual inventory-only Plan question; an uncovered business decision remains Human-owned")
+        _ <- GoalPhaseInventoryAuthority.coversC(value, actual,
+          core.component.get.core.instanceId.canonicalKey, source.session.participantIdentity)
+      } yield ()
+      case None => installation.evidence.admitC(core, reference, binding)
+    }
     state <- _adopted_c(source, actual, reference.identity, input.rationale)
     pending <- _pending_c(source)
     adapter <- source.session.storage.bindDecisionSupersessionC(H.completionOperation, H.inputCodec, codec)
     _ <- adapter.executeC(H.identity(source), pending.revision, pending,
       F.history(pending, "phase." + state.stage.toString, reference.identity),
-      TypedValue(codec.typeIdentity, Payload(actual, reference, source.session.participantIdentity, input.rationale)))(using core.executionContext)
+      TypedValue(codec.typeIdentity, Payload(actual, reference, source.session.participantIdentity, input.rationale, authority)))(using core.executionContext)
   } yield V.GoalPhaseRemainingPlanAdoptionResult(input.sessionId, true, "remaining-plan-adopted", message)
 
   /** Only persisted business input resumes the history walker; no directive is
@@ -208,6 +227,11 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
         pending <- GoalPhaseNativeHistory.prefixC(source.session.current, sourceRevision)
         _ <- if (_matches(source, target, pending) && payload.participant == source.session.participantIdentity)
           Consequence.unit else F.invalid("retained remaining Plan adoption crosses its original actual source")
+        _ <- payload.inventoryAuthority.fold(Consequence.unit)(value => GoalPhaseInventoryAuthority.coversC(value,
+          target, target.currentInventory.map(_.componentInstance).getOrElse(""), payload.participant))
+        _ <- if (payload.inventoryAuthority.isEmpty || (source.result.result.value.dependencyProposal.isEmpty &&
+          source.result.result.value.planRevision.contains(target.captured.proposal))) Consequence.unit
+          else F.invalid("Retained authority cannot supersede a genuine uncovered decision")
         _ <- validateDocumentsC(source.controller, target.captured, source.documents)
         _ <- if (target.currentInventory.isEmpty || target.captured.documents == source.documents) Consequence.unit
           else F.invalid("Current inventory adoption cannot revise document acceptance")

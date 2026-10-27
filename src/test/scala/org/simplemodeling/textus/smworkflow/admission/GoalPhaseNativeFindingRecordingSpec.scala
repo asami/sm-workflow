@@ -202,10 +202,22 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
     _qualify_remaining_plan(narrator, inventory = false)
     _qualify_remaining_plan(narrator, inventory = true)
   }
-  private def _qualify_remaining_plan(narrator: GivenWhenThen, inventory: Boolean): Unit = {
+  private[admission] def qualifyRetainedInventoryAuthority(narrator: GivenWhenThen): Unit =
+    _qualify_remaining_plan(narrator, inventory = true, retainedAuthority = true)
+
+  private def _qualify_remaining_plan(narrator: GivenWhenThen, inventory: Boolean, retainedAuthority: Boolean = false): Unit = {
     narrator.Given("docs/spec/goal-phase-remaining-plan-adoption.md R13–R16 E3: an actual two-Step Session with its first Step accepted and committed; Human inputs are SPECIFICATION-OWNED")
     val directory = _root()
-    val initial = _plan(two = true)
+    val basic = _plan(two = true)
+    val initial = if (retainedAuthority) basic.copy(acceptance = Some(GoalPhaseAcceptanceBoundary.Adoption(
+      "Deliver the selected Component behavior", Vector(GoalPhaseAcceptanceBoundary.Condition(
+        "selected-behavior", "phase", true, "Preserve the selected Component behavior"))))) else basic
+    val raw = initial.copy(revision = "remaining-2", steps = initial.steps.updated(1,
+      if (inventory) initial.steps(1).copy(ownedPaths = initial.steps(1).ownedPaths :+ _inventory_path)
+      else initial.steps(1).copy(purpose = "Use operation-owned Evidence for the remaining Step")))
+    val revision = GoalPhasePlanRevision.Proposal("spec-new-contract", "2",
+      "Necessary inventory for the unchanged selected contract", raw)
+    val proposal = GoalPhasePlanRevision.publicProposal(Some(revision)).get
     var session = ""
     var original = Option.empty[InstanceRecord]
     var question = Option.empty[WorkflowInteraction[GoalPhaseOrderedHumanDecision.Input, Nothing]]
@@ -223,23 +235,26 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       Files.writeString(directory.resolve("repository/step-2.txt"), "Second Step requiring a correction.\n")
       e.submit(e.work(session))
       val review = e.advance(session)
-      e.submit(e.work(session), Some(review), "repair", findings = Vector("Correct the second Step before acceptance"))
+      val reviewWork = e.work(session)
+      val purposeSources = Option.when(retainedAuthority) {
+        val contract = _business(reviewWork).purposeRepair.get
+        Vector[GoalPhasePurposeRepair.Source](GoalPhasePurposeRepair.StepPurpose(1, contract.stepIdentity,
+          "SPECIFICATION-OWNED defect in the selected second Step before acceptance", Vector("step-2.txt")))
+      }
+      e.submit(reviewWork, Some(review), "repair", findings = Vector("Correct the second Step before acceptance"),
+        repairFindingSources = purposeSources)
       e.advance(session).work.get.kind shouldBe "RepairStep"
       val dependency = GoalPhaseDependencyScope.Proposal("spec-old-dependency", "1", "REPAIR",
         GoalPhaseDependencyScope.Component("SmWorkflow", "sm-workflow", "repository"),
         GoalPhaseDependencyScope.Component("OtherComponent", "other-library", "repository"),
         ContextReference("old-usage", "1"), "Old proposed dependency contract needs reconsideration",
         Vector("src/old.scala"), Vector("Old dependency acceptance"), Vector(ContextReference("step-2", "1")), Vector.empty)
-      e.submit(e.work(session), outcome = "decision-needed", dependencyProposal = Some(dependency))
+      e.submit(e.work(session), outcome = "decision-needed", dependencyProposal = Option.unless(retainedAuthority)(dependency),
+        planRevision = Option.when(retainedAuthority)(revision))
       e.advance(session)
       question = Some(e.question(session))
       val before = e.current(session)
       original = Some(before)
-      val raw = initial.copy(revision = "remaining-2", steps = initial.steps.updated(1,
-        if (inventory) initial.steps(1).copy(ownedPaths = initial.steps(1).ownedPaths :+ _inventory_path)
-        else initial.steps(1).copy(purpose = "Use operation-owned Evidence for the remaining Step")))
-      val proposal = GoalPhasePlanRevision.publicProposal(Some(GoalPhasePlanRevision.Proposal(
-        "spec-new-contract", "2", "Actual new direction replaces the unaccepted future contract", raw))).get
       narrator.When("public description captures the actual unanswered frontier and proposed remaining contract")
       val description = e.invoke[V.GoalPhaseRemainingPlanDescriptionResult](GoalPhaseRemainingPlanAdoption.describeOperation,
         List(Property("input", V.GoalPhaseRemainingPlanDescriptionInput(session, proposal).toRecord(), None)))
@@ -282,8 +297,9 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       _same_instance(e.current(session), before)
       e.question(session) shouldBe question.get
       narrator.When("the specification host records the matching separately observed directive and public adoption runs")
-      e.prepareRemaining(description, input)
-      val crossed = _request_(input.copy(rationale = "A different unobserved directive"))
+      if (retainedAuthority) e.prepareInventoryAuthority(description, input) else e.prepareRemaining(description, input)
+      val crossed = if (retainedAuthority) _request_(input.copy(reference = V.WorkflowArtifactReference("absent-source", "1")))
+        else _request_(input.copy(rationale = "A different unobserved directive"))
       if (inventory) {
         val metadata = captured.currentInventory.get
         _request_(input.copy(target = GoalPhaseRemainingPlanAdoption.targetRecord(captured.copy(
@@ -340,6 +356,21 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       narrator.Then("the stale answer refuses without changing the resumed native history")
       stale.isSuccess shouldBe false
       _same_instance(e.current(session), before)
+      if (retainedAuthority) {
+        Files.createDirectories(directory.resolve("repository").resolve(_inventory_path).getParent)
+        Files.writeString(directory.resolve("repository").resolve(_inventory_path), "{\"selectedApi\":true}\n")
+        e.submit(e.work(session))
+        val review = e.advance(session)
+        e.submit(e.work(session), Some(review), "accept")
+        val closing = e.advance(session)
+        e.authority(session, closing)
+        e.advance(session)
+        val committed = e.observe()
+        committed.head should not be target.get.completed.head.commit.identity
+        e.commit(committed.head).parents shouldBe Vector(target.get.completed.head.commit.identity)
+        e.advance(session)
+        e.observe().head shouldBe committed.head
+      }
     }
   }
 
@@ -527,9 +558,27 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
           "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))
         _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)
       } yield ())
+    def prepareInventoryAuthority(description: V.GoalPhaseRemainingPlanDescriptionResult, input: V.GoalPhaseRemainingPlanAdoptionInput): Unit =
+      prepare(call => for {
+        target <- GoalPhaseRemainingPlanAdoption.targetC(description.target)
+        boundary = GoalPhaseInventoryAuthority.Boundary(description.componentInstance, target.sessionId, "participant",
+          target.plan.repository, target.plan.identity, target.currentInventory.get.stepIdentity,
+          target.plan.steps.find(_.identity == target.currentInventory.get.stepIdentity).get.purpose,
+          ContextReference("specification-original-purpose", "1"), target.plan.effectiveAcceptance.get.usage.get,
+          target.plan.effectiveAcceptance.get.conditions.asJson, GoalPhaseInventoryAuthority.operations, Vector("excluded"))
+        prepared <- NativeAuthorityPreparation.goalC(V.WorkflowAuthorityContext(GoalPhaseInventoryAuthority.purpose,
+          description.componentInstance, GoalPhaseNativeMetadata.record(boundary.asJson)), input.reference,
+          "participant", "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))
+        _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)
+      } yield ())
     def observe(): RepositorySyncManagedGitObservation.Observed = {
       var value = Option.empty[RepositorySyncManagedGitObservation.Observed]
       prepare(call => call.observeC().map(v => { value = Some(v); () }))
+      value.get
+    }
+    def commit(identity: String): RepositorySyncManagedGitObservation.Commit = {
+      var value = Option.empty[RepositorySyncManagedGitObservation.Commit]
+      prepare(call => RepositorySyncManagedGitObservation.commitC(call.core, identity).map(v => { value = Some(v); () }))
       value.get
     }
     def index(): String = {
@@ -539,7 +588,9 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
     }
     def submit(work: WorkflowInteraction[S.Request, Nothing], display: Option[V.GoalPhaseAdvanceResult] = None,
       outcome: String = "completed", observations: Option[R.Observations] = None, findings: Vector[String] = Vector.empty,
-      dependencyProposal: Option[GoalPhaseDependencyScope.Proposal] = None): ContinuationResult[S.Result] = {
+      dependencyProposal: Option[GoalPhaseDependencyScope.Proposal] = None,
+      planRevision: Option[GoalPhasePlanRevision.Proposal] = None,
+      repairFindingSources: Option[Vector[GoalPhasePurposeRepair.Source]] = None): ContinuationResult[S.Result] = {
       val order = _request(work)
       val assigned = _business(work)
       val reports = assigned.issues.filter(_ => assigned.kind != "ImplementStep").map { state =>
@@ -553,16 +604,15 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
         GoalPhaseAcceptanceBoundary.applicable(boundary, assigned.kind).map(condition => GoalPhaseAcceptanceBoundary.Observation(
           condition.identity, if (condition.required) "satisfied" else "unsatisfied", "SPECIFICATION-OWNED " + condition.description)), Vector.empty))
       val value = S.Result(outcome, "SPECIFICATION-OWNED assigned semantic response", findings, acceptance = acceptance, issueReport = reports,
-        reviewObservations = observations, dependencyProposal = dependencyProposal)
+        reviewObservations = observations, dependencyProposal = dependencyProposal, planRevision = planRevision,
+        repairFindingSources = repairFindingSources)
       val reference = ContextReference("specification-recording-" + assigned.kind, order.expectedRevision.value)
       val evidence = ExecutionEvidence(Vector(reference), Some(if (assigned.kind.startsWith("Review")) "specification-reviewer" else "participant"))
       val result = ContinuationResult(work.handle, order.runId, order.continuationId, order.expectedRevision, order.context.snapshot,
         TypedValue(S.resultCodec.typeIdentity, value), reference, Vector.empty, evidence)
       if (assigned.kind.startsWith("Review")) prepare(call => for {
         prepared <- NativeReviewPreparation.goalC(display.get.work.get.review.get.reviewContext.get,
-          V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings, GoalPhaseAcceptanceBoundary.publicReport(value.acceptance), None, GoalPhaseFixIssues.publicReport(value.issueReport), None,
-            R.publicObservations(value.reviewObservations), None,
-            value.completionConditions.map(condition => GoalPhaseNativeMetadata.record(condition.asJson)), None, dependencyValidation = GoalPhaseDependencyValidation.publicSelection(value.dependencyValidation), diagnosticRepair = None), V.WorkflowArtifactReference(reference.identity, reference.revision),
+          NativeWorkflowOperationInputFixture.goalWorkResult(value), V.WorkflowArtifactReference(reference.identity, reference.revision),
           V.WorkflowExecutionEvidence(Vector(V.WorkflowArtifactReference(reference.identity, reference.revision)), evidence.workerIdentity, None, None),
           "normal-development-host", call.executionContext.clock.instant().minusSeconds(60))
         _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)

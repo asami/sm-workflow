@@ -309,37 +309,9 @@ final class GoalTaskMalformedIssuedWorkRecoverySpec extends AnyWordSpec with Mat
       }
     }
 
-    "leave the exact native frontier and business checkpoint unchanged for absent evidence, Defer and stale claim-release targets" in {
-      withEpisode(root()) { e =>
-        val (session, old) = e.startMalformed()
-        val description = e.describe(session, old)
-        val before = e.current(session)
-        val original = e.issue(old)
-        val target = take(R.targetC(description.target))
-        val missing = V.GoalTaskMalformedIssuedWorkRecoveryInput(session, old, description.target, R.choices.head,
-          "Source locator alone is not host evidence", "participant", V.WorkflowArtifactReference("source-locator-only", "1"))
-        e.call("recoverGoalTaskMalformedIssuedWork", List(Property("input", missing, None))).isSuccess shouldBe false
-        assertSameNativeRecord(e.current(session), before)
-        val defer = e.provision(description, "Defer", "defer")
-        e.recover(defer).outcome shouldBe "deferred"
-        assertSameNativeRecord(e.current(session), before)
-        val authorized = e.provision(description, R.choices.head, "stale")
-        e.project(call => call.withTaskClaimsC { claims => for {
-          claimed <- claims.claimC(ContinuationIdentity(old))
-          _ <- claims.releaseC(ContinuationIdentity(old), claimed.claimId.get)
-        } yield () })
-        // Same native frontier and Available state, different exact entity revision.
-        assertSameNativeRecord(e.current(session), before)
-        val changed = e.describe(session, old)
-        take(R.targetC(changed.target)).continuationRevision should not be target.continuationRevision
-        e.call("recoverGoalTaskMalformedIssuedWork", List(Property("input", authorized, None))).isSuccess shouldBe false
-        assertSameNativeRecord(e.current(session), before)
-        e.issue(old) shouldBe original
-        val fresh = e.provision(changed, R.choices.head, "fresh-after-release")
-        e.recover(fresh).outcome shouldBe "recovered-awaiting-advance"
-        e.retained(session, old).receipt.payload.direction.target.business shouldBe target.business
-      }
-    }
+    "retire only independently covered nonexecution and collect its one ordinary successor after reopening" in { qualifyCoveringNonexecution() }
+
+    "leave the exact native frontier and business checkpoint unchanged for absent evidence, Defer and stale claim-release targets" in { qualifyPriorClaimRefusal() }
 
     "refuse known native claimed and completed old work despite independently provisioned fixture direction" in {
       Vector(false, true).foreach { complete => withEpisode(root()) { e =>
@@ -410,9 +382,90 @@ final class GoalTaskMalformedIssuedWorkRecoverySpec extends AnyWordSpec with Mat
         refused shouldBe true
         assertSameNativeRecord(e.current(session), before)
         e.issue(old) shouldBe original
-        take(R.targetC(e.describe(session, old).target)).business shouldBe target.business
+        e.call("describeGoalTaskMalformedIssuedWorkRecovery", List(Property("input",
+          V.GoalTaskMalformedIssuedWorkRecoveryDescriptionInput(session, old), None))).isSuccess shouldBe false
       }
     }
+  }
+
+  private[admission] def qualifyCoveringNonexecution(): Unit = {
+      val directory = root()
+      var direction = Option.empty[V.GoalTaskMalformedIssuedWorkRecoveryInput]
+      var session = ""
+      var old = ""
+      var original = Option.empty[WorkflowInteraction[StandaloneFixExecution.Work, Nothing]]
+      withEpisode(directory) { e =>
+        val started = e.startMalformed()
+        session = started._1
+        old = started._2
+        original = Some(e.issue(old))
+        val description = e.describe(session, old)
+        val before = e.current(session)
+        val missing = V.GoalTaskMalformedIssuedWorkRecoveryInput(session, old, description.target,
+          R.nonexecutionChoice, "Specification source locator is not covering evidence", "participant",
+          V.WorkflowArtifactReference("absent-nonexecution", "1"))
+        e.call("recoverGoalTaskMalformedIssuedWork", List(Property("input", missing, None))).isSuccess shouldBe false
+        assertSameNativeRecord(e.current(session), before)
+        val humanOnly = e.provision(description, R.choices.head, "human-is-not-nonexecution")
+        e.call("recoverGoalTaskMalformedIssuedWork", List(Property("input",
+          humanOnly.copy(choice = R.nonexecutionChoice), None))).isSuccess shouldBe false
+        assertSameNativeRecord(e.current(session), before)
+        direction = Some(e.provision(description, R.nonexecutionChoice, "covering-nonexecution"))
+        val recovered = e.recover(direction.get)
+        recovered.externalEffects shouldBe "NOT_EXECUTED"
+        recovered.outcome shouldBe "recovered-awaiting-advance"
+        val checkpoint = e.retained(session, old).receipt.payload
+        checkpoint.externalEffects shouldBe "NOT_EXECUTED"
+        R.checkpointAdmitted(checkpoint) shouldBe true
+        checkpoint.direction.target.business shouldBe take(R.targetC(description.target)).business
+        e.issue(old) shouldBe original.get
+      }
+      withEpisode(directory) { e =>
+        val first = e.advance(session)
+        val second = e.advance(session)
+        first.kind shouldBe "Request"
+        first.issuedWorkContext shouldBe second.issuedWorkContext
+        val before = e.current(session)
+        val collected = e.recover(direction.get)
+        collected.outcome shouldBe "already-recovered"
+        collected.externalEffects shouldBe "NOT_EXECUTED"
+        collected.successorContinuationId shouldBe first.issuedWorkContext.map(_.continuationId)
+        assertSameNativeRecord(e.current(session), before)
+        e.issue(old) shouldBe original.get
+      }
+
+  }
+
+  private[admission] def qualifyPriorClaimRefusal(): Unit = {
+      withEpisode(root()) { e =>
+        val (session, old) = e.startMalformed()
+        val description = e.describe(session, old)
+        val before = e.current(session)
+        val original = e.issue(old)
+        val target = take(R.targetC(description.target))
+        val missing = V.GoalTaskMalformedIssuedWorkRecoveryInput(session, old, description.target, R.choices.head,
+          "Source locator alone is not host evidence", "participant", V.WorkflowArtifactReference("source-locator-only", "1"))
+        e.call("recoverGoalTaskMalformedIssuedWork", List(Property("input", missing, None))).isSuccess shouldBe false
+        assertSameNativeRecord(e.current(session), before)
+        val defer = e.provision(description, "Defer", "defer")
+        e.recover(defer).outcome shouldBe "deferred"
+        assertSameNativeRecord(e.current(session), before)
+        val authorized = e.provision(description, R.choices.head, "stale")
+        e.project(call => call.withTaskClaimsC { claims => for {
+          claimed <- claims.claimC(ContinuationIdentity(old))
+          _ <- claims.releaseC(ContinuationIdentity(old), claimed.claimId.get)
+        } yield () })
+        // Same native frontier and Available state, different exact entity revision.
+        assertSameNativeRecord(e.current(session), before)
+        e.call("describeGoalTaskMalformedIssuedWorkRecovery", List(Property("input",
+          V.GoalTaskMalformedIssuedWorkRecoveryDescriptionInput(session, old), None))).isSuccess shouldBe false
+        e.call("recoverGoalTaskMalformedIssuedWork", List(Property("input", authorized, None))).isSuccess shouldBe false
+        assertSameNativeRecord(e.current(session), before)
+        e.issue(old) shouldBe original
+        // A released native claim is execution history, not fresh unclaimed work.
+        e.call("recoverGoalTaskMalformedIssuedWork", List(Property("input", authorized, None))).isSuccess shouldBe false
+      }
+
   }
 
   "Malformed Task recovery admission" should {

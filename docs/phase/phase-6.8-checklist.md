@@ -1,6 +1,6 @@
 # Phase 6.8 acceptance checklist
 
-Status: pending; planning is not implementation or acceptance.
+Status: in progress; source implementation is not qualification or Phase acceptance. All acceptance items remain unchecked.
 Owner: [Phase 6.8](phase-6.8.md).
 Contract: [commit completion and recovery](../spec/commit-completion-and-recovery.md).
 
