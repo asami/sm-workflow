@@ -101,7 +101,9 @@ final class BoundedWorkNativeOutcomeSpec extends AnyWordSpec with Matchers with 
     Files.createDirectories(directory.resolve("repository"))
     val wrapper = "#!/bin/sh\nfor arg in \"$@\"; do\n if [ \"$arg\" = commit ]; then\n" +
       "  printf '%s\\n' commit >> " + quote(directory.resolve("commit-calls").toString) + "\n" +
-      "  if [ -f " + quote(directory.resolve("fail-commit").toString) + " ]; then exit 1; fi\n fi\ndone\nexec /usr/bin/git \"$@\"\n"
+      "  if [ -f " + quote(directory.resolve("fail-commit").toString) + " ]; then exit 1; fi\n" +
+      "  if [ -f " + quote(directory.resolve("commit-then-fail").toString) + " ]; then\n" +
+      "   /usr/bin/git \"$@\"\n   commit_exit=$?\n   if [ \"$commit_exit\" -eq 0 ]; then exit 1; fi\n   exit \"$commit_exit\"\n  fi\n fi\ndone\nexec /usr/bin/git \"$@\"\n"
     val executable = directory.resolve("observed-git")
     Files.writeString(executable, wrapper)
     executable.toFile.setExecutable(true) shouldBe true
@@ -392,6 +394,8 @@ final class BoundedWorkNativeOutcomeSpec extends AnyWordSpec with Matchers with 
             _ <- GoalTaskNativeRun.advanceC("fixture-uncertain", h, seeded._1, call.core)
             again <- currentC(seeded._2, "fixture-uncertain", call.core)
             _ = again.revision shouldBe record.revision
+            againPayload <- GoalTaskNativeRun.loadPayloadC(seeded._2, "fixture-uncertain", again.revision.value, call.core)
+            _ = againPayload shouldBe saved
             _ = commitCalls(directory) shouldBe (if (failure) 1L else 0L)
             after <- G.observeC(call.core)
             _ = after.head shouldBe before.head
@@ -399,6 +403,61 @@ final class BoundedWorkNativeOutcomeSpec extends AnyWordSpec with Matchers with 
             _ = Files.readString(directory.resolve("repository/unrelated.txt")) shouldBe "other worker dirty bytes\n"
           } yield ())
         }
+      }
+    }
+
+    "collect an actual commit after a failed process result without replaying that commit" in {
+      val directory = root(); prepare(directory)
+      Files.writeString(directory.resolve("repository/value.txt"), "selected implementation\n")
+      Files.writeString(directory.resolve("repository/unrelated.txt"), "other worker dirty bytes\n")
+      Files.writeString(directory.resolve("commit-then-fail"), "Specification-owned failure after actual Git commit\n")
+      _with_runtime_(directory, "Outcome", hostParameters = parameters(directory)) { (_, _, _, project) =>
+        project(call => for {
+          before <- G.observeC(call.core)
+          _ <- E.stageGoalCandidateC(call.core, 1).flatMap(_.valueC)
+          candidate <- candidateC(call.core, before.head)
+          h = host(directory)
+          ready = state(true, "CommitReady").copy(candidate = Some(candidate),
+            reviewReference = Some(ContextReference("fixture-independent-review", "1")))
+          payload = Payload(ready, h.root, "main", before.head,
+            unrelated = Some(before.dirty.filterNot(_.path == "value.txt")))
+          seeded <- seedC(GoalTaskNativeRun, h, "fixture-failed-result-committed", payload, call.core)
+          first <- GoalTaskNativeRun.advanceC("fixture-failed-result-committed", h, seeded._1, call.core)
+          _ = first.kind shouldBe "Incomplete"
+          failedRecord <- currentC(seeded._2, "fixture-failed-result-committed", call.core)
+          failed <- GoalTaskNativeRun.loadPayloadC(seeded._2, "fixture-failed-result-committed", failedRecord.revision.value, call.core)
+          _ = failed.state.stage shouldBe "CommitFailed"
+          _ = failed.state.commit shouldBe None
+          _ = failed.state.commitExecution.map(_.termination) shouldBe Some("exited")
+          _ = failed.state.commitExecution.flatMap(_.exitCode) shouldBe Some(1)
+          _ = commitCalls(directory) shouldBe 1L
+          observed <- G.observeC(call.core)
+          actual <- G.commitC(call.core, observed.head)
+          _ = actual.parents shouldBe Vector(before.head)
+          _ = actual.tree shouldBe candidate.tree
+          collected <- GoalTaskNativeRun.advanceC("fixture-failed-result-committed", h, seeded._1, call.core)
+          _ = collected.kind shouldBe "Terminal"
+          completedRecord <- currentC(seeded._2, "fixture-failed-result-committed", call.core)
+          completed <- GoalTaskNativeRun.loadPayloadC(seeded._2, "fixture-failed-result-committed", completedRecord.revision.value, call.core)
+          _ = completed.state.stage shouldBe "Completed"
+          _ = completed.state.commit.map(_.identity) shouldBe Some(actual.identity)
+          _ = completed.state.commitExecution shouldBe failed.state.commitExecution
+          _ = completed.state.candidate shouldBe ready.candidate
+          _ = completed.state.receipts shouldBe ready.receipts
+          _ = completed.state.reviewReference shouldBe ready.reviewReference
+          _ = completed.state.conditionReport shouldBe ready.conditionReport
+          _ = completed.state.automaticCount shouldBe ready.automaticCount
+          _ = completed.state.ordinaryCount shouldBe ready.ordinaryCount
+          _ = completedRecord.history.take(failedRecord.history.size) shouldBe failedRecord.history
+          _ <- GoalTaskNativeRun.advanceC("fixture-failed-result-committed", h, seeded._1, call.core)
+          unchanged <- currentC(seeded._2, "fixture-failed-result-committed", call.core)
+          _ = unchanged.revision shouldBe completedRecord.revision
+          _ = commitCalls(directory) shouldBe 1L
+          after <- G.observeC(call.core)
+          _ = after.head shouldBe actual.identity
+          _ = after.dirty shouldBe payload.unrelated.get
+          _ = Files.readString(directory.resolve("repository/unrelated.txt")) shouldBe "other worker dirty bytes\n"
+        } yield ())
       }
     }
 

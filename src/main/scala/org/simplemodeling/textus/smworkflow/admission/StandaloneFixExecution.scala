@@ -24,6 +24,14 @@ private[smworkflow] object StandaloneFixExecution {
   final case class CommitExecution(outcome: String, selectedPaths: Vector[String], termination: String,
     exitCode: Option[Int], stdout: String, stderr: String)
   final case class Commit(identity: String, parent: String, tree: String)
+  /** Produced only by matching-commit collection, after the native owner has
+    * observed the actual commit. It binds the unchanged candidate and original
+    * execution, including failed or missing/UNKNOWN execution evidence. This is
+    * attributable result data, not independent authentication of foreign storage.
+    */
+  final case class CommitReconciliation(sourceStage: String, candidateHead: String,
+    candidateTree: String, candidatePaths: Vector[String], commit: Commit,
+    execution: Option[CommitExecution])
   final case class Candidate(head: String, tree: String, paths: Vector[String], diff: String)
   final case class Condition(identity: String, satisfied: Boolean, detail: String)
   final case class Result(outcome: String, summary: String, findings: Vector[String],
@@ -44,7 +52,8 @@ private[smworkflow] object StandaloneFixExecution {
     priorReviewCandidate: Option[Candidate] = None,
     message: String = "Selected validation has not executed", commit: Option[Commit] = None, commitExecution: Option[CommitExecution] = None, projectionWarning: Option[String] = None,
     reviewDispositions: Option[Vector[StandaloneReviewFix.Disposition]] = None,
-    delivery: Option[DelegateTask.Delivery] = None)
+    delivery: Option[DelegateTask.Delivery] = None,
+    commitReconciliation: Option[CommitReconciliation] = None)
   final case class Work(session: String, sourceRevision: String, kind: String, state: State)
 
   private given Encoder[ContextReference] = deriveEncoder
@@ -55,6 +64,8 @@ private[smworkflow] object StandaloneFixExecution {
   given Decoder[CommitExecution] = deriveDecoder
   given Encoder[Commit] = deriveEncoder
   given Decoder[Commit] = deriveDecoder
+  given Encoder[CommitReconciliation] = deriveEncoder
+  given Decoder[CommitReconciliation] = deriveDecoder
   given Encoder[Input] = deriveEncoder[Input].mapJson(_.mapObject(_.filter {
     case ("task" | "reviewOrigin" | "delegation", value) => !value.isNull
     case _ => true
@@ -71,7 +82,7 @@ private[smworkflow] object StandaloneFixExecution {
   given Decoder[Result] = deriveDecoder
   private given Encoder[R.Context] = deriveEncoder
   private given Decoder[R.Context] = deriveDecoder
-  given Encoder[State] = deriveEncoder[State].mapJson(_.mapObject(o => o.filter { case ("commit" | "commitExecution" | "projectionWarning" | "reviewDispositions" | "delivery", value) => !value.isNull; case _ => true }))
+  given Encoder[State] = deriveEncoder[State].mapJson(_.mapObject(o => o.filter { case ("commit" | "commitExecution" | "projectionWarning" | "reviewDispositions" | "delivery" | "commitReconciliation", value) => !value.isNull; case _ => true }))
   given Decoder[State] = deriveDecoder
   given Encoder[Work] = deriveEncoder
   given Decoder[Work] = deriveDecoder
@@ -254,13 +265,40 @@ private[smworkflow] object StandaloneFixExecution {
   } yield next
 
   def committedC(state: State, actual: Commit): Consequence[State] =
-    if (state == null || state.input.task.isEmpty || !Set("CommitIntent", "CommitUnknown")(state.stage) ||
+    if (state == null || state.input.task.isEmpty || !reconcilable(state.stage, state.commitExecution) ||
       (state.reviewReference.isEmpty && (state.input.delegation.isEmpty || state.input.reviewRequired || state.priorReview.nonEmpty || state.unresolvedQuestions.nonEmpty)) || actual == null || !Vector(actual.identity, actual.parent, actual.tree).forall(v =>
         v != null && v.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")) ||
       !state.candidate.exists(c => c.paths.nonEmpty && c.head == actual.parent && c.tree == actual.tree && actual.identity != c.head))
       invalid("Task completion requires the actual reviewed single-parent selected commit")
     else Consequence.success(state.copy(stage = "Completed", commit = Some(actual),
+      commitReconciliation = state.candidate.map(c => CommitReconciliation(state.stage,
+        c.head, c.tree, c.paths, actual, state.commitExecution)),
       message = "Integrated Task review, selected validation and actual local commit are complete"))
+
+  /** Returned results share the owning Task commit contract. An old ordinary
+    * successful execution remains readable; a failed/UNKNOWN execution needs
+    * the native matching-commit observation and is never rewritten as success.
+    */
+  def committedResultValid(state: State): Boolean = state != null && state.input != null && state.input.task.nonEmpty &&
+    state.commitReconciliation != null && state.commitExecution != null &&
+    state.commit.exists(commit => Vector(commit.identity, commit.parent, commit.tree).forall(v =>
+      v != null && v.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")) && state.candidate.exists { candidate =>
+      validCandidate(candidate) && candidate.paths.forall(permitted(_, state.input)) && candidate.tree == commit.tree &&
+        (if (candidate.paths.isEmpty) candidate.head == commit.identity && state.commitReconciliation.isEmpty
+         else candidate.head == commit.parent && commit.identity != commit.parent && state.commitExecution.forall(e =>
+           e != null && e.selectedPaths != null && e.selectedPaths.nonEmpty &&
+             e.selectedPaths.forall(owned(_, state.input.ownedPaths)) && candidate.paths.forall(owned(_, e.selectedPaths))) &&
+           state.commitReconciliation.fold(state.commitExecution.exists(e =>
+             e.termination == "exited" && e.exitCode.contains(0))) { observed =>
+             observed != null && observed.commit == commit && observed.candidateHead == candidate.head &&
+               observed.candidateTree == candidate.tree && observed.candidatePaths == candidate.paths &&
+               observed.execution == state.commitExecution && reconcilable(observed.sourceStage, observed.execution)
+           })
+    })
+
+  private def reconcilable(stage: String, execution: Option[CommitExecution]): Boolean =
+    Set("CommitIntent", "CommitUnknown")(stage) || (stage == "CommitFailed" && execution.exists(e =>
+      e.termination == "exited" && e.exitCode.exists(_ != 0)))
 
   def diagnostics(state: State, revision: String): Vector[IncrementalSbtFailureDiagnosis.View] =
     state.candidate.toVector.flatMap(c => state.receipts.flatMap(r => state.selected.find(_.identity == r.identity)

@@ -184,6 +184,7 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
       And("passive import, execution, delivery and caller-information Operations expose distinct concrete inputs and outputs")
       val preparation = Map("prepareStandaloneFixStart" -> "WorkflowStandaloneFixStartPreparationInput", "prepareGoalStart" -> "WorkflowGoalStartPreparationInput",
         "prepareStandaloneReviewFixStart" -> "WorkflowStandaloneReviewFixStartPreparationInput", "prepareGoalTaskStart" -> "WorkflowGoalTaskStartPreparationInput",
+        "prepareDelegateTaskStart" -> "WorkflowDelegateTaskStartPreparationInput",
         "prepareRepositoryStart" -> "WorkflowRepositoryStartPreparationInput", "prepareSplitStart" -> "WorkflowSplitStartPreparationInput",
         "prepareRepositoryEffect" -> "WorkflowRepositoryEffectPreparationInput", "prepareAuthority" -> "WorkflowAuthorityPreparationInput",
         "prepareEvidence" -> "WorkflowEvidencePreparationInput")
@@ -191,8 +192,7 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
         "prepareExecution" -> ("WorkflowCallerExecutionPrepareInput", "WorkflowCallerExecutionState"),
         "recordExecution" -> ("WorkflowCallerExecutionRecordInput", "WorkflowCallerExecutionState"),
         "prepareTaskFixDelivery" -> ("WorkflowTaskFixDeliveryPreparationInput", "WorkflowTaskFixDelivery"),
-        "prepareTaskFixAdoption" -> ("WorkflowTaskFixAdoptionPreparationInput", "WorkflowTaskFixAdoption", "DelegateTaskContract",
-          "DelegateTaskObservationInput", "DelegateTaskAdoptionContext", "WorkflowDelegateTaskStartPreparationInput"),
+        "prepareTaskFixAdoption" -> ("WorkflowTaskFixAdoptionPreparationInput", "WorkflowTaskFixAdoption"),
         "prepareCallerInformation" -> ("WorkflowCallerInformationPrepareInput", "WorkflowCallerInformationRequest"),
         "recordCallerInformation" -> ("WorkflowCallerInformationRecordInput", "WorkflowCallerInformationResult"))
       names("NativeWorkflowPreparationService") should contain theSameElementsAs (preparation.keys ++ callerinformation.keys).toVector

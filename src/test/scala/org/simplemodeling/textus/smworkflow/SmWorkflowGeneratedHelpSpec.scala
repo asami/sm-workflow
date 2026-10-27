@@ -33,7 +33,8 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
     SmWorkflowComponent.NativeWorkflowPreparationServiceService -> Vector(
       "prepareGoalStart", "prepareRepositoryStart", "prepareSplitStart", "prepareRepositoryEffect", "prepareAuthority", "prepareEvidence",
       "prepareExecution", "recordExecution", "prepareCallerInformation", "recordCallerInformation",
-      "prepareStandaloneFixStart", "prepareStandaloneReviewFixStart", "prepareGoalTaskStart", "prepareTaskFixDelivery", "prepareTaskFixAdoption"
+      "prepareStandaloneFixStart", "prepareStandaloneReviewFixStart", "prepareGoalTaskStart", "prepareTaskFixDelivery", "prepareTaskFixAdoption",
+      "prepareDelegateTaskStart"
     ),
     SmWorkflowComponent.GoalPhaseServiceService -> Vector(
       "startGoalPhase", "advanceGoalPhase", "submitGoalPhaseWorkResult", "submitGoalPhaseOrderedDecision", "submitGoalPhaseFindingRecording",
@@ -70,6 +71,14 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
     SmWorkflowComponent.StandaloneFixSemanticAdmissionServiceService -> Vector("admitStandaloneFixReview"),
     SmWorkflowComponent.GoalTaskServiceService -> Vector("startGoalTask", "advanceGoalTask", "submitGoalTaskWorkResult", "resolveGoalTaskDiagnosticInformation",
       "describeGoalTaskMalformedIssuedWorkRecovery", "recoverGoalTaskMalformedIssuedWork"),
+    SmWorkflowComponent.DelegateTaskServiceService -> Vector("startDelegateTask", "advanceDelegateTask",
+      "submitDelegateTaskWorkResult", "resolveDelegateTaskDiagnosticInformation"),
+    SmWorkflowComponent.DelegateTaskImplementationServiceService -> Vector("implementDelegateTask"),
+    SmWorkflowComponent.DelegateTaskRepairServiceService -> Vector("repairDelegateTask"),
+    SmWorkflowComponent.DelegateTaskReviewServiceService -> Vector("reviewDelegateTask"),
+    SmWorkflowComponent.DelegateTaskSemanticAdmissionServiceService -> Vector("admitDelegateTaskReview"),
+    SmWorkflowComponent.DelegateTaskDeliveryServiceService -> Vector("observeDelegateTaskDelivery", "describeDelegateTaskAdoption"),
+    SmWorkflowComponent.CompletionRecordClosureServiceService -> Vector("describeCompletionRecordClosure", "advanceCompletionRecordClosure"),
     SmWorkflowComponent.GoalTaskImplementationServiceService -> Vector("implementGoalTask"),
     SmWorkflowComponent.GoalTaskRepairServiceService -> Vector("repairGoalTask"),
     SmWorkflowComponent.GoalTaskReviewServiceService -> Vector("reviewGoalTask"),

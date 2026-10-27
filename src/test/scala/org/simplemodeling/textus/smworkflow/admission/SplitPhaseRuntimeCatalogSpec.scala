@@ -38,7 +38,8 @@ final class SplitPhaseRuntimeCatalogSpec extends AnyWordSpec with Matchers with 
         catalog.definition.workflowRevision.value shouldBe "split-phase-business-operation-v14"
         catalog.definition.validateC shouldBe a[Consequence.Success[?]]
         catalog.producer.models.map(_.model.workflow.map(_.identity.value)).flatten.toSet shouldBe
-          Set("GoalPhaseWorkflow", "SplitPhaseWorkflow", "RepositorySyncWorkflow", "StandaloneFixWorkflow", "GoalTaskWorkflow")
+          Set("GoalPhaseWorkflow", "SplitPhaseWorkflow", "RepositorySyncWorkflow", "StandaloneFixWorkflow", "GoalTaskWorkflow",
+            "DelegateTaskWorkflow")
         take(SplitPhaseRuntimeCatalog.loadC()).workflow.workflow.identity shouldBe "SplitPhaseWorkflow"
       } finally loader.close()
     }

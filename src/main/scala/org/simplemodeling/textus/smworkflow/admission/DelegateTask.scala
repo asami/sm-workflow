@@ -143,10 +143,7 @@ private[smworkflow] object DelegateTask {
     _ <- WorkflowRepairAssessment.checksC(state.input.kind, state.input.scalaLint, state.selected, state.receipts)
     _ <- checksC(state.input, state.selected)
     _ <- if (state.conditionReport.map(_.identity) == state.input.conditions && state.conditionReport.forall(_.satisfied) &&
-      state.unresolvedQuestions.isEmpty && state.findings.isEmpty && state.commit.exists(commit =>
-        Vector(commit.identity, commit.parent, commit.tree).forall(v => v != null && v.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")) &&
-        state.candidate.exists(candidate => candidate.tree == commit.tree && (if (candidate.paths.isEmpty) candidate.head == commit.identity
-          else candidate.head == commit.parent && commit.identity != commit.parent && state.commitExecution.exists(e => e.exitCode.contains(0))))) &&
+      state.unresolvedQuestions.isEmpty && state.findings.isEmpty && S.committedResultValid(state) &&
       (!state.input.reviewRequired || state.reviewReference.nonEmpty) && state.delivery.exists(d =>
         contract.publicationTarget.isEmpty || d.publication.exists(p => p.ready &&
           p.request.target.identity == contract.publicationTarget.get && p.request.target.component == contract.componentIdentity &&

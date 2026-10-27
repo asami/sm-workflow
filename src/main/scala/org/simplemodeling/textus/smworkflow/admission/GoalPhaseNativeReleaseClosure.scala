@@ -70,6 +70,15 @@ private[smworkflow] object GoalPhaseNativeReleaseClosure {
   def needed(controller: O.State): Boolean = controller.stage == O.Stage.PhaseClosing && (controller.releaseRepairActive || controller.phaseRecordingPaths.nonEmpty) &&
     controller.candidate.exists(_.tree != controller.tipSnapshot.tree)
 
+  /** Receipt-chain consistency only. Reconciled results additionally require the
+    * owning advance's actual Git observation, authority and adjacent history.
+    * Decoding a commit-shaped payload alone never establishes those facts.
+    */
+  private[admission] def resultFollowsExecution(predecessor: Payload, result: Payload, reconciled: Boolean): Boolean =
+    predecessor.commit.isEmpty &&
+      (reconciled || predecessor.execution.exists(e => e.outcome == "succeeded" && e.exitCode.contains(0))) &&
+      result.copy(commit = None) == predecessor
+
   def retainedC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     from: InstanceRecord, controller: O.State): Consequence[Option[Saved]] = for {
     store <- _store_c(session, d, core, from, controller, _ => Consequence.unit)
@@ -83,9 +92,8 @@ private[smworkflow] object GoalPhaseNativeReleaseClosure {
       _ <- execution.fold(Consequence.unit)(store.adjacentC(intent.record, _, "execution"))
       predecessor = execution.getOrElse(intent)
       _ <- store.adjacentC(predecessor.record, value, if (reconciled.nonEmpty) "reconciled" else "committed")
-      _ <- if (intent.payload == store.initial && predecessor.payload.commit.isEmpty &&
-          (reconciled.nonEmpty || predecessor.payload.execution.exists(e => e.outcome == "succeeded" && e.exitCode.contains(0))) &&
-          value.payload.copy(commit = None) == predecessor.payload) Consequence.unit
+      _ <- if (intent.payload == store.initial && resultFollowsExecution(predecessor.payload, value.payload,
+          reconciled.nonEmpty)) Consequence.unit
         else F.invalid("release commit changes its admitted intent or actual execution")
       commit <- value.payload.commit.map(Consequence.success).getOrElse(F.invalid("committed release receipt has no commit"))
       next <- controller.acceptC(O.ReleaseCommitObserved(commit))

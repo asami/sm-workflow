@@ -330,12 +330,9 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
       case "NoChange" if task && recordPaths(h, payload).nonEmpty && payload.records.isEmpty => commitC(h, store, record, payload, core)
       case "CommitReady" => commitC(h, store, record, payload, core)
       case "CommitIntent" | "CommitUnknown" => reconcileC(h, store, record, payload, core)
-      case "CommitFailed" if task && s.commitExecution.exists(e => e.termination == "exited" && e.exitCode.exists(_ != 0)) => for {
-        _ <- freshC(payload, core)
-        next = payload.copy(state = s.copy(stage = "CommitReady", message = "Confirmed ended failed commit; unchanged accepted candidate continues under retained authority"))
-        saved <- saveC(h, store, record, next, core)
-        result <- commitC(h, store, saved, next, core)
-      } yield result
+      // A failed process may already have committed (for example a later hook
+      // failed). Observe its actual effect; a nonzero exit is no retry authority.
+      case "CommitFailed" if task => reconcileC(h, store, record, payload, core)
       case "CommitFailed" => Consequence.success(view(record, s, "Incomplete", s.message))
       case "Completed" | "NoChange" if delegation => deliverC(h, store, record, payload, core)
       case "HygieneReady" if delegation => hygieneC(h, store, record, payload, core)
@@ -491,7 +488,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
         else Consequence.success(view(saved, retained.state, "Terminal", retained.state.message))
     } yield response
     else Consequence.success(view(from, payload.state, "Incomplete",
-      "Task commit remains UNKNOWN; accepted implementation, checks and review are retained without replay"))
+      "Task commit remains unresolved; actual failed/UNKNOWN execution, accepted implementation, checks and review are retained without replay"))
   } yield response
 
   private def hygieneC(h: Host, store: WorkflowComponentStorage, from: InstanceRecord, payload: Payload,
