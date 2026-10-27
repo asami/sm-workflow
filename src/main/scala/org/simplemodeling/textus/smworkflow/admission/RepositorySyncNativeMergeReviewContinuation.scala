@@ -20,7 +20,7 @@ import RepositorySyncNativeProgressStore as N
   * file writes, validation acceptance or commit/push authority. No pool,
   * provider, execution-context lease or semantic routing is retained by host.
   * @since   Oct.  6, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
@@ -48,7 +48,7 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
         case None => for {
           captured <- I.captureC(source.store, source.validated, policy)
           signals <- _uncertainties_c(source)
-          input = captured.copy(judgmentMode = mode, uncertainties = signals)
+          input = captured.copy(judgmentMode = mode, uncertainties = (captured.uncertainties ++ signals).distinct)
           projected <- prepareC(source, input)
           selectedWork <- RepositorySyncNativeExecution.bindIssuedC(projected.work, RepositorySyncNativeExecution.Work.Review,
             declaration.executionClassifications, declaration.executionProfiles, declaration.executionOrigin)
@@ -134,7 +134,9 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
     private def _uncertainties_c(source: Source): Consequence[Vector[String]] = assessment match {
       case None => Consequence.success(Vector.empty)
       case Some(policy) => RepositorySyncMergeAssessment.captureC(source.store, source.validated, policy).map(value =>
-        value.overlappingPaths.map("Actual parent overlap: " + _) ++ value.contractPaths.map("Selected contract path: " + _))
+        value.overlappingPaths.map("Actual parent overlap: " + _) ++ value.contractPaths.map("Selected contract path: " + _) ++
+          source.validated.payload.validation.toVector.flatMap(_.inputs.toVector.flatMap(_.binaryPaths))
+            .map("Unexamined binary document: " + _))
     }
 
     def acceptedC(identity: String, core: ActionCall.Core): Consequence[Option[N.Stage]] =

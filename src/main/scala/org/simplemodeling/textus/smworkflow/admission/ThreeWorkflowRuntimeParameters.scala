@@ -20,7 +20,7 @@ import GoalPhaseDependencyValidation.given
   * command grants or a declaration that any review/Human result was admitted.
   * Storage/process bootstrap has already been performed by the owning Subsystem.
   * @since   Oct.  7, 2026
-  * @version Oct. 28, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowLauncherAssembly.RuntimeCompositionDecoder {
@@ -111,7 +111,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
   val declarations: Vector[ComponentParameterKey[?]] =
     GoalPhaseRuntimeParameters.declarations ++ Vector(definition, WorkflowExecutionProfileParameters.declaration,
       GoalPhaseNativeExecution.declaration, GoalPhaseAcceptanceBoundary.declaration, GoalPhaseFindingRecording.declaration,
-      RepositorySyncNativeExecution.declaration, SplitPhaseNativeExecution.declaration, DevelopmentJournal.declaration, CommonEvidence.declaration,
+      RepositorySyncNativeExecution.declaration, RepositorySyncDocumentInputs.declaration, SplitPhaseNativeExecution.declaration, DevelopmentJournal.declaration, CommonEvidence.declaration,
       completionPolicy, validationRepairCallerSource, developmentObservation, LocalPublicationRuntime.declaration, CommitHygiene.declaration, CompletionRecords.declaration)
   lazy val factory = new SmWorkflowConfiguredComponentFactory(declarations, Vector.empty,
     bindServicesC, ThreeWorkflowLauncherAssembly.publishedMcpOperations)

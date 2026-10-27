@@ -19,7 +19,7 @@ import WorkflowManagedProcessExecution as E
 /** Actual managed checks, with native intent/result boundaries. Nothing here
   * accepts a caller's success claim or runs an unrecorded retained intent again.
   * @since   Oct.  6, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeValidation {
@@ -108,8 +108,12 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
         sbt <- cursor.get[Option[WorkflowSbtValidation.Facts]]("sbt")
       } yield Receipt(identity, termination, exit, stdout, stderr, sbt))
   }
-  final case class State(mode: String, reason: String, selected: Vector[Check], sourceRevision: String, receipts: Vector[Receipt])
-  private given Encoder[State] = deriveEncoder
+  final case class State(mode: String, reason: String, selected: Vector[Check], sourceRevision: String, receipts: Vector[Receipt],
+    inputs: Option[RepositorySyncDocumentInputs.Assessment] = None)
+  private given Encoder[State] = deriveEncoder[State].mapJson(_.mapObject(_.filter {
+    case ("inputs", value) => !value.isNull
+    case _ => true
+  }))
   private given Decoder[State] = deriveDecoder
   private[admission] val stateCodec = new WorkflowResultJsonV1.PayloadCodec[State] {
     val typeIdentity = "RepositorySyncNativeValidationState"
@@ -141,7 +145,12 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
     _ <- if (pending.payload.stage == "PendingMergePrepared" && pending.payload.indexTree.nonEmpty &&
         pending.payload.mergeHead.nonEmpty && pending.payload.after.nonEmpty) Consequence.unit
       else N.invalid("validation requires the genuine selected pending merge")
-    selected <- selectedC(store, pending, policy, merge = true, namespace = namespace)
+    inputs <- if (store.declaration.runtimeCleanSync) RepositorySyncDocumentInputs.captureC(store, pending).map(Some(_))
+      else Consequence.success(None)
+    _ <- if (inputs.forall(_.documentOnly)) Consequence.unit
+      else N.invalid("program/unknown consumed inputs require impact-selected validation; consumed=" +
+        inputs.get.consumedPaths.mkString(",") + "; unknown=" + inputs.get.unknownPaths.mkString(","))
+    selected <- selectedC(store, pending, policy, merge = true, namespace = namespace, inputs = inputs)
   } yield selected
 
   /** Equal, local-ahead and fast-forward integrations introduce no semantic
@@ -169,12 +178,14 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
   } yield ()
 
   private def selectedC(store: N.Store, pending: N.Stage, policy: Policy, merge: Boolean,
-    namespace: String): Consequence[N.Stage] = for {
+    namespace: String, inputs: Option[RepositorySyncDocumentInputs.Assessment] = None): Consequence[N.Stage] = for {
     _ <- preconditionsC(store, pending)
     complete <- store.loadC(N.candidateKey(namespace, if (merge) "merge-validated" else "integration-validated"))
     selected <- complete match {
       case Some(value) => for {
         _ <- completedC(value, pending, policy, merge)
+        _ <- if (value.payload.validation.exists(state => RepositorySyncDocumentInputs.applicable(state.inputs, inputs))) Consequence.unit
+          else N.invalid("retained validation crosses its actual document/consumption inputs")
       } yield value
       case None =>
         val prefix = if (!merge) pending.payload.continuation.filter(_.choice == "AuthorizeNewValidation")
@@ -182,7 +193,7 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
         if (prefix.nonEmpty && !RepositorySyncValidationContinuation.validPrefix(prefix, policy))
           N.invalid("continuation seed is not a successful contiguous selected prefix")
         else checksC(store, pending, policy,
-          State(policy.mode, policy.reason, policy.checks, pending.record.revision.value.toString, prefix), merge, namespace)
+          State(policy.mode, policy.reason, policy.checks, pending.record.revision.value.toString, prefix, inputs), merge, namespace)
     }
   } yield selected
 

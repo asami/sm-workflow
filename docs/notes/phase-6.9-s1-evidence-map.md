@@ -1,7 +1,8 @@
 # Phase 6.9 S1: clean RepositorySync connection and evidence
 
-Date: 2026-10-28. Status: authored implementation and executable specification;
-compile, lint, selected suite and installed qualification remain runtime-owned.
+Date: 2026-10-28. Status: S1 accepted and three installed clean observations
+retained; Phase acceptance and later-step qualification remain pending. The
+initial authored snapshot below is preserved with its evidence boundaries.
 No P69 Phase condition is marked satisfied by this note.
 
 ## Reuse and actual evidence boundaries
@@ -60,13 +61,14 @@ commands belong solely to the controlled repository fixture. Negative normal
 Operation cases cover missing intent, mismatched tracking and preservation of
 untracked work without a checkpoint intent.
 
-These are authored cases, not observed PASS results. The parent runtime owns
+At the initial S1 implementation return these were authored cases, not observed
+PASS results. The parent runtime owns
 contract-compile, scala-lint and clean-sync-route, publication/activation and a
 separate installed public entry observation. The parent reported Start/first
 Advance on installed image `1d8c2491-fda5-4da6-8c89-63645062c58a`; that identifies
 the owning development workflow, not installed qualification of this S1 candidate.
-There is no new installed-success claim, reviewer evidence, Submit acceptance or
-Phase completion here. S2-S5, public help/schema simplification and the integrated
+That original implementation return claimed no installed success, reviewer
+evidence, Submit acceptance or Phase completion. S2-S5, public help/schema simplification and the integrated
 English Phase handoff retain their selected scope.
 
 ## Minimal installed observation input (not executed here)
@@ -93,3 +95,31 @@ The existing public full-record schema/help still describes tracking fields;
 its simplification and packaged skill alignment remain S5, not a claim made by
 this authored source connection. Parent runtime publication and installation
 selection are required before attributing any result to the candidate.
+
+## Subsequent actual S1 observations (2026-10-28)
+
+The actual S2 Request records S1 accepted commit
+`db32f6bf9000f9d33fdd134d576bc33fae748f55`, retained successful contract-compile,
+scala-lint and clean-sync-route admission, and resolved repair history. The parent
+reports the selected clean suite passed5/5. These observations do not erase the
+two earlier repair attempts or mark all Phase conditions satisfied.
+
+The parent separately qualified the normal installed CLI on runtime-published
+image `477a83e6-4d15-440d-9f6c-f4b765bcc545` in the dedicated installation root.
+Actual evidence is retained in the owning T69 task's
+`inputs/p69-s1-installed/qualification.json` and `qualification.md`, under
+`target/sm-workflow/runtime-phase-6.9-20261028/target/sm-workflow/tasks/phase-6.9-01a1555d-b4a7-7be3-8232-5396c2f5e293/`.
+This agent read those artifacts; it did not execute that qualification.
+
+| Isolated RepositorySync case | Actual Session | Observed result |
+| --- | --- | --- |
+| Equal | `c92d39097ff0d57937b9c36551af78b0` | Terminal/converged; local/tracking/bare tips and tree agree, clean worktree |
+| LocalAhead | `c02d6a20c911c6e48feaa4a611f29bf2` | Terminal/converged; local/tracking/bare tips and tree agree, clean worktree |
+| RemoteAhead | `8ef89866f0809a15d07c09e222bf9c14` | Terminal/converged; local/tracking/bare tips and tree agree, clean worktree |
+
+These three actual installed calls used repositoryIdentity + FULL_STATE without
+caller selection/effect imports, gitPrograms or SBT bindings/events. They are
+isolated test subjects; original GoalPhase Session
+`db7e363d6c9c44dfd14f8e0605288127` remains the owner. Installed S1 success does not
+establish merge/dirty delivery or integrated review. The S2 authored extension
+and its remaining boundaries are in the [merge note](phase-6.9-s2-merge-assessment.md).

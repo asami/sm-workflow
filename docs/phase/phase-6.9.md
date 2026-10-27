@@ -1,6 +1,6 @@
 # Phase 6.9: Runtime-owned RepositorySync and Purpose-based Commits
 
-Status: S1 clean-route implementation authored; runtime checks and installed acceptance pending.
+Status: S1 accepted with three installed clean observations; S2 source/specification authored, checks pending. Phase acceptance remains pending.
 Date: 2026-10-27
 Owner: sm-workflow development
 Sequence: Phase 6.7 -> Phase 6.8 -> Phase 6.9 -> Phase 6.10 -> Phase 7
@@ -56,3 +56,7 @@ and richer Task/FIX breadth remain with their existing owners.
 S1 source/specification and predecessor evidence boundaries are mapped in the
 [clean-route evidence note](../notes/phase-6.9-s1-evidence-map.md). No unchecked
 Phase condition is satisfied by authored fixtures alone.
+
+S2 connects conditional document-merge assessment and public retained-text ranges;
+see its [source/evidence note](../notes/phase-6.9-s2-merge-assessment.md). Program
+impact selection and integrated qualification retain their later selected Steps.

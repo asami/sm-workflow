@@ -113,3 +113,22 @@ documents authorize no private state rewrite, reset, re-Start or accepted replay
 This target supersedes blanket full-test/review and automatic dirty-checkpoint
 wording in older RepositorySync descriptions for the Phase 6.9 delivery. Keep
 historical results and currently running contracts intact until qualified adoption.
+
+## S2 authored standard-runtime connection
+
+The standard runtime document shortcut consumes the optional normal host
+`sm-workflow.repository-sync.document-inputs` declaration. Actual parent/index
+Git deltas must be covered by declared document scopes and outside every declared
+consumed-input scope; unknown paths and nonordinary/unavailable input remain
+unfinished. The declaration must describe real build/runtime consumption, so a
+path under docs alone never proves non-consumption. Equal, push-only and
+fast-forward do not require this merge-specific declaration.
+
+Document-only candidates use native structural checks and existing conditional
+assessment. Actual parent overlap selects existing scoped triage; actual conflict
+selects the conflict route. Deterministic admission creates no semantic review
+receipt or repeated product PASS. Binary/incomplete input stays explicitly
+unexamined. Large text uses CommonEvidence and `EvidenceService.readEvidenceRange`
+with zero-based Unicode code point offset/count; range access is not review
+coverage. See the [S2 source/evidence note](../notes/phase-6.9-s2-merge-assessment.md)
+for configuration, API inputs, authored cases and runtime qualification limits.

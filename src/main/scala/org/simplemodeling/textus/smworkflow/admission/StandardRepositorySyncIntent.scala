@@ -87,6 +87,9 @@ private[smworkflow] object StandardRepositorySyncIntent {
   def owns(context: RepositorySyncManagedFetch.StartContext): Boolean =
     context.selectionIdentity.startsWith(prefix) && context.selectionIdentity == context.invocationIdentity
 
+  // This is the effect scope of the retained request. Native convergence still
+  // requires actual deterministic merge admission or paired semantic acceptance
+  // before CommitPending; the request itself is no review/validation acceptance.
   val authority: RepositorySyncNativeConvergence.AuthorityPort = new RepositorySyncNativeConvergence.AuthorityPort {
     def admitC(core: ActionCall.Core, context: RepositorySyncManagedFetch.StartContext, target: Target,
       effect: RepositorySyncNativeConvergence.Effect): Consequence[Unit] = for {
@@ -96,9 +99,10 @@ private[smworkflow] object StandardRepositorySyncIntent {
       _ <- if (context.selectionIdentity == prefix + session && context.invocationIdentity == prefix + session &&
           context.syncMode == "FULL_STATE" && context.localBranch == target.localBranch &&
           context.trackingRemote == target.remote && context.trackingBranch == target.remoteBranch &&
-          Set(RepositorySyncNativeConvergence.Effect.Push, RepositorySyncNativeConvergence.Effect.FinalFetch)(effect))
+          Set(RepositorySyncNativeConvergence.Effect.CommitPending, RepositorySyncNativeConvergence.Effect.Push,
+            RepositorySyncNativeConvergence.Effect.FinalFetch)(effect))
         Consequence.unit
-        else Consequence.securityPermissionDenied("Repository effect is outside the retained clean sync request; separate merge/commit admission is required")
+        else Consequence.securityPermissionDenied("Repository effect is outside the retained sync request; native merge acceptance and configured Git grants remain required")
     } yield ()
   }
 }

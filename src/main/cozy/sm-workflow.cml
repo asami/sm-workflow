@@ -1640,6 +1640,19 @@ OperationResult
 | identity | string | 1 |
 | revision | string | ? |
 
+## EvidenceRangeInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| revision | string | ? |
+| startCharacter | int | 1 |
+| characterCount | int | 1 |
+
 ## EvidenceDescribeInput
 
 - input-kind :: COMMAND
@@ -9214,6 +9227,34 @@ EvidenceReadInput
 | name | type | multiplicity |
 |------+------|--------------|
 | input | EvidenceReadInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+EvidenceReadResult
+
+#### readEvidenceRange
+
+##### DESCRIPTION
+
+Read a bounded range of the retained common UTF-8 Evidence through the owning managed File workspace. startCharacter is a zero-based Unicode code point offset; characterCount is from 1 through 65536. Return original source/storage metadata and the exact requested available text, with total coverage in the message. A range is partial access, not a review acceptance or new successful Action. Missing and indeterminate Evidence remain explicit; reading performs no Git, Test, AI or archive replay.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+EvidenceRangeInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | EvidenceRangeInput | 1 |
 
 ##### OUTPUT
 

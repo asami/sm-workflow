@@ -170,14 +170,16 @@ private[smworkflow] object StandardWorkflowRuntime {
         selected.trackingBranch, selected.remoteEndpointIdentity, selected.syncMode), StandardRepositorySyncIntent.owns(selected))
     input = selectedInput._1
     classifications <- RepositorySyncNativeExecution.resolveC(parameters)
+    documentInputs <- RepositorySyncDocumentInputs.resolveC(parameters)
+    validation = if (selectedInput._2) documentValidation else repositoryValidation
     declaration = RepositorySyncManagedFetch.Declaration(p.configuration, p.instances, p.continuations, input,
-      target, shared.profiles, shared.origin, classifications, shared.journal, runtimeCleanSync = selectedInput._2)
+      target, shared.profiles, shared.origin, classifications, shared.journal, runtimeCleanSync = selectedInput._2, documentInputs = documentInputs, evidencePolicy = shared.evidence)
     // Before review use actual conflicts; afterwards use that issued review's
     // retained candidate paths so staging does not erase the repair scope.
     paths <- if (request.operation == "startRepositorySync") Consequence.success(Set.empty[String])
       else repositoryPathsC(declaration, definition, request, core)
     service <- RepositorySyncManagedServiceAssembly.bindRuntimeC(creation, declaration, nativeProgression = true,
-      conflictPolicy = RepositorySyncNativeConflictInput.Policy(paths), validationPolicy = Some(repositoryValidation),
+      conflictPolicy = RepositorySyncNativeConflictInput.Policy(paths), validationPolicy = Some(validation),
       nativeReview = Some(RepositorySyncNativeMergeReview.Installation(repositoryReview, shared.ports.repositoryReview)),
       convergence = Some(if (selectedInput._2) StandardRepositorySyncIntent.authority else shared.ports.convergence),
       humanConflict = if (paths.isEmpty) None else Some(RepositorySyncHumanConflict.Installation(shared.ports.repositoryHuman)),
@@ -295,6 +297,11 @@ private[smworkflow] object StandardWorkflowRuntime {
     ThreeWorkflowRuntimeParameters.Definition(ThreeWorkflowRuntimeParameters.schema,
       ThreeWorkflowRuntimeParameters.Target(target.root.toString, target.localBranch, target.remote, target.remoteBranch, target.endpoint), goal, repository)
   }
+
+  private def documentValidation = RepositorySyncNativeMergeValidation.Policy("document-repository-sync", 1,
+    "explicit-no-product-tests", "Reuse applicable program validation: actual parent/index deltas contain only declared non-consumed documents; no uncovered program behavior is introduced.",
+    Vector.empty, Some(RepositorySyncMergeAssessment.Policy("conditional", "not-applicable", "not-applicable",
+      "Actual declared document-only changes do not consume Scala or CAR inputs", Vector.empty)))
 
   private def repositoryReview = RepositorySyncNativeMergeReview.Policy("merge-review", 1)
   private def repositoryValidation = RepositorySyncNativeMergeValidation.Policy("repository-checks", 1, "required",

@@ -22,7 +22,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Common immutable source association and managed one-text storage.
   * Physical I/O belongs to File intents in the current call's UoW.
   * @since   Oct. 20, 2026
-  * @version Oct. 21, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object CommonEvidence {
@@ -379,6 +379,23 @@ private[smworkflow] object CommonEvidence {
       } catch { case NonFatal(_) => Consequence.success(_result_("unavailable", "Evidence managed read interrupted")) }
     }
   }
+  /** Range access preserves the released source association and reports its
+    * actual coverage. Reading a preview cannot manufacture review acceptance. */
+  def readRangeC(policy: Option[Policy], core: ActionCall.Core, input: V.EvidenceRangeInput): Consequence[V.EvidenceReadResult] =
+    if (input == null || input.startCharacter < 0 || input.characterCount < 1 || input.characterCount > 65536)
+      Consequence.success(V.EvidenceReadResult("invalid", "Evidence range requires startCharacter >= 0 and characterCount from 1 through 65536", None, None, None))
+    else readC(policy, core, V.EvidenceReadInput(input.identity, input.revision)).map { result =>
+      result.text match {
+        case None => result
+        case Some(text) =>
+          val points = text.codePoints().toArray
+          val start = math.min(input.startCharacter, points.length)
+          val count = math.min(input.characterCount, points.length - start)
+          result.copy(message = result.message + "; Unicode code points " + start + ".." + (start + count) +
+            " of " + points.length + "; range access does not attest review coverage", text = Some(new String(points, start, count)))
+      }
+    }
+
   def recordC(policy: Option[Policy], journal: Option[DevelopmentJournal.Policy], core: ActionCall.Core,
     input: V.EvidenceReadInput): Consequence[V.EvidenceRecordingState] = {
     if (input == null || !validIdentity(input.identity) || input.revision == null || input.revision.exists(_ != "1"))
