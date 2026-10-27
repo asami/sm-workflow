@@ -1,5 +1,10 @@
 # Phase 9: Acceptance-Bounded Convergence and Provider Routing
 
+2026-10-27 allocation: [Phase 6.10](phase-6.10.md) supplies named operating
+profiles and inexpensive source-delta/observed-token summaries. Model comparison
+and enhanced routing remain here; 6.10 does not require benchmarks or prove a
+profile's cost/quality advantage. Reuse its attribution and raw observations.
+
 Production-first revision (2026-10-18): references below to Phase 6 delivery of
 CBD-backed P6-SQ01..05 are superseded by [Phase 10](phase-10.md). Consume the
 accepted ordinary review/Admission route for this Phase; do not wait for Phase

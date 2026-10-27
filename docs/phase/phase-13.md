@@ -8,6 +8,11 @@ checklist=[Phase 13 checklist](phase-13-checklist.md)
 spec=[AI使用量](../spec/ai-usage-accounting.md)
 design=[記録経路](../design/ai-usage-accounting.md)
 
+2026-10-27 allocation: [Phase 6.10](phase-6.10.md) reuses already acquired,
+attributable usage for a lightweight Phase-close source-delta ratio. New usage
+acquisition and attribution remain here. The 6.10 projection neither requires
+this Phase's completion nor expands this Phase into a historical dashboard.
+
 ## 目的と位置付け
 
 sm-goal-phaseなどの終了時に、親＋subagent（再委譲を含む）の実測トークン数を

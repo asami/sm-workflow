@@ -148,6 +148,8 @@ lazy val root = project
         "docs/spec/goal-phase-purpose-repair.md",
         "docs/spec/goal-phase-release-repair-continuation.md",
         "docs/spec/goal-phase-dependency-scope.md",
+        "docs/spec/goal-phase-dependency-source-revision.md",
+        "docs/spec/repository-sync-validation-continuation.md",
         "docs/spec/goal-phase-validation-metadata.md",
         "docs/spec/native-goal-command-task.md",
         "docs/spec/runtime-caller-format-migration.md",
@@ -159,7 +161,15 @@ lazy val root = project
         if (!source.isFile) sys.error("Missing component-owned skill contract source: " + source)
         source -> relativepath
       }
-      skills ++ contracts
+      val agents = Seq("analysis", "design", "implementation", "repair", "review").map { role =>
+        val relativePath = "agents/sm_workflow_" + role + ".toml"
+        val source = baseDirectory.value / relativePath
+        if (!source.isFile) sys.error("Missing component-owned agent source: " + source)
+        source -> relativePath
+      }
+      val installer = baseDirectory.value / "scripts" / "sm-workflow-tools.py"
+      if (!installer.isFile) sys.error("Missing component-owned skill installer: " + installer)
+      skills ++ contracts ++ agents ++ Seq(installer -> "install-sm-workflow.py")
     },
     Compile / resourceGenerators += Def.task {
       val destinationRoot = (Compile / resourceManaged).value / "META-INF" / "sm-workflow"

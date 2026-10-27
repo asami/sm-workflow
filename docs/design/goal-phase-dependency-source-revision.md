@@ -152,3 +152,74 @@ review and LocalPublicationService delivery are parent-owned pending evidence.
 The exact Consumption and native guards do not prequalify future source/program
 changes. The consumer owner reassesses affected input roots and actual loaded
 suite provenance; a missing suite and a zero-test result cannot supply a PASS.
+
+## Committed dependency base within the same native lineage
+
+The explicit V4 target adds CommittedBaseSuccession to this owner. Existing
+Target/Scope/Capture versions keep their exact codecs and historical predicates.
+Only V4 carries the new optional target field; the encoder omits it for every
+older target and the reader refuses null or version crossing. The V4 scope keeps
+the immutable original Direction plus the exact separately admitted consumption
+Direction, and its capture retains that scope through ordinary native storage.
+No operation, public DTO, persistence owner or recovery registry is added.
+
+The native source walker already authenticates same-family runtime succession,
+the original parent, genuine later same-Step approvals and the single successor
+limit. This extension permits only a new binding revision/native base and the
+existing approved path extension. It does not alter logical identity, root,
+workspace, branch, checks/routes, requester, Step or acceptance. The original
+predecessor guard and primary base remain original history. Native Human evidence
+admits the complete observed target before the existing atomic supersession;
+separate Advance resumes the same Session/Plan/Step.
+
+The source owner derives four ordered disjoint partitions from the actual typed
+TreeChanges between exact CommitMetadata commit/tree pairs. Their union is the
+complete delta. The runtime successor predicate additionally checks their
+classification against original ownership/E0 and qualified added exclusions.
+Background paths consume the selected baseline without becoming edit/stage
+ownership or receiving a non-input classification. No historical count is a
+constant in the contract.
+
+CommittedEntry distinguishes absence from a regular CommittedObject(mode, blob)
+for each effective selected path. The new typed TreeEntries operation uses only
+the explicit finite `goal-source-committed-inventory` selection registered by the
+host. WorkflowManagedProcessExecution projects it to the thin Git DSL in the
+existing GitExec UoW. CNCF owns argv, parser and bounded result interpretation;
+SM owns neither raw Git output nor a fallback process. Automatic generic fixture
+enum expansion excludes TreeEntries, and the source fixture registers its exact
+selectedPaths explicitly along with CommitMetadata.
+
+The V4 observer repeats exact native commit metadata, complete tree changes,
+selected entries and ordinary Git guards around managed file/blob reads. It
+compares each actual BlobContent.bytes directly with managed File bytes/presence,
+then retains the established FileIdentity metadata for legacy compatibility.
+The repeated reads are freshness observations, not a new atomic snapshot or
+digest/certification protocol. The complete committed rows and delta must still
+equal the admitted target during fresh capture and later live freshness.
+
+`modeOf(direction, scope)` and its capture overload join bindingOf, consumptionOf,
+exclusionsOf and qualificationOf. The effective committed mode skips source-stage
+preflight, intents and results in capture and retained-prefix reconstruction.
+Candidate validity requires zero source stages, equal capture guards and clean
+selected committed data, even when HEAD/index delta is empty. Historical captures
+validate their own binding; fresh current data validates the adopted qualification.
+Later selected edits, base movement or mode drift refuse without implicit reversal
+or another runtime successor. Existing UNKNOWN rows remain original facts.
+
+The existing native CLI specification adds an explicitly selected installed V4
+case: a real selected/background/excluded producer delta is committed between
+two bases, the untouched executable and absent selected rows are observed, the
+post-adoption candidate acknowledgement is interrupted, and ordinary Advance
+collects the exact saved capture with no source stages or duplicate checks. It
+also retains an earlier actual UNKNOWN source intent. Current primary work has
+a new diff, normal selected checks and independent review, and ordinary Step
+closure creates the real primary commit. This covers the supported primary
+route; no-new-delta primary completion remains unsupported.
+
+The shared interruption fixture accepts only an optional explicit installed
+Bootstrap selection (manifest and pinned CAR), default absent. It supplies
+`--no-default-components` and the exact component file through ordinary
+BootstrapConfig; InstalledRuntimeDistribution admission is unchanged. The hook
+remains specification-owned and child CLI commands use the dedicated installed
+executable/image. This correction neither reruns the historical installed001
+refusal nor establishes a real consumer operation.

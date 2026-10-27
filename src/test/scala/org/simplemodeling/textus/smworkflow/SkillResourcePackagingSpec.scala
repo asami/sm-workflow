@@ -29,6 +29,8 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
     "docs/spec/goal-phase-acceptance-boundary.md",
     "docs/spec/goal-phase-release-repair-continuation.md",
     "docs/spec/goal-phase-dependency-scope.md",
+    "docs/spec/goal-phase-dependency-source-revision.md",
+    "docs/spec/repository-sync-validation-continuation.md",
     "docs/spec/goal-phase-validation-metadata.md"
   )
   private val _caller_paths = Vector(
@@ -39,7 +41,12 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
     "scripts/migrate-runtime-caller-format.py"
   )
   private val _supporting_paths = Vector("docs/spec/goal-phase-purpose-repair.md", "docs/spec/standalone-fix-acceptance.md")
-  private val _distribution_paths = _skill_paths ++ _contract_paths ++ _caller_paths ++ _supporting_paths
+  private val _agent_paths = Vector("analysis", "design", "implementation", "repair", "review")
+    .map(role => s"agents/sm_workflow_$role.toml")
+  private val _distribution_paths = _skill_paths ++ _contract_paths ++ _caller_paths ++ _supporting_paths ++
+    _agent_paths ++ Vector("install-sm-workflow.py")
+  private def _source_path(path: String): java.nio.file.Path =
+    Paths.get(if (path == "install-sm-workflow.py") "scripts/sm-workflow-tools.py" else path)
 
   "Component-owned skill resources" should {
     "retain exactly the six public semantic skill sources in the actual component JAR" in {
@@ -89,7 +96,7 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
           entries.map(_.getName).sorted shouldBe _distribution_paths.sorted
           packagedpaths.sorted shouldBe _distribution_paths.sorted
           _distribution_paths.foreach { path =>
-            val sourceBytes = Files.readAllBytes(Paths.get(path)).toVector
+            val sourceBytes = Files.readAllBytes(_source_path(path)).toVector
             contents(path) shouldBe sourceBytes
             val packagedEntry = jar.getJarEntry(s"META-INF/sm-workflow/$path")
             packagedEntry should not be null
@@ -140,13 +147,13 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
       val probe = probeRoot.resolve("repacked.zip")
       Files.isRegularFile(original) shouldBe true
       withClue("Run checkSkillBundleReproducibility before this scenario: ")(Files.isRegularFile(probe) shouldBe true)
-      When("the complete ZIP bytes and all fifteen copied sources, timestamps and original authoring bytes are read")
+      When("the complete ZIP bytes and all declared copied sources, timestamps and original authoring bytes are read")
       val originalBytes = Files.readAllBytes(original).toVector
       val probeBytes = Files.readAllBytes(probe).toVector
       val copies = _distribution_paths.map { path =>
         val copy = probeRoot.resolve(path)
         (path, Files.isRegularFile(copy), Files.getLastModifiedTime(copy).toMillis,
-          Files.readAllBytes(copy).toVector, Files.readAllBytes(Paths.get(path)).toVector)
+          Files.readAllBytes(copy).toVector, Files.readAllBytes(_source_path(path)).toVector)
       }
       val zip = new ZipFile(original.toFile)
       try {
@@ -154,7 +161,7 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
           val input = zip.getInputStream(zip.getEntry(path))
           try path -> input.readAllBytes().toVector finally input.close()
         }.toMap
-        Then("all fifteen copies have the changed timestamp, authoring bytes remain original, and full ZIP bytes are equal")
+        Then("all declared copies have the changed timestamp, authoring bytes remain original, and full ZIP bytes are equal")
         copies.foreach { case (path, regular, timestamp, copiedbytes, authoringbytes) =>
           regular shouldBe true
           timestamp shouldBe 946684800000L

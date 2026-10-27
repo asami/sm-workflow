@@ -42,7 +42,7 @@ import SplitPhaseTypedStartFixture as StorageFixture
   * substitutes product behavior, evidence readers, engines or process drivers.
   * Optional completion timing observations delegate the actual product action.
   * @since   Oct.  7, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers {
@@ -334,12 +334,25 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
   protected def local_subject_capabilities: Vector[String] = Vector("user")
   protected def standard_runtime: Boolean = false
 
+  protected final case class InstalledBootstrapSelection(manifest: Path, component: Path)
+
   protected def _with_runtime_(root: Path, scenario: String,
     host: Option[ThreeWorkflowRuntimeParameters.Definition] = None,
     hostParameters: Map[String, String] = Map.empty,
     nativeAcknowledgement: Option[String => Consequence[Unit]] = None,
     goalAcknowledgement: Option[String => Consequence[Unit]] = None,
     componentInstance: String = "repository-spec")(task: (org.goldenport.cncf.subsystem.Subsystem,
+    org.goldenport.cncf.component.Component, ExecutionContext, (Setup => Consequence[Unit]) => Unit) => Unit): Unit =
+    _with_runtime_(root, scenario, host, hostParameters, nativeAcknowledgement, goalAcknowledgement,
+      componentInstance, None)(task)
+
+  protected def _with_runtime_(root: Path, scenario: String,
+    host: Option[ThreeWorkflowRuntimeParameters.Definition],
+    hostParameters: Map[String, String],
+    nativeAcknowledgement: Option[String => Consequence[Unit]],
+    goalAcknowledgement: Option[String => Consequence[Unit]],
+    componentInstance: String,
+    installedBootstrap: Option[InstalledBootstrapSelection])(task: (org.goldenport.cncf.subsystem.Subsystem,
     org.goldenport.cncf.component.Component, ExecutionContext, (Setup => Consequence[Unit]) => Unit) => Unit): Unit = {
     Files.createDirectories(root.resolve("repository"))
     val original = host.getOrElse(ThreeWorkflowNormalHostFixture.definition(root))
@@ -395,9 +408,12 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
         |    mode: deterministic
         |""".stripMargin)
     val runtime = new CncfRuntime()
-    val handle = try take(runtime.initializeHandle(BootstrapConfig(cwd = root, args = Array(
+    val installedargs = installedBootstrap.toVector.flatMap(value => Vector("--no-default-components",
+      s"--${org.goldenport.cncf.config.RuntimeConfig.installedRuntimeManifestKey}=${value.manifest}",
+      s"--component-file=${value.component}"))
+    val handle = try take(runtime.initializeHandle(BootstrapConfig(cwd = root, args = (Vector(
       s"--textus.assembly.descriptor=${directory.resolve("assembly.yaml")}",
-      s"--textus.test.descriptor=${directory.resolve("test.yaml")}"))))
+      s"--textus.test.descriptor=${directory.resolve("test.yaml")}") ++ installedargs).toArray)))
     catch { case error: Throwable => runtime.closeEmbedding(); throw error }
     try {
       val owner = RuntimeBindingAdmissionFixture.admit(handle.subsystem)
@@ -449,7 +465,13 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
         name = Some(id.name), componentName = Some(id.name), version = Some("0.1.0-SNAPSHOT"), schemaVersion = Some(3),
         componentId = Some(id), config = raw))).withInstanceMetadata(ComponentInstanceMetadata(id.name, componentInstance, componentId = Some(id)))
       val component = take(factory.createPrimaryC(creation))
-      owner.add(component)
+      if (installedBootstrap.nonEmpty) {
+        // The specification-owned acknowledgement hook replaces the already admitted
+        // same-instance service solely in this embedding fixture. Ordinary CLI runs
+        // the pinned CAR; this is neither deployment nor a consumer operation.
+        owner.components.count(_.instanceId == component.instanceId) shouldBe 1
+        take(owner.upsertC(Vector(component)))
+      } else owner.add(component)
       val authenticated = take(IngressSecurityResolver.resolve(SubsystemExecutionProfile.Fixed,
         component.logic.executionContext(), Map.empty)).executionContext
       val actor = take(ExecutionContext.withRoutingSessionIdentity(authenticated,

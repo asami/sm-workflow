@@ -61,7 +61,7 @@ class NativeRepositoryEffectCommandSpecification(unittest.TestCase):
         self.counter += 1
         self.output = self.task / ("call-" + str(self.counter))
         self.output.mkdir()
-        values = {"executable": str(self.executable), "runtime_root": str(self.runtime_root), "task": str(self.task),
+        values = {"executable": str(self.executable), "runtime-root": str(self.runtime_root), "task": str(self.task),
                   "action": "prepare-repository-effect", "output": str(self.output),
                   **self.metadata, **{name: str(path) for name, path in self.files.items()},
                   "effect": effect}
@@ -144,7 +144,7 @@ class NativeRepositoryEffectCommandSpecification(unittest.TestCase):
                     self.assertEqual(self.route.read_bytes() if self.route.exists() else None, before_route)
 
     def test_sync_effect_exact_required_pairs_effects_and_collections_refuse_before_native(self):
-        required = ("executable", "runtime_root", "task", "action", "output", "component-instance", "selection",
+        required = ("executable", "runtime-root", "task", "action", "output", "component-instance", "selection",
                     "target", "effect", "reference", "participant", "issuer", "occurred-at", "collection")
         cases = [(kind, name, None) for kind in ("missing", "duplicate", "blank", "unpaired") for name in required]
         cases += [("extra", name, "supplied") for name in

@@ -15,6 +15,10 @@ Deliver a minimal entry callable without project configuration, then GoalPhase
 setup and existing-installation reuse. Preserve live Sessions and overrides;
 initialization is separate from Start and does not regenerate the product project.
 
+[Phase 19](phase-19.md) consumes this bounded initialization delivery in a clean
+Docker HEAVY suite. It owns installation/customization qualification, not another
+bootstrap implementation; its broader matrix is not an INIT completion gate.
+
 ## Goal
 
 Expose coherent user-facing workspace preparation, inspection and dependency update operations.

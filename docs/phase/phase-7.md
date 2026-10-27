@@ -3,7 +3,9 @@
 ## Commit/recovery predecessor — 2026-10-26
 
 The planned rollout is Phase 6.7 -> [Phase 6.8](phase-6.8.md) ->
-[Phase 6.9](phase-6.9.md) -> Phase 7.
+[Phase 6.9](phase-6.9.md) -> [Phase 6.10](phase-6.10.md) -> Phase 7.
+Consume 6.10's optional operating-profile selection and endpoint metrics without
+changing issued work or requiring model comparison/complete usage measurement.
 Consume 6.9's clean/dirty single-repository orchestration and impact-selected
 validation under the [runtime contract](../spec/repository-sync-runtime-orchestration.md).
 Do not recreate caller-side preparation or treat UPDATED alone as a FULL gate.

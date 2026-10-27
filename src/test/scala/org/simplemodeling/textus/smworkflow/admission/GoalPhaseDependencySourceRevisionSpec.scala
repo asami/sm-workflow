@@ -516,6 +516,138 @@ final class GoalPhaseDependencySourceRevisionSpec extends AnyWordSpec with Match
         preStageGuard = guard, postStageGuard = guard, scope = Some(scope)))
     }
 
+    def _committed_fixture_(): (R.Direction, R.Direction, R.ScopeSuccessor, R.Capture) = {
+      val (previous, runtime, prior, captured) = _exclusion_fixture_()
+      val originalmodes = previous.target.proposal.consumption.expectedModes.zipWithIndex.map((mode, index) =>
+        if (index == 1) mode.copy(mode = "100755") else mode)
+      val original = previous.copy(target = previous.target.copy(proposal = previous.target.proposal.copy(
+        mode = "selected-changes", consumption = previous.target.proposal.consumption.copy(expectedModes = originalmodes))))
+      val binding = prior.binding.copy(base = GoalPhaseOrderedProgression.Snapshot("c" * 40, "d" * 40))
+      val modes = originalmodes :+ prior.consumption.expectedModes.last.copy(mode = "000000")
+      val consumption = prior.consumption.copy(expectedModes = modes)
+      val guard = captured.preStageGuard.copy(head = binding.base.head, committedTree = binding.base.tree,
+        indexTree = binding.base.tree, selectedFiles = captured.preStageGuard.selectedFiles.dropRight(1) :+
+          R.fileIdentity(binding.paths.last, None))
+      val paths = Vector(binding.paths.head, runtime.target.exclusionSuccession.get.previousExclusions.head,
+        runtime.target.exclusionSuccession.get.addedPaths.head, "src/main/scala/BaselineOnly.scala")
+      val changes = paths.map(path => R.StageChange("100644", "100644", Some("a" * 40), Some("b" * 40), "M", path))
+      val entries = modes.map(mode => R.CommittedEntry(mode.path,
+        Option.when(mode.mode != "000000")(R.CommittedObject(mode.mode, "e" * 40))))
+      val succession = R.CommittedBaseSuccession(R.committedBaseSuccessionSchema, original.directive,
+        original.target.binding.base, binding.base, changes, paths.take(1), paths.slice(1, 2), paths.slice(2, 3),
+        paths.drop(3), "committed", entries)
+      val target = runtime.target.copy(schemaVersion = R.committedSchema, binding = binding,
+        proposal = runtime.target.proposal.copy(mode = "committed", consumption = consumption),
+        preStageGuard = guard, committedBaseSuccession = Some(succession))
+      val next = runtime.copy(target = target)
+      val scope = prior.copy(schemaVersion = R.committedScopeSchema, binding = binding, consumption = consumption,
+        consumptionDirection = Some(next))
+      (original, next, scope, captured.copy(schemaVersion = R.committedCaptureSchema, direction = original,
+        preStageGuard = guard, postStageGuard = guard, stagedPaths = Vector.empty, scope = Some(scope)))
+    }
+
+    "round trip explicit committed-base v4 and preserve every legacy target scope and capture meaning" in {
+      Given("an explicit committed successor plus unchanged V1 V2 and V3 fixtures")
+      val (original, next, scope, capture) = _committed_fixture_()
+      val (_, runtime, runtimescope, runtimecapture) = _runtime_fixture_()
+      val (_, excluded, excludedscope, excludedcapture) = _exclusion_fixture_()
+      val targets = Vector(original.target, runtime.target, excluded.target, next.target)
+      When("the ordinary closed codecs and public Record projection read the exact complete values")
+      val read = targets.map(value => value.asJson.as[R.Target])
+      val public = R.targetC(R.targetRecord(next.target))
+      Then("V4 is explicit and each old writer still omits committed-base succession")
+      read shouldBe targets.map(Right(_))
+      take(public) shouldBe next.target
+      targets.dropRight(1).foreach(_.asJson.hcursor.downField("committedBaseSuccession").focus shouldBe None)
+      Vector(runtimescope, excludedscope, scope).foreach(value => value.asJson.as[R.ScopeSuccessor] shouldBe Right(value))
+      Vector(runtimecapture, excludedcapture, capture).foreach(value => value.asJson.as[R.Capture] shouldBe Right(value))
+      R.runtimeSuccessorValid(original, next, scope.approvals) shouldBe true
+      R.modeOf(original, Some(scope)) shouldBe "committed"
+      R.modeOf(capture) shouldBe "committed"
+      original.target.proposal.mode shouldBe "selected-changes"
+      capture.direction shouldBe original
+      capture.primaryBase shouldBe original.target.primaryBase
+      capture.stagedPaths shouldBe empty
+    }
+
+    "refuse missing null unknown and crossed committed-base target scope capture and entry fields" in {
+      Given("a complete V4 target with one explicitly absent selected entry")
+      val (_, next, scope, capture) = _committed_fixture_()
+      val wire = next.target.asJson
+      val succession = next.target.committedBaseSuccession.get
+      val absent = succession.committedEntries.last.asJson
+      When("a caller removes required meaning or crosses a historical version")
+      val invalidpairs = Vector("previousBase", "nextBase").flatMap { key =>
+        val base = succession.asJson.hcursor.get[Json](key).toOption.get
+        Vector(base.mapObject(_.add("unknown", Json.True)), base.mapObject(_.remove("head")),
+          base.mapObject(_.remove("tree")), Json.Null, base.mapObject(_.add("head", Json.Null)),
+          base.mapObject(_.add("tree", Json.Null)), base.mapObject(_.add("head", "invalid-oid".asJson)),
+          base.mapObject(_.add("tree", "invalid-oid".asJson))).map(pair =>
+          wire.mapObject(_.add("committedBaseSuccession", succession.asJson.mapObject(_.add(key, pair)))))
+      }
+      val invalid = Vector(wire.mapObject(_.remove("committedBaseSuccession")),
+        wire.mapObject(_.add("committedBaseSuccession", Json.Null)),
+        wire.mapObject(_.add("schemaVersion", R.exclusionSchema.asJson)),
+        wire.mapObject(_.add("committedBaseSuccession", succession.asJson.mapObject(_.remove("sourceMode")))),
+        wire.mapObject(_.add("committedBaseSuccession", succession.asJson.mapObject(_.add("unknown", Json.True))))) ++ invalidpairs
+      Then("no omission or null upgrades an old schema or creates a complete selected observation")
+      invalid.map(_.as[R.Target].isLeft) shouldBe Vector.fill(invalid.size)(true)
+      absent.hcursor.downField("entry").focus shouldBe None
+      absent.as[R.CommittedEntry] shouldBe Right(succession.committedEntries.last)
+      absent.mapObject(_.add("entry", Json.Null)).as[R.CommittedEntry].isLeft shouldBe true
+      absent.mapObject(_.add("unknown", Json.True)).as[R.CommittedEntry].isLeft shouldBe true
+      scope.copy(schemaVersion = R.exclusionScopeSchema).asJson.as[R.ScopeSuccessor].isLeft shouldBe true
+      capture.copy(schemaVersion = R.exclusionCaptureSchema).asJson.as[R.Capture].isLeft shouldBe true
+      scope.asJson.mapObject(_.remove("consumptionDirection")).as[R.ScopeSuccessor].isLeft shouldBe true
+    }
+
+    "require an exact complete ordered partition without granting baseline ownership" in {
+      Given("native-shaped changes in all four disjoint partitions")
+      val (original, next, scope, _) = _committed_fixture_()
+      val succession = next.target.committedBaseSuccession.get
+      val invalid = Vector(succession.copy(baselineChangedPaths = Vector.empty),
+        succession.copy(phaseChangedPaths = succession.phaseChangedPaths ++ succession.baselineChangedPaths),
+        succession.copy(previousExcludedChangedPaths = succession.addedExcludedChangedPaths),
+        succession.copy(changes = succession.changes.dropRight(1)),
+        succession.copy(previousBase = succession.nextBase),
+        succession.copy(parent = ContextReference("invented-parent", "1")))
+      When("each changed path or its native parent/base classification is altered")
+      val allowed = invalid.map(value => R.runtimeSuccessorValid(original,
+        next.copy(target = next.target.copy(committedBaseSuccession = Some(value))), scope.approvals))
+      Then("every alteration refuses and baseline paths stay outside selected ownership and exclusions")
+      allowed shouldBe Vector.fill(invalid.size)(false)
+      succession.baselineChangedPaths.toSet.intersect(scope.binding.paths.toSet) shouldBe empty
+      succession.baselineChangedPaths.toSet.intersect(scope.consumption.nonInputExclusions.toSet) shouldBe empty
+      R.runtimeSuccessorValid(next, next.copy(directive = ContextReference("second-successor", "1")), scope.approvals) shouldBe false
+    }
+
+    "retain untouched committed executable and absent entries and refuse source staging or later drift" in {
+      Given("a V4 selected inventory containing changed untouched executable and absent paths")
+      val (original, next, scope, capture) = _committed_fixture_()
+      val succession = next.target.committedBaseSuccession.get
+      val untouched = succession.committedEntries(1)
+      val substituted = succession.copy(committedEntries = succession.committedEntries.updated(1,
+        untouched.copy(entry = untouched.entry.map(_.copy(mode = "100644")))))
+      When("selected entries, historical binding, stage effects or the effective native guard are crossed")
+      val modeallowed = next.target.copy(committedBaseSuccession = Some(substituted)).asJson.as[R.Target]
+      val incomplete = next.target.copy(committedBaseSuccession = Some(succession.copy(
+        committedEntries = succession.committedEntries.dropRight(1)))).asJson.as[R.Target]
+      val drift = capture.postStageGuard.copy(head = "f" * 40)
+      Then("complete selected data and the single effective committed mode remain mandatory")
+      untouched.entry.map(_.mode) shouldBe Some("100755")
+      succession.phaseChangedPaths should not contain untouched.path
+      succession.committedEntries.last.entry shouldBe None
+      modeallowed.isLeft shouldBe true
+      incomplete.isLeft shouldBe true
+      capture.copy(stagedPaths = scope.binding.paths).asJson.as[R.Capture].isLeft shouldBe true
+      R.captureBaseValid(original, capture.generation + 1, drift, Some(scope)) shouldBe false
+      R.captureBaseValid(original, capture.generation + 1, capture.preStageGuard, Some(scope)) shouldBe true
+      R.bindingOf(capture).base shouldBe succession.nextBase
+      original.target.binding.base shouldBe succession.previousBase
+      scope.copy(binding = original.target.binding).asJson.as[R.ScopeSuccessor].isRight shouldBe true
+      R.scopeValid(original, scope.copy(binding = original.target.binding)) shouldBe false
+    }
+
     "round trip closed non-input exclusion target scope and capture without upgrading v1 or v2 encodings" in {
       Given("four retained exclusions and five independently declared additions accompanying one runtime successor")
       val (original, next, scope, capture) = _exclusion_fixture_()

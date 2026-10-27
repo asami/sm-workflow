@@ -233,3 +233,67 @@ transition establishes new-source validation or resets repair counts.
 The rejected build.sbt suite-registration change remains excluded. Normal discovery,
 normal local publication and exact task-private runtime qualification remain
 separate from actual consumer acceptance.
+
+## Explicit committed dependency base succession (V4)
+
+The existing describe/adopt operations admit a closed V4 Target only with the
+required `committedBaseSuccession` and the existing single RuntimeSuccession.
+The original target must have no runtime successor. Actual later same-Step
+approvals and independently admitted whole-target Human evidence remain required.
+An optional ExclusionSuccession keeps its exact E0 followed by qualified additions.
+V1/V2/V3 writers and readers retain their historical meaning; omission never
+upgrades them. Present null, unknown, missing and crossed fields refuse.
+
+The succession schema is `sm-workflow.goal-phase-committed-base-succession.v1`.
+It records the exact original Direction reference, `previousBase` and `nextBase`
+native commit/tree pairs, the complete ordered native `changes`, ordered
+`phaseChangedPaths`, `previousExcludedChangedPaths`, `addedExcludedChangedPaths`
+and `baselineChangedPaths`, constant `sourceMode=committed`, and `committedEntries`.
+The four disjoint vectors cover the entire actual old/new tree delta. Counts
+are observations, never fixed at the historical pre-API 117 paths. Baseline
+classification grants no edit, staging, check bypass or acceptance authority.
+
+Every effective selected path has one CommittedEntry in selection order, including
+actual absence. Its optional `entry` is omitted for absence and rejects explicit
+null; a present CommittedObject contains only regular `mode` (100644/100755) and
+native `blob`. Expected removal uses the existing declared 000000 mode. These
+rows observe committed entries even when HEAD/index TreeChanges is empty.
+Guard.selectedEntries keeps its historical index-delta meaning.
+
+Only an explicitly registered `tree-entries` host operation with selection
+`goal-source-committed-inventory` and the exact effective binding.paths may
+observe this inventory. There is no unselected or whole-repository default.
+Typed Git CommitMetadata establishes both native commit/tree pairs; TreeChanges
+establishes the complete delta; TreeEntries establishes every selected mode/blob
+or absence. Compare each actual BlobContent byte vector directly with the actual
+managed File bytes/presence. Legacy FileIdentity fields remain readable metadata,
+not a substitute for these reads. Repeat the native/managed observations around
+reads and require stable exact guards; normal unsupported/bounded/unknown failures
+remain errors, with no process/argv/parser fallback.
+
+The effective binding may change its revision and native base, plus the existing
+genuinely approved inventory extension. Dependency identity, root, workspace,
+branch, requester, Step, checks, routes, ownership and acceptance stay exact.
+Original Direction, primary base, accepted prefix, prior captures and actual
+repair accounting remain immutable. A later dependency commit or selected edit
+does not inherit qualification and refuses; there is no automatic later-source
+follow, second runtime succession or implicit mode reversal.
+
+One effective `modeOf` projection owns preflight, capture, staging, retained
+prefixes and freshness. V4 committed capture issues no source-stage preflight,
+intent or result and has empty stagedPaths because no source-stage effect occurs.
+It observes all selected committed bytes and requires equal pre/post guards.
+Every old UNKNOWN intent/result remains unchanged. Actual acknowledgement
+interruption is collected through ordinary native re-entry; no accepted Submit,
+stage or adoption is replayed. Separate Advance resumes the same Session, Plan
+and Step at the next generation. Fresh checks and independent review remain
+obligations. Ordinary primary closure requires actual new primary work and a
+genuine primary commit; all-committed primary/no-new-delta completion remains
+unsupported. No empty dependency or primary commit is manufactured.
+
+Installed interruption specifications explicitly select the actual manifest and
+pinned component CAR with `--no-default-components` through a fixture-owned,
+optional Bootstrap selection. Existing source callers omit it. Ordinary installed
+policy validation remains unchanged; installed child commands require the
+dedicated executable and image without source-launcher fallback. Fixture hooks
+and producer success do not establish real consumer adoption or deployment.

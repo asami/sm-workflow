@@ -14,7 +14,7 @@ import org.goldenport.protocol.operation.OperationResponse
   * workflow progression. The owning workflow must persist intent and observe
   * uncertain effects before considering a later invocation.
   * @since   Oct.  6, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowManagedProcessExecution {
@@ -222,6 +222,7 @@ private[smworkflow] object WorkflowManagedProcessExecution {
       case GitOperation.CheckSelectedIndex(selection, parent) => git_check_selected_index(target, selection, parent)
       case GitOperation.SelectedIndexChanges(selection, parent) => git_selected_index_changes(target, selection, parent)
       case GitOperation.TreeChanges(before, after) => git_tree_changes(target, before, after)
+      case GitOperation.TreeEntries(tree, selection) => git_tree_entries(target, tree, selection)
     }
     def runGitC[A](program: ExecUowM[GitExecutionResult[A]]): Consequence[GitExecutionResult[A]] = executeProgram(program)
     def execute(): Consequence[OperationResponse] =

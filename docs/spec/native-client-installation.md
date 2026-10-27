@@ -1,5 +1,11 @@
 # Native client and task-private skill installation
 
+Clean-environment qualification planned 2026-10-28:
+[Phase 19](../phase/phase-19.md) tests the normal distribution, bootstrap,
+configuration and supported update/removal paths under the
+[Docker HEAVY contract](clean-installation-qualification.md). This is a test plan,
+not evidence that the recipes or desktop integrations below are already qualified.
+
 Startup correction adopted 2026-10-27: the
 [assembly-free runtime contract](assembly-free-runtime-startup.md) governs current
 installation. A consumer need not create `.textus/assembly.yaml` or a fixed-name
@@ -266,29 +272,48 @@ mkdir -p "$skill_parent"
 mkdir "$skill_destination" && unzip "$bundle" -d "$skill_destination"
 ```
 
-Keep the existing names `sm-goal-phase`, `sm-split-phase` and
-`sm-repository-sync`. Their sources are installed at
-`<skill_destination>/skills/<skill-name>/SKILL.md`. Use existing `unzip`; do
-not install into the user's home, replace existing skills or select a bundle
-by searching arbitrary candidates. An occupied destination requires an
-explicitly chosen fresh task-private destination.
+The bundle contains six skills (`sm-goal-phase`, `sm-split-phase`,
+`sm-repository-sync`, `sm-goal-task`, `sm-test-fix`, `sm-review-fix`), seventeen
+shared contracts under `docs/spec/`, the finite command/authority callers and
+explicit offline migration script under `scripts/`, five `sm_workflow_*` agent
+TOMLs under `agents/`, and `install-sm-workflow.py`: 32 regular files in total.
+The component JAR retains the same source bytes under `META-INF/sm-workflow/`.
+The installer source is `scripts/sm-workflow-tools.py`; the archive root name
+makes the extracted installer independently usable, without a source checkout.
 
-The same ZIP also installs four supporting contract resources at
-`<skill_destination>/docs/spec/`:
+For a selected shared installation, inspect the portable installer and use the
+actual extracted path and this machine's canonical shared destination. Dry-run
+is the default; only `--write` applies the displayed installation:
 
-- `native-host-execution.md`
-- `goal-phase-acceptance-boundary.md`
-- `goal-phase-dependency-scope.md`
-- `goal-phase-validation-metadata.md`
+```sh
+uv run --no-cache --managed-python --no-python-downloads --script \
+  "$skill_destination/install-sm-workflow.py" install \
+  --bundle "$bundle" --shared-root /absolute/path/to/development-workstation/common/codex
+```
 
-Together with the three `SKILL.md` files, these are the bundle's exact seven
-files. Before loading a skill, verify that all seven are present in the fresh
-destination and that its direct `../../docs/spec/` Markdown links resolve there,
-removing any `#fragment` before checking the file path. These contracts support
-the installed instructions' host execution, acceptance boundary, dependency scope
-and validation metadata guidance. Use the selected bundle's installed resources;
-missing files require correcting that bundle and installing into a fresh
-task-private destination, with no copy from another checkout or silent fallback.
+The installation copies only the declared payload into the shared destination,
+links `~/.agents/skills/sm-*` to those shared skill directories, and deploys the
+five regular agent definitions under `~/.codex/agents/`. It does not edit
+`config.toml`, credentials, local runtime settings or Workflow stores, select a
+runtime, run migration or call Start/Submit/Advance. An explicit `--home` supports
+a disposable installation test. Existing matching files and links need no write.
+Differing content requires reconciliation or an intentional `--replace` for
+those selected files. Occupied discovery paths and duplicate legacy discovery
+paths remain conflicts even with replacement selected. Other work is preserved.
+A partial filesystem write is not an atomic installation; collect actual status
+and retained files before deciding the next action, without automatic replay.
+
+Task-private extraction remains valid without installing into the real home.
+Before loading a skill, verify its direct `../../docs/spec/` Markdown references
+within the selected distribution, after removing fragments. The subset contains
+the direct shared contracts, not all product documentation or unrelated CNCF
+skills; conditional procedures still require their actual referenced resources.
+No other checkout or automatic fallback supplies a missing required contract.
+
+Agent file deployment does not refresh an existing chat's loaded role catalog.
+Check actual role availability in a fresh agent/chat when needed; this does not
+restart or replace an existing Workflow Session. No new role is invoked during
+installation, and installation alone proves no real semantic work or acceptance.
 
 A capable semantic host must load the installed `SKILL.md` source for the
 actual assigned work. Listing or extracting the files is only installation,

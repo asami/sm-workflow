@@ -5,6 +5,24 @@ description: Route explicit Phase start/resume requests through the caller and p
 
 # GoalPhase semantic work
 
+## Show who is working
+
+Apply the [activity transitions](../../docs/spec/native-host-execution.md#caller-activity-transitions)
+from the first actual work segment, including a resumed turn. Parent-only
+investigation, planning, editing or repair needs `actor=parent, event=working`
+in the first ordinary progress update for that segment; do not wait for a
+subagent call, runtime response or code edit to trigger it.
+For a subagent, forward dispatch/resume and paired results, and also forward
+`actor=subagent, event=working` when existing tool output or a worker message
+establishes active work. The generated **🤖 ✨ AI作業中** indication must not
+be replaced by dispatch-only text or an `Agent Use` block. Unknown start is not
+active work. Parent work uses the generated **🤖 🛠️ 親AI作業中** indication.
+Use the bundled renderer and forward `presentation.commentary` verbatim to
+chat: tool stdout alone is not a user-facing commentary message. End the active
+indication at actual waiting/result/control-transfer boundaries in the ordinary
+update; waiting alone is not parent work. Do not repeat unchanged status or
+create extra AI calls, monitoring or business Operations for these indications.
+
 ## Runtime-owned local publication
 
 `publishLocal` always runs through sm-workflow `LocalPublicationService`, including
@@ -32,8 +50,8 @@ manufacture a Start request or run a replacement workflow.
 ## Runtime-owned repair and stop decisions
 
 For command preparation or delegated delivery that is confirmed unexecuted,
-follow the common unstarted-execution recovery contract linked from the installed
-`cncf-command-execution` skill. Reuse existing approval for unchanged targets,
+follow the bundled [unstarted execution contract](../../docs/spec/native-host-execution.md#unstarted-execution-continuation).
+Reuse existing approval for unchanged targets,
 operations and effects with unconsumed permission; do not add a Human gate for
 preparation correction or runner replacement. Preserve Session, base, history,
 repair counts and successful results. Use the runtime's public continuation
@@ -119,6 +137,15 @@ asking the consumer to freeze each edit or relay each reviewer question. This
 organizes responsibility; it does not merge native issued work types or grant
 semantic workers command authority. Normal Phase validation remains runtime-owned.
 
+For separately authorized dependency development in another chat, use the
+[independent dependency delivery contract](../../docs/spec/native-host-execution.md#independent-dependency-delivery).
+The requesting chat defines the deliverable, scope and acceptance conditions and
+owns integration; the dependency chat completes implementation, compile, tests
+and required review under its repository's ordinary development route. It returns
+the changed revision/version, actual validation results, remaining issues and
+consumption instructions. Source edits alone are not completed delivery. This is
+not a child Workflow of the parent Session and requires no nested-workflow feature.
+
 Keep a single owner of process/result collection. Consumers use the returned
 result rather than polling the same logs or requesting progress-only AI turns.
 Report completion, material scope/contract changes and decisions the owner cannot
@@ -150,15 +177,22 @@ Start admission and effect permissions with their existing owners.
 
 ## Visible subagent calls
 
-The owning caller shows every authorized subagent dispatch and actual result in
-commentary using the [subagent display contract](../../docs/spec/native-host-execution.md#subagent-call-display).
-Show purpose/role, selected model and reasoning effort, with their source; pair
-the call and result using the real agent ID when returned and known Session/Step.
-Label model/effort as configured until actual execution metadata confirms them;
-unavailable values remain unknown. Include resumed/reused agents and configured
-alternate attempts, without granting new dispatch or retry authority. INLINE
-work is parent work, not a subagent call. This is presentation only: add no
-agent, model probe, AI invocation, polling or saved record solely for display.
+At each existing authorized subagent dispatch/resume return and actual result
+handler, pass only actual known metadata through the bundled
+`native-goal-command.py` `observe_ai_activity` API (or its finite local
+`ai-activity --observation /absolute/input.json` transport). Forward the returned
+`presentation.commentary` **VERBATIM** to chat; retain its `activityContext` in
+the ordinary continuation context and reuse it for the actual paired result.
+Follow the [program-generated AI activity contract](../../docs/spec/native-host-execution.md#program-generated-ai-activity).
+Do not compose AI markers, infer model/start/success/native acceptance or make
+display metadata a work gate. Empty resume acknowledgements retain identity but
+prove no start. Feed already available progress, actual parent work/wait and
+authorized existing-chat dispatch/results (with the actual chat title) through
+the same API when applicable. Keep ongoing runtime control and existing gear
+before/after intervals intact; child results never imply parent handback.
+Report buffered or failed delivery honestly in the normal update. Add no AI
+call, agent, polling, dedicated wait, display ledger or sm-workflow command for
+presentation.
 
 ## Source-history comment recovery
 
@@ -231,21 +265,8 @@ Keep paired `complete` (Submit + permitted Advance) in one interval; an intermed
 Submit response does not return control. If output is buffered, show a compact
 matched start/end when received and label it `出力一括受信`, without claiming live
 delivery. A start not yet observable stays preparation/start-unconfirmed.
-Show **🤖 🛠️ 親AI作業中** when the parent is actually doing the work,
-including editing or fixing code. For an active subagent, show
-**🤖 ✨ AI作業中** and identify the responsible subagent and activity.
-Neither AI marker uses a blue circle. A handback or dispatch alone does not
-establish active parent work: while only waiting for a child, runtime or user,
-do not show **🤖 🛠️ 親AI作業中**. Preserve the sm-workflow execution interval.
-If parent and child both work, label their activities separately.
-For another chat, use **💬 📨 別チャットへ依頼中** after dispatch when work
-is unconfirmed, **💬 ✨ 別チャット作業中** for observed active work, or
-**💬 ⏳ 別チャット待機中** for an observed wait. Always name the destination
-chat; include its task or known waiting reason. Do not use the subagent marker
-for another chat or infer its waiting state from the parent's wait.
-Follow the [separate-chat display contract](../../docs/spec/native-host-execution.md#separate-chat-delegation-display).
-Add no AI call, status query, wait loop, command, persisted display
-record or extra update solely to create these markers; use existing calls/events.
+Forward program-generated AI commentary at the existing observation boundaries
+as specified in [AI activity forwarding](#visible-subagent-calls).
 
 Use actual program-produced information. Absent optional fields, repair counts
 and observations remain `unknown` (or explicitly absent), never fabricated zero
@@ -287,6 +308,17 @@ creates no schedule or additional execution authority.
 
 ## Product SBT ownership
 
+Textus SBT must have at least a 4 GiB maximum heap. The runtime-owned CNCF SBT
+DSL resolves `cncf.sbt.jvm.maximum-heap-mib` from ordinary config and preserves
+larger target `.jvmopts` values. Do not add per-check fixed JAVA_OPTS, a global
+launcher wrapper or direct skill-side SBT. For actual heap exhaustion, use the
+bundled [memory recovery contract](../../docs/spec/native-host-execution.md#product-sbt-lifecycle).
+Correct the owning runtime/config; machine-wide sbtopts is for outside-workflow
+SBT and concrete edits there require human confirmation.
+Keep the same Session, history, repair counters and results; subsequent Phase
+validation remains inside the native runtime. This adds no routine AI memory
+gate, automatic increase, or external SBT fallback.
+
 The installed CLI's native local driver owns ordinary SBT launch, waiting,
 timeout, capture, termination and validation inside its already escalated,
 admitted UoW. Consume its actual observations; do not create, launch, wait for
@@ -298,14 +330,16 @@ UoW is platform-owned. See the
 [product SBT lifecycle](../../docs/spec/native-host-execution.md#product-sbt-lifecycle).
 
 Classify validation by its purpose, not the repository being developed or the
-label attached to the command. Checks needed for issued implementation, repair,
-Step acceptance or Phase completion belong to this workflow, including when
+label attached to the command. Checks for the parent project needed for its
+issued implementation, repair, Step acceptance or Phase completion belong to this workflow, including when
 developing sm-workflow itself. Calling them "independent development tests",
 "supplementary checks" or a worker's pre-Submit sanity check does not move them
 to `cncf_command_runner`. Apply this rule before general top-level SBT routing.
 
-Pass this boundary in implementation/repair assignments: edit the issued scope
-and return the actual semantic result and any missing validation requirement;
+Pass this boundary to workers performing the parent Session's issued
+implementation/repair, not to an independently commissioned dependency chat:
+edit the issued scope and return the actual semantic result and any missing
+validation requirement;
 do not launch SBT or prepare/delegate a runner intake. The caller Submits that
 result and uses ordinary Advance so the runtime executes the selected checks,
 waits, retains actual outcomes and continues through its configured progression.
@@ -314,8 +348,9 @@ the concrete gap and correct that connection; do not silently run checks outside
 the workflow or claim unobserved validation success.
 
 The independent route remains for separately scoped work outside this Phase's
-validation, such as a standalone test request or restoration of a broken runtime
-that cannot execute its own checks. State that purpose and scope using existing
+validation, including the dependency repository's own compile, tests and required
+review for an independently commissioned deliverable, a standalone test request
+or restoration of a broken runtime that cannot execute its own checks. State that purpose and scope using existing
 task context; this is no new approval or per-command classification artifact.
 Use `cncf_command_runner` and native sbt locks for that separate work, without
 treating its receipt as automatic Phase acceptance. Preserve ongoing work,
@@ -489,9 +524,10 @@ actual check failures. CBD remains OFF.
 Journal adoption creates no journaling-only AI task, clerical transcription,
 Markdown dual write, storage fallback, automatic replay, Submit or Advance.
 An already-issued file-only recording retains its exact captured destinations,
-assigned edits and typed completion contract. RepositorySync and SplitPhase gain
-no automatic Journal producer in this Phase: consume only real supplied fields;
-do not invent a recording duty. Existing caller controls, consent, effect authority
+assigned edits and typed completion contract. RepositorySync merge-assessment
+and SplitPhase routing can supply their own optional Journal observations;
+consume only actual returned fields and do not invent a recording duty.
+Existing caller controls, consent, effect authority
 and the first-attempt escalated direct installed CLI rule still apply.
 
 Use ordinary provided `JournalService.findJournalEntries` or
@@ -688,7 +724,16 @@ redefine a planned file inventory as the target Human authorization boundary.
 
 Follow the existing [dependency-scope contract](../../docs/spec/goal-phase-dependency-scope.md).
 Ordinary public Usage Contract use and inspection need no dependency-change
-proposal. Internal changes to a dependency Component, including a Component in
+proposal. Separately authorized dependency development follows the
+[independent delivery contract](../../docs/spec/native-host-execution.md#independent-dependency-delivery);
+the native scope decision below does not create or manage a nested Workflow.
+If the Session already retains pending dependency work or a scope question,
+preserve it and reconcile the returned outcome through supported public
+procedures. Do not replace that record with a chat claim of success or rewrite
+internal state. Missing public reconciliation is a specific integration gap,
+not a reason to require nested management before dependency development.
+
+Internal changes to a dependency Component, including a Component in
 the same repository, require the actual admitted scope. Component `identity`,
 `repository` and `workspace` values are logical identities; they grant no path
 access or executable permission.
@@ -736,6 +781,27 @@ installed-task consumption. Load the fresh packaged skill for the actual task
 and retain separate evidence. Prose and specification-owned tests establish no
 actual Human direction, linked dependency editing, execution or acceptance;
 those require their own genuine evidence and existing admission gates.
+
+## Dependency authorization and source continuation
+
+Consume the actual issued dependency proposal and its typed
+`authorizationBoundary` under the [dependency scope contract](../../docs/spec/goal-phase-dependency-scope.md#typed-authorization-and-inventory-continuation).
+An implementation inventory is distinct from an explicit `exactPaths` restriction.
+Only the runtime may admit `scopeUpdate` against the linked actual approval;
+preserve exclusions, purpose, operations, acceptance and pending Human records.
+A mechanical inventory continuation is not a new Human answer or effect grant.
+
+When the actual current dependency source must change, consult
+[dependency source revision](../../docs/spec/goal-phase-dependency-source-revision.md)
+and the installed public `describeGoalPhaseDependencySourceRevision` result.
+Use its exact current target and offered choices with actual independent Human
+evidence through `adoptGoalPhaseDependencySourceRevision`; a separate ordinary
+Advance owns subsequent work and fresh checks. Preserve the primary base,
+accepted Steps, old checks, UNKNOWN outcomes and repair counts. This route
+requires the matching runtime capability and qualified source-consumption
+configuration; source documentation alone establishes neither. Report a concrete
+missing capability through the producer owner. Never edit captured bindings or
+Session storage, forge a completed prefix or replay an accepted Submit.
 
 ## Incremental diagnostic information within an issued repair
 

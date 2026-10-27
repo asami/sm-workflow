@@ -70,8 +70,6 @@ def execute(options):
     COMMAND.require(output != task and task in output.parents, "output must be beneath the selected task")
     COMMAND.installed_executable(executable)
     with COMMAND.selected_directory(runtime_root):
-        for path in (runtime_root / ".textus/config.json", runtime_root / ".textus/assembly.yaml"):
-            COMMAND.existing_file(path)
         with COMMAND.selected_directory(task) as task_fd, COMMAND.selected_output_directory(task_fd, task, output) as output_fd:
             command = preparation_command(options, executable, task_fd)
             context = COMMAND.exchange_context(command, runtime_root, output, COMMAND.routing(task_fd))

@@ -360,7 +360,7 @@ class NativeGoalAuthoritySpecification(unittest.TestCase):
                   b'{"family":"GoalPhase","sessionId":" "}',
                   b'{"family":"GoalPhase","sessionId":"selected-goal","session_id":"selected-goal"}',
                   b'{"family":"GoalPhase","sessionId":"selected-goal","sessionId":"other"}')
-        cases = [("route", value) for value in routes] + [("prerequisite", path) for path in self.prerequisites]
+        cases = [("route", value) for value in routes] + [("prerequisite", self.executable)]
         for kind, value in cases:
             with self.subTest(case=kind, value=value):
                 # Given an absent/malformed/nonexact route or missing existing launcher/runtime_root prerequisite.

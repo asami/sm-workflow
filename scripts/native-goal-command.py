@@ -23,6 +23,7 @@ import stat
 import subprocess
 import sys
 import time
+import unicodedata
 from urllib.parse import unquote, urlsplit
 
 
@@ -287,8 +288,7 @@ def new_file(directory_fd, name):
 
 def command_prefix(executable, runtime_root):
     """Use the explicitly selected installed CLI; artifact selection is its own."""
-    return [str(executable), "--runtime-root", str(runtime_root),
-            "--textus.assembly.descriptor=" + str(runtime_root / ".textus/assembly.yaml"), "command"]
+    return [str(executable), "--runtime-root", str(runtime_root), "command"]
 
 
 def installed_executable(path):
@@ -440,9 +440,9 @@ def issued_repository_repair_route(options, task_fd):
 
 
 def prepare_review_input(options, executable, task_fd):
-    """Keep original review preparation strictly on the outer Goal route."""
+    """Prepare review evidence for the exact retained Goal family."""
     _operation, session_id = issued_goal_route(options, task_fd)
-    return review_input_command(options, executable, session_id)
+    return review_input_command(options, executable, session_id, route_record(task_fd)["family"])
 
 
 def issued_repository_conflict_route(options, task_fd):
@@ -896,6 +896,184 @@ def display_observation(response):
     sys.stdout.flush()
 
 
+def ai_activity_text(value):
+    """Bound structured scalars without changing their printable characters."""
+    if not isinstance(value, str):
+        return "unknown"
+    text = "".join(c for c in value[:8192] if not unicodedata.category(c).startswith("C")
+                   and c not in "\n\r\u2028\u2029").strip()
+    return text[:512] or "unknown"
+
+
+def ai_activity_selection(value, observed=False):
+    """Selection labels never imply observable execution or inherited settings."""
+    if not isinstance(value, dict):
+        return {"value": "unknown", "provenance": "unknown"}
+    provenance = value.get("provenance")
+    permitted = {"observed"} if observed else {"configured", "requested", "observed"}
+    text = ai_activity_text(value.get("value"))
+    if provenance not in permitted or text == "unknown":
+        return {"value": "unknown", "provenance": "unknown"}
+    return {"value": text, "provenance": provenance}
+
+
+def ai_activity_identity(value):
+    """Keep exact reusable identity or unknown; never truncate into a match."""
+    if (not isinstance(value, str) or not value.strip() or len(value) > 512
+            or any(unicodedata.category(c).startswith("C") or c in "\u2028\u2029" for c in value)):
+        return "unknown"
+    return value
+
+
+def ai_activity_commentary_text(value):
+    """Escape dynamic Markdown/HTML syntax only at presentation formatting."""
+    return re.sub(r"([\\`*_{}\[\]()<>#!|~:.+\-/=])", r"\\\1", value)
+
+
+def ai_activity_commentary(record):
+    """Generate the sole canonical heading/detail presentation for an observation."""
+    context = record["activityContext"]
+    observation = record["observation"]
+    actor, event = context["actor"], record["event"]
+    if record["identityConflict"] or (event == "result" and actor in {"subagent", "chat"}
+                                       and record["pairing"] != "matched"):
+        event = "unknown"
+    markers = {
+        "parent": {"working": "🤖 🛠️ 親AI作業中", "waiting": "🤖 ⏳ 親AI待機中",
+                   "dispatch": "🤖 ▶ 親AI呼出し", "result": "🤖 ◀ 親AI結果受領",
+                   "failed": "🤖 🔴 親AI作業失敗", "unknown": "🤖 🟡 親AI状態不明"},
+        "subagent": {"dispatch": "🤖 ▶ subagent 呼出し", "working": "🤖 ✨ AI作業中",
+                     "waiting": "🤖 ⏳ subagent 待機中", "result": "🤖 ◀ subagent 結果受領",
+                     "failed": "🤖 🔴 subagent 呼出し失敗", "unknown": "🤖 🟡 subagent 状態不明"},
+        "chat": {"dispatch": "💬 📨 別チャットへ依頼中", "working": "💬 ✨ 別チャット作業中",
+                 "waiting": "💬 ⏳ 別チャット待機中", "result": "💬 ◀ 別チャット結果受領",
+                 "failed": "💬 🔴 別チャット依頼失敗", "unknown": "💬 🟡 別チャット状態不明"},
+    }
+    heading = markers.get(actor, {}).get(event, "🤖 🟡 AI状態不明")
+    fields = ["purpose=" + ai_activity_commentary_text(context["purpose"]),
+              "role=" + ai_activity_commentary_text(context["role"])]
+    if actor == "chat":
+        fields.append("chat=" + ai_activity_commentary_text(context["chatTitle"]))
+    else:
+        fields.append("agentId=" + ai_activity_commentary_text(context["agentId"]))
+    fields.extend(["Session=" + ai_activity_commentary_text(context["sessionId"]),
+                   "Step=" + ai_activity_commentary_text(context["stepId"])])
+    for name in ("model", "reasoningEffort"):
+        selection = record[name]
+        fields.append(name + "=" + ai_activity_commentary_text(selection["value"])
+                      + " (" + ai_activity_commentary_text(selection["provenance"]) + ")")
+    if context["action"] != "unknown":
+        fields.append("action=" + ai_activity_commentary_text(context["action"]))
+    fields.extend(["pairing=" + ai_activity_commentary_text(record["pairing"]),
+                   "started=" + ai_activity_commentary_text(str(record["started"]).lower())])
+    if record["event"] in {"dispatch", "result", "failed"}:
+        fields.extend(["outcome=" + ai_activity_commentary_text(record["outcome"]),
+                       "accepted=" + ai_activity_commentary_text(str(record["accepted"]).lower())])
+    for name in ("summary", "reason"):
+        if observation[name] != "unknown":
+            fields.append(name + "=" + ai_activity_commentary_text(observation[name]))
+    if context["reference"] != "unknown":
+        fields.append("reference=" + ai_activity_commentary_text(context["reference"]))
+    if context["runtimeControl"] == "sm-workflow":
+        heading = "⚙️ 🔵 │ sm-workflow 実行中 · " + heading
+        fields.insert(0, "制御：sm-workflow")
+    return "**" + heading + "**\n" + "; ".join(fields)
+
+
+def ai_activity_record(event, context=None, observation=None):
+    """Build bounded presentation data only; no execution, admission or persistence."""
+    try:
+        context = context if isinstance(context, dict) else {}
+        observation = observation if isinstance(observation, dict) else {}
+        event = event if isinstance(event, str) and event in {
+            "dispatch", "working", "waiting", "result", "failed", "unknown"} else "unknown"
+        scope = {name: ai_activity_text(context.get(name)) for name in (
+            "purpose", "role", "sessionId", "stepId", "agentId", "chatTitle", "reference")}
+        for name in ("agentId", "chatTitle"):
+            scope[name] = ai_activity_identity(context.get(name))
+        for name, permitted in (("actor", {"parent", "subagent", "chat"}),
+                                ("action", {"start", "resume"}),
+                                ("runtimeControl", {"sm-workflow", "parent", "unknown"})):
+            value = context.get(name)
+            scope[name] = value if isinstance(value, str) and value in permitted else "unknown"
+        for name in ("model", "reasoningEffort"):
+            scope[name] = ai_activity_selection(context.get(name))
+        actual = {name: ai_activity_text(observation.get(name)) for name in (
+            "agentId", "chatTitle", "outcome", "summary", "reason")}
+        for name in ("agentId", "chatTitle"):
+            actual[name] = ai_activity_identity(observation.get(name))
+        for name in ("accepted", "started"):
+            actual[name] = observation.get(name) if type(observation.get(name)) is bool else "unknown"
+        for name in ("model", "reasoningEffort"):
+            actual[name] = ai_activity_selection(observation.get(name), observed=True)
+        # Exact bounded structured identities remain reusable; Markdown is
+        # neutralized only at commentary formatting, never in pairing data.
+        def identity(name, source):
+            value = ai_activity_identity(source.get(name))
+            return value if value != "unknown" else None
+        conflict = any(identity(name, context) is not None
+                       and identity(name, observation) is not None
+                       and identity(name, context) != identity(name, observation)
+                       for name in ("agentId", "chatTitle"))
+        identity_name = "chatTitle" if scope["actor"] == "chat" else "agentId"
+        original, observed = identity(identity_name, context), identity(identity_name, observation)
+        pairing = "matched" if original is not None and original == observed and not conflict else "unknown"
+        # A contradictory identity has no winner; callers retain the original
+        # context separately rather than reusing an arbitrarily attributed ID.
+        if conflict:
+            scope["agentId"] = scope["chatTitle"] = "unknown"
+        elif event == "dispatch":
+            for name in ("agentId", "chatTitle"):
+                if actual[name] != "unknown":
+                    scope[name] = actual[name]
+        record = {"kind": "native-ai-activity", "event": event, "activityContext": scope,
+                  "observation": actual, "pairing": pairing, "identityConflict": conflict,
+                  "started": actual["started"], "accepted": actual["accepted"],
+                  "outcome": actual["outcome"], "delivery": "not-attempted"}
+        for name in ("model", "reasoningEffort"):
+            record[name] = dict(actual[name] if actual[name]["provenance"] == "observed" else scope[name])
+        record["presentation"] = {"commentary": ai_activity_commentary(record)}
+        return record
+    except Exception:
+        # Invalid presentation input/renderer failure is never a business error.
+        return {"kind": "native-ai-activity", "event": "unknown", "activityContext": {},
+                "pairing": "unknown", "delivery": "not-attempted",
+                "presentation": {"commentary": "**🤖 🟡 AI状態不明**\npresentation=unknown"}}
+
+
+def observe_ai_activity(event, context=None, observation=None):
+    """Attempt one existing display sink, never retry or claim chat visibility."""
+    record = ai_activity_record(event, context, observation)
+    record["delivery"] = "attempted"
+    try:
+        display_observation(record)
+        record["delivery"] = "sink-returned"
+    except Exception:
+        record["delivery"] = "failed"
+    return record
+
+
+def ai_activity_main(argv):
+    """Optional finite local transport; it cannot invoke any business command."""
+    try:
+        require(len(argv) == 2 and argv[0] == "--observation", "invalid display arguments")
+        path = explicit_path(argv[1])
+        # Pin all ancestors and refuse final symlinks, FIFOs and oversized input.
+        with selected_directory(path.parent) as directory:
+            descriptor = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+            with os.fdopen(descriptor, "rb") as stream:
+                info = os.fstat(stream.fileno())
+                require(stat.S_ISREG(info.st_mode) and info.st_size <= 65536, "invalid display input")
+                raw = stream.read(65537)
+        require(len(raw) <= 65536, "oversized display input")
+        value = json.loads(raw, parse_constant=lambda _value: None)
+        require(isinstance(value, dict), "invalid display input")
+        observe_ai_activity(value.get("event"), value.get("context"), value.get("observation"))
+    except Exception:
+        observe_ai_activity("unknown")
+    return 0
+
+
 def complete(options, executable, runtime_root, task_fd, output_fd):
     """Submit once, then explicitly Advance once only after actual acceptance."""
     command, submit_id, following, outer_id, advance_action, preparation, family = completion_commands(
@@ -1022,8 +1200,6 @@ def execute(options):
     require(output != task and task in output.parents, "output must be beneath the selected task")
     installed_executable(executable)
     with selected_directory(runtime_root):
-        for path in (runtime_root / ".textus/config.json", runtime_root / ".textus/assembly.yaml"):
-            existing_file(path)
         with selected_directory(task) as task_fd, selected_output_directory(task_fd, task, output) as output_fd:
             if options["action"] == "complete":
                 complete(options, executable, runtime_root, task_fd, output_fd)
@@ -1042,8 +1218,11 @@ def execute(options):
 
 def main(argv=None):
     """Return 0 only for the selected actual acknowledgement; errors return 2."""
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if arguments and arguments[0] == "ai-activity":
+        return ai_activity_main(arguments[1:])
     try:
-        execute(parse_options(list(sys.argv[1:] if argv is None else argv)))
+        execute(parse_options(arguments))
         return 0
     except CallerError as error:
         diagnostic = str(error)
@@ -1058,4 +1237,12 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    exit_code = main()
+    if sys.argv[1:2] == ["ai-activity"]:
+        # A broken display pipe may otherwise fail again during interpreter
+        # shutdown and replace the display-only zero status with exit 120.
+        try:
+            sys.stdout.flush()
+        except Exception:
+            sys.stdout = None
+    sys.exit(exit_code)

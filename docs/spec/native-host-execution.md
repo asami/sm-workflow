@@ -18,21 +18,30 @@ accepted work, history, counters and results. Already approved restoration proce
 under its existing supported route while the new admission contract is delivered.
 
 
-Terminology revision 2026-10-23: [runtime/caller terminology](runtime-caller-terminology.md)
-is authoritative. Host denotes only a network destination. In this document,
-caller execution/dispatch belongs to CallerIntegration, command execution to
-Runtime, and configuration-directory selection to RuntimeRoot. Old concrete
-historical identifiers remain in original records; the executable names below
-use the adopted interface without compatibility aliases. Follow the [adoption plan](../notes/runtime-caller-terminology-adoption-plan.md)
-for coordinated API/CLI/configuration cutover and existing Session preservation.
+## Repair control ownership — 2026-10-25
 
-The [Codex caller information contract](host-terminal-source.md) returns a typed
-information request to the existing caller and consumes its attributable result
-in the same retained continuation. The former fixed ProcessExec/App Server proxy
-proposal is superseded, not a prerequisite. Runtime Human authority remains
-separate from information collection and implementation approval. The
-[adoption plan](../notes/codex-caller-information-adoption-plan.md) records the
-remaining implementation/acceptance work without resetting active Sessions.
+GoalPhase repair continuation, convergence and the normal ten-batch hard ceiling
+belong to sm-workflow. The caller presents actual runtime requests and returns
+semantic results; it must not add one-run-only, stop-on-any-failure or per-finding
+approval clauses to an authorized repair scope. See the
+[skill boundary](../../skills/sm-goal-phase/SKILL.md#runtime-owned-repair-and-stop-decisions).
+Runtime restoration is an execution-route exception, not a caller-owned repair
+controller. Until RRC is delivered, existing authorized restoration continues via
+that applicable route; missing RRC is tracked in parallel, not made a new gate.
+Missing producer capability is reported as that gap, not fabricated as a runtime
+Human request. Existing explicit human restrictions and genuine
+new authority remain distinct from AI-authored conditions.
+
+Preserve current Session/work identity, history, active/cumulative counts and
+validation results. Adoption uses supported public transitions without direct
+storage edits, re-Start or accepted-result replay. This instruction update does
+not establish installed runtime convergence/restoration support. The producer's
+`docs/spec/runtime-owned-repair-control.md` and RRC corrective plan track delivery.
+
+The [caller information contract](caller-information.md) returns a typed request
+to the existing caller and consumes its attributable observation in the same
+retained continuation. The former runtime-side terminal provider is withdrawn.
+Information return grants no Human authority, Submit, Advance or replay.
 
 The existing caller uses public `caller.NativeWorkflowCallerExecution` to connect an
 actual generated `WorkflowIssuedWorkContext` from a Request to CNCF's finite
@@ -103,8 +112,9 @@ correction or relay every reviewer question. New authority or a material unresol
 requirement/contract decision retains its actual escalation route.
 
 This delegation boundary does not expand permissions, collapse generated native
-work types, or let semantic workers execute Phase SBT. The owning workflow still
-issues work, runs normal validation and admits results. For the already-authorized
+work types, or let workers for the parent Session execute its Phase SBT.
+Separately commissioned dependency delivery follows the boundary below.
+The owning workflow still issues work, runs normal validation and admits results. For the already-authorized
 broken-runtime restoration exception, the producer delivery owner coordinates the
 existing standalone execution facilities. Missing future RRC support does not
 suspend that existing applicable route. Keep RRC implementation in parallel;
@@ -138,6 +148,47 @@ existing records; do not create a separate snapshot/approval ledger for delegati
 Preserve Sessions, work identities, accepted results, history and active/cumulative
 repair counts. An end-to-end responsibility is not permission to bypass real
 runtime decisions, unknown-effect settlement or publication authority.
+
+## Independent dependency delivery
+
+When an authorized parent task needs changes in a dependency repository, the
+requesting chat defines the required outcome, repository/scope, acceptance
+conditions, usage contract and delivery method. Use an authorized destination
+chat and the existing messaging tools; this contract alone does not authorize
+creating or messaging a chat. The requesting chat remains responsible for
+collecting the result and integrating it into the parent project.
+
+The dependency chat owns ordinary development in its repository: implementation,
+compilation, tests, correction of failures and required independent review. Use
+that repository's applicable execution routes, including the registered SBT
+runner for standalone SBT. If it has its own Workflow, that Workflow owns its
+checks. Do not apply the parent Session's edit-only semantic-worker instruction
+to this separate delivery owner or send its repository validation back to the
+parent merely because the parent needs the result. The dependency chat is not
+a child Workflow in the parent Session. Missing nested-workflow support does not
+block this authorized development; no new runtime management feature is required.
+
+Return the actual changed revision and artifact version/location, scope delivered,
+compile/test commands and results with retained evidence references, required
+review outcome, unresolved issues and concrete consumption instructions. Identify
+uncommitted changes or unavailable artifacts honestly. Source edits alone do not
+complete delivery; failed or missing required validation remains incomplete.
+Artifact publication follows its existing authorization and version rules.
+
+The parent consumes the delivered dependency and uses its own sm-workflow for
+parent-project integration checks, required review and formal Step/Phase
+acceptance. Dependency validation is evidence about the delivered dependency;
+it is not a substitute for parent acceptance. This separation is based on the
+actual deliverable and ownership, not renaming a parent check as external work.
+
+Preserve any pending dependency assignment, scope question, Session identity and
+history already registered in the parent. Reconcile actual returned work through
+the supported public decision/result/continuation procedures applicable to that
+record. Do not edit internal storage, invent a successful result, discard a
+pending obligation or replay accepted work. When no supported reconciliation
+exists, report that precise parent integration gap and retain the record;
+authorized independent dependency development can still proceed. Existing
+native dependency-scope admission remains applicable to work recorded there.
 
 ## Codex Goal registration
 
@@ -235,6 +286,32 @@ without that configuration argument. Preparation/Submit uncertainty, rejection, 
 or changed routing stops without Advance or retry and retains all prior actual
 outputs. See the caller contract for exact input shapes and output sequence.
 
+### Runtime configuration boundary
+
+The development target repository and sm-workflow's runtime host have distinct
+roles, even when deliberately selected at the same path. `--runtime-root` selects
+the runtime working directory; it does not declare the target a CAR/SAR project
+or require `.textus/config.json` and `.textus/assembly.yaml` there. Retain an
+existing Session's selected host and storage; do not move it to another root to
+work around a configuration error.
+
+The installed launcher and finite callers validate their executable, selected
+directory and owned task/output paths. CNCF's normal runtime configuration
+resolver owns home/project/cwd files, supported formats, environment and argument
+precedence, and explicitly selected configuration sources. Do not duplicate that
+resolver in the skill or preflight one fixed filename as mandatory. The launcher
+must not manufacture `textus.assembly.descriptor` from the working directory.
+Use that property only when an assembly override is actually selected; CNCF
+retains validation of an explicitly selected missing or invalid descriptor.
+The installed sm-workflow CAR is selected separately from the target's packaging.
+
+Use the existing configured runtime host and public setup/admission route for
+actual missing host, check, Git or storage registration. Do not create dummy
+configuration/assembly files in a target such as Cozy, equate missing fixed
+filenames with an unavailable Workflow, or substitute standalone SBT/commits for
+native acceptance. Report actual CNCF configuration/admission failures with
+their observed cause.
+
 ## Validation cadence: ADMISSION, FULL and HEAVY
 
 For newly prepared execution plans, use the existing canonical purpose metadata
@@ -246,11 +323,10 @@ with this default cadence. Purposes are selections, not three nested suite sets.
 | FULL | Integrated Phase validation before Phase completion | Broad ordinary regression coverage, excluding HEAVY and external-service requirements |
 | HEAVY | A separately scheduled overnight batch | Long-running, nested-SBT, multi-process and external-service integration coverage |
 
-ADMISSION targets an aggregate **test-body time of at most
-one minute**, excluding preparation and cleanup. This is not a fixed timeout or
-a per-test budget; retain actual results even when the target is exceeded. See
-[label-driven selection](label-driven-test-selection.md#admission-operating-target)
-for timing attribution and declarations.
+ADMISSION targets an aggregate **test-body time of at most one minute**,
+excluding preparation and cleanup. This is an operating target, not a fixed
+timeout or per-test budget. Preserve actual results when the target is exceeded;
+the component's label-driven selection contract owns timing attribution.
 
 Do not select an entire HEAVY suite for every repair merely because the changed
 case belongs to it. When daytime integration evidence is necessary, select the
@@ -283,7 +359,54 @@ not narrow an already captured requirement or alter a running invocation,
 Session, accepted work, history or repair accounting. Daytime changes to those
 requirements use the existing planning/adoption route.
 
+## Unstarted execution continuation
+
+Continue already authorized preparation without another Human confirmation only
+when actual tool/provider observations establish nonexecution, unconsumed
+permission and the same target, operation, scope, acceptance, destinations and
+effects. Preserve explicit user restrictions. Missing logs alone do not establish
+nonexecution; retain the stopped owner's actual result and disposition.
+
+Correct the identified preparation problem through the existing execution owner.
+For a runtime-owned operation, use its supported public continuation or result
+collection. A missing capability is a runtime contract gap, not permission to
+replace it with skill-owned execution. An old worker whose loaded contract cannot
+continue stays retired when ownership transfers; the old failure stays recorded.
+Do not re-Start, replay accepted Submit, rerun completed effects or reset counters.
+Provider safety/policy refusal, permission/sandbox denial, a live execution,
+consumed authority and uncertain execution do not qualify. Do not route around
+those results with another prompt, model, worker or tool, or request approval to
+bypass them. New effects still require their existing authority.
+
 ## Product SBT lifecycle
+
+Textus SBT has a required minimum maximum heap of 4 GiB, including human shell
+invocations. Project `.jvmopts` settings and larger heap requirements remain
+supported by the policy. Normal workflow execution resolves the ordinary
+`cncf.sbt.jvm.maximum-heap-mib` property (default 4096 MiB) in the CNCF typed SBT
+producer, preserving larger project options. Manual/standalone SBT outside
+sm-workflow uses standard SBT config. No extra global launcher is installed.
+Producer source validation does not establish
+adoption by an already installed consumer runtime or machine configuration.
+
+On an actual heap failure, retain diagnostics and identify the failing JVM and
+effective setting when available. Distinguish compiler heap exhaustion from a
+forked test, Cozy JVM, metaspace failure or OS termination; unknown heap remains
+unknown. Correct the owning runtime/configuration through normal continuation.
+Do not mask missing runtime behavior with machine configuration, parse JVM options
+inside a skill, inject per-check JAVA_OPTS or automatically increase memory.
+
+For separately authorized manual/standalone SBT, inspect the selected launcher's
+actual option precedence, user sbtopts, project .jvmopts/.sbtopts and explicit
+arguments/environment. A later fixed --mem option can override a larger project
+heap; an imported dependency's .jvmopts does not configure the primary SBT JVM.
+Resolve XDG_CONFIG_HOME and any SBT_ETC_FILE before proposing a concrete minimal
+shared-setting diff. Obtain human confirmation for that exact diff and its
+effects on other projects before editing; reuse approval already covering it.
+Test authority alone does not approve home configuration changes. Preserve larger
+project requirements and unrelated settings. A config change is not a successful
+validation; retain the same Session, failures, repair counters and execution owner.
+Sufficient configured heap does not rule out excessive demand or a memory leak.
 
 The installed sm-workflow CLI's native local driver executes ordinary SBT
 inside its already escalated, admitted UoW. The execution platform owns launch,
@@ -323,9 +446,23 @@ existing interrupt handling; a new SIGINT handback/resumption protocol is a
 deferred candidate, without new tests, acceptance or Phase-plan obligations.
 
 This product execution belongs to the platform program within the installed
-CLI call. Independent AI-owned top-level development tests and publication
-retain `cncf_command_runner`, the shared wrapper, normal caches and sbt-native
-locking. This distinction changes no general development execution policy.
+CLI call. Parent-project validation for its issued implementation/repair, Step
+acceptance and Phase completion stays on Submit/Advance, including development of sm-workflow
+itself. A supplementary or pre-Submit test label does not make that validation
+an independent command. The caller propagates this boundary to editing workers;
+missing check selection or progression is corrected through the owning workflow,
+not replaced with an AI-created runner intake. This rule applies to the parent
+Session's workers; independently commissioned dependency development follows
+[independent dependency delivery](#independent-dependency-delivery).
+
+Separately scoped standalone development tests/publication and restoration of a
+broken runtime unable to execute its checks retain `cncf_command_runner`, the
+shared wrapper, normal caches and sbt-native locking. Identify the separate
+purpose in existing task context without a new approval/classification artifact.
+External receipts are not automatic Phase acceptance. Adoption preserves ongoing
+work, Session identity, history, repair counts and attributed validation evidence;
+collect running work, reuse applicable evidence through supported admission and
+do not restart or rerun solely because the routing policy was clarified.
 
 The former manual registered SBT host bridge is rejected and retired, including
 current typed `registered_sbt` execution; there is no V8 execution promise.
@@ -540,87 +677,202 @@ runtime stopped. A returned Wait condition, accepted Submit, root exit or a
 requested SIGTERM alone proves neither whole-Workflow completion nor descendant
 settlement. Preserve those distinctions in the detail line.
 
-Choose the marker from the actual actor and activity, not merely from handback.
-Use **🤖 🛠️ 親AI作業中** while the parent itself edits, fixes or otherwise
-actively performs the work; use **🤖 ✨ AI作業中** for an active subagent and
-name that agent. Append the actual task, review or repair detail to its actor's
-prefix. Neither marker guarantees health or success, and neither uses a blue
-circle or brain icon. If parent and child both work, label each separately.
-When the parent only waits for a child, runtime or user, do not label it as
-active parent work. Dispatch, transport waits and result collection alone do
-not establish editing or repair activity. State a real waiting transition only
-when useful in an existing update; do not add repeated waiting announcements.
-Keep the sm-workflow gear/blue execution markers unchanged. Include existing messages,
-result/acceptance values, supplied repair counts and retained response/stderr links
-without adding output-only operations or exposing secret payloads.
+AI actor commentary is generated by the existing bundled Python helper's
+[AI activity API](#program-generated-ai-activity), including actual parent work
+and parent waiting. The caller forwards its generated commentary verbatim in
+existing dispatch, progress and result handling. A handback, dispatch or result
+collection does not establish active parent work. If parent and child both work,
+feed their separate actual observations. Keep existing gear intervals, messages,
+acceptance values, counts and retained links unchanged.
 
-Render these markers in existing commentary/output handling. Add no AI invocation,
-agent, continuation prompt, polling/status query, dedicated wait loop, persisted
-display state or periodic message solely for presentation. Existing runtime
-telemetry remains runtime-owned. Tool buffering or unavailable UI coloring is a
-display limitation, not permission to restart work or alter timeouts.
+Add no AI invocation, agent, continuation prompt, polling/status query, dedicated
+wait loop, persisted display state or periodic update for presentation. The
+optional finite local display transport below is not a business command and
+does not call the installed CLI. Buffering or unavailable coloring is a display
+limitation, never permission to restart work or alter timeouts.
 
 ### Separate-chat delegation display
 
-Use the three **💬** markers above for separately named chats; **🤖 ✨** remains
-the subagent marker and **🤖 🛠️** remains the active parent marker. Use the
-destination's actual chat title and a short task description so multiple
-deliveries remain distinguishable. A successful send establishes dispatch only.
-Choose working or waiting from actual messages, results or observations already
-obtained for the work. Silence, elapsed time and the parent's wait do not establish
-destination inactivity or a destination waiting reason.
-
-Update the display on meaningful observed changes in normal commentary. Identify
-delayed or outdated observations as such; do not present old progress as proof
-of current activity. Report an actual completed result as received instead of
-leaving it labeled working or waiting. The marker does not grant messaging,
-execution or continuation authority and requires no new display state.
-
-Keep any ongoing **⚙️ 🔵 │ sm-workflow 実行中** interval and its control ownership
-unchanged; separate-chat details do not signal runtime handback. Do not add AI
-calls, status queries, periodic monitoring, repeated unchanged announcements
-or dedicated waits for these markers. Use information already available from
-authorized work and ordinary result collection.
+At an already authorized send and actual result, pass `actor=chat`, the actual
+destination `chatTitle`, purpose and existing reference through the
+[AI activity API](#program-generated-ai-activity). Forward
+`presentation.commentary` verbatim. An opaque chat ID is not a title.
+Actual working/waiting observations already available may be passed too; silence,
+elapsed time or the parent's wait do not establish destination activity.
+Keep delayed/buffered observation timing honest in the surrounding existing
+update. This grants no messaging, execution or continuation authority and never
+ends the ongoing runtime interval.
 
 ### Subagent call display
 
-For sm-goal-phase, the owning host makes each already-authorized semantic
-subagent call visible in normal commentary, including reuse/resume and an
-already-authorized alternate. Keep the selected role, purpose, known Session/Step
-and the real returned agent identity together. A configured role name is not an
-actual agent ID. Use the existing selection/agent definition or dispatch arguments
-for the selected model and reasoning effort; show that source and label these
-values as configured/requested until execution metadata confirms them. If inherited
-settings cannot be observed, say inherited/unknown rather than inferring them
-from the parent, role name or a previous invocation. Never change model selection
-to improve the display.
+All six native skills use the [AI activity API](#program-generated-ai-activity)
+at actual authorized dispatch/resume and result handling, including reuse and an
+already authorized alternate. Keep purpose, role, Session/Step and the real
+returned agent ID together. A role is not an agent ID. Retain the returned
+`activityContext` in the caller's ordinary continuation context for the paired
+result; this is neither a display ledger nor an admission receipt.
+Unknown metadata never blocks work or grants a new call, retry or acceptance.
 
-Use these compact paired markers in the normal dispatch/result handling:
+### Caller activity transitions
 
-- **🤖 ▶ subagent 呼出し** — purpose/role, model and reasoning effort with
-  configured/requested/observed labels, and known Session/Step. This announces
-  dispatch, not confirmed execution. When dispatch returns an actual identity,
-  include it in the existing progress update; distinguish accepted from started
-  if the tool does not establish execution.
-- **🤖 ✨ AI作業中 — subagent=<actual identity>** — relevant observed progress
-  when an ordinary work update is already due. Name the parent and child
-  separately if both are working.
-- **🤖 ◀ subagent 結果受領** — the same agent identity/role and model/effort,
-  actual outcome and concise result. Prefer observed model/effort when supplied;
-  otherwise retain the configured labels. A child result is not Step acceptance.
-- **🤖 🔴 subagent 呼出し失敗** or **🤖 🟡 subagent 状態不明** — actual
-  dispatch failure or uncertain status; do not manufacture an identity, success,
-  termination or replacement call.
+The caller supplies activity facts at its existing work boundaries; the renderer
+cannot observe the parent's work by itself. This applies to all six sm-* skills,
+including a resumed turn and work performed without any subagent dispatch.
 
-If runtime-owned subagent events arrive while sm-workflow is still running,
-retain the outer **⚙️ 🔵 │ sm-workflow 実行中** marker and show the child detail
-inside it. Do not imply control returned to the parent. Buffered observations
-may be summarized together as 出力一括受信; unavailable child details stay unknown.
-Active parent INLINE work uses **🤖 🛠️ 親AI作業中** and is never reported as
-delegation; waiting for a delegated result is not active parent INLINE work.
-Use only normal calls, returned metadata and existing events: no extra AI turns,
-status/model queries, polling, continuation prompts or display ledger. Missing
-display metadata is not a work-admission failure or a reason to pause work.
+| Existing boundary | Observation and presentation |
+| --- | --- |
+| Parent begins a real investigation, planning, edit or repair segment | Send `actor=parent, event=working` and its purpose; forward generated commentary in the first normal progress update, before continuing that segment's tools/work. |
+| Subagent dispatch/resume returns | Forward the dispatch indication with actual identity and available model/effort provenance. A generic `Agent Use` block does not replace it. |
+| Existing dispatch output or worker message confirms active execution | Also forward `actor=subagent, event=working` with that identity in the same ordinary update, producing **🤖 ✨ AI作業中**. No extra status query; an acknowledgement without a start observation stays dispatch-only. |
+| Parent waits while a child works | Preserve the child's observed activity and distinguish the parent's wait; do not label the parent working merely because it is collecting/waiting. |
+| Actual result, wait or runtime control transfer | Reflect that transition in the ordinary update; preserve existing gear intervals and the actual actor. A received child result is not native acceptance. |
+
+The parent can directly report its own current task activity without claiming
+access to hidden reasoning, model identity or runtime status. Missing Session,
+Step or model details remain unknown and do not suppress the marker. A genuinely
+new segment after waiting/resume gets its own first update; unchanged ongoing
+activity does not require heartbeats or a new message per tool/file.
+
+Use the existing API or finite local transport and forward its generated
+`presentation.commentary` verbatim. The caller may render multiple already
+observed transitions in one ordinary update. Prefer the existing in-process
+renderer where available; do not create a persistent display input/ledger or
+start a sm-workflow Operation merely to announce work. For example, inside the
+existing caller integration (the output function is the ordinary chat sink):
+
+```python
+# The parent is now beginning the authorized work, not merely waiting.
+display = native_caller.ai_activity_record(
+    "working", {**known_context, "actor": "parent", "purpose": actual_purpose},
+    {"started": True})
+forward_commentary(display["presentation"]["commentary"])
+```
+
+Rendering or printing JSON in a terminal is not proof of chat delivery. The
+caller must forward the commentary; unavailable rendering/delivery is reported
+in the next ordinary update without pausing business work or retrying effects.
+No extra AI invocation, status poll, recurring monitor or assertion of unobserved
+activity is permitted. Existing generic agent-disclosure fields may accompany
+this generated presentation but cannot replace the actor marker in sm-* work.
+
+### Program-generated AI activity
+
+The bundled `scripts/native-goal-command.py` owns deterministic AI presentation.
+`ai_activity_record(event, context=None, observation=None)` returns JSON-safe
+`kind=native-ai-activity`. `observe_ai_activity(...)` attempts the existing
+`display_observation` sink once and returns the record best-effort. Neither
+changes native-command-progress records, business responses or runtime state.
+The record contains `event`, sanitized `activityContext`, whitelisted
+`observation`, `pairing`, `identityConflict`, explicit/unknown `started`,
+`accepted`, `outcome`, effective `model` and `reasoningEffort`,
+`presentation.commentary` and `delivery`.
+
+Input schema:
+
+| Field | Supplied actual metadata |
+| --- | --- |
+| `event` | `dispatch\|working\|waiting\|result\|failed\|unknown`, from an actual observation, never elapsed time. |
+| `context.actor` | `parent\|subagent\|chat`. |
+| `context.action` | `start\|resume`, when applicable. |
+| Context scope | `purpose`, `role`, `sessionId`, `stepId`, `agentId`, `chatTitle`, `reference` (an existing locator only). |
+| `context.runtimeControl` | `sm-workflow\|parent\|unknown`; this describes existing control, never transitions it. |
+| `context.model`, `context.reasoningEffort` | `{value: nonempty-string, provenance: configured\|requested\|observed}`. Unobservable inherited settings remain unknown. |
+| `observation` | Only `agentId`, `chatTitle`, `model`, `reasoningEffort` (the latter two require `provenance=observed`), `outcome`, `summary`, `reason`, boolean `accepted` and boolean `started`. |
+
+Scalar input is bounded to 512 characters and strips control/newline/bidi
+content while preserving original printable characters in the inert structured
+whitelist data. All dynamic scalar values are Markdown/HTML-escaped only when
+formatting commentary, preserving their visible spelling without active headings
+or links. Exact bounded agent IDs/chat titles remain unchanged in pairing data;
+oversized/control-bearing identities become unknown, never truncated matches.
+Unknown keys, raw argv/env/tool/result payloads are never copied. Missing or
+invalid values stay unknown. The API copies only the closed whitelist.
+
+Dispatch retains the actual returned ID (or existing resume ID), but start is
+unconfirmed unless `started=true` is explicitly observed. An empty resume ack
+establishes neither start nor acceptance. Results are `pairing=matched` only
+when retained original identity and actual result identity match. Missing
+identity or conflicting IDs/titles produces unknown attribution; a conflict has
+no selected winner. Chat pairing uses the actual title; any supplied ID/title
+contradiction also prevents pairing. This is attribution, not authentication.
+Result/summary receipt does not establish success or native acceptance. Only
+explicit structured observations supply outcome/accepted.
+
+Observed model/effort supersede display selection only with observed provenance.
+Original configured/requested selection stays in `activityContext`; it is never
+rewritten into an execution claim. Do not infer model from a role, parent or
+previous invocation.
+
+The canonical commentary is a bold marker heading and compact detail line.
+Parent working and waiting are distinct. Subagent dispatch includes start/resume;
+working requires an actual work observation. Result, failure and unknown remain
+distinct. Chat records use the actual chat title and their own dispatch, work,
+wait, result, failure and unknown markers. Purpose, role, identity, Session/Step
+and model/effort provenance are explicit even when unknown. Results show explicit
+or unknown outcome/accepted; available reason/summary is bounded. An ongoing
+`runtimeControl=sm-workflow` prefixes the existing gear interval and
+`制御：sm-workflow`; a child result never implies parent handback. Other control
+values assert no transition. Existing gear before/after rules remain unchanged.
+
+Actual caller integration (shown inside the caller that already owns its normal
+authorized dispatch and result handling; `forward_commentary` is its existing
+chat commentary output, not a new tool/service):
+
+```python
+# Existing authorized dispatch/resume returns its actual response.
+spawn_response = authorized_dispatch(existing_request)
+display = native_caller.observe_ai_activity(
+    "dispatch", selected_context,
+    {"agentId": spawn_response["agent_id"]})
+forward_commentary(display["presentation"]["commentary"])  # VERBATIM
+activity_context = display["activityContext"]  # normal continuation context
+
+# Later, the same existing result handler receives the actual result.
+display = native_caller.observe_ai_activity(
+    "result", activity_context,
+    {"agentId": actual_result.agent_id, "summary": actual_result.summary})
+forward_commentary(display["presentation"]["commentary"])  # VERBATIM
+```
+
+Map only fields actually returned by that tool. Pass known model selection with
+its source in `selected_context`, not an assumed observed model. Include outcome,
+accepted, started or observed model/effort only when the actual response supplies
+them. For resume, keep the existing identity and `action=resume`; an empty response
+adds no start claim. Already available start/work/wait observations may be fed
+later through the same API, with no dedicated query. Parent INLINE work and
+actual parent waits use `actor=parent`; existing-chat sends/results use
+`actor=chat` and their actual titles. Forward generated commentary at each of
+these existing boundaries, without composing/rebuilding AI markers in the model.
+
+For callers without an in-process Python binding, the same bundled helper has
+one optional pure local finite transport:
+
+```text
+native-goal-command.py ai-activity --observation /absolute/observation.json
+```
+
+Use the documented managed-Python helper invocation. The UTF-8 JSON file is
+`{event, context, observation}`, a regular nonsymlink file no larger than 64 KiB.
+Only that literal argument pair is accepted. This branch runs before business
+argument parsing: no installed CLI, operation, host/task requirement, runtime
+mutation or new workflow. Parse its one output record and forward
+`presentation.commentary` verbatim; retain its `activityContext` as above.
+Invalid/missing input emits safe unknown when possible and display failure
+returns zero, including a broken output pipe. No retry is introduced.
+
+`delivery=not-attempted` means pure construction. The emitted record says
+`attempted`; the API return says `sink-returned` or `failed`. A returned sink
+does not prove chat visibility. Renderer/input/sink failure never raises into
+business execution or initiates retries; a safe unknown record is acceptable.
+Report failed/unavailable delivery honestly in the next normal update. For
+buffered output forward the generated commentary unchanged when received and
+label the surrounding update `出力一括受信`; do not claim earlier live delivery.
+No extra AI call, agent, wait, polling, status query, display persistence or
+sm-workflow command may be introduced solely for this output.
+
+Behavioral regression evidence is authored in
+`scripts/tests/test_native_ai_activity.py`; caller integration additionally
+requires actual existing dispatch/resume and result forwarding evidence.
 
 ## sm-workflow agent definitions
 
@@ -655,15 +907,19 @@ explicitly issued. Role instructions do not create filesystem permissions.
 The parent admits matching actual profile/identity and genuine independence;
 never relabel an inherited or different execution as the selected role.
 
-The workstation's `scripts/sm-workflow-tools.py` packages the three skills,
-five contracts, two finite caller scripts, five agent files and a standalone installer. It installs only
+The workstation's `scripts/sm-workflow-tools.py` packages the six sm-* skills,
+seventeen contracts, two finite caller scripts, the offline caller-format migration
+script, five agent files and a standalone installer. It installs only
 those selected files, shared skill links and regular deployed sm agent files.
 Dry-run is the default; occupied discovery paths or differing contents stop
 before writes unless file replacement was explicitly selected. See the
 workstation's `docs/design/sm-workflow-agent-distribution.md` for installation.
-The current product skillBundle still contains no agent definitions; product
-packaging integration is pending. File installation and actual newly loaded
-agent behavior are separate verification boundaries.
+The product's normal `skillBundle` and component JAR contain the same six
+skills, seventeen contracts, three scripts, five agent definitions and portable
+`install-sm-workflow.py` (32 files). Product installation follows
+`docs/spec/native-client-installation.md`; the selected installer works without
+a development-workstation checkout. File installation and actual newly loaded
+agent behavior remain separate verification boundaries.
 Installed `sm-workflow` command calls remain parent-owned with scoped escalation.
 
 ## R1 — First issued input and retained scope

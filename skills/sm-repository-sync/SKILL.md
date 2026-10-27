@@ -5,6 +5,24 @@ description: Perform semantic merge assessment or conflict work issued by Reposi
 
 # RepositorySync semantic work
 
+## Show who is working
+
+Apply the [activity transitions](../../docs/spec/native-host-execution.md#caller-activity-transitions)
+from the first actual work segment, including a resumed turn. Parent-only
+investigation, planning, editing or repair needs `actor=parent, event=working`
+in the first ordinary progress update for that segment; do not wait for a
+subagent call, runtime response or code edit to trigger it.
+For a subagent, forward dispatch/resume and paired results, and also forward
+`actor=subagent, event=working` when existing tool output or a worker message
+establishes active work. The generated **🤖 ✨ AI作業中** indication must not
+be replaced by dispatch-only text or an `Agent Use` block. Unknown start is not
+active work. Parent work uses the generated **🤖 🛠️ 親AI作業中** indication.
+Use the bundled renderer and forward `presentation.commentary` verbatim to
+chat: tool stdout alone is not a user-facing commentary message. End the active
+indication at actual waiting/result/control-transfer boundaries in the ordinary
+update; waiting alone is not parent work. Do not repeat unchanged status or
+create extra AI calls, monitoring or business Operations for these indications.
+
 ## Runtime-owned local publication
 
 `publishLocal` always runs through sm-workflow `LocalPublicationService`, including
@@ -36,6 +54,46 @@ executable as the approval prefix. Follow the
 [native host command contract](../../docs/spec/native-host-execution.md#installed-sm-workflow-command).
 This command transport rule leaves semantic delegation, independent review,
 Start admission and effect permissions with their existing owners.
+
+## Interrupted integration validation
+
+For a resultless integration-validation intent, use the public
+`describeRepositorySyncValidationContinuation` and the
+[same-Session validation continuation contract](../../docs/spec/repository-sync-validation-continuation.md).
+Offer only the actual target's choices: `AuthorizeNewValidation`,
+`AdoptCurrentFullState`, or `Defer`. Reuse attributable existing direction only
+when it covers that precise target and unresolved effects. A non-Defer adoption
+requires actual independently verified prior execution termination and explicit
+acceptance of original uncertainty. Missing receipts or elapsed time supply
+neither. If a genuinely new decision is required, present it to the user.
+
+Normal `prepareEvidence` with family `RepositorySync` and kind
+`validation-continuation` passively encodes supplied facts; it does not verify
+termination or grant authority. Public `adoptRepositorySyncValidationContinuation`
+records the direction only; separate ordinary Advance owns unfinished work.
+Preserve old UNKNOWN effects, successful history and Session identity. A changed
+FULL_STATE candidate requires its fresh checks. Do not reconstruct targets,
+reset the index, replay accepted results or infer general commit/push/fetch
+recovery support from this bounded route.
+
+## AI activity forwarding
+
+At each existing authorized subagent dispatch/resume return and actual result
+handler, pass only actual known metadata through the bundled
+`native-goal-command.py` `observe_ai_activity` API (or its finite local
+`ai-activity --observation /absolute/input.json` transport). Forward the returned
+`presentation.commentary` **VERBATIM** to chat; retain its `activityContext` in
+the ordinary continuation context and reuse it for the actual paired result.
+Follow the [program-generated AI activity contract](../../docs/spec/native-host-execution.md#program-generated-ai-activity).
+Do not compose AI markers, infer model/start/success/native acceptance or make
+display metadata a work gate. Empty resume acknowledgements retain identity but
+prove no start. Feed already available progress, actual parent work/wait and
+authorized existing-chat dispatch/results (with the actual chat title) through
+the same API when applicable. Keep ongoing runtime control and existing gear
+before/after intervals intact; child results never imply parent handback.
+Report buffered or failed delivery honestly in the normal update. Add no AI
+call, agent, polling, dedicated wait, display ledger or sm-workflow command for
+presentation.
 
 ## Long-running invocation collection
 
@@ -94,21 +152,8 @@ Keep paired `complete` (Submit + permitted Advance) in one interval; an intermed
 Submit response does not return control. If output is buffered, show a compact
 matched start/end when received and label it `出力一括受信`, without claiming live
 delivery. A start not yet observable stays preparation/start-unconfirmed.
-Show **🤖 🛠️ 親AI作業中** when the parent is actually doing the work,
-including editing or fixing code. For an active subagent, show
-**🤖 ✨ AI作業中** and identify the responsible subagent and activity.
-Neither AI marker uses a blue circle. A handback or dispatch alone does not
-establish active parent work: while only waiting for a child, runtime or user,
-do not show **🤖 🛠️ 親AI作業中**. Preserve the sm-workflow execution interval.
-If parent and child both work, label their activities separately.
-For another chat, use **💬 📨 別チャットへ依頼中** after dispatch when work
-is unconfirmed, **💬 ✨ 別チャット作業中** for observed active work, or
-**💬 ⏳ 別チャット待機中** for an observed wait. Always name the destination
-chat; include its task or known waiting reason. Do not use the subagent marker
-for another chat or infer its waiting state from the parent's wait.
-Follow the [separate-chat display contract](../../docs/spec/native-host-execution.md#separate-chat-delegation-display).
-Add no AI call, status query, wait loop, command, persisted display
-record or extra update solely to create these markers; use existing calls/events.
+Forward program-generated AI commentary at the existing observation boundaries
+as specified in [AI activity forwarding](#ai-activity-forwarding).
 
 Use actual program-produced information. Absent optional fields, repair counts
 and observations remain `unknown` (or explicitly absent), never fabricated zero

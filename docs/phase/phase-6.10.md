@@ -10,6 +10,10 @@ Handoff: [English development handoff](../journal/2026/10/2026-10-27-phase-6.10-
 
 ## Purpose and preservation
 
+[Phase 19](phase-19.md) consumes the delivered profile contract for clean Docker
+installation/customization cases. That broader HEAVY qualification is not a new
+6.10 completion prerequisite and does not require live model calls.
+
 Keep existing behavior as `standard`, add opt-in `cost` and `quality` selection,
 and obtain an initial operational impression from two source counts and already
 available usage. The denominator is net physical source lines, not Workflow Step

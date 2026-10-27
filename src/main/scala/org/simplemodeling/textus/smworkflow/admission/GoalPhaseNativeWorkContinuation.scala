@@ -29,7 +29,7 @@ import GoalPhaseRepairInventoryContinuation as K
   * together. Canonical atomic suspension/completion owns all writes. No result
   * runs Git/SBT or turns implementation completion into Step/Phase acceptance.
   * @since   Oct.  6, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWorkContinuation {
@@ -2135,10 +2135,16 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           val binding = GoalPhaseDependencySourceRevision.bindingOf(direction, sourcescope)
           " Native source direction " + direction.directive.identity + "@" + direction.directive.revision +
             " selects dependency binding " + binding.identity + "@" + binding.revision + " at " + binding.root +
-            " branch " + binding.branch + ", original source HEAD " + binding.base.head + ", paths " + binding.paths.mkString(", ") +
+            " branch " + binding.branch + ", effective source HEAD " + binding.base.head + ", mode " +
+            GoalPhaseDependencySourceRevision.modeOf(direction, sourcescope) + ", paths " + binding.paths.mkString(", ") +
             ". Preserve excluded paths " + GoalPhaseDependencySourceRevision.exclusionsOf(direction, sourcescope).mkString(", ") +
             ". This original direction remains immutable. Later actual native dependency approvals require an independently declared inventory and mode successor before fresh candidate effects; the new candidate and capture retain its exact approval coverage. " +
             "This is pending qualification, not a new approval or accepted Step. Existing native capture, fresh selected checks, independent review and closure remain required. " +
+            (if (GoalPhaseDependencySourceRevision.qualificationOf(direction, sourcescope).target.committedBaseSuccession.nonEmpty)
+              "The exact committed dependency base and complete selected modes, blobs and bytes must remain unchanged. " +
+              "Baseline-only changed paths confer no edit or stage ownership. No source staging or empty source commit is required; " +
+              "ordinary primary closure still requires new primary work, checks, independent review and a genuine primary commit. "
+              else "") +
             "Do not select the historical source binding, forge dependencyAdmission or transfer old check results to these bytes. Omit dependencyValidation to retain this native direction."
         } else
           GoalPhaseDependencyValidation.instructions(inventorybinding,

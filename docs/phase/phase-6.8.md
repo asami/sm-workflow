@@ -3,7 +3,7 @@
 Status: planned; no implementation or acceptance claimed by this plan.
 Planned: 2026-10-26 (Asia/Tokyo)
 Owner: sm-workflow development
-Sequence: Phase 6.7 -> Phase 6.8 -> Phase 6.9 -> Phase 7
+Sequence: Phase 6.7 -> Phase 6.8 -> Phase 6.9 -> Phase 6.10 -> Phase 7
 Specification: [commit completion and recovery](../spec/commit-completion-and-recovery.md)
 Delegation contract: [sm-delegate-task](../spec/delegate-task.md)
 Checklist: [P68 acceptance](phase-6.8-checklist.md)

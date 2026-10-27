@@ -1,5 +1,14 @@
 # sm-workflow incremental-use roadmap
 
+Docker installation/customization qualification adopted 2026-10-28:
+[Phase 19](phase-19.md) establishes empty-environment installation/bootstrap/use
+before configuration, customization-preserving update and failure/cleanup cases.
+The [CI-01–18 matrix](../spec/clean-installation-qualification.md) is HEAVY-only,
+with no developer HOME/cache/classpath reuse and no new gate for active Phases.
+Consume Phase 15 initialization and 6.10 profile delivery where relevant; retain
+separate native desktop coverage. See the [checklist](phase-19-checklist.md) and
+[English handoff](../journal/2026/10/2026-10-28-docker-installation-customization-handoff.md).
+
 Tool-neutral validation allocated 2026-10-28:
 [Phase 18](phase-18.md) / [checklist](phase-18-checklist.md) extends the Phase 6.7
 shared execution baseline alongside Phase 17, without inserting a gate into
@@ -447,6 +456,7 @@ in Phase 6, using the corrected runtime contract.
 | [7: Multi-repository synchronization and artifact overlay](phase-7.md) | Synchronize/validate the workspace and consumer artifact selections using CNCF-discovered project purpose/feature queries | Full practical GoalPhase adoption with related-project management; retain local-development/sync/artifact ownership and existing overlay acceptance |
 | [17: Task and standalone FIX extensions](phase-17.md) | Wider inputs, dirty/focused/full options, multi-unit composition and authorized investigation/related-project integration | Reuse 6.7 without rebuilding it; [checklist](phase-17-checklist.md); Phase 7/14 dependencies are scenario-specific |
 | [18: Tool-neutral validation and Flutter](phase-18.md) | Common validation results, retained SBT semantics and Flutter integration | After the 6.7 execution baseline; Flutter W4–W5 consume CNCF Phase 117; [checklist](phase-18-checklist.md); no new gate for 6.8–7 |
+| [19: Docker installation and customization qualification](phase-19.md) | Empty-environment install/use, configuration, preserved customization, update/failure and owned cleanup | Independent HEAVY track; consume INIT and profile producers per case; [checklist](phase-19-checklist.md); no active Phase gate |
 | [8: Runtime extensions and practical closure](phase-8.md) | Resolve necessary Phase 2 carryover and needs found during use | Reassess necessity, finish selected work and close this rollout |
 | [11: Common Journal and trial skills](phase-11.md) | Actual common record/read/find, accepted Finding recording, packaged/deployed skills and Phase 6.4 trial-host connection | Short priority delivery before remaining 6.4 work; no 6.4 archive or 7–10 completion dependency |
 | [11.1: Journal decisions, issues and handoffs](phase-11.1.md) | Related semantic records, correction/history, state/query and bounded batch management | Reuse 11 independently; not a prerequisite for the 6.4 trial |

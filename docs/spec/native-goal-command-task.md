@@ -28,6 +28,30 @@ issued native pair; no generic interpreter prefix or command-runner child is
 admitted. This is the existing finite completion transport, not an alternate
 Workflow or a new wrapper around business policy. A platform denial stops it.
 
+## Retained GoalTask transport
+
+For an already selected `GoalTask` Session, the finite caller also supports
+`advance`, `submit`, `complete`, `prepare-review-input`, `prepare-execution` and
+`record-execution`. Retain its original `workflow-session.json` family and ID;
+these actions neither prepare nor issue a new Task Start. Task/FIX Start uses
+its own public preparation/service contract, not the GoalPhase `start` action.
+
+Task Submit forwards the complete unchanged `issuedWorkContext` from the exact
+original Request alongside its result and evidence. Submission metadata cannot
+replace or renew that binding. The Task acknowledgement is `kind: Submitted`;
+it closes the issued WorkOrder without establishing validation or acceptance.
+Only then may `complete` perform its one ordinary `advanceGoalTask`. An actual
+`Incomplete` frontier is retained and displayed as incomplete, never success.
+Failed, mismatched or uncertain Submit stops without Advance or retry, keeping
+raw output and the same Session. Review preparation uses family `GoalTask` and
+requires genuine independent review evidence under the existing runtime contract.
+
+Public malformed-issued-work recovery is separate from this transport. Follow
+[the Task contract](goal-task-runtime.md) only when that exact installed runtime
+provides it and genuine exact-target Human evidence has been admitted. A missing
+log, unclaimed issue or helper failure proves neither nonexecution nor authority
+to replace work. Never edit Session storage or replay an accepted Submit.
+
 ## Prepare the owning task
 
 ### Mandatory actual exchange display
@@ -145,8 +169,10 @@ creation failures stop before CLI launch without deleting or replacing prior
 results. Retained stream files use exclusive creation, preventing concurrent
 calls to the same output from launching duplicate native commands. No automatic
 retry, new Workflow attempt or recovery operation follows preparation failure.
-The explicit executable must be an available executable file; the ordinary host
-configuration/assembly and installed skills must exist. The caller requires no
+The explicit executable must be an available executable file and the selected
+runtime root and installed skills must exist. Configuration is resolved through
+the [normal runtime configuration boundary](native-host-execution.md#runtime-configuration-boundary),
+without requiring fixed local config or assembly filenames. The caller requires no
 checkout launcher, generated classpath, component descriptor or CAR manifest.
 The installed CLI alone selects the published artifact. There is no source
 fallback, PATH search or legacy --primary alias.
@@ -455,16 +481,18 @@ facts and declared result before semantic editing; load the actual task-installe
 not instructions granting authority or changing the route.
 
 `Human` uses the host's independent actual human channel and genuine evidence.
-`Wait` follows its actual condition without polling; `Terminal` ends. This bounded
-script's original `submit` and `prepare-review-input` actions support only an outer Goal `Request` with
+`Wait` follows its actual condition without polling; `Terminal` ends. For GoalPhase,
+`submit` and `prepare-review-input` support an outer Goal `Request` with
 `submitOperation=submitGoalPhaseWorkResult`,
 `submitSessionId=<outer canonical ID>` and `resultType=GoalPhaseWorkResult`.
-A forwarded child still stops those original actions. The dedicated actions
+A retained GoalTask uses its exact Task pair and original context as described
+in [retained GoalTask transport](#retained-goaltask-transport).
+A forwarded child still stops those actions. The dedicated actions
 below cover the finite issued Repository merge-review, merge-repair and conflict
 children forwarded through their owning Goal. Other child types/routes return to the host under the common loop
 and installed skill.
 
-The caller accepts these four native field aliases only:
+For these consumed Request fields, the caller accepts these native aliases:
 
 | Camel spelling | Native wire spelling |
 | --- | --- |
@@ -472,6 +500,7 @@ The caller accepts these four native field aliases only:
 | `submitOperation` | `submit_operation` |
 | `submitSessionId` | `submit_session_id` |
 | `resultType` | `result_type` |
+| `issuedWorkContext` | `issued_work_context` |
 
 If both spellings occur they must agree. The routing file retains its exact
 camel spelling and two-field shape. Contradictory aliases or issued context,
@@ -529,7 +558,7 @@ availability, independence or permission.
    ReviewPhase. Excluded conditions stay advisory. Only actual final operational
    completion supplies the returned execution evidence with its genuine
    result/reference to the host's `complete` action below. That finite action
-   checks the actual Submit target ID, message, Boolean accepted and outcome,
+   checks the actual Submit target ID, message and family-specific acknowledgement,
    displays and flushes the observation, then explicitly Advances the retained
    outer session once on acceptance. Accepted Submit establishes semantic
    admission only.
@@ -579,7 +608,7 @@ derive observations from model, profile, task or context labels.
   --submission /absolute/path/to/semantic-submission.json
 ```
 
-The host's `complete` reads the exact caller route and actual Request, then calls the issued
+For GoalPhase, `complete` reads the exact caller route and actual Request, then calls the issued
 `GoalPhaseService.submitGoalPhaseWorkResult` with named `--sessionId`,
 `--result`, `--resultReference` and only supplied `--completionFacts`/
 `--executionEvidence`. It forwards semantic values unchanged for native admission.
@@ -591,12 +620,19 @@ without a user continuation prompt or continuation-only AI turn. Validate that
 Advance's actual outer ID, message and kind, then display its JSON as the second
 line and return control. Request returns semantic work to the host; Human uses
 the independent actual human channel; Wait stops for its actual condition;
-Terminal ends. None causes another call inside `complete`.
+Terminal ends. None causes another call inside `complete`. For a retained Task,
+the same action calls `GoalTaskService.submitGoalTaskWorkResult`, adding the
+original Request's unchanged `--issuedWorkContext`. Its matching-ID/nonblank-message
+acknowledgement must have `kind=Submitted`; it does not have GoalPhase's
+`accepted/outcome` contract. Only that acknowledgement permits the one ordinary
+`advanceGoalTask`; its `Incomplete` kind remains incomplete. Both families keep
+Submit distinct from native validation and final acceptance.
 
 `complete` requires `--request` and `--submission` alongside common
-options for all three families. Optional `--human-provenance` is admitted only
+options for all four supported families. Optional `--human-provenance` is admitted only
 for the finite Goal Human branch described below; semantic Requests reject it,
-and every other action rejects it. Semantic completion selects only the original Goal pair above,
+and every other action rejects it. Semantic completion selects only the GoalPhase pair above,
+the same-ID `submitGoalTaskWorkResult` / `GoalTaskWorkResult` pair,
 the three fixed Split pairs below, or the three fixed Repository review/repair/
 conflict pairs below. All existing issued-route and submission metadata checks
 apply, including agreeing consumed aliases. Split accepts only its own pairs;
