@@ -12,7 +12,7 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 /**
  * Logical persistence configuration only; physical storage and grants belong to the host.
  * @since   Oct.  1, 2026
- * @version Oct. 21, 2026
+ * @version Oct. 27, 2026
  */
 private[smworkflow] object GoalPhaseRuntimeParameters {
   private val _prefix = "sm-workflow.goal-phase.persistence."
@@ -23,7 +23,7 @@ private[smworkflow] object GoalPhaseRuntimeParameters {
     case _ => Consequence.configurationInvalid("GoalPhase persistence requires an exact nonblank string")
   }
   private def _key[A](name: String)(decode: String => Consequence[A]): ComponentParameterKey[A] =
-    ComponentParameterKey.required(_prefix + name,
+    ComponentParameterKey.optional(_prefix + name,
       ComponentParameterDecoder(value => _exact_string.decode(value).flatMap(decode)))
 
   val storeName = _key("store-name") { value =>
@@ -49,17 +49,27 @@ private[smworkflow] object GoalPhaseRuntimeParameters {
   final case class Persistence(configuration: Configuration, instances: DataStore.CollectionId,
     continuations: DataStore.CollectionId)
 
+  /** Logical component defaults; the Subsystem continues to own the physical
+    * store, its shared pool and the declaration granting this component access.
+    */
+  val defaultStoreName = "workflow"
+  val defaultStoreIdentity = WorkflowStoreIdentity("sm-workflow")
+  val defaultInstances: DataStore.CollectionId =
+    DataStore.CollectionId.EntityStore(EntityCollectionId("smworkflow", "local", "instances"))
+  val defaultContinuations: DataStore.CollectionId =
+    DataStore.CollectionId.EntityStore(EntityCollectionId("smworkflow", "local", "continuations"))
+
   def decodeC(parameters: ComponentInitializationParameters): Consequence[Persistence] =
     if (parameters == null)
       Consequence.configurationInvalid("GoalPhase configured persistence is missing")
     else for {
-      name <- _required_c(parameters, storeName)
-      identity <- _required_c(parameters, storeIdentity)
-      migration <- _required_c(parameters, migrationPolicy)
-      retention <- _required_c(parameters, retentionPolicy)
-      lease <- _required_c(parameters, leasePolicy)
-      root <- _required_c(parameters, instances)
-      delivery <- _required_c(parameters, continuations)
+      name <- _value_c(parameters, storeName, defaultStoreName)
+      identity <- _value_c(parameters, storeIdentity, defaultStoreIdentity)
+      migration <- _value_c(parameters, migrationPolicy, MigrationPolicy("v1"))
+      retention <- _value_c(parameters, retentionPolicy, RetentionPolicy("v1"))
+      lease <- _value_c(parameters, leasePolicy, LeasePolicy("v1"))
+      root <- _value_c(parameters, instances, defaultInstances)
+      delivery <- _value_c(parameters, continuations, defaultContinuations)
       configuredlimits <- WorkflowMechanicalReceiptParameters.resolveC(parameters)
       limits <- configuredlimits.fold(_default_receipt_limits)(Consequence.success)
       _ <- if (root != delivery) Consequence.unit
@@ -68,11 +78,7 @@ private[smworkflow] object GoalPhaseRuntimeParameters {
         DeliveryConfiguration.SameStore(identity), Some(limits.maxBytes)).validateC
     } yield Persistence(configuration, root, delivery)
 
-  private def _required_c[A](parameters: ComponentInitializationParameters, key: ComponentParameterKey[A]): Consequence[A] =
-    parameters.resolve(key).flatMap { result =>
-      result.value match {
-        case Some(value) => Consequence.success(value)
-        case None => Consequence.configurationInvalid("GoalPhase required persistence parameter is absent")
-      }
-    }
+  private def _value_c[A](parameters: ComponentInitializationParameters, key: ComponentParameterKey[A],
+    default: => A): Consequence[A] =
+    parameters.resolve(key).map(_.value.getOrElse(default))
 }

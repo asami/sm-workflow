@@ -12,11 +12,20 @@ this does not clean up or restore uncertain effects of the abandoned execution.
 
 ## Prepare the owning runtime
 
-The owning Textus Subsystem initializes its shared storage and process facilities
-before constructing the component. Supply trusted host configuration, the normal
-storage plan, purpose-specific record destinations, repository/check policies
-and bounded process grants. Component construction does not create a second
-database pool, seed Workflow instances or grant execution permission.
+The component CAR supplies standard logical storage settings and bounded process
+declarations. No `.textus/config.json`, assembly override, selected Phase or Plan
+is required for Help. CNCF resolves the storage directory from RuntimeRoot and
+the process profile from the actual repository, Git configuration and installed
+tools. Explicit host settings can override these defaults. Missing repository or
+tool information does not prevent Help; it must be supplied before its managed
+effects can run.
+
+The owning Textus Subsystem initializes the shared storage and process facilities
+before constructing the component. Construction does not create a second pool or
+seed Workflow instances. The real Phase and Plan are selected at Start, retained
+with that execution and used by subsequent Operations. Standard check names are
+`compile`, `test` and `fix-check`; custom checks require explicit bindings. The
+runtime executes only the admitted typed Git and SBT operations.
 
 Use the official development CAR/runtime artifacts. In this workstation's
 development workflow, SBT runs through the registered command runner and shared

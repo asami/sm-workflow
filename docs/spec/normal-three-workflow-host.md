@@ -40,6 +40,16 @@ RepositorySync assemblies together. Use the official development CAR/classpath
 and the ordinary CNCF launcher. Factory composition does not start a workflow,
 install initial records, initialize a second pool or grant a process command.
 
+For the standard composition, the CAR supplies logical persistence defaults and
+bounded managed process declarations. CNCF derives physical storage from
+RuntimeRoot and resolves actual repository/tool/environment values. There is no
+required global `sm-workflow.runtime.definition` for Help or standard startup.
+The real Phase and Plan arrive through Start selection and are retained in the
+native run; Advance composes from that retained Plan after reopening the runtime.
+The ordinary checks are `compile`, `test` and `fix-check`. Custom check bindings
+and explicit complete runtime definitions remain supported configuration choices.
+No placeholder Phase, Plan, paths or human evidence is installed by default.
+
 Optional [native Goal execution disposition](goal-phase-native-execution.md)
 uses the canonical `workflow.execution.profiles` and
 `sm-workflow.execution.origin` Component parameter pair. Both absent retain

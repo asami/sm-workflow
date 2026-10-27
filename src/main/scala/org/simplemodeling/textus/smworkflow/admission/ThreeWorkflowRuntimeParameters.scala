@@ -20,7 +20,7 @@ import GoalPhaseDependencyValidation.given
   * command grants or a declaration that any review/Human result was admitted.
   * Storage/process bootstrap has already been performed by the owning Subsystem.
   * @since   Oct.  7, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowLauncherAssembly.RuntimeCompositionDecoder {
@@ -81,7 +81,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
       .flatMap(d => Either.cond(d.schemaVersion == schema, d, "Three-workflow runtime schema differs"))
       .fold(Consequence.configurationInvalid(_), Consequence.success)
 
-  val definition = ComponentParameterKey.required("sm-workflow.runtime.definition",
+  val definition = ComponentParameterKey.optional("sm-workflow.runtime.definition",
     ComponentParameterDecoder[Definition] {
       case value: ConfigurationValue.ObjectValue => decodeDefinitionC(json(value))
       case ConfigurationValue.StringValue(value) => io.circe.parser.parse(value)
@@ -113,7 +113,22 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
       GoalPhaseNativeExecution.declaration, GoalPhaseAcceptanceBoundary.declaration, GoalPhaseFindingRecording.declaration,
       RepositorySyncNativeExecution.declaration, SplitPhaseNativeExecution.declaration, DevelopmentJournal.declaration, CommonEvidence.declaration,
       completionPolicy, validationRepairCallerSource, developmentObservation, LocalPublicationRuntime.declaration)
-  lazy val factory = ThreeWorkflowLauncherAssembly.factory(declarations, Vector.empty, this)
+  lazy val factory = new SmWorkflowConfiguredComponentFactory(declarations, Vector.empty,
+    bindServicesC, ThreeWorkflowLauncherAssembly.publishedMcpOperations)
+
+  private[admission] def bindServicesC(creation: ComponentCreate, parameters: ComponentInitializationParameters,
+    context: ExecutionContext): Consequence[Vector[org.goldenport.protocol.spec.ServiceDefinition]] =
+    parameters.resolve(definition).flatMap { selected =>
+      selected.value match {
+        case Some(_) => decodeC(creation, parameters, context).flatMap(host =>
+          ThreeWorkflowLauncherAssembly.bindC(creation, host)(using context))
+        case None => GoalPhaseRuntimeParameters.decodeC(parameters).map { _ =>
+          DeferredWorkflowServices.bind(ThreeWorkflowLauncherAssembly.deferredDeclarations,
+            (request, core) => StandardWorkflowRuntime.bindForCallC(creation, parameters, request, core)) :+
+            NativeWorkflowPreparationServiceAssembly.bind
+        }
+      }
+    }
 
   def decodeC(creation: ComponentCreate, parameters: ComponentInitializationParameters,
     context: ExecutionContext): Consequence[ThreeWorkflowLauncherAssembly.RuntimeComposition] =
@@ -123,6 +138,11 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
       resolved <- parameters.resolve(definition)
       settings <- resolved.value.map(Consequence.success).getOrElse(
         Consequence.configurationInvalid("Three-workflow runtime definition is not configured"))
+      result <- decodeSettingsC(creation, parameters, context, settings)
+    } yield result
+
+  private[admission] def decodeSettingsC(creation: ComponentCreate, parameters: ComponentInitializationParameters,
+    context: ExecutionContext, settings: Definition): Consequence[ThreeWorkflowLauncherAssembly.RuntimeComposition] = for {
       persistence <- GoalPhaseRuntimeParameters.decodeC(parameters)
       selectedpolicy <- parameters.resolve(completionPolicy).map(_.value.getOrElse(GoalPhasePostCompletionSync.localPolicy))
       callersource <- parameters.resolve(validationRepairCallerSource).map(_.value)

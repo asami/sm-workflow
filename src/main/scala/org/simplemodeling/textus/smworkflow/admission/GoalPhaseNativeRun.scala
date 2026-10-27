@@ -23,7 +23,7 @@ import RepositorySyncManagedGitObservation as G
   * the Subsystem's canonical store and managed Git execution. No private pool,
   * controller digest or AI-supplied plan admission is introduced.
   * @since   Oct.  6, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeRun {
@@ -294,6 +294,6 @@ private[smworkflow] object GoalPhaseNativeRun {
       record.currentProgression.map(_.value).getOrElse("pending")))
   def invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("GoalPhase native run: " + reason)
   private def token(value: String) = URLEncoder.encode(value, UTF_8)
-  private def reference(identity: String) = WorkflowMechanicalTransition.Reference(identity + ":ordered-start", "1")
+  private[admission] def reference(identity: String) = WorkflowMechanicalTransition.Reference(identity + ":ordered-start", "1")
   private def empty = ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](())
 }
