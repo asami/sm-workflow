@@ -93,10 +93,10 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean) {
       CausationReference(cause), from.derivedCompositeOccurrence, from.committedPredecessor, None)
   def saveC(h: Host, storage: WorkflowComponentStorage, from: InstanceRecord, payload: Payload,
     core: ActionCall.Core): Consequence[InstanceRecord] = for {
-    projection <- if (task && terminal(payload.state.stage)) recordEvidenceObservedC(h, core,
+    projection <- if (terminal(payload.state.stage)) recordEvidenceObservedC(h, core,
       from.identity.value, from.revision.next.value,
       Json.obj("state" -> payload.state.asJson, "workflowRevision" -> Json.fromLong(from.revision.next.value)),
-      "completion", payload.state.stage).map(Some(_)) else Consequence.success(None)
+      "completion", "passed").map(Some(_)) else Consequence.success(None)
     selected = projection.fold(payload)(p => payload.copy(state = payload.state.copy(
       evidenceReferences = (payload.state.evidenceReferences ++ p.references).distinct, projectionWarning = p.warning)))
     mechanical <- storage.bindMechanicalC(advanceOperation, stateCodec)
@@ -104,10 +104,6 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean) {
       reference(from.identity.value, from.revision.next.value), from, from.revision,
       history(from, "standalone-state:" + from.revision.next.value, terminal(payload.state.stage)),
       TypedValue(stateCodec.typeIdentity, selected)), empty)(using core.executionContext)
-    _ <- if (!task && terminal(payload.state.stage)) recordEvidenceC(h, core,
-      saved.receipt.next.identity.value, saved.receipt.next.revision.value,
-      Json.obj("state" -> payload.state.asJson, "workflowRevision" -> Json.fromLong(saved.receipt.next.revision.value)),
-      "completion", payload.state.stage).map(_ => ()) else Consequence.unit
   } yield saved.receipt.next
   def loadPayloadC(storage: WorkflowComponentStorage, id: String, revision: Long,
     core: ActionCall.Core): Consequence[Payload] = for {
@@ -219,8 +215,8 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean) {
             done <- completions.loadRetainedC(ContinuationIdentity(parts(1)))(using core.executionContext)
               .flatMap(_.map(x => Consequence.success(x.completion.result)).getOrElse(invalid("Actual completion is missing")))
             next <- S.completedC(S.Work(id, revision.toString, payload.state.stage, payload.state), done.result.value, done.resultReference)
-            references <- recordEvidenceC(h, core, id, current.revision.value, done.result.value.asJson,
-              "semantic-" + payload.state.stage, done.result.value.outcome)
+            references <- recordSemanticEvidenceC(h, core, id, current.revision.value,
+              payload.state.stage, done.result.value)
             retained = next.copy(evidenceReferences = next.evidenceReferences ++ references)
             saved <- saveC(h, storage, current, payload.copy(state = retained, supersededWork = None,
               implementationWorker = if (Set("Repair", "Implement")(payload.state.stage)) done.evidence.workerIdentity else payload.implementationWorker,
@@ -266,11 +262,11 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean) {
               Some(facts), Some(p))
             _ <- freshC(payload, core)
             observed <- S.observedC(intent, receipt)
-            references <- recordEvidenceC(h, core, record.identity.value, savedIntent.revision.value, receipt.asJson,
-              check.identity, facts.outcome.wire)
+            references <- recordCheckEvidenceC(h, core, record.identity.value, savedIntent.revision.value, receipt)
             next = observed.copy(evidenceReferences = observed.evidenceReferences ++ references)
             saved <- saveC(h, store, savedIntent, payload.copy(state = next), core)
-            response <- progressC(h, definition, store, saved, payload.copy(state = next), core, depth + 1)
+            retained <- loadPayloadC(store, saved.identity.value, saved.revision.value, core)
+            response <- progressC(h, definition, store, saved, retained, core, depth + 1)
           } yield response
           case SbtExecutionAttempt.AdmissionRejected(_, _, conclusion) =>
             val blocked = intent.copy(stage = "AdmissionBlocked", pendingCheck = None,
@@ -434,6 +430,58 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean) {
     response <- requestViewC(pending, selected, core)
   } yield response
 
+  /** Adapt only confirmed native outcomes to the existing Evidence vocabulary.
+    * The immutable raw receipt/result remains the archived content. Incomplete,
+    * unverified and nonexecuted checks have no passed/failed projection.
+    */
+  private[admission] def recordCheckEvidenceC(h: Host, core: ActionCall.Core, session: String,
+    revision: Long, receipt: RepositorySyncNativeMergeValidation.Receipt): Consequence[Vector[ContextReference]] = {
+    val outcome = receipt.sbt.flatMap { facts => facts.outcome match {
+      case WorkflowSbtValidation.Outcome.Succeeded if
+          RepositorySyncNativeMergeValidation.productSuccessful(receipt, facts.kind) => Some("passed")
+      case WorkflowSbtValidation.Outcome.Failed if receipt.termination == "exited" && receipt.exitCode.exists(_ != 0) => Some("failed")
+      case _ => None
+    }}
+    outcome.fold(Consequence.success(Vector.empty[ContextReference]))(value =>
+      recordEvidenceC(h, core, session, revision, receipt.asJson, receipt.identity, value))
+  }
+
+  private[admission] def recordSemanticEvidenceC(h: Host, core: ActionCall.Core, session: String,
+    revision: Long, kind: String, result: S.Result): Consequence[Vector[ContextReference]] = {
+    val outcome = result.outcome match {
+      case "completed" | "accept" => Some("passed")
+      case "repair" => Some("failed")
+      case _ => None // An unresolved decision does not establish success or failure.
+    }
+    outcome.fold(Consequence.success(Vector.empty[ContextReference]))(value =>
+      recordEvidenceC(h, core, session, revision, result.asJson, "semantic-" + kind, value))
+  }
+
+  /** Allocation identity is retained independently of File availability. A
+    * Journal row can faithfully record conflict/uncertainty without proving that
+    * the captured content was stored. Idempotent Journal collection is success.
+    */
+  private[admission] def projectionWarning(storageStatus: String, journalStatus: Option[String]): Option[String] = {
+    val storage = storageStatus match {
+      case "stored" => None
+      case "conflict" => Some("Common Evidence storage conflict; captured content is not confirmed stored")
+      case "indeterminate" => Some("Common Evidence storage is indeterminate; captured content is not confirmed stored")
+      case _ => Some("Common Evidence storage outcome is unrecognized; captured content is not confirmed stored")
+    }
+    val journal = journalStatus match {
+      case Some("recorded" | "alreadyRecorded") => None
+      case None => Some("Common Journal projection is not installed")
+      case Some(status) => Some("Journal projection is " + status)
+    }
+    (storage, journal) match {
+      case (None, None) => None
+      case (None, Some(message)) if journalStatus.isEmpty => Some(message)
+      case (None, Some(message)) => Some("Common Evidence stored; " + message)
+      case (Some(message), None) => Some(message)
+      case (Some(message), Some(detail)) => Some(message + "; " + detail)
+    }
+  }
+
   private final case class Projection(references: Vector[ContextReference], warning: Option[String])
   private def recordEvidenceC(h: Host, core: ActionCall.Core, session: String, revision: Long,
     facts: Json, output: String, outcome: String): Consequence[Vector[ContextReference]] =
@@ -449,8 +497,8 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean) {
         facts.noSpaces, "identity", core.executionContext.clock).flatMap {
         case (_, Some((allocation, observation))) =>
           DevelopmentJournalEvidence.recordC(h.journal, core, allocation, observation)
-            .map(_ => Projection(Vector(ContextReference(allocation.identity, "1")),
-              if (h.journal.isEmpty) Some("Common Journal projection is not installed") else None))
+            .map(journal => Projection(Vector(ContextReference(allocation.identity, "1")),
+              projectionWarning(observation.status, Option.when(h.journal.nonEmpty)(journal.status))))
         case _ => Consequence.success(Projection(Vector.empty, Some("Common Evidence archive returned no allocation")))
       }.recoverWith(_ => Consequence.success(Projection(Vector.empty,
         Some("Common Evidence or Journal projection failed; actual execution and commit remain retained"))))

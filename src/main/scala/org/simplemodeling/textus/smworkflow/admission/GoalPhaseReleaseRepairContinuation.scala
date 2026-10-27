@@ -26,7 +26,7 @@ import RepositorySyncManagedGitObservation as G
   * Phase-review question without answering it or reinterpreting its review.
   * Recover records only the native disposition. Advance owns all later effects.
   * @since   Oct. 25, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseReleaseRepairContinuation {
@@ -71,13 +71,16 @@ private[smworkflow] object GoalPhaseReleaseRepairContinuation {
     private given Encoder[O.Commit] = deriveEncoder
     private given Decoder[O.Commit] = _strict(deriveDecoder[O.Commit], Set("identity", "parent", "tree"))(value =>
       value != null && _snapshot(O.Snapshot(value.identity, value.tree)) && _snapshot(O.Snapshot(value.parent, value.tree)))
+    private given Decoder[O.StepCommitChain] = _strict(deriveDecoder[O.StepCommitChain],
+      Set("originalParent", "partial", "completion"))(O.validStepCommitChain)
     private given Encoder[O.ClosedStep] = deriveEncoder[O.ClosedStep].mapJson(_.mapObject(_.filter {
-      case ("admission", value) => !value.isNull
+      case ("admission" | "partialCompletion", value) => !value.isNull
       case _ => true
     }))
     private given Decoder[O.ClosedStep] = Decoder.instance(cursor => deriveDecoder[O.ClosedStep].apply(cursor).flatMap(value =>
       if (cursor.value.asObject.exists(fields => Set("step", "commit").subsetOf(fields.keys.toSet) &&
-          fields.keys.toSet.subsetOf(Set("step", "commit", "review", "admission")) && fields("admission").forall(!_.isNull)) &&
+          fields.keys.toSet.subsetOf(Set("step", "commit", "review", "admission", "partialCompletion")) &&
+          fields("admission").forall(!_.isNull) && fields("partialCompletion").forall(!_.isNull)) &&
           value != null && _exact(value.step) && value.commit != null && O.validStepAcceptance(value) && value.review.forall(_exact)) Right(value)
       else Left(DecodingFailure("Release continuation has invalid, unknown or contradictory fields", cursor.history))))
     given Encoder[Target] = deriveEncoder

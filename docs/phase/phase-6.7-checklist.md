@@ -1,8 +1,48 @@
 # Phase 6.7 acceptance checklist
 
-Status: pending. Planning is not implementation or acceptance.
+Status: Release repair 4 fixture correction prepared; fresh repository-full and affected PhaseReview pending.
+
+Latest observation (Request110): actual FULL1232 selected all six local native
+cases and ran 196 suites/1936 tests, with 1935 passed and one terminal-reference
+fixture failure. Five of the six native cases passed, including controlled failed/
+UNKNOWN intent and empty-commit protection. The failing case incorrectly replayed
+a historical mechanical save after Completed. Release repair 4 retains the valid
+initial active intent and uses typed retained checkpoint collection plus ordinary
+duplicate Advance, preserving exact payload/count/commit assertions. No production
+guard changes. Continuation1235/expected1236 retains Plan2, Phase4/10; required
+issue8 is REOPENED and issue11 OPEN. Both FIXED semantic claims await fresh normal
+FULL and affected review. Prior1195 success and1232 failure remain unchanged;
+earlier six-unexecuted statements below describe the preceding handoff. Checklist
+acceptance remains pending; no physical timeout is asserted.
 Owner: [Phase 6.7](phase-6.7.md).
 Retain GTASK/SFIX requirement IDs as cross-references; do not duplicate their runs.
+
+Current affected PhaseReview1198/1199 resolved issues9/10/12 and retained issue11
+(P67-05): the six native cases were excluded from actual FULL1195 by their
+RuntimeTestDeclaration. FULL1195 genuinely passed 195 suites/1930 tests; no six-case
+success is claimed. Release repair 3 changes only that suite's declaration to
+LocalTestDeclaration for its owned SQLite/File/Git fixtures, with no external or
+nested-SBT prerequisite. Normal FULL execution and affected PhaseReview remain
+pending at continuation1200/expected1201, Plan2, Phase3/10. Global classification
+rules and all eleven conditions are unchanged. Boxes remain open.
+
+Historical Release repair 2 evidence: first Phase review satisfied P67-01/02/06/07/09/10/11 within
+its recorded scope. Its four findings for P67-03/04/05/08 are addressed by the
+Release repair 2 source and new installed public journal-Task and NoChange
+qualifications. The journal Task includes original integrated findings
+P67-JTASK-001/002, same-Task repair1/10, fresh Compile +4 passing tests,
+independent affected acceptance and actual selected commit `a82c704eb18ee46081bc575124be2c5cfaec9552`.
+The separate NoChange Task has fresh Compile +5 passing tests, independent
+acceptance, no commit and unchanged HEAD. Both preserve unrelated dirty bytes
+and retain five Evidence references without warning. The square defect was
+intentionally seeded for qualification. Exact artifacts and limits are in the
+[current handoff](../journal/2026/10/2026-10-27-phase-6.7-t4-source-handoff.md).
+
+Publication105 activated the corrected image `57ace7b8`. Six newly authored
+native cases are unexecuted; controlled failed/UNKNOWN fixture designs do not
+claim an actual physical timeout or public failed closure. Fresh full Phase
+checks and formal PhaseReview remain required. Boxes below deliberately remain
+open; public examples do not independently close the eleven Phase conditions.
 
 - [ ] P67-01 (SFIX-A01/02): A real failing test and a compiler-failure case use
   the shared diagnosis/repair path and reach actually executed focused success;
@@ -63,7 +103,7 @@ snake-case state fields. The same-purpose adapter correction and regressions
 passed affected independent source review. Runtime-owned publication071
 completed with exit0 and activated dedicated image0d19a544. Installed public
 delivery072 returned completed-committed; requester adoption preparation073
-returned adopt as an attachment only. Native T4 and Phase acceptance remain pending. Task success is retained without replay. See the T4
+returned adopt as an attachment only. At that historical observation, native T4 and Phase acceptance remained pending. Task success is retained without replay. See the T4
 handoff for exact source artifacts. The consumer fresh-issue classification
 and new-Start preflight fix was published and activated as image6cf10ee0. Separate
 actual installed failing-test and compiler-failure FIX Sessions reached Accepted:
@@ -71,5 +111,5 @@ each passed Compile and three focused tests after repair, retained its original
 failure, and made no implicit commit. The compiler case retained affected tests
 as not executed during failure. These are actual standalone observations; Task
 native T4 acceptance, remaining variants and integrated
-Phase qualification are still pending. No box is closed by packaging, dispatch
+Phase qualification were still pending at that observation. No box is closed by packaging, dispatch
 or source fixtures.

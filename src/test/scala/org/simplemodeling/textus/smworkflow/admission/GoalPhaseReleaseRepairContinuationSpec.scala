@@ -20,7 +20,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Saved Phase review provenance and independently admitted direction only.
   * Actual old/new installed history and effects are qualified separately.
   * @since   Oct. 25, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 27, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -272,6 +272,8 @@ final class GoalPhaseReleaseRepairContinuationSpec extends AnyWordSpec with Matc
       val malformed = Vector(wire.mapObject(_.add("origin", "unknown".asJson)), wire.mapObject(_.add("extra", true.asJson)),
         wire.hcursor.downField("payload").downField("target").withFocus(_.mapObject(_.add("extra", true.asJson))).top.get,
         wire.hcursor.downField("payload").downField("target").downField("host").withFocus(_ => Json.Null).top.get,
+        wire.hcursor.downField("payload").downField("target").downField("completed").downArray
+          .withFocus(_.mapObject(_.add("partialCompletion", Json.Null))).top.get,
         L.storageCodec.encode(L.ReleaseRepair(_payload.copy(target = _target.copy(pendingRevision = "22")))),
         L.storageCodec.encode(L.ReleaseRepair(_payload.copy(target = _target.copy(candidate = _base)))),
         L.storageCodec.encode(L.ReleaseRepair(_payload.copy(target = _target.copy(host = _host.copy(programs = Vector(P.Program("one", 1))))))),

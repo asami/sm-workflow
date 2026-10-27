@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  6, 2026
- * @version Oct. 26, 2026
+ * @version Oct. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -33,11 +33,12 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
 
   "Native three-workflow launcher composition" should {
     "publish only actual generated native operation identities rather than guessed skill-stage names" in {
-      Given("the three generated CML provided-operation declarations and generated Journal and Evidence services")
+      Given("the five generated CML provided-operation declarations and generated Journal and Evidence services")
       val generated = Vector(domain.statemachine.providedapi.GoalPhaseWorkflowStateMachineProvidedApi1.workflow,
         domain.statemachine.providedapi.SplitPhaseWorkflowStateMachineProvidedApi2.workflow,
         domain.statemachine.providedapi.RepositorySyncWorkflowStateMachineProvidedApi3.workflow,
-        domain.statemachine.providedapi.StandaloneFixWorkflowStateMachineProvidedApi4.workflow)
+        domain.statemachine.providedapi.StandaloneFixWorkflowStateMachineProvidedApi4.workflow,
+        domain.statemachine.providedapi.GoalTaskWorkflowStateMachineProvidedApi5.workflow)
       When("the native launcher publication set is compared with the generated operations")
       val declared = generated.flatMap(_.providedOperations.map(o => s"${o.service}.${o.name}")).toSet ++
         SmWorkflowComponent.JournalServiceService.operations.operations.toVector.map(o => s"${SmWorkflowComponent.JournalServiceService.name}.${o.name}") ++
@@ -45,6 +46,9 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
         SmWorkflowComponent.DevelopmentObservationServiceService.operations.operations.toVector.map(o =>
           s"${SmWorkflowComponent.DevelopmentObservationServiceService.name}.${o.name}")
       val expected = Set(
+        "GoalTaskService.startGoalTask", "GoalTaskService.advanceGoalTask",
+        "GoalTaskService.submitGoalTaskWorkResult", "GoalTaskService.resolveGoalTaskDiagnosticInformation",
+        "GoalTaskService.describeGoalTaskMalformedIssuedWorkRecovery", "GoalTaskService.recoverGoalTaskMalformedIssuedWork",
         "StandaloneFixService.startStandaloneFix", "StandaloneFixService.advanceStandaloneFix",
         "StandaloneFixService.submitStandaloneFixWorkResult", "StandaloneFixService.resolveStandaloneFixDiagnosticInformation",
         "GoalPhaseService.startGoalPhase", "GoalPhaseService.advanceGoalPhase", "GoalPhaseService.submitGoalPhaseWorkResult",
@@ -72,7 +76,7 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
     }
 
     "bind generated passive preparation signatures without adding semantic MCP publication" in {
-      Given("the six generated preparation declarations and unchanged workflow publication boundary")
+      Given("the actual generated preparation declarations and unchanged workflow publication boundary")
       val declared = SmWorkflowComponent.NativeWorkflowPreparationServiceService
       When("the normal preparation service binds its actual generated metadata")
       val bound = NativeWorkflowPreparationServiceAssembly.bind

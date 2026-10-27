@@ -144,11 +144,15 @@ preparations and three native routes on that installed artifact before claiming
 availability, and retain actual publication, installation, execution and return
 observations. Source archive fixtures alone prove none of these effects.
 
-This checkout's GoalPhase closure codec accepts only native-step-closure **v3**;
-the ongoing Phase uses a qualified image retaining **v4** partial completion.
-It also lacks the newer runtime-owned LocalPublication implementation present in
-the producer. Keep the existing Phase image/configuration/storage pinned. A new
-isolated Task/FIX installation can be evaluated without migrating that Session;
-this does not establish general source-adoption compatibility. Reconciliation of
-producer source and authored CAR ABI exports needs its own admitted scope. Do not
-silently copy producer repairs or relax a codec/schema gate.
+The GoalPhase closure codec retains historical native-step-closure **v3** and
+supports producer-authored **v4** partial completion with the exact retained
+P→C→D chain. Release continuation targets preserve optional admission and partial
+completion through their closed codecs. The qualified Phase has traversed its
+actual Plan2 accepted prefix and current-Step inventory continuation on the
+installed consumer; this establishes that recorded compatibility scope rather
+than compatibility with arbitrary histories. Runtime-owned LocalPublication is
+available through its admitted existing operation and selected publication host.
+Retain actual image, candidate and qualification references when adopting changed
+bytes. Do not migrate stores, replay accepted work, silently copy producer repairs
+or relax codec/schema gates. New Task/FIX demonstrations use separate explicitly
+selected inputs and runtime observations.
