@@ -8,6 +8,7 @@ import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation}
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
+import org.goldenport.cncf.workspace.WorkspaceFilePath
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.TypedValue
@@ -23,7 +24,7 @@ import GoalPhaseDependencyValidation.given
   * the CML candidate-observed edge. Git staging cannot roll back with storage.
   * An intent without its actual recorded result is retained, never replayed.
   * @since   Oct.  6, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeCandidate {
@@ -39,7 +40,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     dependencySourceGuard: Option[GoalPhaseDependencySourceRevision.Guard] = None,
     dependencySourceStages: Vector[GoalPhaseDependencySourceRevision.StageFact] = Vector.empty,
     dependencySourceCapture: Option[GoalPhaseDependencySourceRevision.Capture] = None,
-    dependencySourceScope: Option[GoalPhaseDependencySourceRevision.ScopeSuccessor] = None)
+    dependencySourceScope: Option[GoalPhaseDependencySourceRevision.ScopeSuccessor] = None,
+    hygiene: Option[Json] = None)
   final case class StepEvidence(step: String, candidate: O.Snapshot, changedPaths: Vector[String], diff: String,
     commit: O.Commit, eofCorrections: Vector[String], partialCompletion: Option[O.StepCommitChain] = None)
   object StepEvidence {
@@ -56,7 +58,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
   object Payload {
     given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
       case ("continuation" | "stepEvidence" | "dependencyAdmission" | "dependency" | "dependencyOrigin" |
-          "dependencySourceDirection" | "dependencySourceGuard" | "dependencySourceCapture" | "dependencySourceScope", value) => !value.isNull
+          "dependencySourceDirection" | "dependencySourceGuard" | "dependencySourceCapture" | "dependencySourceScope" | "hygiene", value) => !value.isNull
       case ("dependencyStaged" | "dependencySourceStages", value) => !value.asArray.exists(_.isEmpty)
       case _ => true
     }))
@@ -70,8 +72,9 @@ private[smworkflow] object GoalPhaseNativeCandidate {
       val valid = cursor.value.asObject.exists(_.keys.forall(Set("sourceRevision", "step", "selectedPaths",
         "stagedPaths", "candidate", "changedPaths", "diff", "continuation", "stepEvidence", "dependencyAdmission",
         "dependencyStaged", "dependency", "dependencyOrigin", "dependencySourceDirection", "dependencySourceGuard",
-        "dependencySourceStages", "dependencySourceCapture", "dependencySourceScope"))) && !Vector("continuation", "stepEvidence", "dependencyAdmission", "dependency", "dependencyOrigin",
-          "dependencySourceDirection", "dependencySourceGuard", "dependencySourceCapture", "dependencySourceScope").exists(name => cursor.downField(name).focus.exists(_.isNull)) &&
+        "dependencySourceStages", "dependencySourceCapture", "dependencySourceScope", "hygiene"))) && !Vector("continuation", "stepEvidence", "dependencyAdmission", "dependency", "dependencyOrigin",
+          "dependencySourceDirection", "dependencySourceGuard", "dependencySourceCapture", "dependencySourceScope", "hygiene").exists(name => cursor.downField(name).focus.exists(_.isNull)) &&
+        value.hygiene != null && value.hygiene.forall(_historical_hygiene_valid) &&
         GoalPhaseDependencySourceRevision.candidateValid(value) &&
         value.dependencyAdmission != null && value.dependencyAdmission.forall(GoalPhaseDependencyValidation.admissionValid) &&
         value.dependencyStaged != null && value.dependencyStaged.distinct == value.dependencyStaged &&
@@ -96,6 +99,46 @@ private[smworkflow] object GoalPhaseNativeCandidate {
       })
     })
   }
+  /** Completed historical metadata is retained verbatim; it grants no effect authority. */
+  private def _historical_hygiene_valid(value: Json): Boolean = {
+    val cursor = value.hcursor
+    val decoded = for {
+      fields <- value.asObject
+      mode <- cursor.get[String]("mode").toOption
+      outcome <- cursor.get[String]("outcome").toOption
+      findings <- cursor.get[Vector[String]]("findings").toOption
+      corrections <- cursor.get[Vector[Json]]("corrections").toOption
+      diagnostic <- cursor.get[String]("diagnostic").toOption
+      originalindex <- cursor.get[String]("originalIndex").toOption
+    } yield fields.keys.toSet == Set("mode", "outcome", "findings", "corrections", "diagnostic", "originalIndex") &&
+      Set("auto-fix", "error")(mode) && findings.isEmpty &&
+      (originalindex.isEmpty || GitObjectId.parseC(originalindex).isSuccess) &&
+      corrections.size <= 256 && corrections.forall(_historical_hygiene_correction_valid) &&
+      corrections.flatMap(_.hcursor.get[String]("path").toOption).distinct.size == corrections.size &&
+      (outcome match {
+        case "clean" => corrections.isEmpty
+        case "corrected" => mode == "auto-fix" && corrections.nonEmpty && originalindex.nonEmpty
+        case _ => false
+      })
+    decoded.contains(true)
+  }
+
+  private def _historical_hygiene_correction_valid(value: Json): Boolean = {
+    val cursor = value.hcursor
+    val decoded = for {
+      fields <- value.asObject
+      path <- cursor.get[String]("path").toOption
+      mode <- cursor.get[String]("mode").toOption
+      originalblob <- cursor.get[String]("originalBlob").toOption
+      ordinal <- cursor.downField("stagingOrdinal").focus.flatMap(_.asNumber).flatMap(_.toInt)
+    } yield fields.keys.toSet == Set("path", "mode", "originalBlob", "stagingOrdinal") &&
+      WorkspaceFilePath.parseC(path).toOption.exists(_.value == path) && path.endsWith(".cml") &&
+      !path.split('/').exists(segment => Set("test", "tests", "fixtures", "expected", "golden", "snapshots")(
+        segment.toLowerCase(java.util.Locale.ROOT))) &&
+      Set("100644", "100755")(mode) && GitObjectId.parseC(originalblob).isSuccess && ordinal >= 1 && ordinal <= 256
+    decoded.contains(true)
+  }
+
   private[admission] val codec = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "GoalPhaseNativeCandidateReceipt"
     def encode(value: Payload): Json = Json.obj("schemaVersion" -> Json.fromString(

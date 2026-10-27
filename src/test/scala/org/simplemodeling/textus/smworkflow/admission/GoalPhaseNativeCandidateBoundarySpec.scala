@@ -10,7 +10,7 @@ import RepositorySyncManagedGitObservation as G
 
 /** Pure retained proof, compatibility and ownership evidence; no Git effect authority.
   * @since   Oct. 21, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -25,6 +25,19 @@ final class GoalPhaseNativeCandidateBoundarySpec extends AnyWordSpec with Matche
   private val _owners = Vector("src", "docs/phase.md")
   private def _dirty(index: Char, worktree: Char, path: String = "notes/user.md", from: Option[String] = None) =
     G.DirtyPath(index, worktree, path, from)
+  private def _historical_correction(path: String = "src/model.cml", blob: String = _oid(11), ordinal: Int = 1): Json =
+    Json.obj("path" -> Json.fromString(path), "mode" -> Json.fromString("100644"),
+      "originalBlob" -> Json.fromString(blob), "stagingOrdinal" -> Json.fromInt(ordinal))
+  private def _historical_hygiene(outcome: String = "clean", mode: String = "auto-fix",
+    corrections: Vector[Json] = Vector.empty, originalindex: String = ""): Json =
+    Json.obj("mode" -> Json.fromString(mode), "outcome" -> Json.fromString(outcome),
+      "findings" -> Json.arr(), "corrections" -> Json.fromValues(corrections),
+      "diagnostic" -> Json.fromString(""), "originalIndex" -> Json.fromString(originalindex))
+  private def _historical_wire(hygiene: Json): Json = {
+    val original = GoalPhaseNativeCandidate.codec.encode(GoalPhaseNativeCandidate.Payload("1", "S1",
+      Vector("src"), Vector("src"), Some(_anchor), Vector("src/model.cml"), Some("selected diff")))
+    original.mapObject(fields => fields.add("payload", fields("payload").get.mapObject(_.add("hygiene", hygiene))))
+  }
 
   "Retained descendant proof" should {
     "admit either actual merge parent and preserve the exact original anchor" in {
@@ -107,6 +120,126 @@ final class GoalPhaseNativeCandidateBoundarySpec extends AnyWordSpec with Matche
       val results = malformed.map(GoalPhaseNativeCandidate.codec.decode)
       Then("every malformed extension is rejected instead of falling back to legacy inference")
       results.foreach(_.isLeft shouldBe true)
+    }
+  }
+
+  "Historical terminal candidate hygiene compatibility" should {
+    "round trip clean receipts in either historical mode without changing their raw evidence" in {
+      Given("completed clean metadata with empty corrections and supported optional original index facts")
+      val receipts = Vector(
+        _historical_hygiene(), _historical_hygiene(mode = "error", originalindex = _oid(12)),
+        _historical_hygiene(originalindex = "a" * 64).mapObject(_.add("diagnostic", Json.fromString("historical clean check"))))
+      val wires = receipts.map(_historical_wire)
+      When("the actual candidate codec decodes and re-encodes each historical receipt")
+      val decoded = wires.map(GoalPhaseNativeCandidate.codec.decode(_).toOption.get)
+      val encoded = decoded.map(GoalPhaseNativeCandidate.codec.encode)
+      Then("the complete wire and exact historical JSON remain unchanged, including through payload copies")
+      encoded shouldBe wires
+      decoded.map(_.hygiene) shouldBe receipts.map(Some(_))
+      decoded.map(_.copy(sourceRevision = "2").hygiene) shouldBe receipts.map(Some(_))
+    }
+
+    "round trip corrected receipts with both Git object lengths and the finite correction limit" in {
+      Given("terminal auto-fix metadata with distinct production CML paths and supported historical staging facts")
+      val executable = _historical_correction("src/executable.cml", "b" * 64, 256)
+        .mapObject(_.add("mode", Json.fromString("100755")))
+      val maximum = (1 to 256).map(n => _historical_correction(s"src/model$n.cml", _oid(n), n)).toVector
+      val receipts = Vector(
+        _historical_hygiene("corrected", corrections = Vector(_historical_correction(), executable), originalindex = _oid(12)),
+        _historical_hygiene("corrected", corrections = maximum, originalindex = "c" * 64))
+      val wires = receipts.map(_historical_wire)
+      When("the codec reads and writes completed historical correction evidence")
+      val decoded = wires.map(GoalPhaseNativeCandidate.codec.decode(_).toOption.get)
+      Then("raw paths, modes, object IDs and ordinals survive without granting or executing an operation")
+      decoded.map(_.hygiene) shouldBe receipts.map(Some(_))
+      decoded.map(GoalPhaseNativeCandidate.codec.encode) shouldBe wires
+    }
+
+    "preserve current absence and refuse unrelated unknown candidate fields" in {
+      Given("a current candidate created without historical metadata and an unrelated unknown payload extension")
+      val payload = GoalPhaseNativeCandidate.Payload("1", "S1", Vector.empty, Vector.empty, None, Vector.empty, None)
+      val wire = GoalPhaseNativeCandidate.codec.encode(payload)
+      val unknown = wire.mapObject(fields => fields.add("payload",
+        fields("payload").get.mapObject(_.add("unknownHistoricalField", Json.obj()))))
+      When("the codec decodes both complete candidate wires")
+      val current = GoalPhaseNativeCandidate.codec.decode(wire)
+      val rejected = GoalPhaseNativeCandidate.codec.decode(unknown)
+      Then("absence remains omitted and strict unknown-field admission remains intact")
+      wire.hcursor.downField("payload").downField("hygiene").focus shouldBe None
+      current shouldBe Right(payload)
+      current.toOption.get.hygiene shouldBe None
+      GoalPhaseNativeCandidate.codec.encode(current.toOption.get) shouldBe wire
+      rejected.isLeft shouldBe true
+    }
+
+    "reject null missing mistyped and extra historical fields instead of ignoring malformed evidence" in {
+      Given("the exact historical object and variants missing or corrupting its required typed fields")
+      val clean = _historical_hygiene()
+      val keys = Vector("mode", "outcome", "findings", "corrections", "diagnostic", "originalIndex")
+      val malformed = Vector(Json.Null, Json.arr(), Json.fromString("clean"),
+        clean.mapObject(_.add("unknown", Json.fromBoolean(true)))) ++
+        keys.map(key => clean.mapObject(_.remove(key))) ++
+        keys.map(key => clean.mapObject(_.add(key, Json.Null))) ++
+        keys.map(key => clean.mapObject(_.add(key, Json.fromInt(1)))) ++ Vector(
+          clean.mapObject(_.add("findings", Json.arr(Json.fromInt(1)))),
+          clean.mapObject(_.add("corrections", Json.arr(Json.fromString("src/model.cml")))))
+      When("the actual candidate codec reads each malformed historical extension")
+      val results = malformed.map(value => GoalPhaseNativeCandidate.codec.decode(_historical_wire(value)))
+      Then("every malformed record fails closed without a legacy fallback")
+      results.foreach(_.isLeft shouldBe true)
+    }
+
+    "reject pending diagnostic unknown and contradictory terminal outcomes without replay" in {
+      Given("pending outcomes and terminal records that contradict the completed clean or corrected contract")
+      val correction = Vector(_historical_correction())
+      val invalid = Vector("planned", "diagnostic", "remaining-findings", "unknown").map(outcome =>
+        _historical_hygiene(outcome, corrections = correction, originalindex = _oid(12))) ++ Vector(
+        _historical_hygiene(mode = "unknown"),
+        _historical_hygiene(corrections = correction),
+        _historical_hygiene("corrected", originalindex = _oid(12)),
+        _historical_hygiene("corrected", mode = "error", corrections = correction, originalindex = _oid(12)),
+        _historical_hygiene("corrected", corrections = correction),
+        _historical_hygiene(originalindex = "not-an-object-id"),
+        _historical_hygiene().mapObject(_.add("findings", Json.arr(Json.fromString("remaining finding")))),
+        _historical_hygiene("corrected", corrections = correction, originalindex = _oid(12))
+          .mapObject(_.add("findings", Json.arr(Json.fromString("remaining finding")))))
+      When("the codec checks whether each historical record is a completed terminal receipt")
+      val results = invalid.map(value => GoalPhaseNativeCandidate.codec.decode(_historical_wire(value)))
+      Then("none is converted to a completed result or accepted as permission to replay old work")
+      results.foreach(_.isLeft shouldBe true)
+    }
+
+    "reject malformed duplicate oversized and out-of-bound historical correction facts" in {
+      Given("one valid historical correction and mutations violating its closed finite metadata contract")
+      val correction = _historical_correction()
+      val keys = Vector("path", "mode", "originalBlob", "stagingOrdinal")
+      val badpaths = Vector("", "/src/model.cml", "../model.cml", "src/../model.cml", "src/model.scala") ++
+        Vector("test", "tests", "fixtures", "expected", "golden", "snapshots").flatMap(segment =>
+          Vector(s"src/$segment/model.cml", s"src/${segment.toUpperCase(java.util.Locale.ROOT)}/model.cml"))
+      val badids = Vector("a" * 39, "a" * 41, "a" * 63, "a" * 65, "g" * 40)
+      val malformed = Vector(Json.Null, Json.arr(), Json.fromString("src/model.cml"),
+        correction.mapObject(_.add("unknown", Json.fromBoolean(true)))) ++
+        keys.map(key => correction.mapObject(_.remove(key))) ++
+        keys.map(key => correction.mapObject(_.add(key, Json.Null))) ++
+        badpaths.map(path => correction.mapObject(_.add("path", Json.fromString(path)))) ++
+        badids.map(blob => correction.mapObject(_.add("originalBlob", Json.fromString(blob)))) ++
+        Vector("100600", "120000", "160000").map(mode => correction.mapObject(_.add("mode", Json.fromString(mode)))) ++
+        Vector(Json.fromInt(-1), Json.fromInt(0), Json.fromInt(257), Json.fromLong(2147483648L),
+          Json.fromBigDecimal(BigDecimal("1.5")), Json.fromString("1")).map(ordinal =>
+          correction.mapObject(_.add("stagingOrdinal", ordinal)))
+      val invalid = malformed.map(value => _historical_hygiene("corrected", corrections = Vector(value), originalindex = _oid(12))) ++
+        badids.map(index => _historical_hygiene("corrected", corrections = Vector(correction), originalindex = index)) ++ Vector(
+          _historical_hygiene("corrected", corrections = Vector(correction, correction), originalindex = _oid(12)),
+          _historical_hygiene("corrected", corrections = (1 to 257).map(n =>
+            _historical_correction(s"src/model$n.cml", _oid(n), 1)).toVector, originalindex = _oid(12)))
+      When("the codec validates the full historical correction list")
+      val results = invalid.map(value => GoalPhaseNativeCandidate.codec.decode(_historical_wire(value)))
+      Then("bad paths, modes, IDs, ordinals, duplicate paths and excess corrections all refuse")
+      invalid.zip(results).foreach { case (value, result) =>
+        withClue(s"Historical hygiene ${value.noSpaces}: $result") {
+          result.isLeft shouldBe true
+        }
+      }
     }
   }
 
