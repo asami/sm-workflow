@@ -1,5 +1,42 @@
 # Explicit adoption of a remaining Plan
 
+## Accepted proposal before question issuance (R17–R19, E4)
+
+R17. The ordinary Human owner may now issue a closed `remaining-purpose` capture
+for an actual accepted Implementation/Repair decision-needed proposal that changes
+only current/future unaccepted purposes, including at least one future purpose.
+Its strict eligibility, exact saved acceptance and absent-document limit are
+defined by [Plan revision R17–R19](goal-phase-plan-revision.md#remaining-purpose-semantic-continuation-r17r19-e4).
+This connects an accepted result with no issued question to the existing public
+frontier through ordinary Advance. It neither replays semantic Submit nor
+manufactures an answer or silently adopts the proposal.
+
+R18. `describeGoalPhaseRemainingPlan` and `adoptGoalPhaseRemainingPlan` continue to
+require the actual genuinely issued unanswered Human. After ordinary Advance
+issues the scoped question, those existing Operations are reachable under exactly
+their own whole-target admission and atomic supersession contract. Their target
+and independently admitted directive remain separate from ordinary
+`AdoptPlanRevision` evidence. This change adds no Operation or DTO member and does
+not change current inventory, Review continuation, document-backed adoption,
+selected checks or acceptance authority.
+
+R19. Description does not answer or supersede the scoped question. Successful
+remaining-Plan adoption retains it as unanswered/superseded and reopens only the
+same unaccepted Step at generation + 1. Session/base/accepted prefix/history and
+repair counts remain. Missing or mismatched independent evidence, stale answers,
+duplicate adoption and uncertain outcomes keep their existing refusal/observation
+rules. The saved ordinary scoped capture remains exact in retained history.
+
+E4 (`CBD12-PLAN-HUMAN-409`) uses an isolated managed three-Step Session, a real
+accepted first-Step commit, and an accepted second-Step proposal before Human
+issuance. Reopened ordinary Advance issues the scoped Human without semantic
+resubmission. Separate public description/adoption with independently prepared
+specification-owned evidence preserves the old question, prefix/base/counts and
+reopens at the same Step. The companion live specification exercises ordinary
+Human adoption, and the dedicated installed CLI specification continues through
+real checks, independent fixture review and scoped Step commit. These are authored
+regressions; execution, independent review and delivery belong to the parent.
+
 The separate [legacy purpose batch continuation](goal-phase-purpose-repair.md)
 preserves an already accepted untyped ReviewStep decision and its unanswered
 Human without changing the Plan or adding a condition. Its explicit new inner

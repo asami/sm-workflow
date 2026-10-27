@@ -15,7 +15,7 @@ import GoalPhaseDocumentPlan as P
 /** Pure complete-Plan proposal and the question owner's captured business input.
   * Neither value certifies consent, transport integrity or execution authority.
   * @since   Oct. 18, 2026
-  * @version Oct. 18, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhasePlanRevision {
@@ -41,13 +41,17 @@ private[smworkflow] object GoalPhasePlanRevision {
   private given Decoder[D.Bound] = _decoder(deriveDecoder[D.Bound], Set("source", "bindings", "items"),
     value => D.instructionsC(Some(value), None).map(_ => ()))
 
-  final case class Captured(proposal: Proposal, plan: O.Plan, documents: Option[D.Bound] = None)
+  val remainingPurposeScope = "remaining-purpose"
+  final case class Captured(proposal: Proposal, plan: O.Plan, documents: Option[D.Bound] = None,
+    revisionScope: Option[String] = None)
   object Captured {
     given Encoder[Captured] = Encoder.instance(value => Json.obj(
-      "proposal" -> value.proposal.asJson, "plan" -> value.plan.asJson).mapObject(fields =>
-      value.documents.fold(fields)(documents => fields.add("documents", documents.asJson))))
+      "proposal" -> value.proposal.asJson, "plan" -> value.plan.asJson).mapObject { fields =>
+      val documents = value.documents.fold(fields)(documents => fields.add("documents", documents.asJson))
+      value.revisionScope.fold(documents)(scope => documents.add("revisionScope", Json.fromString(scope)))
+    })
     given Decoder[Captured] = _decoder(deriveDecoder[Captured], Set("proposal", "plan"),
-      validateCapturedC, Set("documents"))
+      validateCapturedC, Set("documents", "revisionScope"))
   }
 
   def validateOptionC(value: Option[Proposal]): Consequence[Unit] =
@@ -113,6 +117,10 @@ private[smworkflow] object GoalPhasePlanRevision {
     _ <- _check(value.plan.copy(effectiveAcceptance = None) == value.proposal.plan,
       "captured Plan differs from its explicit raw proposal")
     _ <- _check(value.documents != null, "captured documents Option is null")
+    _ <- _check(value.revisionScope != null && value.revisionScope.forall(_ == remainingPurposeScope),
+      "captured revision scope is invalid")
+    _ <- _check(value.revisionScope.isEmpty || value.documents.isEmpty,
+      "remaining-purpose cannot replace selected documents")
     _ <- value.documents.fold(Consequence.unit)(_documents_c(value.plan, _))
   } yield ()
 
@@ -125,6 +133,57 @@ private[smworkflow] object GoalPhasePlanRevision {
     // Eligibility only: this pure discarded transition is never Human evidence.
     _ <- controller.adoptRevisionC(captured.plan, "proposal-eligibility")
   } yield captured
+
+  /** Fresh semantic questions select this branch from the actual Plan delta.
+    * An ordinary capture failure must never be reinterpreted as another scope.
+    */
+  def captureSemanticProposalC(controller: O.State, proposal: Proposal, project: Option[A.Project],
+    documents: Option[D.Bound] = None): Consequence[Captured] = for {
+    _ <- _check(controller != null && documents != null, "semantic capture source is absent")
+    _ <- validateProposalC(proposal)
+    captured <- if (_future_purpose_changed(controller.plan, controller.cursor, proposal.plan)) for {
+      _ <- _check(documents.isEmpty, "remaining-purpose requires absent selected documents")
+      _ <- _check(proposal.plan.acceptance == controller.plan.acceptance,
+        "remaining-purpose must retain raw acceptance")
+      // Preserve the already selected boundary, independent of later project defaults.
+      plan = proposal.plan.copy(effectiveAcceptance = controller.plan.effectiveAcceptance)
+      selected = Captured(proposal, plan, revisionScope = Some(remainingPurposeScope))
+      _ <- adoptedC(controller, selected, "proposal-eligibility")
+    } yield selected else captureC(controller, proposal, project)
+  } yield captured
+
+  /** Pure delta guard shared by fresh capture, saved questions and adoption. */
+  def validateRemainingPurposeC(previous: O.Plan, cursor: Int, proposed: O.Plan): Consequence[Unit] = for {
+    _ <- O.validatePlanC(previous)
+    _ <- O.validatePlanC(proposed)
+    _ <- A.savedPlanC(previous)
+    _ <- A.savedPlanC(proposed)
+    _ <- _check(cursor >= 0 && cursor < previous.steps.size,
+      "remaining-purpose requires a current unaccepted Step")
+    _ <- _check(proposed.copy(revision = previous.revision, steps = previous.steps) == previous &&
+      proposed.revision != previous.revision && proposed.steps.size == previous.steps.size &&
+      proposed.steps.take(cursor) == previous.steps.take(cursor) &&
+      proposed.steps.drop(cursor).zip(previous.steps.drop(cursor)).forall { (next, prior) =>
+        next.copy(purpose = prior.purpose) == prior
+      } && _future_purpose_changed(previous, cursor, proposed),
+      "remaining-purpose may change only unaccepted purposes and must change a future Step purpose")
+  } yield ()
+
+  def validateCapturedScopeC(previous: O.Plan, cursor: Int, captured: Captured): Consequence[Unit] = for {
+    _ <- validateCapturedC(captured)
+    _ <- O.validatePlanC(previous)
+    _ <- captured.revisionScope match {
+      case Some(`remainingPurposeScope`) => validateRemainingPurposeC(previous, cursor, captured.plan)
+      case None => _check(!_future_purpose_changed(previous, cursor, captured.plan),
+        "future purpose changes require explicit remaining-purpose scope")
+      case _ => _check(false, "captured revision scope is invalid")
+    }
+  } yield ()
+
+  private def _future_purpose_changed(previous: O.Plan, cursor: Int, proposed: O.Plan): Boolean =
+    previous.steps.drop(cursor + 1).zip(proposed.steps.drop(cursor + 1)).exists { (prior, next) =>
+      prior.purpose != next.purpose
+    }
 
   def captureDocumentsC(controller: O.State, proposal: Proposal, project: Option[A.Project],
     previous: D.Bound, imported: P.Imported): Consequence[Captured] = for {
@@ -151,7 +210,20 @@ private[smworkflow] object GoalPhasePlanRevision {
   def adoptedC(controller: O.State, captured: Captured, evidence: String): Consequence[O.State] = for {
     _ <- validateCapturedC(captured)
     _ <- _check(controller != null, "controller is absent")
-    adopted <- controller.adoptRevisionC(captured.plan, evidence)
+    adopted <- captured.revisionScope match {
+      case None => controller.adoptRevisionC(captured.plan, evidence)
+      case Some(`remainingPurposeScope`) => for {
+        _ <- validateRemainingPurposeC(controller.plan, controller.cursor, captured.plan)
+        _ <- _check(controller.cursor == controller.completed.size &&
+          controller.completed.map(_.step) == controller.plan.steps.take(controller.cursor).map(_.identity) &&
+          controller.completed.forall(O.validStepAcceptance) &&
+          controller.repairs < controller.effectiveRepairLimit && controller.repairControl.flatMap(_.stop).isEmpty &&
+          !controller.policyRepairPending && controller.releaseCommit.isEmpty,
+          "remaining-purpose requires an exact accepted prefix and unexhausted repair scope")
+        next <- controller.adoptRemainingRevisionC(captured.plan, evidence)
+      } yield next
+      case _ => Consequence.stateConflict("GoalPhase Plan revision scope is invalid")
+    }
   } yield adopted
 
   private def _documents_c(plan: O.Plan, value: D.Bound): Consequence[Unit] = for {

@@ -15,9 +15,10 @@ import GoalPhasePlanRevision as R
 
 /** Finite public transport stages around separately performed document revision work.
   * The parent supplies actual semantic, Human, review and authority evidence.
+  * E4 separately uses the managed Operation fixture with specification-owned inputs.
   * Retained observations establish no external provenance by themselves.
   * @since   Oct. 18, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -31,6 +32,13 @@ final class NativeGoalPlanRevisionLiveSpec extends AnyWordSpec with Matchers wit
   private val _choices = Vector("AdoptPlanRevision", "RejectPlanRevision", "Defer", "Cancel")
   private val _paths = Vector(Vector("value.txt", "docs/phase.md", "docs/checklist.md"),
     Vector("docs/phase.md", "docs/checklist.md"))
+
+  "E4 CBD12-PLAN-HUMAN-409 ordinary Human continuation" should afterWord(
+    "in spec:goal-phase-plan-revision, example:E4, rules:R17,R18,R19, phase:CBD12-PLAN-HUMAN-409") {
+    "issue the actual scoped question from the accepted result and resume the same accepted-prefix Session through independent Human adoption" in {
+      new GoalPhaseRemainingPlanOperationSpec().qualifyRemainingPurpose(this, remaining = false)
+    }
+  }
 
   private def _property(name: String): String = sys.props.get(_prefix + name).filter(_.trim.nonEmpty)
     .getOrElse(throw new AssertionError("Select explicit " + _prefix + name))

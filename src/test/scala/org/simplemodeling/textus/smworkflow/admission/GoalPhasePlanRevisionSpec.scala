@@ -66,6 +66,140 @@ final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with Giv
     _take(pending.acceptC(O.StepCommitObserved("fixture-intent", O.Commit("c" * 40, _base.head, snapshot.tree))))
   }
 
+  "E4 CBD12-PLAN-HUMAN-409 remaining-purpose capture" should afterWord(
+    "in spec:goal-phase-plan-revision, example:E4, rules:R17,R18,R19, phase:CBD12-PLAN-HUMAN-409") {
+    "retain the accepted prefix and saved acceptance while dispatching only an actual future purpose change" in {
+      Given("docs/spec/goal-phase-plan-revision.md R17–R19 E4: an accepted first Step, a current second-Step implementation Decision and a future third Step")
+      val raw = _raw.copy(steps = _raw.steps :+ _raw.steps(1).copy(identity = "S3", dependencies = Vector("S2")))
+      val paused = _decision(_close_first(_take(O.startC(_take(A.captureC(Some(_project), raw)), _base))))
+      val revised = raw.copy(revision = "remaining-2", steps = raw.steps.zipWithIndex.map { (step, index) =>
+        if (index == 0) step else step.copy(purpose = "Explicit remaining purpose " + step.identity)
+      })
+      val proposed = _proposal(revised)
+      val later = A.Project(Vector(A.Condition("later", "step", true, "Later host default")))
+      When("fresh semantic capture selects the structural branch and saved adoption consumes its own scope")
+      val captured = _take(captureSemanticProposalC(paused, proposed, Some(later)))
+      val saved = captured.asJson.as[Captured].toOption.get
+      val adopted = _take(adoptedC(paused, saved, "spec-independent-human"))
+      Then("legacy capture still refuses and no later project defaults, accepted work or repair history change")
+      captureC(paused, proposed, Some(_project)) shouldBe a[Consequence.Failure[?]]
+      captured.revisionScope shouldBe Some(remainingPurposeScope)
+      captured.documents shouldBe None
+      captured.plan.effectiveAcceptance shouldBe paused.plan.effectiveAcceptance
+      saved shouldBe captured
+      val public = publicCaptured(Some(captured)).get
+      Vector(PropertyNameContext.default, PropertyNameContext(outputStyle = PropertyNameStyle.KebabCase)).foreach { context =>
+        val formatted = context.transformRecord(public)
+        val wire = io.circe.parser.parse(_take(formatted.toJsonStringC)).toOption.get
+        _take(normalizeJsonC(wire)).as[Captured] shouldBe Right(captured)
+      }
+      adopted.stage shouldBe O.Stage.Implementation
+      adopted.plan shouldBe captured.plan
+      adopted.plan.steps.head shouldBe paused.plan.steps.head
+      adopted.completed shouldBe paused.completed
+      adopted.base shouldBe paused.base
+      adopted.cursor shouldBe paused.cursor
+      adopted.generation shouldBe paused.generation + 1
+      adopted.repairs shouldBe paused.repairs
+      adopted.ordinaryRepairs shouldBe paused.ordinaryRepairs
+      adopted.repairObservations shouldBe paused.repairObservations
+      adopted.repairControl shouldBe paused.repairControl
+      adoptedC(paused, saved.copy(revisionScope = None), "spec-crossed-scope") shouldBe a[Consequence.Failure[?]]
+      adoptedC(adopted, saved, "spec-stale-answer") shouldBe a[Consequence.Failure[?]]
+      val retrospective = revised.copy(steps = revised.steps.updated(0, revised.steps.head.copy(purpose = "Changed accepted purpose")))
+      captureSemanticProposalC(paused, _proposal(retrospective), Some(_project)) shouldBe a[Consequence.Failure[?]]
+      val ordinary = _take(captureSemanticProposalC(paused, _proposal(_revised(paused)), Some(_project)))
+      ordinary.revisionScope shouldBe None
+      ordinary.asJson.hcursor.downField("revisionScope").focus shouldBe None
+      adoptedC(paused, ordinary.copy(revisionScope = Some(remainingPurposeScope)), "spec-crossed-scope") shouldBe a[Consequence.Failure[?]]
+    }
+
+    "refuse crossed scope metadata and every non-purpose change without falling back from a failed ordinary capture" in {
+      Given("docs/spec/goal-phase-plan-revision.md R17–R19 E4: a current first-Step Decision and a complete raw proposal changing both unaccepted purposes")
+      val paused = _decision(_start)
+      val revised = _raw.copy(revision = "remaining-2", steps = _raw.steps.map(step => step.copy(purpose = "New " + step.identity)))
+      val captured = _take(captureSemanticProposalC(paused, _proposal(revised), Some(_project)))
+      val wire = captured.asJson
+      val second = revised.steps(1)
+      val crossed = Vector(revised.copy(identity = "other-plan"), revised.copy(revision = paused.plan.revision),
+        revised.copy(phase = "other-phase"), revised.copy(repository = "other-repository"),
+        revised.copy(repairLimit = 3), revised.copy(phaseChecks = Vector("other-check")),
+        revised.copy(phaseReviewClassification = None), revised.copy(acceptance = None),
+        revised.copy(steps = revised.steps.reverse), revised.copy(steps = revised.steps.take(1))) ++
+        Vector(second.copy(identity = "S3"), second.copy(ownedPaths = Vector("other.scala")),
+          second.copy(dependencies = Vector.empty), second.copy(checks = Vector("other-check")),
+          second.copy(workClassification = None), second.copy(actionPolicy = Some(GoalPhaseStepAssessment.Policy(
+            "other-policy", "code", "required", "off", "off", Vector.empty))))
+          .map(step => revised.copy(steps = revised.steps.updated(1, step)))
+      When("strict capture and saved codecs receive forbidden deltas and finite-scope violations")
+      val rejected = crossed.map(plan => captureSemanticProposalC(paused, _proposal(plan), Some(_project)))
+      val malformed = Vector(Json.Null, Json.True, Json.fromString("current-step"), Json.fromString("unknown"))
+        .map(scope => wire.mapObject(_.add("revisionScope", scope)).as[Captured])
+      Then("nothing changes checks, scope, order, policy, acceptance or selected documents")
+      rejected.foreach(_ shouldBe a[Consequence.Failure[?]])
+      malformed.foreach(_ shouldBe a[Left[?, ?]])
+      captureSemanticProposalC(paused, _proposal(revised), Some(_project), Some(_documents())) shouldBe a[Consequence.Failure[?]]
+      validateCapturedC(captured.copy(documents = Some(_documents()))) shouldBe a[Consequence.Failure[?]]
+      captured.copy(documents = Some(_documents())).asJson.as[Captured] shouldBe a[Left[?, ?]]
+      validateCapturedC(captured.copy(revisionScope = null)) shouldBe a[Consequence.Failure[?]]
+      validateCapturedC(captured.copy(plan = captured.plan.copy(steps = captured.plan.steps.reverse))) shouldBe a[Consequence.Failure[?]]
+      val changed = captured.plan.copy(effectiveAcceptance = _take(A.captureC(None, revised)).effectiveAcceptance)
+      adoptedC(paused, captured.copy(plan = changed), "spec-crossed-effective") shouldBe a[Consequence.Failure[?]]
+      val exhausted = _decision(_start)
+      val repairs = exhausted.getClass.getDeclaredField("repairs")
+      repairs.setAccessible(true)
+      repairs.setInt(exhausted, exhausted.effectiveRepairLimit)
+      captureSemanticProposalC(exhausted, _proposal(revised), Some(_project)) shouldBe a[Consequence.Failure[?]]
+      val overflow = _decision(_start)
+      val generation = overflow.getClass.getDeclaredField("generation")
+      generation.setAccessible(true)
+      generation.setLong(overflow, Long.MaxValue)
+      captureSemanticProposalC(overflow, _proposal(revised), Some(_project)) shouldBe a[Consequence.Failure[?]]
+    }
+
+    "bind independent Human evidence to the entire saved scope and refuse erased crossed or stale captures" in {
+      Given("docs/spec/goal-phase-plan-revision.md R18–R19 E4: a scoped saved question and separately retained specification-owned evidence")
+      val paused = _decision(_start)
+      val raw = _raw.copy(revision = "remaining-2", steps = _raw.steps.map(step => step.copy(purpose = "New " + step.identity)))
+      val captured = _take(captureSemanticProposalC(paused, _proposal(raw), Some(_project)))
+      val fixture = NativeHumanEvidenceFixture
+      val template = fixture.revisionQuestion(captured)
+      val decision = template.current.asInstanceOf[WorkflowContinuation.Decision[GoalPhaseOrderedHumanDecision.Input]]
+      val original = decision.request.input.get.value
+      val input = original.copy(work = original.work.copy(selectedPlan = paused.plan, stepIdentity = Some("S1"),
+        purpose = paused.plan.steps.head.purpose))
+      val question = template.copy(current = decision.copy(request = decision.request.copy(input = Some(
+        TypedValue(GoalPhaseOrderedHumanDecision.inputCodec.typeIdentity, input)))))
+      val answer = fixture.revisionAnswer(question)
+      val binding = _take(ThreeWorkflowExternalEvidencePorts.goalHumanBindingC(fixture.owner.canonicalKey,
+        question, answer, "actual-submitter"))
+      val now = java.time.Instant.parse("2026-10-08T00:00:00Z")
+      val declared = NativeExternalEvidence.Declaration("workflow", org.goldenport.cncf.datastore.DataStore.CollectionId.EntityStore(
+        org.simplemodeling.model.datatype.EntityCollectionId("test", "host", "human_evidence")), "independent-host")
+      val evidence = NativeExternalEvidence.Evidence(NativeExternalEvidence.schema, NativeExternalEvidence.Purpose.GoalHuman.identity,
+        "actual-answer-lookup", "human-answer", "1", declared.issuer, "actual-human", binding, now.minusSeconds(1).toString)
+      val saved = _take(NativeExternalEvidence.decodeStorageC(_take(NativeExternalEvidence.encodeStorageC(evidence))))
+      val path = Vector("humanAttestation", "question", "source", "planRevision")
+      val changed = Vector(
+        fixture.alter(binding, path)(_.mapObject(_.remove("revisionScope"))),
+        fixture.alter(binding, path)(_.mapObject(_.add("revisionScope", Json.fromString("current-step")))),
+        fixture.alter(binding, path)(_ => captured.copy(proposal = captured.proposal.copy(identity = "other-proposal")).asJson))
+      When("saved input decoding and independent observation consume exact and changed scope targets")
+      val wire = GoalPhaseOrderedHumanDecision.inputCodec.encode(input)
+      val decoded = GoalPhaseOrderedHumanDecision.inputCodec.decode(wire)
+      val erased = GoalPhaseOrderedHumanDecision.inputCodec.decode(wire.mapObject(_.add("planRevision",
+        captured.copy(revisionScope = None).asJson)))
+      val crossed = changed.map(value => NativeExternalEvidence.observeC(saved, declared,
+        NativeExternalEvidence.Purpose.GoalHuman, "actual-answer-lookup", value, now))
+      Then("the exact target is admitted and scope erasure changes to the proposal or malformed scope cannot reuse it")
+      decoded shouldBe Right(input)
+      erased shouldBe a[Left[?, ?]]
+      crossed.foreach(_ shouldBe a[Consequence.Failure[?]])
+      NativeExternalEvidence.observeC(saved, declared, NativeExternalEvidence.Purpose.GoalHuman,
+        "actual-answer-lookup", binding, now).isSuccess shouldBe true
+    }
+  }
+
   "E3 current primary inventory adoption" should afterWord(
     "in spec:goal-phase-remaining-plan-adoption, example:E3, rules:R13,R14,R15,R16, phase:P67-T4-INV01") {
     "append only current literal inventory while retaining the original partial completion and all repair counters" in {

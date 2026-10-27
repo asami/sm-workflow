@@ -21,7 +21,7 @@ import GoalPhasePlanRevision as R
   * completion records direction only; owning advance issues any subsequent work.
   * The older closure-Human contract is deliberately not used for ordered work.
   * @since   Oct.  7, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseOrderedHumanDecision {
@@ -131,6 +131,17 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
         case None => Right(None)
         case Some(value) => value.asString.filter(at => scala.util.Try(java.time.Instant.parse(at)).isSuccess)
           .toRight("Invalid development occurrence time").map(Some(_))
+      }
+      _ <- Either.cond(captured.map(_.proposal) == result.planRevision, (),
+        "ordered Decision capture differs from its requesting proposal")
+      _ <- Either.cond(captured.forall(selected => R.validateCapturedScopeC(work.selectedPlan,
+        work.completed.size, selected).isSuccess), (), "ordered Decision capture crosses its saved scope")
+      _ <- captured.filter(_.revisionScope.nonEmpty).fold[Either[String, Unit]](Right(())) { selected =>
+        val cursor = work.completed.size
+        Either.cond(Set("ImplementStep", "RepairStep")(work.kind) && result.outcome == "decision-needed" &&
+          work.stepIdentity == work.selectedPlan.steps.lift(cursor).map(_.identity) &&
+          R.validateRemainingPurposeC(work.selectedPlan, cursor, selected.plan).isSuccess, (),
+          "ordered Decision remaining-purpose capture differs from its actual semantic work")
       }
     } yield Input(work, ContextReference(identity, revision), result, reason, progress, captured, recovery, occurred)
   }
@@ -351,6 +362,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       required <- requiredC
       bundle = ContextBundle(if (input.sourceHistoryRecovery.nonEmpty) GoalPhaseSourceHistoryRecovery.message
         else if (input.result.dependencyProposal.nonEmpty) "Answer only the saved exact bounded dependency scope proposal"
+        else if (input.planRevision.exists(_.revisionScope.contains(R.remainingPurposeScope))) _remaining_purpose_notice(input)
         else if (input.planRevision.nonEmpty) "Answer only the saved complete bounded Plan revision proposal"
         else if (source.controller.pendingRepair.nonEmpty) "Answer only the runtime repair budget or convergence stop for this unchanged Step or Release scope"
         else if (source.controller.documentDecision) "Answer only the retained document acceptance conflict"
@@ -377,6 +389,8 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
           "notice" -> Json.fromString(if (input.sourceHistoryRecovery.nonEmpty) GoalPhaseSourceHistoryRecovery.message
           else if (input.result.dependencyProposal.nonEmpty)
             "ApproveDependencyScope selects only this exact proposed linked work unit, its acceptance and dependent work. RejectDependencyScope rejects that proposal. Both resume the same semantic frontier with the actual answer reference; all effect, target and acceptance authorities still apply. Review remains read-only and neither direction executes dependency work."
+          else if (input.planRevision.exists(_.revisionScope.contains(R.remainingPurposeScope)))
+            _remaining_purpose_notice(input) + " AdoptPlanRevision selects this exact saved remaining-purpose capture. RejectPlanRevision retains the original Plan. Both preserve history and counts; subsequent work, checks and independent review retain their existing authorities."
           else if (input.planRevision.nonEmpty)
             "AdoptPlanRevision selects only this saved complete Plan revision. RejectPlanRevision retains the original Plan and resumes its same semantic work. Both retain history and counts; execution, source permissions, checks, review and closure require their existing authority."
           else if (source.controller.pendingRepair.nonEmpty)
@@ -409,7 +423,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
             case Some(proposal) => for {
               _ <- admitRevisionSourceC(source.controller, source.input.kind, source.result.result.value, source.documents)
               captured <- source.documents match {
-                case None => R.captureC(source.controller, proposal, d.projectAcceptance)
+                case None => R.captureSemanticProposalC(source.controller, proposal, d.projectAcceptance)
                 case Some(previous) => for {
                   imported <- GoalPhaseDocumentSource.loadForCallC(previous.source, core)
                   captured <- R.captureDocumentsC(source.controller, proposal, d.projectAcceptance, previous, imported)
@@ -526,6 +540,12 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
     else F.invalid("ordered Human answer choice or rationale is invalid")
   private def _continues(choice: String): Boolean =
     Set("ResumeAssignedWork", "ContinueRepairs", "AdoptPlanRevision", "RejectPlanRevision", "ApproveDependencyScope", "RejectDependencyScope", "AuthorizeNewAttempt")(choice)
+  private def _remaining_purpose_notice(input: Input): String = {
+    val selected = input.planRevision.get
+    val changed = input.work.selectedPlan.steps.zip(selected.plan.steps).drop(input.work.completed.size)
+      .collect { case (prior, next) if prior.purpose != next.purpose => next.identity }
+    "Answer only the saved remaining-purpose Plan revision; changed unaccepted Step purposes: " + changed.mkString(", ") + "."
+  }
   private def _wait_c(next: InstanceRecord, result: ContinuationResult[Answer]) = F.waitC(next,
     "Ordered Human answer retained", result.result.value.choice match {
       case "ResumeAssignedWork" => "Direction retained; only owning advance may issue the same semantic work. No command or closure is authorized."

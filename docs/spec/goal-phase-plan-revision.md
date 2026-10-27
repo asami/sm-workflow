@@ -1,5 +1,67 @@
 # Explicit bounded Plan revision
 
+## Remaining-purpose semantic continuation (R17–R19, E4)
+
+R17. `captureC` retains its strict current-Step and whole-Phase corrective-Step
+meaning. Fresh no-document semantic question preparation uses
+`captureSemanticProposalC`. A changed purpose of an existing future unaccepted
+Step structurally selects the separate `remaining-purpose` branch. Ordinary
+capture errors are never swallowed to select it. This branch requires the actual
+Implementation/Repair decision-needed result, a Decision cursor equal to the
+accepted-prefix size and below Step count, no selected documents or document
+conflict, no pending/exhausted repair or convergence stop, closure/unknown effect,
+accepted Phase review or generation overflow. Document-backed future-purpose
+proposals refuse through the existing strict route; their Bound is never dropped.
+
+The complete Plan requires a fresh revision and exact identity, Phase,
+repository, Step count/order/IDs, accepted Step definitions, paths, dependencies,
+checks, action policies, work classifications, Phase check/review policies,
+repair limit, raw acceptance and saved effective acceptance, including condition
+order and sources. Only purposes at the current cursor and later may change;
+at least one later purpose must actually differ. The new capture copies the
+controller's already saved effective acceptance after checking raw acceptance
+equality. It does not recapture current project defaults. Ordinary remaining-Plan
+eligibility and this stricter pure delta guard both apply on saved adoption.
+
+R18. `Captured.revisionScope: Option[String] = None` is a closed optional public
+field. Its only present value is `remaining-purpose`. Historical absence emits
+exactly the old JSON and retains its old meaning. Present null, unknown values,
+selected documents combined with this scope, contradictory raw Proposal/captured
+Plan, a scoped capture without a future purpose change, and an erased scope on a
+future-purpose question refuse. A retained question uses its stored scope and
+capture, never fresh semantic capture or later host defaults.
+`adoptedC` sends historical absence to strict `adoptRevisionC`; only the explicit
+new scope uses the strict purpose-only guard and `adoptRemainingRevisionC`.
+
+R19. Ordinary Advance can issue one actual Human from the retained accepted
+semantic result before any question exists, without replaying its accepted Submit.
+The real question context and notice display `remaining-purpose` and every changed
+unaccepted Step identity. Choices remain exactly `AdoptPlanRevision`,
+`RejectPlanRevision`, `Defer`, `Cancel`. The existing independent Human owner binds
+the entire capture, including scope and target; erasing/changing scope or proposal
+cannot reuse its evidence. Genuine independent adoption resumes the same current
+Step at generation + 1, retaining Session, original base, accepted commits/reviews,
+issues, history and all repair counts/policy/observations. New work still needs its
+own checks, independent review and real scoped commit. Rejection, Defer, Cancel
+and the separate remaining-Plan Operations retain their owning transitions.
+
+E4 (`CBD12-PLAN-HUMAN-409`) covers an accepted first Step, a second-Step accepted
+decision-needed proposal changing second/third purposes, and a runtime closed
+before Human issuance. The ordinary source/live route reopens and issues the
+scoped question once, retains it on readback, independently adopts it and reopens
+at the same second Step with generation + 1 and an exact prefix/base/counts.
+The separate Operation example describes and adopts a remaining Plan at that new
+issued frontier. Pure cases retain old capture refusal, finite codecs and crossed
+scope/evidence/accepted-prefix/delta/exhaustion/overflow refusal. The dedicated
+installed CLI example is selected with the existing
+`smworkflow.spec.installedCommand`, `smworkflow.spec.installations` and
+`smworkflow.spec.sbt` flags; it requires an installed command and has no source
+launcher fallback. It performs actual fixture work, successful checks, independent
+fixture review, source-authority admission and a real Step commit before issuing
+the next Step. All semantic and Human fixture inputs are specification-owned.
+These authored examples establish no execution result, live consumer adoption or
+genuine Human direction; parent validation and independent review remain required.
+
 Updated 2026-10-27: the separate
 [current primary-Component inventory adoption](goal-phase-remaining-plan-adoption.md#current-primary-component-inventory-continuation-r13r16-e3)
 uses its own pure current-Step literal append guard and typed `Target.currentInventory`
@@ -91,8 +153,10 @@ Saved document validation pairs the capture with the actual previous optional
 Bound, requires matching presence and repeats the same pure compatibility
 checks. It performs no reads, writes or reconstruction of prior configuration.
 
-`adoptedC(controller, captured, evidence)` validates the saved capture and passes
-the actual host-admitted answer reference to `State.adoptRevisionC`. Adoption
+`adoptedC(controller, captured, evidence)` validates the saved capture. Historical
+scope absence passes the actual host-admitted answer reference to
+`State.adoptRevisionC`; only explicit `remaining-purpose` dispatches through the
+stricter R17–R19 guard and `State.adoptRemainingRevisionC`. Historical adoption
 ordinarily requires a current unclosed Step at a semantic Decision sourced from
 Implementation, Repair or Review, with no document conflict, pending exhausted
 repair or closure intent, and a generation below the maximum. Ordinary unpaused

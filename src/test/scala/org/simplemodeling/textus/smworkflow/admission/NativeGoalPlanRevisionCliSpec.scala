@@ -16,7 +16,8 @@ import GoalPhaseOrderedProgression as O
 
 /** Ordinary native commands with explicitly SPECIFICATION-OWNED semantics and
   * Human answers. These examples claim no genuine Human/provider adoption,
-  * independent review, accepted Step commit or Phase acceptance.
+  * external reviewer provenance or Phase acceptance. E4 exercises an actual
+  * scoped Step commit after independently admitted specification-owned review.
   * @since   Oct. 18, 2026
   * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
@@ -28,7 +29,7 @@ final class NativeGoalPlanRevisionCliSpec extends AnyWordSpec with Matchers with
 
   private final case class Selected(scenario: F.Scenario, task: Path,
     initial: V.GoalPhaseAdvanceResult, proposal: R.Proposal, question: Option[V.GoalPhaseAdvanceResult],
-    questionResult: Option[F.Result])
+    questionresult: Option[F.Result])
   private val _purpose = "Implement the explicitly revised expected-newline requirement"
   private val _document_acceptance = "Produce expected followed by exactly one newline under the revised current-Step requirement"
   private val _participant = "participant"
@@ -90,9 +91,17 @@ final class NativeGoalPlanRevisionCliSpec extends AnyWordSpec with Matchers with
     accepted.sessionId shouldBe request.sessionId
     accepted
   }
-  private def _selected(name: String, check: String = "test", issueQuestion: Boolean = true): Selected = {
+  private def _selected(name: String, check: String = "test", issuequestion: Boolean = true,
+    remainingpurpose: Boolean = false): Selected = {
     Given("a fresh isolated Phase 1, two owned Steps and a fixed normal typed SBT policy; all semantic inputs are SPECIFICATION-OWNED")
     val scenario = F.fresh(name, sbtRepair = Some(TypedSbtHostPlanFixture.normalExecutable), repairContinuation = true)
+    if (remainingpurpose && sys.props.get("smworkflow.spec.installedCommand").exists(_.trim.nonEmpty)) {
+      val config = scenario.root.resolve(".textus/config.json")
+      val settings = parse(Files.readString(config, UTF_8)).toOption.get
+      val descriptor = Json.fromString(scenario.root.resolve(".textus/assembly.yaml").toAbsolutePath.toString)
+      settings.hcursor.downField("textus.assembly.descriptor").focus.foreach(_ shouldBe descriptor)
+      Files.writeString(config, settings.mapObject(_.add("textus.assembly.descriptor", descriptor)).noSpaces, UTF_8)
+    }
     val task = scenario.ownTask("plan-revision-task")
     When("separate ordinary Start and Advance commands select the initial implementation")
     val started = scenario.start().business[V.GoalPhaseStartResult]
@@ -109,8 +118,10 @@ final class NativeGoalPlanRevisionCliSpec extends AnyWordSpec with Matchers with
     _executions(scenario) shouldBe empty
 
     Given("the issued implementation and an explicit raw complete bounded revision of only its purpose and literal check selection")
-    val revised = scenario.plan.copy(revision = "2", steps = scenario.plan.steps.updated(0,
-      scenario.plan.steps.head.copy(purpose = _purpose, checks = Vector(check))))
+    val revised = if (remainingpurpose) scenario.plan.copy(revision = "2", steps = scenario.plan.steps.map(
+      step => step.copy(purpose = "Remaining purpose " + step.identity)))
+      else scenario.plan.copy(revision = "2", steps = scenario.plan.steps.updated(0,
+        scenario.plan.steps.head.copy(purpose = _purpose, checks = Vector(check))))
     val proposed = R.Proposal("specification-plan-proposal", "1", "SPECIFICATION-OWNED explicit requirement/design gap", revised)
     val result = V.GoalPhaseWorkResult("decision-needed", "Explicit current-Step design decision", Vector.empty,
       None, None, None, R.publicProposal(Some(proposed)), None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
@@ -120,7 +131,7 @@ final class NativeGoalPlanRevisionCliSpec extends AnyWordSpec with Matchers with
     _executions(scenario) shouldBe empty
     Files.readString(Path.of(scenario.host.target.root).resolve("value.txt"), UTF_8) shouldBe "initial\n"
     val selected = Selected(scenario, task, initial, proposed, None, None)
-    if (issueQuestion) {
+    if (issuequestion) {
       Given("the actual decision-needed proposal awaits explicit Human direction")
       When("a separate ordinary Advance captures and saves its actual revision question")
       val actual = scenario.advance(task)
@@ -136,8 +147,127 @@ final class NativeGoalPlanRevisionCliSpec extends AnyWordSpec with Matchers with
       captured.plan.copy(effectiveAcceptance = None) shouldBe proposed.plan
       _progress(question)
       _executions(scenario) shouldBe empty
-      selected.copy(question = Some(question), questionResult = Some(actual))
+      selected.copy(question = Some(question), questionresult = Some(actual))
     } else selected
+  }
+
+  "E4 CBD12-PLAN-HUMAN-409 installed remaining-purpose continuation" should afterWord(
+    "in spec:goal-phase-plan-revision, example:E4, rules:R17,R18,R19, phase:CBD12-PLAN-HUMAN-409") {
+    "issue and retain one scoped Human after accepted Submit and adopt it through the dedicated installed command" in {
+      Given("docs/spec/goal-phase-plan-revision.md R17–R19 E4: an explicitly selected dedicated installed command and normal suite flags; all answers are SPECIFICATION-OWNED")
+      sys.props.get("smworkflow.spec.installedCommand").filter(_.trim.nonEmpty)
+        .getOrElse(cancel("Select smworkflow.spec.installedCommand for installed remaining-purpose qualification"))
+      val selected = _selected("cbd12-remaining-purpose-installed", issuequestion = false, remainingpurpose = true)
+      val scenario = selected.scenario
+      When("a separate ordinary Advance consumes the accepted result without another semantic Submit")
+      val result = scenario.advance(selected.task)
+      val question = result.business[V.GoalPhaseAdvanceResult]
+      val captured = _captured(question)
+      val pending = selected.copy(question = Some(question), questionresult = Some(result))
+      Then("the real saved Human exposes remaining-purpose and the same raw proposal with unchanged counts")
+      question.kind shouldBe "Human"
+      question.sessionId shouldBe selected.initial.sessionId
+      question.human.get.choices shouldBe Vector("AdoptPlanRevision", "RejectPlanRevision", "Defer", "Cancel")
+      captured.revisionScope shouldBe Some(R.remainingPurposeScope)
+      captured.proposal shouldBe selected.proposal
+      captured.documents shouldBe None
+      GoalPhaseAcceptanceBoundary.publicEffective(captured.plan.effectiveAcceptance) shouldBe selected.initial.work.get.selectedPlan.effectiveAcceptance
+      val scope = take(R.normalizeJsonC(json(question.human.get.humanDecisionContext.get.question)))
+      scope.hcursor.downField("source").downField("planRevision").as[R.Captured] shouldBe Right(captured)
+      scenario.advance(selected.task).business[V.GoalPhaseAdvanceResult] shouldBe question
+      _progress(question)
+      _executions(scenario) shouldBe empty
+      Given("the exact scoped question and separately prepared independent fixture Human answer")
+      When("normal prepareEvidence/import and ordinary Human Submit adopt the saved target")
+      val answer = _answer(pending, "AdoptPlanRevision")
+      _accepted(pending, _answer_submit(pending, answer))
+      _answer_submit(pending, answer).exitCode should not be 0
+      val implementation = scenario.advance(selected.task).business[V.GoalPhaseAdvanceResult]
+      val work = implementation.work.get
+      Then("only a separate Advance issues the same Step under the complete saved remaining-purpose Plan")
+      implementation.sessionId shouldBe selected.initial.sessionId
+      work.kind shouldBe "ImplementStep"
+      work.stepIdentity shouldBe selected.initial.work.get.stepIdentity
+      work.selectedPlan shouldBe selected.initial.work.get.selectedPlan.copy(revision = selected.proposal.plan.revision,
+        steps = selected.initial.work.get.selectedPlan.steps.zip(selected.proposal.plan.steps).map { (prior, next) =>
+          prior.copy(purpose = next.purpose)
+        })
+      work.completed shouldBe selected.initial.work.get.completed
+      work.originalBase shouldBe selected.initial.work.get.originalBase
+      work.issues shouldBe selected.initial.work.get.issues
+      implementation.repairProgress shouldBe selected.initial.repairProgress
+      work.selectedPlan.steps.map(_.checks) shouldBe selected.initial.work.get.selectedPlan.steps.map(_.checks)
+      work.selectedPlan.steps.map(_.ownedPaths) shouldBe selected.initial.work.get.selectedPlan.steps.map(_.ownedPaths)
+      scenario.advance(selected.task).business[V.GoalPhaseAdvanceResult] shouldBe implementation
+      _executions(scenario) shouldBe empty
+
+      Given("only the fixture-owned value correction and an honest completed response for the adopted current Step")
+      Files.writeString(Path.of(scenario.host.target.root).resolve("value.txt"), "expected\n", UTF_8)
+      When("ordinary semantic Submit and Advance perform actual selected checks before independent review")
+      _submit(scenario, implementation, V.GoalPhaseWorkResult("completed", "SPECIFICATION-OWNED remaining-purpose implementation",
+        Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None), "remaining-implementation")
+      val checked = scenario.advance(selected.task)
+      val review = checked.business[V.GoalPhaseAdvanceResult]
+      Then("one real successful Test is retained and the current Step still requires independent acceptance")
+      review.work.get.kind shouldBe "ReviewStep"
+      review.work.get.selectedPlan shouldBe work.selectedPlan
+      review.work.get.completed shouldBe work.completed
+      val receipt = review.work.get.review.get.checks.head
+      receipt.exitCode shouldBe Some(0)
+      receipt.sbt.get.outcome shouldBe "succeeded"
+      receipt.stdout should include("PRODUCT_CHECK_PASSED")
+      _executions(scenario).size shouldBe 1
+      scenario.advance(selected.task).business[V.GoalPhaseAdvanceResult] shouldBe review
+
+      Given("a separately observed SPECIFICATION-OWNED independent acceptance of this exact candidate and its successful checks")
+      val reviewresult = V.GoalPhaseWorkResult("accept", "SPECIFICATION-OWNED independent remaining-purpose acceptance",
+        Vector.empty, None, None, review.work.get.issues.map(_ => V.GoalPhaseIssueReport(Vector.empty)), None, None, None, None, None,
+        dependencyValidation = None, diagnosticRepair = None)
+      val reviewreference = _reference("remaining-review")
+      val reviewexecution = V.WorkflowExecutionEvidence(Vector(reviewreference), Some("specification-independent-reviewer"), None, None)
+      When("normal review preparation/import and semantic Submit retain the independent review")
+      val prepared = scenario.prepareHostInput("prepareEvidence", V.WorkflowEvidencePreparationInput("GoalPhase", "review",
+        checked.invocation.stdout.toUri.toASCIIString,
+        _save(scenario, "remaining-review-result", json(reviewresult.toRecord()).noSpaces),
+        _save(scenario, "remaining-review-reference", json(reviewreference.toRecord()).noSpaces),
+        _save(scenario, "remaining-review-execution", json(reviewexecution.toRecord()).noSpaces),
+        "normal-development-host", Instant.now().minusSeconds(60).toString, "entity:smworkflow.cli.host_evidence", None).toRecord())
+      prepared.exitCode shouldBe 0
+      scenario.selectPreparedImport(prepared)
+      scenario.call("command", review.submitOperation.get, Vector("--sessionId", review.submitSessionId.get,
+        "--result", json(reviewresult.toRecord()).noSpaces, "--resultReference", json(reviewreference.toRecord()).noSpaces,
+        "--executionEvidence", json(reviewexecution.toRecord()).noSpaces)).business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+      val waiting = scenario.advance(selected.task)
+      val authority = waiting.business[V.GoalPhaseAdvanceResult]
+      Then("actual Step closure waits for its independent authority without rerunning checks")
+      authority.authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
+      _executions(scenario).size shouldBe 1
+
+      Given("the exact pending Step closure and separately supplied specification-owned source authority")
+      When("normal authority preparation/import permits the existing native scoped Step commit")
+      val permission = scenario.prepareHostInput("prepareAuthority", V.WorkflowAuthorityPreparationInput(
+        waiting.invocation.stdout.toUri.toASCIIString,
+        _save(scenario, "remaining-step-authority", json(_reference("remaining-step-authority").toRecord()).noSpaces),
+        "participant", "normal-development-host", Instant.now().minusSeconds(60).toString,
+        "entity:smworkflow.cli.host_evidence").toRecord())
+      permission.exitCode shouldBe 0
+      scenario.selectPreparedImport(permission)
+      val next = scenario.advance(selected.task).business[V.GoalPhaseAdvanceResult]
+      Then("the same Session issues only the next unaccepted Step after a real commit with preserved base and counts")
+      next.sessionId shouldBe selected.initial.sessionId
+      next.work.get.kind shouldBe "ImplementStep"
+      next.work.get.stepIdentity shouldBe Some("step-2")
+      next.work.get.selectedPlan shouldBe work.selectedPlan
+      next.work.get.originalBase shouldBe work.originalBase
+      next.work.get.completed.size shouldBe work.completed.size + 1
+      next.work.get.completed.head.step shouldBe "step-1"
+      next.work.get.completed.head.commit.identity shouldBe scenario.candidateHead
+      next.work.get.completed.head.commit.parent shouldBe work.originalBase.head
+      next.repairProgress shouldBe implementation.repairProgress
+      scenario.advance(selected.task).business[V.GoalPhaseAdvanceResult] shouldBe next
+      _executions(scenario).size shouldBe 1
+      scenario.invocations.count(_.argv.exists(_.endsWith(".submitGoalPhaseWorkResult"))) shouldBe 3
+    }
   }
   private def _captured(question: V.GoalPhaseAdvanceResult): R.Captured = {
     val record = question.human.get.planRevision.get
@@ -168,7 +298,7 @@ final class NativeGoalPlanRevisionCliSpec extends AnyWordSpec with Matchers with
     val reference = _reference("answer-" + choice)
     val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("specification-owned-human-answer"), None, None)
     val requesturi = _save(scenario, "actual-question-" + choice,
-      Files.readString(selected.questionResult.get.invocation.stdout, UTF_8))
+      Files.readString(selected.questionresult.get.invocation.stdout, UTF_8))
     val resulturi = _save(scenario, "answer-" + choice, json(answer.toRecord()).noSpaces)
     val referenceuri = _save(scenario, "reference-" + choice, json(reference.toRecord()).noSpaces)
     val executionuri = _save(scenario, "execution-" + choice, json(execution.toRecord()).noSpaces)
@@ -498,7 +628,7 @@ final class NativeGoalPlanRevisionCliSpec extends AnyWordSpec with Matchers with
         selected.scenario.advance(selected.task).business[V.GoalPhaseAdvanceResult] shouldBe selected.question.get
         _executions(selected.scenario) shouldBe empty
       }
-      val unknown = _selected("goal-plan-revision-unknown-check", check = "unknown-configured-check", issueQuestion = false)
+      val unknown = _selected("goal-plan-revision-unknown-check", check = "unknown-configured-check", issuequestion = false)
       Given("an accepted semantic proposal whose literal check has no declared host-policy binding")
       When("ordinary Advance attempts to create its first Human question")
       val refused = unknown.scenario.advance(unknown.task)
