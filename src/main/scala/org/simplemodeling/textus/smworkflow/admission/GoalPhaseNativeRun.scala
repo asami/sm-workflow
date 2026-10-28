@@ -280,6 +280,7 @@ private[smworkflow] object GoalPhaseNativeRun {
             GoalPhaseFailedPhaseRepairAdoption.describeOperation, GoalPhaseFailedPhaseRepairAdoption.adoptionOperation,
             GoalPhaseValidationRepairAdoption.describeOperation, GoalPhaseValidationRepairAdoption.adoptionOperation,
             GoalPhaseCompletionPolicyAdoption.describeOperation, GoalPhaseCompletionPolicyAdoption.adoptionOperation,
+            GoalPhaseStepReviewRequest.describeOperation, GoalPhaseStepReviewRequest.requestOperation,
             GoalPhaseRepairPolicyAdoption.describeOperation, GoalPhaseRepairPolicyAdoption.adoptionOperation,
             GoalPhaseOrderedHumanDecision.completionOperation.operation,
             GoalPhaseNativeFindingRecording.completionOperation.operation)(core.action.request.operation)) ||

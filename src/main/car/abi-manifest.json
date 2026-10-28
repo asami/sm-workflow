@@ -823,6 +823,20 @@
           "kind": "COMMAND",
           "input": "RepositorySyncPurposeRequest",
           "output": "RepositorySyncConflictSubmissionResult"
+        },
+        {
+          "service": "GoalPhaseService",
+          "name": "describeGoalPhaseStepReview",
+          "kind": "COMMAND",
+          "input": "GoalPhaseStepReviewDescriptionInput",
+          "output": "GoalPhaseStepReviewDescriptionResult"
+        },
+        {
+          "service": "GoalPhaseService",
+          "name": "requestGoalPhaseStepReview",
+          "kind": "COMMAND",
+          "input": "GoalPhaseStepReviewRequestInput",
+          "output": "GoalPhaseStepReviewRequestResult"
         }
       ],
       "types": [
@@ -7513,6 +7527,108 @@
               "type": "string",
               "multiplicity": "?",
               "required": false
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseStepReviewDescriptionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseStepReviewDescriptionResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "record",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "requestOperation",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseStepReviewRequestInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "record",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reason",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseStepReviewRequestResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "accepted",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
             }
           ]
         }

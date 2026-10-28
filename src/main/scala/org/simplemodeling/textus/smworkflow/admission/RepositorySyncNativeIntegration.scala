@@ -9,7 +9,7 @@ import RepositorySyncNativeProgressStore.*
 /** Selected native intent, actual Git result and later uncertain observation.
   * A conflict is retained, never auto-resolved or relabeled as an integration.
   * @since   Oct.  6, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeIntegration {
@@ -22,7 +22,8 @@ private[smworkflow] object RepositorySyncNativeIntegration {
       case Some(value) => Consequence.success(value)
       case None if hygiene.nonEmpty => finishHygieneC(store, hygiene.get)
       case None => for {
-        before <- Git.observeC(store.core)
+        retained <- store.loadC("integration-intent")
+        before <- retained.map(value => Consequence.success(value.payload.before)).getOrElse(Git.observeC(store.core))
         _ <- store.scopeC(before)
         _ <- if (before.dirty.isEmpty && before.trackingTip.nonEmpty &&
             before.counts.nonEmpty && before.mergeBase.nonEmpty) Consequence.unit
@@ -33,9 +34,14 @@ private[smworkflow] object RepositorySyncNativeIntegration {
           case Git.Relation.RemoteAhead => "fast-forward"
           case Git.Relation.Diverged => "merge"
         }
-        intent <- store.saveC("integration-intent", "integration-started", preserved.record,
-          store.payload("Integrating", before).copy(method = Some(method)))
-        effected <- if (method == "equal" || method == "local-ahead") Git.inspectC(store.core)
+        _ <- if (retained.forall(_.payload.method.contains(method))) Consequence.unit
+          else invalid("retained integration intent differs from its fetched relation")
+        intent <- retained.map(Consequence.success).getOrElse(store.saveC("integration-intent", "integration-started", preserved.record,
+          store.payload("Integrating", before).copy(method = Some(method))))
+        _ <- if (retained.isEmpty) store.acknowledgeC("integration-intent") else Consequence.unit
+        // Re-entry observes the original intent. Even an apparently unchanged
+        // repository cannot prove that a live/unknown Git operation never ran.
+        effected <- if (retained.nonEmpty || method == "equal" || method == "local-ahead") Git.inspectC(store.core)
           else {
             GitObjectId.parseC(before.trackingTip.get).flatMap { tip =>
               val effect = if (method == "fast-forward") GitOperation.FastForward(tip)

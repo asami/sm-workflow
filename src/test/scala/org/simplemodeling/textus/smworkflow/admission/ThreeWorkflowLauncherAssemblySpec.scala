@@ -1,7 +1,8 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.component.{ComponentCreate, ComponentDescriptor, ComponentOrigin}
+import java.nio.file.{Files, Path}
+import org.goldenport.cncf.component.{ComponentCreate, ComponentDescriptor, ComponentInstanceMetadata, ComponentOrigin}
 import org.goldenport.cncf.config.{ComponentInitializationParameters, ComponentParameterKey}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.cli.RunMode
@@ -13,6 +14,9 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import org.goldenport.protocol.{Property, Request}
+import org.simplemodeling.textus.smworkflow.value as V
+import SplitPhaseExplicitPartitionFixture.take
 
 /**
  * @since   Oct.  6, 2026
@@ -32,6 +36,54 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
       version = Some("0.1.0"), schemaVersion = Some(3), componentId = Some(component), config = Map(limitKey.name -> "31"))))
 
   "Native three-workflow launcher composition" should {
+    for (route <- Vector("launcher", "runtime-parameters")) {
+      s"admit the full explicit legacy inventory through the real $route factory without granting purpose completion" in
+          new ThreeWorkflowManagedRepositoryFixture {
+        val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/launcher-purpose-publication").toAbsolutePath), route + "-")
+        _with_runtime_(root, "Equal") { (owner, component, actor, prepare) =>
+          val input = ThreeWorkflowNormalHostFixture.definition(root).repository.input
+          val selection = _repository_selection_(input, "factory-purpose-" + route, "factory-purpose-" + route)
+          prepare(setup => setup.setupC(_setup_commands_(root, "Equal").size)
+            .flatMap(_ => _prepare_input_(setup, input, selection, root)))
+          Given("an explicit legacy runtime definition with ordinary storage and an admitted Start selection")
+          val config = take(io.circe.parser.parse(Files.readString(root.resolve(".textus/config.json")))
+            .fold(error => Consequence.stateConflict(error.message), json =>
+              json.as[Map[String, String]].fold(error => Consequence.stateConflict(error.message), Consequence.success)))
+          val id = SmWorkflowComponent.componentId
+          val creation = ComponentCreate(owner, ComponentOrigin.Builtin, Vector(ComponentDescriptor(
+            name = Some(id.name), componentName = Some(id.name), version = Some("0.1.0-SNAPSHOT"),
+            schemaVersion = Some(3), componentId = Some(id), config = config)))
+            .withInstanceMetadata(ComponentInstanceMetadata(id.name, "repository-spec", componentId = Some(id)))
+          val factory = if (route == "launcher") ThreeWorkflowLauncherAssembly.factory(
+            ThreeWorkflowRuntimeParameters.declarations, Vector.empty, ThreeWorkflowRuntimeParameters).primaryFactory
+            else ThreeWorkflowRuntimeParameters.factory.primaryFactory
+          When("the actual production factory admits that complete configured component")
+          val admitted = take(factory.createPrimaryC(creation))
+          val host = take(ThreeWorkflowRuntimeParameters.decodeC(creation, admitted.initializationParameters, actor))
+          Then("legacy routing stays selected while every advertised operation is actually bound")
+          host.goal.repositoryClosure.get.declaration.runtimeCleanSync shouldBe false
+          admitted.mcpReadyOperations shouldBe ThreeWorkflowLauncherAssembly.publishedMcpOperations
+          val bound = admitted.protocol.services.services.toVector.flatMap(service =>
+            service.operations.operations.toVector.map(operation => service.name + "." + operation.name)).toSet
+          ThreeWorkflowLauncherAssembly.publishedMcpOperations.subsetOf(bound) shouldBe true
+          bound should contain("RepositorySyncService.submitRepositoryPurposeResult")
+          take(owner.upsertC(Vector(admitted)))
+          def call(operation: String, properties: List[Property]) = owner.executeOperationResponseInContext(
+            Request.of(component = component.name, service = "RepositorySyncService", operation = operation,
+              properties = properties), actor)
+          val session = read_value[V.RepositorySyncStartResult](take(call("startRepositorySync",
+            NativeWorkflowOperationInputFixture.repository(input)))).sessionId
+          When("the published purpose operation is invoked before any purpose WorkOrder exists")
+          val refused = call("submitRepositoryPurposeResult", List(Property("sessionId", session, None),
+            Property("result", V.RepositorySyncPurposeResult("decision-needed", "No issued purpose work", Vector.empty, Vector.empty), None),
+            Property("resultReference", V.WorkflowArtifactReference("specification-unissued-purpose", "1"), None)))
+          Then("the real native result boundary refuses the unissued completion")
+          refused.isSuccess shouldBe false
+          refused.toString should include("result session has no pending assignment")
+        }
+      }
+    }
+
     "publish only actual generated native operation identities rather than guessed skill-stage names" in {
       Given("the six generated CML provided-operation declarations and generated Journal, Evidence and completion-record services")
       val generated = Vector(domain.statemachine.providedapi.GoalPhaseWorkflowStateMachineProvidedApi1.workflow,

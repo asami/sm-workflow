@@ -1,6 +1,6 @@
 # Phase 6.9 acceptance checklist
 
-Status: pending integrated acceptance. S1 is accepted with three installed clean observations; S2 is accepted with its five behavioral cases passed; S3 source/specification is authored with runtime checks outstanding.
+Status: S1–S4 accepted in the issued native S5 context; S5 source/specification authored. Fresh integrated publication, installed qualification, independent review and Phase acceptance remain pending.
 Owner: [Phase 6.9](phase-6.9.md).
 Contract: [runtime orchestration](../spec/repository-sync-runtime-orchestration.md).
 
@@ -61,3 +61,9 @@ under the actual Human258-approved dependency continuation. See the
 [capability boundary](../notes/phase-6.9-s4-capability-gap.md). Native checks,
 independent review, publication and installed qualification remain unobserved by
 the implementation agent. All phase acceptance flags remain unchanged.
+
+S5 source integration, completed-effect continuation, exact host selector and
+English Phase 6.10/7 handoff are recorded in the
+[delivery note](../notes/phase-6.9-s5-delivery-and-handoff.md). These source edits
+and historical evidence do not establish fresh installed qualification or Phase
+acceptance. All checklist flags remain unchanged.

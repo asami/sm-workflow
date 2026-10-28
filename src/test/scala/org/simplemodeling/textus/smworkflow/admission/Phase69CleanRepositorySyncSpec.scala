@@ -1,8 +1,6 @@
 package org.simplemodeling.textus.smworkflow.admission
 
-import io.circe.Json
 import java.nio.file.{Files, Path}
-import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{InstanceIdentity, Lifecycle}
 import org.goldenport.protocol.{Property, Request}
 import org.scalatest.GivenWhenThen
@@ -15,31 +13,13 @@ import SplitPhaseExplicitPartitionFixture.take
   * author qualification; they do not attest an installed deployment or consent
   * from a live user. The product route uses CNCF default Git, no gitPrograms.
   * @since   Oct. 28, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class Phase69CleanRepositorySyncSpec extends AnyWordSpec with Matchers with GivenWhenThen
-    with ThreeWorkflowManagedRepositoryFixture {
-  override protected def standard_runtime = true
+    with Phase69ConfiguredRepositoryFixture {
 
-  override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
-    val descriptor = take(GenericSubsystemDescriptor.loadComponentArchive(Path.of("src/main/car").toAbsolutePath))
-    val template = io.circe.parser.parse(descriptor.config("textus.subsystem.process-execution.plan")).toOption.get
-    val values = Map("repository.root" -> root.resolve("repository").toString, "git.branch" -> "main",
-      "git.remote" -> "origin", "git.remote-branch" -> "main", "git.endpoint" -> root.resolve("upstream.git").toString,
-      "git.user-name" -> "Fixture", "git.user-email" -> "fixture@example.invalid",
-      "environment.path" -> "/usr/bin:/bin", "environment.java-home" -> "", "environment.ssh-auth-sock" -> "")
-    def expand(value: Json): Json = value.mapString(text => values.foldLeft(text) { case (prior, (key, value)) =>
-      prior.replace("${" + key + "}", value) }).mapArray(_.map(expand)).mapObject(_.mapValues(expand))
-    // With no SBT binding an accidental product check cannot pass. The product
-    // Git boundary resolves its installed default executable once per target.
-    val removedcapabilities = template.hcursor.get[Vector[Json]]("sbtPrograms").toOption.get
-      .map(_.hcursor.get[Json]("capability").toOption.get).toSet
-    expand(template).mapObject(fields => fields.add("sbtPrograms", Json.arr()).add("grants",
-      fields("grants").get.mapArray(_.map(_.mapObject(grant => grant.add("capabilities",
-        grant("capabilities").get.mapArray(_.filterNot(removedcapabilities))))))))
-  }
 
   "Phase 6.9 configured clean sync" should {
     for (scenario <- Vector("Equal", "LocalAhead", "RemoteAhead")) {

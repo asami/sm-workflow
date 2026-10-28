@@ -151,3 +151,41 @@ manufactures independent review or waives unresolved merge interaction. Failed
 and unknown native checks retain their existing FIX and no-blind-replay routes.
 See the [S3 source/evidence note](../notes/phase-6.9-s3-program-impact.md) for
 configuration, authored specifications and remaining qualification limits.
+
+## S5 completed effects and same-Session delivery
+
+Integration now loads its original `integration-intent` before any Git operation.
+A fresh intent may perform its selected fast-forward/merge once. Re-entry inspects
+the saved parents/relation against actual native Git facts; an unestablished
+outcome stays UNKNOWN even when the worktree appears unchanged. Existing commit,
+push and final-fetch intent observation retain their original no-replay owners.
+A failed push or later remote movement cannot discard accepted local commits or
+convert their result into remote success. A retained native terminal is collected
+from its actual saved convergence and closure, without fresh Git, SBT or review.
+
+The exact `installed-sync-route` source selector is
+`org.simplemodeling.textus.smworkflow.admission.Phase69InstalledRepositorySyncSpec`.
+It composes controlled normal clean/dirty Operations, interrupted integration
+collection, strict public validation-adoption contracts and conditional precommit
+Step review. Source qualification is distinct from fresh installed CLI observation.
+The publication owner must publish the integrated product, activate the returned
+image through the normal updater, load its exact packaged skills and retain fresh
+clean/dirty CLI results. No source test name or historical PASS proves that delivery.
+
+Public adoption remains bounded by each existing owner: validation continuation,
+GoalPhase remaining Plan/dependency scope, closure and repair-policy continuation.
+Preserve the actual complete target, Session/Plan/base, accepted prefix, failures,
+UNKNOWN history and counters. An old pending Human question uses its applicable
+public owner and actual independent direction; neither a skill nor installation
+supersedes it silently. The
+[precommit Step review](goal-phase-precommit-step-review.md) route carries the
+qualified operational repair forward without treating an external report as
+independent native review.
+
+Native progress and validation receipts retain actual relation, selected effects,
+purpose and check/reuse reasons. Existing CommonEvidence and Journal producers
+project their real sources; disabled/unavailable Journal is not successful
+recording, and structural admission is not AI review. No periodic checks or
+additional AI are introduced to obtain a display/record. See the
+[S5 handoff](../notes/phase-6.9-s5-delivery-and-handoff.md) for actual observations
+and remaining qualification work.

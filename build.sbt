@@ -149,6 +149,7 @@ lazy val root = project
         "docs/spec/standalone-review-fix-runtime.md",
         "docs/spec/goal-phase-acceptance-boundary.md",
         "docs/spec/goal-phase-purpose-repair.md",
+        "docs/spec/goal-phase-precommit-step-review.md",
         "docs/spec/goal-phase-release-repair-continuation.md",
         "docs/spec/goal-phase-dependency-scope.md",
         "docs/spec/goal-phase-dependency-source-revision.md",

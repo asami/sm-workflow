@@ -61,6 +61,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     "GoalPhaseService.describeGoalPhaseFailedPhaseRepair", "GoalPhaseService.adoptGoalPhaseFailedPhaseRepair",
     "GoalPhaseService.describeGoalPhaseValidationRepair", "GoalPhaseService.adoptGoalPhaseValidationRepair",
     "GoalPhaseService.describeGoalPhaseCompletionPolicy", "GoalPhaseService.adoptGoalPhaseCompletionPolicy",
+    "GoalPhaseService.describeGoalPhaseStepReview", "GoalPhaseService.requestGoalPhaseStepReview",
     "SplitPhaseService.startSplitPhase", "SplitPhaseService.advanceSplitPhase", "SplitPhaseService.submitPartitionSemanticResult",
     "SplitPhaseService.submitHandoffScopeResult", "SplitPhaseService.submitSplitHumanDirection", "SplitPhaseService.submitReasoningResult",
     "RepositorySyncService.startRepositorySync", "RepositorySyncService.advanceRepositorySync",

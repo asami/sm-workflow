@@ -27,7 +27,7 @@ import org.goldenport.cncf.validation.ValidationDiscoveryV1 as D
   * plan check identities select host bindings, never commands from AI. Intent
   * commits precede each external effect. Unknown results are not replayed.
   * @since   Oct.  6, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeValidation {
@@ -489,7 +489,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
         validated <- observedStateC(inspected, payload, store.reference("validation").identity, store.candidate.payload.changedPaths)
         target = validated.stage.toString
         event = (if (store.whole) "phase-" else "") + (outcome match {
-          case "passed" if assessment.exists(_.branch == "admit") => "checks-admitted"
+          case "passed" if assessment.exists(_.branch == "admit") && validated.stage == O.Stage.Closing => "checks-admitted"
           case "passed" if assessment.exists(_.branch == "triage") => "checks-triage-required"
           case "passed" if assessment.exists(_.branch == "decision") => "checks-judgment-required"
           case "passed" => "checks-passed"
@@ -718,7 +718,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
           from.currentProgression.contains(ProgressionReference("phase." + validationStage))) Consequence.unit
         else F.invalid("check intent/result has no actual unsuspended Validation frontier")
       target = payload.outcome.map {
-        case "passed" if payload.assessment.exists(_.branch == "admit") => "Closing"
+        case "passed" if payload.assessment.exists(_.branch == "admit") && !controller.stepReviewRequired => "Closing"
         case "passed" if payload.assessment.exists(_.branch == "triage") => "Triage"
         case "passed" if payload.assessment.exists(_.branch == "decision") => "Decision"
         case "passed" => reviewStage

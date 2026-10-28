@@ -1149,6 +1149,59 @@ OperationResult
 | outcome | string | 1 |
 | message | string | 1 |
 
+## GoalPhaseStepReviewDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+## GoalPhaseStepReviewDescriptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| target | record | 1 |
+| requestOperation | string | 1 |
+
+## GoalPhaseStepReviewRequestInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | record | 1 |
+| reason | string | 1 |
+
+## GoalPhaseStepReviewRequestResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+
 ## GoalPhaseCompletionPolicyDescriptionInput
 
 - input-kind :: COMMAND
@@ -3077,6 +3130,14 @@ operation = GoalPhaseService.describeGoalPhaseCompletionPolicy
 
 operation = GoalPhaseService.adoptGoalPhaseCompletionPolicy
 
+#### describeGoalPhaseStepReview
+
+operation = GoalPhaseService.describeGoalPhaseStepReview
+
+#### requestGoalPhaseStepReview
+
+operation = GoalPhaseService.requestGoalPhaseStepReview
+
 #### describeGoalPhaseRepairPolicy
 
 operation = GoalPhaseService.describeGoalPhaseRepairPolicy
@@ -3359,6 +3420,11 @@ to = Decision
 on = repair-decision-needed
 
 #### Closing
+
+##### TRANSITION
+
+to = Review
+on = step-review-requested
 
 ##### TRANSITION
 
@@ -6987,6 +7053,62 @@ GoalPhaseRepairPolicyAdoptionInput
 
 GoalPhaseRepairPolicyAdoptionResult
 
+#### describeGoalPhaseStepReview
+
+##### DESCRIPTION
+
+Passively describe the exact active unsuspended selected Step at conditional Closing before any closure attempt. Require its complete retained passed checks, candidate, conditional admission, unchanged candidate and dependency, and no same-generation ReviewStep. Return the exact server-derived target for requestGoalPhaseStepReview. Description appends nothing and issues no work or authority.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseStepReviewDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseStepReviewDescriptionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseStepReviewDescriptionResult
+
+#### requestGoalPhaseStepReview
+
+##### DESCRIPTION
+
+Request independent native review of the exact described conditional Step before any closure attempt. The nonempty reason is well-formed UTF-8 of at most 16 KiB and is retained only as review purpose, never a command or review verdict. Append one source-bound Closing to Review transition; ordinary Advance issues ReviewStep on the same generation and successful checks. No repair is charged until an actual independent repair verdict. Preserve Plan, base, prefix, candidate, checks, repair progress and history. Stale, crossed, duplicate, suspended, already reviewed, committed or unknown-effect targets refuse. A requested Step retains independent review through repair and fresh checks until its ordinary commit. This operation grants no commit, process or remote authority and imports no external report as an accepted review.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseStepReviewRequestInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseStepReviewRequestInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseStepReviewRequestResult
+
 #### describeGoalPhaseCompletionPolicy
 
 ##### DESCRIPTION
@@ -7406,7 +7528,7 @@ RepositorySyncHumanConflictAnswer
 
 ### DESCRIPTION
 
-Own repository convergence through five normal Operations: Start, advance and assigned conflict/review/Human completion. Session context resolves selected native state and pending work. Workflow owns fetch, preservation, integration, validation, commit, push and final observation through configured fixed managed Git/check capabilities, delegating only requested semantic results or Human answers. Other declarations are not additional normal public stages. Host scope, effect authority and independent evidence remain with their consuming boundaries. A WAIT or accepted review without the actual final repository outcome is not convergence.
+Own configured repository synchronization through Start, Advance and the actual assigned purpose/conflict/review/repair/Human completion. Repository identity plus actual sync intent resolves the configured tracking target and default Git. Equal, push-only and fast-forward add no product tests or AI solely for sync. Dirty purpose acceptance requires normal host policy and fixed candidate workspaces; missing configuration is an explicit preparation gap. Session context resolves retained work, actual effects and completed results without replay. Workflow owns fetch, preservation, integration, impact-selected validation, commit, non-force push and final observation. Host scope, effect authority and independent evidence remain with their consuming boundaries. Wait and accepted semantic results do not establish convergence.
 
 ### OPERATION
 
@@ -7414,7 +7536,7 @@ Own repository convergence through five normal Operations: Start, advance and as
 
 ##### DESCRIPTION
 
-Start the declared repositoryIdentity, localBranch, trackingRemote, trackingBranch, remoteEndpointIdentity and syncMode. Resolve actual host business entry/participant directly, allocate sessionId when absent and return the canonical ID with the start acknowledgement. Start does not fetch/push or grant command/remote authority; owning Advance progresses.
+Start with configured repositoryIdentity and actual syncMode intent. The normal runtime resolves localBranch, trackingRemote, trackingBranch and remoteEndpointIdentity from its configured repository; supplied complete targets must match. Resolve the actual participant, allocate sessionId when absent and return its canonical ID. Existing admitted sync intent covers only its configured purpose and effects. Start performs no fetch or push; owning Advance progresses. Missing or ambiguous configuration returns its actual diagnostic.
 
 ##### TYPE
 

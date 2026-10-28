@@ -1,6 +1,6 @@
 # Phase 6.9: Runtime-owned RepositorySync and Purpose-based Commits
 
-Status: S1 accepted with three installed clean observations; S2 accepted with its five behavioral cases passed; S3 source/specification authored, runtime checks pending. Phase acceptance remains pending.
+Status: S1–S4 accepted in the issued native S5 context; S5 source/specification authored. Fresh integrated publication, installed qualification, independent review and Phase acceptance remain pending.
 Date: 2026-10-27
 Owner: sm-workflow development
 Sequence: Phase 6.7 -> Phase 6.8 -> Phase 6.9 -> Phase 6.10 -> Phase 7
@@ -63,3 +63,9 @@ impact selection and integrated qualification retain their later selected Steps.
 
 S3 authored impact selection, native evidence applicability and limitations are recorded in the
 [program impact note](../notes/phase-6.9-s3-program-impact.md). All phase acceptance flags remain unchanged.
+
+S5 source integration, completed-effect continuation, exact host selector and
+English Phase 6.10/7 handoff are recorded in the
+[delivery note](../notes/phase-6.9-s5-delivery-and-handoff.md). These source edits
+and historical evidence do not establish fresh installed qualification or Phase
+acceptance. All checklist flags remain unchanged.
