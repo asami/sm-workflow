@@ -22,12 +22,12 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Pure codec and independently supplied fixture evidence; no real invocation or Human proof.
   * @since   Oct. 22, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
-final class GoalPhaseWholePhaseCandidateRecoverySpec extends AnyWordSpec with Matchers with GivenWhenThen {
+final class GoalPhaseWholePhaseCandidateRecoverySpec extends AnyWordSpec with NativeGoalSourceHistoryCliFixture {
   private val _base = O.Snapshot("a" * 40, "b" * 40)
   private val _candidate = O.Snapshot(_base.head, "c" * 40)
   private val _commit = O.Commit("d" * 40, _candidate.head, _candidate.tree)
@@ -68,6 +68,225 @@ final class GoalPhaseWholePhaseCandidateRecoverySpec extends AnyWordSpec with Ma
     rationale: String = "Fresh fixture Human answer"): Json =
     take(W.bindingC("component", t, choice, rationale, "participant",
       ContextReference(_reference.identity, _reference.revision), ended))
+
+  private def _release_target: W.Target = {
+    val original = _target
+    val paths = Vector(sourcePath, "src/main/scala/Another.scala")
+    val plan = original.controller.plan.copy(steps = original.controller.plan.steps.map(_.copy(ownedPaths = paths)))
+    val controller = original.controller.copy(plan = plan, generation = 1, repairs = 1, ordinaryRepairs = 1,
+      repairDirective = Some(O.RepairDirective("Actual first failed Phase Test", Vector("Selected value differs"))))
+    val inspection = original.inspection.copy(selectedPaths = paths)
+    def _identity_(key: String) = original.sessionId + ":ordered-candidate:20:" + key
+    val history = paths.zipWithIndex.map { (path, index) =>
+      val intent = GoalPhaseNativeSourceHistory.Payload("20", inspection.step, path, "goldenport",
+        "native-cli-external-goldenport-v1", "2026-10-28", true, None)
+      R.HistoryPair(index, _identity_("source-history-intent-" + index), "1", (22 + index * 2).toString,
+        _identity_("source-history-result-" + index), "1", (23 + index * 2).toString, intent,
+        intent.copy(outcome = Some(if (index == 0) "updated" else "unchanged")))
+    }
+    val stages = paths.indices.map(index => R.StagePair(index, _identity_("stage-intent-" + index), "1",
+      (26 + index * 2).toString, _identity_("stage-result-" + index), "1", (27 + index * 2).toString,
+      inspection.copy(stagedPaths = paths.take(index)), inspection.copy(stagedPaths = paths.take(index + 1)))).toVector
+    original.copy(controller = controller, candidatePaths = paths, inspection = inspection,
+      frontierRevision = "29", completedCandidates = original.completedCandidates.map(_.copy(
+        selectedPaths = Vector(sourcePath), stagedPaths = Vector(sourcePath), changedPaths = Vector(sourcePath))),
+      stagingPrefix = stages, releasePreparation = Some(W.ReleasePreparation(
+        WorkflowSourceHistoryRule.Selection("goldenport", Some(take(WorkflowSourceHistoryRule.decodeC(enabledSettings(ruleKey))))),
+        history, CommitHygiene.autoFix)), repository = original.repository.copy(indexTree = "e" * 40,
+        dirty = paths.map(path => K.Dirty("M", " ", path, None))))
+  }
+
+  private def _directory_target(unselected: Boolean = false, inventory: Boolean = false): W.Target = {
+    val original = _release_target
+    val owners = Vector("src/main/scala", "build.sbt") ++ Option.when(unselected)("src/test/scala")
+    val literals = Option.when(inventory)("support/Allowed.scala").toVector
+    val plan = original.controller.plan.copy(steps = original.controller.plan.steps.map(_.copy(ownedPaths = owners)),
+      phaseRepairInventory = literals)
+    val selected = Vector("src/main/scala", "build.sbt") ++ literals
+    val inspection = original.inspection.copy(selectedPaths = selected)
+    val historysize = original.releasePreparation.get.historyPrefix.size
+    val source = original.sourceRevision.toLong
+    def _identity_(key: String) = original.sessionId + ":ordered-candidate:" + source + ":" + key
+    val stages = selected.indices.map { index =>
+      val revision = source + 2 + historysize * 2 + index * 2
+      R.StagePair(index, _identity_("stage-intent-" + index), "1", revision.toString,
+        _identity_("stage-result-" + index), "1", (revision + 1).toString,
+        inspection.copy(stagedPaths = selected.take(index)), inspection.copy(stagedPaths = selected.take(index + 1)))
+    }.toVector
+    original.copy(controller = original.controller.copy(plan = plan), candidatePaths = plan.phaseOwnedPaths,
+      inspection = inspection, stagingPrefix = stages, frontierRevision = (source + 1 + 2 * (historysize + selected.size)).toString,
+      repository = original.repository.copy(dirty = (original.repository.dirty :+ K.Dirty("M", " ", "build.sbt", None)) ++
+        literals.map(path => K.Dirty("M", " ", path, None)) :+
+        K.Dirty(" ", "M", "src/main/catalog/car/org/simplemodeling/textus/textus-sm-workflow.yaml", None)))
+  }
+
+  "Release recovery selected directory ownership" should {
+    "round trip exact directory and build selectors while admitting their physical paths and preserving an unrelated unstaged catalog" in {
+      Given("P69 directory-owner correction: two retained physical history paths, exact directory/build selectors and an unrelated unstaged catalog")
+      val target = _directory_target()
+      val physical = Vector(sourcePath, "src/main/scala/Another.scala", "build.sbt")
+      val exact = _release_target
+      val legacy = _target
+      val managementpath = "docs/management.md"
+      val managementplan = legacy.controller.plan.copy(steps = legacy.controller.plan.steps.map(step =>
+        step.copy(ownedPaths = step.ownedPaths :+ managementpath)))
+      val managementinspection = legacy.inspection.copy(selectedPaths = Vector(managementpath))
+      val managementstage = R.StagePair(0, "whole-session:ordered-candidate:20:stage-intent-0", "1", "22",
+        "whole-session:ordered-candidate:20:stage-result-0", "1", "23", managementinspection,
+        managementinspection.copy(stagedPaths = Vector(managementpath)))
+      val managed = legacy.copy(controller = legacy.controller.copy(plan = managementplan), frontierRevision = "23",
+        candidatePaths = managementplan.phaseOwnedPaths, managementPaths = Vector(managementpath),
+        recordingPaths = Vector(managementpath), inspection = managementinspection, stagingPrefix = Vector(managementstage),
+        repository = legacy.repository.copy(indexTree = "e" * 40, dirty = Vector(K.Dirty("M", " ", managementpath, None))))
+      When("the canonical target and actual physical pending paths are admitted")
+      val decoded = W.decodeTarget(target.asJson)
+      val pending = W.pendingPathsOwned(target, physical)
+      Then("directory coverage uses slash boundaries without changing prefix identities or unstaged evidence")
+      decoded shouldBe Right(target)
+      take(W.targetC(W.targetRecord(target))) shouldBe target
+      W.validTarget(target) shouldBe true
+      W.validRepository(target, target.repository) shouldBe true
+      target.inspection.selectedPaths shouldBe Vector("src/main/scala", "build.sbt")
+      target.releasePreparation.get.historyPrefix shouldBe exact.releasePreparation.get.historyPrefix
+      pending shouldBe true
+      W.pendingPathsOwned(exact, exact.inspection.selectedPaths) shouldBe true
+      W.pendingPathsOwned(legacy, Vector.empty) shouldBe true
+      W.pendingPathsOwned(legacy, Vector("build.sbt")) shouldBe false
+      W.decodeTarget(managed.asJson) shouldBe Right(managed)
+      W.pendingPathsOwned(managed, Vector(managementpath)) shouldBe true
+      W.pendingPathsOwned(managed, Vector(managementpath + "/child.md")) shouldBe false
+    }
+
+    "refuse prefix siblings unselected owners unrelated staged paths and duplicate pending paths" in {
+      Given("P69 directory-owner correction: the Plan also owns a directory absent from the actual selection")
+      val target = _directory_target(unselected = true)
+      val cases = Vector(Vector("src/main/scala-extra/A.scala"), Vector("src/main/other/A.scala"),
+        Vector("src/test/scala/Unselected.scala"),
+        Vector("src/main/catalog/car/org/simplemodeling/textus/textus-sm-workflow.yaml"),
+        Vector(sourcePath, sourcePath))
+      When("physical pending paths are compared with both Plan ownership and the exact staged selection")
+      val admitted = cases.map(W.pendingPathsOwned(target, _))
+      Then("global ownership alone cannot replace actual selection and duplicate or null vectors refuse")
+      W.validTarget(target) shouldBe true
+      target.controller.plan.phasePathsOwned(Vector("src/test/scala/Unselected.scala")) shouldBe true
+      admitted.foreach(_ shouldBe false)
+      W.pendingPathsOwned(target, null) shouldBe false
+    }
+
+    "retain literal inventory ownership without extending it to descendants" in {
+      Given("P69 directory-owner correction: a selected exact inventory file alongside ordinary directory owners")
+      val target = _directory_target(inventory = true)
+      When("the literal and a descendant are checked as pending paths")
+      val exact = W.pendingPathsOwned(target, Vector("support/Allowed.scala"))
+      val descendant = W.pendingPathsOwned(target, Vector("support/Allowed.scala/Child.scala"))
+      Then("the valid full target accepts only the literal inventory entry")
+      W.decodeTarget(target.asJson) shouldBe Right(target)
+      exact shouldBe true
+      descendant shouldBe false
+      W.validRepository(target, target.repository.copy(dirty = Vector(
+        K.Dirty("M", " ", "support/Allowed.scala/Child.scala", None)))) shouldBe false
+    }
+
+    "require both rename endpoints to remain owned and selected while keeping the unstaged catalog unchanged" in {
+      Given("P69 directory-owner correction: the actual directory target and snapshots describing both rename endpoints")
+      val target = _directory_target(unselected = true)
+      val oldpath = "src/main/scala/Before.scala"
+      val newpath = "src/main/scala/After.scala"
+      val catalog = "src/main/catalog/car/org/simplemodeling/textus/textus-sm-workflow.yaml"
+      val rename = target.repository.copy(dirty = Vector(K.Dirty("R", " ", newpath, Some(oldpath)), K.Dirty(" ", "M", catalog, None)))
+      val crossed = Vector(
+        rename.copy(dirty = Vector(K.Dirty("R", " ", newpath, Some("outside/Before.scala")))),
+        rename.copy(dirty = Vector(K.Dirty("R", " ", "outside/After.scala", Some(oldpath)))),
+        rename.copy(dirty = Vector(K.Dirty("R", " ", "src/main/scala-extra/After.scala", Some(oldpath)))),
+        rename.copy(dirty = Vector(K.Dirty("R", " ", newpath, Some("src/main/scala-extra/Before.scala")))),
+        rename.copy(dirty = Vector(K.Dirty("R", " ", catalog, Some(oldpath)))),
+        rename.copy(dirty = Vector(K.Dirty("M", " ", catalog, None))))
+      When("snapshot scope and no-renames physical pending endpoints are checked independently")
+      val snapshot = W.validRepository(target, rename)
+      val refused = crossed.map(W.validRepository(target, _))
+      Then("both endpoints must stay within slash-bounded owners and every pending endpoint must also be selected")
+      snapshot shouldBe true
+      refused.foreach(_ shouldBe false)
+      W.pendingPathsOwned(target, Vector(oldpath, newpath)) shouldBe true
+      W.pendingPathsOwned(target, Vector(oldpath, "src/test/scala/OwnedButUnselected.scala")) shouldBe false
+      W.pendingPathsOwned(target, Vector("outside/Before.scala", newpath)) shouldBe false
+      W.pendingPathsOwned(target, Vector(oldpath, catalog)) shouldBe false
+      W.validRepository(target, target.repository) shouldBe true
+    }
+  }
+
+  "Release recovery exact preparation prefix" should {
+    "retain the old absent-option wire and round trip actual release history before staging with unchanged Plan base and counters" in {
+      Given("P69-RELEASE-UNKNOWN-01: an old whole target and a repaired all-closed target with actual updated/unchanged history and staging")
+      val legacy = _target
+      val release = _release_target
+      val direction = W.Direction(release, ContextReference(_reference.identity, "1"), "participant", "Fresh fixture authorization", true)
+      When("strict public and durable codecs read the respective canonical targets")
+      val decoded = W.decodeTarget(release.asJson)
+      val durable = W.codec.decode(W.codec.encode(direction))
+      Then("the optional release extension is absent on the legacy wire and the complete release prefix remains exact")
+      legacy.asJson.hcursor.downField("releasePreparation").focus shouldBe None
+      W.decodeTarget(legacy.asJson) shouldBe Right(legacy)
+      take(W.targetC(W.targetRecord(legacy))).asJson shouldBe legacy.asJson
+      decoded shouldBe Right(release)
+      take(W.targetC(W.targetRecord(release))) shouldBe release
+      durable shouldBe Right(direction)
+      release.controller.plan shouldBe _release_target.controller.plan
+      release.controller.base shouldBe legacy.controller.base
+      release.controller.tip shouldBe legacy.controller.tip
+      release.controller.completed shouldBe legacy.controller.completed
+      release.controller.repairs shouldBe 1
+      release.controller.ordinaryRepairs shouldBe 1
+      release.releasePreparation.get.historyPrefix.map(_.result.outcome) shouldBe Vector(Some("updated"), Some("unchanged"))
+      release.stagingPrefix.head.intentRecordRevision shouldBe "26"
+      release.oldObservationOutcome shouldBe "UNKNOWN"
+      release.oldObservationTermination shouldBe "termination-unconfirmed"
+    }
+
+    "refuse crossed identity revision ordering rule incomplete prefixes and nonrelease or noncanonical extension fields" in {
+      Given("P69-RELEASE-UNKNOWN-01: the exact release source history and stages before the missing pending-index check")
+      val target = _release_target
+      val preparation = target.releasePreparation.get
+      val first = preparation.historyPrefix.head
+      def _history_(pairs: Vector[R.HistoryPair]): W.Target = target.copy(releasePreparation = Some(preparation.copy(historyPrefix = pairs)))
+      val crossed = Vector(
+        _history_(Vector(first.copy(intentIdentity = "crossed"), preparation.historyPrefix.last)),
+        _history_(Vector(first.copy(resultRecordRevision = "24"), preparation.historyPrefix.last)),
+        _history_(Vector(first.copy(intent = first.intent.copy(sourceRevision = "19")), preparation.historyPrefix.last)),
+        _history_(Vector(first.copy(result = first.result.copy(step = "step-1")), preparation.historyPrefix.last)),
+        _history_(Vector(first.copy(intent = first.intent.copy(outcome = Some("updated"))), preparation.historyPrefix.last)),
+        _history_(Vector(first.copy(result = first.result.copy(outcome = Some("missing"))), preparation.historyPrefix.last)),
+        _history_(preparation.historyPrefix.reverse), _history_(preparation.historyPrefix.take(1)),
+        _history_(preparation.historyPrefix.map(p => p.copy(intent = p.intent.copy(path = sourcePath), result = p.result.copy(path = sourcePath)))),
+        target.copy(stagingPrefix = target.stagingPrefix.reverse), target.copy(stagingPrefix = target.stagingPrefix.take(1)),
+        target.copy(stagingPrefix = target.stagingPrefix.map(p => p.copy(intentRecordRevision = "22"))),
+        target.copy(releasePreparation = None),
+        target.copy(controller = target.controller.copy(repairs = 0, ordinaryRepairs = 0, repairDirective = None)),
+        target.copy(releasePreparation = Some(preparation.copy(hygieneMode = "unsupported"))),
+        target.copy(releasePreparation = Some(preparation.copy(historySelection = WorkflowSourceHistoryRule.Selection("none", None)))),
+        target.copy(releasePreparation = Some(preparation.copy(
+          historySelection = preparation.historySelection.copy(
+            rule = preparation.historySelection.rule.map(_.copy(identity = "crossed-provider"))
+          )))),
+        target.copy(releasePreparation = Some(preparation.copy(
+          historySelection = preparation.historySelection.copy(
+            rule = preparation.historySelection.rule.map(_.copy(sourceRoots = Vector("other")))
+          ))))
+      )
+      val wire = target.asJson
+      val extension = wire.hcursor.downField("releasePreparation").focus.get
+      val malformed = Vector(wire.mapObject(_.add("releasePreparation", Json.Null)),
+        wire.mapObject(_.add("releasePreparation", extension.mapObject(_.remove("historyPrefix")))),
+        wire.mapObject(_.add("releasePreparation", extension.mapObject(_.add("laterHygiene", Json.True)))),
+        _target.asJson.mapObject(_.add("historyPrefix", Json.arr())),
+        _target.asJson.mapObject(_.add("releasePreparation", Json.Null)))
+      When("each tampered target is decoded using the unchanged canonical rejection boundary")
+      val refused = crossed.map(t => W.decodeTarget(t.asJson)) ++ malformed.map(W.decodeTarget)
+      Then("no partial crossed nonrelease or unknown shape grants recovery")
+      refused.foreach(_.isLeft shouldBe true)
+      W.decodeTarget(wire) shouldBe Right(target)
+    }
+  }
 
   "Whole-Phase recovery E1 original all-closed empty selection" should afterWord(
     "in spec:goal-phase-whole-phase-candidate-recovery, example:E1, rules:R1,R3,R4, phase:6.4") {
@@ -188,6 +407,7 @@ final class GoalPhaseWholePhaseCandidateRecoverySpec extends AnyWordSpec with Ma
       val crossed = Vector(_binding(target.copy(controller = target.controller.copy(generation = target.controller.generation + 1))),
         _binding(changedpolicy), _binding(target.copy(policy = target.policy.copy(maximumDiffBytes = target.policy.maximumDiffBytes - 1))),
         _binding(target.copy(policy = target.policy.copy(phaseValidation = target.policy.phaseValidation.copy(revision = 2)))),
+        _binding(target.copy(repository = target.repository.copy(indexTree = "f" * 40))),
         binding.mapObject(_.add("componentInstance", "crossed-component".asJson)))
       When("the independent reader admits exact evidence and compares every crossed or stale binding")
       val admitted = NativeExternalEvidence.observeC(evidence, declaration, purpose, "lookup", binding, _now)

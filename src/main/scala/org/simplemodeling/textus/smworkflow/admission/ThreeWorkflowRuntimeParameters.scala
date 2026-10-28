@@ -31,7 +31,8 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
     review: GoalPhaseNativeReview.Policy, closure: GoalPhaseNativeClosure.Policy,
     dependencyValidation: Option[GoalPhaseDependencyValidation.Binding] = None,
     dependencySourceRevisions: Vector[GoalPhaseDependencyValidation.Binding] = Vector.empty,
-    dependencySourceConsumptions: Vector[GoalPhaseDependencySourceRevision.Consumption] = Vector.empty)
+    dependencySourceConsumptions: Vector[GoalPhaseDependencySourceRevision.Consumption] = Vector.empty,
+    phaseDependencyValidation: Option[GoalPhaseDependencyValidation.Binding] = None)
   final case class Repository(input: RepositorySyncStartInput,
     validation: RepositorySyncNativeMergeValidation.Policy, conflicts: RepositorySyncNativeConflictInput.Policy,
     review: RepositorySyncNativeMergeReview.Policy)
@@ -40,12 +41,14 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
   // Bottom-up derivation also bounds compiler expansion for the nested policies.
   private given Encoder[Goal] = deriveEncoder[Goal].mapJson(_.mapObject(fields =>
     Vector("dependencySourceRevisions", "dependencySourceConsumptions").foldLeft(
-      if (fields("dependencyValidation").exists(_.isNull)) fields.remove("dependencyValidation") else fields) { (prior, key) =>
+      Vector("dependencyValidation", "phaseDependencyValidation").foldLeft(fields) { (prior, key) =>
+        if (prior(key).exists(_.isNull)) prior.remove(key) else prior
+      }) { (prior, key) =>
       if (prior(key).exists(_.asArray.exists(_.isEmpty))) prior.remove(key) else prior
     }))
   private val _goal_decoder: Decoder[Goal] = deriveDecoder
   private given Decoder[Goal] = Decoder.instance { cursor =>
-    if (Vector("dependencyValidation", "dependencySourceRevisions", "dependencySourceConsumptions")
+    if (Vector("dependencyValidation", "phaseDependencyValidation", "dependencySourceRevisions", "dependencySourceConsumptions")
         .exists(key => cursor.downField(key).focus.exists(_.isNull)))
       Left(io.circe.DecodingFailure("Dependency validation binding must be absent or a complete object", cursor.history))
     else {
@@ -54,6 +57,9 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
       }
       _goal_decoder(normalized.hcursor).flatMap(value =>
       if (value.dependencyValidation != null && value.dependencyValidation.forall(GoalPhaseDependencyValidation.bindingValid) &&
+          value.phaseDependencyValidation != null && value.phaseDependencyValidation.forall(b =>
+            GoalPhaseDependencyValidation.bindingValid(b) && b.step == "phase:" + value.input.phaseIdentity &&
+              b.requester.repository == value.input.repositoryIdentity) &&
           value.dependencySourceRevisions != null && value.dependencySourceRevisions.size <= 16 &&
           value.dependencySourceRevisions.forall(GoalPhaseDependencyValidation.bindingValid) &&
           value.dependencySourceRevisions.map(b => (b.identity, b.revision)).distinct.size == value.dependencySourceRevisions.size &&
@@ -193,7 +199,8 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
         Some(GoalPhaseRepairPolicyAdoption.Installation(ports.repairPolicyAdoption)),
         Some(GoalPhaseSourceHistoryNormalization.Installation(ports.sourceHistoryNormalization)),
         Some(GoalPhaseDependencySourceRevision.Installation(ports.dependencySourceRevision)),
-        settings.goal.dependencySourceRevisions, settings.goal.dependencySourceConsumptions, publication, hygiene, records)
+        settings.goal.dependencySourceRevisions, settings.goal.dependencySourceConsumptions, publication, hygiene, records,
+        settings.goal.phaseDependencyValidation)
       _ <- if (settings.goal.dependencyValidation.forall(GoalPhaseDependencyValidation.bindingValid)) Consequence.unit
         else Consequence.configurationInvalid("Goal dependency validation binding is invalid")
       _ <- GoalPhaseNativeRun.validateC(goal)

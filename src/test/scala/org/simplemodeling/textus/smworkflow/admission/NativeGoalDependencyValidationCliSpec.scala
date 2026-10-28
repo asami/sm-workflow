@@ -21,7 +21,7 @@ import GoalPhaseDependencyValidation.given
 /** Ordinary CLI specifications. All semantic submissions and Human evidence are
   * SPECIFICATION-OWNED; no production adoption, installed qualification or acceptance is claimed.
   * @since   Oct. 24, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -473,6 +473,66 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
   private def _latest_capture(request: V.GoalPhaseAdvanceResult): D.Capture =
     GoalPhaseNativeMetadata.normalizePublicJson(json(request.work.get.review.get.dependencyValidations.last))
       .flatMap(_.hcursor.get[D.Capture]("capture").left.map(_.message)).fold(fail(_), identity)
+
+  "Release dependency succession after actual Step closure" should {
+    "retain failed-history terminal facts through new phase dependency review after three genuine source repairs" in {
+      Given("a coherent disposable source with pre-adopted limit ten and a fixed Phase test requiring three actual documentation corrections")
+      val frontier = ReleaseDependencyCliSpecification.setup("p69-release-dependency-failed-history", None,
+        coherentSource = true, priorReleaseHistory = true, failedReleaseHistory = true)
+      When("ordinary continuation authenticates failed and repair-required history before the new dependency purpose")
+      ReleaseDependencyCliSpecification.resume(frontier, None, negativeChecks = true, stopAtDependencyReview = true)
+      Then("the actual dependency ReviewPhase retains all three failed facts and the later passed fact without source-coherence acceptance")
+      frontier.repair.repairProgress.get.limit shouldBe 10
+      frontier.repair.repairProgress.get.ordinaryCount shouldBe 4
+    }
+
+    "reconstruct a passed pre-binding Release repair without replay before new phase dependency checks and closure" in {
+      Given("a pre-adopted third repair allowance and a genuine earlier Release validation and independent repair review")
+      val frontier = ReleaseDependencyCliSpecification.setup("p69-release-dependency-prior-history", None,
+        priorReleaseHistory = true)
+      When("current phase check drift is refused before ordinary resume with the exact restored declaration")
+      ReleaseDependencyCliSpecification.resume(frontier, None, negativeChecks = true)
+      Then("old candidate, passed checks and repair facts remain while new checks, review and normal closure complete")
+      frontier.repair.repairProgress.get.ordinaryCount shouldBe 2
+    }
+
+    "capture a different phase-approved purpose while preserving the old candidate, publication and closed Step" in {
+      Given("a genuinely closed dependency Step, actual Release repair and the original failed unstarted Phase frontier")
+      val frontier = ReleaseDependencyCliSpecification.setup("p69-release-dependency-managed", None)
+      When("ordinary Advance selects the explicit phase binding through an exact typed one-path Git target")
+      ReleaseDependencyCliSpecification.resume(frontier, None, negativeChecks = true)
+      Then("the same Session has completed actual new checks, independent specification review and ordinary closure")
+      frontier.binding.step should startWith("phase:")
+    }
+
+    "resume retained successful staging without replaying it" in {
+      Given("an isolated Release repair and an interruption after its actual selected stage result")
+      val point = "goal-release-dependency-stage-recorded:release-help.txt"
+      When("the next invocation reconstructs that genuine contiguous result before continuing observation")
+      val result = ReleaseDependencyCliSpecification.interrupted("p69-release-dependency-known-stage", point)
+      Then("the fixture has asserted exactly one selected stage result and a fresh integrated review")
+      result.get.work.get.kind shouldBe "ReviewPhase"
+    }
+
+    "retain a result-less stage intent as UNKNOWN without another Git attempt" in {
+      Given("an isolated Release repair and an interruption immediately after the committed stage intent")
+      val point = "goal-release-dependency-stage-prepared:release-help.txt"
+      When("repeated ordinary invocations encounter the same result-less native intent")
+      val result = ReleaseDependencyCliSpecification.interrupted("p69-release-dependency-unknown-stage", point)
+      Then("the fixture has asserted unchanged native facts, retained publication and an explicit UNKNOWN wait")
+      result.get.kind shouldBe "Wait"
+      result.get.message should include("UNKNOWN")
+    }
+
+    "refuse automatic succession once an ordinary Phase check intent exists" in {
+      Given("the original primary candidate with an actual committed Phase check intent")
+      val point = "goal-check-prepared:test"
+      When("the explicit phase dependency binding is selected after that original check intent")
+      val result = ReleaseDependencyCliSpecification.interrupted("p69-release-dependency-existing-check", point)
+      Then("the original check remains unresolved and no Release dependency succession is manufactured")
+      result shouldBe None
+    }
+  }
 
   /** Only this specification's host declaration changes. Accepted native history
     * and the old workspace/programs remain available to authenticate the prefix.
@@ -1371,7 +1431,8 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
       }
       val pending = successorrecord(snapshot.toMap)
       pending._2.hcursor.get[String]("status").toOption shouldBe Some("Available")
-      repeated shouldBe third
+      repeated.copy(message = third.message) shouldBe third
+      third.message shouldBe repeated.message + " Commit hygiene mode=auto-fix; clean: Selected index is clean."
       _native_fixture(selected.scenario)(LegacyDependencyHistoryFixture.snapshotC(_, value.first.session)) shouldBe snapshot
       snapshot.exists { (_, bytes) => parse(bytes).toOption.flatMap(_.hcursor.get[String]("completionPayload").toOption)
         .contains("cncf.workflow-json.v1:" + legacybytes) } shouldBe true

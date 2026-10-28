@@ -22,6 +22,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 import GoalPhaseNativeRun as F
 import GoalPhaseOrderedProgression as O
 import GoalPhaseNativeCandidate as C
+import GoalPhaseNativeSourceHistory as H
 import GoalPhaseCandidateRecovery as R
 import GoalPhaseCandidateObservationContinuation as K
 import GoalPhaseNativeCandidateBoundary as B
@@ -30,7 +31,7 @@ import RepositorySyncManagedGitObservation as G
 /** One independently authorized remaining observation of an original whole-Phase inspection.
   * Retained UNKNOWN history is immutable. Failed new intents have no retry contract.
   * @since   Oct. 22, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseWholePhaseCandidateRecovery {
@@ -61,13 +62,20 @@ private[smworkflow] object GoalPhaseWholePhaseCandidateRecovery {
       plan <- io.circe.parser.parse(raw).left.map(error => io.circe.DecodingFailure(error.message, cursor.history))
     } yield Policy(phase, budget, plan))
   }
+  final case class ReleasePreparation(historySelection: WorkflowSourceHistoryRule.Selection,
+    historyPrefix: Vector[R.HistoryPair], hygieneMode: String)
+  object ReleasePreparation {
+    given Encoder[ReleasePreparation] = deriveEncoder[ReleasePreparation]
+    given Decoder[ReleasePreparation] = deriveDecoder[ReleasePreparation]
+  }
   final case class Target(sessionId: String, controller: R.Controller, definitionIdentity: String,
     definitionRevision: String, participant: String, sourceRevision: String, frontierRevision: String,
     root: String, branch: String, candidatePaths: Vector[String], managementPaths: Vector[String],
     documentPolicy: Option[GoalPhaseDocumentProgress.Policy], recordingPaths: Vector[String],
     completedCandidates: Vector[C.Payload], inspectionIdentity: String, inspectionRevision: String,
     inspectionRecordRevision: String, inspection: C.Payload, stagingPrefix: Vector[R.StagePair],
-    oldObservationOutcome: String, oldObservationTermination: String, repository: K.RepositorySnapshot, policy: Policy)
+    oldObservationOutcome: String, oldObservationTermination: String, repository: K.RepositorySnapshot, policy: Policy,
+    releasePreparation: Option[ReleasePreparation] = None)
   object Target {
     // This complete public target omits nested absent Options. Its outer
     // canonical comparison still rejects every unknown or noncanonical field;
@@ -144,7 +152,8 @@ private[smworkflow] object GoalPhaseWholePhaseCandidateRecovery {
       p.worktree != null && p.worktree.length == 1 && RepositorySyncNativeConflictInput.relative(p.path) &&
       p.renamedFrom != null && p.renamedFrom.forall(RepositorySyncNativeConflictInput.relative)) &&
     snapshot.dirty.map(_.path).distinct.size == snapshot.dirty.size &&
-    B.scopedDirty(snapshot.dirty.map(p => G.DirtyPath(p.index.head, p.worktree.head, p.path, p.renamedFrom)), t.managementPaths, true) &&
+    B.scopedDirty(snapshot.dirty.map(p => G.DirtyPath(p.index.head, p.worktree.head, p.path, p.renamedFrom)),
+      if (t.releasePreparation.nonEmpty) t.controller.plan.phaseOwnedPaths else t.managementPaths, true) &&
     snapshot.dirty.filter(p => t.controller.plan.phaseRepairInventory.exists(owner =>
       B.covers(owner, p.path) || p.renamedFrom.exists(B.covers(owner, _)))).forall(p =>
         t.controller.plan.phasePathsOwned((Vector(p.path) ++ p.renamedFrom.toVector).distinct))
@@ -182,7 +191,13 @@ private[smworkflow] object GoalPhaseWholePhaseCandidateRecovery {
     t.inspection != null && C.codec.decode(C.codec.encode(t.inspection)).isRight &&
     t.inspection.sourceRevision == t.sourceRevision && t.inspection.step == "phase:" + t.controller.plan.phase &&
     t.inspection.selectedPaths != null && t.inspection.selectedPaths.distinct == t.inspection.selectedPaths &&
-    t.inspection.selectedPaths.forall(t.managementPaths.contains) && t.inspection.stagedPaths.isEmpty &&
+    t.releasePreparation != null && (t.releasePreparation match {
+      case None => t.inspection.selectedPaths.forall(t.managementPaths.contains)
+      case Some(preparation) => t.controller.repairs > 0 && t.controller.repairDirective.nonEmpty &&
+        t.inspection.selectedPaths.forall(path => t.candidatePaths.contains(path) &&
+          t.controller.plan.phaseOwnedPaths.contains(path)) &&
+        t.controller.plan.phasePathsOwned(t.inspection.selectedPaths) && _valid_release_preparation(t, preparation)
+    }) && t.inspection.stagedPaths.isEmpty &&
     t.inspection.candidate.isEmpty && t.inspection.changedPaths.isEmpty && t.inspection.diff.isEmpty &&
     t.inspection.continuation.isEmpty && t.inspection.stepEvidence.isEmpty &&
     t.inspectionIdentity == _native_identity(t, "inspection") && t.inspectionRevision == "1" &&
@@ -191,13 +206,47 @@ private[smworkflow] object GoalPhaseWholePhaseCandidateRecovery {
       p != null && p.index == i && p.intentRevision == "1" && p.resultRevision == "1" &&
       p.intentIdentity == _native_identity(t, "stage-intent-" + i) && p.resultIdentity == _native_identity(t, "stage-result-" + i) &&
       Vector(p.intentRecordRevision, p.resultRecordRevision).forall(_revision) &&
-      BigInt(p.intentRecordRevision) == BigInt(t.sourceRevision) + 2 + BigInt(i) * 2 &&
+      BigInt(p.intentRecordRevision) == BigInt(t.sourceRevision) + 2 +
+        BigInt(t.releasePreparation.toVector.flatMap(_.historyPrefix).size) * 2 + BigInt(i) * 2 &&
       BigInt(p.resultRecordRevision) == BigInt(p.intentRecordRevision) + 1 &&
       p.intent == t.inspection.copy(stagedPaths = t.inspection.selectedPaths.take(i)) &&
       p.result == t.inspection.copy(stagedPaths = t.inspection.selectedPaths.take(i + 1))
-    } && BigInt(t.frontierRevision) == BigInt(t.sourceRevision) + 1 + BigInt(t.stagingPrefix.size) * 2 &&
+    } && BigInt(t.frontierRevision) == BigInt(t.sourceRevision) + 1 +
+      BigInt(t.releasePreparation.toVector.flatMap(_.historyPrefix).size + t.stagingPrefix.size) * 2 &&
     BigInt(t.frontierRevision) < BigInt(Long.MaxValue) - 2 && t.oldObservationOutcome == "UNKNOWN" &&
     t.oldObservationTermination == "termination-unconfirmed" && validPolicy(t.policy) && validRepository(t, t.repository)
+
+  private def _valid_release_preparation(t: Target, preparation: ReleasePreparation): Boolean =
+    preparation != null && CommitHygiene.decodeC(preparation.hygieneMode).isSuccess &&
+    preparation.historySelection != null && preparation.historySelection.rule != null &&
+    WorkflowSourceHistoryRule.selectionC(preparation.historySelection.style, preparation.historySelection.rule)
+      .toOption.contains(preparation.historySelection) &&
+    preparation.historyPrefix != null && preparation.historyPrefix.size <= 65536 &&
+    preparation.historyPrefix.forall(pair => pair != null && pair.intent != null) &&
+    preparation.historyPrefix.map(_.intent.path).distinct.size == preparation.historyPrefix.size &&
+    preparation.historyPrefix.zipWithIndex.forall { (pair, index) =>
+      pair.index == index && pair.intentRevision == "1" && pair.resultRevision == "1" &&
+      pair.intentIdentity == _native_identity(t, "source-history-intent-" + index) &&
+      pair.resultIdentity == _native_identity(t, "source-history-result-" + index) &&
+      Vector(pair.intentRecordRevision, pair.resultRecordRevision).forall(_revision) &&
+      BigInt(pair.intentRecordRevision) == BigInt(t.sourceRevision) + 2 + BigInt(index) * 2 &&
+      BigInt(pair.resultRecordRevision) == BigInt(pair.intentRecordRevision) + 1 && pair.result != null &&
+      H.codec.decode(H.codec.encode(pair.intent)).isRight && H.codec.decode(H.codec.encode(pair.result)).isRight &&
+      pair.intent.sourceRevision == t.sourceRevision && pair.intent.step == t.inspection.step &&
+      pair.intent.outcome.isEmpty && pair.result.copy(outcome = None) == pair.intent &&
+      pair.result.outcome.exists(Set("updated", "unchanged")) &&
+      t.controller.plan.phasePathsOwned(Vector(pair.intent.path)) &&
+      t.inspection.selectedPaths.exists(owner => B.covers(owner, pair.intent.path)) &&
+      preparation.historySelection.style == "goldenport" && preparation.historySelection.rule.exists(rule =>
+        rule.identity == pair.intent.providerIdentity && rule.style == pair.intent.style &&
+          WorkflowSourceHistoryRule.includesC(rule, pair.intent.path).toOption.contains(true))
+    }
+
+  private[admission] def pendingPathsOwned(target: Target, paths: Vector[String]): Boolean =
+    if (target.releasePreparation.nonEmpty) target.controller.plan.phasePathsOwned(paths) &&
+      paths.forall(path => target.inspection.selectedPaths.exists(owner =>
+        if (target.controller.plan.phaseRepairInventory.contains(owner)) owner == path else B.covers(owner, path)))
+    else B.pathsOwned(paths, target.managementPaths) && paths.forall(target.inspection.selectedPaths.contains)
 
   def observeRepositoryC(core: ActionCall.Core, target: Target): Consequence[K.RepositorySnapshot] = for {
     root <- G.rootC(core)
@@ -210,10 +259,18 @@ private[smworkflow] object GoalPhaseWholePhaseCandidateRecovery {
     afterroot <- G.rootC(core)
     snapshot = K.snapshot(root, before, index)
     _ <- if (root == afterroot && before == after && index == afterindex && validRepository(target, snapshot) &&
-        B.pathsOwned(pending.map(_.value), target.managementPaths) &&
-        pending.map(_.value).forall(target.inspection.selectedPaths.contains)) Consequence.unit
-      else _invalid("repository/index is unstable or crosses original tip, root, branch or completed management staging")
+        pendingPathsOwned(target, pending.map(_.value))) Consequence.unit
+      else _invalid("repository/index is unstable or crosses original tip, root, branch or completed staging selection")
   } yield snapshot
+
+  /** Only a clean index can finish the missing release preparation read. */
+  def requireCleanReleaseC(core: ActionCall.Core, target: Target): Consequence[Unit] =
+    target.releasePreparation.fold(Consequence.unit) { _ => for {
+      parent <- GitObjectId.parseC(target.controller.tip.head)
+      check <- WorkflowManagedProcessExecution.executeGitC(core, GitOperation.CheckPendingIndex(parent)).flatMap(_.valueC)
+      _ <- if (check.findingKeys.isEmpty) Consequence.unit
+        else _invalid("release recovery requires a clean pending index without corrections")
+    } yield () }
 
   def bindingC(component: String, target: Target, choice: String, rationale: String, participant: String,
     reference: ContextReference, priorExecutionEnded: Boolean): Consequence[Json] =
@@ -288,7 +345,13 @@ private[smworkflow] object GoalPhaseWholePhaseCandidateRecovery {
     adapter <- session.storage.bindMechanicalC(F.advanceOperation, C.codec)
     inspected <- _load_c(adapter, core, from, "inspection")
     inspectionrecord <- R.adjacentC(session.current, from, inspected._1, "ordered-candidate:inspection")
-    staged <- inspected._2.selectedPaths.indices.foldLeft(Consequence.success((inspectionrecord, Vector.empty[R.StagePair]))) {
+    preparation <- if (controller.releaseRepairActive) for {
+      selection <- WorkflowSourceHistoryParameters.resolveC(core.executionContext)
+      history <- R.historyPrefixC(session, core, from, inspectionrecord)
+      _ <- CommitHygiene.decodeC(d.commitHygieneMode)
+    } yield (history._1, Some(ReleasePreparation(selection, history._2, d.commitHygieneMode)))
+      else Consequence.success((inspectionrecord, Option.empty[ReleasePreparation]))
+    staged <- inspected._2.selectedPaths.indices.foldLeft(Consequence.success((preparation._1, Vector.empty[R.StagePair]))) {
       case (prior, index) => for {
         previous <- prior
         intent <- _load_c(adapter, core, from, "stage-intent-" + index)
@@ -304,15 +367,19 @@ private[smworkflow] object GoalPhaseWholePhaseCandidateRecovery {
     historyadapter <- session.storage.bindMechanicalC(F.advanceOperation, GoalPhaseNativeSourceHistory.codec)
     historyintent <- historyadapter.loadRetainedC(_native_reference(from, "source-history-intent-0"))(using core.executionContext)
     historyresult <- historyadapter.loadRetainedC(_native_reference(from, "source-history-result-0"))(using core.executionContext)
-    _ <- if (historyintent.isEmpty && historyresult.isEmpty) Consequence.unit
+    _ <- if (preparation._2.nonEmpty || (historyintent.isEmpty && historyresult.isEmpty)) Consequence.unit
       else _invalid("whole-Phase preparation cannot contain any source-history receipt")
+    hygieneplan <- adapter.loadRetainedC(_native_reference(from, "commit-hygiene-plan"))(using core.executionContext)
+    hygieneresult <- adapter.loadRetainedC(_native_reference(from, "commit-hygiene-result"))(using core.executionContext)
+    _ <- if (preparation._2.isEmpty || (hygieneplan.isEmpty && hygieneresult.isEmpty)) Consequence.unit
+      else _invalid("release recovery cannot cross a retained hygiene plan or result")
     _ <- if (candidate.isEmpty && observation.isEmpty) Consequence.unit else _invalid("original candidate or observation intent already exists")
     target = Target(from.identity.value, R.controllerSnapshot(controller), from.definition.workflowIdentity.value,
       from.definition.workflowRevision.value, session.participantIdentity, from.revision.value.toString,
       staged._1.revision.value.toString, d.target.root.toString, d.target.localBranch, d.candidatePaths,
       (documentPolicy.toVector.flatMap(_.paths) ++ recordingPaths).distinct, documentPolicy, recordingPaths,
       completedCandidates, _native_reference(from, "inspection").identity, "1", inspectionrecord.revision.value.toString,
-      inspected._2, staged._2, "UNKNOWN", "termination-unconfirmed", repository, policy)
+      inspected._2, staged._2, "UNKNOWN", "termination-unconfirmed", repository, policy, preparation._2)
     _ <- if (target.controller.base == session.started.receipt.payload.value.base && validTarget(target)) Consequence.unit
       else _invalid("all-closed controller, completed candidates, inspection or contiguous staging prefix differs")
   } yield target
@@ -325,9 +392,16 @@ private[smworkflow] object GoalPhaseWholePhaseCandidateRecovery {
     if (session.current.revision.value.toString == target.frontierRevision && session.current.suspension.isEmpty &&
         session.current.currentProgression.contains(ProgressionReference("phase.PhaseInspection"))) Consequence.unit
     else _invalid("requires the exact original whole-Phase inspection/staging frontier")
-  def requirePolicyC(d: F.Declaration, core: ActionCall.Core, target: Target): Consequence[Unit] =
-    resolvePolicyC(d, core).flatMap(actual => if (actual == target.policy) Consequence.unit
-      else _invalid("resolved Phase validation, process host plan or diff policy changed"))
+  def requirePolicyC(d: F.Declaration, core: ActionCall.Core, target: Target): Consequence[Unit] = for {
+    actual <- resolvePolicyC(d, core)
+    _ <- if (actual == target.policy) Consequence.unit
+      else _invalid("resolved Phase validation, process host plan or diff policy changed")
+    _ <- target.releasePreparation.fold(Consequence.unit) { preparation => for {
+      selection <- WorkflowSourceHistoryParameters.resolveC(core.executionContext)
+      _ <- if (selection == preparation.historySelection && d.commitHygieneMode == preparation.hygieneMode)
+        Consequence.unit else _invalid("release source-history selection or commit hygiene mode changed")
+    } yield () }
+  } yield ()
   def appendC(session: F.Session, d: F.Declaration, core: ActionCall.Core, from: InstanceRecord,
     target: Target, reference: ContextReference, rationale: String, priorExecutionEnded: Boolean): Consequence[Unit] = for {
     _ <- requireFrontierC(session, target)

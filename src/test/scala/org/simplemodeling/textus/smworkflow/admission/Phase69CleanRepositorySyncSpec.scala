@@ -2,6 +2,7 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import java.nio.file.{Files, Path}
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{InstanceIdentity, Lifecycle}
+import org.goldenport.cncf.workflow.WorkflowProtocolV1.WorkflowContinuation
 import org.goldenport.protocol.{Property, Request}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -74,7 +75,7 @@ final class Phase69CleanRepositorySyncSpec extends AnyWordSpec with Matchers wit
       }
     }
 
-    "preserve dirty work and report unfinished local preparation without a checkpoint" in {
+    "preserve unfinished dirty work and issue normal purpose grouping without a checkpoint" in {
       val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/phase69-clean-sync").toAbsolutePath), "dirty-")
       _with_runtime_(root, "Equal") { (owner, component, actor, prepare) =>
         prepare(call => call.setupC(_setup_commands_(root, "Equal").size))
@@ -84,14 +85,61 @@ final class Phase69CleanRepositorySyncSpec extends AnyWordSpec with Matchers wit
             "repositoryIdentity" -> "sm-workflow", "syncMode" -> "FULL_STATE"), None))), actor)))
         val unfinished = root.resolve("repository/ongoing.txt")
         Files.writeString(unfinished, "another unfinished purpose\n")
+        var original = Option.empty[RepositorySyncManagedGitObservation.Observed]
+        var originalIndex = ""
+        prepare(call => for {
+          observed <- call.observeC()
+          index <- RepositorySyncManagedGitObservation.indexTreeC(call.core)
+        } yield { original = Some(observed); originalIndex = index; () })
+        When("normal public continuation inventories the unfinished dirty purpose")
         val result = owner.executeOperationResponseInContext(Request.of(component = component.name,
           service = "RepositorySyncService", operation = "advanceRepositorySync",
           properties = List(Property("sessionId", started.sessionId, None))), actor)
-        result.isSuccess shouldBe false
-        result.toString should include("local preparation is unfinished")
+        val issued = read_value[V.RepositorySyncAdvanceResult](take(result))
+        Then("actual purpose work is issued while unfinished content and local state remain intact")
+        issued.kind shouldBe "Request"
+        issued.submitOperation shouldBe Some("submitRepositoryPurposeResult")
+        issued.submitSessionId shouldBe Some(started.sessionId)
+        issued.resultType shouldBe Some("RepositorySyncPurposeResult")
+        issued.issuedWorkContext should not be empty
+        issued.purposeWork should not be empty
+        issued.convergence shouldBe None
         Files.readString(unfinished) shouldBe "another unfinished purpose\n"
-        prepare(call => call.nativeStageC(ThreeWorkflowNormalHostFixture.definition(root).repository.input,
-          InstanceIdentity(started.sessionId), root, "preservation-intent").map(value => { value shouldBe None; () }))
+        val input = ThreeWorkflowNormalHostFixture.definition(root).repository.input.copy(
+          remoteEndpointIdentity = root.resolve("upstream.git").toString)
+        prepare(call => for {
+          work <- call.repositoryWorkC(InstanceIdentity(started.sessionId),
+            RepositorySyncPurposeContinuation.completionOperation, RepositorySyncPurpose.inputCodec)
+          current <- call.currentC(InstanceIdentity(started.sessionId))
+          observed <- call.observeC()
+          index <- RepositorySyncManagedGitObservation.indexTreeC(call.core)
+          preservation <- call.nativeStageC(input, InstanceIdentity(started.sessionId), root, "preservation-intent")
+          checkpoint <- call.nativeStageC(input, InstanceIdentity(started.sessionId), root, "checkpoint-created")
+          push <- call.nativeStageC(input, InstanceIdentity(started.sessionId), root, "push-intent")
+          commit <- call.nativeStageC(input, InstanceIdentity(started.sessionId), root, "commit-intent")
+        } yield {
+          val request = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[RepositorySyncPurpose.Request]].request
+          val captured = request.input.get.value
+          work.handle.instanceIdentity.value shouldBe started.sessionId
+          request.requiredOperation.capability shouldBe "group-repository-purpose-capability"
+          captured.files.map(_.path) shouldBe Vector("ongoing.txt")
+          captured.files.head.worktree shouldBe Some("another unfinished purpose\n")
+          captured.files.head.indexed shouldBe None
+          captured.parent shouldBe original.get.head
+          captured.indexTree shouldBe originalIndex
+          current.lifecycle shouldBe Lifecycle.Active
+          current.suspension.get.continuationIdentity.value shouldBe issued.issuedWorkContext.get.continuationId
+          observed.head shouldBe original.get.head
+          observed.tree shouldBe original.get.tree
+          observed.dirty shouldBe original.get.dirty
+          index shouldBe originalIndex
+          preservation shouldBe None
+          checkpoint shouldBe None
+          push shouldBe None
+          commit shouldBe None
+          ()
+        })
+        Files.exists(root.resolve("sbt-executions.txt")) shouldBe false
       }
     }
 

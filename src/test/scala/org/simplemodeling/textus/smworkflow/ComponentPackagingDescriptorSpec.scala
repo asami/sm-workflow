@@ -12,7 +12,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 27, 2026
+ * @version Oct. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -160,7 +160,7 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
         operations.find(op => text(op, "service") == service && text(op, "name") == name)
           .getOrElse(fail(s"Missing Operation $service.$name"))
 
-      Then("the distribution identifies this component and exactly the authored eleven, six and six participant Operations")
+      Then("the distribution identifies this component and exactly the authored thirteen, six and seven participant Operations")
       text(abi, "format") shouldBe "cozy.car.abi-manifest.v2"
       abi.hcursor.downField("component").get[String]("namespace") shouldBe Right("org.simplemodeling.textus")
       abi.hcursor.downField("component").get[String]("id") shouldBe Right("SmWorkflow")
@@ -168,6 +168,7 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
       abi.hcursor.downField("abi").get[Int]("version") shouldBe Right(1)
       names("GoalPhaseService") should contain theSameElementsAs Vector(
         "startGoalPhase", "advanceGoalPhase", "submitGoalPhaseWorkResult", "submitGoalPhaseOrderedDecision", "submitGoalPhaseFindingRecording",
+        "describeGoalPhaseStepReview", "requestGoalPhaseStepReview",
         "describeGoalPhaseReleaseRepairContinuation", "recoverGoalPhaseReleaseRepairContinuation",
         "describeGoalPhaseFailedPhaseRepair", "adoptGoalPhaseFailedPhaseRepair",
         "describeGoalPhaseValidationRepair", "adoptGoalPhaseValidationRepair")
@@ -176,7 +177,7 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
         "submitHandoffScopeResult", "submitReasoningResult", "submitSplitHumanDirection")
       names("RepositorySyncService") should contain theSameElementsAs Vector(
         "startRepositorySync", "advanceRepositorySync", "submitRepositorySyncWorkResult",
-        "submitNativeMergeReview", "submitNativeMergeRepair", "submitRepositoryConflictDecision")
+        "submitNativeMergeReview", "submitNativeMergeRepair", "submitRepositoryConflictDecision", "submitRepositoryPurposeResult")
 
       names("StandaloneFixService") should contain theSameElementsAs Vector(
         "startStandaloneFix", "startStandaloneReviewFix", "advanceStandaloneFix", "submitStandaloneFixWorkResult", "resolveStandaloneFixDiagnosticInformation")
@@ -221,6 +222,8 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
           .fold(error => fail(error.message), identity)).toMap
       participantInputs shouldBe Map(
         "advanceGoalPhase" -> "GoalPhaseAdvanceInput",
+        "describeGoalPhaseStepReview" -> "GoalPhaseStepReviewDescriptionInput",
+        "requestGoalPhaseStepReview" -> "GoalPhaseStepReviewRequestInput",
         "describeGoalPhaseFailedPhaseRepair" -> "GoalPhaseFailedPhaseRepairDescriptionInput",
         "adoptGoalPhaseFailedPhaseRepair" -> "GoalPhaseFailedPhaseRepairAdoptionInput",
         "describeGoalPhaseValidationRepair" -> "GoalPhaseValidationRepairDescriptionInput",
@@ -242,8 +245,22 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
         "submitRepositorySyncWorkResult" -> "RepositorySyncConflictResult",
         "submitNativeMergeReview" -> "RepositorySyncNativeMergeReviewResult",
         "submitNativeMergeRepair" -> "RepositorySyncNativeMergeRepairResult",
+        "submitRepositoryPurposeResult" -> "RepositorySyncPurposeResult",
         "submitRepositoryConflictDecision" -> "RepositorySyncHumanConflictAnswer")
           .view.mapValues(value => Some(value)).toMap
+      And("precommit review and purpose completion retain their concrete participant output and value contracts")
+      Vector(
+        ("GoalPhaseService", "describeGoalPhaseStepReview", "GoalPhaseStepReviewDescriptionResult"),
+        ("GoalPhaseService", "requestGoalPhaseStepReview", "GoalPhaseStepReviewRequestResult"),
+        ("RepositorySyncService", "submitRepositoryPurposeResult", "RepositorySyncConflictSubmissionResult")
+      ).foreach { case (service, name, output) =>
+        text(operation(service, name), "kind") shouldBe "COMMAND"
+        text(operation(service, name), "output") shouldBe output
+      }
+      valueFields("GoalPhaseStepReviewDescriptionInput") shouldBe Vector("sessionId")
+      valueFields("GoalPhaseStepReviewDescriptionResult") shouldBe Vector("sessionId", "outcome", "message", "target", "requestOperation")
+      valueFields("GoalPhaseStepReviewRequestInput") shouldBe Vector("sessionId", "target", "reason")
+      valueFields("GoalPhaseStepReviewRequestResult") shouldBe Vector("sessionId", "accepted", "outcome", "message")
       valueFields("GoalPhaseAdvanceInput") should contain theSameElementsAs Vector("sessionId")
       valueFields("GoalPhaseReleaseRepairContinuationDescriptionInput") shouldBe Vector("sessionId")
       valueFields("GoalPhaseReleaseRepairContinuationDescriptionResult") shouldBe
@@ -279,6 +296,10 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
       text(semantic, "output") shouldBe "SplitPhasePartitionSemanticResult"
       text(operation("SplitHumanService", "presentReasoningHumanDirection"), "input") shouldBe "SplitPhaseReasoningHumanDirectionRequest"
       text(operation("RepositoryConflictService", "resolveRepositoryMergeConflicts"), "output") shouldBe "RepositorySyncConflictResult"
+      text(operation("RepositoryConflictService", "groupRepositoryPurposes"), "input") shouldBe "RepositorySyncPurposeRequest"
+      text(operation("RepositoryConflictService", "groupRepositoryPurposes"), "output") shouldBe "RepositorySyncPurposeResult"
+      text(operation("RepositorySyncSemanticAdmissionService", "admitRepositoryPurposes"), "input") shouldBe "RepositorySyncPurposeRequest"
+      text(operation("RepositorySyncSemanticAdmissionService", "admitRepositoryPurposes"), "output") shouldBe "RepositorySyncConflictSubmissionResult"
       text(operation("RepositorySyncSemanticAdmissionService", "admitNativeMergeReview"), "input") shouldBe "RepositorySyncNativeMergeReviewRequest"
       text(operation("RepositorySyncSemanticAdmissionService", "admitNativeMergeRepair"), "input") shouldBe "RepositorySyncNativeMergeRepairRequest"
       text(operation("MergeRepairService", "repairNativePendingMerge"), "output") shouldBe "RepositorySyncNativeMergeRepairResult"

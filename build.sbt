@@ -154,6 +154,7 @@ lazy val root = project
         "docs/spec/goal-phase-dependency-scope.md",
         "docs/spec/goal-phase-dependency-source-revision.md",
         "docs/spec/repository-sync-validation-continuation.md",
+        "docs/spec/repository-sync-runtime-orchestration.md",
         "docs/spec/goal-phase-validation-metadata.md",
         "docs/spec/native-goal-command-task.md",
         "docs/spec/runtime-caller-format-migration.md",

@@ -5,7 +5,7 @@ import io.circe.syntax.*
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters.*
-import org.goldenport.cncf.processexecution.SbtOperation
+import org.goldenport.cncf.processexecution.{GitOperationKind, SbtOperation}
 import org.scalatest.GivenWhenThen
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
@@ -15,7 +15,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** A fresh normal host, actual ordinary SBT publication and separate CLI
   * processes. No real development Session is read or advanced.
   * @since   Oct. 26, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -23,6 +23,7 @@ import SplitPhaseExplicitPartitionFixture.take
 final class NativeLocalPublicationCliSpec extends AnyWordSpec with GivenWhenThen with ThreeWorkflowManagedRepositoryFixture {
   private val _primary = Path.of("").toAbsolutePath.normalize
   private val _collection = ThreeWorkflowNormalHostFixture.collection("local_publication")
+  private val _catalog = "src/main/catalog/car/org/example/publication-fixture.yaml"
   override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
     val git = TypedGitHostPlanFixture.plan(Programs.Target(root.resolve("repository"), "main", "origin", "main",
       root.resolve("upstream.git").toString))
@@ -31,9 +32,19 @@ final class NativeLocalPublicationCliSpec extends AnyWordSpec with GivenWhenThen
       .hcursor.get[Vector[Json]]("sbtPrograms").toOption.get.head
       .mapObject(_.add("target", TypedGitHostPlanFixture.workspace.asJson)
         .add("identity", "fixture-publish-local".asJson).add("capability", "fixture-publish-local".asJson))
-    val capabilities = git.hcursor.get[Vector[Json]]("gitPrograms").toOption.get.map(
+    val ordinary = git.hcursor.get[Vector[Json]]("gitPrograms").toOption.get
+    val catalog = ordinary.find(_.hcursor.get[String]("operation").toOption.contains(GitOperationKind.IndexTree.wireName)).get
+      .mapObject(_.add("operation", GitOperationKind.TreeEntries.wireName.asJson)
+        .add("selectionId", "publication-catalog".asJson).add("selectedPath", Json.Null)
+        .add("selectedPaths", Vector(_catalog).asJson).add("identity", "fixture-publication-catalog".asJson)
+        .add("capability", "fixture-publication-catalog".asJson))
+    val programs = ordinary :+ catalog
+    val capabilities = programs.map(
       _.hcursor.get[Json]("capability").toOption.get) :+ "fixture-publish-local".asJson
-    git.mapObject(_.add("sbtPrograms", Json.arr(sbt)).add("grants", Json.arr(Json.obj(
+    require(git.hcursor.get[Vector[Json]]("workspaceGrants").toOption.get.exists(g =>
+      g.hcursor.get[String]("workspaceId").toOption.contains(TypedGitHostPlanFixture.workspace) &&
+        g.hcursor.get[String]("access").toOption.contains("manage")), "The ordinary fixture must admit File reads")
+    git.mapObject(_.add("gitPrograms", programs.asJson).add("sbtPrograms", Json.arr(sbt)).add("grants", Json.arr(Json.obj(
       "componentId" -> SmWorkflowComponent.componentId.name.asJson, "capabilities" -> Json.fromValues(capabilities)))))
   }
   private def _initialize(root: Path): Unit = {
@@ -41,6 +52,8 @@ final class NativeLocalPublicationCliSpec extends AnyWordSpec with GivenWhenThen
       Json.fromValues(fields("records").get.asArray.get :+ Json.obj("componentId" -> SmWorkflowComponent.componentId.name.asJson,
         "storeName" -> "workflow".asJson, "collection" -> _collection.asJson))))
     val publication = Json.obj("storeName" -> "workflow".asJson, "collection" -> _collection.asJson,
+      "catalogOutputs" -> Json.arr(Json.obj("targetIdentity" -> "fixture-producer".asJson,
+        "path" -> _catalog.asJson, "selection" -> "publication-catalog".asJson)),
       "targets" -> Json.arr(Json.obj("identity" -> "fixture-producer".asJson,
         "component" -> "org.example.PublicationFixture".asJson, "workspace" -> TypedGitHostPlanFixture.workspace.asJson)))
     _with_runtime_(root, "Goal", hostParameters = Map("textus.subsystem.storage.plan" -> storage.noSpaces,
@@ -52,9 +65,20 @@ final class NativeLocalPublicationCliSpec extends AnyWordSpec with GivenWhenThen
       |organization := "org.example.sm-workflow-publication-fixture"
       |name := "local-publication-fixture"
       |version := "0.0.1-SNAPSHOT"
-      |publishLocal := { val result = publishLocal.value; IO.append(file("../publication-count.txt"), "published\n"); result }
+      |publishLocal := {
+      |  val result = publishLocal.value
+      |  val catalog = file("src/main/catalog/car/org/example/publication-fixture.yaml")
+      |  IO.write(catalog, IO.read(catalog).replaceAll("(?m)^    publishedAt: [^\\r\\n]+", "    publishedAt: " + java.time.OffsetDateTime.now().toString))
+      |  IO.append(file("../publication-count.txt"), "published\n")
+      |  result
+      |}
       |""".stripMargin)
-    take(_run_setup_command_(Vector("-C", root.resolve("repository").toString, "add", "--", "build.sbt")))
+    val catalog = root.resolve("repository").resolve(_catalog)
+    Files.createDirectories(catalog.getParent)
+    Files.writeString(catalog, "schemaVersion: 2\nkind: car\nversions:\n  - version: 0.0.1-SNAPSHOT\n" +
+      "    component: org.example.PublicationFixture\n    publishedAt: 2026-10-29T00:00:00+09:00\n" +
+      "    file: repository/car/fixture.car\n")
+    take(_run_setup_command_(Vector("-C", root.resolve("repository").toString, "add", "--", "build.sbt", _catalog)))
     take(_run_setup_command_(Vector("-C", root.resolve("repository").toString, "-c", "user.name=Fixture",
       "-c", "user.email=fixture@example.invalid", "commit", "-m", "configure ordinary local publication")))
   }
@@ -99,12 +123,33 @@ final class NativeLocalPublicationCliSpec extends AnyWordSpec with GivenWhenThen
     _initialize(root)
     def _status_(op: String, id: String) = _call(root, op, id, installed).hcursor.get[String]("status").toOption.get
     When("ordinary CLI ensure publishes once, a new process collects it, and a new prerequisite observes the same source")
-    _status_("ensureLocalPublication", "first") shouldBe "published"
-    _status_("collectLocalPublication", "first") shouldBe "published"
-    _status_("ensureLocalPublication", "first") shouldBe "published"
-    _status_("ensureLocalPublication", "same-source") shouldBe "unnecessary"
+    val first = _status_("ensureLocalPublication", "first")
+    val collected = _status_("collectLocalPublication", "first")
+    val repeated = _status_("ensureLocalPublication", "first")
+    val samesource = _status_("ensureLocalPublication", "same-source")
     Then("only the runtime-owned actual SBT invocation published and no Session was started")
+    first shouldBe "published"
+    collected shouldBe "published"
+    repeated shouldBe "published"
+    samesource shouldBe "unnecessary"
     Files.readString(root.resolve("publication-count.txt")).linesIterator.toVector shouldBe Vector("published")
+    val catalog = root.resolve("repository").resolve(_catalog)
+    Files.readString(catalog) should not include "2026-10-29T00:00:00+09:00"
+    Given("the retained successful publication with its actual timestamp output")
+    When("actual catalog metadata changes after the timestamp-only publication output")
+    Files.writeString(catalog, Files.readString(catalog).replace("repository/car/fixture.car", "repository/car/changed.car"))
+    val changedcatalog = _status_("ensureLocalPublication", "changed-catalog")
+    Then("the meaningful catalog input requires a second ordinary publication")
+    changedcatalog shouldBe "published"
+    Files.readString(root.resolve("publication-count.txt")).linesIterator.toVector shouldBe Vector("published", "published")
+    Given("the actual second publication and its changed catalog")
+    When("the changed catalog is staged and another source input is dirty")
+    take(_run_setup_command_(Vector("-C", root.resolve("repository").toString, "add", "--", _catalog)))
+    Files.writeString(root.resolve("repository/build.sbt"), "\n// A genuine changed build input\n", java.nio.file.StandardOpenOption.APPEND)
+    val stagedsource = _status_("ensureLocalPublication", "staged-catalog-and-source")
+    Then("projection preserves staged catalog and other source changes")
+    stagedsource shouldBe "published"
+    Files.readString(root.resolve("publication-count.txt")).linesIterator.toVector shouldBe Vector.fill(3)("published")
     _status_("collectLocalPublication", "absent") shouldBe "not-found"
   }
   "Runtime-owned local publication" should {
