@@ -24,7 +24,7 @@ import WorkflowManagedProcessExecution as Process
   * client stage command, SQL provider or component-owned process is used.
   * Fetch and DB commits are separate effects: an uncertain call never retries.
   * @since   Oct.  6, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncManagedFetch {
@@ -43,7 +43,8 @@ private[smworkflow] object RepositorySyncManagedFetch {
     completionRecords: Option[CompletionRecords.Policy] = None,
     runtimeCleanSync: Boolean = false,
     documentInputs: Option[RepositorySyncDocumentInputs.Policy] = None,
-    evidencePolicy: Option[CommonEvidence.Policy] = None)
+    evidencePolicy: Option[CommonEvidence.Policy] = None,
+    programEvidence: Option[RepositorySyncProgramImpact.EvidencePort] = None)
   final case class StartContext(selectionIdentity: String, invocationIdentity: String,
     participantIdentity: String, repositoryIdentity: String, localBranch: String,
     trackingRemote: String, trackingBranch: String, remoteEndpointIdentity: String, syncMode: String)

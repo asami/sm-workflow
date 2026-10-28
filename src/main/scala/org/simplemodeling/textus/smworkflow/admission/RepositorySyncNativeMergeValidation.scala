@@ -19,7 +19,7 @@ import WorkflowManagedProcessExecution as E
 /** Actual managed checks, with native intent/result boundaries. Nothing here
   * accepts a caller's success claim or runs an unrecorded retained intent again.
   * @since   Oct.  6, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeValidation {
@@ -36,20 +36,21 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
     } yield Check(identity, ordinal, kind))
   }
   final case class Policy(identity: String, revision: Int, mode: String, reason: String, checks: Vector[Check],
-    assessment: Option[RepositorySyncMergeAssessment.Policy] = None) {
+    assessment: Option[RepositorySyncMergeAssessment.Policy] = None,
+    impact: Option[RepositorySyncProgramImpact.Policy] = None) {
     def validateC: Consequence[Unit] = if (id(identity) && revision > 0 && reason != null &&
         reason.trim.nonEmpty && reason.length <= 4096 && checks != null && checks.size <= 16 &&
         checks.forall(c => c != null && id(c.identity) && !Set("index-local", "index-remote")(c.identity) &&
           c.kind != null && c.ordinal > 0 && c.ordinal <= 16) && checks.map(_.identity).distinct.size == checks.size &&
         checks.map(_.ordinal).distinct.size == checks.size &&
-        assessment != null &&
+        assessment != null && impact != null &&
         ((mode == "explicit-no-product-tests" && checks.isEmpty) || (mode == "required" && checks.nonEmpty)))
       assessment.fold(Consequence.unit)(RepositorySyncMergeAssessment.validateC)
       else N.invalid("pending-merge validation policy is incomplete or contradictory")
   }
   object Policy {
     given Encoder[Policy] = deriveEncoder[Policy].mapJson(_.mapObject(_.filter {
-      case ("assessment", value) => !value.isNull
+      case ("assessment" | "impact", value) => !value.isNull
       case _ => true
     }))
     given Decoder[Policy] = deriveDecoder
@@ -109,9 +110,10 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       } yield Receipt(identity, termination, exit, stdout, stderr, sbt))
   }
   final case class State(mode: String, reason: String, selected: Vector[Check], sourceRevision: String, receipts: Vector[Receipt],
-    inputs: Option[RepositorySyncDocumentInputs.Assessment] = None)
+    inputs: Option[RepositorySyncDocumentInputs.Assessment] = None,
+    impact: Option[RepositorySyncProgramImpact.Selection] = None)
   private given Encoder[State] = deriveEncoder[State].mapJson(_.mapObject(_.filter {
-    case ("inputs", value) => !value.isNull
+    case ("inputs" | "impact", value) => !value.isNull
     case _ => true
   }))
   private given Decoder[State] = deriveDecoder
@@ -147,10 +149,16 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       else N.invalid("validation requires the genuine selected pending merge")
     inputs <- if (store.declaration.runtimeCleanSync) RepositorySyncDocumentInputs.captureC(store, pending).map(Some(_))
       else Consequence.success(None)
-    _ <- if (inputs.forall(_.documentOnly)) Consequence.unit
-      else N.invalid("program/unknown consumed inputs require impact-selected validation; consumed=" +
-        inputs.get.consumedPaths.mkString(",") + "; unknown=" + inputs.get.unknownPaths.mkString(","))
-    selected <- selectedC(store, pending, policy, merge = true, namespace = namespace, inputs = inputs)
+    prepared <- if (inputs.forall(_.documentOnly)) Consequence.success(
+      (Option.empty[RepositorySyncProgramImpact.Selection], Map.empty[String, Receipt]))
+      else policy.impact match {
+        case Some(impact) => RepositorySyncProgramImpact.prepareC(store, pending, inputs.get, impact)
+          .map((selection, receipts) => (Some(selection), receipts))
+        case None => N.invalid("program/unknown consumed inputs require impact-selected validation; consumed=" +
+          inputs.get.consumedPaths.mkString(",") + "; unknown=" + inputs.get.unknownPaths.mkString(","))
+      }
+    selected <- selectedC(store, pending, policy, merge = true, namespace = namespace, inputs = inputs,
+      impact = prepared._1, reused = prepared._2)
   } yield selected
 
   /** Equal, local-ahead and fast-forward integrations introduce no semantic
@@ -178,7 +186,8 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
   } yield ()
 
   private def selectedC(store: N.Store, pending: N.Stage, policy: Policy, merge: Boolean,
-    namespace: String, inputs: Option[RepositorySyncDocumentInputs.Assessment] = None): Consequence[N.Stage] = for {
+    namespace: String, inputs: Option[RepositorySyncDocumentInputs.Assessment] = None,
+    impact: Option[RepositorySyncProgramImpact.Selection] = None, reused: Map[String, Receipt] = Map.empty): Consequence[N.Stage] = for {
     _ <- preconditionsC(store, pending)
     complete <- store.loadC(N.candidateKey(namespace, if (merge) "merge-validated" else "integration-validated"))
     selected <- complete match {
@@ -193,12 +202,14 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
         if (prefix.nonEmpty && !RepositorySyncValidationContinuation.validPrefix(prefix, policy))
           N.invalid("continuation seed is not a successful contiguous selected prefix")
         else checksC(store, pending, policy,
-          State(policy.mode, policy.reason, policy.checks, pending.record.revision.value.toString, prefix, inputs), merge, namespace)
+          State(policy.mode, impact.map(_.reason).getOrElse(policy.reason),
+            if (store.declaration.runtimeCleanSync && merge) impact.map(_.checks).getOrElse(Vector.empty) else policy.checks,
+            pending.record.revision.value.toString, prefix, inputs, impact), merge, namespace, reused)
     }
   } yield selected
 
   private def checksC(store: N.Store, pending: N.Stage, policy: Policy, selection: State, merge: Boolean,
-    namespace: String): Consequence[N.Stage] = {
+    namespace: String, reused: Map[String, Receipt] = Map.empty): Consequence[N.Stage] = {
     val structural = if (merge) 2 else 1
     val checks = Vector(Check("index-local", 0)) ++ (if (merge) Vector(Check("index-remote", 0)) else Vector.empty) ++ selection.selected
     val checking = if (merge) "ValidationChecking" else "IntegrationValidationChecking"
@@ -237,9 +248,12 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
                   }
                   receipt <- receiptC(check.identity, raw)
                 } yield receipt
-                  else E.repositoryValidationC(store.core, check.ordinal, check.kind)
+                  else reused.get(check.identity) match {
+                    case Some(actual) => Consequence.success(actual)
+                    case None => E.repositoryValidationC(store.core, check.ordinal, check.kind)
                     .flatMap(sbtReceiptC(check.identity, check.kind, _))
-                _ <- store.acknowledgeC("merge-check-executed:" + check.identity)
+                  }
+                _ <- store.acknowledgeC((if (reused.contains(check.identity)) "merge-check-reused:" else "merge-check-executed:") + check.identity)
                 recorded <- store.saveC(N.candidateKey(namespace, "validation-result-" + index), "native-check-recorded", prepared.record,
                   pending.payload.copy(stage = checking, validation = Some(state.copy(receipts = receipts :+ receipt))))
                 _ <- store.acknowledgeC("merge-check-recorded:" + check.identity)

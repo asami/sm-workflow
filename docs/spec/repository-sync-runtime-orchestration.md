@@ -132,3 +132,22 @@ unexamined. Large text uses CommonEvidence and `EvidenceService.readEvidenceRang
 with zero-based Unicode code point offset/count; range access is not review
 coverage. See the [S2 source/evidence note](../notes/phase-6.9-s2-merge-assessment.md)
 for configuration, API inputs, authored cases and runtime qualification limits.
+
+## S3 program impact connection
+
+The standard runtime accepts optional host `sm-workflow.repository-sync.program-inputs`
+coverage/consumption scopes, explicit broad input paths, ordinary focused/FULL
+check bindings and native prior-evidence locators. Actual typed parent/index
+changes select coverage; broad or uncovered input changes select FULL with
+their actual paths and rationale. Merge/UPDATED and metadata alone select no
+FULL, and this route adds no HEAVY selection. Known consumed paths are distinct
+from unknown semantic inputs.
+
+Prior evidence is read from actual managed GoalPhase Start, validation and
+committed accepted Step closure records under the same repository/branch and
+principal. Exact typed consumed-input deltas govern reuse; original receipts and
+review references retain their source attribution. Successful validation never
+manufactures independent review or waives unresolved merge interaction. Failed
+and unknown native checks retain their existing FIX and no-blind-replay routes.
+See the [S3 source/evidence note](../notes/phase-6.9-s3-program-impact.md) for
+configuration, authored specifications and remaining qualification limits.

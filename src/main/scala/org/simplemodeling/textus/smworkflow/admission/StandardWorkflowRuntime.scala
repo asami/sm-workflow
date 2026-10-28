@@ -21,7 +21,7 @@ import org.simplemodeling.textus.smworkflow.value.{GoalPhaseStartInput, Reposito
   * selected Phase or Plan. Read actual Start input or the retained native run
   * only when its Operation executes, within that call's ordinary storage/UoW.
   * @since   Oct. 27, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   */
 private[smworkflow] object StandardWorkflowRuntime {
   private final case class Shared(persistence: GoalPhaseRuntimeParameters.Persistence,
@@ -171,9 +171,15 @@ private[smworkflow] object StandardWorkflowRuntime {
     input = selectedInput._1
     classifications <- RepositorySyncNativeExecution.resolveC(parameters)
     documentInputs <- RepositorySyncDocumentInputs.resolveC(parameters)
-    validation = if (selectedInput._2) documentValidation else repositoryValidation
+    programInputs <- RepositorySyncProgramImpact.resolveC(parameters)
+    validation = if (selectedInput._2) programInputs.fold(documentValidation)(p => documentValidation.copy(
+      identity = "impact-repository-sync", mode = "required", checks = p.checks, impact = Some(p))) else repositoryValidation
+    goalDefinition <- GoalPhaseRuntimeCatalog.loadC()
+    evidenceStorage <- WorkflowComponentStorage.bindC(creation, SmWorkflowComponent.componentId, p.configuration,
+      Vector(goalDefinition.definition), p.instances, p.continuations)
     declaration = RepositorySyncManagedFetch.Declaration(p.configuration, p.instances, p.continuations, input,
-      target, shared.profiles, shared.origin, classifications, shared.journal, runtimeCleanSync = selectedInput._2, documentInputs = documentInputs, evidencePolicy = shared.evidence)
+      target, shared.profiles, shared.origin, classifications, shared.journal, runtimeCleanSync = selectedInput._2, documentInputs = documentInputs, evidencePolicy = shared.evidence,
+      programEvidence = Some(RepositorySyncProgramImpact.evidencePort(evidenceStorage)))
     // Before review use actual conflicts; afterwards use that issued review's
     // retained candidate paths so staging does not erase the repair scope.
     paths <- if (request.operation == "startRepositorySync") Consequence.success(Set.empty[String])
@@ -206,8 +212,23 @@ private[smworkflow] object StandardWorkflowRuntime {
         work <- retained.map(Consequence.success).getOrElse(invalid("Native merge review input is missing"))
         input <- NativeWorkflowOperationOutput.workInputC(work)
       } yield input.changedPaths.toSet
-      case None => WorkflowManagedProcessExecution.executeGitC(selectedcore,
-        org.goldenport.cncf.processexecution.GitOperation.UnmergedIndex).flatMap(_.valueC).map(_.map(_.path.value).toSet)
+      case None => for {
+        unmerged <- WorkflowManagedProcessExecution.executeGitC(selectedcore,
+          org.goldenport.cncf.processexecution.GitOperation.UnmergedIndex).flatMap(_.valueC)
+        selected <- if (unmerged.nonEmpty || !session.started.current.currentProgression.exists(p =>
+            Set("sync.PendingMergePrepared", "sync.ValidationChecking", "sync.ValidationRepairRequired", "sync.MergeValidated")(p.value))) Consequence.success(unmerged.map(_.path.value).toSet)
+          else for {
+            store <- RepositorySyncNativeProgressStore.bindC(session, declaration, selectedcore, _ => Consequence.unit)
+            candidate <- store.currentMergeCandidateC(session.started.current)
+            _ <- RepositorySyncNativeMergeValidation.preconditionsC(store, candidate.pending)
+            local <- org.goldenport.cncf.processexecution.GitObjectId.parseC(candidate.pending.payload.before.head)
+            remote <- org.goldenport.cncf.processexecution.GitObjectId.parseC(candidate.pending.payload.mergeHead.get)
+            localPaths <- WorkflowManagedProcessExecution.executeGitC(selectedcore,
+              org.goldenport.cncf.processexecution.GitOperation.PendingPaths(local)).flatMap(_.valueC)
+            remotePaths <- WorkflowManagedProcessExecution.executeGitC(selectedcore,
+              org.goldenport.cncf.processexecution.GitOperation.PendingPaths(remote)).flatMap(_.valueC)
+          } yield (localPaths ++ remotePaths).map(_.value).toSet
+      } yield selected
     }
   } yield paths
 

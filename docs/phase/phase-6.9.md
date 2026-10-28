@@ -1,6 +1,6 @@
 # Phase 6.9: Runtime-owned RepositorySync and Purpose-based Commits
 
-Status: S1 accepted with three installed clean observations; S2 source/specification authored, checks pending. Phase acceptance remains pending.
+Status: S1 accepted with three installed clean observations; S2 accepted with its five behavioral cases passed; S3 source/specification authored, runtime checks pending. Phase acceptance remains pending.
 Date: 2026-10-27
 Owner: sm-workflow development
 Sequence: Phase 6.7 -> Phase 6.8 -> Phase 6.9 -> Phase 6.10 -> Phase 7
@@ -60,3 +60,6 @@ Phase condition is satisfied by authored fixtures alone.
 S2 connects conditional document-merge assessment and public retained-text ranges;
 see its [source/evidence note](../notes/phase-6.9-s2-merge-assessment.md). Program
 impact selection and integrated qualification retain their later selected Steps.
+
+S3 authored impact selection, native evidence applicability and limitations are recorded in the
+[program impact note](../notes/phase-6.9-s3-program-impact.md). All phase acceptance flags remain unchanged.

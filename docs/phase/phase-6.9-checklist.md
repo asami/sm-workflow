@@ -1,6 +1,6 @@
 # Phase 6.9 acceptance checklist
 
-Status: pending integrated acceptance. S1 is accepted with three installed clean observations; S2 source/specification is authored with runtime checks outstanding.
+Status: pending integrated acceptance. S1 is accepted with three installed clean observations; S2 is accepted with its five behavioral cases passed; S3 source/specification is authored with runtime checks outstanding.
 Owner: [Phase 6.9](phase-6.9.md).
 Contract: [runtime orchestration](../spec/repository-sync-runtime-orchestration.md).
 
@@ -51,3 +51,6 @@ connected standard clean route and explicit qualification limits.
 S2 authored behavior and limits are recorded in the
 [merge assessment note](../notes/phase-6.9-s2-merge-assessment.md). All phase
 conditions remain unchecked until the owning integrated assessment.
+
+S3 authored impact selection, native evidence applicability and limitations are recorded in the
+[program impact note](../notes/phase-6.9-s3-program-impact.md). All phase acceptance flags remain unchanged.

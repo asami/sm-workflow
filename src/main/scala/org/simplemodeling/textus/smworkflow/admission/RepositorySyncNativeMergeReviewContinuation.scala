@@ -20,7 +20,7 @@ import RepositorySyncNativeProgressStore as N
   * file writes, validation acceptance or commit/push authority. No pool,
   * provider, execution-context lease or semantic routing is retained by host.
   * @since   Oct.  6, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
@@ -136,7 +136,9 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
       case Some(policy) => RepositorySyncMergeAssessment.captureC(source.store, source.validated, policy).map(value =>
         value.overlappingPaths.map("Actual parent overlap: " + _) ++ value.contractPaths.map("Selected contract path: " + _) ++
           source.validated.payload.validation.toVector.flatMap(_.inputs.toVector.flatMap(_.binaryPaths))
-            .map("Unexamined binary document: " + _))
+            .map("Unexamined binary input: " + _) ++
+          source.validated.payload.validation.toVector.flatMap(_.inputs.toVector.flatMap(_.unknownPaths))
+            .map("Unexamined unknown input: " + _))
     }
 
     def acceptedC(identity: String, core: ActionCall.Core): Consequence[Option[N.Stage]] =

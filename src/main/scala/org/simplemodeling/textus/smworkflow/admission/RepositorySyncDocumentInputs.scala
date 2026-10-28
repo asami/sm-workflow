@@ -12,7 +12,7 @@ import RepositorySyncNativeProgressStore as N
   * Actual native parent/index deltas decide applicability. Neither docs/ nor a
   * changed commit is a no-program-change certificate or a fresh PASS receipt.
   * @since   Oct. 28, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   */
 private[smworkflow] object RepositorySyncDocumentInputs {
   final case class Policy(documentPaths: Vector[String], consumedPaths: Vector[String], reason: String)
@@ -71,7 +71,7 @@ private[smworkflow] object RepositorySyncDocumentInputs {
     changed = changes.map(_.path.value).distinct.sorted
     policy = store.declaration.documentInputs
     consumed = changed.filter(path => policy.exists(p => contains(p.consumedPaths, path)))
-    unknown = changed.filter(path => !policy.exists(p => contains(p.documentPaths, path))) ++
+    unknown = changed.filter(path => !policy.exists(p => contains(p.documentPaths, path) || contains(p.consumedPaths, path))) ++
       changes.filter(c => !Set("000000", "100644", "100755")(c.oldMode) ||
         !Set("000000", "100644", "100755")(c.newMode)).map(_.path.value)
     // Blob observations establish ordinary text independently of a diff-size
