@@ -54,3 +54,10 @@ conditions remain unchecked until the owning integrated assessment.
 
 S3 authored impact selection, native evidence applicability and limitations are recorded in the
 [program impact note](../notes/phase-6.9-s3-program-impact.md). All phase acceptance flags remain unchanged.
+
+S4 producer/consumer source and controlled public Operation specifications are authored
+under the actual Human258-approved dependency continuation. See the
+[purpose runtime note](../notes/phase-6.9-s4-purpose-runtime.md) and historical
+[capability boundary](../notes/phase-6.9-s4-capability-gap.md). Native checks,
+independent review, publication and installed qualification remain unobserved by
+the implementation agent. All phase acceptance flags remain unchanged.

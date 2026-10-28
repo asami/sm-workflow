@@ -15,7 +15,7 @@ import org.goldenport.cncf.workflow.WorkflowInstancePersistence.DefinitionBindin
 /** Binds actual generated Workflow/Provided API and Candidate-Admission
   * descriptors. Required review declarations are never added to entry metadata.
   * @since   Oct.  6, 2026
-  * @version Oct. 15, 2026
+  * @version Oct. 28, 2026
   */
 private[smworkflow] object RepositorySyncDefinitionBinding {
   // Bound each generated producer descriptor explicitly: one deeply nested
@@ -80,6 +80,17 @@ private[smworkflow] object RepositorySyncDefinitionBinding {
         GeneratedProvidedApiAbi.SourceIdentity(p.source.definition.line)),
       p.providedOperations.map(o => GeneratedProvidedApiAbi.Operation(o.service, o.name,
         o.inputType, o.resultType, GeneratedProvidedApiAbi.SourceIdentity(o.source.line))))
+  }
+
+  def purposeOperationC: Consequence[StateMachineRequiredOperation] = candidateC.flatMap { candidate =>
+    candidate.workflow.requiredSpi.find(_.capability == "group-repository-purpose-capability")
+      .map(spi => StateMachineRequiredOperation(StateMachineRequiredOperationIdentity(spi.capability), spi.actionIdentity,
+        StateMachineOperationIdentity(spi.operation.service, spi.operation.name),
+        spi.operation.inputType.map(StateMachineInputTypeReference(_)), spi.operation.resultType.map(StateMachineResultTypeReference(_)),
+        StateMachineRequiredOperationMetadata(ContextContract("repository-purpose-context-v1", Vector.empty, Vector.empty),
+          CompletionContract("repository-purpose-completion-v1", Vector.empty),
+          EvidenceContract("repository-purpose-evidence-v1", Vector.empty), Vector.empty)))
+      .map(Consequence.success).getOrElse(Consequence.stateConflict("Repository purpose SPI is absent"))
   }
 
   def conflictOperationC: Consequence[StateMachineRequiredOperation] = candidateC.flatMap { candidate =>

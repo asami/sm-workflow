@@ -65,7 +65,7 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
           wire <- waitC(next, value.completion.result)
         } yield wire
       }
-      journal <- assessment match {
+      journal <- (if (source.validated.payload.purposes.nonEmpty) None else assessment) match {
         case None => Consequence.success(None)
         case Some(policy) => for {
           selected <- RepositorySyncMergeAssessment.captureC(source.store, source.validated, policy)
@@ -87,11 +87,12 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
     def savedReviewC(identity: String, core: ActionCall.Core): Consequence[Option[SavedReview]] = for {
       session <- F.sessionC(identity, declaration, definition, core)
       store <- N.bindC(session, declaration, core, acknowledgement)
-      candidate <- if (session.started.current.history.exists(_.currentProgression.contains(ProgressionReference("sync.PendingMergePrepared"))))
-        store.currentMergeCandidateC(session.started.current).map(Some(_)) else Consequence.success(None)
-      validated <- candidate match {
-        case Some(value) => store.loadC(N.candidateKey(value.namespace, "merge-validated"))
-        case None => Consequence.success(None)
+      purpose <- store.currentPurposeC(session.started.current)
+      validated <- purpose match {
+        case Some(value) => Consequence.success(Some(value))
+        case None => if (session.started.current.history.exists(_.currentProgression.contains(ProgressionReference("sync.PendingMergePrepared"))))
+          store.currentMergeCandidateC(session.started.current).flatMap(value => store.loadC(N.candidateKey(value.namespace, "merge-validated")))
+          else Consequence.success(None)
       }
       saved <- validated match {
         case None => Consequence.success(None)
@@ -122,7 +123,7 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
       }
     } yield result
 
-    private def _mode_c(source: Source): Consequence[String] = assessment match {
+    private def _mode_c(source: Source): Consequence[String] = (if (source.validated.payload.purposes.nonEmpty) None else assessment) match {
       case None => Consequence.success("detailed-review")
       case Some(policy) => for {
         selected <- RepositorySyncMergeAssessment.captureC(source.store, source.validated, policy)
@@ -131,7 +132,7 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
       } yield if (selected.branch == "semantic-uncertainty" && !prior.exists(value =>
         Set("suspicious", "decline")(value.result.result.value.decision))) "triage" else "detailed-review"
     }
-    private def _uncertainties_c(source: Source): Consequence[Vector[String]] = assessment match {
+    private def _uncertainties_c(source: Source): Consequence[Vector[String]] = (if (source.validated.payload.purposes.nonEmpty) None else assessment) match {
       case None => Consequence.success(Vector.empty)
       case Some(policy) => RepositorySyncMergeAssessment.captureC(source.store, source.validated, policy).map(value =>
         value.overlappingPaths.map("Actual parent overlap: " + _) ++ value.contractPaths.map("Selected contract path: " + _) ++
@@ -159,10 +160,14 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
     private def sourceC(identity: String, core: ActionCall.Core): Consequence[Source] = for {
       session <- F.sessionC(identity, declaration, definition, core)
       store <- N.bindC(session, declaration, core, acknowledgement)
-      candidate <- store.currentMergeCandidateC(session.started.current)
-      validated <- store.loadC(N.candidateKey(candidate.namespace, "merge-validated")).flatMap {
+      purpose <- store.currentPurposeC(session.started.current)
+      validated <- purpose match {
         case Some(value) => Consequence.success(value)
-        case _ => invalid("semantic review selection has no genuine native review")
+        case None => store.currentMergeCandidateC(session.started.current).flatMap(candidate =>
+          store.loadC(N.candidateKey(candidate.namespace, "merge-validated"))).flatMap {
+            case Some(value) => Consequence.success(value)
+            case _ => invalid("semantic review selection has no genuine native review")
+          }
       }
       source <- _source_from_loaded_c(session, store, validated, core)
     } yield source
@@ -174,7 +179,7 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
           Set(F.advanceOperation.operation, completionOperation.operation,
             RepositorySyncNativeMergeRepairContinuation.completionOperation.operation)(core.action.request.operation)) Consequence.unit
         else invalid("review continuation requires its actual owning Operation")
-      _ <- if (validated.payload.stage == "MergeValidated") Consequence.unit
+      _ <- if (Set("MergeValidated", "PurposeChecked")(validated.payload.stage)) Consequence.unit
         else invalid("semantic review selection has no genuine native review")
       current = session.started.current
     } yield Source(session, store, validated, current)

@@ -111,7 +111,8 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
   val declarations: Vector[ComponentParameterKey[?]] =
     GoalPhaseRuntimeParameters.declarations ++ Vector(definition, WorkflowExecutionProfileParameters.declaration,
       GoalPhaseNativeExecution.declaration, GoalPhaseAcceptanceBoundary.declaration, GoalPhaseFindingRecording.declaration,
-      RepositorySyncNativeExecution.declaration, RepositorySyncDocumentInputs.declaration, RepositorySyncProgramImpact.declaration, SplitPhaseNativeExecution.declaration, DevelopmentJournal.declaration, CommonEvidence.declaration,
+      RepositorySyncNativeExecution.declaration, RepositorySyncDocumentInputs.declaration, RepositorySyncProgramImpact.declaration,
+      RepositorySyncPurpose.declaration, SplitPhaseNativeExecution.declaration, DevelopmentJournal.declaration, CommonEvidence.declaration,
       completionPolicy, validationRepairCallerSource, developmentObservation, LocalPublicationRuntime.declaration, CommitHygiene.declaration, CompletionRecords.declaration)
   lazy val factory = new SmWorkflowConfiguredComponentFactory(declarations, Vector.empty,
     bindServicesC, ThreeWorkflowLauncherAssembly.publishedMcpOperations)
@@ -149,6 +150,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
       executionprofiles <- WorkflowExecutionProfileParameters.resolveC(parameters)
       executionorigin <- GoalPhaseNativeExecution.resolveOriginC(parameters)
       repositoryclassifications <- RepositorySyncNativeExecution.resolveC(parameters)
+      purposePolicy <- RepositorySyncPurpose.resolveC(parameters)
       splitclassifications <- SplitPhaseNativeExecution.resolveC(parameters)
       _ <- SplitPhaseNativeExecution.validateC(splitclassifications, executionprofiles, executionorigin)
       projectacceptance <- GoalPhaseAcceptanceBoundary.resolveProjectC(parameters)
@@ -163,7 +165,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
       evidence <- NativeExternalEvidence.bindC(creation.configuration, persistence)
       repository = RepositorySyncManagedFetch.Declaration(persistence.configuration, persistence.instances,
         persistence.continuations, settings.repository.input, target, executionprofiles, executionorigin, repositoryclassifications, journalpolicy,
-        hygiene, settings.goal.candidatePaths, records)
+        hygiene, settings.goal.candidatePaths, records, purposePolicy = purposePolicy)
       ports = new ThreeWorkflowExternalEvidencePorts(evidence)
       closure = GoalPhaseNativeRepositoryClosure.Installation(repository,
         ports.phaseClosure, settings.repository.validation, ports.convergence,

@@ -18,7 +18,7 @@ import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms
   * and per-effect evidence rows. This projection grants no CNCF capability:
   * every Git operation still passes the configured managed execution boundary.
   * @since   Oct. 28, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   */
 private[smworkflow] object StandardRepositorySyncIntent {
   private val prefix = "runtime-repository-sync:"
@@ -100,7 +100,7 @@ private[smworkflow] object StandardRepositorySyncIntent {
           context.syncMode == "FULL_STATE" && context.localBranch == target.localBranch &&
           context.trackingRemote == target.remote && context.trackingBranch == target.remoteBranch &&
           Set(RepositorySyncNativeConvergence.Effect.CommitPending, RepositorySyncNativeConvergence.Effect.Push,
-            RepositorySyncNativeConvergence.Effect.FinalFetch)(effect))
+            RepositorySyncNativeConvergence.Effect.FinalFetch, RepositorySyncNativeConvergence.Effect.PurposeCommit)(effect))
         Consequence.unit
         else Consequence.securityPermissionDenied("Repository effect is outside the retained sync request; native merge acceptance and configured Git grants remain required")
     } yield ()

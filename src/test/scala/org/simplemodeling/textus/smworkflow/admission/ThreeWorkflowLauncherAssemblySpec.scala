@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  6, 2026
- * @version Oct. 27, 2026
+ * @version Oct. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -69,7 +69,7 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
         "SplitPhaseService.startSplitPhase", "SplitPhaseService.advanceSplitPhase", "SplitPhaseService.submitPartitionSemanticResult",
         "SplitPhaseService.submitHandoffScopeResult", "SplitPhaseService.submitSplitHumanDirection", "SplitPhaseService.submitReasoningResult",
         "RepositorySyncService.startRepositorySync", "RepositorySyncService.advanceRepositorySync",
-        "RepositorySyncService.submitRepositorySyncWorkResult", "RepositorySyncService.submitNativeMergeReview",
+        "RepositorySyncService.submitRepositorySyncWorkResult", "RepositorySyncService.submitRepositoryPurposeResult", "RepositorySyncService.submitNativeMergeReview",
         "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitNativeMergeRepair",
         "LocalPublicationService.ensureLocalPublication", "LocalPublicationService.collectLocalPublication",
         "JournalService.readJournalEntry", "EvidenceService.readEvidence", "EvidenceService.recordEvidenceJournal",

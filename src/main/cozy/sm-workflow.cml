@@ -2450,6 +2450,36 @@ OperationResult
 | issuedWorkContext | WorkflowIssuedWorkContext | ? |
 | repair | RepositorySyncNativeMergeRepairRequest | ? |
 | journalRecording | JournalRecordingState | ? |
+| purposeWork | record | ? |
+
+## RepositorySyncPurposeRequest
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| repository | string | 1 |
+| root | string | 1 |
+| branch | string | 1 |
+| parent | string | 1 |
+| indexTree | string | 1 |
+| files | record | * |
+| records | record | * |
+
+## RepositorySyncPurposeResult
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| decision | string | 1 |
+| rationale | string | 1 |
+| groups | record | * |
+| excludedPaths | string | * |
 
 ## RepositorySyncConflictBlob
 
@@ -4811,6 +4841,12 @@ state-machine = RepositorySyncBoundaryLifecycle
 subject = sync
 subject-type = RepositorySyncStartInput
 
+##### purpose
+
+state-machine = RepositorySyncPurposeContext
+subject = dirtyPurpose
+subject-type = RepositorySyncPurposeRequest
+
 ##### conflict
 
 state-machine = RepositorySyncNativeConflictContext
@@ -4842,6 +4878,30 @@ subject-type = RepositorySyncHumanConflictRequest
 ##### Fetching
 
 ##### FetchAdmitted
+
+##### PurposeInventory
+
+##### PurposeGrouped
+
+##### PurposePreparing
+
+##### PurposePrepared
+
+##### PurposeMaterializing
+
+##### PurposeMaterialized
+
+##### PurposeChecking
+
+##### PurposeChecked
+
+##### PurposeInstalling
+
+##### PurposeInstalled
+
+##### PurposeRepairRequired
+
+##### PurposeUnfinished
 
 ##### Preserving
 
@@ -4915,201 +4975,291 @@ subject-type = RepositorySyncHumanConflictRequest
 
 #### DERIVATION
 
+##### purpose-inventory
+
+state = PurposeInventory
+when = sync.PurposeInventory, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### purpose-grouped
+
+state = PurposeGrouped
+when = sync.PurposeGrouped, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### purpose-preparing
+
+state = PurposePreparing
+when = sync.PurposePreparing, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### purpose-prepared
+
+state = PurposePrepared
+when = sync.PurposePrepared, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### purpose-materializing
+
+state = PurposeMaterializing
+when = sync.PurposeMaterializing, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### purpose-materialized
+
+state = PurposeMaterialized
+when = sync.PurposeMaterialized, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### purpose-checking
+
+state = PurposeChecking
+when = sync.PurposeChecking, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### purpose-checked
+
+state = PurposeChecked
+when = sync.PurposeChecked, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### purpose-installing
+
+state = PurposeInstalling
+when = sync.PurposeInstalling, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### purpose-installed
+
+state = PurposeInstalled
+when = sync.PurposeInstalled, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### purpose-repairrequired
+
+state = PurposeRepairRequired
+when = sync.PurposeRepairRequired, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### purpose-unfinished
+
+state = PurposeUnfinished
+when = sync.PurposeUnfinished, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
 ##### boundary-pending
 
 state = BoundaryPending
-when = sync.BoundaryAssessment, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.BoundaryAssessment, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### fetch-admitted
 
 state = FetchAdmitted
-when = sync.FetchAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.FetchAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### fetching
 
 state = Fetching
-when = sync.Fetching, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.Fetching, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### local-state-preserved
 
 state = LocalStatePreserved
-when = sync.LocalStatePreserved, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.LocalStatePreserved, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### preserving
 
 state = Preserving
-when = sync.Preserving, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.Preserving, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### index-captured
 
 state = IndexCaptured
-when = sync.IndexCaptured, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.IndexCaptured, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### checkpoint-creating
 
 state = CheckpointCreating
-when = sync.CheckpointCreating, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.CheckpointCreating, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### checkpoint-created
 
 state = CheckpointCreated
-when = sync.CheckpointCreated, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.CheckpointCreated, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### checkpoint-installing
 
 state = CheckpointInstalling
-when = sync.CheckpointInstalling, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.CheckpointInstalling, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### integrating
 
 state = Integrating
-when = sync.Integrating, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.Integrating, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### integrated
 
 state = Integrated
-when = sync.Integrated, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.Integrated, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### integration-validation-checking
 
 state = IntegrationValidationChecking
-when = sync.IntegrationValidationChecking, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.IntegrationValidationChecking, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### integration-validated
 
 state = IntegrationValidated
-when = sync.IntegrationValidated, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.IntegrationValidated, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### validation-continuation-admitted
 
 state = ValidationContinuationAdmitted
-when = sync.ValidationContinuationAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.ValidationContinuationAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### merge-conflicted
 
 state = MergeConflicted
-when = sync.MergeConflicted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.MergeConflicted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### merge-resolution-admitted
 
 state = MergeResolutionAdmitted
-when = sync.MergeResolutionAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.MergeResolutionAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### materializing-conflict
 
 state = MaterializingConflict
-when = sync.MaterializingConflict, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.MaterializingConflict, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### validation-checking
 
 state = ValidationChecking
-when = sync.ValidationChecking, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.ValidationChecking, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### conflict-decision-required
 
 state = ConflictDecisionRequired
-when = sync.ConflictDecisionRequired, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.ConflictDecisionRequired, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### pending-merge-prepared
 
 state = PendingMergePrepared
-when = sync.PendingMergePrepared, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.PendingMergePrepared, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### merge-validated
 
 state = MergeValidated
-when = sync.MergeValidated, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.MergeValidated, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### review-accepted
 
 state = ReviewAccepted
-when = sync.ReviewAccepted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.ReviewAccepted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### merge-admitted
 
 state = MergeAdmitted
-when = sync.MergeAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.MergeAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### merge-triage-clean
 
 state = MergeTriageClean
-when = sync.MergeTriageClean, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.MergeTriageClean, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### merge-review-required
 
 state = MergeReviewRequired
-when = sync.MergeReviewRequired, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.MergeReviewRequired, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### review-repair-required
 
 state = ReviewRepairRequired
-when = sync.ReviewRepairRequired, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.ReviewRepairRequired, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### repair-proposal-admitted
 
 state = RepairProposalAdmitted
-when = sync.RepairProposalAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.RepairProposalAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### validation-repair-required
 
 state = ValidationRepairRequired
-when = sync.ValidationRepairRequired, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.ValidationRepairRequired, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### repair-decision-required
 
 state = RepairDecisionRequired
-when = sync.RepairDecisionRequired, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.RepairDecisionRequired, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### materializing-repair
 
 state = MaterializingRepair
-when = sync.MaterializingRepair, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.MaterializingRepair, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### review-decision-required
 
 state = ReviewDecisionRequired
-when = sync.ReviewDecisionRequired, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.ReviewDecisionRequired, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### review-rejected
 
 state = ReviewRejected
-when = sync.ReviewRejected, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.ReviewRejected, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### native-commit-preparing
 
 state = NativeCommitPreparing
-when = sync.NativeCommitPreparing, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.NativeCommitPreparing, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### native-commit-observed
 
 state = NativeCommitObserved
-when = sync.NativeCommitObserved, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.NativeCommitObserved, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### native-push-preparing
 
 state = NativePushPreparing
-when = sync.NativePushPreparing, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.NativePushPreparing, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### native-push-observed
 
 state = NativePushObserved
-when = sync.NativePushObserved, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.NativePushObserved, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### native-final-fetching
 
 state = NativeFinalFetching
-when = sync.NativeFinalFetching, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.NativeFinalFetching, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### converged
 
 state = Converged
-when = sync.Converged, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+when = sync.Converged, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 #### INITIAL
 
-sync.BoundaryAssessment, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained
+sync.BoundaryAssessment, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 #### ACTION
+
+##### GroupRepositoryPurposes
+
+kind = JUDGMENT
+operation = groupRepositoryPurposes
+input = purpose.subject
+goal = group-only-unresolved-dirty-purpose-and-dependency-intent
+context = actual-inventory-and-existing-task-step-finding-journal-records
+candidate = bounded-purpose-content-proposals
+alternative = resolved
+alternative = decision-needed
+criteria = preserve-excluded-ongoing-work-and-partial-staging
+criteria = valid-dependency-order-and-explicit-inseparable-coalescing
+criteria = no-check-review-command-or-effect-authority
+expected-result = purpose-plan-only
+rationale = purpose-rationale
+evidence = issued-native-purpose-context
+evidence-scope = actual-dirty-paths
+evidence-freshness = actual-native-purpose-revision
+evidence-provenance = workflow-owned-result-reference
+
+##### AdmitRepositoryPurposes
+
+kind = ADMISSION
+operation = admitRepositoryPurposes
+input = purpose.subject
+candidate-action = GroupRepositoryPurposes
+effect = LOCAL
+transaction = REQUIRED
+idempotency = NOT_REQUIRED
 
 ##### ResolveRepositoryMergeConflicts
 
@@ -5211,6 +5361,10 @@ input = humanConflict.subject
 
 ### REQUIRED-OPERATION
 
+#### group-repository-purpose-capability
+
+action = GroupRepositoryPurposes
+
 #### resolve-repository-conflict-capability
 
 action = ResolveRepositoryMergeConflicts
@@ -5245,6 +5399,10 @@ operation = RepositorySyncService.describeRepositorySyncValidationContinuation
 
 operation = RepositorySyncService.adoptRepositorySyncValidationContinuation
 
+#### submitRepositoryPurposeResult
+
+operation = RepositorySyncService.submitRepositoryPurposeResult
+
 #### submitRepositorySyncWorkResult
 
 operation = RepositorySyncService.submitRepositorySyncWorkResult
@@ -5260,6 +5418,14 @@ operation = RepositorySyncService.submitNativeMergeRepair
 #### submitRepositoryConflictDecision
 
 operation = RepositorySyncService.submitRepositoryConflictDecision
+
+# STATE-MACHINE
+
+## RepositorySyncPurposeContext
+
+### STATE
+
+#### Retained
 
 # STATE-MACHINE
 
@@ -5306,6 +5472,11 @@ to = FetchAdmitted
 on = fetch-observed
 
 #### FetchAdmitted
+
+##### TRANSITION
+
+to = PurposeInventory
+on = purpose-inventory
 
 ##### TRANSITION
 
@@ -5574,6 +5745,11 @@ on = native-review-rejected
 
 ##### TRANSITION
 
+to = PurposeChecked
+on = purpose-progress
+
+##### TRANSITION
+
 to = ReviewAccepted
 on = completion-records-prepared
 
@@ -5661,6 +5837,11 @@ on = native-repair-decision-required
 
 ##### TRANSITION
 
+to = PurposeGrouped
+on = purpose-progress
+
+##### TRANSITION
+
 to = MaterializingRepair
 on = native-repair-materialization-prepared
 
@@ -5721,6 +5902,145 @@ on = native-final-fetch-prepared
 
 to = Converged
 on = native-convergence-observed
+
+#### PurposeInventory
+
+##### TRANSITION
+
+to = PurposeGrouped
+on = purpose-grouped
+
+#### PurposeGrouped
+
+##### TRANSITION
+
+to = PurposePreparing
+on = purpose-progress
+
+#### PurposePreparing
+
+##### TRANSITION
+
+to = PurposePrepared
+on = purpose-progress
+
+##### TRANSITION
+
+to = PurposeUnfinished
+on = purpose-progress
+
+#### PurposePrepared
+
+##### TRANSITION
+
+to = PurposeMaterializing
+on = purpose-progress
+
+#### PurposeMaterializing
+
+##### TRANSITION
+
+to = PurposeMaterialized
+on = purpose-progress
+
+##### TRANSITION
+
+to = PurposeUnfinished
+on = purpose-progress
+
+#### PurposeMaterialized
+
+##### TRANSITION
+
+to = PurposeChecking
+on = purpose-progress
+
+##### TRANSITION
+
+to = PurposeChecked
+on = purpose-progress
+
+#### PurposeChecking
+
+##### TRANSITION
+
+to = PurposeMaterialized
+on = purpose-progress
+
+##### TRANSITION
+
+to = PurposeUnfinished
+on = purpose-progress
+
+##### TRANSITION
+
+to = PurposeRepairRequired
+on = purpose-progress
+
+#### PurposeChecked
+
+##### TRANSITION
+
+to = PurposeInstalling
+on = purpose-progress
+
+##### TRANSITION
+
+to = ReviewAccepted
+on = native-review-accepted
+
+##### TRANSITION
+
+to = ReviewRepairRequired
+on = native-review-repair-required
+
+##### TRANSITION
+
+to = ReviewDecisionRequired
+on = native-review-decision-required
+
+##### TRANSITION
+
+to = ReviewRejected
+on = native-review-rejected
+
+#### PurposeInstalling
+
+##### TRANSITION
+
+to = PurposeInstalled
+on = purpose-progress
+
+##### TRANSITION
+
+to = PurposeUnfinished
+on = purpose-progress
+
+#### PurposeInstalled
+
+##### TRANSITION
+
+to = PurposePreparing
+on = purpose-progress
+
+##### TRANSITION
+
+to = FetchAdmitted
+on = purpose-progress
+
+#### PurposeRepairRequired
+
+##### TRANSITION
+
+to = RepairProposalAdmitted
+on = native-repair-proposal-admitted
+
+##### TRANSITION
+
+to = RepairDecisionRequired
+on = native-repair-decision-required
+
+#### PurposeUnfinished
 
 # VALUE
 
@@ -7203,6 +7523,38 @@ RepositorySyncValidationContinuationAdoptionInput
 
 RepositorySyncValidationContinuationAdoptionResult
 
+#### submitRepositoryPurposeResult
+
+##### DESCRIPTION
+
+Return only the issued dirty purpose/dependency grouping and intended content projections. This saves a semantic proposal, never check/review acceptance or commit authority. Existing native progression owns candidate preparation, actual selected validation, acceptance and installation.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+RepositorySyncPurposeResult
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| result | RepositorySyncPurposeResult | 1 |
+| resultReference | WorkflowArtifactReference | 1 |
+| completionFacts | WorkflowArtifactReference | * |
+| executionEvidence | WorkflowExecutionEvidence | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+RepositorySyncConflictSubmissionResult
+
 #### submitRepositorySyncWorkResult
 
 ##### DESCRIPTION
@@ -7343,6 +7695,30 @@ operation. Do not choose a stage, modify files, execute commands, grant Human
 consent or assert validation, commit, push or synchronization acceptance.
 
 ### OPERATION
+
+#### groupRepositoryPurposes
+
+##### DESCRIPTION
+
+Return one coherent unresolved purpose/dependency grouping from the actual dirty
+inventory and retained work records. Group content grants no effects or review.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+RepositorySyncPurposeRequest
+
+##### OUTPUT
+
+###### TYPE
+
+RepositorySyncPurposeResult
+
 
 #### resolveRepositoryMergeConflicts
 
@@ -8476,6 +8852,30 @@ SplitPhaseHumanDirectionAnswer
 Internal declarations for the native conflict and independent merge-review admissions already owned by advance/completion. They are not public client stages or additional execution grants.
 
 ### OPERATION
+
+#### admitRepositoryPurposes
+
+##### DESCRIPTION
+
+Internal admission of the issued dirty purpose grouping. Native checks, review,
+Git effects and the actual clean observation remain separately owned.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+RepositorySyncPurposeRequest
+
+##### OUTPUT
+
+###### TYPE
+
+RepositorySyncConflictSubmissionResult
+
 
 #### admitRepositoryConflicts
 

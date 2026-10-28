@@ -18,11 +18,11 @@ import WorkflowManagedProcessExecution as E
   * recorded as normal progression. Re-entry collects retained effect intents and
   * actual repository facts. Push remains non-forcing; convergence is observed.
   * @since   Oct.  6, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeConvergence {
-  enum Effect { case CommitPending, Push, FinalFetch }
+  enum Effect { case CommitPending, Push, FinalFetch, PurposeCommit }
   trait AuthorityPort {
     // Trusted host reads its current human-selected scope/grants. Review text
     // and a successful Start are not grants for these additional effects.

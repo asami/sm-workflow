@@ -84,6 +84,16 @@ private[smworkflow] object RepositorySyncProgramImpact {
     _ <- validateC(p)
     selection = select(p, inputs)
     _ <- if (selection.checks.nonEmpty) Consequence.unit else N.invalid("changed program inputs have no selected coverage")
+    result <- reuseForTreeC(store, pending.payload.indexTree.get, p, selection)
+    _ <- V.preconditionsC(store, pending)
+  } yield result
+
+  /** Reuse against the actual prepared purpose tree, not the excluded source worktree.
+    * The owning native purpose route separately binds its candidate/source facts.
+    */
+  def reuseForTreeC(store: N.Store, candidateTree: String, p: Policy,
+    selection: Selection): Consequence[(Selection, Map[String, V.Receipt])] = for {
+    _ <- validateC(p)
     prior <- p.priorEvidence.foldLeft(Consequence.success(Vector.empty[Evidence])) { (before, source) => for {
       values <- before
       port <- store.declaration.programEvidence.map(Consequence.success).getOrElse(N.invalid("native prior evidence reader is absent"))
@@ -92,7 +102,7 @@ private[smworkflow] object RepositorySyncProgramImpact {
     result <- prior.foldLeft(Consequence.success((selection, Map.empty[String, V.Receipt]))) { (before, evidence) => for {
       current <- before
       oldTree <- GitObjectId.parseC(evidence.tree)
-      newTree <- GitObjectId.parseC(pending.payload.indexTree.get)
+      newTree <- GitObjectId.parseC(candidateTree)
       delta <- WorkflowManagedProcessExecution.executeGitC(store.core, GitOperation.TreeChanges(oldTree, newTree)).flatMap(_.valueC)
       reusable = selection.checks.filterNot(c => current._2.contains(c.identity)).filter { check =>
         p.coverage.find(_.check == check).exists(coverage => !delta.exists(c => covers(coverage.inputPaths, c.path.value))) &&
@@ -101,7 +111,6 @@ private[smworkflow] object RepositorySyncProgramImpact {
       receipts = reusable.map(c => c.identity -> evidence.receipts.find(_.identity == c.identity).get).toMap
       refs = reusable.map(c => Reuse(c.identity, evidence.validation, evidence.closure, evidence.review))
     } yield (current._1.copy(reused = current._1.reused ++ refs), current._2 ++ receipts) }
-    _ <- V.preconditionsC(store, pending)
   } yield result
 
   /** Composition receives the existing managed native storage. These are reads
@@ -143,6 +152,19 @@ private[smworkflow] object RepositorySyncProgramImpact {
       v.selected.filter(c => c.metadata.isEmpty && c.hostIdentity.isEmpty && c.operation.isEmpty && c.dependency.isEmpty)
         .map(c => V.Check(c.identity, c.ordinal, c.kind)), v.receipts, c.input.reviewEvidence)
   }
+
+  /** Validation reuse alone never establishes review. The exact complete tree
+    * and the actual accepted native Step closure must retain reviewer evidence.
+    */
+  def reusableReviewC(store: N.Store, tree: String, policy: Policy): Consequence[Option[org.goldenport.cncf.workflow.ContextReference]] =
+    policy.priorEvidence.foldLeft(Consequence.success(Option.empty[org.goldenport.cncf.workflow.ContextReference])) { (prior, source) =>
+      prior.flatMap {
+        case value @ Some(_) => Consequence.success(value)
+        case None => store.declaration.programEvidence.map(_.loadC(source, store)).getOrElse(N.invalid("prior purpose review has no native evidence reader"))
+          .map(value => if (value.tree == tree && value.review.nonEmpty)
+            Some(org.goldenport.cncf.workflow.ContextReference(value.closure, "1")) else None)
+      }
+    }
 
   private def json(value: ConfigurationValue): Json = value match {
     case ConfigurationValue.StringValue(v) => Json.fromString(v)

@@ -13,7 +13,7 @@ import RepositorySyncNativeProgressStore.*
 /** Public owning advance's deterministic connection. Configuration, not the
   * caller, selects this installed route. A nonterminal result is not convergence.
   * @since   Oct.  6, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeProgression {
@@ -31,7 +31,26 @@ private[smworkflow] object RepositorySyncNativeProgression {
     output <- if (session.started.current.lifecycle == Lifecycle.Completed)
       _retained_terminal_c(session, declaration, core, acknowledgement)
       else session.started.current.suspension match {
+      case Some(boundary) if boundary.completion.value == "repository-purpose-completion-v1" =>
+        continuationstore.loadC("purpose-inventory").flatMap {
+          case Some(inventory) => RepositorySyncPurposeRuntime.advanceC(continuationstore, session.started.current,
+            inventory.payload.before, validationPolicy, convergence, review,
+            (stage, observed) => progressC(continuationstore, stage.record, observed, conflicts, validationPolicy, review, convergence, repair))
+          case None => invalid("retained purpose continuation has no actual inventory")
+        }
       case Some(boundary) => _pending_c(session, boundary, core)
+      case None if session.started.current.currentProgression.exists(p =>
+          Set("sync.PurposeRepairRequired", "sync.ReviewRepairRequired", "sync.RepairProposalAdmitted")(p.value)) &&
+          session.started.current.history.exists(_.currentProgression.exists(_.value.startsWith("sync.Purpose"))) =>
+        repair.map(_.advanceC(identity, core)).getOrElse(Consequence.success(NativeWorkflowOperationOutput.repositoryWait(identity,
+          "Actual purpose repair requires its installed native FIX policy/owner; failed checks and findings remain unresolved", "purpose-repair-unavailable")))
+      case None if RepositorySyncPurposeRuntime.selected(session.started.current) =>
+        continuationstore.loadC("purpose-inventory").flatMap {
+          case Some(inventory) => RepositorySyncPurposeRuntime.advanceC(continuationstore, session.started.current,
+            inventory.payload.before, validationPolicy, convergence, review,
+            (stage, observed) => progressC(continuationstore, stage.record, observed, conflicts, validationPolicy, review, convergence, repair))
+          case None => invalid("retained purpose continuation has no actual inventory")
+        }
       case None if continuation.nonEmpty => validationPolicy match {
         case Some(policy) => RepositorySyncValidationContinuation.advanceC(continuationstore, continuation.get,
           session.started.current, policy, convergence)
@@ -175,9 +194,11 @@ private[smworkflow] object RepositorySyncNativeProgression {
     validationPolicy: Option[RepositorySyncNativeMergeValidation.Policy],
     review: Option[RepositorySyncNativeMergeReviewContinuation.Port],
     convergence: Option[RepositorySyncNativeConvergence.AuthorityPort],
-    repair: Option[RepositorySyncNativeMergeRepairContinuation.Port]): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
-    _ <- if (!store.declaration.runtimeCleanSync || observed.dirty.isEmpty) Consequence.unit
-      else invalid("clean sync local preparation is unfinished: staged, unstaged or untracked changes require purpose-based acceptance; existing work is preserved")
+    repair: Option[RepositorySyncNativeMergeRepairContinuation.Port]): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] =
+    if (store.declaration.runtimeCleanSync && observed.dirty.nonEmpty)
+      RepositorySyncPurposeRuntime.advanceC(store, fetched, observed, validationPolicy, convergence, review,
+        (stage, clean) => progressC(store, stage.record, clean, conflicts, validationPolicy, review, convergence, repair))
+    else for {
     preserved <- RepositorySyncNativePreservation.preserveC(store, fetched, observed)
     integrated <- RepositorySyncNativeIntegration.integrateC(store, preserved)
     detail = if (integrated.payload.stage == "MergeConflicted")

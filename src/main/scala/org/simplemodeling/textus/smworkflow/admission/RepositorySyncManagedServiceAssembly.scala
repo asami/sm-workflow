@@ -14,7 +14,7 @@ import RepositorySyncManagedFetch as Fetch
 /** Current trusted-host entry/owning-advance pair with session-resolved inputs.
   * Captures declarations/selection reader only, never a provider or call lease.
   * @since   Oct.  6, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 28, 2026
   */
 private[smworkflow] object RepositorySyncManagedServiceAssembly {
   /** Normal host-record composition: no injected in-memory selection callback.
@@ -88,6 +88,9 @@ private[smworkflow] object RepositorySyncManagedServiceAssembly {
     completion <- if (conflicts.nonEmpty)
       RepositorySyncNativeConflictContinuation.bindCompletionC(params, declaration, definition, conflictPolicy).map(Some(_))
       else Consequence.success(None)
+    purposeCompletion <- if (declaration.runtimeCleanSync)
+      RepositorySyncPurposeContinuation.bindCompletionC(params, declaration, definition).map(Some(_))
+      else Consequence.success(None)
     humanCompletion <- conflicts match {
       case Some(port) => port.bindHumanCompletionC(params)
       case None => Consequence.success(None)
@@ -96,7 +99,7 @@ private[smworkflow] object RepositorySyncManagedServiceAssembly {
     spec.OperationDefinitionGroup(NonEmptyVector.of(
     new Operation(true, declaration, definition, acknowledgement, nativeProgression, nativeAcknowledgement, conflicts, validationPolicy, review, convergence, repair),
     new Operation(false, declaration, definition, acknowledgement, nativeProgression, nativeAcknowledgement, conflicts, validationPolicy, review, convergence, repair))
-    .concat(completion.toVector ++ reviewCompletion.toVector ++ humanCompletion.toVector ++ repairCompletion.toVector ++
+    .concat(completion.toVector ++ reviewCompletion.toVector ++ humanCompletion.toVector ++ repairCompletion.toVector ++ purposeCompletion.toVector ++
       repositoryContinuation.toVector.flatMap(installation => RepositorySyncValidationContinuation.operations(
         declaration, definition, validationPolicy.get, installation, nativeAcknowledgement)))))
 

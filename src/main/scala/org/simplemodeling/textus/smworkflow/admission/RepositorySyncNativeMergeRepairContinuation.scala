@@ -20,7 +20,7 @@ import RepositorySyncNativeProgressStore as N
 /** Genuine paired review -> assigned affected-file proposal. Submit owns only
   * proposal admission; explicit Advance owns fixed effects and fresh review.
   * @since   Oct. 15, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
@@ -47,7 +47,12 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
           result = value.completion.result
           next <- N.completionNextC(source.session.started.current, value.completion.instanceRevision,
             result.resultReference, if (result.result.value.decision == "repaired") "RepairProposalAdmitted" else "RepairDecisionRequired")
-          output <- if (result.result.value.decision == "repaired") for {
+          output <- if (result.result.value.decision == "repaired" && source.basis.validated.payload.purposes.nonEmpty) for {
+            adopted <- RepositorySyncPurposeRuntime.repairC(source.store, source.basis, input, result.result.value, next, policy)
+          } yield NativeWorkflowOperationOutput.repositoryWait(identity,
+            "Actual native FIX proposal is admitted; the next owning Advance prepares and qualifies its new candidate in the next fixed slot",
+            adopted.payload.stage)
+            else if (result.result.value.decision == "repaired") for {
             pending <- RepositorySyncNativeMergeRepairMaterialization.advanceC(source.store, source.basis,
               input, result.result.value, next, policy)
             output <- RepositorySyncNativeProgression.pendingMergeC(source.store, pending, Some(validation), Some(review),
@@ -60,7 +65,7 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
           case None if _budget_exhausted(source) => Consequence.success(NativeWorkflowOperationOutput.repositoryWait(identity,
             "Selected merge repair budget is exhausted; actual Human handling is required. No new repair or counter reset.", "native-repair-limit"))
           case None => for {
-            _ <- if (source.session.started.current.currentProgression.exists(p => Set("sync.ReviewRepairRequired", "sync.ValidationRepairRequired")(p.value)) &&
+            _ <- if (source.session.started.current.currentProgression.exists(p => Set("sync.ReviewRepairRequired", "sync.ValidationRepairRequired", "sync.PurposeRepairRequired")(p.value)) &&
                 source.session.started.current.revision == source.basis.next.revision) Consequence.unit
               else N.invalid("repair issuance requires the actual current repair review completion")
             input <- _capture_c(source)
@@ -78,12 +83,23 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
         else N.invalid("repair requires its actual owning Operation")
       session <- F.sessionC(identity, declaration, definition, core)
       store <- N.bindC(session, declaration, core, acknowledgement)
-      reviewed <- review.savedReviewC(identity, core)
-      saved <- reviewed match {
-        case Some(value) if value.result.result.value.decision == "repair" &&
-            value.next.currentProgression.contains(ProgressionReference("sync.ReviewRepairRequired")) =>
-          Consequence.success(M.basis(value))
-        case _ => for {
+      purpose <- store.currentPurposeC(session.started.current)
+      saved <- purpose match {
+        // A failed product check is a FIX source, never a completed review.
+        // Preserve the owning candidate capture and require a settled failure.
+        case Some(purpose) if purpose.payload.stage == "PurposeRepairRequired" => for {
+          failed <- purpose.payload.purposes.get.receipts.lastOption.filter(receipt =>
+            receipt.termination == "exited" && receipt.exitCode.exists(_ != 0)).map(Consequence.success)
+            .getOrElse(N.invalid("purpose FIX requires its actual failed check; unknown execution is not a failed check"))
+          context <- RepositorySyncNativeMergeReview.capturePurposeC(store, purpose,
+            RepositorySyncNativeMergeReview.Policy("purpose-check-origin-repair", 1))
+        } yield M.Basis(purpose, context, Vector.empty, purpose.record, Some(failed.identity))
+        case _ => review.savedReviewC(identity, core).flatMap {
+          case Some(value) if value.result.result.value.decision == "repair" &&
+              value.next.currentProgression.contains(ProgressionReference("sync.ReviewRepairRequired")) =>
+            Consequence.success(M.basis(value))
+          case _ => for {
+
           candidate <- store.currentMergeCandidateC(session.started.current)
           failure <- RepositorySyncNativeMergeValidation.retainedFailureC(store, candidate.pending, validation, candidate.namespace)
             .flatMap(_.map(Consequence.success).getOrElse(N.invalid("repair has no actual retained failed check or repair review")))
@@ -94,10 +110,24 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
             RepositorySyncNativeMergeReview.Policy("check-origin-repair", 1))
         } yield M.Basis(failure, context, Vector.empty, next.record,
           Some(failure.payload.validation.get.receipts.last.identity))
+        }
       }
     } yield Source(session, store, saved)
 
-    private def _capture_c(source: Source): Consequence[M.Request] = for {
+    private def _capture_c(source: Source): Consequence[M.Request] = if (source.basis.validated.payload.purposes.nonEmpty) for {
+      _ <- policy.validateC
+      progress = source.basis.validated.payload.purposes.get
+      findings = source.basis.findings
+      paths = if (source.basis.validationFailure.isEmpty) findings.flatMap(_.affectedPaths).distinct.sorted
+        else source.basis.input.changedPaths.filter(policy.semanticPaths).distinct.sorted
+      files <- paths.foldLeft(Consequence.success(Vector.empty[M.File]))((prior, path) => for {
+        values <- prior
+        text <- progress.candidate.get.changes.find(_.path == path).flatMap(_.text).map(Consequence.success)
+          .getOrElse(N.invalid("purpose repair requires actual selected text; deleted or unexamined content requires a semantic decision"))
+      } yield values :+ M.File(path, text))
+      input = M.Request(source.basis.input, findings, files, source.basis.validationFailure)
+      _ <- M.admitRequestC(input, policy)
+    } yield input else for {
       _ <- policy.validateC
       findings = source.basis.findings
       paths = if (source.basis.validationFailure.isEmpty) findings.flatMap(_.affectedPaths).distinct.sorted
@@ -189,7 +219,7 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
           case Some(call) => for {
             source <- _source_c(current.identity.value, call)
             _ <- if (submitted.continuationId == _continuation_id(source) &&
-                current.currentProgression.exists(p => Set("sync.ReviewRepairRequired", "sync.ValidationRepairRequired")(p.value))) Consequence.unit
+                current.currentProgression.exists(p => Set("sync.ReviewRepairRequired", "sync.ValidationRepairRequired", "sync.PurposeRepairRequired")(p.value))) Consequence.unit
               else N.invalid("repair result crosses the actual current review assignment")
             work <- issued.loadC(submitted.continuationId).flatMap(_.map(Consequence.success)
               .getOrElse(N.invalid("repair result has no actual issued WorkOrder")))

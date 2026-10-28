@@ -13,7 +13,7 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
   * The standard launcher uses ThreeWorkflowRuntimeParameters after CNCF bootstrap.
   * Parameter data selects storage/targets/policies, never independent authority ports.
   * @since   Oct.  6, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowLauncherAssembly {
@@ -64,7 +64,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     "SplitPhaseService.startSplitPhase", "SplitPhaseService.advanceSplitPhase", "SplitPhaseService.submitPartitionSemanticResult",
     "SplitPhaseService.submitHandoffScopeResult", "SplitPhaseService.submitSplitHumanDirection", "SplitPhaseService.submitReasoningResult",
     "RepositorySyncService.startRepositorySync", "RepositorySyncService.advanceRepositorySync",
-    "RepositorySyncService.submitRepositorySyncWorkResult", "RepositorySyncService.submitNativeMergeReview",
+    "RepositorySyncService.submitRepositorySyncWorkResult", "RepositorySyncService.submitRepositoryPurposeResult", "RepositorySyncService.submitNativeMergeReview",
     "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitNativeMergeRepair")
 
   /** Only implemented public Operations, using their generated CML contracts.

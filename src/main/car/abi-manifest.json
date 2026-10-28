@@ -802,6 +802,27 @@
           "kind": "COMMAND",
           "input": "EvidenceRangeInput",
           "output": "EvidenceReadResult"
+        },
+        {
+          "service": "RepositorySyncService",
+          "name": "submitRepositoryPurposeResult",
+          "kind": "COMMAND",
+          "input": "RepositorySyncPurposeResult",
+          "output": "RepositorySyncConflictSubmissionResult"
+        },
+        {
+          "service": "RepositoryConflictService",
+          "name": "groupRepositoryPurposes",
+          "kind": "COMMAND",
+          "input": "RepositorySyncPurposeRequest",
+          "output": "RepositorySyncPurposeResult"
+        },
+        {
+          "service": "RepositorySyncSemanticAdmissionService",
+          "name": "admitRepositoryPurposes",
+          "kind": "COMMAND",
+          "input": "RepositorySyncPurposeRequest",
+          "output": "RepositorySyncConflictSubmissionResult"
         }
       ],
       "types": [

@@ -15,7 +15,7 @@ import WorkflowManagedProcessExecution as E
 /** Actual full pending-merge semantic input. No legacy digest receipt or AI
   * command/authority selection participates in this native route.
   * @since   Oct.  6, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeReview {
@@ -51,9 +51,9 @@ private[smworkflow] object RepositorySyncNativeMergeReview {
   }
 
   def captureC(store: N.Store, source: N.Stage, policy: Policy): Consequence[Request] = for {
-    _ <- if (source.payload.stage == "MergeValidated") Consequence.unit
+    _ <- if (Set("MergeValidated", "PurposeChecked")(source.payload.stage)) Consequence.unit
       else invalid("review has no actual native selected validation")
-    request <- captureCandidateC(store, source, policy)
+    request <- if (source.payload.purposes.nonEmpty) capturePurposeC(store, source, policy) else captureCandidateC(store, source, policy)
   } yield request
 
   /** The same actual candidate facts also bound check-origin repair. Capturing
@@ -82,6 +82,23 @@ private[smworkflow] object RepositorySyncNativeMergeReview {
       uncertainties = localDiff.uncertainties ++ remoteDiff.uncertainties, priorReview = prior)
   } yield input
 
+  def capturePurposeC(store: N.Store, source: N.Stage, policy: Policy): Consequence[Request] = for {
+    _ <- policy.validateC
+    progress <- source.payload.purposes.map(Consequence.success).getOrElse(invalid("purpose review lacks its native content candidate"))
+    candidate <- progress.candidate.map(Consequence.success).getOrElse(invalid("purpose review lacks its actual candidate"))
+    slot <- store.declaration.purposePolicy.toVector.flatMap(_.slots).lift(progress.slotCursor).map(Consequence.success)
+      .getOrElse(invalid("purpose review lacks its fixed candidate workspace"))
+    _ <- RepositorySyncPurposeRuntime.candidateWorkspaceC(store, slot, candidate)
+    diff <- diffC(store, source, candidate.parent, "purpose-diff", policy.maximumDiffBytes, Some(slot.workspace))
+    parent <- GitObjectId.parseC(candidate.parent)
+    tree <- GitObjectId.parseC(candidate.tree)
+    delta <- E.executeGitC(store.core, GitOperation.TreeChanges(parent, tree)).flatMap(_.valueC)
+    selection <- progress.selection.map(Consequence.success).getOrElse(invalid("purpose review lacks its actual check selection"))
+    _ <- RepositorySyncPurposeRuntime.candidateWorkspaceC(store, slot, candidate)
+  } yield Request(store.identity, source.record.revision.value.toString, candidate.parent, candidate.parent,
+    candidate.tree, delta.map(_.path.value), diff.text, diff.text, selection.depth, selection.reason,
+    selection.checks.map(_.identity), progress.receipts.drop(1), uncertainties = diff.uncertainties)
+
   def admitC(input: Request, result: Result, policy: Policy): Consequence[Unit] = for {
     _ <- if (result != null && (!Set("accept", "clean")(result.decision) ||
         !input.uncertainties.exists(_.startsWith("Unexamined"))) && bounded(result.rationale, 16384) && result.rationale.trim.nonEmpty && result.findings != null &&
@@ -101,9 +118,9 @@ private[smworkflow] object RepositorySyncNativeMergeReview {
     * CNCF still owns actual capture/resource limits. Truncation and binary facts
     * remain explicit and cannot be accepted as an examined text review. */
   private def diffC(store: N.Store, source: N.Stage, parent: String,
-    output: String, inlineBytes: Int): Consequence[Diff] = for {
+    output: String, inlineBytes: Int, workspace: Option[String] = None): Consequence[Diff] = for {
     oid <- GitObjectId.parseC(parent)
-    captured <- E.executeGitC(store.core, GitOperation.PendingDiff(oid))
+    captured <- workspace.fold(E.executeGitC(store.core, GitOperation.PendingDiff(oid)))(value => E.executeGitC(store.core, GitOperation.PendingDiff(oid), value))
     decoded = captured.valueC.toOption
     text = decoded.map(_.text).getOrElse {
       try java.nio.charset.StandardCharsets.UTF_8.newDecoder().decode(

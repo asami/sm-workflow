@@ -172,6 +172,7 @@ private[smworkflow] object StandardWorkflowRuntime {
     classifications <- RepositorySyncNativeExecution.resolveC(parameters)
     documentInputs <- RepositorySyncDocumentInputs.resolveC(parameters)
     programInputs <- RepositorySyncProgramImpact.resolveC(parameters)
+    purposePolicy <- RepositorySyncPurpose.resolveC(parameters)
     validation = if (selectedInput._2) programInputs.fold(documentValidation)(p => documentValidation.copy(
       identity = "impact-repository-sync", mode = "required", checks = p.checks, impact = Some(p))) else repositoryValidation
     goalDefinition <- GoalPhaseRuntimeCatalog.loadC()
@@ -179,7 +180,7 @@ private[smworkflow] object StandardWorkflowRuntime {
       Vector(goalDefinition.definition), p.instances, p.continuations)
     declaration = RepositorySyncManagedFetch.Declaration(p.configuration, p.instances, p.continuations, input,
       target, shared.profiles, shared.origin, classifications, shared.journal, runtimeCleanSync = selectedInput._2, documentInputs = documentInputs, evidencePolicy = shared.evidence,
-      programEvidence = Some(RepositorySyncProgramImpact.evidencePort(evidenceStorage)))
+      programEvidence = Some(RepositorySyncProgramImpact.evidencePort(evidenceStorage)), purposePolicy = purposePolicy)
     // Before review use actual conflicts; afterwards use that issued review's
     // retained candidate paths so staging does not erase the repair scope.
     paths <- if (request.operation == "startRepositorySync") Consequence.success(Set.empty[String])
@@ -204,7 +205,10 @@ private[smworkflow] object StandardWorkflowRuntime {
       val name = value.continuationIdentity.value
       name.startsWith(identity + ":native-review:") || name.startsWith(identity + ":native-triage:")
     }
-    paths <- boundary match {
+    purposestore <- RepositorySyncNativeProgressStore.bindC(session, declaration, selectedcore, _ => Consequence.unit)
+    purpose <- purposestore.currentPurposeC(session.started.current)
+    paths <- if (purpose.nonEmpty) Consequence.success(purpose.get.payload.purposes.get.candidate.toVector.flatMap(_.changes.map(_.path)).toSet)
+      else boundary match {
       case Some(value) => for {
         issued <- session.storage.bindIssuedC(RepositorySyncNativeMergeReviewContinuation.completionOperation,
           RepositorySyncNativeMergeReview.inputCodec)

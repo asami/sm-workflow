@@ -14,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Concrete public business output projections from their actual owning
   * outcome. No extra store read, result verifier or transport envelope.
   * @since   Oct. 12, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationOutput {
@@ -178,6 +178,17 @@ private[smworkflow] object NativeWorkflowOperationOutput {
         V.RepositorySyncConflictBlob(c.local.identity, c.local.text), V.RepositorySyncConflictBlob(c.remote.identity, c.remote.text),
         c.mode, c.worktree)))
 
+  def repositoryPurposeRequestC(work: WorkflowInteraction[RepositorySyncPurpose.Request, Nothing]):
+    Consequence[V.RepositorySyncAdvanceResult] = for {
+    value <- workInputC(work)
+    context <- NativeWorkflowIssuedWorkContext.fromIssuedC(work, NativeWorkflowIssuedWorkContext.Mode.Implementation,
+      RepositorySyncPurpose.inputCodec)
+    request = GoalPhaseNativeMetadata.record(RepositorySyncPurpose.inputCodec.encode(value).hcursor.downField("payload").focus.get)
+  } yield V.RepositorySyncAdvanceResult(work.handle.instanceIdentity.value, "Request",
+    "Resolve only uncovered dirty purpose and dependency intent; retain excluded ongoing work.",
+    Some(RepositorySyncPurposeContinuation.completionOperation.operation), Some(work.handle.instanceIdentity.value),
+    Some("RepositorySyncPurposeResult"), None, None, None, None, None, None, Some(context), None, None, Some(request))
+
   def repositoryConflictRequestC(work: WorkflowInteraction[RepositorySyncNativeConflictInput.Request, Nothing]):
     Consequence[V.RepositorySyncAdvanceResult] = for {
     value <- workInputC(work)
@@ -185,7 +196,7 @@ private[smworkflow] object NativeWorkflowOperationOutput {
       RepositorySyncConflictSemantic.inputCodec)
   } yield V.RepositorySyncAdvanceResult(work.handle.instanceIdentity.value, "Request", "Resolve only the selected repository conflicts.",
         Some(RepositorySyncNativeConflictContinuation.completionOperation.operation), Some(work.handle.instanceIdentity.value),
-        Some("RepositorySyncConflictResult"), None, None, Some(repositoryConflict(value)), None, None, None, Some(issuedContext), None, None)
+        Some("RepositorySyncConflictResult"), None, None, Some(repositoryConflict(value)), None, None, None, Some(issuedContext), None, None, None)
 
   def repositoryReviewRequestC(work: WorkflowInteraction[RepositorySyncNativeMergeReview.Request, Nothing], core: ActionCall.Core):
     Consequence[V.RepositorySyncAdvanceResult] = for {
@@ -208,7 +219,7 @@ private[smworkflow] object NativeWorkflowOperationOutput {
     if (value.judgmentMode == "triage") "Independently triage only the captured merge uncertainties; return clean, suspicious or decline without review findings."
       else "Independently review the selected merge.",
     Some(RepositorySyncNativeMergeReviewContinuation.completionOperation.operation), Some(work.handle.instanceIdentity.value),
-    Some("RepositorySyncNativeMergeReviewResult"), None, None, None, Some(view), None, None, Some(issuedContext), None, None)
+    Some("RepositorySyncNativeMergeReviewResult"), None, None, None, Some(view), None, None, Some(issuedContext), None, None, None)
 
   def repositoryRepairRequestC(work: WorkflowInteraction[RepositorySyncNativeMergeRepair.Request, Nothing]):
     Consequence[V.RepositorySyncAdvanceResult] = for {
@@ -230,7 +241,7 @@ private[smworkflow] object NativeWorkflowOperationOutput {
     if (value.validationFailure.nonEmpty) "Repair only the actual failed selected merge check within the assigned files."
       else "Repair only the assigned native merge findings.",
     Some(RepositorySyncNativeMergeRepairContinuation.completionOperation.operation), Some(work.handle.instanceIdentity.value),
-    Some("RepositorySyncNativeMergeRepairResult"), None, None, None, None, None, None, Some(issuedContext), Some(input), None)
+    Some("RepositorySyncNativeMergeRepairResult"), None, None, None, None, None, None, Some(issuedContext), Some(input), None, None)
 
   def repositoryHumanC(question: WorkflowInteraction[RepositorySyncHumanConflict.Input, Nothing], core: ActionCall.Core):
     Consequence[V.RepositorySyncAdvanceResult] = for {
@@ -240,17 +251,17 @@ private[smworkflow] object NativeWorkflowOperationOutput {
       Some(RepositorySyncHumanConflict.completionOperation.operation), Some(question.handle.instanceIdentity.value),
       Some("RepositorySyncHumanConflictAnswer"), None, None, None, None,
       Some(V.RepositorySyncHumanQuestion(repositoryConflict(value.conflict), value.rationale,
-        RepositorySyncHumanConflict.choices, Some(context))), None, None, None, None)
+        RepositorySyncHumanConflict.choices, Some(context))), None, None, None, None, None)
 
   def repositoryWait(session: String, message: String, condition: String): V.RepositorySyncAdvanceResult =
-    V.RepositorySyncAdvanceResult(session, "Wait", message, None, None, None, Some(condition), None, None, None, None, None, None, None, None)
+    V.RepositorySyncAdvanceResult(session, "Wait", message, None, None, None, Some(condition), None, None, None, None, None, None, None, None, None)
 
   def repositoryConvergence(value: RepositorySyncNativeConvergence.Result): V.RepositorySyncNativeConvergenceResult =
     V.RepositorySyncNativeConvergenceResult(value.repositoryRoot, value.localBranch, value.remote, value.remoteBranch, value.tip, value.tree)
 
   def repositoryComplete(session: String, value: RepositorySyncNativeConvergence.Result): V.RepositorySyncAdvanceResult =
     V.RepositorySyncAdvanceResult(session, "Terminal", "Actual local, tracking and remote tips converged with a clean repository.",
-      None, None, None, None, Some("converged"), None, None, None, Some(repositoryConvergence(value)), None, None, None)
+      None, None, None, None, Some("converged"), None, None, None, Some(repositoryConvergence(value)), None, None, None, None)
 
   private def _goal_plan(value: GoalPhaseOrderedProgression.Plan): V.GoalPhaseOrderedPlan =
     V.GoalPhaseOrderedPlan(value.identity, value.revision, value.phase, value.repository,
@@ -312,6 +323,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
           case SplitPhaseHumanDirectionAnswerContract.Answer.Cancel => "Cancel"
         }
         V.SplitPhaseHumanDirectionSubmissionResult(session, true, "accepted", "Accepted Human " + choice + ".")
+      case value: RepositorySyncPurpose.Result =>
+        V.RepositorySyncConflictSubmissionResult(session, true, "accepted", "Accepted purpose grouping " + value.decision + ": " + value.rationale)
       case value: RepositorySyncConflictSemantic.Result =>
         V.RepositorySyncConflictSubmissionResult(session, true, "accepted", "Accepted conflict " + value.decision + ": " + value.rationale)
       case value: RepositorySyncNativeMergeReview.Result =>
