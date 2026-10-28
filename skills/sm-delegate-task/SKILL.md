@@ -10,6 +10,20 @@ Use the [delegation contract](../../docs/spec/delegate-task.md),
 [native execution contract](../../docs/spec/native-host-execution.md) and
 [runtime publication contract](../../docs/spec/runtime-owned-local-publication.md).
 This is a thin semantic/caller adapter to an independent runtime entry.
+It is the standard route for new authorized development deliverables sent to an
+existing chat. Apply the [new-request/continuation boundary](../../docs/spec/native-host-execution.md#new-cross-chat-development-requests-and-existing-continuations):
+continue corrections to the original deliverable in its existing request; use
+this entry for a distinct purpose or acceptance obligation. Do not duplicate
+ongoing legacy work or accept a direct development message as native admission.
+Missing setup is reported concretely, not silently bypassed with another skill
+or a standalone execution route.
+
+The owning caller invokes the installed CLI directly with first-attempt scoped
+escalation. Use the native host's program-generated activity presentation and
+forward `presentation.commentary` to chat. Confirm the selected public operations
+in the installed runtime; source documentation or skill installation alone does
+not establish their availability. Report a missing operation as a runtime setup
+gap and retain the existing Session instead of substituting another workflow.
 
 Adopt the actual authorized objective, repository, literal owned paths, ordered
 conditions, checks, source references and complete `DelegateTaskContract`.
