@@ -13,16 +13,32 @@ import org.simplemodeling.textus.smworkflow.value as V
 
 /** Public Evidence operations use the owning host policy and Procedure UoW.
   * @since   Oct. 20, 2026
-  * @version Oct. 21, 2026
+  * @version Oct. 27, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object CommonEvidenceService {
   private val _declared = SmWorkflowComponent.EvidenceServiceService
   def bind(policy: Option[CommonEvidence.Policy], journal: Option[DevelopmentJournal.Policy]): spec.ServiceDefinition =
     NativeWorkflowDescriptionMetadata.service(_declared, spec.OperationDefinitionGroup(NonEmptyVector.of(
-      new Operation(false, policy, journal), new Operation(true, policy, journal),
+      new Operation(false, policy, journal), new Operation(true, policy, journal), new RangeOperation(policy),
       new ManagedOperation(Kind.Batch, policy, journal), new ManagedOperation(Kind.Describe, policy, journal),
       new ManagedOperation(Kind.Retention, policy, journal), new ManagedOperation(Kind.Due, policy, journal))))
+  private final class RangeOperation(policy: Option[CommonEvidence.Policy]) extends spec.OperationDefinition {
+    val specification = NativeWorkflowDescriptionMetadata.operation(_declared.ReadEvidenceRangeOperation)
+    def createOperationRequest(request: Request): Consequence[OperationRequest] =
+      if (request == null || !request.service.contains(_declared.name) || request.operation != specification.name)
+        Consequence.stateConflict("Evidence range requires its exact owning service and Operation")
+      else NativeWorkflowOperationInput.recordC(request, "input").flatMap(record => V.EvidenceRangeInput.createC(record))
+        .map(input => RangeAction(request, input, policy))
+  }
+  private final case class RangeAction(request: Request, input: V.EvidenceRangeInput,
+    policy: Option[CommonEvidence.Policy]) extends CommandAction {
+    override def commandExecutionMode = CommandExecutionMode.Sync
+    def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
+      val core = c
+      def execute(): Consequence[OperationResponse] = CommonEvidence.readRangeC(policy, core, input).map(NativeWorkflowOperationOutput.response)
+    }
+  }
   private enum Kind { case Batch, Describe, Retention, Due }
   private final class ManagedOperation(kind: Kind, policy: Option[CommonEvidence.Policy], journal: Option[DevelopmentJournal.Policy])
       extends spec.OperationDefinition {

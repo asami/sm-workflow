@@ -15,7 +15,7 @@ import GoalPhaseNativeValidation as V
 
 /** References select business context, never execution permission or observations.
   * @since   Oct. 24, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseDependencyValidation {
@@ -167,6 +167,22 @@ private[smworkflow] object GoalPhaseDependencyValidation {
   }
   def validateSelectionC(value: Option[Selection]): Consequence[Unit] =
     if (value != null && value.forall(selectionValid)) Consequence.unit else invalid("invalid selection")
+
+  /** Structural half only. The native walker supplies both actual approvals
+    * and the independently reconstructed closed-Step prefix. */
+  def phaseAdmissionC(binding: Binding, approvals: Vector[Approval], plan: O.Plan,
+    prefix: Option[AcceptedPrefix]): Consequence[Admission] = {
+    val selected = Option(approvals).getOrElse(Vector.empty).filter(a => approvalValid(a) &&
+      Option(binding).exists(b => a.step == b.step && a.proposal.requester == b.requester &&
+        a.proposal.dependency == b.dependency))
+    val admission = Admission(binding, selected, prefix)
+    if (bindingValid(binding) && plan != null && binding.step == "phase:" + plan.phase &&
+        binding.requester.repository == plan.repository && admissionValid(admission) &&
+        prefix.exists(p => p.plan == ContextReference(plan.identity, plan.revision) &&
+          plan.steps.exists(_.identity == p.step) && !p.paths.exists(binding.paths.contains)))
+      Consequence.success(admission)
+    else invalid("Release dependency requires exact actual phase approval, a disjoint closed-Step prefix and unchanged purpose")
+  }
   /** Inspect the actual named input before a generated reader can discard extra fields. */
   def validatePublicResultC(record: Record): Consequence[Unit] =
     if (record == null) invalid("public completion result is absent")

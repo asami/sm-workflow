@@ -11,7 +11,7 @@ import org.simplemodeling.textus.smworkflow.value.RepositorySyncStartInput
 
 /**
  * @since   Oct.  6, 2026
- * @version Oct. 24, 2026
+ * @version Oct. 28, 2026
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -20,6 +20,7 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
     SmWorkflowComponent.RepositorySyncServiceService.StartRepositorySyncOperation,
     SmWorkflowComponent.RepositorySyncServiceService.AdvanceRepositorySyncOperation,
     SmWorkflowComponent.RepositorySyncServiceService.SubmitRepositorySyncWorkResultOperation,
+    SmWorkflowComponent.RepositorySyncServiceService.SubmitRepositoryPurposeResultOperation,
     SmWorkflowComponent.RepositorySyncServiceService.SubmitNativeMergeReviewOperation,
     SmWorkflowComponent.RepositorySyncServiceService.SubmitNativeMergeRepairOperation,
     SmWorkflowComponent.RepositorySyncServiceService.SubmitRepositoryConflictDecisionOperation,
@@ -52,6 +53,7 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
         "startRepositorySync" -> Some("RepositorySyncStartInput"),
         "advanceRepositorySync" -> Some("RepositorySyncAdvanceInput"),
         "submitRepositorySyncWorkResult" -> Some("RepositorySyncConflictResult"),
+        "submitRepositoryPurposeResult" -> Some("RepositorySyncPurposeResult"),
         "submitNativeMergeReview" -> Some("RepositorySyncNativeMergeReviewResult"),
         "submitNativeMergeRepair" -> Some("RepositorySyncNativeMergeRepairResult"),
         "submitRepositoryConflictDecision" -> Some("RepositorySyncHumanConflictAnswer"),
@@ -70,7 +72,7 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
       consumed shouldBe org.goldenport.Consequence.success(input)
     }
 
-    "resolve only the current conflict, native review, native repair and Human capabilities" in {
+    "resolve only the current purpose, conflict, native review, native repair and Human capabilities" in {
       Given("the generated RepositorySync Workflow and native candidate definition consumer")
       When("the actual execution definition is resolved")
       val workflow = RepositorySyncWorkflowStateMachineWorkflow3.workflow
@@ -79,8 +81,15 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
       candidate.isSuccess shouldBe true
       workflow.version shouldBe "repository-sync-business-operation-v12"
       workflow.requiredOperations.map(_.identity.capability).toSet shouldBe Set(
+        "group-repository-purpose-capability",
         "resolve-repository-conflict-capability", "native-merge-review-capability", "repair-native-merge-capability",
         "repository-conflict-human-capability")
+      workflow.actions.find(_.operation.name == "groupRepositoryPurposes").flatMap(_.operation.inputType) shouldBe
+        Some("RepositorySyncPurposeRequest")
+      workflow.actions.find(_.operation.name == "groupRepositoryPurposes").flatMap(_.operation.resultType) shouldBe
+        Some("RepositorySyncPurposeResult")
+      RepositorySyncWorkflowStateMachineProvidedApi3.workflow.providedOperations.find(_.name == "submitRepositoryPurposeResult")
+        .flatMap(_.resultType) shouldBe Some("RepositorySyncConflictSubmissionResult")
       workflow.actions.find(_.operation.name == "repairNativePendingMerge").flatMap(_.operation.inputType) shouldBe
         Some("RepositorySyncNativeMergeRepairRequest")
       workflow.actions.find(_.operation.name == "repairNativePendingMerge").flatMap(_.operation.resultType) shouldBe

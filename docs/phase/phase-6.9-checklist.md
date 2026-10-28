@@ -1,6 +1,6 @@
 # Phase 6.9 acceptance checklist
 
-Status: pending. Planning is not implementation or installed acceptance.
+Status: S1–S4 accepted in the issued native S5 context; S5 source/specification authored. Fresh integrated publication, installed qualification, independent review and Phase acceptance remain pending.
 Owner: [Phase 6.9](phase-6.9.md).
 Contract: [runtime orchestration](../spec/repository-sync-runtime-orchestration.md).
 
@@ -44,3 +44,26 @@ Contract: [runtime orchestration](../spec/repository-sync-runtime-orchestration.
   periodic checks; retained results and delivery are collected once.
 - [ ] P69-14 (S5): One integrated review and English Phase 7 handoff report actual
   qualification and limitations. No new 6.7/6.8 acceptance obligation is added.
+
+See the [S1 reuse and evidence map](../notes/phase-6.9-s1-evidence-map.md) for the
+connected standard clean route and explicit qualification limits.
+
+S2 authored behavior and limits are recorded in the
+[merge assessment note](../notes/phase-6.9-s2-merge-assessment.md). All phase
+conditions remain unchecked until the owning integrated assessment.
+
+S3 authored impact selection, native evidence applicability and limitations are recorded in the
+[program impact note](../notes/phase-6.9-s3-program-impact.md). All phase acceptance flags remain unchanged.
+
+S4 producer/consumer source and controlled public Operation specifications are authored
+under the actual Human258-approved dependency continuation. See the
+[purpose runtime note](../notes/phase-6.9-s4-purpose-runtime.md) and historical
+[capability boundary](../notes/phase-6.9-s4-capability-gap.md). Native checks,
+independent review, publication and installed qualification remain unobserved by
+the implementation agent. All phase acceptance flags remain unchanged.
+
+S5 source integration, completed-effect continuation, exact host selector and
+English Phase 6.10/7 handoff are recorded in the
+[delivery note](../notes/phase-6.9-s5-delivery-and-handoff.md). These source edits
+and historical evidence do not establish fresh installed qualification or Phase
+acceptance. All checklist flags remain unchanged.

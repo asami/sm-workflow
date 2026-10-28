@@ -5,11 +5,12 @@ import io.circe.generic.auto.*
 import io.circe.syntax.*
 import org.goldenport.Consequence
 import org.goldenport.cncf.processexecution.*
+import org.goldenport.record.io.RecordDecoder
 
 /** Local publication is workflow work. The caller supplies only an identified
   * semantic answer; the runtime owns necessity, admission, execution and results.
   * @since   Oct. 26, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object LocalPublication {
@@ -35,6 +36,46 @@ private[smworkflow] object LocalPublication {
     case Unnecessary(reason: String)
     case Required(reason: String)
     case Semantic(reason: String, paths: Vector[String])
+  }
+
+  /** Both semantic and byte-preserving projections must identify only the
+    * publisher's canonical version timestamps. Everything else stays an input.
+    */
+  private[smworkflow] def catalogTimestampOnly(component: String, indexed: String, working: String): Boolean = {
+    val timestamp = ("(?m)^    publishedAt: ([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}" +
+      "(?:\\.[0-9]{1,9})?(?:Z|[+-][0-9]{2}:[0-9]{2}))(?=\\r?$)").r
+    def _candidate_(text: String): Option[(Json, String)] = {
+      val matches = timestamp.findAllMatchIn(text).map(_.group(1)).toVector
+      if (matches.isEmpty || !matches.forall(t => scala.util.Try(java.time.OffsetDateTime.parse(t)).isSuccess)) None
+      else {
+        // Core rejects YAML timestamp tags. Quote only these already validated
+        // scalars for parsing; exact comparison below still uses original bytes.
+        val parsing = timestamp.replaceAllIn(text, m => "    publishedAt: \"" + m.group(1) + "\"")
+        for {
+          record <- new RecordDecoder().yaml(parsing).toOption
+          raw <- record.toJsonStringC.toOption
+          json <- io.circe.parser.parse(raw).toOption
+          if json.hcursor.get[Int]("schemaVersion").toOption.contains(2) &&
+            json.hcursor.get[String]("kind").toOption.contains("car")
+          versions <- json.hcursor.get[Vector[Json]]("versions").toOption.filter(_.nonEmpty)
+          if versions.forall(v => v.asObject.nonEmpty && v.hcursor.get[String]("version").toOption.exists(_.nonEmpty) &&
+            v.hcursor.get[String]("component").toOption.contains(component) &&
+            v.hcursor.get[String]("publishedAt").toOption.exists(t =>
+              scala.util.Try(java.time.OffsetDateTime.parse(t)).isSuccess))
+          values = versions.map(_.hcursor.get[String]("publishedAt").toOption.get)
+          if matches == values
+          semantic = json.mapObject(_.add("versions", Json.fromValues(versions.map(_.mapObject(_.remove("publishedAt"))))))
+          exact = timestamp.replaceAllIn(text, _ => "    publishedAt: <publication-timestamp>")
+        } yield semantic -> exact
+      }
+    }
+    if (component == null || component.isEmpty || indexed == null || working == null || indexed == working) false
+    else try {
+      (_candidate_(indexed), _candidate_(working)) match {
+        case (Some(before), Some(after)) => before == after
+        case _ => false
+      }
+    } catch { case scala.util.control.NonFatal(_) => false }
   }
 
   /** This port is the existing component-managed record store. Entries are

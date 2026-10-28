@@ -10,7 +10,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /** Actual application CML progression; common completion guarantees are not re-specified.
   * @since   Oct.  2, 2026
-  * @version Oct. 24, 2026
+  * @version Oct. 28, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -88,6 +88,7 @@ final class WorkflowStateMachineGuardSpec extends AnyWordSpec with Matchers with
         "AssessHandoffScopes" -> Vector("Enriched", "DecisionNeeded"),
         "AssessReasoningDemand" -> Vector("Enriched", "DecisionNeeded"))
       syncAlternatives shouldBe Vector(
+        "GroupRepositoryPurposes" -> Vector("resolved", "decision-needed"),
         "ResolveRepositoryMergeConflicts" -> Vector("resolved", "decision-needed"),
         "ReviewNativePendingMerge" -> Vector("accept", "repair", "decision-needed", "reject"),
         "RepairNativePendingMerge" -> Vector("repaired", "decision-needed"))

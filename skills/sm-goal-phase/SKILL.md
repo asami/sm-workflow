@@ -47,6 +47,19 @@ the configured caller entry binding; the caller must independently record and ad
 the exact human selection. Missing binding or selection is not permission to
 manufacture a Start request or run a replacement workflow.
 
+## Conditional Step review before closure
+
+When an actual external observation calls for independent review before the first
+Step closure attempt, use the public `describeGoalPhaseStepReview` Operation.
+Only its actual `review-available` response supplies the complete current target
+for `requestGoalPhaseStepReview`. Preserve that target unchanged and provide a
+bounded reason; an external report motivates review and cannot become a native
+review verdict. The request grants no effect authority and charges no repair.
+The owner then uses ordinary Advance to issue the existing independent ReviewStep.
+A repeated request, stale candidate, already attempted closure, or unknown effect
+must retain the actual refusal; do not re-Start or replay accepted Submit.
+Follow the [precommit Step review contract](../../docs/spec/goal-phase-precommit-step-review.md).
+
 ## Runtime-owned repair and stop decisions
 
 For command preparation or delegated delivery that is confirmed unexecuted,

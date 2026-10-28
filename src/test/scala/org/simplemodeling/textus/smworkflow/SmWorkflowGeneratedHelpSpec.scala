@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  5, 2026
- * @version Oct. 27, 2026
+ * @version Oct. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -28,7 +28,10 @@ import org.scalatest.wordspec.AnyWordSpec
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
-final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+final class SmWorkflowGeneratedHelpSpec extends SmWorkflowGeneratedHelpBehavior
+
+/** Shared declarations register real tests on each concrete suite. */
+private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _declarations: Vector[(ServiceDefinition, Vector[String])] = Vector(
     SmWorkflowComponent.NativeWorkflowPreparationServiceService -> Vector(
       "prepareGoalStart", "prepareRepositoryStart", "prepareSplitStart", "prepareRepositoryEffect", "prepareAuthority", "prepareEvidence",
@@ -51,6 +54,7 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
       "describeGoalPhaseReleaseRepairContinuation", "recoverGoalPhaseReleaseRepairContinuation",
       "describeGoalPhaseReviewPurposeRepair", "admitGoalPhaseReviewPurposeRepair",
       "describeGoalPhaseCompletionPolicy", "adoptGoalPhaseCompletionPolicy",
+      "describeGoalPhaseStepReview", "requestGoalPhaseStepReview",
       "describeGoalPhaseRepairPolicy", "adoptGoalPhaseRepairPolicy",
       "describeGoalPhaseFailedPhaseRepair", "adoptGoalPhaseFailedPhaseRepair",
       "describeGoalPhaseValidationRepair", "adoptGoalPhaseValidationRepair"
@@ -60,7 +64,7 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
       "submitHandoffScopeResult", "submitReasoningResult", "submitSplitHumanDirection"
     ),
     SmWorkflowComponent.RepositorySyncServiceService -> Vector(
-      "startRepositorySync", "advanceRepositorySync", "submitRepositorySyncWorkResult",
+      "startRepositorySync", "advanceRepositorySync", "submitRepositoryPurposeResult", "submitRepositorySyncWorkResult",
       "describeRepositorySyncValidationContinuation", "adoptRepositorySyncValidationContinuation",
       "submitNativeMergeReview", "submitNativeMergeRepair", "submitRepositoryConflictDecision"
     ),
@@ -86,10 +90,10 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
     SmWorkflowComponent.DevelopmentObservationServiceService -> Vector("readDevelopmentState", "readDevelopmentHistory"),
     SmWorkflowComponent.LocalPublicationServiceService -> Vector("ensureLocalPublication", "collectLocalPublication"),
     SmWorkflowComponent.JournalServiceService -> Vector("readJournalEntry", "findJournalEntries"),
-    SmWorkflowComponent.EvidenceServiceService -> Vector("readEvidence", "recordEvidenceJournal",
+    SmWorkflowComponent.EvidenceServiceService -> Vector("readEvidence", "readEvidenceRange", "recordEvidenceJournal",
       "archiveEvidenceBatch", "describeEvidence", "manageEvidenceRetention", "findDueEvidence"),
     SmWorkflowComponent.RepositoryHumanServiceService -> Vector("presentRepositoryConflictDecision"),
-    SmWorkflowComponent.RepositoryConflictServiceService -> Vector("resolveRepositoryMergeConflicts"),
+    SmWorkflowComponent.RepositoryConflictServiceService -> Vector("resolveRepositoryMergeConflicts", "groupRepositoryPurposes"),
     SmWorkflowComponent.GoalPhaseOrderedHumanServiceService -> Vector("presentOrderedGoalDecision"),
     SmWorkflowComponent.GoalPhaseImplementationServiceService -> Vector("implementGoalPhaseStep"),
     SmWorkflowComponent.GoalPhaseRepairWorkServiceService -> Vector("repairGoalPhaseStep"),
@@ -106,7 +110,7 @@ final class SmWorkflowGeneratedHelpSpec extends AnyWordSpec with Matchers with G
       "admitPartitionSemanticInputs", "admitHandoffScopes", "admitReasoningDemand"
     ),
     SmWorkflowComponent.SplitHumanServiceService -> Vector("presentSplitHumanDirection", "presentReasoningHumanDirection"),
-    SmWorkflowComponent.RepositorySyncSemanticAdmissionServiceService -> Vector("admitRepositoryConflicts", "admitNativeMergeReview", "admitNativeMergeRepair"),
+    SmWorkflowComponent.RepositorySyncSemanticAdmissionServiceService -> Vector("admitRepositoryConflicts", "admitRepositoryPurposes", "admitNativeMergeReview", "admitNativeMergeRepair"),
     SmWorkflowComponent.GoalPhaseSemanticAdmissionServiceService -> Vector("admitOrderedStepReview")
   )
   // The generated Component retains CNCF's canonical host services in addition

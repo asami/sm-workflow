@@ -11,7 +11,7 @@ import GoalPhaseOrderedProgression.*
 /**
  * Pure controller evidence, not native Git/SBT, permission, storage or CLI proof.
  * @since   Oct.  6, 2026
- * @version Oct. 27, 2026
+ * @version Oct. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -42,6 +42,160 @@ final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers wi
     val pending = take(accepted.acceptC(ClosureIntentSaved(accepted.candidate.get, "intent-" + id)))
     take(pending.acceptC(StepCommitObserved("intent-" + id,
       Commit(id, pending.candidate.get.head, tree))))
+  }
+
+  "Requested precommit Step review" should {
+    "preserve the checked prefix and eight consumed repairs and charge the genuine ninth repair only once" in {
+      Given("P69-PRECOMMIT-REVIEW-01: a conditional Step after eight actual test repair transitions")
+      val policy = GoalPhaseStepAssessment.Policy("conditional-doc", "documentation", "conditional", "off", "off", Vector.empty)
+      val selected = plan.copy(repairLimit = 10, steps = plan.steps.map(_.copy(actionPolicy = Some(policy))))
+      var state = take(startC(selected, base, Some(GoalPhaseRuntimeRepairControl.version)))
+      (1 to 8).foreach { index =>
+        val ready = take(state.acceptC(SemanticCompleted(work(state), "Completed assigned work")))
+        val seen = take(ready.acceptC(CandidateObserved(Snapshot(base.head, oid('c')))))
+        state = take(seen.acceptC(RepairableChecksObserved(seen.candidate.get, selected.steps.head.checks,
+          "failed-check-" + index, RepairDirective("Repair check " + index, Vector("Distinct finding " + index)))))
+      }
+      val ready = take(state.acceptC(SemanticCompleted(work(state), "Eighth repair completed")))
+      val snap = Snapshot(base.head, oid('d'))
+      val seen = take(ready.acceptC(CandidateObserved(snap)))
+      val assessment = GoalPhaseStepAssessment.Result(policy, snap, "passed-eight", selected.steps.head.checks,
+        "admit", "Actual selected checks passed", "not-selected", "not-executed")
+      val closing = take(seen.acceptC(StepAssessed(assessment)))
+      When("the exact checked conditional Step requests independent review")
+      val requested = take(closing.acceptC(StepReviewRequested(snap, "passed-eight")))
+      Then("only admission is cleared and the native review requirement is established without charging a repair")
+      requested.stage shouldBe Stage.Review
+      requested.stepReviewRequired shouldBe true
+      requested.stepAdmission shouldBe None
+      requested.plan shouldBe closing.plan
+      requested.generation shouldBe closing.generation
+      requested.base shouldBe closing.base
+      requested.completed shouldBe closing.completed
+      requested.candidate shouldBe closing.candidate
+      requested.candidateParent shouldBe closing.candidateParent
+      requested.checksReceipt shouldBe closing.checksReceipt
+      requested.repairControl shouldBe closing.repairControl
+      requested.repairObservations shouldBe closing.repairObservations
+      requested.repairs shouldBe 8
+      requested.ordinaryRepairs shouldBe closing.ordinaryRepairs
+      requested.acceptC(StepReviewRequested(snap, "passed-eight")).isSuccess shouldBe false
+      When("a real independent repair verdict is admitted and its assigned repair is completed and freshly checked")
+      val verdict = ReviewAdmitted(work(requested), snap, "passed-eight", "independent-nine",
+        ReviewOutcome.Repair, Some(RepairDirective("Repair the reviewed defect", Vector("New ninth finding"))))
+      val repair = take(requested.acceptC(verdict))
+      val repaired = take(repair.acceptC(SemanticCompleted(work(repair), "Corrected ninth finding")))
+      val fresh = snap.copy(tree = oid('e'))
+      val inspected = take(repaired.acceptC(CandidateObserved(fresh)))
+      val checked = take(inspected.acceptC(StepAssessed(assessment.copy(candidate = fresh, validationReference = "fresh-nine"))))
+      Then("the unchanged conditional Plan still requires a fresh independent ReviewStep and cannot reuse covered completion")
+      repair.repairs shouldBe 9
+      repair.ordinaryRepairs shouldBe requested.ordinaryRepairs + 1
+      repair.acceptC(verdict).isSuccess shouldBe false
+      repaired.stepReviewRequired shouldBe true
+      checked.stepReviewRequired shouldBe true
+      checked.stage shouldBe Stage.Review
+      checked.stepAdmission shouldBe None
+      checked.plan shouldBe selected
+      checked.acceptC(CoveredReviewCompletionObserved(fresh, "fresh-nine", requested.generation, snap,
+        "independent-nine", "covered-completion")).isSuccess shouldBe false
+      When("the corrected candidate receives genuine acceptance and its normal commit closes the Step")
+      val accepted = take(checked.acceptC(ReviewAdmitted(work(checked), fresh, "fresh-nine", "independent-accept", ReviewOutcome.Accept)))
+      val pending = take(accepted.acceptC(ClosureIntentSaved(fresh, "ordinary-close")))
+      val next = take(pending.acceptC(StepCommitObserved("ordinary-close", Commit(oid('f'), base.head, fresh.tree))))
+      val nextready = take(next.acceptC(SemanticCompleted(work(next), "Unrelated next Step completed")))
+      val nextsnapshot = Snapshot(oid('f'), oid('1'))
+      val nextseen = take(nextready.acceptC(CandidateObserved(nextsnapshot)))
+      val nextclosing = take(nextseen.acceptC(StepAssessed(assessment.copy(candidate = nextsnapshot,
+        validationReference = "next-check", checks = selected.steps(1).checks))))
+      Then("normal closure resets the obligation and the next conditional Step retains ordinary reviewless admission")
+      next.stepReviewRequired shouldBe false
+      next.repairs shouldBe 0
+      next.completed.head.review shouldBe Some("independent-accept")
+      nextclosing.stage shouldBe Stage.Closing
+      nextclosing.stepAdmission.nonEmpty shouldBe true
+      nextclosing.stepReviewRequired shouldBe false
+    }
+
+    "retain requested review through clean triage and ordinary policy adoption without changing Plan or counters" in {
+      Given("a conditional triage policy with an actual immediate observation and a clean initial triage")
+      val observation = GoalPhaseStepAssessment.Observation("immediate-observation", ContextReference("observation", "1"),
+        "Check the current boundary", "immediate", "Immediate semantic uncertainty", None)
+      val policy = GoalPhaseStepAssessment.Policy("conditional-triage", "documentation", "conditional", "off", "off",
+        Vector(observation), semanticTriage = "conditional")
+      val selected = plan.copy(repairLimit = 10, steps = plan.steps.updated(0, plan.steps.head.copy(actionPolicy = Some(policy))))
+      val started = take(startC(selected, base))
+      val ready = take(started.acceptC(SemanticCompleted(work(started), "Ready for triage")))
+      val snap = Snapshot(base.head, oid('c'))
+      val seen = take(ready.acceptC(CandidateObserved(snap)))
+      val assessment = GoalPhaseStepAssessment.Result(policy, snap, "triage-check", selected.steps.head.checks,
+        "triage", "Immediate observation remains", "required", "not-executed")
+      val triage = take(seen.acceptC(StepAssessed(assessment)))
+      val judgment = GoalPhaseStepTriage.Judgment(ContextReference("first-triage", "1"), "clean", "Actual uncertainty resolved", Vector.empty)
+      val closing = take(triage.acceptC(TriageAdmitted(work(triage), assessment, judgment)))
+      When("the clean conditional candidate requests independent review and ordinary runtime policy is adopted")
+      val requested = take(closing.acceptC(StepReviewRequested(snap, "triage-check")))
+      val adopted = take(requested.adoptRepairPolicyC("AdoptRuntimePolicy", "actual-policy-direction"))
+      Then("adoption retains the selected Step obligation and its unchanged accepted state and counters")
+      triage.acceptC(StepReviewRequested(snap, "triage-check")).isSuccess shouldBe false
+      adopted.stepReviewRequired shouldBe true
+      adopted.plan shouldBe requested.plan
+      adopted.repairs shouldBe requested.repairs
+      adopted.ordinaryRepairs shouldBe requested.ordinaryRepairs
+      adopted.candidate shouldBe requested.candidate
+      When("a genuine repair is reserved and its fresh candidate receives another clean triage")
+      val repair = take(adopted.acceptC(ReviewAdmitted(work(adopted), snap, "triage-check", "repair-review",
+        ReviewOutcome.Repair, Some(directive))))
+      val repaired = take(repair.acceptC(SemanticCompleted(work(repair), "Repair completed")))
+      val fresh = snap.copy(tree = oid('d'))
+      val inspected = take(repaired.acceptC(CandidateObserved(fresh)))
+      val freshassessment = assessment.copy(candidate = fresh, validationReference = "fresh-triage-check")
+      val freshtriage = take(inspected.acceptC(StepAssessed(freshassessment)))
+      val reviewed = take(freshtriage.acceptC(TriageAdmitted(work(freshtriage), freshassessment,
+        judgment.copy(reference = ContextReference("fresh-triage", "1")))))
+      Then("clean triage preserves its actual facts while still requiring the explicitly requested independent review")
+      reviewed.stage shouldBe Stage.Review
+      reviewed.stepReviewRequired shouldBe true
+      reviewed.stepAdmission shouldBe None
+      reviewed.repairs shouldBe 1
+      reviewed.checksReceipt shouldBe Some("fresh-triage-check")
+      reviewed.plan shouldBe selected
+    }
+
+    "refuse crossed checks candidates stages required-review states and every closure intent" in {
+      Given("a selected conditional Closing candidate alongside actual ordinary controller frontiers")
+      val policy = GoalPhaseStepAssessment.Policy("conditional-doc", "documentation", "conditional", "off", "off", Vector.empty)
+      val selected = plan.copy(steps = plan.steps.map(_.copy(actionPolicy = Some(policy))))
+      val started = take(startC(selected, base))
+      val ready = take(started.acceptC(SemanticCompleted(work(started), "Ready")))
+      val snap = Snapshot(base.head, oid('c'))
+      val seen = take(ready.acceptC(CandidateObserved(snap)))
+      val assessment = GoalPhaseStepAssessment.Result(policy, snap, "conditional-check", selected.steps.head.checks,
+        "admit", "Selected checks passed", "not-selected", "not-executed")
+      val closing = take(seen.acceptC(StepAssessed(assessment)))
+      val event = StepReviewRequested(snap, "conditional-check")
+      val requested = take(closing.acceptC(event))
+      val accepted = take(requested.acceptC(ReviewAdmitted(work(requested), snap, "conditional-check", "review", ReviewOutcome.Accept)))
+      val intent = take(closing.acceptC(ClosureIntentSaved(snap, "intent")))
+      val decision = take(seen.acceptC(NativeFailure("Actual check failure")))
+      val repair = take(requested.acceptC(ReviewAdmitted(work(requested), snap, "conditional-check", "repair-review",
+        ReviewOutcome.Repair, Some(directive))))
+      val phase = close(close(initial, oid('d'), oid('e')), oid('f'), oid('1'))
+      val phasevalidated = take(take(phase.acceptC(CandidateObserved(phase.tipSnapshot)))
+        .acceptC(ChecksObserved(phase.tipSnapshot, plan.phaseChecks, "phase-check", true)))
+      val phaseclosing = take(phasevalidated.acceptC(ReviewAdmitted(work(phasevalidated), phase.tipSnapshot,
+        "phase-check", "phase-review", ReviewOutcome.Accept)))
+      val terminal = take(phaseclosing.acceptC(PhaseLocallyCompleted(phase.tipSnapshot, phase.completed.map(_.commit), "phase-review")))
+      When("crossed or malformed events and ineligible lifecycle frontiers are submitted")
+      val malformed = Vector(event.copy(snapshot = snap.copy(tree = oid('2'))), event.copy(checksReceipt = "crossed"),
+        event.copy(checksReceipt = ""), event.copy(snapshot = null))
+      val frontiers = Vector(started, ready, seen, requested, accepted, intent, decision, repair, phase, phasevalidated, phaseclosing, terminal)
+      Then("only the original eligible conditional Closing can open review before closure effects")
+      malformed.foreach(value => closing.acceptC(value).isSuccess shouldBe false)
+      frontiers.foreach(value => value.acceptC(event).isSuccess shouldBe false)
+      take(intent.acceptC(ClosureUnknown("intent"))).acceptC(event).isSuccess shouldBe false
+      reviewed(initial, oid('c')).acceptC(event).isSuccess shouldBe false
+    }
   }
 
   "GoalPhase ordered deterministic controller" should {

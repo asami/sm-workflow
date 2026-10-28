@@ -4,8 +4,15 @@ import io.circe.Json
 import io.circe.generic.auto.*
 import io.circe.syntax.*
 import org.goldenport.Consequence
+import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
+import org.goldenport.cncf.cli.RunMode
+import org.goldenport.cncf.component.{ComponentCreate, ComponentDescriptor, ComponentOrigin}
+import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.cncf.processexecution.*
+import org.goldenport.cncf.subsystem.Subsystem
+import org.goldenport.cncf.testutil.RuntimeBindingAdmissionFixture
 import org.goldenport.cncf.workspace.WorkspaceId
+import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -15,7 +22,7 @@ import LocalPublication.*
 /** Pure decision and continuation contracts. Supplied process facts are test
   * data; actual CLI/UoW execution is qualified separately.
   * @since   Oct. 26, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -23,6 +30,28 @@ import LocalPublication.*
 final class LocalPublicationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _target = Target("producer", "org.example.Producer", "producer-workspace")
   private val _clean = Source("a" * 40, "b" * 40, Vector.empty)
+  private val _catalog_path = "src/main/catalog/car/org/example/producer.yaml"
+  private val _catalog = "schemaVersion: 2\nkind: car\nversions:\n  - version: 0.1.0-SNAPSHOT\n" +
+    "    component: org.example.Producer\n    publishedAt: 2026-10-29T01:02:03.123+09:00\n" +
+    "    file: repository/car/producer.car\n    runtime:\n      cncf:\n        minimum: 0.5.3-SNAPSHOT\n"
+  private val _timestamp_output = _catalog.replace("2026-10-29T01:02:03.123+09:00", "2026-10-29T02:03:04Z")
+  private def _policy(value: Json): Consequence[LocalPublicationRuntime.Policy] = {
+    val subsystem = RuntimeBindingAdmissionFixture.admit(Subsystem(name = "publication-policy", version = None,
+      configuration = ResolvedConfiguration(Configuration(Map(LocalPublicationRuntime.declaration.name ->
+        ConfigurationValue.StringValue(value.noSpaces))), ConfigurationTrace.empty),
+      aliasResolver = AliasResolver.empty, runMode = RunMode.Command))
+    val id = SmWorkflowComponent.componentId
+    val descriptor = ComponentDescriptor(name = Some(id.name), componentName = Some(id.name),
+      version = Some("0.1.0"), schemaVersion = Some(3), componentId = Some(id))
+    var decoded = Option.empty[LocalPublicationRuntime.Policy]
+    val factory = new SmWorkflowConfiguredComponentFactory(Vector(LocalPublicationRuntime.declaration), Vector.empty,
+      (_, parameters, _) => parameters.resolve(LocalPublicationRuntime.declaration).map { resolution =>
+        decoded = resolution.value
+        Vector(SmWorkflowComponent.GoalPhaseStepReviewServiceService)
+      })
+    factory.primaryFactory.createPrimaryC(ComponentCreate(subsystem, ComponentOrigin.Builtin, Vector(descriptor)))
+      .flatMap(_ => decoded.map(Consequence.success).getOrElse(Consequence.configurationInvalid("No selected publication policy")))
+  }
   private def _observed(termination: ProcessExecutionTermination, workspace: String = _target.workspace): SbtExecutionAttempt = {
     val capture = ProcessExecutionCapture(Vector.empty, 0L, false)
     SbtExecutionAttempt.Observed(SbtExecutionResult(SbtTarget(take(WorkspaceId.parseC(workspace))), SbtOperation.PublishLocal,
@@ -78,6 +107,143 @@ final class LocalPublicationSpec extends AnyWordSpec with Matchers with GivenWhe
   }
 
   "Runtime-owned publication" should {
+    "project only canonical version timestamps while preserving semantic and exact text inputs" in {
+      Given("a canonical CAR catalog and the publisher's changed offset timestamp")
+      val second = "  - version: 0.2.0-SNAPSHOT\n    component: org.example.Producer\n" +
+        "    publishedAt: 2026-10-29T03:04:05+09:00\n    file: repository/car/next.car\n"
+      When("semantic JSON and the exact original text are projected together")
+      val canonical = catalogTimestampOnly(_target.component, _catalog, _timestamp_output)
+      val canonicalcrlf = catalogTimestampOnly(_target.component, _catalog.replace("\n", "\r\n"),
+        _timestamp_output.replace("\n", "\r\n"))
+      val canonicalmulti = catalogTimestampOnly(_target.component, _catalog + second,
+        _timestamp_output + second.replace("03:04:05", "04:05:06"))
+      Then("canonical timestamp-only changes are accepted for LF, CRLF and multiple versions")
+      canonical shouldBe true
+      canonicalcrlf shouldBe true
+      canonicalmulti shouldBe true
+      Given("catalog variants with semantic or noncanonical textual changes")
+      val changes = Vector(
+        _timestamp_output.replace("producer.car", "different.car"),
+        _timestamp_output.replace("0.1.0-SNAPSHOT", "0.2.0-SNAPSHOT"),
+        _timestamp_output.replace("0.5.3-SNAPSHOT", "0.5.4-SNAPSHOT"),
+        _timestamp_output.replace("org.example.Producer", "org.example.Other"),
+        _timestamp_output.replace("2026-10-29T02:03:04Z", "2026-02-30T02:03:04Z"),
+        _timestamp_output.replace("kind: car", "kind: car # generated"),
+        _timestamp_output.replace("kind: car", "kind:  car"),
+        _timestamp_output.replace("    publishedAt:", "   publishedAt:"),
+        _timestamp_output.replace("    publishedAt: 2026-10-29T02:03:04Z\n", ""),
+        _timestamp_output.replace("    publishedAt: 2026-10-29T02:03:04Z", "    publishedAt: \"2026-10-29T02:03:04Z\""),
+        _timestamp_output + "extra: null\n", _timestamp_output.replace("\n", "\r\n"),
+        "schemaVersion: 2\nkind: car\nversions: []\n", "not: [valid yaml")
+      When("each variant is compared with the actual indexed catalog")
+      val variantresults = changes.map(next => catalogTimestampOnly(_target.component, _catalog, next))
+      val wrongcomponent = catalogTimestampOnly("wrong-component", _catalog, _timestamp_output)
+      val equal = catalogTimestampOnly(_target.component, _catalog, _catalog)
+      val absent = catalogTimestampOnly(_target.component, null, _timestamp_output)
+      val empty = catalogTimestampOnly(_target.component, "", _timestamp_output)
+      Then("every semantic or noncanonical textual change remains an input")
+      variantresults.foreach(_ shouldBe false)
+      wrongcomponent shouldBe false
+      equal shouldBe false
+      absent shouldBe false
+      empty shouldBe false
+      Given("a canonical-looking timestamp line inside block scalar content")
+      val block = "description: |\n    publishedAt: 2026-10-29T01:02:03.123+09:00\n"
+      When("the same block appears in both catalogs")
+      val blockresult = catalogTimestampOnly(_target.component, _catalog + block, _timestamp_output + block)
+      Then("it cannot be projected as version timestamp metadata")
+      blockresult shouldBe false
+      Given("a separate publishedAt field outside the version entries")
+      When("that field changes alongside the canonical timestamp")
+      val fieldresult = catalogTimestampOnly(_target.component, _catalog + "publishedAt: unchanged\n",
+        _timestamp_output + "publishedAt: changed\n")
+      Then("its change remains a catalog input")
+      fieldresult shouldBe false
+    }
+
+    "keep old policy compatibility and reject ambiguous finite catalog bindings" in {
+      Given("the existing target configuration with no output policy")
+      val base = Json.obj("storeName" -> "workflow".asJson,
+        "collection" -> ThreeWorkflowNormalHostFixture.collection("publication_policy").asJson,
+        "targets" -> Json.arr(_target.asJson))
+      val output = Json.obj("targetIdentity" -> _target.identity.asJson,
+        "path" -> _catalog_path.asJson, "selection" -> "publication-catalog".asJson)
+      def _selected_(value: Json) = base.mapObject(_.add("catalogOutputs", value))
+      When("the normal configured factory resolves absent, empty and explicit finite outputs")
+      val basepolicy = take(_policy(base))
+      val emptypolicy = take(_policy(_selected_(Json.arr())))
+      val outputpolicy = take(_policy(_selected_(Json.arr(output))))
+      Then("absent and empty outputs preserve compatibility and the explicit binding is retained exactly")
+      basepolicy.catalogOutputs shouldBe Vector.empty
+      emptypolicy.catalogOutputs shouldBe Vector.empty
+      outputpolicy.catalogOutputs shouldBe Vector(
+        LocalPublicationRuntime.CatalogOutput(_target.identity, _catalog_path, "publication-catalog"))
+      Given("null, extra-field, invalid and ambiguous catalog bindings")
+      val invalid = Vector(Json.Null, Json.obj(), "not-an-array".asJson,
+        Json.arr(output, output), Json.fromValues(Vector.fill(17)(output)), Json.arr(Json.Null),
+        Json.arr(output.mapObject(_.remove("path"))), Json.arr(output.mapObject(_.add("extra", true.asJson))),
+        Json.arr(output.mapObject(_.add("path", Json.Null))),
+        Json.arr(output.mapObject(_.add("path", 1.asJson))),
+        Json.arr(output.mapObject(_.add("targetIdentity", Json.Null))),
+        Json.arr(output.mapObject(_.add("selection", Json.Null))),
+        Json.arr(output.mapObject(_.add("targetIdentity", "undeclared".asJson))),
+        Json.arr(output.mapObject(_.add("selection", "".asJson))),
+        Json.arr(output.mapObject(_.add("selection", "not a selection".asJson))),
+        Json.arr(output, output.mapObject(_.add("path", "src/main/catalog/car/other.yaml".asJson)))) ++
+        Vector("/src/main/catalog/car/x.yaml", "src/main/catalog/car/../x.yaml", "src/main/catalog/car//x.yaml",
+          "src/main/catalog/car/x.yml", "docs/x.yaml", "src/main/catalog/car/./x.yaml")
+          .map(path => Json.arr(output.mapObject(_.add("path", path.asJson))))
+      When("the normal configured factory resolves each malformed policy")
+      val invalidresults = invalid.map(value => _policy(_selected_(value)))
+      val extrafield = _policy(base.mapObject(_.add("extra", true.asJson)))
+      val extratargetfield = _policy(base.mapObject(_.add("targets", Json.arr(_target.asJson.mapObject(_.add("extra", true.asJson))))))
+      Then("nulls, extra fields, invalid paths and selections, undeclared targets and duplicates are rejected")
+      invalidresults.foreach(_.isFaillure shouldBe true)
+      extrafield.isFaillure shouldBe true
+      extratargetfield.isFaillure shouldBe true
+    }
+
+    "reuse a prerequisite after timestamp projection but retain actual changed inputs and unknown effects" in {
+      Given("a successful clean prerequisite and the same index with timestamp-only worktree output")
+      val m = new Memory
+      val input = Input("catalog-prerequisite", _target.identity)
+      val original = take(ensurePrerequisiteC(input, _target, "actor", m))
+      // sourceC omits only the qualified output; the index and HEAD stay exact.
+      m.source = _clean
+      When("the owning prerequisite sees that projected source repeatedly")
+      val repeated = take(ensurePrerequisiteC(input, _target, "actor", m))
+      Then("the timestamp-only projection reuses the successful prerequisite")
+      catalogTimestampOnly(_target.component, _catalog, _timestamp_output) shouldBe true
+      repeated shouldBe original
+      m.starts shouldBe 1
+      Given("the retained publication and meaningful changed catalog metadata")
+      When("the owning prerequisite observes that catalog input change")
+      m.source = _clean.copy(dirty = Vector(Change(_catalog_path, " ", "M")))
+      val metadata = take(ensurePrerequisiteC(input, _target, "actor", m))
+      Then("the meaningful catalog input requires a new publication")
+      metadata.status shouldBe "published"
+      m.starts shouldBe 2
+      Given("the actual catalog publication followed by staged catalog and dirty build inputs")
+      When("the owning prerequisite observes those changed inputs")
+      m.source = _clean.copy(tree = "c" * 40, dirty = Vector(Change(_catalog_path, "M", " "),
+        Change("build.sbt", " ", "M")))
+      val changed = take(ensurePrerequisiteC(input, _target, "actor", m))
+      Then("the staged catalog and other dirty source remain in the new publication source")
+      changed.status shouldBe "published"
+      changed.request.source shouldBe m.source
+      m.starts shouldBe 3
+      Given("that last actual intent loses its terminal result")
+      val key = m.rows.collectFirst { case (key, value) if key.endsWith(":result") &&
+        value.hcursor.downField("request").get[Input]("input").toOption.contains(changed.request.input) => key }.get
+      m.rows.remove(key)
+      When("the source returns to timestamp-only output and the prerequisite resumes")
+      m.source = _clean
+      val uncertain = take(ensurePrerequisiteC(input, _target, "actor", m))
+      Then("the unknown effect is retained without another publication")
+      uncertain.status shouldBe "uncertain"
+      m.starts shouldBe 3
+    }
+
     "observe a new source change after a ready successor skipped without publishing" in {
       Given("a prerequisite published A, then a documentation-only successor skipped")
       val m = new Memory

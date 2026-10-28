@@ -17,7 +17,7 @@ import RepositorySyncManagedGitObservation as Git
 /** Per-call metadata binding only. Every transition borrows canonical shared
   * storage; Git effects are not captured in the DB completion transaction.
   * @since   Oct.  6, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   */
 private[smworkflow] object RepositorySyncNativeProgressStore {
   val schema = "sm-workflow.repository-sync-native-progress.v3"
@@ -29,7 +29,8 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     repairContext: Option[RepositorySyncNativeMergeReview.RepairContext] = None,
     continuation: Option[RepositorySyncValidationContinuation.Direction] = None,
     hygiene: Option[CommitHygiene.Record] = None,
-    records: Option[CompletionRecords.Plan] = None)
+    records: Option[CompletionRecords.Plan] = None,
+    purposes: Option[RepositorySyncPurpose.Progress] = None)
   final case class Stage(record: InstanceRecord, payload: Payload)
   final case class Candidate(namespace: String, pending: Stage)
   def candidateKey(namespace: String, key: String): String =
@@ -38,7 +39,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
   private given Decoder[RepositorySyncNativeMergeValidation.State] = Decoder.instance(cursor =>
     RepositorySyncNativeMergeValidation.stateCodec.decode(cursor.value).left.map(reason => DecodingFailure(reason, cursor.history)))
   private given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
-    case ("assessment" | "repairContext" | "continuation" | "hygiene" | "records", value) => !value.isNull
+    case ("assessment" | "repairContext" | "continuation" | "hygiene" | "records" | "purposes", value) => !value.isNull
     case _ => true
   }))
   private given Decoder[Payload] = deriveDecoder
@@ -71,6 +72,15 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     /** The current native history selects the actual candidate receipt. A
       * reference is an ordinary progression link, not an unchanged-data seal.
       */
+    def currentPurposeC(current: InstanceRecord): Consequence[Option[Stage]] = {
+      val prefix = "native-repository:" + identity + ":"
+      current.history.reverse.find(entry => entry.currentProgression.exists(p => Set("sync.PurposeChecked", "sync.PurposeRepairRequired", "sync.PendingMergePrepared")(p.value)) &&
+        entry.causation.value.startsWith(prefix)) match {
+        case None => Consequence.success(None)
+        case Some(entry) if entry.currentProgression.contains(ProgressionReference("sync.PendingMergePrepared")) => Consequence.success(None)
+        case Some(entry) => loadC(entry.causation.value.substring(prefix.length))
+      }
+    }
     def currentMergeCandidateC(current: InstanceRecord): Consequence[Candidate] = {
       if (current.identity.value != identity) return invalid("current candidate history crosses its instance")
       val selected = current.history.reverse.find(entry =>

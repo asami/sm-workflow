@@ -43,7 +43,7 @@ import SplitPhaseTypedStartFixture as F
   * Input/evidence rows are test data, not a production human interaction channel.
   * No launcher, CLI command, fabricated history or direct SQLite write is used.
   * @since   Oct.  7, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -706,11 +706,12 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
           prepare(call => call.currentC(identity).map(value => { state = Some(value); () }))
           state.get
         }
-        Then("exactly the fifty installed Operations expose named business input and explicit execution parameters")
+        Then("exactly the fifty-three installed Operations expose named business input and explicit execution parameters")
         val expected = Set(
           "GoalPhaseService.startGoalPhase", "GoalPhaseService.advanceGoalPhase", "GoalPhaseService.submitGoalPhaseWorkResult",
           "GoalPhaseService.submitGoalPhaseOrderedDecision",
           "GoalPhaseService.submitGoalPhaseFindingRecording",
+          "GoalPhaseService.describeGoalPhaseStepReview", "GoalPhaseService.requestGoalPhaseStepReview",
           "GoalPhaseService.resolveGoalPhaseDiagnosticInformation",
           "GoalPhaseService.describeGoalPhaseValidationRecovery", "GoalPhaseService.recoverGoalPhaseValidation",
           "GoalPhaseService.describeGoalPhaseClosureRecovery", "GoalPhaseService.recoverGoalPhaseClosure",
@@ -736,10 +737,10 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
           "SplitPhaseService.submitHandoffScopeResult", "SplitPhaseService.submitSplitHumanDirection", "SplitPhaseService.submitReasoningResult",
           "RepositorySyncService.startRepositorySync", "RepositorySyncService.advanceRepositorySync",
           "RepositorySyncService.describeRepositorySyncValidationContinuation", "RepositorySyncService.adoptRepositorySyncValidationContinuation",
-          "RepositorySyncService.submitRepositorySyncWorkResult", "RepositorySyncService.submitNativeMergeReview",
+          "RepositorySyncService.submitRepositorySyncWorkResult", "RepositorySyncService.submitRepositoryPurposeResult", "RepositorySyncService.submitNativeMergeReview",
           "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitNativeMergeRepair")
-        published should have size 50
-        published.map(_._1).distinct should have size 50
+        published should have size 53
+        published.map(_._1).distinct should have size 53
         published.map(_._1).toSet shouldBe expected
         val sessiondescriptions = Set("describeGoalPhaseValidationRecovery", "describeGoalPhaseClosureRecovery",
           "describeGoalPhaseSourceHistoryRecovery", "describeGoalPhaseCandidateRecovery",
@@ -749,7 +750,8 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
           withClue(identity) {
             operation.specification.request.parameters.head.name shouldBe
               (if (sessiondescriptions(operation.name)) "sessionId"
-                else if (Vector("start", "describe", "recover", "adopt", "admit", "continue", "resolve").exists(operation.name.startsWith)) "input"
+                else if (operation.name == "requestGoalPhaseStepReview" ||
+                  Vector("start", "describe", "recover", "adopt", "admit", "continue", "resolve").exists(operation.name.startsWith)) "input"
                 else "sessionId")
             if (Set("describeGoalPhaseValidationRepair", "adoptGoalPhaseValidationRepair",
                 "recoverGoalPhaseCandidate", "recoverGoalPhaseWholePhaseCandidate", "describeGoalPhaseReleaseRepairContinuation",

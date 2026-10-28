@@ -16,7 +16,7 @@ import GoalPhaseNativeWorkContinuation.DependencyChain
 
 /** Dependency effects use the existing candidate/check intent owners and UoW.
   * @since   Oct. 24, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeDependencyValidation {
@@ -228,11 +228,15 @@ private[smworkflow] object GoalPhaseNativeDependencyValidation {
     * replaces an ancestor's live-tree comparison. Unrelated histories stay fresh. */
   def chainFreshnessC(core: ActionCall.Core, chain: Option[DependencyChain], current: Vector[D.Capture]): Consequence[Unit] = {
     val accepted = chain.toVector.flatMap(_.accepted.map(_.capture))
-    val all = (accepted ++ current).distinct
-    all.foldLeft(Consequence.unit)((prior, capture) => prior.flatMap { _ =>
+    val phase = chain.toVector.flatMap(c => c.historicalPhase.map(_.capture) ++ c.activePhaseCapture)
+    val all = ((accepted ++ current).filterNot(phase.contains) ++ phase).distinct
+    val consistent = all.groupBy(_.sourceRevision).values.forall(_.size == 1) &&
+      all.groupBy(_.step).values.forall(_.size == 1)
+    (if (consistent) Consequence.unit else D.invalid("dependency chain has contradictory same-Step or same-source captures"))
+    .flatMap(_ => all.foldLeft(Consequence.unit)((prior, capture) => prior.flatMap { _ =>
       if (D.captureValid(capture)) chain.fold(resolvedC(capture.admission, None))(_.captureC(capture))
       else D.invalid("invalid dependency chain capture")
-    }).flatMap { _ =>
+    })).flatMap { _ =>
       all.groupBy(_.admission.binding.dependency.identity).values.foldLeft(Consequence.unit) { (prior, history) =>
         // An absent-prefix history retains its original strict full-tree obligation.
         // Only a genuinely reconstructed prefixed successor supersedes live ancestor comparison.

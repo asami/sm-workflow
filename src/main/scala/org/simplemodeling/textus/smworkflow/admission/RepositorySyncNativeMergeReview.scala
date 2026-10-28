@@ -15,7 +15,7 @@ import WorkflowManagedProcessExecution as E
 /** Actual full pending-merge semantic input. No legacy digest receipt or AI
   * command/authority selection participates in this native route.
   * @since   Oct.  6, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeReview {
@@ -51,9 +51,9 @@ private[smworkflow] object RepositorySyncNativeMergeReview {
   }
 
   def captureC(store: N.Store, source: N.Stage, policy: Policy): Consequence[Request] = for {
-    _ <- if (source.payload.stage == "MergeValidated") Consequence.unit
+    _ <- if (Set("MergeValidated", "PurposeChecked")(source.payload.stage)) Consequence.unit
       else invalid("review has no actual native selected validation")
-    request <- captureCandidateC(store, source, policy)
+    request <- if (source.payload.purposes.nonEmpty) capturePurposeC(store, source, policy) else captureCandidateC(store, source, policy)
   } yield request
 
   /** The same actual candidate facts also bound check-origin repair. Capturing
@@ -65,25 +65,43 @@ private[smworkflow] object RepositorySyncNativeMergeReview {
       else invalid("candidate has no actual native selected validation")
     _ <- V.preconditionsC(store, source)
     state = source.payload.validation.get
-    localDiff <- diffC(store.core, source.payload.before.head, policy.maximumDiffBytes)
-    remoteDiff <- diffC(store.core, source.payload.mergeHead.get, policy.maximumDiffBytes)
+    localDiff <- diffC(store, source, source.payload.before.head, "local-diff", policy.maximumDiffBytes)
+    remoteDiff <- diffC(store, source, source.payload.mergeHead.get, "remote-diff", policy.maximumDiffBytes)
     localPaths <- pathsC(store.core, source.payload.before.head)
     remotePaths <- pathsC(store.core, source.payload.mergeHead.get)
     paths = (localPaths ++ remotePaths).distinct.sorted
-    _ <- if (paths.size <= policy.maximumPaths) Consequence.unit else invalid("full merge path coverage exceeds policy; Human handling required")
     _ <- V.preconditionsC(store, source)
     prior <- source.payload.repairContext match {
       case None => Consequence.success(None)
-      case Some(context) => diffC(store.core, context.indexTree, policy.maximumDiffBytes)
-        .map(delta => Some(PriorReview(context, delta)))
+      case Some(context) => diffC(store, source, context.indexTree, "repair-delta", policy.maximumDiffBytes)
+        .map(delta => Some(PriorReview(context, delta.text)))
     }
     input = Request(store.identity, source.record.revision.value.toString, source.payload.before.head,
-      source.payload.mergeHead.get, source.payload.indexTree.get, paths, localDiff, remoteDiff,
-      state.mode, state.reason, state.selected.map(_.identity), state.receipts, priorReview = prior)
+      source.payload.mergeHead.get, source.payload.indexTree.get, paths, localDiff.text, remoteDiff.text,
+      state.mode, state.reason, state.selected.map(_.identity), state.receipts,
+      uncertainties = localDiff.uncertainties ++ remoteDiff.uncertainties, priorReview = prior)
   } yield input
 
+  def capturePurposeC(store: N.Store, source: N.Stage, policy: Policy): Consequence[Request] = for {
+    _ <- policy.validateC
+    progress <- source.payload.purposes.map(Consequence.success).getOrElse(invalid("purpose review lacks its native content candidate"))
+    candidate <- progress.candidate.map(Consequence.success).getOrElse(invalid("purpose review lacks its actual candidate"))
+    slot <- store.declaration.purposePolicy.toVector.flatMap(_.slots).lift(progress.slotCursor).map(Consequence.success)
+      .getOrElse(invalid("purpose review lacks its fixed candidate workspace"))
+    _ <- RepositorySyncPurposeRuntime.candidateWorkspaceC(store, slot, candidate)
+    diff <- diffC(store, source, candidate.parent, "purpose-diff", policy.maximumDiffBytes, Some(slot.workspace))
+    parent <- GitObjectId.parseC(candidate.parent)
+    tree <- GitObjectId.parseC(candidate.tree)
+    delta <- E.executeGitC(store.core, GitOperation.TreeChanges(parent, tree)).flatMap(_.valueC)
+    selection <- progress.selection.map(Consequence.success).getOrElse(invalid("purpose review lacks its actual check selection"))
+    _ <- RepositorySyncPurposeRuntime.candidateWorkspaceC(store, slot, candidate)
+  } yield Request(store.identity, source.record.revision.value.toString, candidate.parent, candidate.parent,
+    candidate.tree, delta.map(_.path.value), diff.text, diff.text, selection.depth, selection.reason,
+    selection.checks.map(_.identity), progress.receipts.drop(1), uncertainties = diff.uncertainties)
+
   def admitC(input: Request, result: Result, policy: Policy): Consequence[Unit] = for {
-    _ <- if (result != null && bounded(result.rationale, 16384) && result.rationale.trim.nonEmpty && result.findings != null &&
+    _ <- if (result != null && (!Set("accept", "clean")(result.decision) ||
+        !input.uncertainties.exists(_.startsWith("Unexamined"))) && bounded(result.rationale, 16384) && result.rationale.trim.nonEmpty && result.findings != null &&
         result.findings.size <= 128 && result.findings.forall(f => f != null && id(f.identity) &&
           f.affectedPaths != null && f.affectedPaths.nonEmpty && f.affectedPaths.distinct == f.affectedPaths &&
           f.affectedPaths.forall(input.changedPaths.contains) && bounded(f.rationale, 16384) && f.rationale.trim.nonEmpty) &&
@@ -94,12 +112,49 @@ private[smworkflow] object RepositorySyncNativeMergeReview {
       else invalid("review result has unknown decision, missing rationale or out-of-coverage findings")
   } yield ()
 
-  private def diffC(core: ActionCall.Core, parent: String, limit: Int): Consequence[String] = for {
+  private final case class Diff(text: String, uncertainties: Vector[String])
+
+  /** The policy byte count bounds the inline preview, not semantic eligibility.
+    * CNCF still owns actual capture/resource limits. Truncation and binary facts
+    * remain explicit and cannot be accepted as an examined text review. */
+  private def diffC(store: N.Store, source: N.Stage, parent: String,
+    output: String, inlineBytes: Int, workspace: Option[String] = None): Consequence[Diff] = for {
     oid <- GitObjectId.parseC(parent)
-    diff <- E.executeGitC(core, GitOperation.PendingDiff(oid)).flatMap(_.valueC)
-    _ <- if (bounded(diff.text, limit) && !diff.isBinary) Consequence.unit
-      else invalid("binary or oversized merge diff requires Human handling")
-  } yield diff.text
+    captured <- workspace.fold(E.executeGitC(store.core, GitOperation.PendingDiff(oid)))(value => E.executeGitC(store.core, GitOperation.PendingDiff(oid), value))
+    decoded = captured.valueC.toOption
+    text = decoded.map(_.text).getOrElse {
+      try java.nio.charset.StandardCharsets.UTF_8.newDecoder().decode(
+        java.nio.ByteBuffer.wrap(captured.processResult.stdout.content.toArray)).toString
+      catch { case scala.util.control.NonFatal(_) => "Git diff text is unavailable; the managed capture is not complete UTF-8." }
+    }
+    complete = decoded.nonEmpty
+    binary = decoded.exists(_.isBinary)
+    uncertainties = (if (!complete) Vector("Unexamined " + output + ": incomplete Git capture; no full coverage or semantic acceptance is claimed") else Vector.empty) ++
+      (if (binary) Vector("Unexamined binary content in " + output + ": textual diff reports metadata only; appropriate binary evidence is required") else Vector.empty)
+    archived <- if (text.getBytes(UTF_8).length <= inlineBytes || store.declaration.evidencePolicy.isEmpty)
+      Consequence.success(None)
+      else {
+        val policy = store.declaration.evidencePolicy.get
+        val reference = ContextReference("native-review:" + store.identity, source.record.revision.value.toString)
+        val association = CommonEvidence.Source(reference, store.context.repositoryIdentity, "RepositorySync", None,
+          store.identity, output + ":" + parent, if (complete) "passed" else "failed")
+        CommonEvidence.archiveManagedC(CommonEvidence.storage(store.core, policy), policy, association, text,
+          "identity", store.core.executionContext.clock).map {
+          case (state, Some((_, observation))) if observation.status == "stored" => state.evidence
+          case _ => None // Keep the captured text inline when storage is unconfirmed.
+        }
+      }
+    presented = archived match {
+      case None => text
+      case Some(reference) =>
+        val preview = text.codePoints().toArray.take(math.min(inlineBytes / 4, 4096))
+        "Retained " + output + ": parent=" + parent + "; complete=" + complete + "; binary=" + binary +
+          "; UTF-8 bytes=" + text.getBytes(UTF_8).length + ". Preview only; this is not full review coverage.\n" +
+          "Read EvidenceService.readEvidenceRange with input {identity: \"" + reference.identity +
+          "\", revision: \"1\", startCharacter: 0, characterCount: 16384}; offsets count Unicode code points.\n" +
+          new String(preview, 0, preview.length)
+    }
+  } yield Diff(presented, uncertainties)
 
   private def pathsC(core: ActionCall.Core, parent: String): Consequence[Vector[String]] = for {
     oid <- GitObjectId.parseC(parent)

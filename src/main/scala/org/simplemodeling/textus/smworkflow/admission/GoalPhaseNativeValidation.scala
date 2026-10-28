@@ -27,7 +27,7 @@ import org.goldenport.cncf.validation.ValidationDiscoveryV1 as D
   * plan check identities select host bindings, never commands from AI. Intent
   * commits precede each external effect. Unknown results are not replayed.
   * @since   Oct.  6, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeValidation {
@@ -163,6 +163,40 @@ private[smworkflow] object GoalPhaseNativeValidation {
     actual <- retained.fold(if (allowRepairDirection) store.pendingRepairSelectionC else store.pendingSelectionC)(x => store.completedC(x).map(Some(_)))
   } yield actual
 
+  /** Read only a terminal pre-binding Release validation at its real historical
+    * source. This returns evidence, never authority to select or execute checks.
+    */
+  private[admission] def historicalReleaseTerminalC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
+    candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, from: InstanceRecord,
+    documentPolicy: Option[GoalPhaseDocumentProgress.Policy], recordingPaths: Vector[String],
+    dependencyChain: GoalPhaseNativeWorkContinuation.DependencyChain): Consequence[Saved] = {
+    def _refusal_(reason: String, outcome: Option[String] = None): String =
+      "explicit phase dependency requires its authenticated successor before validation; an existing check or metadata intent cannot be superseded" +
+        "; historical source=" + from.revision.value + " outcome=" + outcome.getOrElse("absent") + " reason=" + reason
+    for {
+    _ <- if (controller.stage == O.Stage.PhaseValidation && controller.cursor == controller.plan.steps.size &&
+        controller.releaseRepairActive && d.phaseDependencyValidation.nonEmpty &&
+        dependencyChain.activePhaseCapture.isEmpty && dependencyChain.historicalPhase.isEmpty &&
+        candidate.payload.dependency.isEmpty && candidate.payload.dependencySourceCapture.isEmpty) Consequence.unit
+      else F.invalid(_refusal_("not the exact pre-binding whole-Phase source"))
+    store <- _authenticated_store_c(session, d, core, candidate, controller, _ => Consequence.unit,
+      Some(from), documentPolicy, recordingPaths, Some(dependencyChain))
+    retained <- store.loadC("validation").flatMap(_.map(Consequence.success).getOrElse(F.invalid(_refusal_("no saved final validation"))))
+    terminal = (retained.payload.outcome.contains("passed") && retained.payload.receipts.size == retained.payload.selected.size &&
+      successful(retained.payload.receipts, retained.payload.selected)) ||
+      (retained.payload.outcome.exists(Set("failed", "repair-required", "repair-limit-reached")) && repairable(retained.payload))
+    _ <- if (terminal && retained.payload.dependency.isEmpty && retained.payload.dependencySource.isEmpty) Consequence.unit
+      else F.invalid(_refusal_("not an eligible dependency-free terminal validation", retained.payload.outcome))
+    completed <- store.completedC(retained)
+    instances <- session.storage.bindInstancesC()(using core.executionContext)
+    latest <- instances.loadC(session.current.identity)(using core.executionContext).flatMap(
+      _.map(Consequence.success).getOrElse(F.invalid("native Validation instance is absent")))
+    _ <- latest.validateC
+    _ <- if (completed.record.revision.value < latest.revision.value) Consequence.unit
+      else F.invalid(_refusal_("saved final validation is not older than the actual latest record", completed.payload.outcome))
+  } yield completed
+  }
+
   def preconditionsC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     candidate: GoalPhaseNativeCandidate.Saved, controller: O.State,
     from: Option[InstanceRecord] = None,
@@ -293,18 +327,44 @@ private[smworkflow] object GoalPhaseNativeValidation {
   private def _store_c(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, acknowledgement: String => Consequence[Unit],
     from: Option[InstanceRecord], documentpolicy: Option[GoalPhaseDocumentProgress.Policy], recordingpaths: Vector[String],
-    dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None): Consequence[Store] = for {
+    dependencychain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None): Consequence[Store] = for {
+    _ <- if (controller.cursor != controller.plan.steps.size || !controller.releaseRepairActive ||
+        d.phaseDependencyValidation.isEmpty || dependencychain.exists(chain =>
+          chain.activePhaseCapture.nonEmpty || chain.historicalPhase.nonEmpty)) Consequence.unit
+      else F.invalid("explicit phase dependency requires its authenticated successor before validation; an existing check or metadata intent cannot be superseded")
+    store <- _authenticated_store_c(session, d, core, candidate, controller, acknowledgement, from,
+      documentpolicy, recordingpaths, dependencychain)
+  } yield store
+
+  private def _authenticated_store_c(session: F.Session, d: F.Declaration, core: ActionCall.Core,
+    candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, acknowledgement: String => Consequence[Unit],
+    from: Option[InstanceRecord], documentpolicy: Option[GoalPhaseDocumentProgress.Policy], recordingpaths: Vector[String],
+    dependencychain: Option[GoalPhaseNativeWorkContinuation.DependencyChain]): Consequence[Store] = for {
     whole <- Consequence.success(controller.cursor == controller.plan.steps.size)
     _ <- documentpolicy.fold(Consequence.unit)(_.validateC(controller.plan, d.candidatePaths))
     _ <- GoalPhaseNativeFindingRecording.validatePathsC(recordingpaths, controller.plan, d.candidatePaths)
     step = if (whole) None else Some(controller.plan.steps(controller.cursor).identity)
     primary <- selectedChecksC(d, controller.plan, step)
-    consumptions = (dependencyChain.toVector.flatMap(_.acceptedSources.map(entry => GoalPhaseDependencySourceRevision.consumptionOf(entry.capture))) ++
+    consumptions = (dependencychain.toVector.flatMap(_.acceptedSources.map(entry => GoalPhaseDependencySourceRevision.consumptionOf(entry.capture))) ++
       candidate.payload.dependencySourceCapture.map(GoalPhaseDependencySourceRevision.consumptionOf)).distinct
     _ <- if (consumptions.size <= 1 && primary.forall(c => consumptions.forall(route =>
         route.programs.exists(p => p.check == c.identity && p.kind == c.kind.wire)))) Consequence.unit
       else F.invalid("primary checks have no unambiguous admitted source-consumption programs")
-    selected <- GoalPhaseNativeDependencyValidation.checksC(primary, candidate.payload.dependency, candidate.payload.dependencySourceCapture)
+    phasecapture = if (whole) dependencychain.flatMap(_.activePhaseCapture) else None
+    historical = whole && dependencychain.exists(_.historicalPhase.nonEmpty)
+    _ <- if (!historical) Consequence.unit else dependencychain.get.historicalPhaseC(d.phaseDependencyValidation,
+      session.current.identity.value, controller.plan, controller.base, controller.generation, candidate)
+    _ <- if (phasecapture.forall(c => d.phaseDependencyValidation.contains(c.admission.binding) &&
+        c.step == "phase:" + controller.plan.phase && c.session == session.current.identity.value &&
+        c.plan == ContextReference(controller.plan.identity, controller.plan.revision) &&
+        c.primaryBase == controller.base && c.generation == controller.generation &&
+        dependencychain.flatMap(_.activePhaseSource).exists(p => p.capture.contains(c) &&
+          p.primaryRecordRevision == candidate.record.revision.value.toString &&
+          p.primarySourceRevision == candidate.payload.sourceRevision && candidate.payload.candidate.contains(p.primary)) &&
+        candidate.payload.dependency.isEmpty && candidate.payload.dependencySourceCapture.isEmpty)) Consequence.unit
+      else F.invalid("whole-Phase dependency capture is ambiguous or crosses its actual frontier")
+    dependency = candidate.payload.dependency.orElse(phasecapture)
+    selected <- GoalPhaseNativeDependencyValidation.checksC(primary, dependency, candidate.payload.dependencySourceCapture)
     scope = step.getOrElse("phase:" + controller.plan.phase)
     owned = if (whole) controller.plan.phaseOwnedPaths else controller.plan.steps(controller.cursor).ownedPaths
     _ <- L.bindingsC(selected, scope, owned, d.candidatePaths)
@@ -333,11 +393,11 @@ private[smworkflow] object GoalPhaseNativeValidation {
       else F.invalid("native checks require the actual saved candidate")
     prefix = if (selected.exists(_.metadata.nonEmpty)) selected.takeWhile(_.metadata.isEmpty) else Vector.empty
     initial = Payload(frontier.revision.value.toString, scope, candidate.payload.candidate.get,
-      if (prefix.nonEmpty) prefix else selected, Vector.empty, None, dependency = candidate.payload.dependency,
+      if (prefix.nonEmpty) prefix else selected, Vector.empty, None, dependency = dependency,
       dependencySource = candidate.payload.dependencySourceCapture, sourceConsumption = consumptions.headOption)
     adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
     store = new Store(adapter, session, d, core, candidate, frontier, controller, selected, initial,
-      None, acknowledgement, documentpolicy, recordingpaths, dependencyChain)
+      None, acknowledgement, documentpolicy, recordingpaths, dependencychain)
     retained <- store.loadC("selection")
     actual <- retained match {
       case Some(saved) => store.retainedSelectionC(saved)
@@ -489,7 +549,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
         validated <- observedStateC(inspected, payload, store.reference("validation").identity, store.candidate.payload.changedPaths)
         target = validated.stage.toString
         event = (if (store.whole) "phase-" else "") + (outcome match {
-          case "passed" if assessment.exists(_.branch == "admit") => "checks-admitted"
+          case "passed" if assessment.exists(_.branch == "admit") && validated.stage == O.Stage.Closing => "checks-admitted"
           case "passed" if assessment.exists(_.branch == "triage") => "checks-triage-required"
           case "passed" if assessment.exists(_.branch == "decision") => "checks-judgment-required"
           case "passed" => "checks-passed"
@@ -718,7 +778,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
           from.currentProgression.contains(ProgressionReference("phase." + validationStage))) Consequence.unit
         else F.invalid("check intent/result has no actual unsuspended Validation frontier")
       target = payload.outcome.map {
-        case "passed" if payload.assessment.exists(_.branch == "admit") => "Closing"
+        case "passed" if payload.assessment.exists(_.branch == "admit") && !controller.stepReviewRequired => "Closing"
         case "passed" if payload.assessment.exists(_.branch == "triage") => "Triage"
         case "passed" if payload.assessment.exists(_.branch == "decision") => "Decision"
         case "passed" => reviewStage

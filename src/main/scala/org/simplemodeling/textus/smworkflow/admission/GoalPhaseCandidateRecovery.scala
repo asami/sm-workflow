@@ -27,7 +27,7 @@ import D.given
 /** Independent Human direction for one new observation after fully recorded staging.
   * Old process settlement remains unknown; no completed effect is replayed.
   * @since   Oct. 22, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseCandidateRecovery {
@@ -390,7 +390,7 @@ private[smworkflow] object GoalPhaseCandidateRecovery {
     inspected <- _load_c(adapter, core, from, "inspection")
     inspectionrecord <- adjacentC(session.current, from, inspected._1, "ordered-candidate:inspection")
     selection <- WorkflowSourceHistoryParameters.resolveC(core.executionContext)
-    history <- _history_c(session, core, from, inspectionrecord)
+    history <- historyPrefixC(session, core, from, inspectionrecord)
     staged <- inspected._2.selectedPaths.zipWithIndex.foldLeft(Consequence.success((history._1, Vector.empty[StagePair]))) {
       case (prior, (path, index)) => for {
         previous <- prior
@@ -444,7 +444,7 @@ private[smworkflow] object GoalPhaseCandidateRecovery {
       Consequence.success((value.receipt.next, value.receipt.payload.value))).getOrElse(_invalid("missing exact native receipt: " + key)))
 
   /** Actual next causes determine the prefix. A client list never determines eligibility. */
-  private def _history_c(session: F.Session, core: ActionCall.Core, source: InstanceRecord,
+  private[admission] def historyPrefixC(session: F.Session, core: ActionCall.Core, source: InstanceRecord,
     inspected: InstanceRecord): Consequence[(InstanceRecord, Vector[HistoryPair])] = for {
     adapter <- session.storage.bindMechanicalC(F.advanceOperation, H.codec)
     result <- {

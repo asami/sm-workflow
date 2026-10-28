@@ -311,7 +311,58 @@ private[admission] object NativeWorkflowCliFixture {
     def candidateHead: String = _candidate_git(Vector("rev-parse", "--verify", "HEAD"))
     def candidateParent: String = _candidate_git(Vector("rev-parse", "--verify", "HEAD^"))
     def candidateIndex: String = _candidate_git(Vector("diff", "--cached", "--name-only", "--"))
+    def candidateIndexDiff: String = _candidate_git(Vector("diff", "--cached", "--binary", "--"), retainWhitespace = true)
+    def candidateWorktreeDiff: String = _candidate_git(Vector("diff", "--binary", "--"), retainWhitespace = true)
     def candidateStatus: String = _candidate_git(Vector("status", "--porcelain=v1", "--untracked-files=all"))
+
+    private def _release_directory_repository: Path = {
+      require(sourceHistory && root.getFileName.toString.startsWith("p69-release-directory-") &&
+        host.goal.candidatePaths == Vector("src/test/scala", "build.sbt"), "Select only the new fixed directory-owner release fixture")
+      Path.of(host.target.root)
+    }
+
+    /** Fixed baseline arrangement before Start; no Workflow rows are present. */
+    private[NativeWorkflowCliFixture] def prepareReleaseDirectoryBaseline(): Unit = {
+      val repository = _release_directory_repository
+      require(!Files.exists(root.resolve("workflow.sqlite")), "Arrange only the new fixture before Start")
+      val previous = repository.resolve("src/main/scala/HistoryExample.scala")
+      val primary = repository.resolve("src/test/scala/HistoryExample.scala")
+      val auxiliary = repository.resolve("src/test/scala/ReleaseAuxiliary.scala")
+      val catalog = repository.resolve("src/main/catalog/car/org/simplemodeling/textus/textus-sm-workflow.yaml")
+      require(Files.isRegularFile(previous) && !Files.exists(primary) && !Files.exists(auxiliary) && !Files.exists(catalog),
+        "Retain the fixed fresh source-history baseline")
+      Files.createDirectories(primary.getParent)
+      Files.move(previous, primary)
+      Files.writeString(auxiliary, "object ReleaseAuxiliary { val value: Int = 0 }\n", StandardOpenOption.CREATE_NEW)
+      Files.createDirectories(catalog.getParent)
+      Files.writeString(catalog, "name: original-test-owned-catalog\n", StandardOpenOption.CREATE_NEW)
+      val prefix = Vector("/usr/bin/git", "--no-optional-locks", "--no-replace-objects", "-c", "core.hooksPath=/dev/null",
+        "-c", "core.fsmonitor=false", "-c", "gc.auto=0", "-C", repository.toString)
+      val stage = _run(prefix ++ Vector("--literal-pathspecs", "add", "--", "src/main/scala/HistoryExample.scala",
+        "src/test/scala/HistoryExample.scala", "src/test/scala/ReleaseAuxiliary.scala",
+        "src/main/catalog/car/org/simplemodeling/textus/textus-sm-workflow.yaml"))
+      require(stage.exitCode == 0, stage.invocation.logs)
+      val commit = _run(prefix ++ Vector("-c", "user.name=Native Workflow Fixture", "-c",
+        "user.email=native-workflow@example.invalid", "-c", "user.useConfigOnly=true", "commit", "--no-verify", "--no-gpg-sign",
+        "-m", "Arrange fixed directory-owner release fixture baseline"))
+      require(commit.exitCode == 0, commit.invocation.logs)
+    }
+
+    def stageReleaseHistoryCatalog(): Unit = _release_directory_catalog_index(true)
+    def restoreReleaseHistoryCatalogIndex(): Unit = _release_directory_catalog_index(false)
+    private def _release_directory_catalog_index(staged: Boolean): Unit = {
+      val repository = _release_directory_repository
+      val catalog = "src/main/catalog/car/org/simplemodeling/textus/textus-sm-workflow.yaml"
+      require(Files.readString(repository.resolve(catalog)) == "name: retained-unstaged-publication-evidence\n",
+        "Preserve the explicit unrelated worktree evidence")
+      val arguments = if (staged) Vector("add", "--", catalog)
+        else Vector("restore", "--staged", "--source=HEAD", "--", catalog)
+      val result = _run(Vector("/usr/bin/git", "--no-optional-locks", "--no-replace-objects", "-c", "core.hooksPath=/dev/null",
+        "-c", "core.fsmonitor=false", "-C", repository.toString, "--literal-pathspecs") ++ arguments)
+      require(result.exitCode == 0, result.invocation.logs)
+      require(Files.readString(repository.resolve(catalog)) == "name: retained-unstaged-publication-evidence\n",
+        "The negative case changes only the fixed catalog index entry")
+    }
     /** Read the actual checked tree after normal source-history preparation.
       * Preserve all whitespace when comparing check-only execution with its input.
       */
@@ -754,6 +805,115 @@ private[admission] object NativeWorkflowCliFixture {
     if (recording) scenario._prepare_finding_recording_baseline()
     scenario.selectCompletionPolicy(GoalPhasePostCompletionSync.localPolicy)
     scenario
+  }
+
+  /** Actual Compile closes the Step; actual Phase Test alone admits release repair.
+    * The initially absent pending-index check fails before any hygiene receipt.
+    */
+  def freshReleaseHistoryRecovery(name: String, executable: Path, directoryowners: Boolean = false): Scenario = {
+    require(executable == TypedSbtHostPlanFixture.normalExecutable, "Select normal SBT")
+    require(!directoryowners || name.startsWith("p69-release-directory"), "Select a distinct new directory-owner fixture name")
+    val original = fresh(name, sbtRepair = Some(executable), sourceHistory = true)
+    val paths = if (directoryowners) Vector("src/test/scala", "build.sbt") else original.host.goal.candidatePaths
+    val compile = GoalPhaseNativeValidation.Check("compile", 1, WorkflowSbtValidation.Kind.Compile)
+    val test = GoalPhaseNativeValidation.Check("test", 2, WorkflowSbtValidation.Kind.Test)
+    val host = original.host.copy(goal = original.host.goal.copy(
+      candidatePaths = paths,
+      stepValidation = original.host.goal.stepValidation.copy(checks = Vector(compile)),
+      phaseValidation = original.host.goal.phaseValidation.copy(checks = Vector(test)),
+      closure = original.host.goal.closure.copy(programs = Vector(
+        GoalPhaseNativeClosure.StepProgram("step-1", 1),
+        GoalPhaseNativeClosure.StepProgram(GoalPhaseNativeReleaseClosure.programIdentity, 2)))))
+    val plan = original.plan.copy(repairLimit = 2, steps = original.plan.steps.map(_.copy(ownedPaths = paths, checks = Vector("compile"))))
+    val scenario = new Scenario(original.root, host, plan, None, Some(executable), startingLogIndex = 100,
+      sourceHistory = true)
+    _host_files(scenario, Vector(scenario.root), true, Some(Vector("POST")), false, None)
+    val target = Programs.Target(Path.of(host.target.root), host.target.localBranch, host.target.remote,
+      host.target.remoteBranch, host.target.endpoint)
+    val git = TypedGitHostPlanFixture.plan(target, kinds = TypedGitHostPlanFixture.observations ++ Vector(
+      GitOperationKind.IndexTree, GitOperationKind.PendingPaths, GitOperationKind.PendingDiff, GitOperationKind.CommitMetadata),
+      goalPaths = host.goal.candidatePaths,
+      goalMessages = Vector("Complete selected Compile Step", "Complete accepted release source repair"),
+      goalSelections = Vector(host.goal.candidatePaths, host.goal.candidatePaths))
+    val first = TypedSbtHostPlanFixture.plan(scenario.root, executable, Vector(1), Some(git), operation = SbtOperation.Compile)
+    val second = TypedSbtHostPlanFixture.plan(scenario.root, executable, Vector(2), operation = SbtOperation.Test)
+    def _array_(value: Json, name: String): Vector[Json] = value.hcursor.get[Vector[Json]](name).toOption.get
+    val sbtprograms = _array_(first, "sbtPrograms") ++ _array_(second, "sbtPrograms")
+    val capabilities = (_array_(first, "gitPrograms") ++ sbtprograms).map(_.hcursor.get[String]("capability").toOption.get)
+    val process = first.mapObject(_.add("sbtPrograms", Json.fromValues(sbtprograms))
+      .add("workspaces", Json.fromValues(_array_(first, "workspaces") ++ _array_(second, "workspaces")))
+      .add("workspaceGrants", Json.fromValues(_array_(first, "workspaceGrants") ++ _array_(second, "workspaceGrants")))
+      .add("grants", Json.arr(Json.obj("componentId" -> Json.fromString(_component),
+        "capabilities" -> Json.fromValues(capabilities.map(Json.fromString))))))
+    val rule = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.source-history-rule.v1"),
+      "identity" -> Json.fromString("release-history-recovery-fixture-v1"), "style" -> Json.fromString("goldenport"),
+      "format" -> Json.fromString("scala-block-history-v1"),
+      "sourceRoots" -> Json.fromValues((Vector("src/main/scala") ++ Option.when(directoryowners)("src/test/scala")).map(Json.fromString)),
+      "extensions" -> Json.arr(Json.fromString("scala")),
+      "excludedSegments" -> Json.arr(Json.fromString("generated"), Json.fromString("target")),
+      "tags" -> Json.obj("since" -> Json.fromString("@since"), "version" -> Json.fromString("@version"),
+        "history" -> Json.fromString("version"), "author" -> Json.fromString("@author")),
+      "datePattern" -> Json.fromString("MMM. ppd, uuuu"), "locale" -> Json.fromString("en-US"),
+      "rollover" -> Json.fromString("month"), "removeHistoryAtSince" -> Json.True,
+      "removeHistoryInCurrentPeriod" -> Json.True, "header" -> Json.obj("open" -> Json.fromString("/**"),
+        "linePrefix" -> Json.fromString(" * "), "close" -> Json.fromString(" */")))
+    val configfile = scenario.root.resolve(".textus/config.json")
+    val config = parse(Files.readString(configfile)).toOption.get
+    Files.writeString(configfile, config.mapObject(_.add("textus.subsystem.process-execution.plan", Json.fromString(process.noSpaces))
+      .add("sm-workflow.source-history.style", Json.fromString("goldenport"))
+      .add("sm-workflow.source-history.rule", rule)).noSpaces)
+    if (directoryowners) scenario.prepareReleaseDirectoryBaseline()
+    scenario
+  }
+
+  /** Add only the missing ordinary read-only program/grant to the isolated host. */
+  def allowReleaseHistoryPendingIndex(scenario: Scenario): Unit = {
+    require(scenario.sourceHistory && scenario.plan.repairLimit == 2 &&
+      (scenario.host.goal.candidatePaths == Vector("src/main/scala/HistoryExample.scala") ||
+        scenario.root.getFileName.toString.startsWith("p69-release-directory-") &&
+          scenario.host.goal.candidatePaths == Vector("src/test/scala", "build.sbt")), "Select the release history fixture")
+    val host = scenario.host
+    val target = Programs.Target(Path.of(host.target.root), host.target.localBranch, host.target.remote,
+      host.target.remoteBranch, host.target.endpoint)
+    val git = TypedGitHostPlanFixture.plan(target, kinds = Vector(GitOperationKind.CheckPendingIndex))
+    val program = git.hcursor.get[Vector[Json]]("gitPrograms").toOption.get
+    require(program.size == 1, "Select exactly the typed pending-index check")
+    val capability = program.head.hcursor.get[String]("capability").toOption.get
+    val path = scenario.root.resolve(".textus/config.json")
+    val config = parse(Files.readString(path)).toOption.get
+    val process = parse(config.hcursor.get[String]("textus.subsystem.process-execution.plan").toOption.get).toOption.get
+    val existing = process.hcursor.get[Vector[Json]]("gitPrograms").toOption.get
+    require(!existing.exists(_.hcursor.get[String]("capability").toOption.contains(capability)), "Never replace an existing program")
+    val grants = process.hcursor.get[Vector[Json]]("grants").toOption.get.map { grant =>
+      require(grant.hcursor.get[String]("componentId").toOption.contains(_component), "Select this fixture's single Component grant")
+      val capabilities = grant.hcursor.get[Vector[String]]("capabilities").toOption.get
+      grant.mapObject(_.add("capabilities", Json.fromValues((capabilities :+ capability).map(Json.fromString))))
+    }
+    Files.writeString(path, config.mapObject(_.add("textus.subsystem.process-execution.plan", Json.fromString(
+      process.mapObject(_.add("gitPrograms", Json.fromValues(existing ++ program)).add("grants", Json.fromValues(grants))).noSpaces))).noSpaces)
+  }
+
+  /** Input-only reopening of the exact OLD stage; no native row reconstruction. */
+  def reopenReleaseHistoryRecovery(root: Path, executable: Path, startingLogIndex: Int): Scenario = {
+    require(root.isAbsolute && root.normalize == root && root.toRealPath() == root &&
+      root.getParent == _primary.resolve("target/sm-workflow/work/native-cli"), "Select the retained isolated release history fixture")
+    require(executable == TypedSbtHostPlanFixture.normalExecutable, "Retain normal SBT")
+    val config = parse(Files.readString(root.resolve(".textus/config.json"))).toOption.get
+    val host = _take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(parse(config.hcursor.get[String](
+      "sm-workflow.runtime.definition").toOption.get).toOption.get), "Retained release history host")
+    val plan = parse(Files.readString(root.resolve("goal-plan.json"))).toOption.get.as[GoalPhaseOrderedProgression.Plan].toOption.get
+    val paths = if (root.getFileName.toString.startsWith("p69-release-directory-")) Vector("src/test/scala", "build.sbt")
+      else Vector("src/main/scala/HistoryExample.scala")
+    require(host.target.root == root.resolve("repository").toString && host.goal.candidatePaths == paths &&
+      plan.steps.map(_.identity) == Vector("step-1") && plan.steps.head.ownedPaths == paths &&
+      plan.steps.head.checks == Vector("compile") && plan.phaseChecks == Vector("test") && plan.repairLimit == 2 &&
+      host.goal.stepValidation.checks == Vector(GoalPhaseNativeValidation.Check("compile", 1, WorkflowSbtValidation.Kind.Compile)) &&
+      host.goal.phaseValidation.checks == Vector(GoalPhaseNativeValidation.Check("test", 2, WorkflowSbtValidation.Kind.Test)) &&
+      host.goal.closure.programs == Vector(GoalPhaseNativeClosure.StepProgram("step-1", 1),
+        GoalPhaseNativeClosure.StepProgram(GoalPhaseNativeReleaseClosure.programIdentity, 2)), "Retain the frozen Compile/Test/release boundary")
+    require(startingLogIndex > 0 && !Files.exists(root.resolve(s"logs/$startingLogIndex.stdout.json")) &&
+      !Files.exists(root.resolve(s"logs/$startingLogIndex.stderr")), "Preserve every OLD invocation log")
+    new Scenario(root, host, plan, None, Some(executable), startingLogIndex, sourceHistory = true)
   }
 
   /** Read only the retained test host and business Plan; never seed native history. */

@@ -68,7 +68,8 @@ private[smworkflow] object GoalPhaseNativeRun {
     dependencySourceConsumptions: Vector[GoalPhaseDependencySourceRevision.Consumption] = Vector.empty,
     localPublication: Option[LocalPublicationRuntime.Policy] = None,
     commitHygieneMode: String = CommitHygiene.autoFix,
-    completionRecords: Option[CompletionRecords.Policy] = None)
+    completionRecords: Option[CompletionRecords.Policy] = None,
+    phaseDependencyValidation: Option[GoalPhaseDependencyValidation.Binding] = None)
   final case class SelectedPlan(selectionIdentity: String, participantIdentity: String,
     plan: O.Plan, documents: Option[GoalPhaseDocumentSource.Bound] = None)
   trait PlanPort {
@@ -197,6 +198,9 @@ private[smworkflow] object GoalPhaseNativeRun {
         !d.candidatePaths.forall(RepositorySyncNativeConflictInput.relative) || d.validationPolicy == null || d.reviewInstallation == null ||
         d.closureInstallation == null || d.phaseValidationPolicy == null || d.repositoryClosure == null || d.humanDecision == null ||
         d.dependencyValidation == null || d.dependencyValidation.exists(b => !GoalPhaseDependencyValidation.bindingValid(b)) ||
+        d.phaseDependencyValidation == null || d.phaseDependencyValidation.exists(b =>
+          !GoalPhaseDependencyValidation.bindingValid(b) || b.step != "phase:" + d.input.phaseIdentity ||
+            b.requester.repository != d.input.repositoryIdentity) ||
         d.dependencySourceRevision == null || d.dependencySourceRevision.exists(i => i == null || !i.validateC.isSuccess) ||
         d.dependencySourceRevisions == null || d.dependencySourceRevisions.size > 16 ||
         d.dependencySourceRevisions.exists(b => !GoalPhaseDependencyValidation.bindingValid(b)) ||
@@ -280,6 +284,7 @@ private[smworkflow] object GoalPhaseNativeRun {
             GoalPhaseFailedPhaseRepairAdoption.describeOperation, GoalPhaseFailedPhaseRepairAdoption.adoptionOperation,
             GoalPhaseValidationRepairAdoption.describeOperation, GoalPhaseValidationRepairAdoption.adoptionOperation,
             GoalPhaseCompletionPolicyAdoption.describeOperation, GoalPhaseCompletionPolicyAdoption.adoptionOperation,
+            GoalPhaseStepReviewRequest.describeOperation, GoalPhaseStepReviewRequest.requestOperation,
             GoalPhaseRepairPolicyAdoption.describeOperation, GoalPhaseRepairPolicyAdoption.adoptionOperation,
             GoalPhaseOrderedHumanDecision.completionOperation.operation,
             GoalPhaseNativeFindingRecording.completionOperation.operation)(core.action.request.operation)) ||
