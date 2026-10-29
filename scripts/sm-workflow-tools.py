@@ -20,10 +20,10 @@ SKILLS = ('sm-goal-phase', 'sm-repository-sync', 'sm-split-phase',
 ROLES = ('analysis', 'design', 'implementation', 'repair', 'review')
 AGENTS = tuple('sm_workflow_' + role for role in ROLES)
 DOCS = ('native-host-execution', 'runtime-owned-local-publication', 'goal-phase-acceptance-boundary',
-        'goal-phase-purpose-repair', 'goal-phase-release-repair-continuation',
+        'goal-phase-purpose-repair', 'goal-phase-precommit-step-review', 'goal-phase-release-repair-continuation',
         'goal-phase-dependency-scope', 'goal-phase-validation-metadata', 'native-goal-command-task',
         'caller-information', 'runtime-caller-format-migration',
-        'goal-phase-dependency-source-revision', 'repository-sync-validation-continuation',
+        'goal-phase-dependency-source-revision', 'repository-sync-validation-continuation', 'repository-sync-runtime-orchestration',
         'goal-task-runtime', 'task-fix-delivery', 'standalone-fix-runtime',
         'standalone-fix-acceptance', 'standalone-review-fix-runtime',
         'delegate-task', 'native-delegate-task-caller', 'commit-completion-and-recovery')
