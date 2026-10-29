@@ -15,7 +15,7 @@ import GoalPhaseNativeRun as F
 /** Current paired native host assembly, invoked through session-resolved inputs.
   * The saved complete plan drives progress; the client never dispatches stages.
   * @since   Oct.  6, 2026
-  * @version Oct. 28, 2026
+  * @version Oct. 29, 2026
   */
 private[smworkflow] object GoalPhaseNativeServiceAssembly {
   def bindC(params: ComponentCreate, d: F.Declaration, plans: F.PlanPort,
@@ -68,8 +68,10 @@ private[smworkflow] object GoalPhaseNativeServiceAssembly {
       else SmWorkflowComponent.GoalPhaseServiceService.AdvanceGoalPhaseOperation)
     def createStartOperationRequestC(request: Request, input: NativeWorkflowStartInput.BusinessInput,
       selection: ProfileStartAdmission.Selection): Consequence[OperationRequest] = input match {
-      case NativeWorkflowStartInput.Goal(value) => Consequence.success(Action(request,
-        Some(value -> selection), None, d, definition, plans, port))
+      case NativeWorkflowStartInput.Goal(value) => GoalPhaseOperatingProfiles.forStartC(request, d).map { execution =>
+        Action(request, Some(value -> selection), None,
+          d.copy(executionProfiles = execution.profiles, executionOrigin = execution.origin), definition, plans, port)
+      }
       case _ => F.invalid("GoalPhase Start requires its own business input")
     }
     def createAdvanceOperationRequestC(request: Request,

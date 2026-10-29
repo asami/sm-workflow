@@ -492,6 +492,19 @@ replay. Do not infer state or recover a route through status/history/storage.
 Workflow retains mechanical effects. Source edits and mechanical fixtures prove
 no installed route acceptance, genuine task provenance or Phase completion.
 
+## Logical operating profile
+
+For a new Phase Start, pass an optional logical `--profile standard` to the
+installed `startGoalPhase` Operation alongside its existing `--input`. The
+bundled `native-goal-command.py --action start` forwards optional `--profile`
+unchanged. The runtime resolves explicit parameter, then typed
+`sm-workflow.goal-phase.profile` configuration, then `standard`. M1 registers
+`standard` only; cost/quality registration and saved work selection belong to M2.
+Unknown names fail instead of falling back. Keep model and effort overrides out
+of skill input: standard preserves the existing execution mapping/origin,
+parent configuration and acceptance. This Start parameter does not rewrite an
+active Session or retained work and does not prove an observed executor model.
+
 ## Journal results and purpose-driven lookup
 
 Consume optional `journalRecording`, automatic `findingRecording.journaled`,

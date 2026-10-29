@@ -7265,7 +7265,7 @@ GoalPhaseOrderedDecisionSubmissionResult
 
 ##### DESCRIPTION
 
-Start the declared Phase/repository business input. Workflow loads its admitted host business entry directly, assigns a new sessionId when none is proposed and returns that canonical ID with the actual start acknowledgement. A host chat ID is not reused implicitly. Call advanceGoalPhase for next work; Start grants no effect or release authority.
+Start the declared Phase/repository business input. Optional profile selects a registered logical operating profile: explicit parameter, configured sm-workflow.goal-phase.profile, then standard. Standard preserves the existing execution mapping, origin and acceptance; other profiles require registration. Workflow loads its admitted host business entry directly, assigns a new sessionId when none is proposed and returns that canonical ID with the actual start acknowledgement. A host chat ID is not reused implicitly. Call advanceGoalPhase for next work; Start grants no effect or release authority.
 
 ##### TYPE
 
@@ -7283,6 +7283,7 @@ GoalPhaseStartInput
 |------+------|--------------|
 | input | GoalPhaseStartInput | 1 |
 | sessionId | string | ? |
+| profile | string | ? |
 
 ##### OUTPUT
 

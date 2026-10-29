@@ -23,7 +23,7 @@ import RepositorySyncManagedGitObservation as G
   * the Subsystem's canonical store and managed Git execution. No private pool,
   * controller digest or AI-supplied plan admission is introduced.
   * @since   Oct.  6, 2026
-  * @version Oct. 28, 2026
+  * @version Oct. 29, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeRun {
@@ -69,7 +69,8 @@ private[smworkflow] object GoalPhaseNativeRun {
     localPublication: Option[LocalPublicationRuntime.Policy] = None,
     commitHygieneMode: String = CommitHygiene.autoFix,
     completionRecords: Option[CompletionRecords.Policy] = None,
-    phaseDependencyValidation: Option[GoalPhaseDependencyValidation.Binding] = None)
+    phaseDependencyValidation: Option[GoalPhaseDependencyValidation.Binding] = None,
+    operatingProfile: Option[String] = None)
   final case class SelectedPlan(selectionIdentity: String, participantIdentity: String,
     plan: O.Plan, documents: Option[GoalPhaseDocumentSource.Bound] = None)
   trait PlanPort {
@@ -209,6 +210,7 @@ private[smworkflow] object GoalPhaseNativeRun {
         d.dependencySourceConsumptions.exists(c => !GoalPhaseDependencySourceRevision.consumptionValid(c)) ||
         d.dependencySourceConsumptions.distinct.size != d.dependencySourceConsumptions.size ||
         d.localPublication == null || d.localPublication.exists(p => !LocalPublicationRuntime.validateC(p).isSuccess) ||
+        d.operatingProfile == null || d.operatingProfile.exists(value => !GoalPhaseOperatingProfiles.validateNameC(value).isSuccess) ||
         d.executionProfiles == null || d.executionProfiles.exists(_ == null) || d.findingRecordingPolicy == null ||
         d.validationRecovery == null || d.validationRecovery.exists(_ == null) || d.journalPolicy == null ||
         d.releaseRepairContinuation == null || d.releaseRepairContinuation.exists(i => i == null || !i.validateC.isSuccess) ||

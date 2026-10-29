@@ -405,6 +405,18 @@ class NativeGoalCommandSpecification(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assert_one_call(native, self.command("startGoalPhase", "--input", self.input.read_text()))
 
+    def test_p610_m1_start_forwards_logical_profile_without_model_overrides(self):
+        """P610-01/P610-02: logical invocation input; runtime owns registration."""
+        # Given a supplied logical profile and specification-owned acknowledgement.
+        process, _raw = self.process_output({"sessionId": "actual-goal", "message": "Started", "outcome": "started"})
+        # When the finite caller forwards a new Phase Start.
+        status, _printed, _diagnostic, native = self.call(
+            self.args("start", self.output(), "--input", str(self.input), "--profile", "standard"), process)
+        # Then the exact public parameter accompanies unchanged business input.
+        self.assertEqual(status, 0)
+        self.assert_one_call(native, self.command("startGoalPhase", "--input", self.input.read_text(),
+                                                  "--profile", "standard"))
+
     def test_e2_independent_interleaved_advances_reread_exact_task(self):
         """E2 / R2,R3 / PHASE-6 S6-01D3D."""
         # Given two independent tasks retaining their own canonical IDs.

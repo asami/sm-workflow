@@ -1,6 +1,6 @@
 # AI Operating Profiles and Lightweight Phase Metrics
 
-Status: accepted target specification; implementation planned in Phase 6.10.
+Status: accepted target specification; M1 standard route authored in Phase 6.10, runtime qualification pending.
 Date: 2026-10-27
 Plan: [Phase 6.10](../phase/phase-6.10.md)
 
@@ -40,6 +40,22 @@ Record profile identity/version and configured/observed model and effort using
 existing Journal/Evidence and execution records. Unknown actual values remain
 unknown. Preserve mixed-profile attribution when a Phase uses more than one
 selection. Do not add an AI call to choose, inspect or report a profile.
+
+## M1 public standard route
+
+The authored M1 route adds optional `profile` to the generated `startGoalPhase`
+Operation alongside the unchanged `GoalPhaseStartInput` business value, preserving
+existing Start constructors and exact business admission. The typed Component key
+is `sm-workflow.goal-phase.profile`. The bundled Goal caller forwards optional
+`--profile` without constructing model overrides. The runtime resolves explicit
+parameter, config, then standard; consumed invalid names/types fail explicitly.
+M1 registers standard only and retains existing execution mappings and origin.
+Cost/quality registration and saved new-work capture belong to M2. This staged
+source change does not establish installed-route or checklist acceptance.
+
+The [bounded baseline inventory](../notes/phase-6.10-standard-baseline.md)
+distinguishes the packaged gpt-6.1-sol/medium role settings from unknown observed
+model/effort and records the native configuration inspection and spec coverage.
 
 ## Two source snapshots, not intermediate work accounting
 

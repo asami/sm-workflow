@@ -10,6 +10,7 @@ PHASE-6 / S6-01 / S6-01D3D and S6-01D3F, finite caller rules.
 @version Oct. 16, 2026
 @version Oct. 19, 2026
 @version Oct. 25, 2026
+@version Oct. 29, 2026
 @author  ASAMI, Tomoharu
 """
 
@@ -63,7 +64,7 @@ ACTION_OPTIONS = {
         "request", "result", "reference", "execution-evidence", "issuer",
         "occurred-at", "collection",
     },
-    "start": {"input", "proposal"},
+    "start": {"input", "proposal", "profile"},
     "advance": set(),
     "submit": {"request", "submission"},
     "complete": {"request", "submission", "human-provenance"},
@@ -155,6 +156,8 @@ def parse_options(argv):
     require(action in ACTION_OPTIONS, "unsupported action")
     permitted = BASE_OPTIONS | ACTION_OPTIONS[action]
     optional = {"proposal"} if action in {"start", "start-split", "start-repository"} else {"reference"} if action == "record-execution" else set()
+    if action == "start":
+        optional.add("profile")
     if action == "complete":
         optional = {"human-provenance"}
     required = permitted - optional
@@ -350,6 +353,8 @@ def start(options, task_fd):
     routing_absent(task_fd)
     input_text, _input = read_object(explicit_path(options["input"]))
     pairs = ["--input", input_text]
+    if "profile" in options:
+        pairs.extend(["--profile", options["profile"]])
     if "proposal" in options:
         pairs.extend(["--sessionId", options["proposal"]])
     operation = {"start": "startGoalPhase", "start-split": "startSplitPhase",

@@ -20,7 +20,7 @@ import GoalPhaseDependencyValidation.given
   * command grants or a declaration that any review/Human result was admitted.
   * Storage/process bootstrap has already been performed by the owning Subsystem.
   * @since   Oct.  7, 2026
-  * @version Oct. 28, 2026
+  * @version Oct. 29, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowLauncherAssembly.RuntimeCompositionDecoder {
@@ -116,7 +116,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
     })
   val declarations: Vector[ComponentParameterKey[?]] =
     GoalPhaseRuntimeParameters.declarations ++ Vector(definition, WorkflowExecutionProfileParameters.declaration,
-      GoalPhaseNativeExecution.declaration, GoalPhaseAcceptanceBoundary.declaration, GoalPhaseFindingRecording.declaration,
+      GoalPhaseNativeExecution.declaration, GoalPhaseOperatingProfiles.declaration, GoalPhaseAcceptanceBoundary.declaration, GoalPhaseFindingRecording.declaration,
       RepositorySyncNativeExecution.declaration, RepositorySyncDocumentInputs.declaration, RepositorySyncProgramImpact.declaration,
       RepositorySyncPurpose.declaration, SplitPhaseNativeExecution.declaration, DevelopmentJournal.declaration, CommonEvidence.declaration,
       completionPolicy, validationRepairCallerSource, developmentObservation, LocalPublicationRuntime.declaration, CommitHygiene.declaration, CompletionRecords.declaration)
@@ -155,6 +155,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
       callersource <- parameters.resolve(validationRepairCallerSource).map(_.value)
       executionprofiles <- WorkflowExecutionProfileParameters.resolveC(parameters)
       executionorigin <- GoalPhaseNativeExecution.resolveOriginC(parameters)
+      operatingprofile <- GoalPhaseOperatingProfiles.configuredC(parameters)
       repositoryclassifications <- RepositorySyncNativeExecution.resolveC(parameters)
       purposePolicy <- RepositorySyncPurpose.resolveC(parameters)
       splitclassifications <- SplitPhaseNativeExecution.resolveC(parameters)
@@ -200,7 +201,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
         Some(GoalPhaseSourceHistoryNormalization.Installation(ports.sourceHistoryNormalization)),
         Some(GoalPhaseDependencySourceRevision.Installation(ports.dependencySourceRevision)),
         settings.goal.dependencySourceRevisions, settings.goal.dependencySourceConsumptions, publication, hygiene, records,
-        settings.goal.phaseDependencyValidation)
+        settings.goal.phaseDependencyValidation, operatingprofile)
       _ <- if (settings.goal.dependencyValidation.forall(GoalPhaseDependencyValidation.bindingValid)) Consequence.unit
         else Consequence.configurationInvalid("Goal dependency validation binding is invalid")
       _ <- GoalPhaseNativeRun.validateC(goal)
