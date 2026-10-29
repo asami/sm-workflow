@@ -1,6 +1,6 @@
 # Phase 6.9: Runtime-owned RepositorySync and Purpose-based Commits
 
-Status: planned; no implementation or acceptance claimed.
+Status: S1–S4 accepted in the issued native S5 context; S5 source/specification authored. Fresh integrated publication, installed qualification, independent review and Phase acceptance remain pending.
 Date: 2026-10-27
 Owner: sm-workflow development
 Sequence: Phase 6.7 -> Phase 6.8 -> Phase 6.9 -> Phase 6.10 -> Phase 7
@@ -52,3 +52,20 @@ Phase 7 retains related-project/FIFO/subtree/overlay management. It composes thi
 route and adds validation for real changed dependency consumption; it must not
 restore automatic FULL solely because Git reports UPDATED. General installation
 and richer Task/FIX breadth remain with their existing owners.
+
+S1 source/specification and predecessor evidence boundaries are mapped in the
+[clean-route evidence note](../notes/phase-6.9-s1-evidence-map.md). No unchecked
+Phase condition is satisfied by authored fixtures alone.
+
+S2 connects conditional document-merge assessment and public retained-text ranges;
+see its [source/evidence note](../notes/phase-6.9-s2-merge-assessment.md). Program
+impact selection and integrated qualification retain their later selected Steps.
+
+S3 authored impact selection, native evidence applicability and limitations are recorded in the
+[program impact note](../notes/phase-6.9-s3-program-impact.md). All phase acceptance flags remain unchanged.
+
+S5 source integration, completed-effect continuation, exact host selector and
+English Phase 6.10/7 handoff are recorded in the
+[delivery note](../notes/phase-6.9-s5-delivery-and-handoff.md). These source edits
+and historical evidence do not establish fresh installed qualification or Phase
+acceptance. All checklist flags remain unchanged.

@@ -24,7 +24,7 @@ import WorkflowManagedProcessExecution as Process
   * client stage command, SQL provider or component-owned process is used.
   * Fetch and DB commits are separate effects: an uncertain call never retries.
   * @since   Oct.  6, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncManagedFetch {
@@ -40,7 +40,12 @@ private[smworkflow] object RepositorySyncManagedFetch {
     journalPolicy: Option[DevelopmentJournal.Policy] = None,
     commitHygieneMode: String = CommitHygiene.autoFix,
     hygieneStagingPaths: Vector[String] = Vector.empty,
-    completionRecords: Option[CompletionRecords.Policy] = None)
+    completionRecords: Option[CompletionRecords.Policy] = None,
+    runtimeCleanSync: Boolean = false,
+    documentInputs: Option[RepositorySyncDocumentInputs.Policy] = None,
+    evidencePolicy: Option[CommonEvidence.Policy] = None,
+    programEvidence: Option[RepositorySyncProgramImpact.EvidencePort] = None,
+    purposePolicy: Option[RepositorySyncPurpose.Policy] = None)
   final case class StartContext(selectionIdentity: String, invocationIdentity: String,
     participantIdentity: String, repositoryIdentity: String, localBranch: String,
     trackingRemote: String, trackingBranch: String, remoteEndpointIdentity: String, syncMode: String)
@@ -81,13 +86,16 @@ private[smworkflow] object RepositorySyncManagedFetch {
         d.instances == d.continuations || d.input == null || d.target == null || d.target.root == null ||
         !d.target.root.isAbsolute || d.target.root.normalize != d.target.root ||
         d.input.localBranch != d.target.localBranch || d.input.trackingRemote != d.target.remote ||
-        d.input.trackingBranch != d.target.remoteBranch)
+        d.input.trackingBranch != d.target.remoteBranch ||
+        (d.runtimeCleanSync && d.input.remoteEndpointIdentity != d.target.endpoint))
       invalid("host storage/tracking declaration differs")
     else for {
       _ <- CommitHygiene.decodeC(d.commitHygieneMode)
       _ <- d.completionRecords.fold(Consequence.unit)(CompletionRecords.validateC)
       _ <- if (d.hygieneStagingPaths != null && d.hygieneStagingPaths.distinct == d.hygieneStagingPaths) Consequence.unit
         else invalid("Commit hygiene staging declaration is missing or duplicated")
+      _ <- d.documentInputs.fold(Consequence.unit)(RepositorySyncDocumentInputs.validateC)
+      _ <- d.purposePolicy.fold(Consequence.unit)(RepositorySyncPurpose.validatePolicyC)
       _ <- d.configuration.validateC
       _ <- DevelopmentJournal.validatePolicyC(d.journalPolicy, d.instances, d.continuations)
       _ <- RepositorySyncNativeExecution.validateC(d.executionClassifications, d.executionProfiles, d.executionOrigin)

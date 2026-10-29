@@ -11,7 +11,7 @@ import RepositorySyncNativeMergeValidation as V
 /** Selected merge policy over actual managed validation and pending paths.
   * An admission is neither a semantic review verdict nor Git effect authority.
   * @since   Oct. 24, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncMergeAssessment {
@@ -55,6 +55,11 @@ private[smworkflow] object RepositorySyncMergeAssessment {
     _ <- if (policy.scalaLint != "required" || state.selected.exists(_.kind == WorkflowSbtValidation.Kind.FixCheck))
       Consequence.unit else N.invalid("required merge lint has no selected actual fix-check result")
     _ <- V.preconditionsC(store, source)
+    _ <- if (!store.declaration.runtimeCleanSync) Consequence.unit else for {
+      actual <- RepositorySyncDocumentInputs.captureC(store, source)
+      _ <- if (state.inputs.exists(_.applicableTo(actual)) && (actual.documentOnly || state.impact.exists(_.checks == state.selected))) Consequence.unit
+        else N.invalid("merge assessment has no applicable retained input/impact observation")
+    } yield ()
     local <- GitObjectId.parseC(source.payload.before.head)
     remote <- GitObjectId.parseC(source.payload.mergeHead.get)
     localPaths <- WorkflowManagedProcessExecution.executeGitC(store.core, GitOperation.PendingPaths(local)).flatMap(_.valueC)
@@ -62,20 +67,26 @@ private[smworkflow] object RepositorySyncMergeAssessment {
     _ <- V.preconditionsC(store, source)
     overlap = (localPaths.map(_.value).toSet intersect remotePaths.map(_.value).toSet).toVector.sorted
     changed = (localPaths ++ remotePaths).map(_.value).distinct.sorted
-    _ <- if (!changed.exists(_.endsWith(".scala")) || policy.scalaLint == "required") Consequence.unit
+    _ <- if (!changed.exists(_.endsWith(".scala")) || policy.scalaLint == "required" ||
+        state.inputs.exists(_.documentOnly) || state.selected.exists(_.kind == WorkflowSbtValidation.Kind.FixCheck)) Consequence.unit
       else N.invalid("actual Scala merge paths cannot claim lint non-applicability")
     contracts = changed.filter(path => policy.contractPaths.exists(prefix => path == prefix || path.startsWith(prefix + "/")))
     resolved = source.record.history.exists(_.currentProgression.exists(p =>
       Set("sync.MergeConflicted", "sync.MaterializingConflict", "sync.MergeResolutionAdmitted")(p.value)))
     reviewRepair = source.payload.repairContext.nonEmpty
     branch = if (policy.detailedReview == "required" || resolved || reviewRepair) "detailed-review"
-      else if (overlap.nonEmpty || contracts.nonEmpty) "semantic-uncertainty" else "admit"
+      else if (overlap.nonEmpty || contracts.nonEmpty || state.inputs.exists(i => i.binaryPaths.nonEmpty || i.unknownPaths.nonEmpty)) "semantic-uncertainty" else "admit"
     reason = if (policy.detailedReview == "required") "Selected policy requires independent detailed review"
       else if (resolved) "Conflict resolution retains independent detailed review"
       else if (reviewRepair) "Original review findings and the affected repair delta require independent detailed re-review"
-      else if (branch == "semantic-uncertainty") "Actual parent overlap or selected contract paths require scoped semantic judgment"
+      else if (branch == "semantic-uncertainty") "Actual parent overlap, selected contract paths or binary document inputs require scoped semantic judgment"
       else "Actual selected checks passed without unresolved merge interaction; no semantic Action selected"
-  } yield Result(policy, source.record.revision.value.toString, branch, reason, overlap, contracts, resolved)
+    applicability = state.impact.map(impact => "; " + impact.reason +
+      "; reused native checks=" + impact.reused.map(r => r.check + " from " + r.validation).mkString(",") +
+      "; applicable original review context=" + impact.reused.flatMap(_.review).distinct.mkString(",") +
+      "; passing validation is not semantic review acceptance").getOrElse(state.inputs.map(inputs =>
+      "; no changed declared consumed input invalidates prior applicable program evidence; no new program PASS is claimed. Document classification: " + inputs.reason).getOrElse(""))
+  } yield Result(policy, source.record.revision.value.toString, branch, reason + applicability, overlap, contracts, resolved)
 
   def admitC(store: N.Store, source: N.Stage, validation: V.Policy, namespace: String): Consequence[N.Stage] = for {
     policy <- validation.assessment.map(Consequence.success)

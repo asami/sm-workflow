@@ -13,7 +13,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Named public business parameters, never a native continuation envelope.
   * The one TypedValue[Json] helper below is host selection data only.
   * @since   Oct. 11, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationInputFixture {
@@ -88,6 +88,10 @@ private[smworkflow] object NativeWorkflowOperationInputFixture {
         case SplitPhaseHumanDirectionAnswerContract.Answer.Cancel => "Cancel" -> None
       }
       Consequence.success("answer" -> V.SplitPhaseHumanDirectionAnswer(V.SplitPhaseHumanDirectionChoice(choice), resolution))
+    case result: RepositorySyncPurpose.Result =>
+      import io.circe.generic.auto.*
+      Consequence.success("result" -> V.RepositorySyncPurposeResult(result.decision, result.rationale,
+        result.groups.map(group => GoalPhaseNativeMetadata.record(group.asJson)), result.excludedPaths))
     case result: RepositorySyncConflictSemantic.Result => Consequence.success("result" ->
       V.RepositorySyncConflictResult(result.decision, result.resolutions.map(_resolution), result.rationale))
     case result: RepositorySyncNativeMergeReview.Result => Consequence.success("result" ->

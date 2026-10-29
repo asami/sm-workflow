@@ -47,6 +47,19 @@ the configured caller entry binding; the caller must independently record and ad
 the exact human selection. Missing binding or selection is not permission to
 manufacture a Start request or run a replacement workflow.
 
+## Conditional Step review before closure
+
+When an actual external observation calls for independent review before the first
+Step closure attempt, use the public `describeGoalPhaseStepReview` Operation.
+Only its actual `review-available` response supplies the complete current target
+for `requestGoalPhaseStepReview`. Preserve that target unchanged and provide a
+bounded reason; an external report motivates review and cannot become a native
+review verdict. The request grants no effect authority and charges no repair.
+The owner then uses ordinary Advance to issue the existing independent ReviewStep.
+A repeated request, stale candidate, already attempted closure, or unknown effect
+must retain the actual refusal; do not re-Start or replay accepted Submit.
+Follow the [precommit Step review contract](../../docs/spec/goal-phase-precommit-step-review.md).
+
 ## Runtime-owned repair and stop decisions
 
 For command preparation or delegated delivery that is confirmed unexecuted,
@@ -137,14 +150,20 @@ asking the consumer to freeze each edit or relay each reviewer question. This
 organizes responsibility; it does not merge native issued work types or grant
 semantic workers command authority. Normal Phase validation remains runtime-owned.
 
-For separately authorized dependency development in another chat, use the
-[independent dependency delivery contract](../../docs/spec/native-host-execution.md#independent-dependency-delivery).
-The requesting chat defines the deliverable, scope and acceptance conditions and
-owns integration; the dependency chat completes implementation, compile, tests
-and required review under its repository's ordinary development route. It returns
-the changed revision/version, actual validation results, remaining issues and
-consumption instructions. Source edits alone are not completed delivery. This is
-not a child Workflow of the parent Session and requires no nested-workflow feature.
+Route a new authorized development deliverable to another chat through
+[sm-delegate-task](../sm-delegate-task/SKILL.md), following the
+[new-request/continuation boundary](../../docs/spec/native-host-execution.md#new-cross-chat-development-requests-and-existing-continuations).
+A correction needed for an already assigned deliverable stays with that request;
+a distinct purpose or acceptance obligation is new even in the same Phase/chat.
+Do not use "continuation" to absorb unrelated work or silently fall back to direct
+message execution when DelegateTask lacks a capability. Keep ongoing legacy work
+on its existing route without creating a duplicate request.
+
+The [dependency delivery contract](../../docs/spec/native-host-execution.md#independent-dependency-delivery)
+keeps requester integration separate from destination development. The destination's
+runtime owns its validation, local commit and selected publishLocal. Return actual
+source/artifact references, checks and remaining limitations. Source edits or a
+message acknowledgment alone are not completed delivery.
 
 Keep a single owner of process/result collection. Consumers use the returned
 result rather than polling the same logs or requesting progress-only AI turns.
@@ -307,6 +326,12 @@ captured checks; this guidance changes no active Session or required check and
 creates no schedule or additional execution authority.
 
 ## Product SBT ownership
+
+AGENTS.md's runner/wrapper requirement applies to AI-dispatched independent
+SBT, not this workflow's runtime-owned CNCF typed SBT/UoW. Do not ask the user
+for a wrapper exception or require its completion marker on runtime results.
+Use the runtime's retained typed termination and result records. Existing
+execution permissions and explicitly authorized recovery routes remain intact.
 
 Textus SBT must have at least a 4 GiB maximum heap. The runtime-owned CNCF SBT
 DSL resolves `cncf.sbt.jvm.maximum-heap-mib` from ordinary config and preserves

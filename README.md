@@ -445,3 +445,12 @@ Generated Scala sources are written under `target/scala-3.3.8/src_managed/main/s
 The Task/FIX source adapters and passive existing-chat result/adoption Operations
 are described in [Task/FIX delivery](docs/spec/task-fix-delivery.md). Source
 packaging does not establish installed availability or actual chat authorization.
+
+For a configured repository, RepositorySync accepts repository identity plus
+actual sync intent and returns the canonical Session for ordinary continuation.
+Clean equal, push-only and fast-forward routes add no sync-only product tests or
+AI review. Dirty purposes require the host's declared acceptance policy and fixed
+candidate workspaces; the runtime issues only unresolved semantic grouping and
+preserves partial staging and excluded work. See the
+[runtime contract](docs/spec/repository-sync-runtime-orchestration.md) and
+[Phase 6.9 delivery limits](docs/notes/phase-6.9-s5-delivery-and-handoff.md).

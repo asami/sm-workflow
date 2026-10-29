@@ -30,10 +30,12 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
         "docs/spec/commit-completion-and-recovery.md",
     "docs/spec/standalone-review-fix-runtime.md",
     "docs/spec/goal-phase-acceptance-boundary.md",
+    "docs/spec/goal-phase-precommit-step-review.md",
     "docs/spec/goal-phase-release-repair-continuation.md",
     "docs/spec/goal-phase-dependency-scope.md",
     "docs/spec/goal-phase-dependency-source-revision.md",
     "docs/spec/repository-sync-validation-continuation.md",
+    "docs/spec/repository-sync-runtime-orchestration.md",
     "docs/spec/native-goal-command-task.md",
     "docs/spec/goal-phase-validation-metadata.md"
   )

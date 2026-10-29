@@ -142,6 +142,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
   final case class TriageAdmitted(key: WorkKey, assessment: GoalPhaseStepAssessment.Result,
     judgment: GoalPhaseStepTriage.Judgment) extends Event
   final case class StepAssessed(assessment: GoalPhaseStepAssessment.Result) extends Event
+  /** Native precommit request only; retained checks remain historical facts. */
+  final case class StepReviewRequested(snapshot: Snapshot, checksReceipt: String) extends Event
   final case class RepairableChecksObserved(snapshot: Snapshot, selected: Vector[String],
     receipt: String, directive: RepairDirective, comparableFindings: Boolean = true) extends Event
   final case class ReviewAdmitted(key: WorkKey, snapshot: Snapshot, checksReceipt: String,
@@ -201,7 +203,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     val releaseCommit: Option[Commit] = None,
     val repairControl: Option[R.Context] = None,
     val policyRepairPending: Boolean = false,
-    val repairObservations: Vector[R.Observation] = Vector.empty) {
+    val repairObservations: Vector[R.Observation] = Vector.empty,
+    val stepReviewRequired: Boolean = false) {
     def selectedRepairLimit: Int = repairControl.map(_.selectedLimit).getOrElse(plan.repairLimit)
     def effectiveRepairLimit: Int = repairControl.map(_.effectiveLimit).getOrElse(plan.repairLimit)
     private def _repair_scope: String = Json.arr(Json.fromString(plan.identity), Json.fromString(plan.revision),
@@ -249,7 +252,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         documentDecision, ordinaryRepairs, pendingRepair, phaseReviewedCandidate, phaseRecordingPaths,
         candidateParent, stepAdmission, releaseCommit, Some(context),
         pendingRepair.nonEmpty && repairs < context.effectiveLimit && context.stop.isEmpty,
-        repairObservations)
+        repairObservations, stepReviewRequired)
       resumed <- if (stage == Stage.Decision && pendingRepair.isEmpty && decisionSource.contains(Stage.Repair))
         adopted.acceptC(DecisionResumptionAdmitted(evidence)) else Consequence.success(adopted)
     } yield resumed
@@ -377,7 +380,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     } yield new State(proposed, Stage.Implementation, cursor, generation + 1, repairs, base, completed,
       None, None, None, None, None, repositoryReceipt, None, None,
       documentDecision = false, ordinaryRepairs = ordinaryRepairs, pendingRepair = None,
-      stepAdmission = None, releaseCommit = releaseCommit, repairControl = repairControl, repairObservations = repairObservations)
+      stepAdmission = None, releaseCommit = releaseCommit, repairControl = repairControl, repairObservations = repairObservations,
+      stepReviewRequired = stepReviewRequired)
 
     /** Separate explicit remaining-work adoption. Historical accepted Step
       * contracts stay in their original retained native requests and results;
@@ -408,7 +412,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     } yield new State(proposed, Stage.Implementation, cursor, generation + 1, repairs, base, completed,
       None, None, None, None, None, repositoryReceipt, None, None,
       documentDecision = false, ordinaryRepairs = ordinaryRepairs, pendingRepair = None,
-      stepAdmission = None, releaseCommit = releaseCommit, repairControl = repairControl, repairObservations = repairObservations)
+      stepAdmission = None, releaseCommit = releaseCommit, repairControl = repairControl, repairObservations = repairObservations,
+      stepReviewRequired = stepReviewRequired)
 
     /** Direction only: the native owner separately binds the actual Component,
       * finite host registration and independently admitted original-purpose
@@ -424,7 +429,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     } yield new State(proposed, Stage.Implementation, cursor, generation + 1, repairs, base, completed,
       None, None, None, None, None, repositoryReceipt, None, None,
       documentDecision = false, ordinaryRepairs = ordinaryRepairs, pendingRepair = None,
-      stepAdmission = None, releaseCommit = releaseCommit, repairControl = repairControl, repairObservations = repairObservations)
+      stepAdmission = None, releaseCommit = releaseCommit, repairControl = repairControl, repairObservations = repairObservations,
+      stepReviewRequired = stepReviewRequired)
 
     /** Explicit direction changes only the outstanding adopted Phase boundary.
       * Successful checks and the immutable accepted prefix remain actual evidence.
@@ -445,7 +451,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     } yield new State(proposed, Stage.PhaseReview, cursor, generation + 1, repairs, base, completed,
       candidate, checksReceipt, None, closureIntent, None, repositoryReceipt, repairDirective, None,
       documentDecision, ordinaryRepairs, pendingRepair, phaseReviewedCandidate, phaseRecordingPaths,
-      candidateParent, stepAdmission, releaseCommit, repairControl, policyRepairPending, repairObservations)
+      candidateParent, stepAdmission, releaseCommit, repairControl, policyRepairPending, repairObservations, stepReviewRequired)
 
     /** Continue the already reserved phase repair with an exact inventory append.
       * No additional repair batch is consumed and no past acceptance is changed.
@@ -464,7 +470,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     } yield new State(proposed, Stage.Repair, cursor, generation + 1, repairs, base, completed,
       None, None, None, None, None, repositoryReceipt, repairDirective, None,
       documentDecision = false, ordinaryRepairs = ordinaryRepairs, pendingRepair = None,
-      repairControl = repairControl, repairObservations = repairObservations)
+      repairControl = repairControl, repairObservations = repairObservations, stepReviewRequired = stepReviewRequired)
 
     /** Eligibility only. The native owner binds the actual Review finding and
       * new condition to an independently admitted Human directive. This consumes
@@ -496,7 +502,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         candidate, checksReceipt, reviewEvidence, closureIntent, decision, repositoryReceipt, repairDirective,
         decisionSource, documentDecision, ordinaryRepairs, pendingRepair, phaseReviewedCandidate,
         phaseRecordingPaths, candidateParent, stepAdmission, releaseCommit, repairControl,
-        repairObservations = repairObservations)
+        repairObservations = repairObservations, stepReviewRequired = stepReviewRequired)
       next <- selected._reserve_repair_c(directive, evidence, "Review repair allowance exhausted")
     } yield next
 
@@ -553,7 +559,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     } yield new State(proposed, Stage.Implementation, cursor, generation + 1, repairs, base, completed,
       None, None, None, None, None, repositoryReceipt, None, None,
       documentDecision = false, ordinaryRepairs = ordinaryRepairs, pendingRepair = None,
-      stepAdmission = None, releaseCommit = releaseCommit, repairControl = repairControl, repairObservations = repairObservations)
+      stepAdmission = None, releaseCommit = releaseCommit, repairControl = repairControl, repairObservations = repairObservations,
+      stepReviewRequired = stepReviewRequired)
 
     /** Compare already captured effective contracts; the declaration owner captures them. */
     def refreshedC(proposed: Plan, issued: Boolean): Consequence[Either[Vector[String], State]] = for {
@@ -597,7 +604,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           if (clear) None else phaseReviewedCandidate, if (clear) Vector.empty else phaseRecordingPaths,
           if (clear) None else candidateParent, stepAdmission = if (clear) None else stepAdmission,
           releaseCommit = releaseCommit, repairControl = repairControl, policyRepairPending = policyRepairPending,
-          repairObservations = repairObservations))
+          repairObservations = repairObservations, stepReviewRequired = stepReviewRequired))
       }
     }
 
@@ -682,8 +689,9 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           Set("admit", "detailed-review", "triage", "decision")(assessment.branch) =>
         assessment.branch match {
           case "admit" if GoalPhaseStepAssessment.validAdmission(GoalPhaseStepAssessment.admission(assessment)) =>
-            success(Stage.Closing, newChecks = Some(assessment.validationReference),
-              newadmission = Some(GoalPhaseStepAssessment.admission(assessment)))
+            success(if (stepReviewRequired) Stage.Review else Stage.Closing,
+              newChecks = Some(assessment.validationReference),
+              newadmission = if (stepReviewRequired) None else Some(GoalPhaseStepAssessment.admission(assessment)))
           case "triage" if assessment.triage == "required" && assessment.triageJudgment.isEmpty =>
             success(Stage.Triage, newChecks = Some(assessment.validationReference))
           case "detailed-review" if assessment.policy.detailedReview == "required" ||
@@ -700,9 +708,17 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           assessment.checks == checks && GoalPhaseStepTriage.valid(judgment) =>
         val resolved = GoalPhaseStepAssessment.triaged(assessment, judgment)
         if (!GoalPhaseStepAssessment.validResult(resolved)) invalid("triage contradicts its selected policy")
-        else if (judgment.outcome == "clean") success(Stage.Closing,
-          newadmission = Some(GoalPhaseStepAssessment.admission(resolved)))
+        else if (judgment.outcome == "clean") success(if (stepReviewRequired) Stage.Review else Stage.Closing,
+          newadmission = if (stepReviewRequired) None else Some(GoalPhaseStepAssessment.admission(resolved)))
         else success(Stage.Review)
+      case StepReviewRequested(snapshot, validation) if stage == Stage.Closing && !phaseWide &&
+          !stepReviewRequired && closureIntent.isEmpty && reviewEvidence.isEmpty && decision.isEmpty &&
+          candidate.contains(snapshot) && validSnapshot(snapshot) && checksReceipt.contains(validation) && text(validation) &&
+          stepAdmission.exists(a => GoalPhaseStepAssessment.validAdmission(a) &&
+            a.assessment.policy.detailedReview == "conditional" && step.actionPolicy.contains(a.assessment.policy) &&
+            a.assessment.candidate == snapshot && a.assessment.validationReference == validation &&
+            a.assessment.checks == checks && a.assessment.review == "not-executed") =>
+        success(Stage.Review, newadmission = None, newstepreviewrequired = true)
       case RepairableChecksObserved(value, selected, receipt, directive, comparable) if
           (stage == Stage.Validation || (stage == Stage.PhaseValidation && releaseRepairActive)) && candidate.contains(value) &&
           selected == checks && text(receipt) && _valid_directive(directive) =>
@@ -712,7 +728,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
             state.reviewEvidence, state.closureIntent, state.decision, state.repositoryReceipt, state.repairDirective,
             state.decisionSource, state.documentDecision, state.ordinaryRepairs, state.pendingRepair,
             state.phaseReviewedCandidate, state.phaseRecordingPaths, state.candidateParent, state.stepAdmission,
-            state.releaseCommit, state.repairControl, state.policyRepairPending, state.repairObservations) else state)
+            state.releaseCommit, state.repairControl, state.policyRepairPending, state.repairObservations,
+            state.stepReviewRequired) else state)
       case CoveredReviewCompletionObserved(snapshot, validation, originalgeneration, originalcandidate,
           originalreview, completion) if stage == Stage.Review && !phaseWide &&
           candidate.contains(snapshot) && checksReceipt.contains(validation) && text(validation) &&
@@ -720,7 +737,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           validSnapshot(snapshot) && validSnapshot(originalcandidate) &&
           originalcandidate.head == snapshot.head && snapshot.head == candidateBase.head &&
           originalcandidate.tree != snapshot.tree && text(originalreview) && text(completion) &&
-          closureIntent.isEmpty => success(Stage.Closing, newReview = Some(originalreview))
+          closureIntent.isEmpty && !stepReviewRequired => success(Stage.Closing, newReview = Some(originalreview))
       case ReviewAdmitted(value, snapshot, validation, evidence, outcome, directive, allowphaserepair) if
           candidate.contains(snapshot) && checksReceipt.contains(validation) && text(evidence) &&
           ((stage == Stage.Review && value == key(WorkKind.ReviewStep)) ||
@@ -792,7 +809,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           Some("Latest document acceptance conflicts: " + conflicts.mkString(", ")), repositoryReceipt,
           repairDirective, Some(stage), true, ordinaryRepairs, pendingRepair, phaseReviewedCandidate, phaseRecordingPaths, candidateParent,
           stepAdmission = stepAdmission, releaseCommit = releaseCommit, repairControl = repairControl,
-          repairObservations = repairObservations))
+          repairObservations = repairObservations, stepReviewRequired = stepReviewRequired))
       case PhaseValidationRetryAdmitted(snapshot, selected, failed, direction) if stage == Stage.Decision &&
           decisionSource.contains(Stage.PhaseValidation) && !documentDecision && pendingRepair.isEmpty &&
           closureIntent.isEmpty && phaseWide && completed.map(_.step) == plan.steps.map(_.identity) &&
@@ -826,7 +843,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         if (nextcursor == plan.steps.size) Stage.PhaseInspection else Stage.Implementation,
         nextcursor, generation + 1, 0, base, closed, None, None, None, None, None, None, None, None,
         stepAdmission = None, releaseCommit = releaseCommit,
-        repairControl = repairControl.map(_.copy(observations = Vector.empty))))
+        repairControl = repairControl.map(_.copy(observations = Vector.empty)), stepReviewRequired = false))
     }
 
     private def success(nextStage: Stage, newCandidate: Option[Snapshot] = candidate,
@@ -845,6 +862,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       newcontrol: Option[R.Context] = repairControl,
       newpolicypending: Boolean = policyRepairPending,
       newobservations: Vector[R.Observation] = repairObservations,
+      newstepreviewrequired: Boolean = stepReviewRequired,
       clear: Boolean = false): Consequence[State] = Consequence.success(new State(plan, nextStage,
       cursor, newGeneration, newRepairs, base, completed, if (clear) None else newCandidate,
       if (clear) None else newChecks, if (clear) None else newReview,
@@ -855,7 +873,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       phaseRecordingPaths = if (clear) Vector.empty else newPhasePaths,
       candidateParent = if (clear) None else newcandidateparent,
       stepAdmission = if (clear) None else newadmission, releaseCommit = newreleasecommit,
-      repairControl = newcontrol, policyRepairPending = newpolicypending, repairObservations = newobservations))
+      repairControl = newcontrol, policyRepairPending = newpolicypending, repairObservations = newobservations,
+      stepReviewRequired = newstepreviewrequired))
   }
 
   def startC(plan: Plan, initial: Snapshot, repairPolicy: Option[String] = None): Consequence[State] = for {

@@ -32,6 +32,34 @@ private[smworkflow] object WorkflowManagedProcessExecution {
       else Consequence.stateConflict("Workflow Git result differs from its selected target or operation")
   } yield result
 
+  /** Exact typed selected data; CNCF admits and narrows an explicitly granted base program. */
+  def executeSelectedGitC[A](core: ActionCall.Core, operation: GitOperation[A],
+    selection: GitSelectionParameters, workspaceIdentity: String): Consequence[GitExecutionResult[A]] = for {
+    _ <- if (core != null && core.executionContext != null && operation != null && selection != null &&
+        (operation match {
+          case GitOperation.StageSelectedAll(id) => id == selection.identity
+          case _ => false
+        })) Consequence.unit
+      else Consequence.stateConflict("Workflow selected Git target or operation is absent or crossed")
+    workspace <- WorkspaceId.parseC(workspaceIdentity)
+    target = GitTarget(workspace, Some(selection))
+    execution = new Execution(core)
+    result <- execution.runGitC(execution.prepareGit(target, operation))
+    _ <- if (result != null && result.target == target && result.operation == operation) Consequence.unit
+      else Consequence.stateConflict("Workflow selected Git result differs from its exact target or operation")
+  } yield result
+
+  /** Data narrowed from the owning native purpose request, never a process grant. */
+  def executePurposeC[A](core: ActionCall.Core, operation: GitOperation[A],
+    selection: GitSelectionParameters): Consequence[GitExecutionResult[A]] = for {
+    workspace <- WorkspaceId.parseC("sm-workflow-repository")
+    target = GitTarget(workspace, Some(selection))
+    execution = new Execution(core)
+    result <- execution.runGitC(execution.prepareGit(target, operation))
+    _ <- if (result.target == target && result.operation == operation) Consequence.unit
+      else Consequence.stateConflict("Purpose Git result crosses its admitted input")
+  } yield result
+
   /** Ordinals select host-bound paths and never carry filenames. */
   def stageConflictC(core: ActionCall.Core, ordinal: Int): Consequence[GitExecutionResult[Unit]] = for {
     _ <- _ordinal_c(ordinal, 128)
@@ -223,7 +251,9 @@ private[smworkflow] object WorkflowManagedProcessExecution {
       case GitOperation.SelectedIndexChanges(selection, parent) => git_selected_index_changes(target, selection, parent)
       case GitOperation.TreeEntries(tree, selection) => git_tree_entries(target, tree, selection)
       case GitOperation.TreeChanges(before, after) => git_tree_changes(target, before, after)
-      case GitOperation.TreeEntries(tree, selection) => git_tree_entries(target, tree, selection)
+      case GitOperation.PreparePurposeCandidate(id, request) => git_prepare_purpose_candidate(target, id, request)
+      case GitOperation.MaterializePurposeCandidate(id, candidate, workspace) => git_materialize_purpose_candidate(target, id, candidate, workspace)
+      case GitOperation.CommitPurposeCandidate(id, candidate) => git_commit_purpose_candidate(target, id, candidate)
     }
     def runGitC[A](program: ExecUowM[GitExecutionResult[A]]): Consequence[GitExecutionResult[A]] = executeProgram(program)
     def execute(): Consequence[OperationResponse] =

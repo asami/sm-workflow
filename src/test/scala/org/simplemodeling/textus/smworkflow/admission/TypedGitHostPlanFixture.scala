@@ -8,7 +8,7 @@ import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms
 /** Public strict host JSON, decoded and bound only by ordinary CNCF bootstrap.
   * No producer-private declaration, codec, binding or admission is constructed.
   * @since   Oct. 15, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object TypedGitHostPlanFixture {
@@ -21,7 +21,7 @@ private[admission] object TypedGitHostPlanFixture {
     GitOperationKind.Fetch, GitOperationKind.FastForward, GitOperationKind.IndexTree, GitOperationKind.CheckPendingIndex)
   val ordinary: Vector[GitOperationKind] = GitOperationKind.values.toVector.filterNot(kind =>
     Set(GitOperationKind.StageSelected, GitOperationKind.StageSelectedAll, GitOperationKind.CommitSelected,
-      GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges, GitOperationKind.TreeEntries)(kind))
+      GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges, GitOperationKind.TreeEntries, GitOperationKind.PreparePurposeCandidate, GitOperationKind.MaterializePurposeCandidate, GitOperationKind.CommitPurposeCandidate)(kind))
   val limits: Json = Json.obj(Vector("launchTimeoutMillis" -> 10000L, "executionTimeoutMillis" -> 30000L,
     "terminationGraceMillis" -> 1000L, "stdinBytes" -> 2097152L, "stdoutBytes" -> 131072L,
     "stderrBytes" -> 16384L, "argumentCount" -> 512L, "argumentBytes" -> 131072L,

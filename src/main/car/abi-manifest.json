@@ -125,6 +125,9 @@
         },
         {
           "name": "DelegateTaskDeliveryService"
+        },
+        {
+          "name": "EvidenceService"
         }
       ],
       "operations": [
@@ -792,6 +795,48 @@
           "kind": "COMMAND",
           "input": "WorkflowDelegateTaskStartPreparationInput",
           "output": "WorkflowPreparedImport"
+        },
+        {
+          "service": "EvidenceService",
+          "name": "readEvidenceRange",
+          "kind": "COMMAND",
+          "input": "EvidenceRangeInput",
+          "output": "EvidenceReadResult"
+        },
+        {
+          "service": "RepositorySyncService",
+          "name": "submitRepositoryPurposeResult",
+          "kind": "COMMAND",
+          "input": "RepositorySyncPurposeResult",
+          "output": "RepositorySyncConflictSubmissionResult"
+        },
+        {
+          "service": "RepositoryConflictService",
+          "name": "groupRepositoryPurposes",
+          "kind": "COMMAND",
+          "input": "RepositorySyncPurposeRequest",
+          "output": "RepositorySyncPurposeResult"
+        },
+        {
+          "service": "RepositorySyncSemanticAdmissionService",
+          "name": "admitRepositoryPurposes",
+          "kind": "COMMAND",
+          "input": "RepositorySyncPurposeRequest",
+          "output": "RepositorySyncConflictSubmissionResult"
+        },
+        {
+          "service": "GoalPhaseService",
+          "name": "describeGoalPhaseStepReview",
+          "kind": "COMMAND",
+          "input": "GoalPhaseStepReviewDescriptionInput",
+          "output": "GoalPhaseStepReviewDescriptionResult"
+        },
+        {
+          "service": "GoalPhaseService",
+          "name": "requestGoalPhaseStepReview",
+          "kind": "COMMAND",
+          "input": "GoalPhaseStepReviewRequestInput",
+          "output": "GoalPhaseStepReviewRequestResult"
         }
       ],
       "types": [
@@ -7264,6 +7309,324 @@
             {
               "name": "target",
               "type": "record",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "EvidenceRangeInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "revision",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "startCharacter",
+              "type": "int",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "characterCount",
+              "type": "int",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "EvidenceReference",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "revision",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "EvidenceMetadata",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "evidence",
+              "type": "EvidenceReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sourceReference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outputIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "repositoryIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "phaseIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "stepIdentity",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "sessionIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "actionOutcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "mediaType",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "encoding",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "hostIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "workspaceIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "relativePath",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "allocatedAt",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "retentionBasis",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "EvidenceStorageObservation",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "evidence",
+              "type": "EvidenceReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sourceReference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "status",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "observedAt",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "EvidenceReadResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "status",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "metadata",
+              "type": "EvidenceMetadata",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "observation",
+              "type": "EvidenceStorageObservation",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "text",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseStepReviewDescriptionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseStepReviewDescriptionResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "record",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "requestOperation",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseStepReviewRequestInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "record",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reason",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseStepReviewRequestResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "accepted",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
               "multiplicity": "1",
               "required": true
             }

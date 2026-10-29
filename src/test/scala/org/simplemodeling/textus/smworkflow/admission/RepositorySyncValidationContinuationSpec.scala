@@ -35,17 +35,20 @@ private[admission] object RepositorySyncValidationContinuationFixture {
 
 /** Pure contracts plus independent normal managed evidence ingress.
   * Native history/effect cases are qualified by the separate public CLI suite.
-  * @since Oct. 26, 2026
-  * @version Oct. 26, 2026
+  * @since   Oct. 26, 2026
+  * @version Oct. 28, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
-final class RepositorySyncValidationContinuationSpec extends AnyWordSpec with Matchers with GivenWhenThen
-    with NativePreparationManagedFixture {
+final class RepositorySyncValidationContinuationSpec extends RepositorySyncValidationContinuationBehavior
+
+/** Shared declarations register real tests on each concrete suite. */
+private[smworkflow] trait RepositorySyncValidationContinuationBehavior extends AnyWordSpec with Matchers with GivenWhenThen
+    {
   import RepositorySyncValidationContinuationFixture.*
 
   "RS-VC1 strict persisted and public contracts" should {
-    "roundtrip historical v3 payloads exactly while omitting the absent new direction" in {
+    "roundtrip historical v3 payloads exactly while omitting the absent new direction" in new NativePreparationManagedFixture {
       Given("a native v3 Integrated record before validation continuation existed")
       val old = Json.obj("schemaVersion" -> RepositorySyncNativeProgressStore.schema.asJson, "payload" -> Json.obj(
         "stage" -> "Integrated".asJson, "root" -> target.root.asJson, "before" -> observed.asJson,
@@ -58,7 +61,7 @@ final class RepositorySyncValidationContinuationSpec extends AnyWordSpec with Ma
       RepositorySyncNativeProgressStore.codec.encode(restored) shouldBe old
     }
 
-    "refuse absent null extra and malformed meaning-bearing target and answer fields" in {
+    "refuse absent null extra and malformed meaning-bearing target and answer fields" in new NativePreparationManagedFixture {
       Given("a complete exact resultless-intent target and explicit typed answer")
       val wire = target.asJson
       val answer = Json.obj("choice" -> "AuthorizeNewValidation".asJson, "rationale" -> "Explicit fixture direction".asJson,
@@ -80,7 +83,7 @@ final class RepositorySyncValidationContinuationSpec extends AnyWordSpec with Ma
         .foreach(value => N.decodeTarget(value.asJson).isLeft shouldBe true)
     }
 
-    "bind complete policy check kind source prefix participant and explicit uncertainty acceptance" in {
+    "bind complete policy check kind source prefix participant and explicit uncertainty acceptance" in new NativePreparationManagedFixture {
       Given("a successful structural receipt and a missing selected SBT result")
       val actual = take(binding())
       When("the target policy check kind or participant and terminal assertions are crossed")
@@ -98,7 +101,7 @@ final class RepositorySyncValidationContinuationSpec extends AnyWordSpec with Ma
       N.validPrefix(prefix :+ C.Receipt("test", "exited", Some(1), "", ""), checks) shouldBe false
     }
 
-    "require explicit changed FULL_STATE direction for mixed staging and keep old checks historical" in {
+    "require explicit changed FULL_STATE direction for mixed staging and keep old checks historical" in new NativePreparationManagedFixture {
       Given("the same HEAD and tracking with one staged and one unstaged selected file")
       val dirty = observed.copy(dirty = Vector(G.DirtyPath('M', ' ', "staged.txt", None), G.DirtyPath(' ', 'M', "worktree.txt", None)))
       val changed = target.copy(actual = dirty, indexTree = "d" * 40)
@@ -116,7 +119,7 @@ final class RepositorySyncValidationContinuationSpec extends AnyWordSpec with Ma
       RepositorySyncNativeProgressStore.candidateKey(N.namespace(changed), "integrated") shouldBe "validation-continuation-9-integrated"
     }
 
-    "refuse concurrently staged unrelated paths and rename endpoints before checkpoint creation" in {
+    "refuse concurrently staged unrelated paths and rename endpoints before checkpoint creation" in new NativePreparationManagedFixture {
       Given("explicit adopted mixed staging whose status codes normalize under normal full-state staging")
       val before = observed.copy(dirty = Vector(G.DirtyPath('M', 'M', "selected.txt", None),
         G.DirtyPath(' ', 'M', "second.txt", None)))
@@ -133,7 +136,7 @@ final class RepositorySyncValidationContinuationSpec extends AnyWordSpec with Ma
         .foreach(value => RepositorySyncNativePreservation.adoptedStagedC(before, value).isSuccess shouldBe false)
     }
 
-    "return the first immutable index tree after an ordered stable post-stage scope observation" in {
+    "return the first immutable index tree after an ordered stable post-stage scope observation" in new NativePreparationManagedFixture {
       Given("an adopted path whose normal staging has left a fully staged clean worktree")
       val before = observed.copy(dirty = Vector(G.DirtyPath('M', 'M', "selected.txt", None)))
       val staged = before.copy(dirty = Vector(G.DirtyPath('M', ' ', "selected.txt", None)))
@@ -149,7 +152,7 @@ final class RepositorySyncValidationContinuationSpec extends AnyWordSpec with Ma
       reads shouldBe Vector("tree-1", "observed", "tree-2")
     }
 
-    "refuse an index mutation between the valid scope observation and confirming tree read" in {
+    "refuse an index mutation between the valid scope observation and confirming tree read" in new NativePreparationManagedFixture {
       Given("a successful fully staged path observation with different immutable trees before and after it")
       val before = observed.copy(dirty = Vector(G.DirtyPath('M', 'M', "selected.txt", None)))
       val staged = before.copy(dirty = Vector(G.DirtyPath('M', ' ', "selected.txt", None)))
@@ -170,7 +173,7 @@ final class RepositorySyncValidationContinuationSpec extends AnyWordSpec with Ma
       reads shouldBe Vector("tree-1", "observed", "tree-2")
     }
 
-    "stop captured index admission at a refused post-stage path scope" in {
+    "stop captured index admission at a refused post-stage path scope" in new NativePreparationManagedFixture {
       Given("a captured tree followed by a fully staged observation containing a foreign path")
       val before = observed.copy(dirty = Vector(G.DirtyPath('M', 'M', "selected.txt", None)))
       val foreign = before.copy(dirty = Vector(G.DirtyPath('M', ' ', "selected.txt", None),
@@ -190,7 +193,7 @@ final class RepositorySyncValidationContinuationSpec extends AnyWordSpec with Ma
   }
 
   "RS-VC1 independent evidence" should {
-    "remain passive until normal host provisioning and refuse wrong purpose participant target and lifecycle assertions" in {
+    "remain passive until normal host provisioning and refuse wrong purpose participant target and lifecycle assertions" in new NativePreparationManagedFixture {
       Given("a specification-owned terminal attestation, never a producer observation of a real invocation")
       withCore { call =>
         val component = call.core.component.get.core.instanceId.canonicalKey

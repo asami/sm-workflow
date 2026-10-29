@@ -29,6 +29,14 @@ The [native host contract](../../docs/spec/native-host-execution.md) owns actual
 execution and the [caller information contract](../../docs/spec/caller-information.md)
 owns attributed observations. This skill is a thin caller/semantic adapter.
 
+For a new authorized development deliverable assigned to another chat, route
+through [sm-delegate-task](../sm-delegate-task/SKILL.md) and the
+[new-request/continuation boundary](../../docs/spec/native-host-execution.md#new-cross-chat-development-requests-and-existing-continuations).
+Keep corrections to an existing deliverable in its existing request, and preserve
+this Task's own validation, integrated review and commit contract. The destination
+runs its DelegateTask, not this skill as a substitute executor. Report an actual
+missing route rather than silently reverting to direct-message development.
+
 ## AI activity forwarding
 
 At each existing authorized subagent dispatch/resume return and actual result
@@ -93,9 +101,11 @@ can transport Advance, execution observations, review preparation and completion
 Use the original Request and Task family; its `start` action is GoalPhase-only.
 Display actual `Submitted` and later `Incomplete` separately from acceptance.
 If an issued Task is malformed, use only the installed public describe/recover
-capability documented in the Task contract, with genuine admitted Human evidence.
-Missing logs or an unclaimed WorkOrder do not authorize a replacement. Preserve
-the old issue, UNKNOWN effects, accepted results and repair counters.
+capability documented in the Task contract with the independently admitted
+evidence required by its selected choice. Exact covering nonexecution evidence
+permits only its declared continuation; accepting unresolved effects requires
+genuine Human direction. Missing logs or an unclaimed WorkOrder authorize neither.
+Preserve the old issue, actual effect disposition, accepted results and counters.
 
 Task completion requires native integrated independent Review and actual scoped typed commit. No-change, commit failure and UNKNOWN remain distinct; preserve unrelated edits.
 

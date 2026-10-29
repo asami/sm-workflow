@@ -55,6 +55,35 @@ executable as the approval prefix. Follow the
 This command transport rule leaves semantic delegation, independent review,
 Start admission and effect permissions with their existing owners.
 
+## Configured clean and dirty entry
+
+For a normally configured repository, pass repository identity and actual sync
+intent to public `startRepositorySync`; keep its returned Session for ordinary
+`advanceRepositorySync`. Runtime resolves tracking, default Git and existing
+intent authority. Equal, local-ahead and fast-forward use no additional product
+checks or AI solely for synchronization. Merge selection uses actual declared
+consumed inputs and applicable retained evidence, with reasons.
+
+Dirty entry needs the host's declared purpose policy and fixed candidate slots.
+Use the actual issued `RepositorySyncPurposeRequest` and return only its typed
+`RepositorySyncPurposeResult` to `submitRepositoryPurposeResult`. Group actual
+content by purpose and prior dependencies; identify excluded ongoing work and
+inseparable meaning explicitly. A shared file can contain several purposes and
+an excluded remainder. Semantic grouping supplies no check, review or commit
+acceptance. Ordinary Advance owns each candidate's acceptance and installation.
+Missing configuration is a precise preparation gap, never permission to invent
+authority imports, stage everything or checkpoint unrelated work.
+
+Repeated continuation collects saved effects/results in the same Session.
+A retained integration intent is observed without reissuing merge/fast-forward;
+a retained push intent is observed against its selected tip without another push.
+Unknown execution and later remote movement retain local commits and the original
+history. A saved terminal convergence is historical evidence; collecting it does
+not promise that an independently changed remote still converges now. Do not
+rerun effects to reconstruct a response or override an older unanswered Human
+request. Follow the existing owning public continuation and exact actual target.
+See the [runtime orchestration contract](../../docs/spec/repository-sync-runtime-orchestration.md).
+
 ## Interrupted integration validation
 
 For a resultless integration-validation intent, use the public

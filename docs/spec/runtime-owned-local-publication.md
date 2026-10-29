@@ -25,6 +25,15 @@ the record collection, typed Git observation including IndexTree, and the exact
 typed SBT `publish-local` program for that workspace. Properties are resolved
 through Component initialization and ExecutionContext, not parsed by the app.
 
+The optional `catalogOutputs` array defaults to empty for existing hosts. Each
+entry contains exactly `targetIdentity`, `path` and `selection`: a declared
+target, one canonical relative `src/main/catalog/car/*.yaml` path, and a valid
+Git selection identity. At most sixteen entries and one entry per target are
+accepted. This policy supplies no process or File authority. The host separately
+admits a finite fixed `TreeEntries` program selecting exactly that catalog,
+ordinary `BlobContent`, and File reads through the target's existing workspace
+grant and resource limits. Missing admission fails through the owning UoW.
+
 The caller supplies no executable, argv, environment, destination, limits or
 grants. Existing authorization for the same target, purpose, acceptance boundary
 and effects continues. Publication is not a blanket new Human gate; genuinely
@@ -57,6 +66,31 @@ staged paths alone produce a bounded build-relevance question. Unknown unstaged
 inputs are conservatively rebuilt; an answer cannot stand in for unknown bytes.
 Renamed source paths retain their original provenance in this decision.
 
+For an explicitly bound catalog, the runtime may project one unstaged modified
+worktree entry with an unchanged index status and no rename. It reads the actual
+index tree's regular blob and the actual working text through typed Git and File
+UoW operations. Both texts must be valid schemaVersion 2 CAR catalogs whose
+nonempty version entries identify the exact target component. Only canonical
+four-space `publishedAt: <ISO offset timestamp>` version lines may differ. The
+timestamp values must parse as offset dates and match the parsed version fields
+in order. Core RecordDecoder parses a copy with just those timestamp scalars
+quoted, because its YAML boundary rejects timestamp tags. The original file
+bytes are never rewritten. Parsed JSON with only version timestamps removed and
+the exact text with only those line values replaced must both be identical.
+Comments, whitespace, line endings, block scalars, other metadata and all other
+paths stay inputs. A final ordinary Git observation must equal the initial one.
+
+Staged catalogs, renames, additions, deletions, conflicts, nonregular entries,
+missing or binary text, unrecognized catalogs and meaningful catalog changes
+are not projected. Crossed or extra selected tree entries fail. HEAD and index
+tree remain exact, and unknown publication intent remains unreplayed. Hosts
+without this policy keep their previous source comparison. Persisted Target,
+Source, Request and Result schemas and equality are unchanged; no hash, second
+publication ledger or general ignored path is introduced. Projection proves
+only the difference from the actual indexed catalog. An older retained source
+that already contains ambiguous catalog dirtiness is preserved conservatively;
+the runtime cannot rewrite that history or automatically claim applicability.
+
 The runtime saves request and intent before execution, then the actual result.
 `published`, `unnecessary`, `semantic-required`, `not-started`,
 `admission-rejected`, `failed`, and `uncertain` are distinct. Collection and
@@ -87,3 +121,9 @@ Focused verification covers necessity, bounded semantic answers, actual typed
 outcomes, response recollection, nonstart continuation and no replay. A fresh
 plain SBT fixture verifies actual publication and skip through ordinary source
 and isolated installed CLI. Existing real Sessions remain owned by their callers.
+The catalog fixture publishes once, observes its timestamp output from another
+process without publishing again, then requires normal publication for changed
+catalog metadata and for staged catalog/other source inputs. Coherent installed
+source fixtures configure sbt-cozy application activation in fresh
+`.cozy/config.yaml`; their unchanged `project.yaml` retains normal project
+coordinates and publication declarations.

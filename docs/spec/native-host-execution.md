@@ -149,31 +149,75 @@ Preserve Sessions, work identities, accepted results, history and active/cumulat
 repair counts. An end-to-end responsibility is not permission to bypass real
 runtime decisions, unknown-effect settlement or publication authority.
 
+## New cross-chat development requests and existing continuations
+
+Use [sm-delegate-task](../../skills/sm-delegate-task/SKILL.md) for a new
+user-authorized development deliverable assigned to another existing chat.
+Classify by Component, purpose, acceptance conditions and requested operations,
+not by chat, Phase or Session identity, a repeated issue label, or the word
+"continuation". Use existing task context for this distinction; no extra AI call,
+classification Operation, approval artifact or routine user confirmation is needed.
+
+- A correction needed to satisfy the original deliverable, a missing result,
+  or failed consumer acceptance of that deliverable continues the original
+  request. Retain its owner, identity, accepted work and applicable evidence.
+- An additional feature, a different purpose or acceptance obligation, or a
+  separate deliverable is a new request even in the same chat/Phase. Do not
+  absorb it into a legacy repair merely to retain direct-message execution.
+  Necessary files or technical adjustments within the original acceptance
+  boundary alone do not create a new request or require renewed consent.
+
+For a new request, prepare and admit the DelegateTask through its supported
+public operations before transporting its issued work. The message tool is
+transport, not an alternative execution contract. The destination uses that
+DelegateTask's issued work and runtime-managed checks, repair, local commit,
+selected publishLocal and return; it does not start a sibling goal-task/test-fix
+executor. Their existing public test and completion contracts remain unchanged.
+Use [the finite caller contract](native-delegate-task-caller.md) for actual
+operations and attributable receipt/adoption; transport success is not acceptance.
+
+Continue an already-running legacy request on its existing authorized route.
+Do not wrap or duplicate it in a fresh DelegateTask, re-Start, replay accepted
+Submit, reset counters or rerun successful checks just to change routing.
+This preserves the outstanding deliverable, not an indefinite exemption for
+future development. Existing explicitly authorized runtime-restoration contracts
+retain only their actual scope; describing a new request as restoration alone
+creates no exception.
+
+If the installed DelegateTask operation, configuration or admission is missing,
+report the exact observed gap and retain the pending request and existing work.
+Do not silently fall back to a direct development message, sibling skill or
+standalone SBT/publication runner. Correct the connection through an applicable
+authorized route; do not make this gap a stop condition for unrelated ongoing
+work. Genuine new effects or unresolved authority use the normal public decision
+path, while applicable existing authorization is carried forward.
+
 ## Independent dependency delivery
 
 When an authorized parent task needs changes in a dependency repository, the
 requesting chat defines the required outcome, repository/scope, acceptance
-conditions, usage contract and delivery method. Use an authorized destination
-chat and the existing messaging tools; this contract alone does not authorize
-creating or messaging a chat. The requesting chat remains responsible for
-collecting the result and integrating it into the parent project.
+conditions, usage contract and delivery method. Apply the
+[new-request/continuation routing](#new-cross-chat-development-requests-and-existing-continuations)
+above. For new delivery, use an authorized destination and sm-delegate-task;
+the existing message tools carry its issued work and actual return. This contract
+alone does not authorize creating or messaging a chat. The requesting chat remains
+responsible for collecting the result and integrating it into the parent project.
 
-The dependency chat owns ordinary development in its repository: implementation,
-compilation, tests, correction of failures and required independent review. Use
-that repository's applicable execution routes, including the registered SBT
-runner for standalone SBT. If it has its own Workflow, that Workflow owns its
-checks. Do not apply the parent Session's edit-only semantic-worker instruction
-to this separate delivery owner or send its repository validation back to the
-parent merely because the parent needs the result. The dependency chat is not
-a child Workflow in the parent Session. Missing nested-workflow support does not
-block this authorized development; no new runtime management feature is required.
+The dependency chat owns the delivered implementation and required semantic work;
+its DelegateTask runtime owns validation, repair progression, local commit and
+selected publication. Do not launch an independent SBT runner for that delivery.
+An already-running legacy request retains its applicable execution route as
+described above. The requester and destination retain distinct Sessions; this is
+not a child Workflow in the parent Session. Parent integration checks remain
+owned by the parent's workflow, rather than being moved to the dependency chat.
 
 Return the actual changed revision and artifact version/location, scope delivered,
 compile/test commands and results with retained evidence references, required
 review outcome, unresolved issues and concrete consumption instructions. Identify
 uncommitted changes or unavailable artifacts honestly. Source edits alone do not
 complete delivery; failed or missing required validation remains incomplete.
-Artifact publication follows its existing authorization and version rules.
+Artifact publication uses runtime-owned LocalPublication under its existing
+authorization and version rules.
 
 The parent consumes the delivered dependency and uses its own sm-workflow for
 parent-project integration checks, required review and formal Step/Phase

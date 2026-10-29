@@ -411,7 +411,23 @@ private[smworkflow] object GoalPhaseNativeCandidate {
         actual <- GoalPhaseWholePhaseCandidateRecovery.observeRepositoryC(store.core, target)
         _ <- if (actual == target.repository) Consequence.unit
           else F.invalid("whole-Phase approved repository/index snapshot changed")
-        result <- _observe_c(store, intent, store.base, Some(actual.indexTree), Some(actual))
+        prepared <- target.releasePreparation match {
+          case None => Consequence.success(intent)
+          case Some(preparation) => for {
+            parent <- GitObjectId.parseC(store.base.head)
+            check <- E.executeGitC(store.core, GitOperation.CheckPendingIndex(parent)).flatMap(_.valueC)
+            _ <- if (check.findingKeys.isEmpty) Consequence.unit
+              else F.invalid("release remaining observation requires a clean index without hygiene corrections")
+            hygiene = CommitHygiene.Record(preparation.hygieneMode, "clean", Vector.empty, Vector.empty,
+              "Release pending index checked cleanly before the independently authorized candidate observation")
+            saved <- store.saveC("commit-hygiene-plan", intent.record, intent.payload.copy(hygiene = Some(hygiene)))
+            _ <- store.inspectPinnedC(store.base)
+            recheck <- E.executeGitC(store.core, GitOperation.CheckPendingIndex(parent)).flatMap(_.valueC)
+            _ <- if (recheck.findingKeys.isEmpty && hygiene.corrections.isEmpty) Consequence.unit
+              else F.invalid("release pending index no longer clean; fresh observation intent remains unresolved")
+          } yield saved
+        }
+        result <- _observe_c(store, prepared, store.base, Some(actual.indexTree), Some(actual))
       } yield result
     }
   } yield saved

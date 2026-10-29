@@ -33,7 +33,7 @@ import WorkflowManagedProcessExecution as E
 /** A new source direction retains its predecessor and is not source acceptance.
   * Native capture/check/review/closure owners qualify the newly selected bytes.
   * @since   Oct. 26, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseDependencySourceRevision {
@@ -1109,11 +1109,14 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
   def chainFreshnessC(core: ActionCall.Core, chain: Option[GoalPhaseNativeWorkContinuation.DependencyChain],
     legacy: Vector[D.Capture], revised: Vector[Capture]): Consequence[Unit] = {
     val sources = (chain.toVector.flatMap(_.acceptedSources.map(_.capture)) ++ revised).distinct
+    val phase = chain.toVector.flatMap(c => c.historicalPhase.map(_.capture) ++ c.activePhaseCapture)
     if (sources.isEmpty) GoalPhaseNativeDependencyValidation.chainFreshnessC(core, chain, legacy)
+    else if (phase.exists(p => sources.exists(s => bindingOf(s).dependency.identity == p.admission.binding.dependency.identity)))
+      D.invalid("active phase capture contradicts a revised source for the same dependency")
     else sources.foldLeft(Consequence.unit)((prior, capture) => prior.flatMap(_ =>
       chain.map(_.sourceCaptureC(capture)).getOrElse(D.invalid("revised source requires actual native lineage")))).flatMap { _ =>
       val superseded = sources.map(_.direction.target.binding.dependency.identity).toSet
-      val retainedLegacy = legacy.filterNot(c => superseded(c.admission.binding.dependency.identity))
+      val retainedLegacy = (legacy ++ phase).distinct.filterNot(c => superseded(c.admission.binding.dependency.identity))
       val acceptedLegacy = chain.toVector.flatMap(_.accepted.map(_.capture))
         .filterNot(c => superseded(c.admission.binding.dependency.identity))
       // Original V1 capture validation remains strict. Proven superseded histories
@@ -1121,11 +1124,16 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
       val proof = (legacy ++ chain.toVector.flatMap(_.accepted.map(_.capture))).distinct
         .foldLeft(Consequence.unit)((prior, c) => prior.flatMap(_ => chain.map(_.captureC(c))
           .getOrElse(D.invalid("dependency history requires actual native lineage"))))
-      proof.flatMap(_ => (acceptedLegacy ++ retainedLegacy).distinct.groupBy(_.admission.binding.dependency.identity).values
-        .foldLeft(Consequence.unit)((prior, history) => {
-          val selected = if (history.last.admission.acceptedPrefix.nonEmpty) Vector(history.last) else history
-          selected.foldLeft(prior)((p, c) => p.flatMap(_ => GoalPhaseNativeDependencyValidation.freshnessC(core, c, chain)))
-        }))
+      val remaining = ((acceptedLegacy ++ retainedLegacy).filterNot(phase.contains) ++ phase).distinct
+      val consistent = remaining.groupBy(_.step).values.forall(_.size == 1) &&
+        remaining.groupBy(_.sourceRevision).values.forall(_.size == 1)
+      proof.flatMap(_ => if (consistent) Consequence.unit else D.invalid("contradictory phase dependency history"))
+        .flatMap(_ => phase.foldLeft(Consequence.unit)((prior, c) => prior.flatMap(_ => chain.get.captureC(c))))
+        .flatMap(_ => remaining.groupBy(_.admission.binding.dependency.identity).values
+          .foldLeft(Consequence.unit)((prior, history) => {
+            val selected = if (history.last.admission.acceptedPrefix.nonEmpty) Vector(history.last) else history
+            selected.foldLeft(prior)((p, c) => p.flatMap(_ => GoalPhaseNativeDependencyValidation.freshnessC(core, c, chain)))
+          }))
         .flatMap(_ => sources.groupBy(_.direction.target.binding.dependency.identity).values
           .foldLeft(Consequence.unit)((prior, history) => prior.flatMap(_ => freshnessC(core, history.last))))
     }

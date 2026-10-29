@@ -10,7 +10,7 @@ import GoalPhaseNativeValidation as N
 /** Small PLAN-owned Step policy over actual native validation facts.
   * No provider selection, effect authority or replacement validation engine.
   * @since   Oct. 23, 2026
-  * @version Oct. 26, 2026
+  * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseStepAssessment {
@@ -65,6 +65,10 @@ private[smworkflow] object GoalPhaseStepAssessment {
       policy.observations.map(_.identity).distinct.size == policy.observations.size
   } catch { case scala.util.control.NonFatal(_) => false }
 
+  def validatePurposePolicyC(policy: Policy): Consequence[Unit] =
+    if (policyShape(policy) && policy.observations.forall(_.plannedStep.isEmpty)) Consequence.unit
+    else invalid("purpose policy must be complete and cannot defer to an unbound PLAN Step")
+
   def validateC(policy: Policy, step: O.Step, plan: O.Plan): Consequence[Unit] = {
     val valid = policyShape(policy) && step != null && plan != null && plan.steps != null &&
       policy.observations.forall(_.plannedStep.forall(id =>
@@ -106,6 +110,27 @@ private[smworkflow] object GoalPhaseStepAssessment {
   } yield Result(policy, payload.candidate, reference, step.checks, branch, reason,
     if (branch == "triage") "required" else "not-selected",
     if (branch == "detailed-review") "required" else "not-executed", scenarioSignals = signals)
+
+  /** Same acceptance policy for a genuine immutable purpose candidate. Structural
+    * document admission consumes actual native Git checking; code retains the
+    * common compile/nonempty behavioral/lint evidence gate. No result is review.
+    */
+  def assessPurposeC(policy: Policy, candidate: O.Snapshot, reference: String,
+    structural: RepositorySyncNativeMergeValidation.Receipt,
+    selected: Vector[GoalPhaseNativeValidation.Check],
+    receipts: Vector[RepositorySyncNativeMergeValidation.Receipt]): Consequence[Result] = for {
+    _ <- if (policyShape(policy) && text(reference) && structural != null &&
+        structural.termination == "exited" && structural.exitCode.contains(0) &&
+        org.goldenport.cncf.processexecution.GitIndexCheck.parseStoredC(0, structural.stdout, structural.stderr).isSuccess)
+      Consequence.unit else invalid("purpose assessment requires its actual structural receipt and selected policy")
+    _ <- if (policy.kind == "documentation" && selected.isEmpty && receipts.isEmpty) Consequence.unit
+      else WorkflowRepairAssessment.checksC(policy.kind, policy.scalaLint, selected, receipts)
+    immediate = policy.observations.exists(_.timing == "immediate")
+    branch = if (policy.detailedReview == "required" || immediate) "detailed-review" else "admit"
+  } yield Result(policy, candidate, reference, selected.map(_.identity), branch,
+    if (branch == "admit") "Actual purpose candidate structural and selected product checks passed with no immediate obligation"
+      else "Selected independent purpose review remains required; successful validation is not review acceptance",
+    "not-selected", if (branch == "admit") "not-executed" else "required")
 
   def admission(result: Result): Admission = Admission(result.validationReference + ":step-admission", result)
   def triaged(result: Result, judgment: GoalPhaseStepTriage.Judgment): Result = result.copy(
