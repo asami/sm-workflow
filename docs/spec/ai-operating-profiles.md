@@ -1,6 +1,6 @@
 # AI Operating Profiles and Lightweight Phase Metrics
 
-Status: accepted target specification; M1 standard route authored in Phase 6.10, runtime qualification pending.
+Status: accepted target specification; M1/M2 selection route authored in Phase 6.10, runtime qualification pending.
 Date: 2026-10-27
 Plan: [Phase 6.10](../phase/phase-6.10.md)
 
@@ -29,7 +29,7 @@ November baseline, not an automatic consequence of model availability.
 
 Add a logical `profile` parameter to sm-goal-phase and its public runtime input.
 For new work, precedence is explicit invocation parameter, configured profile,
-then `standard`. This is a planned public input, not a claim about today's CLI.
+then `standard`. The generated Start and Advance Operations expose this optional logical input.
 The runtime resolves the registered name; the skill does not construct raw model
 overrides or decide new permissions. Resolve and capture the effective selection
 at a new Task/Step boundary. A resume-time selection can affect only subsequent
@@ -41,21 +41,43 @@ existing Journal/Evidence and execution records. Unknown actual values remain
 unknown. Preserve mixed-profile attribution when a Phase uses more than one
 selection. Do not add an AI call to choose, inspect or report a profile.
 
-## M1 public standard route
+## Authored M1/M2 selection route
 
-The authored M1 route adds optional `profile` to the generated `startGoalPhase`
-Operation alongside the unchanged `GoalPhaseStartInput` business value, preserving
-existing Start constructors and exact business admission. The typed Component key
-is `sm-workflow.goal-phase.profile`. The bundled Goal caller forwards optional
-`--profile` without constructing model overrides. The runtime resolves explicit
-parameter, config, then standard; consumed invalid names/types fail explicitly.
-M1 registers standard only and retains existing execution mappings and origin.
-Cost/quality registration and saved new-work capture belong to M2. This staged
-source change does not establish installed-route or checklist acceptance.
+The optional `profile` parameter is generated on `startGoalPhase` and
+`advanceGoalPhase`, preserving the existing two-argument `GoalPhaseStartInput`
+and exact business admission. The normal Component key is
+`sm-workflow.goal-phase.profile`. All three names are registered. Standard uses
+the existing `workflow.execution.profiles` mapping and
+`sm-workflow.execution.origin`; opt-in cost/quality use typed
+`sm-workflow.goal-phase.profiles.cost` / `.quality` with the same existing CNCF
+mapping schema. Hosts explicitly bind semantic reasoning classes to supported
+concrete profiles. There is no new built-in model table or live configuration
+change. Missing opt-in mapping, class or origin is an explicit unavailable
+failure, never standard fallback. Provider availability is not fetched.
 
-The [bounded baseline inventory](../notes/phase-6.10-standard-baseline.md)
-distinguishes the packaged gpt-6.1-sol/medium role settings from unknown observed
-model/effort and records the native configuration inspection and spec coverage.
+At a new semantic Task/Step issue, explicit current invocation wins, then saved
+explicit Start intent, then current configured profile, then standard. A Start
+choice originating only from config does not freeze later config for unissued
+work. A resume parameter affects newly issued work in that call. Retained pending
+work bypasses all selection; absence in historical records stays absent.
+
+The ordinary issued-work record captures identity/revision/source, semantic
+reasoning class, mapping identity/revision, configured concrete descriptor and
+selected concrete descriptor. Model and effort controls are configured values;
+observed model/effort is not inferred. The public Work view and existing
+extensible issued-context Record project this same retained capture. Existing
+WorkflowIssuedWorkContext constructors and generic protocol fields are unchanged.
+The existing caller harness reconstructs that exact retained mapping with its
+normal mapping constructor; it does not reroute from later caller configuration.
+Cost/quality have no alternate substitution. Standard preserves its previously
+configured finite fallback with explicit failure observation. Result admission
+checks observed profile identity and any supplied model against captured allowed
+selection; missing observation is not a successful mapped execution.
+
+The [bounded M1 baseline inventory](../notes/phase-6.10-standard-baseline.md)
+distinguishes packaged gpt-6.1-sol/medium from unknown observed values. The
+[M2 implementation note](../notes/phase-6.10-profile-capture.md) records source
+coverage and pending runtime qualification. No checklist acceptance is implied.
 
 ## Two source snapshots, not intermediate work accounting
 

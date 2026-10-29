@@ -417,6 +417,15 @@ class NativeGoalCommandSpecification(unittest.TestCase):
         self.assert_one_call(native, self.command("startGoalPhase", "--input", self.input.read_text(),
                                                   "--profile", "standard"))
 
+    def test_p610_m2_resume_forwards_logical_profile_for_native_fresh_work_only(self):
+        """P610-02/P610-03: caller forwards intent; native runtime owns retained work."""
+        self.retain(session_id="actual-goal")
+        process, _raw = self.process_output(self.issued_request())
+        status, _printed, _diagnostic, native = self.call(
+            self.args("advance", self.output(), "--profile", "quality"), process)
+        self.assertEqual(status, 0)
+        self.assert_one_call(native, self.command("advanceGoalPhase", "--sessionId", "actual-goal", "--profile", "quality"))
+
     def test_e2_independent_interleaved_advances_reread_exact_task(self):
         """E2 / R2,R3 / PHASE-6 S6-01D3D."""
         # Given two independent tasks retaining their own canonical IDs.

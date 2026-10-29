@@ -1803,6 +1803,12 @@
               "type": "GoalPhaseRepairProgress",
               "multiplicity": "?",
               "required": false
+            },
+            {
+              "name": "operatingProfile",
+              "type": "org.goldenport.record.Record",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },
@@ -5078,6 +5084,12 @@
             {
               "name": "issues",
               "type": "GoalPhaseIssueState",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "operatingProfile",
+              "type": "org.goldenport.record.Record",
               "multiplicity": "?",
               "required": false
             }

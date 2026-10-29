@@ -1499,6 +1499,7 @@ OperationResult
 | purposeRepair | org.goldenport.record.Record | ? |
 | releaseRepairContract | string | ? |
 | triage | org.goldenport.record.Record | ? |
+| operatingProfile | org.goldenport.record.Record | ? |
 
 ## GoalPhaseOrderedDecisionContext
 
@@ -6214,7 +6215,7 @@ GoalPhaseDiagnosticInformationResult
 
 ##### DESCRIPTION
 
-Advance the single execution identified by sessionId. Read native state/pending work directly and absorb managed mechanical progression. Return a typed Request, Human question, Wait or Terminal; work specifies submitOperation, submitSessionId and resultType. Internal RepositorySync work uses its own child session. The caller chooses no stage/Step/transition; only actual whole-Phase/repository completion is Terminal.
+Advance the single execution identified by sessionId. Optional profile (standard/cost/quality) applies only at new work issuance; retained pending work keeps its saved selection. Explicit current parameter takes precedence over saved explicit Start intent, current configuration and standard. Missing opt-in host mappings fail as unavailable without fallback. Read native state/pending work directly and absorb managed mechanical progression. Return a typed Request, Human question, Wait or Terminal; work specifies submitOperation, submitSessionId and resultType. Internal RepositorySync work uses its own child session. The caller chooses no stage/Step/transition; only actual whole-Phase/repository completion is Terminal.
 
 Optional sm-workflow.source-history.style selects none (the default, with no history rule or source work) or goldenport for changed owned Scala sources before staging and checks. sm-workflow.source-history.rule supplies the external goldenport rule as a JSON object string; common configuration also accepts an object. CNCF resolves common configuration and these same-key operation properties for the current call, with operation values taking precedence. Invalid style or a missing/invalid selected rule fails before candidate inspection is recorded. These properties change no host grants, stores or business input binding.
 
@@ -6233,6 +6234,7 @@ GoalPhaseAdvanceInput
 | name | type | multiplicity |
 |------+------|--------------|
 | sessionId | string | 1 |
+| profile | string | ? |
 | sm-workflow.source-history.style | string | ? |
 | sm-workflow.source-history.rule | string | ? |
 
@@ -7265,7 +7267,7 @@ GoalPhaseOrderedDecisionSubmissionResult
 
 ##### DESCRIPTION
 
-Start the declared Phase/repository business input. Optional profile selects a registered logical operating profile: explicit parameter, configured sm-workflow.goal-phase.profile, then standard. Standard preserves the existing execution mapping, origin and acceptance; other profiles require registration. Workflow loads its admitted host business entry directly, assigns a new sessionId when none is proposed and returns that canonical ID with the actual start acknowledgement. A host chat ID is not reused implicitly. Call advanceGoalPhase for next work; Start grants no effect or release authority.
+Start the declared Phase/repository business input. Optional profile selects a registered logical operating profile: explicit parameter, configured sm-workflow.goal-phase.profile, then standard. Standard preserves the existing execution mapping, origin and acceptance; registered cost/quality require host execution mappings. Workflow loads its admitted host business entry directly, assigns a new sessionId when none is proposed and returns that canonical ID with the actual start acknowledgement. A host chat ID is not reused implicitly. Call advanceGoalPhase for next work; Start grants no effect or release authority.
 
 ##### TYPE
 
@@ -9200,6 +9202,7 @@ GoalPhaseWorkSubmissionResult
 | releaseRepairContract | string | ? |
 | triage | org.goldenport.record.Record | ? |
 | diagnosticHistory | org.goldenport.record.Record | * |
+| operatingProfile | org.goldenport.record.Record | ? |
 
 ## GoalPhaseHumanQuestion
 

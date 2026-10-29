@@ -18,7 +18,7 @@ changed.
 The repository `.textus/config.json` and the current Phase 6.10 native runtime
 configuration at `target/sm-workflow/runtime-phase-6.10-20261029/.textus/config.json`
 were inspected only as configuration files. Both omit
-`sm-workflow.execution.profiles`, `sm-workflow.execution.origin` and
+`workflow.execution.profiles`, `sm-workflow.execution.origin` and
 `sm-workflow.goal-phase.profile`. This is a bounded local inventory, not a
 claim about every installation or environment override. No workflow database,
 retained history or execution observation was read for this inventory.
@@ -73,3 +73,6 @@ were run by the implementation worker. Native runtime checks remain pending.
 No formal Phase checklist box is changed. P610-02 is only partially implemented
 until M2 registers cost/quality and captures selection for newly issued work;
 P610-03 and all endpoint/usage work remain with M2–M4.
+
+M2 evolution: see [profile capture](phase-6.10-profile-capture.md). The M1-only
+registration description above records its original implementation scope.

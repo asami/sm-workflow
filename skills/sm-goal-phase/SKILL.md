@@ -494,16 +494,40 @@ no installed route acceptance, genuine task provenance or Phase completion.
 
 ## Logical operating profile
 
-For a new Phase Start, pass an optional logical `--profile standard` to the
-installed `startGoalPhase` Operation alongside its existing `--input`. The
-bundled `native-goal-command.py --action start` forwards optional `--profile`
-unchanged. The runtime resolves explicit parameter, then typed
-`sm-workflow.goal-phase.profile` configuration, then `standard`. M1 registers
-`standard` only; cost/quality registration and saved work selection belong to M2.
-Unknown names fail instead of falling back. Keep model and effort overrides out
-of skill input: standard preserves the existing execution mapping/origin,
-parent configuration and acceptance. This Start parameter does not rewrite an
-active Session or retained work and does not prove an observed executor model.
+For a new Phase Start, pass optional `--profile standard|cost|quality` to the
+installed `startGoalPhase` Operation alongside its unchanged `--input`. The
+bundled caller forwards `--profile` for `--action start` and `--action advance`.
+Advance applies its explicit parameter only to newly issued work in that call;
+existing pending work is recollected unchanged. With no current explicit input,
+a saved explicit Start choice applies, then current typed
+`sm-workflow.goal-phase.profile` configuration, then `standard`.
+
+Standard borrows the existing execution mapping and origin. Cost and quality
+are registered opt-in names whose concrete class bindings must be explicitly
+installed through `sm-workflow.goal-phase.profiles.cost` and
+`sm-workflow.goal-phase.profiles.quality`, using the existing CNCF execution
+mapping schema. Missing mappings/classes/origin are unavailable and never imply
+fallback to standard or another model. Keep model/effort overrides out of skill
+input. Host mappings express supported candidates; they do not grant execution,
+change parent settings or bypass acceptance, checks, independent review or limits.
+No live Terra activation, availability-fetch call or model evaluation follows.
+
+New work includes `work.operatingProfile` and the same saved capture in
+`issuedWorkContext.context.operatingProfile` (wire aliases may use underscores).
+Use the existing caller `prepareExecution`/`recordExecution` mechanism: it consumes
+the captured concrete route, rather than resolving a later supplied mapping.
+The capture records logical identity/revision/source, configured model/controls
+(including effort when configured), selected descriptor and mapping revision.
+Those values are planned/configured selection, not observed model execution.
+Actual model/effort remains unknown unless genuine execution evidence supplies it.
+Historical work without this capture retains its original execution facts.
+
+Cost/quality execution reports unavailable without alternate substitution when
+its chosen executor is unavailable. Standard retains its existing explicitly
+configured finite fallback mechanism, including the unavailable/declined receipt;
+no silent fallback is introduced. Runtime result admission checks the saved
+selected profile against actual execution evidence. Never substitute packaged
+agent TOML settings for an observed executor or acquire new usage for attribution.
 
 ## Journal results and purpose-driven lookup
 

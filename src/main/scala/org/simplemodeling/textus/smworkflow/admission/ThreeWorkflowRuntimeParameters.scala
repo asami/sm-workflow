@@ -116,7 +116,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
     })
   val declarations: Vector[ComponentParameterKey[?]] =
     GoalPhaseRuntimeParameters.declarations ++ Vector(definition, WorkflowExecutionProfileParameters.declaration,
-      GoalPhaseNativeExecution.declaration, GoalPhaseOperatingProfiles.declaration, GoalPhaseAcceptanceBoundary.declaration, GoalPhaseFindingRecording.declaration,
+      GoalPhaseNativeExecution.declaration, GoalPhaseOperatingProfiles.declaration, GoalPhaseOperatingProfiles.cost, GoalPhaseOperatingProfiles.quality, GoalPhaseAcceptanceBoundary.declaration, GoalPhaseFindingRecording.declaration,
       RepositorySyncNativeExecution.declaration, RepositorySyncDocumentInputs.declaration, RepositorySyncProgramImpact.declaration,
       RepositorySyncPurpose.declaration, SplitPhaseNativeExecution.declaration, DevelopmentJournal.declaration, CommonEvidence.declaration,
       completionPolicy, validationRepairCallerSource, developmentObservation, LocalPublicationRuntime.declaration, CommitHygiene.declaration, CompletionRecords.declaration)
@@ -156,6 +156,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
       executionprofiles <- WorkflowExecutionProfileParameters.resolveC(parameters)
       executionorigin <- GoalPhaseNativeExecution.resolveOriginC(parameters)
       operatingprofile <- GoalPhaseOperatingProfiles.configuredC(parameters)
+      operatingmappings <- GoalPhaseOperatingProfiles.mappingsC(parameters)
       repositoryclassifications <- RepositorySyncNativeExecution.resolveC(parameters)
       purposePolicy <- RepositorySyncPurpose.resolveC(parameters)
       splitclassifications <- SplitPhaseNativeExecution.resolveC(parameters)
@@ -201,7 +202,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
         Some(GoalPhaseSourceHistoryNormalization.Installation(ports.sourceHistoryNormalization)),
         Some(GoalPhaseDependencySourceRevision.Installation(ports.dependencySourceRevision)),
         settings.goal.dependencySourceRevisions, settings.goal.dependencySourceConsumptions, publication, hygiene, records,
-        settings.goal.phaseDependencyValidation, operatingprofile)
+        settings.goal.phaseDependencyValidation, operatingprofile, operatingmappings)
       _ <- if (settings.goal.dependencyValidation.forall(GoalPhaseDependencyValidation.bindingValid)) Consequence.unit
         else Consequence.configurationInvalid("Goal dependency validation binding is invalid")
       _ <- GoalPhaseNativeRun.validateC(goal)

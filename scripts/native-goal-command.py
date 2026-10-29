@@ -65,7 +65,7 @@ ACTION_OPTIONS = {
         "occurred-at", "collection",
     },
     "start": {"input", "proposal", "profile"},
-    "advance": set(),
+    "advance": {"profile"},
     "submit": {"request", "submission"},
     "complete": {"request", "submission", "human-provenance"},
     "submit-repository-review": {"request", "submission"},
@@ -156,7 +156,7 @@ def parse_options(argv):
     require(action in ACTION_OPTIONS, "unsupported action")
     permitted = BASE_OPTIONS | ACTION_OPTIONS[action]
     optional = {"proposal"} if action in {"start", "start-split", "start-repository"} else {"reference"} if action == "record-execution" else set()
-    if action == "start":
+    if action in {"start", "advance"}:
         optional.add("profile")
     if action == "complete":
         optional = {"human-provenance"}
@@ -582,6 +582,9 @@ def action_command(options, executable, runtime_root, task_fd):
         family = route_record(task_fd)["family"]
         require(family in {"GoalPhase", "GoalTask"}, "invalid Goal Advance task routing")
         operation, pairs, session_id = advance(task_fd, family)
+        if "profile" in options:
+            require(family == "GoalPhase", "profile requires a GoalPhase task")
+            pairs.extend(["--profile", options["profile"]])
         if family == "GoalTask":
             service = TASK_FQN
     elif action == "advance-split":

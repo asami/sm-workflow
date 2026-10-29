@@ -70,7 +70,9 @@ private[smworkflow] object GoalPhaseNativeRun {
     commitHygieneMode: String = CommitHygiene.autoFix,
     completionRecords: Option[CompletionRecords.Policy] = None,
     phaseDependencyValidation: Option[GoalPhaseDependencyValidation.Binding] = None,
-    operatingProfile: Option[String] = None)
+    operatingProfile: Option[String] = None,
+    operatingMappings: Map[String, WorkflowExecutionProfileMapping] = Map.empty,
+    invocationOperatingProfile: Option[GoalPhaseOperatingProfiles.Selection] = None)
   final case class SelectedPlan(selectionIdentity: String, participantIdentity: String,
     plan: O.Plan, documents: Option[GoalPhaseDocumentSource.Bound] = None)
   trait PlanPort {
@@ -82,7 +84,7 @@ private[smworkflow] object GoalPhaseNativeRun {
   final case class Payload(participantIdentity: String, root: String, branch: String, plan: O.Plan, base: O.Snapshot,
     documents: Option[GoalPhaseDocumentSource.Bound] = None,
     completionPolicy: Option[String] = None, developmentStartedAt: Option[String] = None,
-    repairPolicy: Option[String] = None)
+    repairPolicy: Option[String] = None, operatingProfile: Option[GoalPhaseOperatingProfiles.Selection] = None)
   final case class Session(storage: WorkflowComponentStorage,
     started: WorkflowManagedMechanicalTransition.Retained[Payload], participantIdentity: String,
     current: InstanceRecord)
@@ -94,7 +96,8 @@ private[smworkflow] object GoalPhaseNativeRun {
         val documents = if (value.documents.isEmpty) fields.remove("documents") else fields
         val policy = if (value.completionPolicy.isEmpty) documents.remove("completionPolicy") else documents
         val occurrence = if (value.developmentStartedAt.isEmpty) policy.remove("developmentStartedAt") else policy
-        if (value.repairPolicy.isEmpty) occurrence.remove("repairPolicy") else occurrence
+        val repair = if (value.repairPolicy.isEmpty) occurrence.remove("repairPolicy") else occurrence
+        if (value.operatingProfile.isEmpty) repair.remove("operatingProfile") else repair
       }))
     def decode(value: Json): Either[String, Payload] = for {
       wire <- Option(value).toRight("native ordered Start is missing")
@@ -102,6 +105,9 @@ private[smworkflow] object GoalPhaseNativeRun {
       _ <- Either.cond(schema == "sm-workflow.goal-phase-native-start.v2",
         (), "native ordered Start schema differs")
       payload <- wire.hcursor.get[Payload]("payload").left.map(_.message)
+      _ <- Either.cond(!wire.hcursor.downField("payload").downField("operatingProfile").focus.contains(Json.Null) &&
+        payload.operatingProfile != null && payload.operatingProfile.forall(GoalPhaseOperatingProfiles.selectionValid), (),
+        "native ordered Start operating profile must be absent or valid")
       _ <- Either.cond(!wire.hcursor.downField("payload").downField("completionPolicy").focus.contains(Json.Null), (),
         "native ordered Start completion policy must be omitted or explicitly selected")
       _ <- Either.cond(payload.completionPolicy.forall(GoalPhasePostCompletionSync.policies.contains), (),
@@ -141,7 +147,7 @@ private[smworkflow] object GoalPhaseNativeRun {
     base = O.Snapshot(observed.head, observed.tree)
     payload = Payload(selected.participantIdentity, root, observed.branch, plan, base, admitted.documents,
       Some(d.selectedCompletionPolicy), d.developmentObservation.map(_ => core.executionContext.clock.instant().toString),
-      Some(GoalPhaseRuntimeRepairControl.version))
+      Some(GoalPhaseRuntimeRepairControl.version), d.invocationOperatingProfile)
     // Ordinary native Git facts and explicit plan references, not source hashes.
     cause = CausationReference("ordered-goal-start:" + token(admitted.plan.identity) + ":" +
       token(admitted.plan.revision) + ":" + base.head + ":" + base.tree)
@@ -210,6 +216,9 @@ private[smworkflow] object GoalPhaseNativeRun {
         d.dependencySourceConsumptions.exists(c => !GoalPhaseDependencySourceRevision.consumptionValid(c)) ||
         d.dependencySourceConsumptions.distinct.size != d.dependencySourceConsumptions.size ||
         d.localPublication == null || d.localPublication.exists(p => !LocalPublicationRuntime.validateC(p).isSuccess) ||
+        d.operatingMappings == null || d.operatingMappings.exists((name, mapping) =>
+          !Set("cost", "quality")(name) || mapping == null) ||
+        d.invocationOperatingProfile == null || d.invocationOperatingProfile.exists(value => !GoalPhaseOperatingProfiles.selectionValid(value)) ||
         d.operatingProfile == null || d.operatingProfile.exists(value => !GoalPhaseOperatingProfiles.validateNameC(value).isSuccess) ||
         d.executionProfiles == null || d.executionProfiles.exists(_ == null) || d.findingRecordingPolicy == null ||
         d.validationRecovery == null || d.validationRecovery.exists(_ == null) || d.journalPolicy == null ||

@@ -8,12 +8,13 @@ import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{InstanceIdentity, WorkflowDefinitionIdentity, WorkflowDefinitionRevision}
 import org.goldenport.record.Record
 import org.simplemodeling.textus.smworkflow.value as V
+import org.simplemodeling.textus.smworkflow.admission.GoalPhaseOperatingProfiles
 import WorkflowExecutionHarness as H
 
 /** Caller library bridge over the actual public Request context. Operational
   * completion supplies observations only; normal Submit owns semantic admission.
   * @since   Oct. 16, 2026
-  * @version Oct. 23, 2026
+  * @version Oct. 29, 2026
   * @author  ASAMI, Tomoharu
   */
 object NativeWorkflowCallerExecution {
@@ -46,7 +47,11 @@ object NativeWorkflowCallerExecution {
     origin: WorkflowExecutorDescriptor): Consequence[Prepared] = for {
     reference <- _reference_c(issued)
     requirement <- _json_c(issued.executionRequirement)
-    session <- H.prepareIssuedJsonC(reference, requirement, origin, mapping)
+    capture <- _capture_c(issued)
+    retained <- capture.filter(_.configured.nonEmpty).map(GoalPhaseOperatingProfiles.retainedMappingC)
+      .getOrElse(Consequence.success(mapping))
+    session <- H.prepareIssuedJsonC(reference, requirement, origin, retained)
+    _ <- capture.filter(_.selected.nonEmpty).fold(Consequence.unit)(GoalPhaseOperatingProfiles.admitCallerSessionC(_, session))
   } yield new Prepared(issued, session)
 
   /** Restore using the original issued DTO and the retained caller artifact, never
@@ -60,9 +65,37 @@ object NativeWorkflowCallerExecution {
         else Consequence.stateConflict("Restored caller execution session belongs to a different issued work reference")
       requirement <- _json_c(issued.executionRequirement)
       checked <- H.decodeIssuedRequirementC(requirement)
+      capture <- _capture_c(issued)
+      _ <- capture.filter(_.selected.nonEmpty).fold(Consequence.unit)(GoalPhaseOperatingProfiles.admitCallerSessionC(_, session))
       _ <- if (checked == session.requirement) Consequence.unit
         else Consequence.stateConflict("Restored caller execution session contradicts its issued execution requirement")
     } yield new Prepared(issued, session)
+
+  private def _capture_c(issued: V.WorkflowIssuedWorkContext): Consequence[Option[GoalPhaseOperatingProfiles.Capture]] =
+    if (issued == null || issued.context == null) Consequence.stateConflict("Caller requires its issued context")
+    else _json_c(issued.context).flatMap { context =>
+      val left = context.hcursor.downField("operatingProfile").focus
+      val right = context.hcursor.downField("operating_profile").focus
+      if (left.nonEmpty && right.nonEmpty && left != right)
+        Consequence.stateConflict("Caller operating profile has contradictory aliases")
+      else left.orElse(right) match {
+        case None => Consequence.success(None)
+        case Some(value) =>
+          val normalized = Vector("reasoningClass" -> "reasoning_class", "mappingIdentity" -> "mapping_identity",
+            "mappingRevision" -> "mapping_revision").foldLeft[Either[String, Json]](Right(value)) {
+            case (prior, (name, wire)) => prior.flatMap { json =>
+              val a = json.hcursor.downField(name).focus
+              val b = json.hcursor.downField(wire).focus
+              if (a.nonEmpty && b.nonEmpty && a != b) Left("Caller profile has contradictory " + name)
+              else Right(json.mapObject(fields => b.fold(fields)(v => fields.remove(wire).add(name, v))))
+            }
+          }
+          normalized.flatMap(_.as[GoalPhaseOperatingProfiles.Capture].left.map(_.message)).fold(
+            Consequence.stateConflict(_), capture =>
+              if (GoalPhaseOperatingProfiles.captureValid(capture)) Consequence.success(Some(capture))
+              else Consequence.stateConflict("Caller operating profile capture is invalid"))
+      }
+    }
 
   private def _reference_c(issued: V.WorkflowIssuedWorkContext): Consequence[H.WorkReference] =
     if (issued == null || issued.schemaVersion != WorkflowProtocolV1.schemaVersion ||

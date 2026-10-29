@@ -16,7 +16,7 @@ import IncrementalSbtDiagnosisRepair.given
   * decoded from an AI reply. Other work kinds will be selected by owning advance
   * only after their actual native predecessor has been connected.
   * @since   Oct.  6, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 29, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWork {
@@ -36,7 +36,8 @@ private[smworkflow] object GoalPhaseNativeWork {
     purposeRepair: Option[GoalPhasePurposeRepair.Contract] = None,
     releaseRepairContract: Option[String] = None,
     triage: Option[GoalPhaseStepTriage.Context] = None,
-    diagnosticHistory: Option[Vector[IncrementalSbtDiagnosisRepair.Prior]] = None)
+    diagnosticHistory: Option[Vector[IncrementalSbtDiagnosisRepair.Prior]] = None,
+    operatingProfile: Option[GoalPhaseOperatingProfiles.Capture] = None)
   final case class Result(outcome: String, summary: String, findings: Vector[String],
     acceptance: Option[GoalPhaseAcceptanceBoundary.Report] = None,
     fixAssessment: Option[GoalPhaseFixAssessment.Report] = None,
@@ -141,10 +142,11 @@ private[smworkflow] object GoalPhaseNativeWork {
   private given Encoder[Request] = deriveEncoder
   private val _request_decoder: Decoder[Request] = deriveDecoder
   private given Decoder[Request] = Decoder.instance { cursor =>
-    if (Vector("checkFailure", "issues", "repairProgress", "purposeRepair", "releaseRepairContract", "triage", "diagnosticHistory").exists(key => cursor.downField(key).focus.exists(_.isNull)))
+    if (Vector("checkFailure", "issues", "repairProgress", "purposeRepair", "releaseRepairContract", "triage", "diagnosticHistory", "operatingProfile").exists(key => cursor.downField(key).focus.exists(_.isNull)))
       Left(DecodingFailure("Check failure context must be absent or a valid object", cursor.history))
     else _request_decoder.tryDecode(cursor).flatMap { request =>
-      if (IncrementalSbtDiagnosisRepair.historyValid(request.diagnosticHistory) &&
+      if (request.operatingProfile != null && request.operatingProfile.forall(GoalPhaseOperatingProfiles.captureValid) &&
+          IncrementalSbtDiagnosisRepair.historyValid(request.diagnosticHistory) &&
           request.checkFailure.forall(value => admitCheckFailureContextC(value).isSuccess) &&
           GoalPhaseFixIssues.validateOptionC(request.issues).isSuccess &&
           GoalPhaseRepairProgress.validateOptionC(request.repairProgress).isSuccess &&
@@ -349,9 +351,11 @@ private[smworkflow] object GoalPhaseNativeWork {
           val purpose = if (value.purposeRepair.isEmpty) progress.remove("purposeRepair") else progress
           val release = if (value.releaseRepairContract.isEmpty) purpose.remove("releaseRepairContract") else purpose
           val triage = if (value.triage.isEmpty) release.remove("triage") else release
-          if (value.diagnosticHistory.isEmpty) triage.remove("diagnosticHistory") else triage
+          val diagnosis = if (value.diagnosticHistory.isEmpty) triage.remove("diagnosticHistory") else triage
+          if (value.operatingProfile.isEmpty) diagnosis.remove("operatingProfile") else diagnosis
         }
-        Json.obj("schemaVersion" -> Json.fromString(if (value.diagnosticHistory.nonEmpty)
+        Json.obj("schemaVersion" -> Json.fromString(if (value.operatingProfile.nonEmpty)
+          "sm-workflow.goal-phase-native-work-request.v5" else if (value.diagnosticHistory.nonEmpty)
           "sm-workflow.goal-phase-native-work-request.v4" else if (value.purposeRepair.nonEmpty)
           "sm-workflow.goal-phase-native-work-request.v3" else "sm-workflow.goal-phase-native-work-request.v2"),
           "payload" -> payload)
@@ -361,9 +365,11 @@ private[smworkflow] object GoalPhaseNativeWork {
         version <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
         marked = wire.hcursor.downField("payload").downField("purposeRepair").focus.nonEmpty
         diagnosis = wire.hcursor.downField("payload").downField("diagnosticHistory").focus.nonEmpty
-        _ <- Either.cond((version == "sm-workflow.goal-phase-native-work-request.v2" && !marked && !diagnosis) ||
-          (version == "sm-workflow.goal-phase-native-work-request.v3" && marked && !diagnosis) ||
-          (version == "sm-workflow.goal-phase-native-work-request.v4" && diagnosis), (), "native ordered request version or purpose contract differs")
+        profile = wire.hcursor.downField("payload").downField("operatingProfile").focus.nonEmpty
+        _ <- Either.cond((version == "sm-workflow.goal-phase-native-work-request.v2" && !marked && !diagnosis && !profile) ||
+          (version == "sm-workflow.goal-phase-native-work-request.v3" && marked && !diagnosis && !profile) ||
+          (version == "sm-workflow.goal-phase-native-work-request.v4" && diagnosis && !profile) ||
+          (version == "sm-workflow.goal-phase-native-work-request.v5" && profile), (), "native ordered request version or purpose contract differs")
         parsed <- wire.hcursor.get[Request]("payload").left.map(_.message)
       } yield parsed
     }

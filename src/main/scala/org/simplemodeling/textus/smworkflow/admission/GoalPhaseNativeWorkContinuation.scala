@@ -30,7 +30,7 @@ import GoalPhaseReleaseDependencyValidation as R
   * together. Canonical atomic suspension/completion owns all writes. No result
   * runs Git/SBT or turns implementation completion into Step/Phase acceptance.
   * @since   Oct.  6, 2026
-  * @version Oct. 28, 2026
+  * @version Oct. 29, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWorkContinuation {
@@ -2222,10 +2222,11 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         plan.input.review.toVector.flatMap(_.dependencyValidations).flatMap(_.dependency),
         plan.input.review.toVector.flatMap(_.dependencyValidations).flatMap(_.dependencySource))
         else Consequence.unit
-      work <- GoalPhaseNativeExecution.bindIssuedC(plan.work, d.executionProfiles, d.executionOrigin,
+      work <- GoalPhaseOperatingProfiles.bindFreshC(plan.work, d, plan.source.started.receipt.payload.value.operatingProfile,
         isolateContext = plan.input.kind == "TriageStep")
+      captured = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[S.Request]].request.input.get.value
       _ <- issued.suspendC(intent, work)(using core.executionContext)
-    } yield plan.copy(work = work)
+    } yield plan.copy(work = work, input = captured)
 
     private def _human_source_c(source: F.Session, cursor: Cursor): Consequence[H.Source] =
       cursor.lastresult.map { case (input, result) => for {
@@ -2451,6 +2452,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           source <- F.retainedSessionC(submitted.handle.instanceIdentity.value, d, definition, call)
           plan <- _locate_assigned_c(source, submitted.continuationId, call)
           _ <- _historical_freshness_c(plan, call)
+          _ <- GoalPhaseOperatingProfiles.admitExecutionC(plan.input.operatingProfile, submitted.evidence)
           admission <- _dependency_admission_c(plan, submitted.result.value)
           mode <- NativeWorkflowIssuedWorkContext.goalModeC(plan.input.kind)
           context <- NativeWorkflowIssuedWorkContext.fromIssuedC(plan.work, mode, S.inputCodec)
