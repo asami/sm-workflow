@@ -95,6 +95,7 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
       When("the native launcher publication set is compared with the generated operations")
       val declared = SmWorkflowComponent.CompletionRecordClosureServiceService.operations.operations.toVector
         .map(o => s"${SmWorkflowComponent.CompletionRecordClosureServiceService.name}.${o.name}").toSet ++ generated.flatMap(_.providedOperations.map(o => s"${o.service}.${o.name}")).toSet ++
+        SmWorkflowComponent.WorkflowForceClosureServiceService.operations.operations.toVector.map(o => s"${SmWorkflowComponent.WorkflowForceClosureServiceService.name}.${o.name}") ++
         SmWorkflowComponent.JournalServiceService.operations.operations.toVector.map(o => s"${SmWorkflowComponent.JournalServiceService.name}.${o.name}") ++
         SmWorkflowComponent.EvidenceServiceService.operations.operations.toVector.map(o => s"${SmWorkflowComponent.EvidenceServiceService.name}.${o.name}") ++
         SmWorkflowComponent.DevelopmentObservationServiceService.operations.operations.toVector.map(o =>
@@ -106,6 +107,7 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
         "DelegateTaskService.submitDelegateTaskWorkResult", "DelegateTaskService.resolveDelegateTaskDiagnosticInformation",
         "DelegateTaskDeliveryService.observeDelegateTaskDelivery", "DelegateTaskDeliveryService.describeDelegateTaskAdoption",
         "CompletionRecordClosureService.describeCompletionRecordClosure", "CompletionRecordClosureService.advanceCompletionRecordClosure",
+        "WorkflowForceClosureService.describeWorkflowForceClosure", "WorkflowForceClosureService.forceCloseWorkflow",
         "GoalTaskService.startGoalTask", "GoalTaskService.advanceGoalTask",
         "GoalTaskService.submitGoalTaskWorkResult", "GoalTaskService.resolveGoalTaskDiagnosticInformation",
         "GoalTaskService.describeGoalTaskMalformedIssuedWorkRecovery", "GoalTaskService.recoverGoalTaskMalformedIssuedWork",

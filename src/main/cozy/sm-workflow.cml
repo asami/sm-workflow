@@ -12587,3 +12587,129 @@ AdvanceCompletionRecordClosureInput
 ###### TYPE
 
 CompletionRecordClosureView
+
+# VALUE
+
+## WorkflowForceClosureDescriptionInput
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| family | string | 1 |
+| sessionId | string | 1 |
+
+## WorkflowForceClosureAnswer
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| target | string | 1 |
+| choice | string | 1 |
+| reason | string | 1 |
+| unfinished | string | * |
+| acceptance | string | 1 |
+| acknowledgeUncertainEffects | boolean | 1 |
+| participant | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+
+## DescribeWorkflowForceClosureInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowForceClosureDescriptionInput | 1 |
+
+## ForceCloseWorkflowInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowForceClosureAnswer | 1 |
+
+## WorkflowForceClosureView
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| family | string | 1 |
+| kind | string | 1 |
+| target | string | 1 |
+| normalCompletion | boolean | 1 |
+| closure | string | ? |
+| message | string | 1 |
+
+# SERVICE
+
+## WorkflowForceClosureService
+
+### DESCRIPTION
+
+Human-directed forced closure shared by GoalPhase, GoalTask and DelegateTask. Preserve the original native/business history, HEAD, candidate, Plan, accepted results, failed or incomplete validation and repair counters. Append only a terminal referring to independently retained exact Human direction, reason, unfinished work and separate optional Human acceptance. This is not ordinary completion, repair or evidence of successful validation. Do not execute Git, SBT, commit, publication or recovery. Prior external effects remain as recorded; this Operation does not terminate an already running process.
+
+### OPERATION
+
+#### describeWorkflowForceClosure
+
+##### DESCRIPTION
+
+Read the exact native frontier and original participant without observing Git or repairing any state. Return opaque native JSON for exact Human judgment. A retained forced closure returns its actual direction and remains distinct from normal completion. Description grants no authority.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DescribeWorkflowForceClosureInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowForceClosureDescriptionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowForceClosureView
+
+#### forceCloseWorkflow
+
+##### DESCRIPTION
+
+Require independently retained Human ForceClose direction bound to the complete described target, reason, unfinished work, NotAccepted or AcceptedByHuman disposition and acknowledgement of prior uncertainty. Append one terminal using the actual native expected revision. Keep every old history entry and business checkpoint unchanged, including pending work and failed/UNKNOWN effects. A stale direction refuses; exact redelivery collects the retained closure. Never reissue work, rerun checks, normalize HEAD/candidate/Plan, commit or publish. Ordinary Advance and delayed Submit cannot resume a forced-closed Session. Actual Session use belongs to its owning caller.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+ForceCloseWorkflowInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowForceClosureAnswer | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowForceClosureView

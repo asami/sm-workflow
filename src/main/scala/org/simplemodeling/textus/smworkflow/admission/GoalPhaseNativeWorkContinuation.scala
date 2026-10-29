@@ -273,6 +273,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
 
     def advanceC(identity: String, core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
       retained <- F.retainedSessionC(identity, d, definition, core)
+      _ <- WorkflowForceClosure.requireOpenC(retained.current)
       closure <- CompletionRecordContinuation.retainedC(retained.storage, retained.current, core)
       completed <- closure match {
         case Some(value) => Consequence.success(Some(NativeWorkflowOperationOutput.goalWait(identity,

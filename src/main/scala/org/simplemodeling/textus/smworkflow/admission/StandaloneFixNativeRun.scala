@@ -131,6 +131,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     instances <- storage.bindInstancesC()(using context)
     current <- instances.loadC(InstanceIdentity(id))(using context).flatMap(
       _.map(Consequence.success).getOrElse(invalid("Session has no retained bounded work")))
+    _ <- WorkflowForceClosure.requireOpenC(current)
     input <- current.suspension match {
       case Some(suspension) => for {
         issued <- storage.bindIssuedC(completionOperation, inputCodec)
@@ -215,6 +216,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     store <- storageC(h, definition, core)
     instances <- store.bindInstancesC()(using core.executionContext)
     prior <- if (delegation) instances.loadC(identity)(using core.executionContext) else Consequence.success(Option.empty[InstanceRecord])
+    _ <- prior.fold(Consequence.unit)(WorkflowForceClosure.requireOpenC)
     root <- G.rootC(core)
     observed <- G.observeC(core)
     _ <- if (root == h.root && observed.branch == h.branch && (prior.nonEmpty || observed.dirty.forall(d =>
@@ -256,6 +258,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
       case Some(value) if value.definition == definition => Consequence.success(value)
       case _ => invalid("No standalone instance belongs to this exact definition")
     }
+    _ <- WorkflowForceClosure.requireOpenC(current)
     closure <- if (task) CompletionRecordContinuation.retainedC(storage, current, core) else Consequence.success(None)
     result <- closure match {
       case Some(value) => for {

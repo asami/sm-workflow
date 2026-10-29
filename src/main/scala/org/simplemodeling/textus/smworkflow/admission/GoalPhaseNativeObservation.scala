@@ -22,8 +22,9 @@ private[smworkflow] object GoalPhaseNativeObservation {
         Consequence.success(Some(value.value.drop(6)))
       case _ => Consequence.stateConflict("Unknown native progression")
     }
-  } yield V.State(record.revision.value.toString, record.lifecycle.value, stage,
-    if (record.suspension.exists(_.completion.value == "goal-phase-ordered-human-completion-v1")) "human-required"
+  } yield V.State(record.revision.value.toString, if (WorkflowForceClosure.isClosed(record)) "forced-closed" else record.lifecycle.value, stage,
+    if (WorkflowForceClosure.isClosed(record)) "unfinished"
+    else if (record.suspension.exists(_.completion.value == "goal-phase-ordered-human-completion-v1")) "human-required"
     else if (stage.contains("Repair")) "repair-required"
     else if (record.suspension.nonEmpty) "unknown" else "none")
 

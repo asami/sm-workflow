@@ -128,6 +128,9 @@
         },
         {
           "name": "EvidenceService"
+        },
+        {
+          "name": "WorkflowForceClosureService"
         }
       ],
       "operations": [
@@ -837,6 +840,20 @@
           "kind": "COMMAND",
           "input": "GoalPhaseStepReviewRequestInput",
           "output": "GoalPhaseStepReviewRequestResult"
+        },
+        {
+          "service": "WorkflowForceClosureService",
+          "name": "describeWorkflowForceClosure",
+          "kind": "COMMAND",
+          "input": "DescribeWorkflowForceClosureInput",
+          "output": "WorkflowForceClosureView"
+        },
+        {
+          "service": "WorkflowForceClosureService",
+          "name": "forceCloseWorkflow",
+          "kind": "COMMAND",
+          "input": "ForceCloseWorkflowInput",
+          "output": "WorkflowForceClosureView"
         }
       ],
       "types": [
@@ -7623,6 +7640,150 @@
               "type": "string",
               "multiplicity": "1",
               "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowForceClosureDescriptionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "family",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowForceClosureAnswer",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choice",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reason",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "unfinished",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "acceptance",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "acknowledgeUncertainEffects",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DescribeWorkflowForceClosureInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "input",
+              "type": "WorkflowForceClosureDescriptionInput",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "ForceCloseWorkflowInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "input",
+              "type": "WorkflowForceClosureAnswer",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowForceClosureView",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "family",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "kind",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "normalCompletion",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "closure",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
             },
             {
               "name": "message",
