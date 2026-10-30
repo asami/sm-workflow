@@ -173,6 +173,7 @@ private[smworkflow] object StandardWorkflowRuntime {
     documentInputs <- RepositorySyncDocumentInputs.resolveC(parameters)
     programInputs <- RepositorySyncProgramImpact.resolveC(parameters)
     purposePolicy <- RepositorySyncPurpose.resolveC(parameters)
+    publication <- parameters.resolve(LocalPublicationRuntime.declaration).map(_.value)
     validation = if (selectedInput._2) programInputs.fold(documentValidation)(p => documentValidation.copy(
       identity = "impact-repository-sync", mode = "required", checks = p.checks, impact = Some(p))) else repositoryValidation
     goalDefinition <- GoalPhaseRuntimeCatalog.loadC()
@@ -180,7 +181,8 @@ private[smworkflow] object StandardWorkflowRuntime {
       Vector(goalDefinition.definition), p.instances, p.continuations)
     declaration = RepositorySyncManagedFetch.Declaration(p.configuration, p.instances, p.continuations, input,
       target, shared.profiles, shared.origin, classifications, shared.journal, runtimeCleanSync = selectedInput._2, documentInputs = documentInputs, evidencePolicy = shared.evidence,
-      programEvidence = Some(RepositorySyncProgramImpact.evidencePort(evidenceStorage)), purposePolicy = purposePolicy)
+      programEvidence = Some(RepositorySyncProgramImpact.evidencePort(evidenceStorage)), purposePolicy = purposePolicy,
+      localPublication = publication)
     // Before review use actual conflicts; afterwards use that issued review's
     // retained candidate paths so staging does not erase the repair scope.
     paths <- if (request.operation == "startRepositorySync") Consequence.success(Set.empty[String])

@@ -55,14 +55,26 @@ private[smworkflow] object RepositorySyncNativeConvergence {
       saved <- RepositorySyncMergeAssessment.admitC(store, checked, policy, candidate.namespace)
       _ <- if (saved == accepted) Consequence.unit else N.invalid("convergence crosses its actual saved merge admission")
     } yield ()
-    committed <- if (accepted.payload.stage == "IntegrationValidated" &&
+    publicationBase <- RepositorySyncPublication.retainedBaseC(store)
+    committed <- if (publicationBase.nonEmpty) Consequence.success(publicationBase.get)
+      else if (accepted.payload.stage == "IntegrationValidated" &&
         CompletionRecords.selected(store.declaration.completionRecords, "repository-sync", store.context.repositoryIdentity).isEmpty)
       Consequence.success(accepted.copy(payload = accepted.payload.copy(finalTip = Some(accepted.payload.after.get.head))))
       else commitC(store, accepted, authority)
+    publication <- RepositorySyncPublication.advanceC(store, committed, authority)
+    result <- publication match {
+      case Left(waiting) => Consequence.success(waiting)
+      case Right(value) => finishC(store, accepted, value, authority)
+    }
+  } yield result
+
+  private def finishC(store: N.Store, accepted: N.Stage, committed: N.Stage, authority: AuthorityPort):
+    Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
     // Equal and fast-forward already have the advertised remote tip. Observe
     // actual convergence without creating a push or another fetch intent.
-    observedOnly = store.declaration.runtimeCleanSync && accepted.payload.mergeHead.isEmpty &&
-      accepted.payload.method.exists(Set("equal", "fast-forward"))
+    observedOnly <- Consequence.success(store.declaration.runtimeCleanSync && accepted.payload.mergeHead.isEmpty &&
+      accepted.payload.method.exists(Set("equal", "fast-forward")) &&
+      committed.payload.finalTip.contains(acceptedHead(accepted)))
     pushed <- if (observedOnly) Consequence.success(committed) else pushC(store, accepted, committed, authority)
     fetched <- if (observedOnly) Consequence.success(pushed) else finalFetchC(store, accepted, pushed, authority)
     actual <- convergedC(store, fetched)

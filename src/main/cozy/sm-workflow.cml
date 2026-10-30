@@ -5031,6 +5031,18 @@ subject-type = RepositorySyncHumanConflictRequest
 
 ##### NativeCommitObserved
 
+##### PublicationPreparing
+
+##### PublicationObserved
+
+##### PublicationStaging
+
+##### PublicationStaged
+
+##### PublicationCommitPreparing
+
+##### PublicationCommitObserved
+
 ##### NativePushPreparing
 
 ##### NativePushObserved
@@ -5270,6 +5282,36 @@ when = sync.NativeCommitPreparing, conflict.Retained, nativeReview.Retained, nat
 
 state = NativeCommitObserved
 when = sync.NativeCommitObserved, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### PublicationPreparing
+
+state = PublicationPreparing
+when = sync.PublicationPreparing, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### PublicationObserved
+
+state = PublicationObserved
+when = sync.PublicationObserved, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### PublicationStaging
+
+state = PublicationStaging
+when = sync.PublicationStaging, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### PublicationStaged
+
+state = PublicationStaged
+when = sync.PublicationStaged, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### PublicationCommitPreparing
+
+state = PublicationCommitPreparing
+when = sync.PublicationCommitPreparing, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### PublicationCommitObserved
+
+state = PublicationCommitObserved
+when = sync.PublicationCommitObserved, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### native-push-preparing
 
@@ -5668,6 +5710,11 @@ on = local-state-preserved
 
 ##### TRANSITION
 
+to = PublicationPreparing
+on = native-publication-prepared
+
+##### TRANSITION
+
 to = Converged
 on = native-convergence-observed
 
@@ -5811,6 +5858,11 @@ on = native-review-rejected
 
 ##### TRANSITION
 
+to = PublicationPreparing
+on = native-publication-prepared
+
+##### TRANSITION
+
 to = PurposeChecked
 on = purpose-progress
 
@@ -5830,6 +5882,11 @@ to = NativeCommitPreparing
 on = native-commit-prepared
 
 #### MergeAdmitted
+
+##### TRANSITION
+
+to = PublicationPreparing
+on = native-publication-prepared
 
 ##### TRANSITION
 
@@ -5942,6 +5999,11 @@ to = NativeCommitObserved
 on = native-commit-observed
 
 #### NativeCommitObserved
+
+##### TRANSITION
+
+to = PublicationPreparing
+on = native-publication-prepared
 
 ##### TRANSITION
 
@@ -6107,6 +6169,63 @@ to = RepairDecisionRequired
 on = native-repair-decision-required
 
 #### PurposeUnfinished
+
+#### PublicationPreparing
+
+##### TRANSITION
+
+to = PublicationObserved
+on = native-publication-observed
+
+#### PublicationObserved
+
+##### TRANSITION
+
+to = PublicationStaging
+on = native-publication-stage-prepared
+
+##### TRANSITION
+
+to = NativePushPreparing
+on = native-push-prepared
+
+##### TRANSITION
+
+to = Converged
+on = native-convergence-observed
+
+#### PublicationStaging
+
+##### TRANSITION
+
+to = PublicationStaged
+on = native-publication-staged
+
+#### PublicationStaged
+
+##### TRANSITION
+
+to = PublicationCommitPreparing
+on = native-publication-commit-prepared
+
+#### PublicationCommitPreparing
+
+##### TRANSITION
+
+to = PublicationCommitObserved
+on = native-publication-commit-observed
+
+#### PublicationCommitObserved
+
+##### TRANSITION
+
+to = NativePushPreparing
+on = native-push-prepared
+
+##### TRANSITION
+
+to = Converged
+on = native-convergence-observed
 
 # VALUE
 

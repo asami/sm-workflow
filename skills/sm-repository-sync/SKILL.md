@@ -55,6 +55,16 @@ executable as the approval prefix. Follow the
 This command transport rule leaves semantic delegation, independent review,
 Start admission and effect permissions with their existing owners.
 
+## Publication and final clean-tree ownership
+
+Publication updates artifacts and publication metadata; it does not commit.
+RepositorySync owns committing publication outputs and GitHub synchronization.
+When the selected host target requires final publication (`beforeSync: true`),
+use the native order: final publish, commit its remaining metadata, non-force
+push, final convergence observation. A dirty tree is unfinished synchronization.
+Do not repair the order with caller-owned Git/SBT, repeat a retained publication,
+or treat generated publication metadata as exempt from the final clean check.
+
 ## Configured clean and dirty entry
 
 For a normally configured repository, pass repository identity and actual sync

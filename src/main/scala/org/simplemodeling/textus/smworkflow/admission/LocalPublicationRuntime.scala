@@ -52,7 +52,7 @@ private[smworkflow] object LocalPublicationRuntime {
             if (outputs.exists(o => !o.asObject.exists(_.keys.toSet == Set("targetIdentity", "path", "selection"))))
               Left("Publication catalog output contains missing or undeclared fields")
             else normalized.hcursor.get[Vector[Json]]("targets").left.map(_.message).flatMap { targets =>
-          if (targets.exists(t => !t.asObject.exists(_.keys.forall(Set("identity", "component", "workspace", "dependency", "beforeChecks")))))
+          if (targets.exists(t => !t.asObject.exists(_.keys.forall(Set("identity", "component", "workspace", "dependency", "beforeChecks", "beforeSync")))))
             Left("Publication target contains an undeclared field")
           else normalized.mapObject(_.add("targets", Json.fromValues(targets.map(t =>
             if (t.hcursor.downField("beforeChecks").focus.isEmpty) t.mapObject(_.add("beforeChecks", Json.False)) else t))))

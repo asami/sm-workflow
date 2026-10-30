@@ -189,3 +189,15 @@ recording, and structural admission is not AI review. No periodic checks or
 additional AI are introduced to obtain a display/record. See the
 [S5 handoff](../notes/phase-6.9-s5-delivery-and-handoff.md) for actual observations
 and remaining qualification work.
+
+## Final publication before completion
+
+When the selected local-publication target declares `beforeSync: true`, native
+convergence first publishes the final integrated clean source via
+LocalPublicationService. Publication never commits. RepositorySync retains the
+actual publication, captures its ordinary CAR catalog outputs, commits those
+exact outputs through typed Git/UoW, then performs non-force push, final fetch and
+clean convergence observation. Re-entry collects retained publication/stage/commit
+facts; missing or uncertain effects are not retried. Unrelated output or dirty
+work prevents completion and is preserved. A publication-generated change is not
+an exemption from the clean-tree completion condition.

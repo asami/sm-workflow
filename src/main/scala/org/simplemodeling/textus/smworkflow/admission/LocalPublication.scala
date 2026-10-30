@@ -16,7 +16,13 @@ import org.goldenport.record.io.RecordDecoder
 private[smworkflow] object LocalPublication {
   val schema = "sm-workflow.local-publication.v1"
   final case class Target(identity: String, component: String, workspace: String,
-    dependency: Option[String] = None, beforeChecks: Boolean = false)
+    dependency: Option[String] = None, beforeChecks: Boolean = false, beforeSync: Boolean = false)
+  object Target {
+    private val decoder: Decoder[Target] = io.circe.generic.semiauto.deriveDecoder
+    given Decoder[Target] = Decoder.instance(cursor => decoder.decodeJson(
+      if (cursor.downField("beforeSync").focus.isEmpty) cursor.value.mapObject(_.add("beforeSync", Json.False))
+      else cursor.value))
+  }
   final case class Source(head: String, tree: String, dirty: Vector[Change]) {
     def clean: Boolean = dirty.isEmpty
   }

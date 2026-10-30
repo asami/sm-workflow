@@ -20,7 +20,7 @@ added. Independent nonpublication development commands remain supported.
 The ordinary CNCF Component parameter `sm-workflow.local-publication` contains
 `storeName`, an existing managed entity `collection`, and declared `targets`.
 Each target has `identity`, `component`, logical `workspace`, optional
-`dependency`, and optional `beforeChecks` (default false). The host must admit
+`dependency`, and optional `beforeChecks` and `beforeSync` (both default false). The host must admit
 the record collection, typed Git observation including IndexTree, and the exact
 typed SBT `publish-local` program for that workspace. Properties are resolved
 through Component initialization and ExecutionContext, not parsed by the app.
@@ -127,3 +127,21 @@ catalog metadata and for staged catalog/other source inputs. Coherent installed
 source fixtures configure sbt-cozy application activation in fresh
 `.cozy/config.yaml`; their unchanged `project.yaml` retains normal project
 coordinates and publication declarations.
+
+## Standard SBT and synchronization completion
+
+The shipped Component defaults include target `repository`, workspace
+`sm-workflow-repository`, a managed publication collection and a typed
+`publish-local` program. CNCF resolves `${executable.sbt}` from PATH; a normal
+host needs no explicit executable or separate publication host. Host overrides
+still require their corresponding storage/workspace grants.
+
+Publication updates artifacts and publication metadata and never commits them.
+A host target with `beforeSync: true` selects publication at the final integrated,
+clean source frontier of RepositorySync. The runtime retains one request for that
+Session/frontier, collects it on re-entry, then commits the resulting ordinary
+`src/main/catalog/car/*.yaml` outputs before push and final convergence. Neither
+staging nor an uncertain commit intent is replayed automatically. Noncatalog,
+staged, renamed or concurrently changed outputs leave synchronization unfinished.
+The final observation requires a clean tree and equal local/tracking/remote tips.
+The default target does not silently enable publication for every sync.
