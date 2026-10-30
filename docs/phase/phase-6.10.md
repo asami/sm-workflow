@@ -24,7 +24,8 @@ Session/Plan, pending work, accepted results, history, repair counts or successf
 verification. No restart, resubmit, counter reset or replay of successful work.
 Keep Phase 6.9's clean/dirty RepositorySync scope intact. Phase 7 retains its
 related-project delivery obligations; existing authorized corrections need not
-wait for 6.10. Model evaluation stays in Phase 9; usage acquisition stays in 13.
+wait for 6.10. Dedicated model experiments stay in Phase 9; ordinary-work comparison projection
+belongs to 6.10 and usage acquisition stays in 13.
 
 ## Main route first
 
@@ -57,3 +58,30 @@ statistics, new metrics-fetch call or Phase 13 completion requirement. Retain th
 current baseline through the planned November observation; actual Terra adoption
 is a later explicit decision. Completion qualifies the mechanism and three named
 profiles, not a claim that one profile is faster, cheaper or more capable.
+
+## Role-based comparison adoption — 2026-10-30
+
+Apply the [role and metric contract](../spec/ai-operating-profiles.md#role-based-candidates-and-operational-comparison--2026-10-30)
+within M2–M4. M1's actual standard baseline remains unchanged. Preserve authored
+M1/M2 selection and active M3 work, their notes and all existing evidence; new
+criteria are pending additions, not retrospective acceptance or invalidation.
+
+- M2: allow explicit cost mappings to compare Terra for bounded implementation/
+  repair/review and Luna for small edits/classification, retaining Sol for complex
+  work and unchanged parent settings. Capture role and mapping revision using the
+  existing mechanism. Keep quality selectable without automatic model migration.
+- M3: project already-recorded total consumption including repairs/retries and
+  escalation, wall-clock completion time, and eventual/first-pass success counts
+  for a declared Task/Step cohort. Keep pending/mixed-profile and partial/unavailable
+  data explicit. Preserve existing source-endpoint metrics and Codex/local separation.
+- M4: verify aggregation, deduplication and denominator behavior with deterministic
+  fixtures, including failed/cancelled/deferred outcomes and mixed profiles. Record
+  a durable English Phase-close summary without requiring live Terra/Luna trials.
+
+The normal-development comparison projection belongs to 6.10. Dedicated comparative
+experiments, model ranking and adaptive routing remain Phase 9. Phase 13 still owns
+new usage acquisition. Do not run extra work or switch configuration to populate
+statistics. Actual Terra/Luna rollout remains an explicit later decision after
+baseline observation and environment support confirmation.
+
+Handoff: [2026-10-30 role-based profile comparison](../journal/2026/10/2026-10-30-phase-6.10-role-based-profile-comparison-handoff.md).

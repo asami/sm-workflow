@@ -15,7 +15,7 @@ before implementation; source configuration alone does not prove the actual mode
 | Profile | Intended worker selection |
 | --- | --- |
 | standard | Existing effective configuration and selection rules |
-| cost | Candidate Terra High for bounded implementation, repair and required lightweight review; retain Sol for complex work |
+| cost | Candidate Terra for bounded implementation/repair/review and Luna for small edits/classification; retain Sol for complex work |
 | quality | Candidate stronger Sol effort for difficult implementation and integrated review |
 
 Keep the parent configuration, acceptance conditions, test scope, review triggers
@@ -40,6 +40,73 @@ Record profile identity/version and configured/observed model and effort using
 existing Journal/Evidence and execution records. Unknown actual values remain
 unknown. Preserve mixed-profile attribution when a Phase uses more than one
 selection. Do not add an AI call to choose, inspect or report a profile.
+
+## Role-based candidates and operational comparison — 2026-10-30
+
+Keep the effective existing mapping as standard, including its existing declared
+fallback behavior. Do not rewrite it to a recommended Sol High table or infer
+observed execution from packaged configuration. Parent settings remain identical
+across standard/cost/quality; the current proposal does not switch live profiles.
+
+| Work role | Cost-profile comparison candidate | Boundary |
+| --- | --- | --- |
+| Bounded implementation, repair, and required lightweight review | GPT-6.1 Terra; High is an initial effort candidate | Clear inputs, owned scope and existing acceptance checks; preserve reviewer independence |
+| Small edits, extraction, classification and bounded first-pass judgment | GPT-6 Luna; effort explicitly configured | Only already-required semantic work; no additional AI gate or call |
+| Complex implementation/repair and integrated semantic review | Retain the applicable Sol assignment | Do not force a cheaper model onto unresolved cross-boundary reasoning |
+| Parent planning and exceptional architectural judgment | Unchanged parent configuration | Astra remains a separate explicit escalation option, not a baseline comparison variable |
+| Git/SBT execution, log extraction, recording and deterministic selection | Existing runtime operations | No AI model assignment for mechanically executable work |
+
+These are configurable hypotheses to compare, not claims that Terra cannot code,
+that Luna is limited to text processing, or that Astra guarantees correctness.
+Use exact registered model identifiers and supported effort values. Role names
+map through existing semantic classes/profile mappings; introduce no second
+scheduler or fixed model table. Retain mapping revision and actual role/model
+attribution so Terra and Luna assignments can be distinguished within cost.
+Compare a changed role assignment against standard while holding parent, scope,
+acceptance, tests, review triggers and repair limit fixed. Missing model support
+remains explicit; it never silently becomes another profile or successful trial.
+
+Phase 6.10 adds an observational comparison from ordinary accepted development,
+not compulsory duplicate executions or a benchmark. Evaluate the following:
+
+| Metric | Definition |
+| --- | --- |
+| Total consumption through outcome | All acquired attributable parent/worker/review/repair/retry/escalation usage for the selected work interval, deduplicated; retain failed and abandoned work |
+| Completion time | Wall-clock start to actual accepted terminal completion, including repairs, validation and waits; show recorded execution/wait breakdown where already available |
+| Eventual success rate | Accepted completed work units / all terminal work units in the declared comparable cohort, including failed, exhausted, cancelled and deferred terminal outcomes; show counts and outcome breakdown |
+| First-pass success rate | Work units accepted without a repair/retry / the same terminal cohort; show separately from eventual success |
+
+Choose and report the unit (for example semantic Task or Step) and cohort before
+comparison; never pool Task, Step and Phase counts or incompatible task classes.
+Pending work is displayed separately, not counted as a success or silently lost.
+Unsuccessful/open work has elapsed time, not a fabricated completion time.
+Show sample size, source/profile revision, observation window, scope and coverage.
+Mixed-profile work remains mixed with per-attempt attribution; do not attribute
+all cost or success to the final worker or assign the same outcome to two cohorts.
+Do not infer model causality from differing task difficulty or waiting time.
+
+Reuse existing records only. Missing usage is unavailable; partial usage is
+partial, never a complete total. Keep Codex and local LLM usage separate, and
+retain input/output/cache distinctions. These operational measures supplement,
+not replace, the signed source-line delta and observed tokens/net-line ratio.
+Missing measurements and unfavorable comparisons do not block Phase closure,
+reset repair counts, change acceptance, or trigger extra AI calls/revalidation.
+
+The 2026-10-30 published Standard API uncached input/output unit-price ratio
+Astra:Sol:Terra:Luna is 100:20:10:1. That is not a per-task cost, speed, or included
+subscription-allowance ratio. Cache mix, reasoning/output volume, retries and
+speed modes affect actual consumption. Never multiply token counts by that ratio
+to manufacture measured credits or account usage. Any monetary estimate must
+separately identify its dated tariff, provider and token categories.
+Official references: [API pricing](https://developers.openai.com/api/docs/pricing),
+[Work/Codex pricing](https://learn.chatgpt.com/docs/pricing), and
+[model selection](https://learn.chatgpt.com/docs/model-selection).
+
+At Phase close, retain the compact comparison and its limitations in the normal
+Git-tracked completion record: profile/mapping and source revisions, role/model
+observations, cohort/counts, observed consumption coverage, elapsed/completion
+figures and unresolved limitations. Disposable Evidence links alone are not a
+durable summary. Do not copy bulk logs or add another close/commit loop.
 
 ## Two source snapshots, not intermediate work accounting
 
@@ -115,6 +182,7 @@ Preserve Session, Plan, accepted results, history, repair counts and verificatio
 
 Phase 6.10 owns named selection and this small endpoint projection. Phase 13
 continues to own acquiring and attributing usage; its full completion is not a
-prerequisite. Phase 9 owns model comparison and enhanced routing. No benchmark,
+prerequisite. Phase 9 owns dedicated model experiments and enhanced routing. Phase 6.10 owns
+the ordinary-work comparison projection defined above. No benchmark,
 new telemetry service, retrospective audit or live configuration change is part
 of adopting this plan.

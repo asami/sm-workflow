@@ -14,3 +14,12 @@ Plan: [Phase 6.10](phase-6.10.md)
 - [ ] P610-08 (M4): Resume/close recollection reuse retained endpoints/results; no invented start for an active Phase, repeat close/commit, new approval or metrics failure gate.
 - [ ] P610-09 (M4): Installed help/skill and runtime agree on profile input and actual Phase-close output; focused verification and integrated review cover changed behavior while retaining prior valid evidence.
 - [ ] P610-10 (M4): Preserve existing Session/Plan/history/repair counts/accepted work; no live profile switch or mandatory Terra run; Phase 9 comparison and Phase 13 acquisition remain separate.
+
+## Additional role/comparison acceptance — 2026-10-30
+
+These additions preserve earlier implementation/evidence and do not mark any item accepted.
+
+- [ ] P610-11 (M2): Cost maps Terra and Luna by applicable role through existing mappings, retains Sol for complex work, and leaves actual standard/parent settings unchanged; unavailable candidates remain explicit without extra AI gates.
+- [ ] P610-12 (M3): Ordinary-work comparison includes attributable repairs/retries/escalation and failed work exactly once, separates Codex/local usage, and preserves partial/unavailable coverage and mixed-profile attribution.
+- [ ] P610-13 (M3/M4): Completion wall time and eventual/first-pass success use declared comparable units/cohorts with numerator/denominator and outcome counts; pending work and unsuccessful elapsed time are explicit, with no invented completion or double attribution.
+- [ ] P610-14 (M4): Durable English Phase completion summary retains revisions, role/model observations, cohort metrics and limitations beyond runtime evidence retention; no benchmark/live switch/extra AI calls, acceptance gate or repeated close is introduced.
