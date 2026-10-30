@@ -49,6 +49,13 @@ create receipts or replay unknown effects. Standalone FIX retains its original
 uncommitted completion contract. Observe missing capabilities through the issued
 public route rather than building a second runner or control engine.
 
+For repair qualification, apply [same-scope engineering continuation](../../docs/spec/native-host-execution.md#same-scope-engineering-continuation--2026-10-30).
+Reuse covering authority for changed candidates and necessary checks; do not add
+per-attempt consent. Present an actual runtime stop with its evidence, distinguish
+coarse failure status from convergence evidence, and correct a producer gap
+without fabricating Human direction. Preserve explicit user limits and consumer
+Session exclusions.
+
 Record actual dispatch/result/return using
 `DelegateTaskDeliveryService.observeDelegateTaskDelivery`. Requester adoption
 requires `describeDelegateTaskAdoption` and independently admitted exact adoption

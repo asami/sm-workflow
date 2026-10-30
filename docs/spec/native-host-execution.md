@@ -50,6 +50,28 @@ driver, invoke tools, dispatch an application command or advance a Workflow.
 Actual installed host/tool/provider availability, all three skill families and
 genuine separate chat/session observations remain Phase 6 acceptance obligations.
 
+## Same-scope engineering continuation — 2026-10-30
+
+An authorized repair includes its necessary affected validation within the same
+Component, purpose, acceptance conditions and permitted operations. A type fix,
+new candidate or next engineering check does not alone require fresh consent.
+Carry the original attributable authority through the supported runtime route;
+preserve explicit one-attempt restrictions when the user actually imposed them.
+
+Distinguish an available choice/registration target from an actual runtime stop.
+For a real `engineering-policy-human-required` response, report the retained
+reason and observations. A repeated `check:<name>:failed` is a status, not proof
+of repeated cause or non-convergence. If the runtime mistakes coarse statuses
+for a trend, correct the producer; do not invent a fresh Human answer or bypass
+the formal stop in the skill. Genuine observed non-convergence, exhausted runtime
+allowance, unresolved effects and scope expansion retain their existing handling.
+
+Keep original authorization, attempt ancestry, repair counts, failed history and
+applicable successful receipts. Collect completed work without replay; revalidate
+only what the changed candidate requires. Engineering authorization is separate
+from permission to operate a consumer's real Session. Do not reset, re-Start,
+re-Submit or operate that Session when the user excludes it.
+
 ## Existing authorization and current-target registration
 
 Keep the user's authority separate from its registration against the runtime's
