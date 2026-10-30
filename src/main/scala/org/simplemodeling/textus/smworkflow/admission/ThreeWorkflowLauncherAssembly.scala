@@ -38,6 +38,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     "DelegateTaskService.startDelegateTask", "DelegateTaskService.advanceDelegateTask",
     "DelegateTaskService.submitDelegateTaskWorkResult", "DelegateTaskService.resolveDelegateTaskDiagnosticInformation",
     "CompletionRecordClosureService.describeCompletionRecordClosure", "CompletionRecordClosureService.advanceCompletionRecordClosure",
+    "WorkflowForceClosureService.describeWorkflowForceClosure", "WorkflowForceClosureService.forceCloseWorkflow",
     "DelegateTaskDeliveryService.observeDelegateTaskDelivery", "DelegateTaskDeliveryService.describeDelegateTaskAdoption",
     "GoalTaskService.startGoalTask", "GoalTaskService.advanceGoalTask",
     "GoalTaskService.submitGoalTaskWorkResult", "GoalTaskService.resolveGoalTaskDiagnosticInformation",
@@ -74,6 +75,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
   def deferredDeclarations: Vector[ServiceDefinition] = Vector(
     SmWorkflowComponent.DelegateTaskServiceService, SmWorkflowComponent.DelegateTaskDeliveryServiceService,
     SmWorkflowComponent.CompletionRecordClosureServiceService,
+    SmWorkflowComponent.WorkflowForceClosureServiceService,
     SmWorkflowComponent.StandaloneFixServiceService, SmWorkflowComponent.GoalTaskServiceService,
     SmWorkflowComponent.GoalPhaseServiceService, SmWorkflowComponent.SplitPhaseServiceService,
     SmWorkflowComponent.RepositorySyncServiceService, SmWorkflowComponent.JournalServiceService,
@@ -111,6 +113,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
       delegate <- DelegateTaskService.bindC(creation, host.goal)
       delivery <- DelegateTaskDeliveryService.bindC(creation, host.goal)
       records <- CompletionRecordContinuation.bindC(creation, host.goal)
+      forceClosure <- WorkflowForceClosureService.bindC(creation, host.goal)
       sync <- RepositorySyncManagedServiceAssembly.bindRuntimeC(creation, repository.declaration.copy(journalPolicy = host.goal.journalPolicy),
         nativeProgression = true, conflictPolicy = repository.conflicts,
         validationPolicy = Some(repository.validation), nativeReview = repository.review,
@@ -122,7 +125,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
       goalCatalog <- GoalPhaseRuntimeCatalog.loadC()
       repositoryDefinition <- RepositorySyncDefinitionBinding.bindC
     } yield Vector(
-      standalone, task, delegate, delivery, records,
+      standalone, task, delegate, delivery, records, forceClosure,
       NativeWorkflowSessionInput.goal(NativeWorkflowResultInput.goal(goal, creation, host.goal, goalCatalog.definition),
         creation, host.goal, goalCatalog.definition),
       NativeWorkflowSessionInput.split(NativeWorkflowResultInput.split(split, creation, host.split, host.splitCatalog.definition),

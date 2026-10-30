@@ -162,6 +162,7 @@ private[smworkflow] object GoalPhaseNativeRun {
 
   def sessionC(identity: String, d: Declaration, definition: DefinitionBinding, core: ActionCall.Core): Consequence[Session] = for {
     session <- retainedSessionC(identity, d, definition, core)
+    _ <- WorkflowForceClosure.requireOpenC(session.current)
     p = session.started.receipt.payload.value
     root <- G.rootC(core)
     branch <- G.branchC(core)

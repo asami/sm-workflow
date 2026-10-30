@@ -83,6 +83,7 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
     SmWorkflowComponent.DelegateTaskSemanticAdmissionServiceService -> Vector("admitDelegateTaskReview"),
     SmWorkflowComponent.DelegateTaskDeliveryServiceService -> Vector("observeDelegateTaskDelivery", "describeDelegateTaskAdoption"),
     SmWorkflowComponent.CompletionRecordClosureServiceService -> Vector("describeCompletionRecordClosure", "advanceCompletionRecordClosure"),
+    SmWorkflowComponent.WorkflowForceClosureServiceService -> Vector("describeWorkflowForceClosure", "forceCloseWorkflow"),
     SmWorkflowComponent.GoalTaskImplementationServiceService -> Vector("implementGoalTask"),
     SmWorkflowComponent.GoalTaskRepairServiceService -> Vector("repairGoalTask"),
     SmWorkflowComponent.GoalTaskReviewServiceService -> Vector("reviewGoalTask"),

@@ -30,6 +30,7 @@ private[smworkflow] object NativeExternalEvidence {
     case SplitStart extends Purpose(SplitPhaseTypedStartHumanVerification.purpose)
     case SplitAnswer extends Purpose(SplitPhaseHumanAnswerVerification.purpose)
     case CompletionRecordClosure extends Purpose(CompletionRecordContinuation.purpose)
+    case WorkflowForceClosure extends Purpose(org.simplemodeling.textus.smworkflow.admission.WorkflowForceClosure.purpose)
     case DelegateAdoption extends Purpose("delegate-task-requester-artifact-adoption")
     case StandaloneReview extends Purpose("standalone-fix-independent-review")
     case GoalTaskMalformedIssuedWorkRecovery extends Purpose("goal-task-malformed-issued-work-recovery")
@@ -128,6 +129,24 @@ private[smworkflow] object NativeExternalEvidence {
     }
 
   final class Reader private[NativeExternalEvidence] (val declaration: Declaration) {
+    /** The direction is independent host input, not a caller-created receipt.
+      * The actual native terminal later points to this exact durable reference.
+      */
+    def forceClosureEvidenceC(core: ActionCall.Core, reference: org.goldenport.cncf.workflow.ContextReference):
+      Consequence[Evidence] = for {
+      record <- ManagedInputRecordRead.loadNativeEvidenceC(core, declaration.storeName, declaration.collection,
+        recordIdentity(Purpose.WorkflowForceClosure, ThreeWorkflowExternalEvidencePorts.key(reference.identity, reference.revision)))
+        .flatMap(_.map(Consequence.success).getOrElse(Consequence.securityPermissionDenied("Independent force closure Human direction is absent")))
+      raw <- record.getString(storageField).map(Consequence.success)
+        .getOrElse(Consequence.stateConflict("Force closure Human direction has no typed payload"))
+      value <- decodeStorageC(raw)
+      declared <- decodeDeclarationC(core.component.get.subsystem.get.configuration)
+      observed <- observeValidatedC(value, declared, Purpose.WorkflowForceClosure,
+        ThreeWorkflowExternalEvidencePorts.key(reference.identity, reference.revision), value.binding, core.executionContext.clock.instant())
+      _ <- if (value.reference == reference.identity && value.revision == reference.revision) Consequence.unit
+        else Consequence.securityPermissionDenied("Force closure Human reference differs")
+    } yield observed.evidence
+
     /** Discover only an explicitly addressed original authority source. The
       * caller must subsequently evaluate coverage; this is no latest-row lookup.
       */
@@ -186,6 +205,12 @@ private[smworkflow] object NativeExternalEvidence {
     _ <- if (purpose == Purpose.RepositoryEffect) {
       if (selected.hcursor.downField("scope").get[String]("participant").contains(value.participant)) Consequence.unit
       else Consequence.securityPermissionDenied("Host effect authority belongs to another selected participant")
+    } else if (purpose == Purpose.WorkflowForceClosure) {
+      val direction = selected.hcursor.downField("workflowForceClosure")
+      if (direction.get[String]("participant").contains(value.participant) &&
+          direction.downField("reference").get[String]("identity").contains(value.reference) &&
+          direction.downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
+      else Consequence.securityPermissionDenied("Force closure direction crosses its actual Human participant or reference")
     } else if (purpose == Purpose.CompletionRecordClosure) {
       if (selected.hcursor.downField("completionRecordClosure").get[String]("participant").contains(value.participant)) Consequence.unit
       else Consequence.securityPermissionDenied("Closure authority belongs to another participant")
@@ -263,6 +288,7 @@ private[smworkflow] object NativeExternalEvidence {
       case Purpose.InventoryAuthority => GoalPhaseInventoryAuthority.select(value)
       case Purpose.RepositoryEffect | Purpose.StepClosure | Purpose.PhaseClosure => NativeAuthorityScope.select(purpose, value)
       case Purpose.CompletionRecordClosure => CompletionRecordContinuation.selectBinding(value)
+      case Purpose.WorkflowForceClosure => WorkflowForceClosure.selectBinding(value)
       case Purpose.DelegateAdoption => DelegateTask.selectAdoptionBinding(value)
       case Purpose.StandaloneReview | Purpose.GoalReview | Purpose.RepositoryReview => NativeReviewScope.select(purpose, value)
       case Purpose.GoalHuman | Purpose.RepositoryHuman => NativeHumanDecisionScope.select(purpose, value)

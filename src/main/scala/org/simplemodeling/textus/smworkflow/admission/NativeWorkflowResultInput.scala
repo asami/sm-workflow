@@ -246,6 +246,7 @@ private[smworkflow] object NativeWorkflowResultInput {
           case Some(value) => Consequence.success(value)
           case None => _invalid("result session has no native execution")
         }
+        _ <- WorkflowForceClosure.requireOpenC(current)
         identity <- current.suspension.map(value => Consequence.success(
           ContinuationIdentity(value.continuationIdentity.value)))
           .getOrElse(_invalid("result session has no pending assignment"))

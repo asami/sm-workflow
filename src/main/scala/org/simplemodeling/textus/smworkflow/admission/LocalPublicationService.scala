@@ -21,7 +21,8 @@ import org.simplemodeling.textus.smworkflow.value as V
 private[smworkflow] object LocalPublicationService {
   private val _declared = SmWorkflowComponent.LocalPublicationServiceService
   def bind(d: GoalPhaseNativeRun.Declaration, definition: DefinitionBinding): spec.ServiceDefinition =
-    bind(d.localPublication, (id, core) => GoalPhaseNativeRun.retainedSessionC(id, d, definition, core).map(_ => ()))
+    bind(d.localPublication, (id, core) => GoalPhaseNativeRun.retainedSessionC(id, d, definition, core)
+      .flatMap(session => WorkflowForceClosure.requireOpenC(session.current)))
 
   def bind(policy: Option[LocalPublicationRuntime.Policy],
     owner: (String, ActionCall.Core) => Consequence[Unit]): spec.ServiceDefinition =

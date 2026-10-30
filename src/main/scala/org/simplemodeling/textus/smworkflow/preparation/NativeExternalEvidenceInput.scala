@@ -19,6 +19,9 @@ private[smworkflow] object NativeExternalEvidenceInput {
   private val _required = Set("family", "kind", "request", "result", "reference", "execution-evidence", "issuer", "occurred-at", "collection")
 
   def prepareC(supplied: Map[String, String], readText: String => Consequence[String]): Consequence[Record] = try {
+    if (supplied.get("kind").contains("force-closure"))
+      NativeWorkflowForceClosurePreparation.prepareSuppliedC(supplied, readText)
+    else {
     for {
       options <- NativePreparationInput.optionsC(supplied, _required, readText, Set("participant"))
       _ <- if (Set("DelegateTask", "GoalTask", "StandaloneFix", "GoalPhase", "RepositorySync", "SplitPhase")(options("family")) &&
@@ -82,6 +85,7 @@ private[smworkflow] object NativeExternalEvidenceInput {
       row = Record.data("id" -> prepared._1, NativeExternalEvidence.storageField -> payload)
       bootstrap = Record.data("datastore" -> Vector(Record.data("collection" -> options("collection"), "records" -> Vector(row))))
     } yield bootstrap
+    }
   } catch { case NonFatal(_) => _invalid("invalid explicit argument, file or typed input") }
 
   private def _selected_c(options: Map[String, String], request: Record, result: Record,
