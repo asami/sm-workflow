@@ -2,6 +2,7 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
 import io.circe.syntax.*
+import org.goldenport.cncf.workflow.{WorkflowConcreteExecutionProfile, WorkflowExecutionProfileMapping, WorkflowExecutorDescriptor}
 import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.scalatest.GivenWhenThen
@@ -13,7 +14,8 @@ import GoalPhaseOrderedProgression as O
 
 /** Planning/codec evidence only: not execution, consent or Skill integration.
   * @since   Oct.  8, 2026
-  * @version Oct. 24, 2026
+  *  version Oct. 24, 2026
+  * @version Oct. 31, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -160,6 +162,96 @@ final class GoalPhaseWorkClassificationSpec extends AnyWordSpec with Matchers wi
           value.copy(reasoningClass = assigned.reasoningClass) shouldBe assigned
         }
         (strict ++ invalid).foreach(_.isSuccess shouldBe false)
+      }
+    }
+
+    "E7 reuse only unanimous retained repair intent and resolve it through the public native mapping" must metadata("E7", "R1,R7") {
+      "without selecting a Step, concrete model or new execution permission" in {
+        Given("two retained Steps with different implementation/review assignments but the same explicit medium repair Classification")
+        val shared = coding.copy(footprint = Footprint.MEDIUM)
+        val first = classified.steps.head.copy(workClassification = Some(assignment.copy(repair = shared)))
+        val second = first.copy(identity = "S2", ownedPaths = Vector("src/two.scala"), dependencies = Vector("S1"),
+          workClassification = Some(assignment.copy(implementation = coding.copy(complexity = Complexity.COMPLEX),
+            repair = shared, review = review.copy(footprint = Footprint.LARGE))))
+        val plan = classified.copy(steps = Vector(first, second))
+        val assigned = base(false).copy(disposition = Some(ExecutionDisposition(ExecutionPlacement.Delegated,
+          ExecutionIndependence.Optional, "retained-origin")))
+        When("a Phase-wide RepairStep reconstructs its requirement from either retained Step ordering")
+        val requirements = plan.steps.permutations.map(steps => take(GoalPhaseWorkClassification.requirementC(
+          "RepairStep", None, plan.copy(steps = steps), assigned))).toVector
+        Then("the shared repair class alone changes semantic intent while capability, risk and assigned disposition remain exact")
+        requirements.foreach { requirement =>
+          requirement shouldBe take(shared.requirementC(assigned))
+          requirement.reasoningClass shouldBe Some(ReasoningClassReference("CodingProgrammingStandard"))
+          requirement.copy(reasoning = assigned.reasoning, reasoningClass = assigned.reasoningClass) shouldBe assigned
+        }
+        Given("a specification-owned concrete profile mapping for that actual semantic class and a different caller profile")
+        val profile = WorkflowConcreteExecutionProfile("fixture-coding", "fixture-provider", "fixture-standard", Map("reasoningEffort" -> "medium"))
+        val mapping = take(WorkflowExecutionProfileMapping.createC("fixture-phase-repair", "1", Vector(profile),
+          Vector(WorkflowExecutionProfileMapping.ClassBinding("CodingProgrammingStandard", profile.identity))))
+        val origin = WorkflowExecutorDescriptor("fixture-origin", profile.copy(identity = "fixture-caller", model = "fixture-other"))
+        val semantic = take(GoalPhaseWorkClassification.requirementC("RepairStep", None, plan, base(false)))
+        When("the existing public invocation boundary resolves the newly reconstructed semantic requirement")
+        val resolved = take(mapping.resolveC(semantic, origin))
+        Then("normal mapping succeeds with its configured profile and preserves capability, risk and independence")
+        resolved.profile shouldBe profile
+        resolved.mappingIdentity shouldBe "fixture-phase-repair"
+        resolved.requirement.disposition shouldBe Some(ExecutionDisposition(ExecutionPlacement.Delegated,
+          ExecutionIndependence.Optional, origin.contextIdentity))
+        resolved.requirement.copy(disposition = None) shouldBe semantic
+        mapping.resolveC(base(false), origin).isSuccess shouldBe false
+        GoalPhaseWorkClassification.requirementC("RepairStep", None, plan, base(true)).isSuccess shouldBe false
+      }
+    }
+    "E8 preserve absent classification for missing or differing retained repair values" must metadata("E8", "R3,R7") {
+      "without taking the first last aggregate or Phase-review classification" in {
+        Given("retained Plans with no classification, one missing assignment, or a different repair member")
+        val first = classified.steps.head
+        val second = first.copy(identity = "S2", ownedPaths = Vector("src/two.scala"), dependencies = Vector("S1"))
+        val differing = Vector(assignment.repair.copy(complexity = Complexity.STANDARD),
+          assignment.repair.copy(domain = Domain.ENGINEERING), assignment.repair.copy(footprint = Footprint.LARGE))
+        val steps = Vector(Vector.empty[O.Step], Vector(first.copy(workClassification = None)),
+          Vector(first.copy(workClassification = None), second.copy(workClassification = None)),
+          Vector(first, second.copy(workClassification = None)),
+          Vector(first.copy(workClassification = None), second)) ++ differing.map(value =>
+          Vector(first, second.copy(workClassification = Some(assignment.copy(repair = value)))))
+        val assigned = base(false).copy(disposition = Some(ExecutionDisposition(ExecutionPlacement.Delegated,
+          ExecutionIndependence.Optional, "retained-origin")))
+        When("Phase-wide repair reconstructs each Plan, including both possible retained orderings")
+        val outcomes = steps.flatMap(values => Vector(values, values.reverse)).map(values =>
+          take(GoalPhaseWorkClassification.requirementC("RepairStep", None, classified.copy(steps = values), assigned)))
+        Then("every requirement is unchanged, even though a separate Phase-review classification exists")
+        outcomes.foreach(_ shouldBe assigned)
+        take(GoalPhaseWorkClassification.requirementC("RepairStep", None, unclassified, assigned)) shouldBe assigned
+      }
+    }
+    "E9 retain normal Step and whole-Phase selection and current Work codecs" must metadata("E9", "R2,R3,R7") {
+      "while only the Phase-wide repair frontier gains the bounded fallback" in {
+        Given("the original explicit implementation repair Step-review and Phase-review classifications")
+        val routes = Vector(("ImplementStep", Some("S1"), false, assignment.implementation),
+          ("RepairStep", Some("S1"), false, assignment.repair),
+          ("TriageStep", Some("S1"), true, assignment.review),
+          ("ReviewStep", Some("S1"), true, assignment.review),
+          ("ReviewPhase", None, true, classified.phaseReviewClassification.get))
+        When("the shared constructor receives the same normal native frontier inputs")
+        val outcomes = routes.map { case (kind, step, independent, expected) =>
+          take(GoalPhaseWorkClassification.requirementC(kind, step, classified, base(independent))) ->
+            take(expected.requirementC(base(independent)))
+        }
+        Then("ordinary lookup and strict requirement meaning stay identical")
+        outcomes.foreach { case (actual, expected) => actual shouldBe expected }
+        Vector("ImplementStep", "TriageStep", "ReviewStep").foreach { kind =>
+          take(GoalPhaseWorkClassification.requirementC(kind, None, classified, base(false))) shouldBe base(false)
+        }
+        take(GoalPhaseWorkClassification.requirementC("RepairStep", Some("absent"), classified, base(false))) shouldBe base(false)
+        take(GoalPhaseWorkClassification.requirementC("ReviewPhase", None, unclassified, base(true))) shouldBe base(true)
+        Given("a Phase-wide repair request carrying its original selected Plan and no Step identity")
+        val request = GoalPhaseNativeWork.Request("instance", "2", "RepairStep", None, 1,
+          "Repair retained release delta", classified, O.Snapshot("a" * 40, "b" * 40), Vector.empty, None, None, None)
+        When("the unchanged current Work codec roundtrips this frontier")
+        val decoded = GoalPhaseNativeWork.inputCodec.decode(GoalPhaseNativeWork.inputCodec.encode(request))
+        Then("the same Plan and absent Step identity are retained without new fields or concrete profile data")
+        decoded shouldBe Right(request)
       }
     }
 

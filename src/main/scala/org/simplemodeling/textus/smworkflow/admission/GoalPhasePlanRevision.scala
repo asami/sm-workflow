@@ -242,7 +242,9 @@ private[smworkflow] object GoalPhasePlanRevision {
   def eligibleC(controller: O.State, captured: Captured): Consequence[Unit] = for {
     _ <- validateCapturedC(captured)
     _ <- _check(controller != null, "controller is absent")
-    _ <- if (controller.cursor < controller.plan.steps.size && captured.plan.steps.size == controller.plan.steps.size &&
+    _ <- if (captured.revisionScope.contains(phaseAcceptanceDeferralScope))
+      adoptedC(controller, captured, "proposal-eligibility").map(_ => ())
+      else if (controller.cursor < controller.plan.steps.size && captured.plan.steps.size == controller.plan.steps.size &&
         captured.plan.steps.map(_.ownedPaths) != controller.plan.steps.map(_.ownedPaths))
       controller.adoptCurrentInventoryRevisionC(captured.plan, "proposal-eligibility").map(_ => ())
       else controller.adoptRevisionC(captured.plan, "proposal-eligibility").map(_ => ())
