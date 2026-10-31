@@ -3,7 +3,7 @@
 Status: S1–S4 accepted in the issued native S5 context; S5 source/specification authored. Fresh integrated publication, installed qualification, independent review and Phase acceptance remain pending.
 Date: 2026-10-27
 Owner: sm-workflow development
-Sequence: Phase 6.7 -> Phase 6.8 -> Phase 6.9 -> Phase 6.10 -> Phase 7
+Sequence: Phase 6.7 -> Phase 6.8 -> Phase 6.9 -> Phase 6.10 -> Phase 6.11 -> Phase 7
 Contract: [runtime orchestration](../spec/repository-sync-runtime-orchestration.md)
 Checklist: [P69 acceptance](phase-6.9-checklist.md)
 Handoff: [development adoption](../journal/2026/10/2026-10-27-phase-6.9-repository-sync-handoff.md)

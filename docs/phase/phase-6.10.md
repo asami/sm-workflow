@@ -3,7 +3,7 @@
 Status: planned; no implementation or acceptance claimed.
 Date: 2026-10-27
 Owner: sm-workflow development
-Sequence: Phase 6.8 -> Phase 6.9 -> Phase 6.10 -> Phase 7
+Sequence: Phase 6.8 -> Phase 6.9 -> Phase 6.10 -> Phase 6.11 -> Phase 7
 Specification: [profiles and endpoint metrics](../spec/ai-operating-profiles.md)
 Checklist: [P610 acceptance](phase-6.10-checklist.md)
 Handoff: [English development handoff](../journal/2026/10/2026-10-27-phase-6.10-ai-operating-profiles-handoff.md)
