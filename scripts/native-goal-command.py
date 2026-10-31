@@ -287,8 +287,8 @@ def new_file(directory_fd, name):
 
 
 def command_prefix(executable, runtime_root):
-    """Use the explicitly selected installed CLI; artifact selection is its own."""
-    return [str(executable), "--runtime-root", str(runtime_root), "command"]
+    """The installed CNCF command accepts an Operation; native_call owns cwd."""
+    return [str(executable)]
 
 
 def installed_executable(path):
@@ -644,7 +644,7 @@ def observation_projection(value):
 
 def exchange_context(command, runtime_root, output, outer_id, request=None):
     """Use only the actual selected invocation and optional issued DTO."""
-    operation = command[command.index("command") + 1]
+    operation = command[1]
     target = command[command.index("--sessionId") + 1] if "--sessionId" in command else None
     context = {"operation": operation, "outerSessionId": display_value(outer_id),
                "targetSessionId": display_value(target), "runtimeRoot": str(runtime_root),
@@ -865,8 +865,7 @@ def completion_commands(options, executable, runtime_root, task_fd):
             pairs.extend(["--" + name, json.dumps(submission[name], ensure_ascii=False, allow_nan=False)])
         prepared_path = explicit_path(options["output"]) / "preparation" / "response.json"
         command = command_prefix(executable, runtime_root)
-        command.insert(-1, "--textus.import.data.file=" + str(prepared_path))
-        command.extend([FQN + pair[0], *pairs, "--json"])
+        command.extend([FQN + pair[0], "--textus.import.data.file=" + str(prepared_path), *pairs, "--json"])
         preparation = (submission, provenance)
     elif family == "GoalPhase" and pair == ("submitGoalPhaseWorkResult", "GoalPhaseWorkResult"):
         action = "submit"

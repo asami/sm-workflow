@@ -145,3 +145,21 @@ staging nor an uncertain commit intent is replayed automatically. Noncatalog,
 staged, renamed or concurrently changed outputs leave synchronization unfinished.
 The final observation requires a clean tree and equal local/tracking/remote tips.
 The default target does not silently enable publication for every sync.
+
+## Installed command selection
+
+Install the operational command through CNCF's `install-cli sm-workflow
+--published-target org.simplemodeling.textus.SmWorkflow`, without a component
+version. The generated command uses `newest`: each invocation compares enabled
+stable and SNAPSHOT versions in the local component catalog by version number,
+preferring stable over the SNAPSHOT of the same base version. A normal local
+publication supplies subsequent invocations without reinstalling the command.
+CNCF owns runtime resolution, component admission and artifact loading; the
+workstation supplies no application launcher or source-classpath fallback.
+Runtime version selection remains a separate normal CNCF host setting.
+
+Call the generated command with an Operation selector and select the host by
+process cwd. The finite skill caller's `--runtime-root` sets that cwd; it is not
+forwarded as an executable argument and no extra `command` token is added.
+Existing running invocations, accepted results, Sessions and uncertain intents
+are not replayed when installation or publication changes.

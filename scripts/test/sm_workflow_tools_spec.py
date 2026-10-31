@@ -178,7 +178,8 @@ import json, sys
 from pathlib import Path
 with Path({str(calls)!r}).open('a') as stream:
     stream.write(json.dumps(sys.argv[1:]) + '\\n')
-operation = sys.argv[sys.argv.index('command') + 1].split('.')[-1]
+assert Path.cwd() == Path({str(runtime)!r})
+operation = sys.argv[1].split('.')[-1]
 response = {{'sessionId': 'fixture-task', 'message': 'Transport fixture only'}}
 if operation == 'submitGoalTaskWorkResult':
     response['kind'] = {response_kind!r}
@@ -208,8 +209,10 @@ print(json.dumps(response))
         self.assertEqual(result.returncode, 0, result.stderr)
         invoked = [json.loads(line) for line in calls.read_text().splitlines()]
         self.assertEqual(len(invoked), 2)
-        self.assertTrue(invoked[0][3].endswith('GoalTaskService.submitGoalTaskWorkResult'))
-        self.assertTrue(invoked[1][3].endswith('GoalTaskService.advanceGoalTask'))
+        self.assertTrue(invoked[0][0].endswith('GoalTaskService.submitGoalTaskWorkResult'))
+        self.assertTrue(invoked[1][0].endswith('GoalTaskService.advanceGoalTask'))
+        self.assertNotIn('--runtime-root', invoked[0])
+        self.assertNotIn('command', invoked[0])
         self.assertEqual(json.loads(invoked[0][invoked[0].index('--issuedWorkContext') + 1]), issued)
         self.assertFalse(any('assembly.descriptor' in item for call in invoked for item in call))
         self.assertEqual(request.read_bytes(), before)

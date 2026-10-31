@@ -297,6 +297,15 @@ command tool. Do not route that invocation through `cncf_runtime_runner`,
 route takes precedence over generic runtime-runner routing for this command.
 Semantic work and independent review retain their existing executor selection.
 
+Install this command with CNCF's `install-cli --published-target
+org.simplemodeling.textus.SmWorkflow`, leaving the component version unspecified.
+The generated executable accepts `<Operation> [parameters]`; select the host as
+its process cwd. `--runtime-root` remains an option of the finite Python caller,
+which sets cwd itself, and is not an argument of the installed executable.
+Do not add the launcher's `command` token to a generated command invocation.
+The launcher selects the newest enabled stable or SNAPSHOT catalog version,
+preferring stable over the SNAPSHOT of the same base version.
+
 On the first attempt, set `sandbox_permissions: "require_escalated"` so normal
 runtime caches and configured runtime outputs are accessible. Use the resolved
 absolute installed command path, explicit runtime root/cwd and the intended literal
@@ -321,7 +330,7 @@ the explicit runtime-root/task/request/submission/fresh-output paths. Use manage
 and scoped escalation for this exact finite invocation, with no general shell or
 interpreter approval prefix. This is the existing host-owned pair, not a command
 subagent or a substitute Workflow. The helper launches only the selected
-installed executable with `--runtime-root <runtime-root> command <fixed Operation>`; it never
+installed executable with `<fixed Operation>`, selecting `<runtime-root>` as the process cwd; it never
 constructs a development classpath or selects an artifact. It retains/displays
 actual accepted Submit before reopening the original family/Session routing for
 one explicit outer Advance. Changed routing, rejection or uncertainty stops with
@@ -1173,11 +1182,11 @@ Select complete concrete input files yourself from the actual Request and
 explicit artifacts. With the explicitly selected installed executable, the two commands are:
 
 ```sh
-"$installed_executable" --runtime-root "$runtime_root" command org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.prepareExecution \
-  --input "$(cat "$task/prepare-execution-input.json")" --json
+(cd "$runtime_root" && "$installed_executable" org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.prepareExecution \
+  --input "$(cat "$task/prepare-execution-input.json")" --json)
 
-"$installed_executable" --runtime-root "$runtime_root" command org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.recordExecution \
-  --input "$(cat "$task/record-execution-input.json")" --json
+(cd "$runtime_root" && "$installed_executable" org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.recordExecution \
+  --input "$(cat "$task/record-execution-input.json")" --json)
 ```
 
 The existing finite `native-goal-command.py` offers `prepare-execution` with
