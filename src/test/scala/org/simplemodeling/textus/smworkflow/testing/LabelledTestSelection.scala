@@ -12,7 +12,7 @@ import org.simplemodeling.textus.smworkflow.admission.ValidationTestPolicy
   */
 object LabelledTestSelection {
   def select(root: String, revision: String, purpose: String, suites: Array[String],
-    exact: Array[String], containing: Array[String]): Array[Array[String]] = {
+    exact: Array[String], containing: Array[String], explicitSuites: Array[String]): Array[Array[String]] = {
     val loader = getClass.getClassLoader
     val scope = D.DiscoveryScope("sm-workflow-tests", "1", Vector(D.ArtifactScope(
       "component:sm-workflow", "sm-workflow-tests", revision, "working-tree",
@@ -47,6 +47,11 @@ object LabelledTestSelection {
     executions.flatMap(_.operations).map(operation => Array(operation.selector.suiteClassName,
       operation.selector.testName, ValidationTestPolicy.requiresRuntime(operation).toString)).toArray
   }
+
+  def select(root: String, revision: String, purpose: String, suites: Array[String],
+    exact: Array[String], containing: Array[String]): Array[Array[String]] =
+    select(root, revision, purpose, suites, exact, containing,
+      if (Set("EXPLICIT", "FOCUSED")(purpose)) suites else Array.empty[String])
 
   def select(root: String, revision: String, purpose: String, suites: Array[String]): Array[Array[String]] =
     select(root, revision, purpose, suites, Array.empty[String], Array.empty[String])
