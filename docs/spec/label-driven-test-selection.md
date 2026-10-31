@@ -104,6 +104,68 @@ metadata-derived selection/adapter, not a replacement hard-coded class-name list
 For unclassified tests, classify from source/known behavior before inclusion;
 do not infer FULL merely from absence of DoNotDiscover or a short class name.
 
+## ON_DEMAND selection and low-frequency maintenance
+
+Adopted policy: 2026-10-31. Add `ON_DEMAND` to CNCF's canonical Validation/Test
+Metadata purpose vocabulary and consume it through the existing discovery,
+selection and execution routes. This is the formal label for low-frequency
+executable specifications; it must not be a sm-workflow-only string or a second
+suite registry. The user-facing spelling `on_demand` follows the existing purpose
+parser's case conventions; the canonical purpose is `ON_DEMAND`.
+Implementation of the new purpose and migration remain pending until verified.
+
+Previous use of "scripted" for these ScalaTest suites was incorrect. Reserve that
+term for the actual sbt scripted mechanism. A procedure's implementation form
+(ScalaTest, sbt scripted, or a standalone script) is distinct from its selection
+policy; do not force non-Scala procedures into a ScalaTest catalogue.
+
+ON_DEMAND remains discoverable and explicitly selectable. Do not use
+`@DoNotDiscover` to hide these runnable suites or manually enroll class names.
+Ordinary ADMISSION, FULL and HEAVY selections exclude ON_DEMAND operations, even
+if inherited/default metadata would otherwise include them. Selecting HEAVY must
+not implicitly opt into ON_DEMAND. Explicit ON_DEMAND selection or an explicitly
+named ON_DEMAND operation in a focused selection can execute it, with the normal
+execution requirements and permissions. A broad feature/FOCUSED query alone is
+not explicit consent to include ON_DEMAND; record the actual selected operations.
+Conflicting ordinary memberships must not silently broaden routine selection.
+
+Apply this policy to existing low-frequency cases as well as new ones. Keep their
+entry points and documented prerequisites usable for on-demand and explicitly
+selected nighttime runs. Exclusion from routine completion must not turn them
+into documentation-only archives. They are not mandatory for ordinary Step,
+Phase, fix, commit or repository-sync completion. Active availability does not
+mean continuous execution or continuous qualification against every revision.
+
+Maintain procedures when they are exercised. Repair environment/specification
+drift found during a selected run, preserve the original result and record any
+repaired rerun separately. Investigate genuine product regressions as such;
+do not weaken assertions to hide them. Retain previous scripts, results and
+version context. Unattended runs may retain exit status, duration and evidence
+references without AI; subsequent maintenance need not use an AI monitoring or
+automatic repair loop. This change does not create a nighttime schedule.
+
+Retain purpose, requirements, versions, invocation, expected result, effects and
+cleanup with each procedure. Keep concise summaries and existing non-Git evidence
+references. Self-update uses a dedicated environment, not live consumer Sessions
+or a development runtime selection. Runtime ownership of SBT/publication remains
+unchanged. Only continuing regression requirements justified by their cost belong
+in HEAVY; do not move every historical scenario there. Preserve a coverage map
+and reusable small fixtures/bounded contract coverage.
+
+Inventory ordinary invocation links and remove any actual mandatory links without
+inventing removals where none exist. Preserve running invocations and all Session,
+history, repair-count and successful-result records. Migration acceptance uses
+small selection checks: discover ON_DEMAND; exclude it from default test/FULL,
+ADMISSION and HEAVY (including inherited defaults); explicitly select ON_DEMAND
+and a named focused case; prepare requirements only for selected operations.
+Exercise a harmless representative case to establish dispatch. Do not replay the
+expensive historical catalogue or self-update merely to prove selection. Verify
+producer/consumer purpose parsing and retained result attribution together.
+
+See the [ON_DEMAND correction handoff](../journal/2026/10/2026-10-31-minimal-reusable-workflow-fixture.md#on_demand-correction--authoritative-handoff)
+for the development assignment. No new registry, scheduler or execution framework
+is required; the accepted incident repair remains closed.
+
 ## Runtime preparation and ownership
 
 The SBT adapter uses `ValidationSpecification` declarations from the compiled
