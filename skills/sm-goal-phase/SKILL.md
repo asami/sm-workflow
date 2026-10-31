@@ -5,6 +5,14 @@ description: Route explicit Phase start/resume requests through the caller and p
 
 # GoalPhase semantic work
 
+## Test classification and selection
+
+Follow the [standard-annotation policy](../../docs/spec/native-host-execution.md#validation-cadence-with-standard-annotations).
+ADMISSION is the sole custom label; FULL/focused are run scopes. Use standard
+Slow for heavy selection and DoNotDiscover for explicit-only suites. Preserve
+captured checks/results and use the runtime's supported selection route.
+
+
 ## Show who is working
 
 Apply the [activity transitions](../../docs/spec/native-host-execution.md#caller-activity-transitions)
@@ -316,11 +324,11 @@ actual results and normal continuation authority without automatic replay.
 ## Validation selection and timing
 
 When supplying or reviewing a new execution plan, follow the
-[ADMISSION/FULL/HEAVY cadence](../../docs/spec/native-host-execution.md#validation-cadence-admission-full-and-heavy):
+[standard-annotation cadence](../../docs/spec/native-host-execution.md#validation-cadence-with-standard-annotations):
 ADMISSION for ordinary Step acceptance, FULL for integrated Phase validation,
-and the complete HEAVY batch for separately scheduled overnight execution.
+and explicitly selected Slow-tag tests for separately scheduled overnight execution.
 Select only affected FOCUSED operations when daytime integration evidence is
-needed; naming a HEAVY suite alone selects more than the changed case.
+needed; naming an unrestricted suite can select more than the changed case.
 Use existing metadata and actual acceptance coverage. The runtime owns the
 captured checks; this guidance changes no active Session or required check and
 creates no schedule or additional execution authority.

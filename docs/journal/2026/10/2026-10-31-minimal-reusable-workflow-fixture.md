@@ -1,5 +1,11 @@
 # Minimal reusable workflow fixture
 
+Superseded classification decision (2026-10-31):
+[ADMISSION and standard annotations handoff](2026-10-31-admission-standard-annotations-handoff.md)
+replaces ON_DEMAND and blanket runnable-DoNotDiscover removal. Retain the decisions,
+commits and verification below as history; do not reapply their retired labels.
+
+
 Date: 2026-10-31
 Status: initial deliveries reported; ON_DEMAND correction requested, implementation and validation pending.
 Development owner: sm-workflow development.
@@ -160,7 +166,7 @@ There is no requirement to implement a registry, scheduler or promotion engine.
 
 The user explicitly applies the operating policy to **existing scripted**, not
 only future procedures. The normative selection policy is now recorded in
-[Label-driven test selection](../../../spec/label-driven-test-selection.md#on_demand-selection-and-low-frequency-maintenance).
+[Label-driven test selection](../../../spec/label-driven-test-selection.md#execution-and-preservation).
 This is a specification and development handoff; invocation wiring is not claimed
 to be changed or verified by this documentation update.
 

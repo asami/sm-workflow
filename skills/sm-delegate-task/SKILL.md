@@ -5,6 +5,14 @@ description: Deliver one authorized development request to an available existing
 
 # sm-delegate-task
 
+## Test classification and selection
+
+Follow the [standard-annotation policy](../../docs/spec/native-host-execution.md#validation-cadence-with-standard-annotations).
+ADMISSION is the sole custom label; FULL/focused are run scopes. Use standard
+Slow for heavy selection and DoNotDiscover for explicit-only suites. Preserve
+captured checks/results and use the runtime's supported selection route.
+
+
 Use the [delegation contract](../../docs/spec/delegate-task.md),
 [finite public caller contract](../../docs/spec/native-delegate-task-caller.md),
 [native execution contract](../../docs/spec/native-host-execution.md) and

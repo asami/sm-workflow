@@ -387,52 +387,55 @@ filenames with an unavailable Workflow, or substitute standalone SBT/commits for
 native acceptance. Report actual CNCF configuration/admission failures with
 their observed cause.
 
-## Validation cadence: ADMISSION, FULL and HEAVY
+<a id="validation-cadence-admission-full-and-heavy"></a>
+## Validation cadence with standard annotations
 
-For newly prepared execution plans, use the existing canonical purpose metadata
-with this default cadence. Purposes are selections, not three nested suite sets.
+ADMISSION is the only custom classification label. FULL and focused describe run
+scope, not test memberships. Use standard ScalaTest Slow and DoNotDiscover rather
+than custom HEAVY/ON_DEMAND labels. SMOKE, FOCUSED, FULL, HEAVY and ON_DEMAND active
+purpose values are retired by the coordinated producer/consumer migration.
+Do not add aliases or automatically map Slow into a second HEAVY classification.
 
-| Purpose | Normal timing | Selection |
-| --- | --- | --- |
-| ADMISSION | Daytime implementation/repair and Step acceptance | A small, nonempty set covering the changed contract and acceptance-critical regressions |
-| FULL | Integrated Phase validation before Phase completion | Broad ordinary regression coverage, excluding HEAVY and external-service requirements |
-| HEAVY | A separately scheduled overnight batch | Long-running, nested-SBT, multi-process and external-service integration coverage |
+| Selection | Operation |
+| --- | --- |
+| ADMISSION | Short basic acceptance from its declared members within ordinary exclusions |
+| FULL | Normal discovered regression tests, excluding Slow and special external-environment work |
+| Slow | Explicit standard Slow-tag selection, including selected nighttime runs |
+| Explicit-only suite | DoNotDiscover plus exact suite selection and its real prerequisites |
+| focused | Actual affected suite/case/feature/tag selection, without a FOCUSED label |
 
-ADMISSION targets an aggregate **test-body time of at most one minute**,
-excluding preparation and cleanup. This is an operating target, not a fixed
-timeout or per-test budget. Preserve actual results when the target is exceeded;
-the component's label-driven selection contract owns timing attribution.
+Use class `@org.scalatest.tags.Slow` or per-case `taggedAs` with the standard Slow
+tag. DoNotDiscover remains selectable by an explicit suite request; it is not a
+disabled test. Selecting Slow alone does not automatically discover those suites.
+A broad query must not re-enroll them. Selecting an unrestricted named suite may
+run all its cases; report actual selection. Keep external-service requirements
+separate from duration and exclude their suites before setup. SQLite and small
+test-owned same-JVM loopback fixtures remain eligible for FULL.
 
-Do not select an entire HEAVY suite for every repair merely because the changed
-case belongs to it. When daytime integration evidence is necessary, select the
-affected operations explicitly through the existing FOCUSED route, retaining
-their actual cost and requirements. Reuse applicable successful results for
-unchanged inputs and coverage; changed behavior or a new failure requires the
-affected validation. Suite-name selection without a purpose filter can include
-HEAVY operations and must not be treated as an ADMISSION or FULL shortcut.
+ADMISSION targets at most one minute of aggregate test-body time, excluding
+preparation/cleanup. It is not a fixed timeout. Preserve feature, expectedDuration,
+execution requirements and actual result scope. A focused request may explicitly
+include Slow/explicit-only cases as needed; do not repeat an entire suite solely
+because an affected case belongs to it. Empty selection is not successful coverage.
 
-Plan and host-policy authors own the selections. The semantic skill supplies
-their meaning and acceptance coverage; the runtime resolves the captured
-selection, prepares its requirements, executes it and retains actual results.
-Use the existing purpose/feature queries and exact-operation filters. Do not
-add another test catalog, infer purpose from elapsed time or clock time, or
-combine all three purposes into the ordinary query.
+Runtime owns selection, preparation, execution and evidence. Apply new selections
+through supported planning/adoption; preserve active Sessions, captured checks,
+accepted results, history and counts. Documentation does not prove deployed support.
+Use actual supported operations and report a concrete obsolete-selector/adapter
+gap; do not invent commands, silently rewrite issued checks or bypass runtime-owned
+SBT. Unrelated ordinary work does not wait for migration completion.
 
-Where a project has no suitable ADMISSION declarations yet, select a bounded,
-nonempty affected FOCUSED set and report its actual coverage while classification
-is completed. Do not invent ADMISSION metadata, broaden automatically to HEAVY,
-or treat an empty selection as successful admission validation.
+<a id="on_demand-operating-policy"></a>
+## Low-frequency test operation
 
-The scheduler/caller owns overnight invocation and result notification. Record
-the tested revision/input scope and keep overnight results separate from current
-Step/Phase results. Review failures in the next development cycle; do not make
-every ordinary Step wait for the overnight batch unless its actual acceptance
-contract explicitly requires that result. This policy schedules no job itself.
-
-This cadence applies to future plans and explicit supported revisions. It does
-not narrow an already captured requirement or alter a running invocation,
-Session, accepted work, history or repair accounting. Daytime changes to those
-requirements use the existing planning/adoption route.
+Keep DoNotDiscover suites and genuine scripts active and invocable when needed
+or explicitly selected for nighttime execution. Maintain invocation instructions,
+prerequisites, expected results and cleanup. Repair drift when exercised, preserve
+original failures and separate repaired reruns, and distinguish real product bugs.
+No continuous qualification, catalogue replay, new scheduler, AI monitor or
+automatic AI repair is required. Reserve scripted for actual sbt scripted, never
+as a nickname for excluded ScalaTest suites. Existing successful evidence retains
+its original scope. Earlier ON_DEMAND guidance is superseded, not an active alias.
 
 ## Unstarted execution continuation
 

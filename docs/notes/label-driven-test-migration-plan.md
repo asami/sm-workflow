@@ -6,6 +6,10 @@ Producer: sm-workflow development; representative consumer: textus-control-cente
 Specification: [label-driven selection](../spec/label-driven-test-selection.md)
 Handoff: [English instructions](../journal/2026/10/2026-10-24-label-driven-test-handoff.md)
 
+Current target: [ADMISSION and standard annotations](../spec/label-driven-test-selection.md).
+LTEST-1–4 below retain their historical acceptance. Their blanket removal of
+runnable DoNotDiscover annotations is superseded by the follow-up below.
+
 ## Position
 
 Deliver a bounded correction to the existing managed-test/validation-metadata
@@ -94,3 +98,34 @@ Default retention: 2026-11-23. Bound original references remain on hold for acti
 consumer adoption, with next retention review on 2026-10-31; no originals were
 removed. Nonblocking maintenance is recorded in the
 [label-selection Hygiene ledger](../journal/2026/10/2026-10-24-label-selection-hygiene-follow-up.md).
+
+## Standard-annotation follow-up — 2026-10-31
+
+Status: planned; no new implementation/validation claimed. Owner: sm-workflow
+development. This is the bounded successor to the completed ON_DEMAND delivery,
+not a reopened closed Task/Phase or a prerequisite for unrelated work.
+
+| Order | Work | Acceptance |
+| --- | --- | --- |
+| TA-S1 | CNCF producer classification/query and framework adapter changes | ADMISSION only; Slow/DoNotDiscover respected; no duplicate custom labels |
+| TA-S2 | One real consumer main route using small fixtures | Ordinary/ADMISSION/Slow/explicit named selection, setup after selection, attributed result |
+| TA-S3 | Migrate real declarations, CML/config, compiled inventory, SBT adapter and caller guidance | Removed labels have no active aliases; assertions and existing scripts retained |
+| TA-S4 | Qualify and deliver coherent producer/consumer revisions | Changed-contract checks, conditional scoped review, runtime-owned commit/publication as needed, preservation evidence |
+
+- [ ] TA-A01: ADMISSION is the sole custom classification; FULL/focused remain
+      run scopes, SMOKE cases assessed individually, no HEAVY/ON_DEMAND purpose.
+- [ ] TA-A02: Normal FULL and ADMISSION exclude Slow and automatic discovery of
+      DoNotDiscover; class/per-test tags and combined annotations are exercised.
+- [ ] TA-A03: Explicit Slow and named focused/explicit-suite selections execute
+      the requested scope without a registration list or broad-query re-enrollment.
+- [ ] TA-A04: Feature/duration/requirements, logical IDs and result attribution
+      survive; no excluded suite setup starts external services.
+- [ ] TA-A05: Only required new checks run; no self-update/catalogue replay,
+      previous evidence preserved, no Session/counter reset or implicit activation.
+- [ ] TA-A06: Product-packaged and deployed skill guidance agree; the actual
+      supported commands and remaining limitations accompany the delivered result.
+
+Follow [the English handoff](../journal/2026/10/2026-10-31-admission-standard-annotations-handoff.md).
+Do not block this plan on a post-return correction API; a terminal predecessor
+uses normal linked new Task intake. Keep the separately pending main integration
+visible and preserve both branch histories and unrelated dirty/staged work.

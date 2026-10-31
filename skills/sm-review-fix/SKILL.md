@@ -5,6 +5,14 @@ description: Repair identified original review findings with exact disposition a
 
 # sm-review-fix
 
+## Test classification and selection
+
+Follow the [standard-annotation policy](../../docs/spec/native-host-execution.md#validation-cadence-with-standard-annotations).
+ADMISSION is the sole custom label; FULL/focused are run scopes. Use standard
+Slow for heavy selection and DoNotDiscover for explicit-only suites. Preserve
+captured checks/results and use the runtime's supported selection route.
+
+
 ## Show who is working
 
 Apply the [activity transitions](../../docs/spec/native-host-execution.md#caller-activity-transitions)

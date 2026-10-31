@@ -1,224 +1,79 @@
-# Label-driven test discovery, selection and preparation
+# Test selection with ADMISSION and standard annotations
 
-Date: 2026-10-24 (Asia/Tokyo)
-Status: implemented and accepted within the focused LTEST boundary
-Plan: [LTEST delivery](../notes/label-driven-test-migration-plan.md)
+Date: 2026-10-31 (Asia/Tokyo)
+Status: approved target; coordinated producer/consumer migration pending.
+Prior LTEST delivery remains accepted within its original scope. The target below
+supersedes its multi-purpose authoring guidance; it does not reopen that delivery.
+Plan: [TA-S1–4 and TA-A01–06](../notes/label-driven-test-migration-plan.md#standard-annotation-follow-up--2026-10-31).
+Handoff: [approved migration and preservation](../journal/2026/10/2026-10-31-admission-standard-annotations-handoff.md).
 
-## Canonical classification
+## Classification and run scope
 
-All tests intended for supported execution use CNCF Validation/Test Metadata:
-purpose, feature, expected duration and execution requirements. Reuse CNCF
-discovery/composition/binding and existing sm-workflow selection; do not create a
-second tag vocabulary or manually maintained suite membership registry.
+ADMISSION is the only custom classification label. Retire active SMOKE, FOCUSED,
+FULL, HEAVY and ON_DEMAND purpose declarations and query values. Do not introduce
+aliases, duplicate labels or a Slow-to-HEAVY normalization layer. FULL and focused
+remain descriptions of run scope, not test memberships. Assess former SMOKE
+coverage individually before assigning ADMISSION; do not bulk relabel it.
 
-Discovery, selection and preparation are distinct:
+Keep canonical CNCF feature, expectedDuration, execution requirements, logical
+operation identities and provenance. Existing stored evidence retains its original
+vocabulary and scope; it is not an active selector or acceptance of this migration.
 
-    discover operations -> resolve metadata -> select requested purpose/features
-      -> bind declared execution requirements -> prepare -> execute -> retain results
+## Standard annotations and explicit selection
 
-Discoverable does not mean selected by FULL. Explicitly selectable does not mean
-authorized for arbitrary effects. Class/spec defaults and operation-level metadata
-retain the producer's merge semantics. Preserve actual logical operation identity
-and result attribution while changing selection plumbing.
+Use ScalaTest `@org.scalatest.tags.Slow` or per-case `taggedAs` only for long-running
+work. Use `@org.scalatest.DoNotDiscover` for suites requiring explicit execution,
+including special-environment and low-frequency acceptance. Combine them when both
+apply. An external database or Docker dependency alone is not a duration label.
+These suites remain active and maintained when exercised, rather than disabled.
 
-## DoNotDiscover and manual registration
+Normal test/FULL and ordinary ADMISSION exclude Slow and automatic discovery of
+DoNotDiscover suites before lifecycle setup. Selecting Slow alone does not include
+DoNotDiscover suites. Name those suites explicitly through the supported generic
+SBT path, optionally with actual case/tag filters. Broad patterns and feature-only
+queries must not re-enroll them. No class-name Set, persistent enrollment or
+per-suite build edit is required. Named unrestricted suites may run all their cases.
+Focused validation can explicitly select affected Slow or explicit-only tests.
+Report the real selection; an empty run is not successful requested coverage.
 
-Do not use `@DoNotDiscover` to classify CLI, slow, artifact-dependent, optional or
-explicit-only runnable specifications. Remove it from those specifications as
-their metadata selection/preparation route becomes operational. Eliminate the
-`build.sbt` class-name Set and per-suite TestDefinition rewriting used to re-enroll
-such suites for testOnly. Adding an ordinary labelled test must require no second
-class-name registration.
-
-Retain `@DoNotDiscover` only for intentional exclusion from normal independent
-execution, with an explicit reason: for example a fixture-only helper suite or an
-intentionally disabled test. Inventory the actual rationale; do not convert every
-annotation mechanically. An intentionally disabled test must not be silently
-re-enabled by a wildcard or routine metadata query. Runnable explicit-only tests
-use selection policy/labels rather than hiding from discovery.
-
-Explicit per-run operation/class selection remains useful for diagnosis and
-focused validation. It is not a persistent second catalog. A selected runnable
-operation must resolve and execute through the supported route, including its
-preparation, without a build.sbt enrollment edit. Missing selection must remain
-visible; an empty run is not successful execution of the requested test.
-
-Historical documentation about individually enrolled DoNotDiscover suites remains
-historical evidence, not the target authoring contract. A one-line enrollment can
-be retained as existing work while migration is incomplete, but is not migration
-acceptance and does not become the permanent solution.
+SQLite, in-memory providers and small same-JVM test-owned loopback fixtures remain
+ordinary. Keep actual external prerequisites separate and retain required live
+opt-ins; annotations neither prepare resources nor authorize effects.
 
 ## ADMISSION operating target
 
-ADMISSION targets **at most one minute of aggregate test-body execution time per
-selected run**, excluding compilation, dependency resolution, generation,
-discovery, runtime startup, fixture setup/teardown and result retention. Sum
-the selected bodies even when execution is parallel; this is not a one-minute
-allowance per test or suite. It is an engineering guideline, not a fixed timeout,
-test assertion, automatic cancellation or automatic reclassification rule.
-An over-target successful run remains successful; reconsider selection/cost with
-its actual coverage retained. Independently configured execution deadlines keep
-their existing role and are not set to 60 seconds by this policy.
+ADMISSION targets at most one minute of aggregate selected test-body time,
+excluding compile, resolution, discovery, startup, fixture preparation/cleanup and
+result retention. This is not a per-case allowance, fixed timeout, assertion or
+automatic cancellation rule. Preserve a successful over-target result and assess
+selection/cost using its actual coverage. Preserve existing duration estimation.
 
-Use `testOnly --purpose ADMISSION` through the existing execution owner; inspect
-with `labelledTestSelection --purpose ADMISSION`. The initial local declarations
-cover GoalPhase ordered progression, RepositorySync input selection and SplitPhase
-candidate allocation. `AdmissionTestDeclaration` adds ADMISSION while retaining
-FOCUSED/FULL. Existing HEAVY declarations and default FULL selection are unchanged.
-Add or narrow membership at the executable specification, without a second suite
-registry. Operation overrides retain CNCF's replacement semantics: explicitly
-retain any intended FOCUSED/FULL memberships when overriding purposes.
+## Execution and preservation
 
-Record body time separately from preparation/cleanup when the execution evidence
-supports that separation. Suite/run wall-clock duration is not net body time;
-report net time as unavailable when it cannot be separated. A conservative
-upper bound below one minute may establish the target, with that basis explicit.
-Do not invent `expectedDuration` values: a declaration default is per operation,
-not the aggregate selection budget. ADMISSION is quick acceptance coverage, not
-a replacement for affected FOCUSED tests or required FULL/HEAVY acceptance.
+Inspect metadata and standard framework tags, select actual operations, bind their
+requirements, then prepare only selected resources, execute and retain attributed
+results. CNCF owns common metadata and framework bindings; sm-workflow consumes
+those facts through its ordinary SBT/UoW route. Do not create a second registry,
+force another framework into fabricated ScalaTest labels, bypass the execution
+owner or reinterpret a runtime failure as permission for a wrapper fallback.
 
-## FULL boundary
+Preserve original scenario assertions, scripts, ongoing changes, Sessions, base,
+Plan, accepted results, history and repair counts. Active issued work finishes
+under its retained contract; adopt changes at the supported next boundary or a
+linked new Task after terminal predecessors. Do not re-Start, replay accepted
+Submit, repeat successful checks solely for result collection or rewrite history.
+Previously successful 22/13 and 7/77/16 results retain their original scopes.
 
-For new Step/Phase plans and overnight execution, follow the
-[ADMISSION/FULL/HEAVY cadence](native-host-execution.md#validation-cadence-admission-full-and-heavy).
-That operational policy uses the existing selection mechanism described here.
+Maintain explicit invocation, prerequisites, expected results and cleanup for
+occasional/nighttime tests. No catalogue replay, scheduler, AI polling or automatic
+AI repair is required. Reserve scripted for the actual sbt scripted mechanism.
 
-Normal FULL selection excludes HEAVY work and external-service-dependent work.
-MySQL/PostgreSQL Docker start/stop, a separately started server, a required existing
-server, or an external service must not become a prerequisite of FULL. SQLite and
-small loopback servers started/stopped within the test's own JVM are eligible,
-subject to the ordinary FULL cost/behavior policy. Artifact/runtime preparation
-alone does not automatically make a test HEAVY; classify its actual cost and effects.
+## Acceptance and remaining work
 
-Although the shared ABI permits multiple purpose memberships, an operation marked
-HEAVY must not execute in ordinary FULL. Contradictory FULL/HEAVY or FULL/external
-requirements are exposed as classification issues, without silently executing the
-excluded work or claiming that the contradictory FULL selection was satisfied.
-HEAVY runs only when explicitly selected by the owning policy/request; it remains
-separate in execution evidence and is never a fallback for an empty FULL selection.
-
-Align ordinary/default SBT test selection and sm-workflow FULL with this boundary
-before removing runnable-suite exclusions. An unfiltered default `test` must not
-suddenly run formerly hidden heavy or external-service fixtures. Use a shared
-metadata-derived selection/adapter, not a replacement hard-coded class-name list.
-For unclassified tests, classify from source/known behavior before inclusion;
-do not infer FULL merely from absence of DoNotDiscover or a short class name.
-
-## ON_DEMAND selection and low-frequency maintenance
-
-Adopted policy: 2026-10-31. Add `ON_DEMAND` to CNCF's canonical Validation/Test
-Metadata purpose vocabulary and consume it through the existing discovery,
-selection and execution routes. This is the formal label for low-frequency
-executable specifications; it must not be a sm-workflow-only string or a second
-suite registry. The user-facing spelling `on_demand` follows the existing purpose
-parser's case conventions; the canonical purpose is `ON_DEMAND`.
-Implementation of the new purpose and migration remain pending until verified.
-
-Previous use of "scripted" for these ScalaTest suites was incorrect. Reserve that
-term for the actual sbt scripted mechanism. A procedure's implementation form
-(ScalaTest, sbt scripted, or a standalone script) is distinct from its selection
-policy; do not force non-Scala procedures into a ScalaTest catalogue.
-
-ON_DEMAND remains discoverable and explicitly selectable. Do not use
-`@DoNotDiscover` to hide these runnable suites or manually enroll class names.
-Ordinary ADMISSION, FULL and HEAVY selections exclude ON_DEMAND operations, even
-if inherited/default metadata would otherwise include them. Selecting HEAVY must
-not implicitly opt into ON_DEMAND. Explicit ON_DEMAND selection or an explicitly
-named ON_DEMAND operation in a focused selection can execute it, with the normal
-execution requirements and permissions. A broad feature/FOCUSED query alone is
-not explicit consent to include ON_DEMAND; record the actual selected operations.
-Conflicting ordinary memberships must not silently broaden routine selection.
-
-Apply this policy to existing low-frequency cases as well as new ones. Keep their
-entry points and documented prerequisites usable for on-demand and explicitly
-selected nighttime runs. Exclusion from routine completion must not turn them
-into documentation-only archives. They are not mandatory for ordinary Step,
-Phase, fix, commit or repository-sync completion. Active availability does not
-mean continuous execution or continuous qualification against every revision.
-
-Maintain procedures when they are exercised. Repair environment/specification
-drift found during a selected run, preserve the original result and record any
-repaired rerun separately. Investigate genuine product regressions as such;
-do not weaken assertions to hide them. Retain previous scripts, results and
-version context. Unattended runs may retain exit status, duration and evidence
-references without AI; subsequent maintenance need not use an AI monitoring or
-automatic repair loop. This change does not create a nighttime schedule.
-
-Retain purpose, requirements, versions, invocation, expected result, effects and
-cleanup with each procedure. Keep concise summaries and existing non-Git evidence
-references. Self-update uses a dedicated environment, not live consumer Sessions
-or a development runtime selection. Runtime ownership of SBT/publication remains
-unchanged. Only continuing regression requirements justified by their cost belong
-in HEAVY; do not move every historical scenario there. Preserve a coverage map
-and reusable small fixtures/bounded contract coverage.
-
-Inventory ordinary invocation links and remove any actual mandatory links without
-inventing removals where none exist. Preserve running invocations and all Session,
-history, repair-count and successful-result records. Migration acceptance uses
-small selection checks: discover ON_DEMAND; exclude it from default test/FULL,
-ADMISSION and HEAVY (including inherited defaults); explicitly select ON_DEMAND
-and a named focused case; prepare requirements only for selected operations.
-Exercise a harmless representative case to establish dispatch. Do not replay the
-expensive historical catalogue or self-update merely to prove selection. Verify
-producer/consumer purpose parsing and retained result attribution together.
-
-See the [ON_DEMAND correction handoff](../journal/2026/10/2026-10-31-minimal-reusable-workflow-fixture.md#on_demand-correction--authoritative-handoff)
-for the development assignment. No new registry, scheduler or execution framework
-is required; the accepted incident repair remains closed.
-
-## Runtime preparation and ownership
-
-The SBT adapter uses `ValidationSpecification` declarations from the compiled
-test artifact and CNCF discovery/selection. Ordinary `test` selects FULL;
-ordinary `testOnly <suite-pattern> -- -t <name>` or `-z <substring>` selects
-explicit operations. `testOnly --purpose HEAVY <suite-pattern>` requests a
-canonical purpose. `runtimeTestOnly` delegates to the same standard entry.
-`labelledTestSelection --purpose FULL` inspects selection without executing
-selected test bodies. An explicit empty selection fails.
-
-Exact selected names remain bound to their individual suite. Preparation is
-derived after purpose and name filtering, so an excluded operation cannot add a
-runtime prerequisite. The `sm-workflow.runtime` capability uses the existing
-`cozyPrepareRuntime` and `Compile/packageBin` tasks. Routine FULL does not
-prepare formerly hidden native CLI work. Unsupported framework options fail
-instead of broadening the requested execution.
-
-The initial dependency CLI declares FOCUSED/HEAVY and a runtime requirement.
-Local specifications declare FOCUSED/FULL, NORMAL and local requirements;
-external-service scenarios remain explicit HEAVY work. The migration inventory
-is evidence only and is never consulted by the adapter.
-
-For the dependency CLI fixture, select the actual normal SBT executable through
-`smworkflow.spec.sbt` (or `SM_WORKFLOW_SPEC_SBT`). This is an execution-host
-prerequisite, not suite registration. Its absence is a visible failure, not an
-empty successful run. Installed qualification additionally supplies the actual
-installed command and a private installation root; that route has no source
-launcher fallback. Other prerequisites remain owned by their existing adapters.
-
-Declare runtime/CAR and other supported prerequisites as execution requirements;
-the owning runtime prepares selected prerequisites using existing typed facilities.
-Reuse the existing runtime preparation tasks where applicable, but select their
-use from metadata rather than a manual suite list. Keep unavailable prerequisites
-distinct from test failure. No generic ProcessExec or AI-runner bypass is introduced.
-
-CNCF owns metadata/discovery/binding vocabulary; sm-workflow owns query, execution,
-results and caller projection. Identify any actual producer adapter gap and reuse
-or extend that boundary with admitted scope. Do not infer new API availability or
-permission for arbitrary cross-repository changes from this specification.
-
-## Preservation and migration
-
-First inventory current hidden/manual-list suites and their actual requirements.
-Then establish label selection and default FULL exclusion in one bounded migration
-unit; only afterward remove the corresponding hidden/list entries. Verify both
-positive explicit selection and negative FULL isolation. Do not run HEAVY/external
-services merely to prove exclusion; selection tests and harmless representative
-fixtures establish that boundary.
-
-Preserve ongoing product/test changes, existing Session/Plan/continuation, commits,
-history, repair counts and all validation/review results with their original scope.
-Changing labels does not retroactively turn earlier partial coverage into FULL or
-invalidate unrelated passed tests. Validate the changed selection/preparation and
-affected tests only. No re-Start, accepted Submit replay, private storage edits or
-routine full-suite rerun solely for adoption. Current active invocations finish
-under their retained selection; supported continuation adopts the new behavior.
+Establish one small producer-to-consumer dispatch before widening migration.
+Verify normal/ADMISSION/Slow/named-focused/explicit-suite selection, class and
+per-case tags, both annotations together, inheritance, preparation after selection,
+real harmless framework execution, correct empty/not-executed results and exact
+result attribution. Complete real declarations/config/CML/compiled inventory and
+caller updates through TA-S1–4. Documentation alone is not product acceptance;
+reuse applicable evidence without claiming earlier tests prove this new contract.
