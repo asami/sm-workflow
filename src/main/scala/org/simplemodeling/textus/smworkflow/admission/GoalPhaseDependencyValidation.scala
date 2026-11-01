@@ -15,7 +15,8 @@ import GoalPhaseNativeValidation as V
 
 /** References select business context, never execution permission or observations.
   * @since   Oct. 24, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseDependencyValidation {
@@ -132,7 +133,7 @@ private[smworkflow] object GoalPhaseDependencyValidation {
     value.diff.nonEmpty && value.diff.indexOf('\u0000') < 0
   def executionValid(value: Execution): Boolean = value != null && _id(value.check) && value.attempt >= 0 &&
     value.attempt < Int.MaxValue && WorkspaceId.parseC(value.workspace).isSuccess &&
-    Set("compile", "test", "test-only")(value.operation)
+    Set("compile", "test", "test-only", "fix-check")(value.operation)
   def recoveryValid(value: RecoverySubject): Boolean = value != null && _reference(value.binding) &&
     _text(value.repository) && WorkspaceId.parseC(value.workspace).isSuccess && _snapshot(value.base) && _snapshot(value.candidate)
 

@@ -24,7 +24,8 @@ import GoalPhaseAcceptanceBoundary as A
   * Selected inputs are specification data, never genuine Human/review evidence.
   * No Workflow state is read or seeded by this caller.
   * @since   Oct. 13, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeWorkflowCliFixture {
@@ -748,7 +749,8 @@ private[admission] object NativeWorkflowCliFixture {
     * Fixture setup/adoption is SPECIFICATION-OWNED, never genuine Human consent.
     */
   def freshDependency(name: String, denial: String = "none",
-    bindingTransform: GoalPhaseDependencyValidation.Binding => GoalPhaseDependencyValidation.Binding = value => value): Scenario = {
+    bindingTransform: GoalPhaseDependencyValidation.Binding => GoalPhaseDependencyValidation.Binding = value => value,
+    dependencyChecks: Option[Vector[GoalPhaseNativeValidation.Check]] = None): Scenario = {
     import io.circe.syntax.*
     import GoalPhaseDependencyValidation as DV
     val executable = TypedSbtHostPlanFixture.normalExecutable
@@ -756,6 +758,23 @@ private[admission] object NativeWorkflowCliFixture {
     val dependencyroot = initial.root.resolve("dependency")
     TypedSbtHostPlanFixture.build(dependencyroot, true)
     val repository = dependencyroot.resolve("repository").toRealPath()
+    if (dependencyChecks.exists(_.exists(_.kind == WorkflowSbtValidation.Kind.FixCheck))) {
+      // These ordinary SBT tasks belong only to the explicitly selected lint
+      // fixture. Their inputs are committed with the original dependency base.
+      Files.writeString(repository.resolve("build.sbt"), """
+        |lazy val fixCheck = taskKey[Unit]("Check the specification-owned dependency input")
+        |fixCheck := {
+        |  val root = baseDirectory.value
+        |  IO.append(root.getParentFile / "sbt-fix-check-executions.txt", java.lang.ProcessHandle.current().pid().toString + "\n")
+        |  if (IO.read(root / "value.txt") != "expected\n")
+        |    sys.error("SPECIFICATION-OWNED FixCheck: value.txt must contain expected followed by LF")
+        |}
+        |Compile / sourceGenerators += Def.task {
+        |  IO.append(baseDirectory.value.getParentFile / "sbt-compile-executions.txt", java.lang.ProcessHandle.current().pid().toString + "\n")
+        |  Seq.empty[java.io.File]
+        |}.taskValue
+        |""".stripMargin, StandardOpenOption.APPEND)
+    }
     Files.writeString(repository.resolve("value.txt"), "initial\n")
     val base = initial.prepareDependencyBase(repository)
     val binding = DV.Binding("specification-cncf-validation", 1, "step-1",
@@ -763,8 +782,8 @@ private[admission] object NativeWorkflowCliFixture {
       GoalPhaseDependencyScope.Component("org.goldenport.cncf", "goldenport-cncf", "cncf-source"),
       repository.toString, "main", Vector("value.txt"), base,
       "SPECIFICATION-OWNED adoption against the actual isolated Git objects; no retrospective Start capture",
-      Vector(GoalPhaseNativeValidation.Check("cncf-compile", 2, WorkflowSbtValidation.Kind.Compile),
-        GoalPhaseNativeValidation.Check("cncf-test", 3, WorkflowSbtValidation.Kind.Test)))
+      dependencyChecks.getOrElse(Vector(GoalPhaseNativeValidation.Check("cncf-compile", 2, WorkflowSbtValidation.Kind.Compile),
+        GoalPhaseNativeValidation.Check("cncf-test", 3, WorkflowSbtValidation.Kind.Test))))
     val selectedbinding = bindingTransform(binding)
     require(DV.bindingValid(selectedbinding), "Select a valid-shaped specification binding; native Git owns actual matching")
     val host = initial.host.copy(goal = initial.host.goal.copy(dependencyValidation = Some(selectedbinding)))
