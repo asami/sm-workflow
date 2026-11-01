@@ -24,6 +24,7 @@ import GoalPhaseDependencyValidation.given
   * @version Oct. 28, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.scalatest.DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.DependencyValidationTestDeclaration])
 final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Matchers with GivenWhenThen
