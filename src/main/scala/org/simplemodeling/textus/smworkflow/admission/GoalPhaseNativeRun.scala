@@ -65,7 +65,7 @@ private[smworkflow] object GoalPhaseNativeRun {
     sourceHistoryNormalization: Option[GoalPhaseSourceHistoryNormalization.Installation] = None,
     dependencySourceRevision: Option[GoalPhaseDependencySourceRevision.Installation] = None,
     dependencySourceRevisions: Vector[GoalPhaseDependencyValidation.Binding] = Vector.empty,
-    dependencySourceConsumptions: Vector[GoalPhaseDependencySourceRevision.Consumption] = Vector.empty,
+    dependencySourceConsumptions: Vector[GoalPhaseDependencySourceRevision.ConsumptionRecord] = Vector.empty,
     localPublication: Option[LocalPublicationRuntime.Policy] = None,
     commitHygieneMode: String = CommitHygiene.autoFix,
     completionRecords: Option[CompletionRecords.Policy] = None,

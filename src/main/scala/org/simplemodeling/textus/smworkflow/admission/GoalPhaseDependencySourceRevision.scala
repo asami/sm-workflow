@@ -8,7 +8,6 @@ import java.nio.file.Path
 import java.security.MessageDigest
 import java.util.UUID
 import org.goldenport.cncf.cli.InstalledRuntimeDistribution
-import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall}
 import org.goldenport.cncf.processexecution.*
@@ -50,6 +49,10 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
   val committedSchema = "sm-workflow.goal-phase-dependency-source-revision.v4"
   val committedScopeSchema = "sm-workflow.goal-phase-dependency-source-scope.v4"
   val committedCaptureSchema = "sm-workflow.goal-phase-dependency-source-capture.v4"
+  val sourceSchema = "sm-workflow.goal-phase-dependency-source-revision.v5"
+  val sourceScopeSchema = "sm-workflow.goal-phase-dependency-source-scope.v5"
+  val sourceCaptureSchema = "sm-workflow.goal-phase-dependency-source-capture.v5"
+  val consumptionSchema = "sm-workflow.goal-phase-dependency-source-consumption.v2"
   val committedBaseSuccessionSchema = "sm-workflow.goal-phase-committed-base-succession.v1"
   val committedInventorySelection = "goal-source-committed-inventory"
   val origin = "dependency-source-revision"
@@ -98,17 +101,48 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
     given Encoder[CheckProgram] = deriveEncoder
     given Decoder[CheckProgram] = closed(Set("check", "workspace", "kind", "program"), deriveDecoder, programValid)
   }
+  sealed trait ConsumptionRecord {
+    def primaryWorkspace: String
+    def sourceRoot: String
+    def nonInputExclusions: Vector[String]
+    def expectedModes: Vector[ExpectedMode]
+    def programs: Vector[CheckProgram]
+  }
+  object ConsumptionRecord {
+    given Encoder[ConsumptionRecord] = Encoder.instance {
+      case value: Consumption => value.asJson
+      case value: LegacyConsumption => value.asJson
+    }
+    given Decoder[ConsumptionRecord] = Decoder.instance { cursor =>
+      if (cursor.downField("schemaVersion").focus.nonEmpty) cursor.as[Consumption]
+      else cursor.as[LegacyConsumption]
+    }
+  }
   final case class Consumption(primaryWorkspace: String, sourceRoot: String,
-    runtimeImage: String, manifestReference: ContextReference, nonInputExclusions: Vector[String],
-    expectedModes: Vector[ExpectedMode], programs: Vector[CheckProgram])
+    nonInputExclusions: Vector[String], expectedModes: Vector[ExpectedMode],
+    programs: Vector[CheckProgram]) extends ConsumptionRecord
   object Consumption {
-    given Encoder[Consumption] = deriveEncoder
-    given Decoder[Consumption] = closed(Set("primaryWorkspace", "sourceRoot", "runtimeImage", "manifestReference",
+    given Encoder[Consumption] = deriveEncoder[Consumption].mapJson(_.mapObject(_.add("schemaVersion", consumptionSchema.asJson)))
+    private val _decoder: Decoder[Consumption] = closed(Set("primaryWorkspace", "sourceRoot",
+      "nonInputExclusions", "expectedModes", "programs"), deriveDecoder, consumptionValid)
+    given Decoder[Consumption] = Decoder.instance { cursor =>
+      cursor.get[String]("schemaVersion").flatMap { version =>
+        if (version == consumptionSchema) _decoder.decodeJson(cursor.value.mapObject(_.remove("schemaVersion")))
+        else Left(DecodingFailure("unknown source consumption schema", cursor.history))
+      }
+    }
+  }
+  final case class LegacyConsumption(primaryWorkspace: String, sourceRoot: String,
+    runtimeImage: String, manifestReference: ContextReference, nonInputExclusions: Vector[String],
+    expectedModes: Vector[ExpectedMode], programs: Vector[CheckProgram]) extends ConsumptionRecord
+  object LegacyConsumption {
+    given Encoder[LegacyConsumption] = deriveEncoder
+    given Decoder[LegacyConsumption] = closed(Set("primaryWorkspace", "sourceRoot", "runtimeImage", "manifestReference",
       "nonInputExclusions", "expectedModes", "programs"),
       deriveDecoder, consumptionValid)
   }
   final case class Proposal(schemaVersion: String, binding: ContextReference, mode: String,
-    excludedPaths: Vector[String], coverage: Vector[Coverage], consumption: Consumption)
+    excludedPaths: Vector[String], coverage: Vector[Coverage], consumption: ConsumptionRecord)
   object Proposal {
     given Encoder[Proposal] = deriveEncoder
     given Decoder[Proposal] = closed(Set("schemaVersion", "binding", "mode", "excludedPaths", "coverage", "consumption"),
@@ -145,13 +179,22 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
         value.approvals.nonEmpty && value.approvals.map(_.decision).distinct.size == value.approvals.size &&
         runtimeSelectionValid(value.installation))
   }
+  final case class SourceSuccession(parent: ContextReference, approvals: Vector[D.Approval], previousDirection: ContextReference)
+  object SourceSuccession {
+    import D.given
+    given Encoder[SourceSuccession] = deriveEncoder
+    given Decoder[SourceSuccession] = closed(Set("parent", "approvals", "previousDirection"), deriveDecoder,
+      value => value != null && referenceValid(value.parent) && referenceValid(value.previousDirection) &&
+        unique(value.approvals, 16)(D.approvalValid) &&
+        value.approvals.map(_.decision).distinct.size == value.approvals.size)
+  }
   final case class Target(schemaVersion: String, sessionId: String, questionIdentity: String,
     sourceRevision: String, pendingRevision: String, plan: O.Plan, step: String, generation: Long,
     primaryBase: O.Snapshot, completed: Vector[O.ClosedStep], repairProgress: GoalPhaseRepairProgress.Snapshot,
     requestingResult: ContextReference, predecessor: D.Admission, ancestors: Vector[Ancestor],
     proposal: Proposal, binding: D.Binding, predecessorGuard: Guard, preStageGuard: Guard,
     runtime: Option[RuntimeSuccession] = None, exclusionSuccession: Option[ExclusionSuccession] = None,
-    committedBaseSuccession: Option[CommittedBaseSuccession] = None)
+    committedBaseSuccession: Option[CommittedBaseSuccession] = None, sourceSuccession: Option[SourceSuccession] = None)
   final case class CommittedObject(mode: String, blob: String)
   object CommittedObject {
     given Encoder[CommittedObject] = deriveEncoder
@@ -200,15 +243,15 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
   object Target {
     import D.given
     given Encoder[Target] = deriveEncoder[Target].mapJson(_.mapObject(_.filter {
-      case ("runtime" | "exclusionSuccession" | "committedBaseSuccession", value) => !value.isNull
+      case ("runtime" | "exclusionSuccession" | "committedBaseSuccession" | "sourceSuccession", value) => !value.isNull
       case _ => true
     }))
     private val _decoder: Decoder[Target] = closed(Set("schemaVersion", "sessionId", "questionIdentity", "sourceRevision",
       "pendingRevision", "plan", "step", "generation", "primaryBase", "completed", "repairProgress",
-      "requestingResult", "predecessor", "ancestors", "proposal", "binding", "predecessorGuard", "preStageGuard", "runtime", "exclusionSuccession", "committedBaseSuccession"),
-      deriveDecoder, targetValid, optional = Set("runtime", "exclusionSuccession", "committedBaseSuccession"))
+      "requestingResult", "predecessor", "ancestors", "proposal", "binding", "predecessorGuard", "preStageGuard", "runtime", "exclusionSuccession", "committedBaseSuccession", "sourceSuccession"),
+      deriveDecoder, targetValid, optional = Set("runtime", "exclusionSuccession", "committedBaseSuccession", "sourceSuccession"))
     given Decoder[Target] = Decoder.instance { cursor =>
-      if (Vector("runtime", "exclusionSuccession", "committedBaseSuccession").exists(key => cursor.downField(key).focus.contains(Json.Null)))
+      if (Vector("runtime", "exclusionSuccession", "committedBaseSuccession", "sourceSuccession").exists(key => cursor.downField(key).focus.contains(Json.Null)))
         Left(DecodingFailure("runtime must be absent or a closed installed consumption succession", cursor.history))
       else _decoder(cursor)
     }
@@ -223,7 +266,7 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
 
   /** Structural data is not authority; native traversal authenticates its decisions. */
   final case class ScopeSuccessor(schemaVersion: String, predecessor: ContextReference,
-    binding: D.Binding, approvals: Vector[D.Approval], consumption: Consumption, coverage: Vector[Coverage],
+    binding: D.Binding, approvals: Vector[D.Approval], consumption: ConsumptionRecord, coverage: Vector[Coverage],
     consumptionDirection: Option[Direction] = None)
   object ScopeSuccessor {
     import D.given
@@ -242,12 +285,16 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
   }
   private def _scope_shape_valid(value: ScopeSuccessor): Boolean = value != null &&
     value.consumptionDirection != null &&
-    value.consumptionDirection.forall(d => directionValid(d) && d.target.runtime.nonEmpty) &&
-    value.schemaVersion == _scope_schema(value.consumptionDirection) &&
+    value.consumptionDirection.forall(d => directionValid(d) && isSuccessor(d.target)) &&
+    value.schemaVersion == _scope_schema(value.consumptionDirection, value.consumption) &&
     referenceValid(value.predecessor) && D.bindingValid(value.binding) &&
-    unique(value.approvals, 16)(D.approvalValid) && value.approvals.nonEmpty &&
+    unique(value.approvals, 16)(D.approvalValid) &&
+    (value.approvals.nonEmpty || _source_scope_direction(value.consumptionDirection)) &&
     value.approvals.map(_.decision).distinct.size == value.approvals.size && consumptionValid(value.consumption) &&
     unique(value.coverage, 16)(coverageValid) && value.coverage.map(_.approval).distinct.size == value.coverage.size
+
+  private def _source_scope_direction(direction: Option[Direction]): Boolean =
+    direction.exists(d => directionValid(d) && d.target.schemaVersion == sourceSchema && d.target.sourceSuccession.nonEmpty)
 
   private def _scope_approvals(direction: Direction, approvals: Vector[D.Approval]): Vector[D.Approval] =
     approvals.filter(a => a.step == direction.target.step &&
@@ -255,26 +302,35 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
       a.proposal.dependency.repository == direction.target.binding.dependency.repository &&
       !direction.target.proposal.coverage.exists(_.approval == a.decision))
 
-  private def _scope_schema(direction: Option[Direction]): String =
-    if (direction.exists(_.target.committedBaseSuccession.nonEmpty)) committedScopeSchema
+  private def _scope_schema(direction: Option[Direction], consumption: ConsumptionRecord): String =
+    if (consumption.isInstanceOf[Consumption]) sourceScopeSchema
+    else if (direction.exists(_.target.committedBaseSuccession.nonEmpty)) committedScopeSchema
     else if (direction.exists(_.target.exclusionSuccession.nonEmpty)) exclusionScopeSchema
     else if (direction.nonEmpty) runtimeScopeSchema else scopeSchema
 
-  private def _capture_schema(scope: Option[ScopeSuccessor]): String =
-    if (scope.exists(value => value != null && value.schemaVersion == committedScopeSchema)) committedCaptureSchema
+  private def _capture_schema(direction: Direction, scope: Option[ScopeSuccessor]): String =
+    if (direction != null && direction.target != null && (direction.target.schemaVersion == sourceSchema ||
+        scope.exists(value => value != null && value.schemaVersion == sourceScopeSchema))) sourceCaptureSchema
+    else if (scope.exists(value => value != null && value.schemaVersion == committedScopeSchema)) committedCaptureSchema
     else if (scope.exists(value => value != null && value.schemaVersion == exclusionScopeSchema)) exclusionCaptureSchema
     else if (scope.nonEmpty) scopeCaptureSchema else schema
 
-  private def _same_consumption(previous: Consumption, next: Consumption, exclusions: Vector[String]): Boolean =
+  private def _with_modes(value: ConsumptionRecord, modes: Vector[ExpectedMode]): ConsumptionRecord = value match {
+    case active: Consumption => active.copy(expectedModes = modes)
+    case legacy: LegacyConsumption => legacy.copy(expectedModes = modes)
+  }
+
+  private def _same_consumption(previous: ConsumptionRecord, next: ConsumptionRecord, exclusions: Vector[String]): Boolean =
     consumptionValid(previous) && consumptionValid(next) &&
-      next.copy(expectedModes = previous.expectedModes, runtimeImage = previous.runtimeImage,
-        manifestReference = previous.manifestReference, nonInputExclusions = previous.nonInputExclusions) == previous &&
+      next.primaryWorkspace == previous.primaryWorkspace && next.sourceRoot == previous.sourceRoot &&
+      next.programs == previous.programs &&
       next.nonInputExclusions == exclusions && next.expectedModes.startsWith(previous.expectedModes)
 
   private def _scope_inventory_valid(direction: Direction, binding: D.Binding, approvals: Vector[D.Approval],
-    consumption: Consumption, coverage: Vector[Coverage], exclusions: Vector[String],
-    committed: Option[CommittedBaseSuccession] = None): Boolean = directionValid(direction) && D.bindingValid(binding) &&
-    unique(approvals, 16)(D.approvalValid) && approvals.nonEmpty && consumptionValid(consumption) &&
+    consumption: ConsumptionRecord, coverage: Vector[Coverage], exclusions: Vector[String],
+    committed: Option[CommittedBaseSuccession] = None, allowemptyapprovals: Boolean = false): Boolean =
+    directionValid(direction) && D.bindingValid(binding) &&
+    unique(approvals, 16)(D.approvalValid) && (approvals.nonEmpty || allowemptyapprovals) && consumptionValid(consumption) &&
     unique(coverage, 16)(coverageValid) && {
       val previous = direction.target.binding
       val inherited = direction.target.predecessor.approvals ++ direction.target.ancestors.flatMap(_.capture.admission.approvals)
@@ -300,7 +356,8 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
   private def _scope_boundary_valid(direction: Direction, value: ScopeSuccessor): Boolean =
     _scope_shape_valid(value) && directionValid(direction) && value.predecessor == direction.directive &&
       _scope_inventory_valid(direction, value.binding, value.approvals, value.consumption, value.coverage,
-        exclusionsOf(direction, Some(value)), value.consumptionDirection.flatMap(_.target.committedBaseSuccession))
+        exclusionsOf(direction, Some(value)), value.consumptionDirection.flatMap(_.target.committedBaseSuccession),
+        allowemptyapprovals = _source_scope_direction(value.consumptionDirection))
 
   /** Structural eligibility is not an independent direction or qualification receipt. */
   private def _runtime_target_successor_valid(original: Direction, target: Target, approvals: Vector[D.Approval]): Boolean =
@@ -322,8 +379,11 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
           case None => target.proposal.excludedPaths == before.proposal.excludedPaths
         }) &&
         target.generation > before.generation && BigInt(target.sourceRevision) > BigInt(before.pendingRevision) &&
-        target.proposal.consumption.runtimeImage != before.proposal.consumption.runtimeImage &&
-        target.proposal.consumption.manifestReference != before.proposal.consumption.manifestReference &&
+        ((before.proposal.consumption, target.proposal.consumption) match {
+          case (old: LegacyConsumption, next: LegacyConsumption) =>
+            next.runtimeImage != old.runtimeImage && next.manifestReference != old.manifestReference
+          case _ => false
+        }) &&
         runtimeMatches(runtime.installation, target.proposal.consumption) &&
         _scope_inventory_valid(original, target.binding, additional, target.proposal.consumption, target.proposal.coverage,
           target.proposal.excludedPaths, target.committedBaseSuccession)
@@ -333,12 +393,57 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
     directionValid(original) && directionValid(next) && next.directive != original.directive &&
       next.participant == original.participant && _runtime_target_successor_valid(original, next.target, approvals)
 
+  def isSuccessor(target: Target): Boolean = target.runtime.nonEmpty || target.sourceSuccession.nonEmpty
+
+  private def _source_target_successor_valid(original: Direction, target: Target, approvals: Vector[D.Approval]): Boolean =
+    directionValid(original) && !isSuccessor(original.target) && targetValid(target) &&
+      approvals != null && approvals.forall(D.approvalValid) && target.sourceSuccession.exists { succession =>
+        val before = original.target
+        val additional = _scope_approvals(original, approvals)
+        succession.parent == original.directive && succession.approvals == additional &&
+          target.sessionId == before.sessionId && target.plan == before.plan && target.step == before.step &&
+          target.primaryBase == before.primaryBase && target.completed == before.completed &&
+          target.predecessor == before.predecessor && target.ancestors == before.ancestors &&
+          target.predecessorGuard == before.predecessorGuard &&
+          (if (target.committedBaseSuccession.nonEmpty) target.proposal.mode == "committed"
+            else target.proposal.mode == before.proposal.mode) &&
+          (target.exclusionSuccession match {
+            case Some(value) => value.parent == original.directive && value.previousExclusions == before.proposal.excludedPaths &&
+              target.proposal.excludedPaths == value.previousExclusions ++ value.addedPaths
+            case None => target.proposal.excludedPaths == before.proposal.excludedPaths
+          }) && target.generation > before.generation && BigInt(target.sourceRevision) > BigInt(before.pendingRevision) &&
+          _scope_inventory_valid(original, target.binding, additional, target.proposal.consumption,
+            target.proposal.coverage, target.proposal.excludedPaths, target.committedBaseSuccession, allowemptyapprovals = true)
+      }
+
+  def sourceSuccessorValid(original: Direction, next: Direction, approvals: Vector[D.Approval]): Boolean =
+    directionValid(original) && directionValid(next) && next.directive != original.directive &&
+      next.target.sourceSuccession.forall(_.previousDirection != next.directive) &&
+      next.participant == original.participant && _source_target_successor_valid(original, next.target, approvals)
+
+  /** The caller supplies the actual traversed predecessor, never a declaration's assertion. */
+  def sourcePreviousValid(original: Direction, next: Target, previous: Option[Direction]): Boolean = {
+    val actual = previous.getOrElse(original)
+    directionValid(actual) && next.sourceSuccession.exists(_.previousDirection == actual.directive) &&
+      next.generation > actual.target.generation && BigInt(next.sourceRevision) > BigInt(actual.target.pendingRevision) &&
+      (actual.target.proposal.mode != "committed" || next.proposal.mode == "committed") &&
+      next.binding.revision > actual.target.binding.revision && next.binding.paths.startsWith(actual.target.binding.paths) &&
+      next.proposal.coverage.startsWith(actual.target.proposal.coverage) &&
+      next.proposal.excludedPaths.startsWith(actual.target.proposal.excludedPaths) &&
+      _same_consumption(actual.target.proposal.consumption, next.proposal.consumption, next.proposal.excludedPaths)
+  }
+
+  def successorValid(original: Direction, next: Direction, approvals: Vector[D.Approval]): Boolean =
+    if (next != null && next.target != null && next.target.sourceSuccession.nonEmpty)
+      sourceSuccessorValid(original, next, approvals)
+    else runtimeSuccessorValid(original, next, approvals)
+
   def scopeValid(direction: Direction, value: ScopeSuccessor): Boolean = _scope_boundary_valid(direction, value) &&
     (value.consumptionDirection match {
-      case Some(next) => runtimeSuccessorValid(direction, next, value.approvals) &&
+      case Some(next) => successorValid(direction, next, value.approvals) &&
         next.target.binding == value.binding && next.target.proposal.consumption == value.consumption &&
         next.target.proposal.coverage == value.coverage
-      case None => value.consumption.copy(expectedModes = direction.target.proposal.consumption.expectedModes) ==
+      case None => _with_modes(value.consumption, direction.target.proposal.consumption.expectedModes) ==
         direction.target.proposal.consumption
     })
 
@@ -356,28 +461,19 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
     value.component.path == Path.of(value.manifest).getParent.resolve("components/textus-sm-workflow.car").toString &&
     root(value.component.source)
 
-  def runtimeMatches(selection: RuntimeSelection, consumption: Consumption): Boolean =
-    runtimeSelectionValid(selection) && consumptionValid(consumption) && consumption.runtimeImage == selection.installation &&
-      consumption.manifestReference == ContextReference("cncf-installed-runtime:" + selection.installation, "1")
+  def runtimeMatches(selection: RuntimeSelection, consumption: ConsumptionRecord): Boolean = consumption match {
+    case legacy: LegacyConsumption => runtimeSelectionValid(selection) && consumptionValid(legacy) &&
+      legacy.runtimeImage == selection.installation &&
+      legacy.manifestReference == ContextReference("cncf-installed-runtime:" + selection.installation, "1")
+    case _ => false
+  }
 
-  private[admission] def installedSelectionC(core: ActionCall.Core): Consequence[RuntimeSelection] =
-    RuntimeConfig.installedRuntimeDistributionC(core.executionContext.resolvedParameters).flatMap {
-      case Some(value) =>
-        val selected = RuntimeSelection(value.installationId.toString, value.updateId.toString, value.manifest.toString,
-          value.modules.map(m => RuntimeArtifact(m.coordinate, m.path.toString, m.source.toString)),
-          value.component.identity, RuntimeArtifact(value.component.coordinate, value.component.path.toString, value.component.source.toString))
-        if (runtimeSelectionValid(selected)) Consequence.success(selected)
-        else D.invalid("current installed runtime profile is unsupported for source consumption succession")
-      case None => D.invalid("source consumption succession requires the actual current immutable installed runtime")
-    }
-
-  def runtimeC(core: ActionCall.Core, scope: Option[ScopeSuccessor]): Consequence[Unit] =
-    scope.flatMap(_.consumptionDirection).flatMap(_.target.runtime) match {
-      case None => Consequence.unit
-      case Some(runtime) => installedSelectionC(core).flatMap { current =>
-        if (current == runtime.installation && scope.exists(s => runtimeMatches(current, s.consumption))) Consequence.unit
-        else D.invalid("source consumption differs from the actual admitted immutable runtime, manifest or module association")
-      }
+  def consumptionPreflightC(direction: Direction, scope: Option[ScopeSuccessor]): Consequence[Unit] =
+    if (!directionValid(direction) || scope == null || !scope.forall(scopeValid(direction, _)))
+      D.invalid("source consumption requires a valid effective direction and scope")
+    else consumptionOf(direction, scope) match {
+      case _: Consumption => Consequence.unit
+      case _: LegacyConsumption => D.invalid("legacy image-based source consumption requires migration through existing describe/adopt source revision operations")
     }
 
   /** Only fresh capture selects current declarations; retained history does not. */
@@ -385,11 +481,11 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
     consumptionDirection: Option[Direction] = None):
       Consequence[Option[ScopeSuccessor]] = {
     if (!directionValid(direction) || approvals == null || !approvals.forall(D.approvalValid) || consumptionDirection == null ||
-        !consumptionDirection.forall(runtimeSuccessorValid(direction, _, approvals)))
+        !consumptionDirection.forall(successorValid(direction, _, approvals)))
       D.invalid("source scope requires actual valid native approvals")
     else {
       val additional = _scope_approvals(direction, approvals)
-      if (additional.isEmpty) Consequence.success(None)
+      if (additional.isEmpty && consumptionDirection.isEmpty) Consequence.success(None)
       else {
         val previous = direction.target.binding
         val paths = previous.paths ++ additional.flatMap(_.proposal.paths).filterNot(previous.paths.contains).distinct
@@ -401,11 +497,11 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
           c.expectedModes.map(_.path) == paths && c.expectedModes.startsWith(direction.target.proposal.consumption.expectedModes) &&
           (consumptionDirection match {
             case Some(next) => c == next.target.proposal.consumption
-            case None => c.copy(expectedModes = direction.target.proposal.consumption.expectedModes) == direction.target.proposal.consumption
+            case None => _with_modes(c, direction.target.proposal.consumption.expectedModes) == direction.target.proposal.consumption
           }))
         (bindings, consumptions) match {
           case (Vector(binding), Vector(consumption)) =>
-            val scope = ScopeSuccessor(_scope_schema(consumptionDirection),
+            val scope = ScopeSuccessor(_scope_schema(consumptionDirection, consumption),
               direction.directive, binding, additional, consumption,
               direction.target.proposal.coverage ++ additional.map(a =>
                 Coverage(a.decision, a.proposal.acceptance, binding.checks.map(_.identity))), consumptionDirection)
@@ -425,7 +521,7 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
       scope.forall(scopeValid(direction, _))
 
   def bindingOf(direction: Direction, scope: Option[ScopeSuccessor]): D.Binding = scope.map(_.binding).getOrElse(direction.target.binding)
-  def consumptionOf(direction: Direction, scope: Option[ScopeSuccessor]): Consumption =
+  def consumptionOf(direction: Direction, scope: Option[ScopeSuccessor]): ConsumptionRecord =
     scope.map(_.consumption).getOrElse(direction.target.proposal.consumption)
   def exclusionsOf(direction: Direction, scope: Option[ScopeSuccessor]): Vector[String] =
     consumptionOf(direction, scope).nonInputExclusions
@@ -434,14 +530,14 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
   def modeOf(direction: Direction, scope: Option[ScopeSuccessor]): String =
     qualificationOf(direction, scope).target.proposal.mode
   def bindingOf(capture: Capture): D.Binding = bindingOf(capture.direction, capture.scope)
-  def consumptionOf(capture: Capture): Consumption = consumptionOf(capture.direction, capture.scope)
+  def consumptionOf(capture: Capture): ConsumptionRecord = consumptionOf(capture.direction, capture.scope)
   def modeOf(capture: Capture): String = modeOf(capture.direction, capture.scope)
 
   /** Existing framework admission, without a process or raw host JSON access. */
   def preflightC(core: ActionCall.Core, direction: Direction, scope: Option[ScopeSuccessor]): Consequence[Unit] = {
     val binding = bindingOf(direction, scope)
     val paths = if (modeOf(direction, scope) == "committed") Vector.empty else binding.paths
-    paths.indices.foldLeft(runtimeC(core, scope)) { (prior, index) =>
+    paths.indices.foldLeft(consumptionPreflightC(direction, scope)) { (prior, index) =>
       prior.flatMap { _ => for {
         workspace <- WorkspaceId.parseC(binding.dependency.workspace)
         selection <- GitSelectionId.parseC("goal-path-" + (index + 1))
@@ -522,7 +618,8 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
       else D.invalid("dependency source revision requires the independent Human evidence provider")
   }
   final case class Source(human: H.Source, predecessor: D.Admission, ancestors: Vector[Ancestor],
-    original: Option[Direction] = None, approvals: Vector[D.Approval] = Vector.empty)
+    original: Option[Direction] = None, approvals: Vector[D.Approval] = Vector.empty,
+    previousDirection: Option[Direction] = None)
 
   def targetRecord(value: Target): Record = GoalPhaseNativeMetadata.record(value.asJson)
   def targetC(value: Record): Consequence[Target] = recordC[Target](value)
@@ -583,16 +680,17 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
 
   private def targetForC(source: Source, declaration: F.Declaration, core: ActionCall.Core,
     proposal: Proposal): Consequence[Target] = for {
-    _ <- if (source != null && D.admissionValid(source.predecessor) && proposalValid(proposal)) Consequence.unit
+    _ <- if (source != null && D.admissionValid(source.predecessor) && proposalValid(proposal) &&
+        proposal.schemaVersion == sourceSchema && proposal.consumption.isInstanceOf[Consumption]) Consequence.unit
       else D.invalid("source revision requires a native standing dependency and closed proposal")
     human = source.human
     _ <- resumedC(human, "source-revision-description-eligibility")
     pending <- pendingC(human)
     _ <- if (source.original match {
       case None => human.result.result.value.dependencyAdmission.contains(source.predecessor)
-      case Some(original) => directionValid(original) && original.target.runtime.isEmpty &&
+      case Some(original) => directionValid(original) && !isSuccessor(original.target) &&
         original.target.predecessor == source.predecessor && source.approvals.forall(D.approvalValid) &&
-        _scope_approvals(original, source.approvals).nonEmpty && human.result.result.value.dependencyAdmission.isEmpty
+        human.result.result.value.dependencyAdmission.isEmpty
     }) Consequence.unit else D.invalid("source revision predecessor is not the actual native semantic lineage")
     selected <- declaration.dependencySourceRevisions.find(b => b.identity == proposal.binding.identity &&
       b.revision.toString == proposal.binding.revision).map(Consequence.success)
@@ -604,11 +702,8 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
       .getOrElse(observeC(core, source.predecessor.binding.copy(paths = inherited), Vector.empty))
     fresh <- observeC(core, selected, proposal.excludedPaths)
     step <- human.input.stepIdentity.map(Consequence.success).getOrElse(D.invalid("source revision has no current Step"))
-    runtime <- source.original match {
-      case Some(original) => installedSelectionC(core).map[Option[RuntimeSuccession]](value => Some(
-        RuntimeSuccession(original.directive, _scope_approvals(original, source.approvals), value)))
-      case None => Consequence.success(Option.empty[RuntimeSuccession])
-    }
+    succession = source.original.map(original => SourceSuccession(original.directive,
+      _scope_approvals(original, source.approvals), source.previousDirection.getOrElse(original).directive))
     exclusions = source.original.filter(_.target.proposal.excludedPaths != proposal.excludedPaths).map(original =>
       ExclusionSuccession(exclusionSuccessionSchema, original.directive, original.target.proposal.excludedPaths,
         proposal.excludedPaths.drop(original.target.proposal.excludedPaths.size)))
@@ -623,14 +718,15 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
         }
       case _ => Consequence.success(Option.empty[CommittedBaseSuccession])
     }
-    target = Target(if (committed.nonEmpty) committedSchema else if (exclusions.nonEmpty) exclusionSchema else if (runtime.nonEmpty) runtimeSchema else schema,
+    target = Target(sourceSchema,
       human.session.current.identity.value, H.identity(human).value,
       human.from.revision.value.toString, pending.revision.value.toString, human.controller.plan, step,
       human.controller.generation, human.controller.base, human.controller.completed,
       GoalPhaseRepairProgress.snapshot(human.controller), human.result.resultReference,
-      source.predecessor, source.ancestors, proposal, selected, old, fresh, runtime, exclusions, committed)
+      source.predecessor, source.ancestors, proposal, selected, old, fresh, None, exclusions, committed, succession)
     _ <- if (targetValid(target) && source.original.forall(original =>
-        _runtime_target_successor_valid(original, target, source.approvals))) Consequence.unit
+        _source_target_successor_valid(original, target, source.approvals) &&
+          sourcePreviousValid(original, target, source.previousDirection))) Consequence.unit
       else D.invalid("source revision crosses inherited source, runtime or acceptance obligations")
     questions <- human.session.storage.bindDecisionC(H.completionOperation, H.inputCodec)
     issued <- questions.loadC(H.identity(human))(using core.executionContext)
@@ -691,11 +787,9 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
         target.completed == source.controller.completed && target.generation == source.controller.generation &&
         target.repairProgress == GoalPhaseRepairProgress.snapshot(source.controller) &&
         target.requestingResult == source.result.resultReference &&
-        (if (target.runtime.nonEmpty) source.result.result.value.dependencyAdmission.isEmpty
+        (if (isSuccessor(target)) source.result.result.value.dependencyAdmission.isEmpty
           else source.result.result.value.dependencyAdmission.contains(target.predecessor)) &&
-        direction.participant == source.session.participantIdentity &&
-        declaration.dependencySourceRevisions.contains(target.binding) &&
-        declaration.dependencySourceConsumptions.contains(target.proposal.consumption)) Consequence.unit
+        direction.participant == source.session.participantIdentity) Consequence.unit
       else D.invalid("retained source direction crosses its actual native source or host declaration")
     state <- resumedC(source, direction.directive.identity)
     next <- GoalPhaseNativeHistory.completionC(source.session.current, pending, direction.directive, state.stage.toString)
@@ -785,9 +879,12 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
   def coverageValid(value: Coverage): Boolean = value != null && referenceValid(value.approval) &&
     unique(value.acceptance, 32)(text) && value.acceptance.nonEmpty &&
     unique(value.checks, 16)(text) && value.checks.nonEmpty
-  def consumptionValid(value: Consumption): Boolean = value != null &&
-    WorkspaceId.parseC(value.primaryWorkspace).isSuccess && root(value.sourceRoot) && text(value.runtimeImage) &&
-    referenceValid(value.manifestReference) && unique(value.nonInputExclusions, 128)(path) &&
+  def consumptionValid(value: ConsumptionRecord): Boolean = value != null &&
+    WorkspaceId.parseC(value.primaryWorkspace).isSuccess && root(value.sourceRoot) &&
+    (value match {
+      case legacy: LegacyConsumption => text(legacy.runtimeImage) && referenceValid(legacy.manifestReference)
+      case _: Consumption => true
+    }) && unique(value.nonInputExclusions, 128)(path) &&
     unique(value.expectedModes, 128)(m => m != null && path(m.path) && Set("100644", "100755", "000000")(m.mode)) &&
     value.expectedModes.nonEmpty && value.expectedModes.map(_.path).distinct.size == value.expectedModes.size &&
     unique(value.programs, 32)(programValid) && value.programs.nonEmpty &&
@@ -795,7 +892,9 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
   def programValid(value: CheckProgram): Boolean = value != null && text(value.check) &&
     WorkspaceId.parseC(value.workspace).isSuccess && text(value.program) &&
     Set("compile", "test", "test-only", "fix-check")(value.kind)
-  def proposalValid(value: Proposal): Boolean = value != null && value.schemaVersion == schema &&
+  def proposalValid(value: Proposal): Boolean = value != null &&
+    ((value.schemaVersion == schema && value.consumption.isInstanceOf[LegacyConsumption]) ||
+      (value.schemaVersion == sourceSchema && value.consumption.isInstanceOf[Consumption])) &&
     referenceValid(value.binding) && Set("selected-changes", "committed")(value.mode) &&
     unique(value.excludedPaths, 128)(path) && unique(value.coverage, 16)(coverageValid) &&
     value.coverage.nonEmpty && value.coverage.map(_.approval).distinct.size == value.coverage.size &&
@@ -830,11 +929,16 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
       value.baselineChangedPaths == changed.filterNot((paths ++ previous ++ added).contains)
   }
 
-  def targetValid(value: Target): Boolean = value != null && value.runtime != null && value.exclusionSuccession != null &&
+  def targetValid(value: Target): Boolean = value != null && value.runtime != null && value.sourceSuccession != null && value.exclusionSuccession != null &&
     value.committedBaseSuccession != null && value.proposal != null &&
-    value.schemaVersion == (if (value.committedBaseSuccession.nonEmpty) committedSchema else if (value.exclusionSuccession.nonEmpty) exclusionSchema else if (value.runtime.nonEmpty) runtimeSchema else schema) &&
+    (if (value.schemaVersion == sourceSchema) value.runtime.isEmpty && value.proposal.schemaVersion == sourceSchema &&
+      value.sourceSuccession.forall(s => s != null && referenceValid(s.parent) && referenceValid(s.previousDirection) &&
+        unique(s.approvals, 16)(D.approvalValid) &&
+        s.approvals.map(_.decision).distinct.size == s.approvals.size)
+    else value.sourceSuccession.isEmpty && value.proposal.schemaVersion == schema &&
+      value.schemaVersion == (if (value.committedBaseSuccession.nonEmpty) committedSchema else if (value.exclusionSuccession.nonEmpty) exclusionSchema else if (value.runtime.nonEmpty) runtimeSchema else schema)) &&
     value.exclusionSuccession.forall(s => _exclusion_succession_valid(s) &&
-      value.runtime.exists(r => r != null && r.parent == s.parent) && value.proposal.excludedPaths == s.previousExclusions ++ s.addedPaths) &&
+      (value.runtime.exists(r => r != null && r.parent == s.parent) || value.sourceSuccession.exists(r => r != null && r.parent == s.parent)) && value.proposal.excludedPaths == s.previousExclusions ++ s.addedPaths) &&
     value.runtime.forall(r => r != null && referenceValid(r.parent) && unique(r.approvals, 16)(D.approvalValid) &&
       r.approvals.nonEmpty && r.approvals.map(_.decision).distinct.size == r.approvals.size &&
       runtimeMatches(r.installation, value.proposal.consumption)) &&
@@ -878,7 +982,7 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
       p.renamedFrom.forall((value.binding.paths ++ value.proposal.excludedPaths).contains)) &&
     (value.proposal.mode != "committed" || !value.preStageGuard.dirty.exists(d => value.binding.paths.contains(d.path))) &&
     value.committedBaseSuccession.forall(s => committedBaseValid(s) && value.proposal.mode == "committed" &&
-      value.runtime.exists(_.parent == s.parent) && s.nextBase == value.binding.base &&
+      (value.runtime.exists(_.parent == s.parent) || value.sourceSuccession.exists(_.parent == s.parent)) && s.nextBase == value.binding.base &&
       s.committedEntries.map(_.path) == value.binding.paths &&
       s.committedEntries.zip(value.proposal.consumption.expectedModes).forall((entry, mode) =>
         entry.path == mode.path && entry.entry.map(_.mode).getOrElse("000000") == mode.mode) &&
@@ -889,7 +993,7 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
     coverageMatches(value)
   private def coverageMatches(value: Target): Boolean = {
     val approvals = (value.predecessor.approvals ++ value.ancestors.flatMap(_.capture.admission.approvals) ++
-      value.runtime.toVector.flatMap(_.approvals))
+      value.runtime.toVector.flatMap(_.approvals) ++ value.sourceSuccession.toVector.flatMap(_.approvals))
       .groupBy(_.decision).values.map(_.head).toVector
     value.proposal.coverage.map(_.approval).toSet == approvals.map(_.decision).toSet &&
       value.proposal.coverage.forall(c => approvals.find(_.decision == c.approval).exists(a =>
@@ -899,7 +1003,7 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
   def directionValid(value: Direction): Boolean = value != null && targetValid(value.target) &&
     referenceValid(value.directive) && text(value.participant) && text(value.rationale)
   def captureValid(value: Capture): Boolean = value != null && value.scope != null &&
-    value.schemaVersion == _capture_schema(value.scope) &&
+    value.schemaVersion == _capture_schema(value.direction, value.scope) &&
     value.scope.forall(scopeValid(value.direction, _)) &&
     directionValid(value.direction) && value.sessionId == value.direction.target.sessionId &&
     value.plan != null && value.plan == ContextReference(value.direction.target.plan.identity, value.direction.target.plan.revision) &&
@@ -992,7 +1096,7 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
           } yield result }
         intent <- saveC("dependency-source-observation-intent", staged.record, staged.payload)
         after <- observe
-        capture = Capture(_capture_schema(scope), current.record.identity.value, ContextReference(controller.plan.identity, controller.plan.revision),
+        capture = Capture(_capture_schema(direction, scope), current.record.identity.value, ContextReference(controller.plan.identity, controller.plan.revision),
           binding.step, controller.generation, current.payload.sourceRevision, controller.base, direction, after,
           staged.payload.dependencySourceStages.map(_.path), before, scope)
         _ <- if (captureValid(capture) && after == staged.payload.dependencySourceStages.lastOption.map(_.after).getOrElse(before))
@@ -1096,7 +1200,7 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
 
   def freshnessC(core: ActionCall.Core, capture: Capture): Consequence[Unit] =
     if (!captureValid(capture)) D.invalid("invalid source capture")
-    else runtimeC(core, capture.scope).flatMap(_ => _qualified_observation_c(core, capture.direction, capture.scope)).flatMap(actual =>
+    else consumptionPreflightC(capture.direction, capture.scope).flatMap(_ => _qualified_observation_c(core, capture.direction, capture.scope)).flatMap(actual =>
       if (actual == capture.postStageGuard) Consequence.unit
       else D.invalid("dependency source bytes or excluded metadata drifted after capture"))
 

@@ -341,7 +341,7 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
   protected def local_subject_capabilities: Vector[String] = Vector("user")
   protected def standard_runtime: Boolean = false
 
-  protected final case class InstalledBootstrapSelection(manifest: Path, component: Path)
+  protected final case class InstalledBootstrapSelection(component: Path)
 
   protected def _with_runtime_(root: Path, scenario: String,
     host: Option[ThreeWorkflowRuntimeParameters.Definition] = None,
@@ -416,7 +416,6 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
         |""".stripMargin)
     val runtime = new CncfRuntime()
     val installedargs = installedBootstrap.toVector.flatMap(value => Vector("--no-default-components",
-      s"--${org.goldenport.cncf.config.RuntimeConfig.installedRuntimeManifestKey}=${value.manifest}",
       s"--component-file=${value.component}"))
     val handle = try take(runtime.initializeHandle(BootstrapConfig(cwd = root, args = (Vector(
       s"--textus.assembly.descriptor=${directory.resolve("assembly.yaml")}",

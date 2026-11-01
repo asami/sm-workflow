@@ -76,7 +76,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
     dependencyExecutions: Vector[GoalPhaseDependencyValidation.Execution] = Vector.empty,
     assessment: Option[GoalPhaseStepAssessment.Result] = None,
     dependencySource: Option[GoalPhaseDependencySourceRevision.Capture] = None,
-    sourceConsumption: Option[GoalPhaseDependencySourceRevision.Consumption] = None)
+    sourceConsumption: Option[GoalPhaseDependencySourceRevision.ConsumptionRecord] = None)
   object Payload {
     given Encoder[Payload] = deriveEncoder[Payload].mapJson(value => value.mapObject(fields =>
       Vector("metadata", "stopped", "admissionFailures", "uncertainties", "newAttempts", "dependencyExecutions").foldLeft(fields) { (prior, key) =>

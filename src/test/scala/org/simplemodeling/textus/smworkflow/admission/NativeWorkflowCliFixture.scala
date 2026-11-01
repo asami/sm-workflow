@@ -214,7 +214,7 @@ private[admission] object NativeWorkflowCliFixture {
     def advance(task: Path): Result = call("command", GoalPhaseNativeRun.advanceOperation.operation,
       Vector("--sessionId", retrieve(task)))
     def call(mode: String, operation: String, parameters: Vector[String]): Result =
-      _run(_launcher ++ Vector(mode, s"$_component.$_service.$operation") ++ parameters ++
+      _run(_operation_argv(mode, s"$_component.$_service.$operation") ++ parameters ++
         (if (mode == "client") _client_options else Vector.empty) ++ _output)
     /** The same isolated host can qualify a separately installed normal CLI. */
     def callInstalled(executable: Path, service: String, operation: String, parameters: Vector[String],
@@ -226,34 +226,33 @@ private[admission] object NativeWorkflowCliFixture {
           "Select only this scenario's existing explicit assembly descriptor")
         s"--textus.assembly.descriptor=$path"
       }
-      _run(Vector(executable.toString, "--runtime-root", root.toString) ++ descriptor ++
-        Vector("command", s"$_component.$service.$operation") ++
+      _run(Vector(executable.toString, s"$_component.$service.$operation") ++ descriptor ++
         parameters ++ Vector("--json"), installations)
     }
     def repositoryCall(operation: String, parameters: Vector[String]): Result =
-      _run(_launcher ++ Vector("command", s"$_component.RepositorySyncService.$operation") ++ parameters ++ _output)
+      _run(_operation_argv("command", s"$_component.RepositorySyncService.$operation") ++ parameters ++ _output)
     def readJournalEntry(input: V.JournalReadInput): Result =
-      _run(_launcher ++ Vector("command", s"$_component.JournalService.readJournalEntry", "--input",
+      _run(_operation_argv("command", s"$_component.JournalService.readJournalEntry") ++ Vector("--input",
         _take(input.toRecord().toJsonStringC, "Public Journal read input")) ++ _output)
     def readEvidence(input: V.EvidenceReadInput): Result =
-      _run(_launcher ++ Vector("command", s"$_component.EvidenceService.readEvidence", "--input",
+      _run(_operation_argv("command", s"$_component.EvidenceService.readEvidence") ++ Vector("--input",
         _take(input.toRecord().toJsonStringC, "Public Evidence read input")) ++ _output)
     def recordEvidenceJournal(input: V.EvidenceReadInput): Result =
-      _run(_launcher ++ Vector("command", s"$_component.EvidenceService.recordEvidenceJournal", "--input",
+      _run(_operation_argv("command", s"$_component.EvidenceService.recordEvidenceJournal") ++ Vector("--input",
         _take(input.toRecord().toJsonStringC, "Public Evidence Journal input")) ++ _output)
     def findJournalEntries(input: V.JournalFindInput): Result =
-      _run(_launcher ++ Vector("command", s"$_component.JournalService.findJournalEntries", "--input",
+      _run(_operation_argv("command", s"$_component.JournalService.findJournalEntries") ++ Vector("--input",
         _take(input.toRecord().toJsonStringC, "Public Journal find input")) ++ _output)
 
     def prepareHostInput(operation: String, input: org.goldenport.record.Record): Result = {
       require(Set("prepareGoalStart", "prepareRepositoryStart", "prepareSplitStart", "prepareRepositoryEffect",
         "prepareAuthority", "prepareEvidence", "prepareExecution", "recordExecution")(operation),
         "Specification must select one declared preparation Operation")
-      _run(_launcher ++ Vector("command", s"$_component.NativeWorkflowPreparationService.$operation", "--input",
+      _run(_operation_argv("command", s"$_component.NativeWorkflowPreparationService.$operation") ++ Vector("--input",
         _take(input.toJsonStringC, "Concrete preparation input"), "--json"))
     }
-    def preparationHelp(): Result = _run(_launcher ++ Vector("command", s"$_component.meta.help",
-      s"$_component.NativeWorkflowPreparationService"))
+    def preparationHelp(): Result = _run(_operation_argv("command", s"$_component.meta.help") ++
+      Vector(s"$_component.NativeWorkflowPreparationService"))
 
     /** Finite test-owned Git arrangement and observation only. Workflow candidate
       * staging, checks and Step commits always use normal typed host programs.
@@ -426,6 +425,8 @@ private[admission] object NativeWorkflowCliFixture {
     }
 
     def withServer[A](task: => A): A = {
+      require(!sys.props.contains("smworkflow.spec.installedCommand"),
+        "The selected installed entry supports command mode only; server mode requires an explicit source scenario")
       val selected = port.getOrElse(throw new AssertionError("This scenario has no selected server port"))
       val (process, invocation) = _spawn(_launcher :+ "server")
       _server_deadline = Some(System.nanoTime() + TimeUnit.SECONDS.toNanos(60))
@@ -453,12 +454,19 @@ private[admission] object NativeWorkflowCliFixture {
     private def _output = Vector("--json")
     private def _client_options = port.toVector.flatMap(selected =>
       Vector("--baseurl", s"http://127.0.0.1:$selected"))
+    private def _operation_argv(mode: String, selector: String): Vector[String] = {
+      val launcher = _launcher
+      if (sys.props.contains("smworkflow.spec.installedCommand")) {
+        require(mode == "command", "The selected installed entry supports command mode only: " + mode)
+        launcher :+ selector
+      } else launcher ++ Vector(mode, selector)
+    }
     private def _launcher = sys.props.get("smworkflow.spec.installedCommand") match {
       case Some(command) =>
         val executable = Path.of(command)
         require(executable.isAbsolute && Files.isRegularFile(executable) && Files.isExecutable(executable),
           "Select an actual absolute installed command; no source-launcher fallback")
-        Vector(command, "--runtime-root", root.toString)
+        Vector(command)
       case None => Vector(_primary.resolve("bin/launcher").toString, "--classpath-file",
         _primary.resolve("target/cncf.d/runtime-classpath.txt").toString, "--main-class",
         "org.goldenport.cncf.CncfMain", "--", "--force-exit", "--component-dev-dir", _primary.toString,

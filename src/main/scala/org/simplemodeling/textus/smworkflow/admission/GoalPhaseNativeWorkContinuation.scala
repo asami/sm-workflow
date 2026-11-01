@@ -556,13 +556,13 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           _ <- cursor.dependencyChain.resolveC(predecessor)
         } yield GoalPhaseDependencySourceRevision.Source(value, predecessor,
           cursor.dependencyChain.accepted.map(a => GoalPhaseDependencySourceRevision.Ancestor(a.capture, a.closureRevision)))
-        case Human(value, _, cursor) if cursor.consumptionDirection.isEmpty && cursor.dependencySourceDirection.nonEmpty => for {
+        case Human(value, _, cursor) if cursor.dependencySourceDirection.nonEmpty => for {
           original <- Consequence.success(cursor.dependencySourceDirection.get)
           _ <- if (value.input.stepIdentity.contains(original.target.step)) Consequence.unit
             else F.invalid("consumption succession requires the original source Step")
           _ <- cursor.dependencyChain.sourceC(original)
         } yield GoalPhaseDependencySourceRevision.Source(value, original.target.predecessor,
-          original.target.ancestors, Some(original), cursor.dependencyApprovals)
+          original.target.ancestors, Some(original), cursor.dependencyApprovals, cursor.consumptionDirection)
         case _ => F.invalid("source revision requires the actual unanswered dependency Decision")
       }
     } yield selected
@@ -1064,9 +1064,11 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             else adopted match {
               case Some(value) => for {
                 _ <- value.dependencySourceDirection.fold(Consequence.unit) { direction =>
-                  if (direction.target.runtime.nonEmpty) cursor.dependencySourceDirection match {
-                    case Some(original) if cursor.consumptionDirection.isEmpty &&
-                        GoalPhaseDependencySourceRevision.runtimeSuccessorValid(original, direction, cursor.dependencyApprovals) =>
+                  if (GoalPhaseDependencySourceRevision.isSuccessor(direction.target)) cursor.dependencySourceDirection match {
+                    case Some(original) if GoalPhaseDependencySourceRevision.successorValid(original, direction, cursor.dependencyApprovals) &&
+                        (if (direction.target.sourceSuccession.nonEmpty)
+                          GoalPhaseDependencySourceRevision.sourcePreviousValid(original, direction.target, cursor.consumptionDirection)
+                        else cursor.consumptionDirection.isEmpty) =>
                       cursor.dependencyChain.sourceC(original)
                     case _ => F.invalid("consumption direction crosses the original source or actual native approvals")
                   } else if (cursor.dependencySourceDirection.isEmpty && cursor.dependencyAdmission.contains(direction.target.predecessor) &&
@@ -1080,8 +1082,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                 result <- _walk_c(source, cursor.copy(from = value.record, controller = value.controller,
                   documents = value.documents, documentpolicy = policy, candidate = None, validation = None,
                   decisioncontext = value.decisionContext, recordingCandidate = None,
-                  dependencySourceDirection = value.dependencySourceDirection.filter(_.target.runtime.isEmpty).orElse(cursor.dependencySourceDirection),
-                  consumptionDirection = value.dependencySourceDirection.filter(_.target.runtime.nonEmpty).orElse(cursor.consumptionDirection)),
+                  dependencySourceDirection = value.dependencySourceDirection.filterNot(value => GoalPhaseDependencySourceRevision.isSuccessor(value.target)).orElse(cursor.dependencySourceDirection),
+                  consumptionDirection = value.dependencySourceDirection.filter(value => GoalPhaseDependencySourceRevision.isSuccessor(value.target)).orElse(cursor.consumptionDirection)),
                   soughtwork, soughthuman, soughtrecording, core, historyonly)
               } yield result
               case None => if (soughthuman.contains(H.identity(decision))) Consequence.success[Located](Human(decision, cursor.findings, cursor))

@@ -20,7 +20,7 @@ private[admission] object DependencySourceRevisionSpecificationFixture {
     Vector(R.fileIdentity("docs/unrelated.md", None)), Vector.empty, Vector.empty)
   val proposal = R.Proposal(R.schema, ContextReference(binding.identity, "2"), "committed", Vector("docs/unrelated.md"),
     F.approvals.map(a => R.Coverage(a.decision, a.proposal.acceptance, binding.checks.map(_.identity))),
-    R.Consumption(F.requester.workspace, binding.root, "fixture-image", ContextReference("fixture-manifest", "1"),
+    R.LegacyConsumption(F.requester.workspace, binding.root, "fixture-image", ContextReference("fixture-manifest", "1"),
       Vector("docs/unrelated.md"), binding.paths.map(R.ExpectedMode(_, "100644")),
       Vector(R.CheckProgram("primary-test", "primary-validation", "test", "fixture-primary-check"))))
   val old = before.copy(root = F.binding.root, head = F.binding.base.head, committedTree = F.binding.base.tree,
@@ -42,6 +42,10 @@ private[admission] object DependencySourceRevisionSpecificationFixture {
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseDependencySourceRevisionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  private def _legacy(value: R.ConsumptionRecord): R.LegacyConsumption = value match {
+    case legacy: R.LegacyConsumption => legacy
+    case _ => fail("Expected an explicit legacy fixture")
+  }
   private val selected = "src/main/scala/Component.scala"
   private val excluded = "docs/notes/unrelated.md"
   private def bytes(value: String) = Some(value.getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector)
@@ -58,7 +62,7 @@ final class GoalPhaseDependencySourceRevisionSpec extends AnyWordSpec with Match
   private val proposal = R.Proposal(R.schema, ContextReference("cncf-source", "2"), "selected-changes",
     Vector(excluded), Vector(R.Coverage(ContextReference("actual-saved-approval", "1"),
       Vector("Preserve inherited API behavior"), Vector("cncf-compile"))),
-    R.Consumption("primary-validation", before.root, "fixture-image", ContextReference("fixture-manifest", "1"),
+    R.LegacyConsumption("primary-validation", before.root, "fixture-image", ContextReference("fixture-manifest", "1"),
       Vector(excluded), Vector(R.ExpectedMode(selected, "100644")),
       Vector(R.CheckProgram("primary-test", "primary-validation", "test", "fixture-primary-check"))))
 
@@ -226,7 +230,7 @@ final class GoalPhaseDependencySourceRevisionSpec extends AnyWordSpec with Match
       val binding = fixture.binding.copy(checks = Vector(compile, test))
       val programs = Vector(R.CheckProgram(compile.identity, "cncf-compile-route", "compile", "cncf-compile-program"),
         R.CheckProgram(test.identity, "cncf-test-route", "test", "cncf-test-program"))
-      val proposal = fixture.proposal.copy(consumption = fixture.proposal.consumption.copy(
+      val proposal = fixture.proposal.copy(consumption = _legacy(fixture.proposal.consumption).copy(
         programs = fixture.proposal.consumption.programs ++ programs),
         coverage = fixture.proposal.coverage.map(_.copy(checks = binding.checks.map(_.identity))))
       val target = fixture.target.copy(binding = binding, proposal = proposal)
@@ -270,7 +274,7 @@ final class GoalPhaseDependencySourceRevisionSpec extends AnyWordSpec with Match
       val stoppedResult = result.copy(payload = stopped)
       val stoppedProgress = V.reconcileAttemptsC(prior, payload, 1,
         Vector(V.Attempt(Some(intent), Some(stoppedResult))))
-      val partial = target.copy(proposal = proposal.copy(consumption = proposal.consumption.copy(
+      val partial = target.copy(proposal = proposal.copy(consumption = _legacy(proposal.consumption).copy(
         programs = proposal.consumption.programs.filterNot(_.check == test.identity))))
       val partialAllowed = R.targetValid(partial)
       Then("both actual routes survive retained validation and crossed or incomplete mappings refuse")
@@ -458,7 +462,7 @@ final class GoalPhaseDependencySourceRevisionSpec extends AnyWordSpec with Match
         acceptance = Vector("Qualify the additional source through the existing checks")),
         decision = ContextReference("additional-actual-decision-fixture", "1"))
       val binding = F.binding.copy(revision = F.binding.revision + 1, paths = F.binding.paths :+ path)
-      val consumption = F.proposal.consumption.copy(expectedModes = F.proposal.consumption.expectedModes :+
+      val consumption = _legacy(F.proposal.consumption).copy(expectedModes = F.proposal.consumption.expectedModes :+
         R.ExpectedMode(path, "100644"))
       val scope = R.ScopeSuccessor(R.scopeSchema, F.direction.directive, binding, Vector(approval), consumption,
         F.proposal.coverage :+ R.Coverage(approval.decision, approval.proposal.acceptance, binding.checks.map(_.identity)))
@@ -480,7 +484,7 @@ final class GoalPhaseDependencySourceRevisionSpec extends AnyWordSpec with Match
         org.goldenport.cncf.cli.InstalledRuntimeDistribution.COMPONENT_IDENTITY,
         R.RuntimeArtifact(org.goldenport.cncf.cli.InstalledRuntimeDistribution.COMPONENT_COORDINATE,
           directory + "/components/textus-sm-workflow.car", "/specification/publication/sm-workflow.car"))
-      val consumption = prior.consumption.copy(runtimeImage = identity,
+      val consumption = _legacy(prior.consumption).copy(runtimeImage = identity,
         manifestReference = ContextReference("cncf-installed-runtime:" + identity, "1"))
       val proposal = original.target.proposal.copy(binding = ContextReference(prior.binding.identity, prior.binding.revision.toString),
         coverage = prior.coverage, consumption = consumption)
@@ -502,9 +506,9 @@ final class GoalPhaseDependencySourceRevisionSpec extends AnyWordSpec with Match
         "docs/phase/startup.md", "docs/spec/startup.md")
       val oldguard = previous.target.preStageGuard.copy(excludedFiles = oldpaths.map(R.fileIdentity(_, bytes("old\n"))))
       val oldproposal = previous.target.proposal.copy(excludedPaths = oldpaths,
-        consumption = previous.target.proposal.consumption.copy(nonInputExclusions = oldpaths))
+        consumption = _legacy(previous.target.proposal.consumption).copy(nonInputExclusions = oldpaths))
       val original = previous.copy(target = previous.target.copy(proposal = oldproposal, preStageGuard = oldguard))
-      val consumption = prior.consumption.copy(nonInputExclusions = oldpaths ++ addedpaths)
+      val consumption = _legacy(prior.consumption).copy(nonInputExclusions = oldpaths ++ addedpaths)
       val guard = runtime.target.preStageGuard.copy(excludedFiles = oldguard.excludedFiles ++
         addedpaths.map(R.fileIdentity(_, bytes("additional unrelated owner\n"))))
       val target = runtime.target.copy(schemaVersion = R.exclusionSchema, proposal = runtime.target.proposal.copy(
@@ -521,10 +525,10 @@ final class GoalPhaseDependencySourceRevisionSpec extends AnyWordSpec with Match
       val originalmodes = previous.target.proposal.consumption.expectedModes.zipWithIndex.map((mode, index) =>
         if (index == 1) mode.copy(mode = "100755") else mode)
       val original = previous.copy(target = previous.target.copy(proposal = previous.target.proposal.copy(
-        mode = "selected-changes", consumption = previous.target.proposal.consumption.copy(expectedModes = originalmodes))))
+        mode = "selected-changes", consumption = _legacy(previous.target.proposal.consumption).copy(expectedModes = originalmodes))))
       val binding = prior.binding.copy(base = GoalPhaseOrderedProgression.Snapshot("c" * 40, "d" * 40))
       val modes = originalmodes :+ prior.consumption.expectedModes.last.copy(mode = "000000")
-      val consumption = prior.consumption.copy(expectedModes = modes)
+      val consumption = _legacy(prior.consumption).copy(expectedModes = modes)
       val guard = captured.preStageGuard.copy(head = binding.base.head, committedTree = binding.base.tree,
         indexTree = binding.base.tree, selectedFiles = captured.preStageGuard.selectedFiles.dropRight(1) :+
           R.fileIdentity(binding.paths.last, None))
@@ -694,7 +698,7 @@ final class GoalPhaseDependencySourceRevisionSpec extends AnyWordSpec with Match
         _next_(succession.copy(addedPaths = Vector("../outside"))),
         _next_(succession.copy(addedPaths = Vector(next.target.binding.paths.head))),
         next.copy(target = next.target.copy(runtime = None)))
-      val unqualified = scope.copy(consumption = scope.consumption.copy(nonInputExclusions = succession.previousExclusions))
+      val unqualified = scope.copy(consumption = _legacy(scope.consumption).copy(nonInputExclusions = succession.previousExclusions))
       Then("only exact E0 plus nonempty new additions with runtime and independent consumption is valid")
       R.runtimeSuccessorValid(original, next, scope.approvals) shouldBe true
       invalid.map(R.runtimeSuccessorValid(original, _, scope.approvals)) shouldBe Vector.fill(invalid.size)(false)
@@ -803,8 +807,8 @@ final class GoalPhaseDependencySourceRevisionSpec extends AnyWordSpec with Match
         scope.copy(binding = scope.binding.copy(paths = scope.binding.paths :+ "unapproved.txt")),
         scope.copy(binding = scope.binding.copy(base = scope.binding.base.copy(head = "f" * 40))),
         scope.copy(approvals = Vector(wrongapproval)),
-        scope.copy(consumption = scope.consumption.copy(programs = scope.consumption.programs.map(_.copy(program = "foreign-program")))),
-        scope.copy(consumption = scope.consumption.copy(expectedModes = scope.consumption.expectedModes.updated(0,
+        scope.copy(consumption = _legacy(scope.consumption).copy(programs = scope.consumption.programs.map(_.copy(program = "foreign-program")))),
+        scope.copy(consumption = _legacy(scope.consumption).copy(expectedModes = scope.consumption.expectedModes.updated(0,
           scope.consumption.expectedModes.head.copy(mode = "100755")))),
         scope.copy(coverage = scope.coverage.dropRight(1)))
       Then("all substitutions refuse without changing the old direction or legacy admission")
@@ -898,9 +902,9 @@ final class GoalPhaseDependencySourceRevisionSpec extends AnyWordSpec with Match
         next.copy(target = target.copy(runtime = Some(runtime.copy(approvals = Vector.empty)))),
         next.copy(target = target.copy(primaryBase = target.primaryBase.copy(head = "f" * 40))),
         next.copy(target = target.copy(binding = target.binding.copy(root = "/other/source"))),
-        next.copy(target = target.copy(proposal = target.proposal.copy(consumption = scope.consumption.copy(
+        next.copy(target = target.copy(proposal = target.proposal.copy(consumption = _legacy(scope.consumption).copy(
           programs = scope.consumption.programs.map(_.copy(program = "other-program")))))),
-        next.copy(target = target.copy(proposal = target.proposal.copy(consumption = scope.consumption.copy(
+        next.copy(target = target.copy(proposal = target.proposal.copy(consumption = _legacy(scope.consumption).copy(
           manifestReference = ContextReference("cncf-installed-runtime:other-image", "1"))))),
         next.copy(target = target.copy(predecessorGuard = target.predecessorGuard.copy(indexTree = differentindex))),
         next.copy(participant = "another-participant"), next.copy(directive = original.directive))
@@ -952,8 +956,8 @@ final class GoalPhaseDependencySourceRevisionSpec extends AnyWordSpec with Match
         R.captureBaseValid(original, 4, changed, Some(scope)), R.captureBaseValid(original, 5, changed, Some(scope)))
       Then("only the original real-profile association and fixed qualified source bytes are eligible")
       unsupported.map(R.runtimeSelectionValid) shouldBe Vector.fill(unsupported.size)(false)
-      R.runtimeMatches(installation, scope.consumption.copy(runtimeImage = "other-image")) shouldBe false
-      R.runtimeMatches(installation, scope.consumption.copy(manifestReference = ContextReference("other-manifest", "1"))) shouldBe false
+      R.runtimeMatches(installation, _legacy(scope.consumption).copy(runtimeImage = "other-image")) shouldBe false
+      R.runtimeMatches(installation, _legacy(scope.consumption).copy(manifestReference = ContextReference("other-manifest", "1"))) shouldBe false
       results shouldBe Vector(true, false, false)
     }
   }

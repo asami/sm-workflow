@@ -31,7 +31,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
     review: GoalPhaseNativeReview.Policy, closure: GoalPhaseNativeClosure.Policy,
     dependencyValidation: Option[GoalPhaseDependencyValidation.Binding] = None,
     dependencySourceRevisions: Vector[GoalPhaseDependencyValidation.Binding] = Vector.empty,
-    dependencySourceConsumptions: Vector[GoalPhaseDependencySourceRevision.Consumption] = Vector.empty,
+    dependencySourceConsumptions: Vector[GoalPhaseDependencySourceRevision.ConsumptionRecord] = Vector.empty,
     phaseDependencyValidation: Option[GoalPhaseDependencyValidation.Binding] = None)
   final case class Repository(input: RepositorySyncStartInput,
     validation: RepositorySyncNativeMergeValidation.Policy, conflicts: RepositorySyncNativeConflictInput.Policy,
