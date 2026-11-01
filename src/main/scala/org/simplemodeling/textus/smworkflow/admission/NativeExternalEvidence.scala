@@ -53,6 +53,8 @@ private[smworkflow] object NativeExternalEvidence {
     case ClosureRecovery extends Purpose(GoalPhaseClosureRecovery.purpose)
     case RemainingPlanAdoption extends Purpose(GoalPhaseRemainingPlanAdoption.purpose)
     case DependencySourceRevision extends Purpose(GoalPhaseDependencySourceRevision.purpose)
+    case PrerequisitePublicationRecovery extends Purpose(GoalPhasePrerequisitePublicationRecovery.purpose)
+    case PrerequisitePublicationObservation extends Purpose(GoalPhasePrerequisitePublicationUnknownRecovery.observationPurpose)
     case ReviewPurposeRepair extends Purpose(GoalPhaseLegacyPurposeRepairContinuation.purpose)
     case ReleaseRepairContinuation extends Purpose(GoalPhaseReleaseRepairContinuation.purpose)
     case FailedPhaseRepairAdoption extends Purpose(GoalPhaseFailedPhaseRepairAdoption.purpose)
@@ -129,6 +131,27 @@ private[smworkflow] object NativeExternalEvidence {
     }
 
   final class Reader private[NativeExternalEvidence] (val declaration: Declaration) {
+    /** Exact request/frontier discovery inside the independently installed
+      * evidence store. The native owner still checks the entire scope. */
+    def prerequisitePublicationObservationC(core: ActionCall.Core,
+      scope: GoalPhasePrerequisitePublicationUnknownRecovery.Scope):
+        Consequence[Option[GoalPhasePrerequisitePublicationUnknownRecovery.Observation]] = for {
+      purpose <- Consequence.success(Purpose.PrerequisitePublicationObservation)
+      identity = GoalPhasePrerequisitePublicationUnknownRecovery.observationKey(scope)
+      record <- ManagedInputRecordRead.loadNativeEvidenceC(core, declaration.storeName, declaration.collection,
+        recordIdentity(purpose, identity))
+      result <- record match {
+        case None => Consequence.success(Option.empty[GoalPhasePrerequisitePublicationUnknownRecovery.Observation])
+        case Some(row) => for {
+          raw <- row.getString(storageField).map(Consequence.success).getOrElse(Consequence.stateConflict("Publication observation has no typed payload"))
+          value <- decodeStorageC(raw)
+          current <- decodeDeclarationC(core.component.get.subsystem.get.configuration)
+          _ <- observeValidatedC(value, current, purpose, identity, value.binding, core.executionContext.clock.instant())
+          observation <- value.binding.hcursor.get[GoalPhasePrerequisitePublicationUnknownRecovery.Observation]("prerequisitePublicationObservation")
+            .fold(error => Consequence.stateConflict(error.message), Consequence.success)
+        } yield Option.when(observation.scope == scope)(observation)
+      }
+    } yield result
     /** The direction is independent host input, not a caller-created receipt.
       * The actual native terminal later points to this exact durable reference.
       */
@@ -232,6 +255,12 @@ private[smworkflow] object NativeExternalEvidence {
           selected.hcursor.downField("humanAttestation").downField("answer").downField("reference").get[String]("identity").contains(value.reference) &&
           selected.hcursor.downField("humanAttestation").downField("answer").downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
       else Consequence.securityPermissionDenied("Independent Human attestation belongs to another actual participant or answer reference")
+    } else if (purpose == Purpose.PrerequisitePublicationObservation) {
+      val observation = selected.hcursor.downField("prerequisitePublicationObservation")
+      if (observation.downField("scope").get[String]("participant").contains(value.participant) &&
+          observation.downField("reference").get[String]("identity").contains(value.reference) &&
+          observation.downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
+      else Consequence.securityPermissionDenied("Publication observation crosses its participant or actual observation reference")
     } else if (purpose == Purpose.InventoryAuthority) {
       if (selected.hcursor.downField("scope").get[String]("participant").contains(value.participant)) Consequence.unit
       else Consequence.securityPermissionDenied("Inventory authority crosses its actual original participant")
@@ -247,8 +276,13 @@ private[smworkflow] object NativeExternalEvidence {
         purpose == Purpose.CandidateObservationContinuation || purpose == Purpose.WholePhaseCandidateRecovery ||
         purpose == Purpose.ClosureRecovery || purpose == Purpose.RemainingPlanAdoption || purpose == Purpose.FailedPhaseRepairAdoption ||
         purpose == Purpose.CompletionPolicyAdoption || purpose == Purpose.RepairPolicyAdoption || purpose == Purpose.ReviewPurposeRepair || purpose == Purpose.ValidationRepairAdoption ||
-        purpose == Purpose.ReleaseRepairContinuation || purpose == Purpose.DependencySourceRevision) {
-      val answer = if (purpose == Purpose.ValidationRecovery) selected.hcursor.downField("validationRecovery").downField("answer")
+        purpose == Purpose.ReleaseRepairContinuation || purpose == Purpose.DependencySourceRevision ||
+        purpose == Purpose.PrerequisitePublicationRecovery) {
+      val answer = if (purpose == Purpose.PrerequisitePublicationRecovery &&
+          selected.hcursor.downField("prerequisitePublicationUnknownRecovery").focus.nonEmpty)
+        selected.hcursor.downField("prerequisitePublicationUnknownRecovery").downField("answer")
+        else if (purpose == Purpose.ValidationRecovery) selected.hcursor.downField("validationRecovery").downField("answer")
+        else if (purpose == Purpose.PrerequisitePublicationRecovery) selected.hcursor.downField("prerequisitePublicationRecovery").downField("answer")
         else if (purpose == Purpose.RepositoryValidationContinuation) selected.hcursor.downField("repositoryValidationContinuation").downField("answer")
         else if (purpose == Purpose.ValidationRepairAdoption) selected.hcursor.downField("validationRepairAdoption").downField("answer")
         else if (purpose == Purpose.SourceHistoryRecovery) selected.hcursor.downField("sourceHistoryRecovery").downField("answer")
@@ -304,6 +338,8 @@ private[smworkflow] object NativeExternalEvidence {
       case Purpose.ClosureRecovery => GoalPhaseClosureRecovery.selectBinding(value)
       case Purpose.RemainingPlanAdoption => GoalPhaseRemainingPlanAdoption.selectBinding(value)
       case Purpose.DependencySourceRevision => GoalPhaseDependencySourceRevision.selectBinding(value)
+      case Purpose.PrerequisitePublicationRecovery => GoalPhasePrerequisitePublicationRecovery.selectBinding(value)
+      case Purpose.PrerequisitePublicationObservation => GoalPhasePrerequisitePublicationUnknownRecovery.selectObservation(value)
       case Purpose.ReviewPurposeRepair => GoalPhaseLegacyPurposeRepairContinuation.selectBinding(value)
       case Purpose.ReleaseRepairContinuation => GoalPhaseReleaseRepairContinuation.selectBinding(value)
       case Purpose.FailedPhaseRepairAdoption => GoalPhaseFailedPhaseRepairAdoption.selectBinding(value)

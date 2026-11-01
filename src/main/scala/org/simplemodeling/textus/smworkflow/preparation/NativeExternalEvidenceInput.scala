@@ -4,15 +4,18 @@ import java.time.Instant
 import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.convert.ValueReader
+import org.goldenport.cncf.workflow.ContextReference
 import org.goldenport.record.Record
 import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseNativeWork, NativeExternalEvidence,
   RepositorySyncNativeMergeReview, SplitPhaseNativeHumanDirection, SplitPhaseReasoningHumanDirection}
 import org.simplemodeling.textus.smworkflow.value as V
+import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseDependencySourceRevision as R,
+  GoalPhasePrerequisitePublicationUnknownRecovery as U, GoalPhaseNativeMetadata as M}
 
 /** Finite conversion of explicit issued output and supplied external facts to
   * standard StartupImport input. It neither writes storage nor calls Workflow.
   * @since   Oct. 14, 2026
-  * @version Oct. 27, 2026
+  * @version Nov.  1, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeExternalEvidenceInput {
@@ -21,6 +24,10 @@ private[smworkflow] object NativeExternalEvidenceInput {
   def prepareC(supplied: Map[String, String], readText: String => Consequence[String]): Consequence[Record] = try {
     if (supplied.get("kind").contains("force-closure"))
       NativeWorkflowForceClosurePreparation.prepareSuppliedC(supplied, readText)
+    else if (supplied.get("kind").contains("goal-phase-prerequisite-publication-recovery"))
+      _prerequisite_recovery_c(supplied, readText)
+    else if (supplied.get("kind").contains("goal-phase-prerequisite-publication-observation"))
+      _prerequisite_observation_c(supplied, readText)
     else {
     for {
       options <- NativePreparationInput.optionsC(supplied, _required, readText, Set("participant"))
@@ -87,6 +94,80 @@ private[smworkflow] object NativeExternalEvidenceInput {
     } yield bootstrap
     }
   } catch { case NonFatal(_) => _invalid("invalid explicit argument, file or typed input") }
+
+  private def _prerequisite_recovery_c(supplied: Map[String, String], readText: String => Consequence[String]):
+    Consequence[Record] = for {
+    options <- NativePreparationInput.optionsC(supplied, _required, readText, Set("participant"))
+    _ <- if (options("family") == "GoalPhase" && options.contains("participant")) Consequence.unit
+      else _invalid("prerequisite publication recovery requires GoalPhase and its independent Human participant")
+    occurred <- NativePreparationInput.instantC(options("occurred-at"))
+    _ <- NativePreparationInput.collectionC(options("collection"))
+    request <- NativePreparationInput.readC(options("request"), readText)
+    result <- NativePreparationInput.readC(options("result"), readText)
+    referencerecord <- NativePreparationInput.readC(options("reference"), readText)
+    executionrecord <- NativePreparationInput.readC(options("execution-evidence"), readText)
+    description <- summon[ValueReader[V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult]].readC(request)
+    input <- summon[ValueReader[V.GoalPhasePrerequisitePublicationRecoveryInput]].readC(result)
+    reference <- summon[ValueReader[V.WorkflowArtifactReference]].readC(referencerecord)
+    execution <- summon[ValueReader[V.WorkflowExecutionEvidence]].readC(executionrecord)
+    prepared <- NativePrerequisitePublicationRecoveryPreparation.prepareC(description, input, reference, execution,
+      options("participant"), options("issuer"), occurred)
+    payload <- prepared.record.getString(NativeExternalEvidence.storageField).map(Consequence.success)
+      .getOrElse(_invalid("prepared prerequisite recovery row has no native payload"))
+    row = Record.data("id" -> prepared.recordIdentity, NativeExternalEvidence.storageField -> payload)
+  } yield Record.data("datastore" -> Vector(Record.data("collection" -> options("collection"), "records" -> Vector(row))))
+
+  private def _prerequisite_observation_c(supplied: Map[String, String], readText: String => Consequence[String]):
+      Consequence[Record] = for {
+    options <- NativePreparationInput.optionsC(supplied, _required, readText, Set("participant"))
+    _ <- if (options("family") == "GoalPhase" && options.contains("participant")) Consequence.unit
+      else _invalid("publication observation requires its GoalPhase participant")
+    occurred <- NativePreparationInput.instantC(options("occurred-at"))
+    _ <- NativePreparationInput.collectionC(options("collection"))
+    requesttext <- readText(options("request"))
+    requestjson <- io.circe.parser.parse(requesttext).left.map(_.message).flatMap(M.normalizePublicJson)
+      .fold(_invalid(_), Consequence.success)
+    request <- new org.goldenport.record.io.RecordDecoder().json(requesttext)
+    target <- _publication_observation_target_c(request, requestjson)
+    raw <- readText(options("result"))
+    observation <- io.circe.parser.parse(raw).left.map(_.message).flatMap(
+      _.as[org.simplemodeling.textus.smworkflow.admission.GoalPhasePrerequisitePublicationUnknownRecovery.Observation].left.map(_.message))
+      .fold(_invalid(_), Consequence.success)
+    reference <- NativePreparationInput.readC(options("reference"), readText).flatMap(summon[ValueReader[V.WorkflowArtifactReference]].readC)
+    execution <- NativePreparationInput.readC(options("execution-evidence"), readText).flatMap(summon[ValueReader[V.WorkflowExecutionEvidence]].readC)
+    _ <- if (observation.scope == org.simplemodeling.textus.smworkflow.admission.GoalPhasePrerequisitePublicationUnknownRecovery.scopeOf(target) &&
+        observation.scope.participant == options("participant") && reference.identity == observation.reference.identity &&
+        reference.revision == observation.reference.revision && execution.workerIdentity.contains(options("participant"))) Consequence.unit
+      else _invalid("publication observation crosses the actual description, source or independent observer reference")
+    prepared <- NativePrerequisitePublicationRecoveryPreparation.prepareObservationC(observation, options("issuer"), occurred)
+    payload <- prepared.record.getString(NativeExternalEvidence.storageField).map(Consequence.success)
+      .getOrElse(_invalid("prepared publication observation has no native payload"))
+    row = Record.data("id" -> prepared.recordIdentity, NativeExternalEvidence.storageField -> payload)
+  } yield Record.data("datastore" -> Vector(Record.data("collection" -> options("collection"), "records" -> Vector(row))))
+
+  /** The closed target schema selects one actual public description. A source
+    * description binds the writer observation to its retained Wait origin. */
+  private def _publication_observation_target_c(request: Record, raw: io.circe.Json): Consequence[U.Target] = for {
+    version <- raw.hcursor.downField("target").get[String]("schemaVersion").fold(error => _invalid(error.message), Consequence.success)
+    operation = if (version == U.schema) "recoveryOperation" else "adoptionOperation"
+    _ <- if ((version == U.schema || version == R.waitSchema) && raw.asObject.exists(fields =>
+        fields.keys.toSet == Set("sessionId", "outcome", "message", "componentInstance", "target", "choices", operation) &&
+          fields.values.forall(value => !value.isNull))) Consequence.unit
+      else _invalid("publication observation requires one closed prerequisite or v6 source description")
+    target <- if (version == U.schema) for {
+      description <- summon[ValueReader[V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult]].readC(request)
+      target <- U.targetC(description.target)
+    } yield target else for {
+      description <- summon[ValueReader[V.GoalPhaseDependencySourceRevisionDescriptionResult]].readC(request)
+      source <- R.targetC(description.target)
+      origin <- source.waitOrigin.map(Consequence.success).getOrElse(_invalid("v6 source description has no retained Wait origin"))
+      _ <- if (source.schemaVersion == R.waitSchema && U.targetValid(origin) &&
+          description.sessionId == source.sessionId && description.componentInstance == origin.componentInstance &&
+          description.outcome == "direction-required" && description.choices == R.choicesFor(source) &&
+          description.adoptionOperation == R.adoptionOperation) Consequence.unit
+        else _invalid("publication observation crosses its complete v6 source description")
+    } yield origin
+  } yield target
 
   private def _selected_c(options: Map[String, String], request: Record, result: Record,
     reference: V.WorkflowArtifactReference, execution: V.WorkflowExecutionEvidence,

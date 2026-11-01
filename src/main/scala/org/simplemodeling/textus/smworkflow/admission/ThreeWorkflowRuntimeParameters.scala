@@ -200,7 +200,9 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
         Some(GoalPhaseSourceHistoryNormalization.Installation(ports.sourceHistoryNormalization)),
         Some(GoalPhaseDependencySourceRevision.Installation(ports.dependencySourceRevision)),
         settings.goal.dependencySourceRevisions, settings.goal.dependencySourceConsumptions, publication, hygiene, records,
-        settings.goal.phaseDependencyValidation)
+        settings.goal.phaseDependencyValidation,
+        Some(GoalPhasePrerequisitePublicationRecovery.Installation(ports.prerequisitePublicationRecovery,
+          Some(ports.prerequisitePublicationObservation))))
       _ <- if (settings.goal.dependencyValidation.forall(GoalPhaseDependencyValidation.bindingValid)) Consequence.unit
         else Consequence.configurationInvalid("Goal dependency validation binding is invalid")
       _ <- GoalPhaseNativeRun.validateC(goal)

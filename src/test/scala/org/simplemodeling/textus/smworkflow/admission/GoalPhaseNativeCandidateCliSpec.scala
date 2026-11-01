@@ -164,7 +164,7 @@ final class GoalPhaseNativeCandidateCliSpec extends AnyWordSpec with Matchers wi
       scenario.candidateStatus should include("M docs/user.md")
       scenario.candidateStatus should include("?? docs/local-draft.md")
       _executions(scenario).size shouldBe 3
-      scenario.advance(episode.task).business[V.GoalPhaseAdvanceResult] shouldBe phase
+      scenario.advance(episode.task).business[V.GoalPhaseAdvanceResult] shouldBe phase.copy(message = phase.work.get.purpose)
       _executions(scenario).size shouldBe 3
     }
 

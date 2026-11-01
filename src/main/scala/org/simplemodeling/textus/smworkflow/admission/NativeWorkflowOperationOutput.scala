@@ -53,7 +53,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
       GoalPhaseFixIssues.publicState(value.issues), value.purposeRepair.map(contract => GoalPhaseNativeMetadata.record(contract.asJson)),
       releaseRepairContract = value.releaseRepairContract,
       triage = value.triage.map(t => GoalPhaseNativeMetadata.record(t.asJson)),
-      diagnosticHistory = value.diagnosticHistory.toVector.flatten.map(p => GoalPhaseNativeMetadata.record(p.asJson)))
+      diagnosticHistory = value.diagnosticHistory.toVector.flatten.map(p => GoalPhaseNativeMetadata.record(p.asJson)),
+      publicationFailure = value.publicationFailure.map(p => GoalPhaseNativeMetadata.record(p.asJson)))
 
   def goalValidation(payload: GoalPhaseNativeValidation.Payload): V.GoalPhaseNativeValidationView = {
     val stopped = if (payload.outcome.isEmpty) payload.stopped.lastOption.filter(receipt =>

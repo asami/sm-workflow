@@ -1,5 +1,85 @@
 # GoalPhase dependency source revision
 
+## Primary-failure source-only origin v7
+
+R1. `sm-workflow.goal-phase-dependency-source-revision.v7` requires the distinct
+primaryFailureOrigin: the exact v2 SourceRequired target following the original
+admitted dependency UNKNOWN artifact Direction and genuine primary beforeChecks
+failure. It has no waitOrigin, runtime/image field or fabricated Human question;
+the retained questionIdentity cell is empty. Use the existing v5 Proposal and v2
+source-only Consumption. V1-v6 canonical encodings keep the new field absent and
+reject it under their old versions. Unknown, null and mixed fields refuse.
+
+The target retains Session, unchanged primary candidate/base, Plan, completed
+prefix, original uncertainty/failure, actual current dependency guard, policies
+and exact ordered dependency/primary targets. Its selected binding is a higher
+independently declared revision of the same logical identity and workspace.
+Preserve inherited approved paths and coverage; a source declaration is not a new
+scope approval. Changed root/branch/base require the existing qualified source
+selection and committed-base evidence where applicable. A same-root selected-path
+correction can carry a fresh current guard while the original UNKNOWN guard stays
+unchanged as history.
+
+R2. V7 offers `AdoptDependencySourceRevisionWithUnknownEffects`,
+`AdoptDependencySourceRevisionAndContinuePublicationWithUnknownEffects` and Defer.
+Source-only selects bytes for capture and leaves artifact/primary decisions
+uncovered. The combined choice explicitly acknowledges old uncertainty and binds
+the concrete ordered source adoption, existing-artifact acceptance for that exact
+source and ONE primary successor under the described fixed policies. Neither
+choice preapproves later failure, different bytes/programs/targets or new primary
+UNKNOWN effects.
+
+Adoption independently admits the exact source answer through the existing
+dependencySourceRevision.directive purpose and appends only a native Direction.
+It runs no Git/SBT/check/publication. Separate ordinary Advances perform missing
+source capture, one artifact-operation fact, one primary-authorization fact, and
+then the publication/check work. Derived facts identify their own actual native
+result and inheritedFrom source directive; they use authenticated native history
+instead of invented extra Human evidence. Fresh individual decisions remain
+available for uncovered operation authority. Development authorization and a
+file inventory supply no runtime approval.
+
+The existing source owner emits
+`sm-workflow.goal-phase-dependency-source-capture.v7`. Initial source generation
+advances exactly once through the existing ordered source transition, preserving
+all repair counters and the original primary delta, hygiene and accepted prefix.
+Only newly unstaged selected paths are staged, in their original selection order;
+committed mode stages nothing. A missing effect with no retained intent may be
+completed; a retained unknown stage/observation intent is never replayed. Later
+ordinary validation/FIX owns actual check failures. No dependency UNKNOWN
+publication is rerun or converted into success.
+
+R3. The host independently declares selected binding and active Consumption,
+managed File/Git selections and the fixed typed SBT program. The resolved primary
+PublishLocal program must have a nonempty explicitly configured environment key
+whose value equals Consumption.sourceRoot exactly. The entire resolved program
+and environment policy is bound, including the source guard and unchanged primary
+snapshot. Ambient environment, substring/path-prefix matches and caller argv do
+not qualify source selection. Missing root selection is a host-configuration
+refusal. Actual producer integration establishes consumption behavior.
+
+The existing describe/adopt Operations and
+recoverGoalPhasePrerequisitePublication accept exactly one of input/inputResource.
+inputResource is an absolute local file URI without authority/query/fragment,
+containing the complete normal business input. The executing call performs CNCF
+read_resource_text with normal Resource authorization, finite acquisition and
+UTF-8 decoding; strict raw duplicate, unique Record, closed schema and null checks
+follow. Resource refusal, truncation or malformed input causes no recovery and no
+inline fallback. Configure textus.resource.read.max-bytes for the whole expanded
+envelope; no new application byte limit is introduced.
+
+Use the normal host to describe the current primary target, describe a declared
+source Proposal, prepare the exact source answer through existing prepareEvidence,
+and have the independent trusted host provision it. Call adopt with
+`--inputResource file:///absolute/path/complete-source-answer.json`. Advance once
+for capture. For combined authority, advance separately for the artifact fact,
+primary fact and actual primary attempt/checks; source-only authority first needs
+the exposed exact individual answers through the same preparation/provisioning
+path. Descriptions and passive prepared JSON are not evidence admission. A lost
+response is resolved from retained native history; never create a second Direction
+from an unconfirmed response. No real consumer Session or source integration is
+activated by this producer contract.
+
 An adopted dependency source may be explicitly revised in the same GoalPhase
 Session. Preserve the original primary base, accepted Steps, native approvals,
 failures, UNKNOWN effects and repair accounting. A source Direction selects
@@ -218,3 +298,24 @@ existing component-file bootstrap. Installed CLI selection uses
 smworkflow.spec.installedCommand. No manifest/image metadata is created or read,
 and no source-launcher fallback supplies an installed result. Fixture hooks and
 producer success do not establish real consumer adoption or deployment.
+# Native prerequisite Wait source revision (v6)
+
+The existing describe/adopt operations also select an actual unstarted ordinary
+Validation prerequisite UNKNOWN frontier. The v6 target adds a closed
+`waitOrigin`, names the real old publication and candidate/native references,
+and uses canonical empty `questionIdentity`. Old schemas reject that marker.
+There is no invented unanswered question, H.Source, Submit or implementation
+request. See the [UNKNOWN continuation](goal-phase-prerequisite-publication-unknown-recovery.md)
+for independent lifecycle/qualification installation and exact invocation shape.
+
+The retained old recovery/capture guard supplies old source bytes; current reads
+only supply the newly selected guard. Host declarations, inheritance, finite
+committed-base inventory, modes, programs and complete coverage still apply.
+Independent writer completion precedes source work, and separate source Human
+admission appends only a mechanical Direction. Normal Advance preserves accepted
+primary work and all Plan/base/prefix/repair facts, increments generation once,
+and captures the new dependency source. V6 stages only selected paths with
+actual new unstaged changes, using their original ordinals. Completed original
+stages remain historical. Committed selection stages zero paths. UNKNOWN new
+intents never replay. Source adoption grants no publication; the old UNKNOWN
+remains the gate until its separate qualified-successor Human Direction.

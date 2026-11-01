@@ -21,6 +21,16 @@ import NativeExternalEvidence.Purpose
   */
 private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: NativeExternalEvidence.Reader) {
   import ThreeWorkflowExternalEvidencePorts.*
+  val prerequisitePublicationObservation: GoalPhasePrerequisitePublicationUnknownRecovery.ObservationPort =
+    new GoalPhasePrerequisitePublicationUnknownRecovery.ObservationPort {
+      def observeC(core: ActionCall.Core, scope: GoalPhasePrerequisitePublicationUnknownRecovery.Scope) =
+        reader.prerequisitePublicationObservationC(core, scope)
+    }
+  val prerequisitePublicationRecovery: GoalPhasePrerequisitePublicationRecovery.EvidencePort =
+    new GoalPhasePrerequisitePublicationRecovery.EvidencePort {
+      def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
+        _admit_evidence_c(core, Purpose.PrerequisitePublicationRecovery, key(reference.identity, reference.revision), binding)
+    }
   val goalTaskMalformedIssuedWorkRecovery: GoalTaskMalformedIssuedWorkRecovery.EvidencePort =
     new GoalTaskMalformedIssuedWorkRecovery.EvidencePort {
       def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =

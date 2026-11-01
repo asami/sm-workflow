@@ -103,7 +103,7 @@ private[smworkflow] object LocalPublicationRuntime {
     }
   } yield projected
 
-  private def _port(core: ActionCall.Core, policy: Policy): LocalPublication.Port = new LocalPublication.Port {
+  private[admission] def _port(core: ActionCall.Core, policy: Policy): LocalPublication.Port = new LocalPublication.Port {
     private def _bound(key: String) = ComponentRecordStorage.bindForCallC(core, policy.storeName,
       policy.collection, DataStore.StringEntryId(key))
     def loadC(key: String): Consequence[Option[Json]] = _bound(key).flatMap(_.loadC()).flatMap {
@@ -175,24 +175,248 @@ private[smworkflow] object LocalPublicationRuntime {
   } yield result
 
   def beforeChecksC(session: GoalPhaseNativeRun.Session, d: GoalPhaseNativeRun.Declaration,
-    core: ActionCall.Core, candidate: GoalPhaseNativeCandidate.Saved): Consequence[Option[V.GoalPhaseAdvanceResult]] =
+    core: ActionCall.Core, candidate: GoalPhaseNativeCandidate.Saved,
+    qualifiedSuccessor: Option[LocalPublication.QualifiedSuccessor] = None,
+    prerequisiteWait: Option[LocalPublication.Result] = None,
+    existingArtifactAdoption: Option[GoalPhasePrerequisitePublicationUnknownRecovery.ExistingArtifactAdoption] = None,
+    confirmedFailureSuccessor: Option[LocalPublication.ConfirmedFailureSuccessor] = None,
+    primaryRepairPublication: Option[LocalPublication.ConfirmedFailureSuccessor] = None):
+      Consequence[Option[V.GoalPhaseAdvanceResult]] =
     d.localPublication match {
+      case None if existingArtifactAdoption.nonEmpty || primaryRepairPublication.nonEmpty =>
+        Consequence.stateConflict("Artifact adoption or primary repair publication requires its publication policy")
       case None => Consequence.success(None)
       case Some(policy) =>
         val dependency = candidate.payload.dependencyAdmission.map(_.binding.identity)
           .orElse(candidate.payload.dependencySourceCapture.map(_.direction.target.binding.identity))
         val targets = policy.targets.filter(t => t.beforeChecks && t.dependency.forall(dependency.contains))
-        targets.foldLeft(Consequence.success(Option.empty[V.GoalPhaseAdvanceResult])) { (prior, target) => prior.flatMap {
+        for {
+        _ <- validateC(policy)
+        _ <- if (primaryRepairPublication.forall(p => confirmedFailureSuccessor.isEmpty && qualifiedSuccessor.isEmpty &&
+            candidate.payload.primaryPublicationRepair.nonEmpty && targets.filter(_.dependency.isEmpty) == Vector(p.previous.request.target) &&
+            p.sourceCapture == org.goldenport.cncf.workflow.ContextReference(session.current.identity.value,
+              candidate.record.revision.value.toString)) &&
+            existingArtifactAdoption.forall(a => targets.contains(a.previous.request.target)) &&
+            !(existingArtifactAdoption.nonEmpty && qualifiedSuccessor.nonEmpty) &&
+            confirmedFailureSuccessor.forall(p => existingArtifactAdoption.exists(a => targets == Vector(a.previous.request.target,
+              p.previous.request.target)) && candidate.payload.dependencySourceCapture.exists(c =>
+                c.schemaVersion == GoalPhaseDependencySourceRevision.primaryCaptureSchema &&
+                c.direction.target.primaryFailureOrigin.exists(_.failed.request.target == p.previous.request.target)) && qualifiedSuccessor.isEmpty)) Consequence.unit
+          else Consequence.stateConflict("Artifact adoption crosses its exact prerequisite target or publication choice")
+        result <- targets.foldLeft(Consequence.success(Option.empty[V.GoalPhaseAdvanceResult])) { (prior, target) => prior.flatMap {
           case some @ Some(_) => Consequence.success(some)
           case None =>
+            existingArtifactAdoption.filter(_.previous.request.target == target) match {
+            case Some(adoption) =>
+              val binding = GoalPhasePrerequisitePublicationUnknownRecovery.bindingOf(candidate.payload)
+              for {
+                _ <- if (target.dependency.contains(binding.identity) && target.workspace == binding.dependency.workspace)
+                  Consequence.unit else Consequence.stateConflict("Artifact adoption differs from the captured dependency")
+                _ <- adoptExistingArtifactsC(adoption, target, session.current.identity.value, session.participantIdentity,
+                  GoalPhaseDependencySourceRevision.observeC(core, binding, adoption.guard.excludedFiles.map(_.path)),
+                  _port(core, policy))
+              } yield Option.empty[V.GoalPhaseAdvanceResult]
+            case None =>
             val input = LocalPublication.Input(session.current.identity.value + ":publication:" +
               candidate.payload.sourceRevision + ":" + target.identity, target.identity,
               Some(session.current.identity.value))
-            _prerequisite_c(core, policy, input).map { result =>
+            val publication = primaryRepairPublication.filter(_.previous.request.target == target) match {
+              case Some(permit) => for {
+                process <- GoalPhasePrerequisitePublicationRecovery.processPolicyC(d, core)
+                _ <- if (process == permit.processPolicy && GoalPhasePrerequisitePublicationRecovery.publicationPolicy(policy) == permit.publicationPolicy &&
+                    candidate.payload.dependencySourceCapture.forall(c => GoalPhasePrerequisitePublicationRecovery.primaryProgramMatches(
+                      process, target, GoalPhaseDependencySourceRevision.consumptionOf(c)))) Consequence.unit
+                  else Consequence.stateConflict("Primary repair publication changed its fixed program, destination or source consumption")
+                result <- LocalPublication.ensureConfirmedFailureSuccessorC(primaryRepairInput(session.current.identity.value,
+                  candidate.payload, target, permit), target, session.participantIdentity, permit, _port(core, policy))
+              } yield result
+              case None => confirmedFailureSuccessor.filter(_.previous.request.target == target) match {
+              case Some(permit) => for {
+                capture <- candidate.payload.dependencySourceCapture.map(Consequence.success).getOrElse(
+                  Consequence.stateConflict("Primary permit has no exact dependency source capture"))
+                process <- GoalPhasePrerequisitePublicationRecovery.processPolicyC(d, core)
+                _ <- if (process == permit.processPolicy && GoalPhasePrerequisitePublicationRecovery.publicationPolicy(policy) == permit.publicationPolicy &&
+                    GoalPhasePrerequisitePublicationRecovery.primaryProgramMatches(process, target,
+                    GoalPhaseDependencySourceRevision.consumptionOf(capture))) Consequence.unit
+                  else Consequence.stateConflict("Fixed primary PublishLocal environment does not select the captured dependency sourceRoot")
+                result <- LocalPublication.ensureConfirmedFailureSuccessorC(confirmedFailureInput(session.current.identity.value,
+                  candidate.payload, target, permit), target, session.participantIdentity, permit, _port(core, policy))
+              } yield result
+              case None => qualifiedSuccessor.filter(_.previous.target == target) match {
+              case Some(permit) => LocalPublication.ensureQualifiedSuccessorC(input.copy(requestIdentity =
+                input.requestIdentity + ":qualified:" + permit.direction.identity + ":" + permit.direction.revision), target,
+                session.participantIdentity, permit, _port(core, policy))
+              case None if prerequisiteWait.exists(_.request.target == target) =>
+                retainedFailureC(core, policy, prerequisiteWait.get).map(_ => prerequisiteWait.get)
+              case None => _prerequisite_c(core, policy, input)
+              }
+            }
+            }
+            publication.map { result =>
               Option.unless(result.ready)(NativeWorkflowOperationOutput.goalWait(session.current.identity.value,
                 "Runtime-owned local publication: " + result.reason, "local-publication").copy(
                 outcome = Some(result.status), localPublication = Some(GoalPhaseNativeMetadata.record(result.asJson))))
             }
+            }
         }}
+        } yield result
     }
+
+  /** Read-only gate shared with bounded specifications. An admitted Human
+    * direction skips this prerequisite only; no publication fact is created.
+    */
+  private[admission] def adoptExistingArtifactsC(
+    adoption: GoalPhasePrerequisitePublicationUnknownRecovery.ExistingArtifactAdoption,
+    target: LocalPublication.Target, ownerSessionId: String, participant: String,
+    currentGuard: => Consequence[GoalPhaseDependencySourceRevision.Guard], port: LocalPublication.Port): Consequence[Unit] = for {
+    _ <- if (adoption != null && GoalPhaseDependencySourceRevision.referenceValid(adoption.direction) &&
+        adoption.previous != null && adoption.previous.status == "uncertain" && adoption.previous.nextPreparation.isEmpty &&
+        adoption.previous.request != null && adoption.previous.request.target == target && target.beforeChecks &&
+        adoption.previous.request.input != null && adoption.previous.request.input.ownerSessionId.contains(ownerSessionId) &&
+        adoption.previous.request.input.targetIdentity == target.identity && !adoption.previous.request.input.explicit &&
+        adoption.previous.request.input.answer.isEmpty && adoption.previous.request.participant == participant &&
+        GoalPhaseDependencySourceRevision.guardValid(adoption.guard) && adoption.source == LocalPublication.Source(
+          adoption.guard.head, adoption.guard.indexTree, adoption.guard.dirty.map(d =>
+            LocalPublication.Change(d.path, d.index, d.worktree, d.renamedFrom)))) Consequence.unit
+      else Consequence.stateConflict("Artifact adoption crosses its UNKNOWN request, owner, participant, target or source")
+    retained <- LocalPublication.collectC(adoption.previous.request.input, target, participant, port)
+    latest <- LocalPublication.collectLatestC(LocalPublication.LatestCollectionInput(target.identity, ownerSessionId), target, participant, port)
+    _ <- if (retained.contains(adoption.previous) && latest.contains(adoption.previous)) Consequence.unit
+      else Consequence.stateConflict("Artifact adoption no longer selects the exact latest retained UNKNOWN")
+    guard <- currentGuard
+    source <- port.sourceC(target)
+    _ <- if (guard == adoption.guard && source == adoption.source) Consequence.unit
+      else Consequence.stateConflict("Artifact adoption source changed; a fresh exact Human target is required")
+  } yield ()
+
+  private[admission] def prerequisiteInput(session: String, candidate: GoalPhaseNativeCandidate.Payload,
+    target: LocalPublication.Target): LocalPublication.Input = LocalPublication.Input(
+      session + ":publication:" + candidate.sourceRevision + ":" + target.identity, target.identity, Some(session))
+
+  private[admission] def confirmedFailureInput(session: String, candidate: GoalPhaseNativeCandidate.Payload,
+    target: LocalPublication.Target, permit: LocalPublication.ConfirmedFailureSuccessor): LocalPublication.Input =
+    prerequisiteInput(session, candidate, target).copy(requestIdentity = prerequisiteInput(session, candidate, target).requestIdentity +
+      ":primary:" + permit.direction.identity + ":" + permit.direction.revision)
+
+  private[admission] def primaryRepairInput(session: String, candidate: GoalPhaseNativeCandidate.Payload,
+    target: LocalPublication.Target, permit: LocalPublication.ConfirmedFailureSuccessor): LocalPublication.Input =
+    prerequisiteInput(session, candidate, target).copy(requestIdentity = prerequisiteInput(session, candidate, target).requestIdentity +
+      ":repair:" + permit.direction.identity + ":" + permit.direction.revision)
+
+  private[admission] def collectPrimaryRepairC(session: String, participant: String,
+    candidate: GoalPhaseNativeCandidate.Payload, permit: LocalPublication.ConfirmedFailureSuccessor,
+    core: ActionCall.Core, policy: Policy): Consequence[Option[LocalPublication.Result]] =
+    LocalPublication.collectConfirmedFailureSuccessorC(primaryRepairInput(session, candidate, permit.previous.request.target, permit),
+      permit.previous.request.target, participant, permit, _port(core, policy))
+
+  /** Only the exact original prerequisite or its qualified primary successor is
+    * admitted. Collection validates retained facts without preparing effects. */
+  private[admission] def primaryPrerequisiteC(session: String, d: GoalPhaseNativeRun.Declaration,
+    core: ActionCall.Core, original: GoalPhaseNativeCandidate.Payload, current: GoalPhaseNativeCandidate.Payload, target: LocalPublication.Target,
+    permit: Option[LocalPublication.ConfirmedFailureSuccessor]): Consequence[LocalPublication.Result] = for {
+    policy <- d.localPublication.map(Consequence.success).getOrElse(Consequence.stateConflict("Primary publication policy is absent"))
+    result <- collectPrimaryPrerequisiteC(session, SecuritySubject.from(core.executionContext.security).subjectId,
+      original, current, target, permit, _port(core, policy))
+  } yield result
+
+  private[admission] def collectPrimaryPrerequisiteC(session: String, participant: String,
+    original: GoalPhaseNativeCandidate.Payload, current: GoalPhaseNativeCandidate.Payload,
+    target: LocalPublication.Target, permit: Option[LocalPublication.ConfirmedFailureSuccessor],
+    port: LocalPublication.Port): Consequence[LocalPublication.Result] = for {
+    _ <- if (target.dependency.isEmpty && target.beforeChecks) Consequence.unit
+      else Consequence.stateConflict("Primary continuation requires its exact primary prerequisite target")
+    originalresult <- LocalPublication.collectPrerequisiteC(prerequisiteInput(session, original, target), target, participant, port)
+    failed <- originalresult.filter(GoalPhasePrerequisitePublicationRecovery.confirmedFailure).map(Consequence.success)
+      .getOrElse(Consequence.stateConflict("Primary continuation has no canonical original terminated failure"))
+    qualified <- permit match {
+      case None => Consequence.success(Option.empty[LocalPublication.Result])
+      case Some(value) => LocalPublication.collectConfirmedFailureSuccessorC(
+        confirmedFailureInput(session, current, target, value), target, participant, value, port)
+    }
+    latest <- LocalPublication.collectLatestC(LocalPublication.LatestCollectionInput(target.identity, session), target, participant, port)
+    result = qualified.getOrElse(permit.map(_.previous).getOrElse(failed))
+    _ <- if (latest.contains(result)) Consequence.unit
+      else Consequence.stateConflict("Latest primary publication belongs to another attempt or causal chain")
+  } yield result
+
+  /** A tightly bounded historical primary failure permits reading the old
+    * artifact Direction after a host selects the corrected source program.
+    * It grants no execution and does not admit a new legacy UNKNOWN answer. */
+  private[admission] def primaryHistoryC(core: ActionCall.Core, policy: Policy,
+    target: GoalPhasePrerequisitePublicationUnknownRecovery.Target): Consequence[Unit] = for {
+    _ <- validateC(policy)
+    applicable = policy.targets.filter(t => t.beforeChecks && t.dependency.forall(Some(target.admission.binding.identity).contains))
+    primary <- applicable match {
+      case Vector(dependency, value) if dependency == target.unknown.request.target && value.dependency.isEmpty &&
+          value.workspace == target.admission.binding.requester.workspace => Consequence.success(value)
+      case _ => Consequence.stateConflict("Historical primary continuation requires exactly its original ordered two targets")
+    }
+    failed <- LocalPublication.collectPrerequisiteC(prerequisiteInput(target.sessionId, target.candidate, primary), primary,
+      target.participant, _port(core, policy))
+    _ <- if (failed.exists(GoalPhasePrerequisitePublicationRecovery.confirmedFailure)) Consequence.unit
+      else Consequence.stateConflict("Historical primary continuation has no genuine original terminated failure")
+  } yield ()
+
+  /** The completed v1 correction's canonical primary request remains historical
+    * even when a later successor now owns the target-wide latest result. */
+  private[admission] def correctedPrimaryHistoryC(core: ActionCall.Core, policy: Policy,
+    target: GoalPhasePrerequisitePublicationRecovery.Target, corrected: GoalPhaseNativeCandidate.Payload): Consequence[Unit] =
+    collectCorrectedPrimaryHistoryC(policy, target, corrected, _port(core, policy))
+
+  private[admission] def collectCorrectedPrimaryHistoryC(policy: Policy,
+    target: GoalPhasePrerequisitePublicationRecovery.Target, corrected: GoalPhaseNativeCandidate.Payload,
+    port: LocalPublication.Port): Consequence[Unit] = for {
+    _ <- validateC(policy)
+    _ <- if (GoalPhasePrerequisitePublicationRecovery.targetValid(target) &&
+        target.publicationPolicy == GoalPhasePrerequisitePublicationRecovery.publicationPolicy(policy) && corrected != null &&
+        corrected.dependency.exists(c => c.session == target.sessionId && c.admission == target.anchoredAdmission &&
+          c.plan == org.goldenport.cncf.workflow.ContextReference(target.plan.identity, target.plan.revision) &&
+          c.step == target.candidate.step && c.generation == target.generation && c.primaryBase == target.base &&
+          c.sourceRevision == corrected.sourceRevision) &&
+        corrected.copy(sourceRevision = target.candidate.sourceRevision, dependencyAdmission = target.candidate.dependencyAdmission,
+          dependency = target.candidate.dependency, dependencyOrigin = target.candidate.dependencyOrigin) == target.candidate)
+      Consequence.unit else Consequence.stateConflict("Historical corrected primary crosses its original candidate, capture or publication policy")
+    applicable = policy.targets.filter(t => t.beforeChecks && t.dependency.forall(Some(target.admission.binding.identity).contains))
+    primary <- applicable match {
+      case Vector(dependency, value) if dependency == target.publicationTarget && dependency == target.failed.request.target &&
+          value.dependency.isEmpty && value.workspace == target.admission.binding.requester.workspace => Consequence.success(value)
+      case _ => Consequence.stateConflict("Historical corrected primary requires its original ordered dependency and primary targets")
+    }
+    failed <- LocalPublication.collectPrerequisiteC(prerequisiteInput(target.sessionId, corrected, primary), primary,
+      target.participant, port)
+    _ <- if (failed.exists(GoalPhasePrerequisitePublicationRecovery.confirmedFailure)) Consequence.unit
+      else Consequence.stateConflict("Historical corrected primary has no canonical original confirmed failure")
+  } yield ()
+
+  /** Collect only; description never prepares or starts a publication. */
+  private[admission] def failedPrerequisiteC(session: String, d: GoalPhaseNativeRun.Declaration,
+    core: ActionCall.Core, candidate: GoalPhaseNativeCandidate.Payload): Consequence[(Policy, LocalPublication.Result)] = for {
+    policy <- d.localPublication.map(Consequence.success).getOrElse(
+      Consequence.stateConflict("Prerequisite recovery requires a declared local publication policy"))
+    _ <- validateC(policy)
+    binding <- candidate.dependencyAdmission.map(_.binding).map(Consequence.success).getOrElse(
+      Consequence.stateConflict("Prerequisite recovery requires its captured dependency binding"))
+    targets = policy.targets.filter(t => t.beforeChecks && t.dependency.contains(binding.identity) &&
+      t.workspace == binding.dependency.workspace)
+    target <- targets match {
+      case Vector(value) => Consequence.success(value)
+      case _ => Consequence.stateConflict("Prerequisite recovery requires one exact declared dependency publication target")
+    }
+    participant = SecuritySubject.from(core.executionContext.security).subjectId
+    failed <- LocalPublication.failedPrerequisiteC(prerequisiteInput(session, candidate, target), target,
+      participant, _port(core, policy))
+  } yield policy -> failed
+
+  /** Historical reconstruction collects the original immutable request only.
+    * Its successor may now be the latest target attempt. */
+  private[admission] def retainedFailureC(core: ActionCall.Core, policy: Policy,
+    failed: LocalPublication.Result): Consequence[Unit] = for {
+    _ <- validateC(policy)
+    _ <- if (policy.targets.contains(failed.request.target)) Consequence.unit
+      else Consequence.stateConflict("Retained prerequisite publication target changed")
+    participant = SecuritySubject.from(core.executionContext.security).subjectId
+    actual <- LocalPublication.collectC(failed.request.input, failed.request.target, participant, _port(core, policy))
+    _ <- if (actual.contains(failed)) Consequence.unit
+      else Consequence.stateConflict("Retained prerequisite failure differs from its actual immutable publication")
+  } yield ()
 }

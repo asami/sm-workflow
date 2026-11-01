@@ -20,13 +20,16 @@ object NativeDependencySourceRevisionPreparation {
     occurredAt: Instant): Consequence[Prepared] = for {
     _ <- if (description != null && input != null && description.outcome == "direction-required" &&
         description.adoptionOperation == R.adoptionOperation && description.sessionId == input.sessionId &&
-        reference != null && input.reference == reference && exact(reference.identity) && exact(reference.revision) &&
+        reference != null && input.reference == reference && _exact(reference.identity) && _exact(reference.revision) &&
         execution != null && execution.workerIdentity != null && execution.workerIdentity.contains(participant) &&
-        exact(participant) && exact(issuer) && occurredAt != null) Consequence.unit
+        _exact(participant) && _exact(issuer) && occurredAt != null) Consequence.unit
       else Consequence.stateConflict("Source revision preparation requires the actual description and independently supplied matching direction")
     target <- R.targetC(description.target)
     supplied <- R.targetC(input.target)
-    _ <- if (target == supplied && target.sessionId == input.sessionId && input.choice == "AdoptDependencySourceRevision")
+    _ <- if (target == supplied && target.sessionId == input.sessionId && description.choices == R.choicesFor(target) &&
+        (input.choice == "AdoptDependencySourceRevision" || (target.waitOrigin.nonEmpty || target.primaryFailureOrigin.nonEmpty) && description.choices.contains(input.choice)) &&
+        target.primaryFailureOrigin.forall(o => o.componentInstance == description.componentInstance && o.participant == participant) &&
+        target.waitOrigin.forall(o => o.componentInstance == description.componentInstance && o.participant == participant))
       Consequence.unit else Consequence.stateConflict("Source revision direction crosses its described target")
     binding <- R.bindingC(description.componentInstance, target, input.choice, input.rationale, participant,
       ContextReference(reference.identity, reference.revision))
@@ -35,5 +38,5 @@ object NativeDependencySourceRevisionPreparation {
     encoded <- NativeExternalEvidence.encodeStorageC(NativeExternalEvidence.Evidence(NativeExternalEvidence.schema,
       purpose.identity, identity, reference.identity, reference.revision, issuer, participant, binding, occurredAt.toString))
   } yield Prepared(NativeExternalEvidence.recordIdentity(purpose, identity), Record.data(NativeExternalEvidence.storageField -> encoded))
-  private def exact(value: String): Boolean = value != null && value.nonEmpty && value.trim == value && !value.exists(_.isControl)
+  private def _exact(value: String): Boolean = value != null && value.nonEmpty && value.trim == value && !value.exists(_.isControl)
 }

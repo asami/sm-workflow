@@ -22,7 +22,8 @@ import GoalPhasePartialCommitClosure as P
   * Durable effect intent precedes commit; external Git is not rolled back with
   * storage and an intent without a recorded result is never automatically rerun.
   * @since   Oct.  6, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  1, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeClosure {
@@ -426,6 +427,16 @@ private[smworkflow] object GoalPhaseNativeClosure {
       after <- GitObjectId.parseC(tree)
       actual <- E.executeGitC(core, GitOperation.TreeChanges(before, after)).flatMap(_.valueC)
     } yield actual
+    private def _selected_scope_c: Consequence[Vector[String]] = for {
+      parent <- GitObjectId.parseC(input.parent.tree)
+      candidate <- GitObjectId.parseC(input.candidate.tree)
+      changes <- E.executeGitC(core, GitOperation.TreeChanges(parent, candidate)).flatMap(_.valueC)
+      _ <- recordsBaseC
+      prepared <- loadC("records-prepared")
+      paths = (changes.map(_.path.value) ++ prepared.toVector.flatMap(_.payload.records.toVector.flatMap(_.files.map(_.path)))).distinct
+      _ <- if (paths.nonEmpty && GoalPhaseNativeCandidateBoundary.pathsOwned(paths, _owned_paths)) Consequence.unit
+        else F.invalid("accepted Step candidate and retained record paths cross selected ownership")
+    } yield paths
     private def _verified_commit_c(payload: Payload, failed: Vector[Saved]): Consequence[Unit] = for {
       native <- G.commitC(core, payload.commit.get.identity)
       _ <- payload.partialCompletion match {
@@ -514,10 +525,12 @@ private[smworkflow] object GoalPhaseNativeClosure {
     def collectSuccessfulC(progress: Progress): Consequence[Saved] = for {
       pending <- progress.pending.filter(p => p.record.causation.value == "ordered-step-closure:" + _attempt_key("intent", p.payload.attempt))
         .map(Consequence.success).getOrElse(F.invalid("successful result collection has no original selected intent"))
+      scope <- _selected_scope_c
       native <- G.inspectC(core)
       root <- G.rootC(core)
       _ <- if (root == d.target.root.toString && native.observed.branch == d.target.localBranch && native.mergeHead.isEmpty &&
-        !native.observed.dirty.exists(_touches_owned) && GoalPhaseNativeCandidateBoundary.scopedDirty(native.observed.dirty, _owned_paths, true)) Consequence.unit
+        !native.observed.dirty.exists(GoalPhaseNativeCandidateBoundary.touches(_, scope)) &&
+        GoalPhaseNativeCandidateBoundary.scopedDirty(native.observed.dirty, scope, true)) Consequence.unit
         else F.invalid("successful Step commit collection differs from its current source or scope")
       actual <- G.commitC(core, native.observed.head)
       completed = pending.payload.copy(commit = Some(O.Commit(actual.identity, input.parent.head, actual.tree)))
@@ -577,13 +590,14 @@ private[smworkflow] object GoalPhaseNativeClosure {
     }
     private def _finish_partial_c(frontier: InstanceRecord, intent: P.Intent, execution: P.Execution): Consequence[Saved] = for {
       proof <- intent.direction.target.partialCompletion.map(Consequence.success).getOrElse(F.invalid("partial completion lost its bound proof"))
+      scope <- _selected_scope_c
       observed <- G.inspectC(core)
       native <- G.commitC(core, observed.observed.head)
       index <- G.indexTreeC(core)
       _ <- if (observed.mergeHead.isEmpty && observed.observed.branch == d.target.localBranch &&
           native.parents == Vector(proof.partial.identity) && native.tree == proof.expectedTree && index == proof.expectedTree &&
-          !observed.observed.dirty.exists(_touches_owned) &&
-          GoalPhaseNativeCandidateBoundary.scopedDirty(observed.observed.dirty, _owned_paths, true) &&
+          !observed.observed.dirty.exists(GoalPhaseNativeCandidateBoundary.touches(_, scope)) &&
+          GoalPhaseNativeCandidateBoundary.scopedDirty(observed.observed.dirty, scope, true) &&
           execution.result.selectedPaths.toSet == proof.remainder.map(_.path).toSet) Consequence.unit
         else F.invalid("actual completion does not finish the exact accepted remainder")
       commit = O.Commit(native.identity, proof.partial.identity, native.tree)
@@ -622,12 +636,13 @@ private[smworkflow] object GoalPhaseNativeClosure {
       } yield closed else Consequence.success(Saved(recorded, payload, controller, Some(summary)))
     } yield saved
     private def _finish_commit_c(frontier: InstanceRecord, payload: Payload): Consequence[Saved] = for {
+      scope <- _selected_scope_c
       observed <- G.inspectC(core)
       commit <- G.commitC(core, observed.observed.head)
       _ <- if (observed.mergeHead.isEmpty && observed.observed.branch == d.target.localBranch &&
           observed.observed.tree == commit.tree &&
-          !observed.observed.dirty.exists(_touches_owned) &&
-          GoalPhaseNativeCandidateBoundary.scopedDirty(observed.observed.dirty, _owned_paths, true)) Consequence.unit
+          !observed.observed.dirty.exists(GoalPhaseNativeCandidateBoundary.touches(_, scope)) &&
+          GoalPhaseNativeCandidateBoundary.scopedDirty(observed.observed.dirty, scope, true)) Consequence.unit
         else F.invalid("actual selected Step commit leaves selected dirty data or a different native frontier")
       completed = payload.copy(commit = Some(O.Commit(commit.identity, input.parent.head, commit.tree)))
       retained <- progressC
@@ -644,6 +659,7 @@ private[smworkflow] object GoalPhaseNativeClosure {
       covers(owner, value.path) || value.renamedFrom.exists(covers(owner, _)))
     def preconditionsC: Consequence[Vector[String]] = for {
       _ <- dependencyPreconditions()
+      scope <- _selected_scope_c
       root <- G.rootC(core)
       native <- G.inspectC(core)
       actual = native.observed
@@ -652,7 +668,7 @@ private[smworkflow] object GoalPhaseNativeClosure {
         .fold(Consequence.unit)(F.invalid(_))
       _ <- if (root == d.target.root.toString && native.mergeHead.isEmpty && actual.branch == d.target.localBranch &&
           actual.head == input.parent.head && actual.tree == input.parent.tree &&
-          GoalPhaseNativeCandidateBoundary.scopedDirty(actual.dirty, _owned_paths, true)) Consequence.unit
+          GoalPhaseNativeCandidateBoundary.scopedDirty(actual.dirty, scope, true)) Consequence.unit
         else F.invalid("actual Step commit candidate or selected ownership has changed")
       parent <- GitObjectId.parseC(input.parent.head)
       paths <- E.executeGitC(core, GitOperation.PendingPaths(parent)).flatMap(_.valueC)
@@ -671,7 +687,7 @@ private[smworkflow] object GoalPhaseNativeClosure {
       afterindex <- G.indexTreeC(core)
       afterroot <- G.rootC(core)
       _ <- if (afterroot == root && afterindex == index && after.branch == actual.branch && after.head == input.parent.head && after.tree == input.parent.tree &&
-          GoalPhaseNativeCandidateBoundary.scopedDirty(after.dirty, _owned_paths, true)) Consequence.unit
+          GoalPhaseNativeCandidateBoundary.scopedDirty(after.dirty, scope, true)) Consequence.unit
         else F.invalid("actual Step parent drifted during closure observation")
     } yield selection.selectedPaths
     def ackC(stage: String): Consequence[Unit] = acknowledge(stage) match {

@@ -41,6 +41,7 @@ private[smworkflow] object GoalPhaseNativeServiceAssembly {
       GoalPhaseWholePhaseCandidateRecovery.operations(port) ++
       GoalPhaseClosureRecovery.operations(port) ++ GoalPhaseRemainingPlanAdoption.operations(port) ++
       GoalPhaseDependencySourceRevision.operations(port) ++
+      GoalPhasePrerequisitePublicationRecovery.operations(port) ++
       GoalPhaseLegacyPurposeRepairContinuation.operations(port) ++
       GoalPhaseReleaseRepairContinuation.operations(port) ++
       GoalPhaseValidationRepairAdoption.operations(port) ++

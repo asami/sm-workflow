@@ -730,6 +730,63 @@ OperationResult
 | outcome | string | 1 |
 | message | string | 1 |
 
+## GoalPhasePrerequisitePublicationRecoveryDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+## GoalPhasePrerequisitePublicationRecoveryDescriptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| componentInstance | string | 1 |
+| target | record | 1 |
+| choices | string | * |
+| recoveryOperation | string | 1 |
+
+## GoalPhasePrerequisitePublicationRecoveryInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | record | 1 |
+| choice | string | 1 |
+| rationale | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+
+## GoalPhasePrerequisitePublicationRecoveryResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+
 ## GoalPhaseDependencySourceRevisionDescriptionInput
 
 - input-kind :: COMMAND
@@ -1510,6 +1567,7 @@ OperationResult
 | purposeRepair | org.goldenport.record.Record | ? |
 | releaseRepairContract | string | ? |
 | triage | org.goldenport.record.Record | ? |
+| publicationFailure | org.goldenport.record.Record | ? |
 
 ## GoalPhaseOrderedDecisionContext
 
@@ -3093,6 +3151,14 @@ operation = GoalPhaseService.describeGoalPhaseRemainingPlan
 
 operation = GoalPhaseService.describeGoalPhaseDependencySourceRevision
 
+#### describeGoalPhasePrerequisitePublicationRecovery
+
+operation = GoalPhaseService.describeGoalPhasePrerequisitePublicationRecovery
+
+#### recoverGoalPhasePrerequisitePublication
+
+operation = GoalPhaseService.recoverGoalPhasePrerequisitePublication
+
 #### adoptGoalPhaseDependencySourceRevision
 
 operation = GoalPhaseService.adoptGoalPhaseDependencySourceRevision
@@ -3288,6 +3354,21 @@ to = Validation
 on = candidate-observed
 
 #### Validation
+
+##### TRANSITION
+
+to = Validation
+on = prerequisite-publication-recovery
+
+##### TRANSITION
+
+to = Validation
+on = prerequisite-publication-unknown-recovery
+
+##### TRANSITION
+
+to = Validation
+on = prerequisite-wait-source
 
 ##### TRANSITION
 
@@ -6770,15 +6851,86 @@ GoalPhaseSourceHistoryRecoveryInput
 
 GoalPhaseSourceHistoryRecoveryResult
 
+#### describeGoalPhasePrerequisitePublicationRecovery
+
+##### DESCRIPTION
+
+Passively describe only the latest unsuspended ordinary Step Validation candidate with its legacy dependency admission and complete capture, an actual latest-target prerequisite publishLocal Exited(nonzero), and no native check or selection intent. Bind the exact component, participant, Session, full controller, original candidate and stages, dependency binding and actual accepted native ancestry, fixed publication policy and failed immutable result, current managed File/Git correction guard and opaque resolved process policy. Require the same workspace/root/branch/original base, unchanged captured index and at least one correction within the existing selected paths. Return AdoptCorrectedSourceAndPublishOnce and Defer. UNKNOWN, timeout, admission refusal, not-started, missing or successful publication, newer target attempts, revised-source and whole-Phase frontiers refuse. Description performs bounded typed observations only; it starts no stage, check, publication or workflow transition.
+
+The distinct sm-workflow.goal-phase-prerequisite-publication-unknown-recovery.v1 branch describes an actual latest UNKNOWN prerequisite at that same unstarted ordinary Validation frontier, including a completed prior correction or v6 Wait-source capture. Its choices are exactly AuthorizeQualifiedSuccessorPublication and Defer. It binds the actual old request, native candidate and accepted semantic reference, Plan/base/prefix/generation/accounting, retained and current source guards and declared process/publication policy. Missing independently installed writer lifecycle or source qualification returns observation-required and grants no effect; Defer remains available. No caller exit, partial typedSBT log or Human approval proves writer completion.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhasePrerequisitePublicationRecoveryDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhasePrerequisitePublicationRecoveryDescriptionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhasePrerequisitePublicationRecoveryDescriptionResult
+
+#### recoverGoalPhasePrerequisitePublication
+
+##### DESCRIPTION
+
+For the closed primary-continuation v2 target, SourceRequired describes a genuine terminated primary failure after the exact admitted dependency UNKNOWN artifact Direction and offers Defer only. The existing source Operations describe a v7 source-only or concrete combined continuation plan. After ordinary source capture, ArtifactDecision accepts existing dependency artifacts at the new exact source; PrimaryDecision authorizes one primary successor. Each operation has its own retained native fact. A combined source Direction may supply attributable inherited authority for those two later facts, recorded on separate ordinary Advances without inventing new Human evidence. Source-only authority leaves uncovered decisions public. PrimaryUncertain is collect-only with Defer. Failed publication never fabricates validation evidence and successful effects never replay.
+
+Supply exactly one of input or inputResource. inputResource is an absolute local file URI without authority, query or fragment containing the complete normal input record. The executing call uses normal CNCF Resource authorization, finite reading and UTF-8 decoding. Duplicate, unknown or null business/target fields refuse; a Resource failure never falls back to inline input. Host resource policy must admit the whole envelope; no additional application byte limit is imposed.
+
+Re-observe the exact current described target and require independently provisioned native Human evidence under goal-phase-prerequisite-publication-recovery. Inputs contain sessionId, target, choice, rationale and reference only. Defer admits that evidence and writes no direction or effect. AdoptCorrectedSourceAndPublishOnce appends one mechanical direction at the same Validation stage, preserving Plan/base/completed Steps/generation/repair counters and every old candidate, stage and failure. It never fabricates or answers an old Human question and runs no staging or publication. Separate ordinary Advance persists intent/result around only the worktree correction paths using their original selection ordinals; observes a fresh incremental dependency capture anchored to the actual accepted native prefix; retains the original primary candidate; then checks normal freshness before ordinary prerequisite publication and validation. The new source revision is the actual recovery direction record revision. UNKNOWN effects never replay. One failed successor requires a new actual target and independent Human direction; success and UNKNOWN retain ordinary publication selection semantics.
+
+For the distinct UNKNOWN schema only, AuthorizeQualifiedSuccessorPublication requires independent exact writer lifecycle/source qualification observations and a separate independently provisioned Human answer bound to the whole target. Append one CAS mechanical Direction only. Separate ordinary Advance constructs the internal typed qualified-successor permit and performs one publication; its failure, not-started or UNKNOWN is retained without automatic renewal. Source adoption alone grants no publication. Original collectLocalPublication continues to return the old UNKNOWN, while collectLatestLocalPublication returns the actual later saved attempt. UNKNOWN Defer stores and executes nothing and requires no observation or Human grant.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhasePrerequisitePublicationRecoveryInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhasePrerequisitePublicationRecoveryInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhasePrerequisitePublicationRecoveryResult
+
 #### describeGoalPhaseDependencySourceRevision
 
 ##### DESCRIPTION
+
+At the exact primary-failure SourceRequired frontier, a closed v7 primaryFailureOrigin retains the original UNKNOWN artifact Direction, terminated primary failure, unchanged primary candidate, policies, exact ordered two targets and current dependency guard. A higher revision of the same logical binding/workspace and complete inherited coverage selects the corrected source. Return AdoptDependencySourceRevisionWithUnknownEffects, AdoptDependencySourceRevisionAndContinuePublicationWithUnknownEffects and Defer. The combined choice binds the concrete source, existing-artifact acceptance and one primary successor plan; different source/programs, later failure and new UNKNOWN effects remain uncovered. No runtime image, old Wait origin or fabricated Human question is introduced.
+
+Supply exactly one of input or inputResource. The latter is an absolute local file URI without authority, query or fragment containing the complete normal business record. The executing call owns normal CNCF Resource authorization, finite UTF-8 acquisition and strict duplicate/unknown/null checks. There is no automatic fallback or application byte cap.
 
 Describe the exact current unanswered implementation or repair Human Decision, its retained dependency predecessor and proposed source selection. Observe selected and excluded regular-file bytes with managed File Identity reads and native Git index/status guards. Preserve original primary base, accepted prefix, approvals and repair history. Return only an exact target and the choices AdoptDependencySourceRevision and Defer. Typed observation can run IndexTree; no staging, source normalization, check, commit, Submit, Advance or adoption runs here.
 
 The bounded installed-runtime successor may append an exact independently declared non-input exclusion scope in a closed version-3 target. Retain the original Direction and ordered exclusions; require nonempty disjoint additions, actual later scope approvals and the current immutable installed distribution. The independent host owns semantic non-input qualification for every declared build/check program. Document suffixes and caller assertions supply no qualification. Version-1 and version-2 targets keep their fixed-exclusion meaning; there is no exclusion-only route or repeated upgrade chain.
 
 An explicit version-4 committed-base successor binds the original Direction, exact old/new native commit/tree pairs, complete native tree changes and four disjoint ordered path partitions. Observe every effective selected path through the explicitly selected TreeEntries operation, including absence and regular mode/blob, and compare actual BlobContent bytes with managed File bytes. Background baseline paths grant no edit or staging ownership. Require the same single installed-runtime successor and actual later approvals; old versions retain their original meaning.
+
+At the exact native prerequisite-publication UNKNOWN Wait, a closed version-6 target binds the actual publication request and retained candidate without inventing an unanswered Human question. Independent observation must establish the old writer's confirmed exited lifecycle before source adoption. Retain the original admission guard, Plan, primary candidate, accepted prefix and repair accounting; select the declared source-only consumption and exact inherited coverage. The separate normal Advance captures only new unstaged dependency paths and increments the source generation once. Source capture leaves publication gated until a separate qualified-successor Human Direction is admitted.
 
 ##### TYPE
 
@@ -6794,7 +6946,8 @@ GoalPhaseDependencySourceRevisionDescriptionInput
 
 | name | type | multiplicity |
 |------+------|--------------|
-| input | GoalPhaseDependencySourceRevisionDescriptionInput | 1 |
+| input | GoalPhaseDependencySourceRevisionDescriptionInput | ? |
+| inputResource | string | ? |
 
 ##### OUTPUT
 
@@ -6805,6 +6958,10 @@ GoalPhaseDependencySourceRevisionDescriptionResult
 #### adoptGoalPhaseDependencySourceRevision
 
 ##### DESCRIPTION
+
+V7 adoption admits the exact independently supplied source-only or combined continuation answer under the existing dependency-source evidence purpose and appends only its source Direction. A separate ordinary Advance captures only missing selected source and increments generation once. For the combined choice, subsequent separate Advances retain one artifact-operation fact and then one primary-authorization fact with inheritedFrom naming that authenticated source directive; a later Advance reserves/executes/collects the one primary attempt. Each fact has its own actual native result identity. No additional Human binding is fabricated or admitted. Source-only selection exposes the later uncovered artifact and primary decisions. Changed guards/programs refuse inheritance and require the relevant current decision or host correction. Original failures, uncertainty, Plan/base, completed Steps, primary delta and repair accounting remain intact.
+
+Supply exactly one of input or inputResource. Resource input is a complete normal business record read through the executing call's normal CNCF Resource authorization and finite UTF-8 path; duplicate/unknown/null data refuses. A read or policy failure performs no adoption and never falls back. The host's finite read policy must admit the whole envelope.
 
 Adopt one independently observed Human source-selection direction for the exact described current target. Re-observe managed selected/excluded bytes, Git and native frontier; refuse stale, crossed, live, unresolved or uncertain effects. Append through the existing Decision supersession owner without answering the old question, replacing original primary base, refunding repairs or accepting new bytes. Defer stores nothing. Only later ordinary Advance, fresh inherited checks, independent review and ordinary closure can qualify a successor. No check, staging, Submit, Advance, commit or publication is run by adoption.
 
@@ -6826,7 +6983,8 @@ GoalPhaseDependencySourceRevisionAdoptionInput
 
 | name | type | multiplicity |
 |------+------|--------------|
-| input | GoalPhaseDependencySourceRevisionAdoptionInput | 1 |
+| input | GoalPhaseDependencySourceRevisionAdoptionInput | ? |
+| inputResource | string | ? |
 
 ##### OUTPUT
 
@@ -9329,6 +9487,7 @@ GoalPhaseWorkSubmissionResult
 | releaseRepairContract | string | ? |
 | triage | org.goldenport.record.Record | ? |
 | diagnosticHistory | org.goldenport.record.Record | * |
+| publicationFailure | org.goldenport.record.Record | ? |
 
 ## GoalPhaseHumanQuestion
 
@@ -10601,6 +10760,10 @@ GoalPhase kind review-purpose-repair requires participant, the actual GoalPhaseR
 GoalPhase kind failed-phase-repair-adoption requires participant, the actual generated GoalPhaseFailedPhaseRepairDescriptionResult as request and GoalPhaseFailedPhaseRepairAdoptionInput as result, exact target/proposal/choice/reference and matching execution worker. Accept unchanged known-failed v1 targets or the distinct complete v2 source.kind=terminated-timeout target from that actual description. Never manufacture KnownFailedPhase or infer a completed result from partial output. Prepare only the independently observed actual new Human direction under purpose goal-phase-failed-phase-repair-adoption and exact failedPhaseRepairAdoption(target,answer) binding, with actual participant, reference, issuer and time. Choices are AdoptRepairPlan and Defer. The returned native external-evidence StartupImport rows neither provision storage nor adopt a Plan nor continue a Workflow. Unknown/missing/explicit-null target, direction or binding fields refuse; no legacy kind or fallback is supported.
 
 GoalPhase kind validation-repair-adoption requires participant, the actual GoalPhaseValidationRepairDescriptionResult and full GoalPhaseValidationRepairAdoptionInput. Bind exactly componentInstance and validationRepairAdoption(target,proposal,answer(choice,rationale,participant,reference)) under native-external-evidence.v7 with actual issuer/time. Historical source uses only AdoptHistoricalAssociationAndRepairPlanAcceptingUnresolvedEffects or Defer and retains exact original public caller provenance and all fixed historical limitations. Preparation does not authenticate source, create Human authority, provision storage, adopt or Advance.
+
+GoalPhase kind goal-phase-prerequisite-publication-recovery requires participant, the actual GoalPhasePrerequisitePublicationRecoveryDescriptionResult as request and GoalPhasePrerequisitePublicationRecoveryInput as result, matching independent Human reference and execution worker, exact described target and complete ordered choices AdoptCorrectedSourceAndPublishOnce and Defer. Prepare the dedicated goal-phase-prerequisite-publication-recovery purpose and prerequisitePublicationRecovery(target,answer) binding. Canonical opaque controller/process text retains native process keys and nulls through public Record conversion. Preparation neither provisions authority nor appends direction, stages source or publishes; independent host provisioning and the guarded public recovery Operation remain separate.
+
+That same preparation kind dispatches the distinct UNKNOWN target schema with exactly AuthorizeQualifiedSuccessorPublication/Defer and prerequisitePublicationUnknownRecovery(target,answer). Kind goal-phase-prerequisite-publication-observation accepts the actual UNKNOWN description plus a strict versioned independent observation as result, its actual reference, observer execution evidence and participant. Prepare only the dedicated observation purpose through ordinary external-evidence imports. Observation scope binds component, participant, Session, exact old request/owner/target, native frontier/candidate revision and full selected binding/source guard. Writer lifecycle requires an actual referenced complete publication-writer CNCF Exited observation. Source qualification independently binds the exact declared source consumption/programs and selected source. Caller JSON is passive preparation, not machine authentication; the independently configured/provisioned host is the trust boundary.
 
 GoalPhase kind completion-policy-adoption requires participant, the actual GoalPhaseCompletionPolicyDescriptionResult as request and GoalPhaseCompletionPolicyAdoptionInput as result, the exact described target and matching independent Human reference and execution worker. Prepare the existing external-evidence import under purpose goal-phase-completion-policy-adoption and completionPolicyAdoption(target,answer). Choices are AdoptLocalCompletion and Defer. Preparation neither adopts direction nor changes a saved Start nor grants repository effects; the public adoption operation owns its guarded self-transition.
 

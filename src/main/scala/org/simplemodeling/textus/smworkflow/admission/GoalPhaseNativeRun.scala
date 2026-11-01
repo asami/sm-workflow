@@ -69,7 +69,8 @@ private[smworkflow] object GoalPhaseNativeRun {
     localPublication: Option[LocalPublicationRuntime.Policy] = None,
     commitHygieneMode: String = CommitHygiene.autoFix,
     completionRecords: Option[CompletionRecords.Policy] = None,
-    phaseDependencyValidation: Option[GoalPhaseDependencyValidation.Binding] = None)
+    phaseDependencyValidation: Option[GoalPhaseDependencyValidation.Binding] = None,
+    prerequisitePublicationRecovery: Option[GoalPhasePrerequisitePublicationRecovery.Installation] = None)
   final case class SelectedPlan(selectionIdentity: String, participantIdentity: String,
     plan: O.Plan, documents: Option[GoalPhaseDocumentSource.Bound] = None)
   trait PlanPort {
@@ -203,6 +204,7 @@ private[smworkflow] object GoalPhaseNativeRun {
           !GoalPhaseDependencyValidation.bindingValid(b) || b.step != "phase:" + d.input.phaseIdentity ||
             b.requester.repository != d.input.repositoryIdentity) ||
         d.dependencySourceRevision == null || d.dependencySourceRevision.exists(i => i == null || !i.validateC.isSuccess) ||
+        d.prerequisitePublicationRecovery == null || d.prerequisitePublicationRecovery.exists(i => i == null || !i.validateC.isSuccess) ||
         d.dependencySourceRevisions == null || d.dependencySourceRevisions.size > 16 ||
         d.dependencySourceRevisions.exists(b => !GoalPhaseDependencyValidation.bindingValid(b)) ||
         d.dependencySourceRevisions.map(b => (b.identity, b.revision)).distinct.size != d.dependencySourceRevisions.size ||
@@ -280,6 +282,7 @@ private[smworkflow] object GoalPhaseNativeRun {
             GoalPhaseClosureRecovery.describeOperation, GoalPhaseClosureRecovery.recoveryOperation,
             GoalPhaseRemainingPlanAdoption.describeOperation, GoalPhaseRemainingPlanAdoption.adoptionOperation,
             GoalPhaseDependencySourceRevision.describeOperation, GoalPhaseDependencySourceRevision.adoptionOperation,
+            GoalPhasePrerequisitePublicationRecovery.describeOperation, GoalPhasePrerequisitePublicationRecovery.recoveryOperation,
             GoalPhaseLegacyPurposeRepairContinuation.describeOperation, GoalPhaseLegacyPurposeRepairContinuation.admissionOperation,
             GoalPhaseReleaseRepairContinuation.describeOperation, GoalPhaseReleaseRepairContinuation.recoveryOperation,
             GoalPhaseFailedPhaseRepairAdoption.describeOperation, GoalPhaseFailedPhaseRepairAdoption.adoptionOperation,

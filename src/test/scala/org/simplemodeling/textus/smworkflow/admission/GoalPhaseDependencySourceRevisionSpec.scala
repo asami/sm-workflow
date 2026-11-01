@@ -1,6 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
+import io.circe.generic.auto.*
 import io.circe.syntax.*
 import org.goldenport.cncf.processexecution.{GitObjectId, GitPath, GitTreeChange}
 import org.goldenport.cncf.workflow.ContextReference
@@ -36,12 +37,126 @@ private[admission] object DependencySourceRevisionSpecificationFixture {
 
 /** Fresh pure source-selection fixtures do not claim actual Human evidence.
   * @since   Oct. 26, 2026
-  * @version Oct. 27, 2026
+  *  version Oct. 27, 2026
+  * @version Nov.  1, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseDependencySourceRevisionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  "Primary-failure source revision v7" should afterWord(
+    "in spec:goal-phase-dependency-source-revision, example:E1,E2,E3,E4, rules:R1,R2,R3, phase:M3-PRIMARY-CONTINUATION-409") {
+    "E1 preserve a distinct closed source-only origin and reject legacy schema reinterpretation" in {
+      Given("docs/spec/goal-phase-dependency-source-revision.md R1 E1: the exact primary failure and a higher revision of its logical dependency binding")
+      import PrimaryPublicationContinuationSpecificationFixture as P
+      When("the new source target is transported through a public Record")
+      val decoded = take(R.targetC(R.targetRecord(P.sourceTarget)))
+      Then("v7 retains the complete original UNKNOWN and primary failure with no fabricated Human question or runtime image")
+      R.targetValid(decoded) shouldBe true
+      decoded shouldBe P.sourceTarget
+      decoded.waitOrigin shouldBe None
+      decoded.runtime shouldBe None
+      decoded.questionIdentity shouldBe empty
+      decoded.proposal.schemaVersion shouldBe R.sourceSchema
+      decoded.primaryFailureOrigin.get.failed shouldBe P.failed
+      R.choicesFor(decoded) shouldBe Vector("AdoptDependencySourceRevisionWithUnknownEffects", R.combinedPrimaryChoice, "Defer")
+      Vector(R.schema, R.runtimeSchema, R.exclusionSchema, R.committedSchema, R.sourceSchema, R.waitSchema).foreach { version =>
+        R.targetValid(decoded.copy(schemaVersion = version)) shouldBe false
+        decoded.asJson.mapObject(_.add("schemaVersion", version.asJson)).as[R.Target].isLeft shouldBe true
+      }
+      R.targetValid(decoded.copy(primaryFailureOrigin = None)) shouldBe false
+      decoded.asJson.mapObject(_.add("primaryFailureOrigin", Json.Null)).as[R.Target].isLeft shouldBe true
+      decoded.asJson.mapObject(_.add("runtime", Json.obj())).as[R.Target].isLeft shouldBe true
+      decoded.asJson.mapObject(_.add("unknownApproval", Json.True)).as[R.Target].isLeft shouldBe true
+      val old = DependencySourceRevisionSpecificationFixture.target
+      old.asJson.hcursor.downField("primaryFailureOrigin").focus shouldBe None
+      take(R.targetC(R.targetRecord(old))) shouldBe old
+    }
+
+    "E2 require inherited coverage and distinguish combined operation authority from a source-only choice" in {
+      Given("docs/spec/goal-phase-dependency-source-revision.md R2 E2: complete inherited source/check coverage and separately attributable choices")
+      import PrimaryPublicationContinuationSpecificationFixture as P
+      val combined = P.sourceDirection
+      val sourceonly = combined.copy(choice = Some("AdoptDependencySourceRevisionWithUnknownEffects"))
+      When("the two exact source answers are interpreted under the existing dependency-source purpose")
+      val combinedbinding = take(R.bindingC(P.sourceRequired.componentInstance, combined.target, R.combinedPrimaryChoice,
+        combined.rationale, combined.participant, combined.directive))
+      val sourcebinding = take(R.bindingC(P.sourceRequired.componentInstance, sourceonly.target, sourceonly.choice.get,
+        sourceonly.rationale, sourceonly.participant, sourceonly.directive))
+      Then("both are valid source results, while only the combined choice carries the concrete later-operation plan")
+      R.directionValid(combined) shouldBe true
+      R.directionValid(sourceonly) shouldBe true
+      combinedbinding should not be sourcebinding
+      R.selectBinding(combinedbinding) shouldBe Right(combinedbinding)
+      R.directionValid(combined.copy(choice = None)) shouldBe false
+      R.directionValid(combined.copy(participant = "foreign-human")) shouldBe false
+      R.bindingC("foreign-component", combined.target, R.combinedPrimaryChoice, combined.rationale,
+        combined.participant, combined.directive).isSuccess shouldBe false
+      R.targetValid(combined.target.copy(proposal = combined.target.proposal.copy(coverage = Vector.empty))) shouldBe false
+      R.targetValid(combined.target.copy(binding = combined.target.binding.copy(paths = combined.target.binding.paths.tail))) shouldBe false
+      R.targetValid(combined.target.copy(binding = combined.target.binding.copy(identity = "foreign-binding"))) shouldBe false
+      R.targetValid(combined.target.copy(binding = combined.target.binding.copy(dependency =
+        combined.target.binding.dependency.copy(workspace = "foreign-workspace")))) shouldBe false
+    }
+
+    "E3 advance source generation once and preserve every primary candidate field through incremental capture" in {
+      Given("docs/spec/goal-phase-dependency-source-revision.md R2 E3: two approved paths with only the first path newly unstaged")
+      import PrimaryPublicationContinuationSpecificationFixture as P
+      When("the v7 capture and exact revised candidate are decoded")
+      val decoded = P.capture.asJson.as[R.Capture]
+      val candidate = P.currentCandidate.asJson.as[GoalPhaseNativeCandidate.Payload]
+      Then("the existing source owner retains the old primary delta, stages no completed path, and gives no repair refund")
+      decoded shouldBe Right(P.capture)
+      candidate shouldBe Right(P.currentCandidate)
+      R.captureValid(P.capture) shouldBe true
+      R.candidateValid(P.currentCandidate) shouldBe true
+      R.stagingPaths(P.sourceDirection, None, P.corrected) shouldBe Vector(P.stage.path)
+      P.capture.generation shouldBe P.sourceTarget.generation + 1L
+      P.capture.direction.target.repairProgress shouldBe P.sourceRequired.repairProgress
+      P.currentCandidate.candidate shouldBe P.candidate.candidate
+      P.currentCandidate.diff shouldBe P.candidate.diff
+      P.currentCandidate.selectedPaths shouldBe P.candidate.selectedPaths
+      P.currentCandidate.stagedPaths shouldBe P.candidate.stagedPaths
+      P.currentCandidate.hygiene shouldBe P.candidate.hygiene
+      R.captureValid(P.capture.copy(generation = P.sourceTarget.generation)) shouldBe false
+      R.captureBaseValid(P.sourceDirection, P.sourceTarget.generation + 1L, P.corrected) shouldBe true
+      R.captureValid(P.capture.copy(schemaVersion = R.waitCaptureSchema)) shouldBe false
+      R.captureValid(P.capture.copy(stagedPaths = P.sourceTarget.binding.paths)) shouldBe false
+      R.candidateValid(P.currentCandidate.copy(diff = Some("foreign primary diff"))) shouldBe false
+      R.candidateValid(P.currentCandidate.copy(selectedPaths = Vector("foreign.scala"))) shouldBe false
+      val sourceonly = P.sourceDirection.copy(choice = Some("AdoptDependencySourceRevisionWithUnknownEffects"))
+      val capture = P.capture.copy(direction = sourceonly)
+      R.captureValid(capture) shouldBe true
+      R.candidateValid(P.currentCandidate.copy(dependencySourceDirection = Some(sourceonly), dependencySourceCapture = Some(capture))) shouldBe true
+    }
+
+    "E4 prepare only the exact v7 participant and complete ordered choice set through the existing purpose" in {
+      Given("docs/spec/goal-phase-dependency-source-revision.md R3 E4: independently supplied combined source evidence for one complete plan")
+      import PrimaryPublicationContinuationSpecificationFixture as P
+      import org.simplemodeling.textus.smworkflow.value as V
+      val reference = V.WorkflowArtifactReference(P.sourceDirection.directive.identity, P.sourceDirection.directive.revision)
+      val input = V.GoalPhaseDependencySourceRevisionAdoptionInput(P.sourceTarget.sessionId, R.targetRecord(P.sourceTarget),
+        R.combinedPrimaryChoice, P.sourceDirection.rationale, reference)
+      val description = V.GoalPhaseDependencySourceRevisionDescriptionResult(P.sourceTarget.sessionId, "direction-required",
+        R.message, P.sourceRequired.componentInstance, R.targetRecord(P.sourceTarget), R.choicesFor(P.sourceTarget), R.adoptionOperation)
+      def _prepare_(value: V.GoalPhaseDependencySourceRevisionDescriptionResult, participant: String = "participant") =
+        org.simplemodeling.textus.smworkflow.preparation.NativeDependencySourceRevisionPreparation.prepareC(value, input, reference,
+          V.WorkflowExecutionEvidence(Vector(reference), Some(participant), None, None), participant,
+          "independent-fixture-provider", java.time.Instant.parse("2026-11-01T00:00:00Z"))
+      When("the passive source preparation checks its actual public description and answer")
+      val prepared = _prepare_(description)
+      Then("the existing source purpose admits the combined plan without manufacturing artifact or primary Human evidence")
+      prepared.isSuccess shouldBe true
+      _prepare_(description.copy(choices = Vector(R.combinedPrimaryChoice, "Defer"))).isSuccess shouldBe false
+      _prepare_(description.copy(componentInstance = "foreign-component")).isSuccess shouldBe false
+      _prepare_(description, "foreign-human").isSuccess shouldBe false
+      val raw = take(input.toRecord().toJsonStringC)
+      GoalPhasePrerequisitePublicationRecovery.validateBusinessTextC(raw).isSuccess shouldBe true
+      GoalPhasePrerequisitePublicationRecovery.validateBusinessTextC(raw.dropRight(1)).isSuccess shouldBe false
+      GoalPhasePrerequisitePublicationRecovery.validateBusinessTextC("{\"target\":{\"primaryFailureOrigin\":1,\"primaryFailureOrigin\":2}}").isSuccess shouldBe false
+    }
+  }
+
   private def _legacy(value: R.ConsumptionRecord): R.LegacyConsumption = value match {
     case legacy: R.LegacyConsumption => legacy
     case _ => fail("Expected an explicit legacy fixture")
@@ -67,6 +182,78 @@ final class GoalPhaseDependencySourceRevisionSpec extends AnyWordSpec with Match
       Vector(R.CheckProgram("primary-test", "primary-validation", "test", "fixture-primary-check"))))
 
   "Dependency source byte guards" should {
+    "retain a distinct native Wait origin and stage only the newly unstaged v6 path" in {
+      Given("M3-UNKNOWN323-SOURCE: accepted primary work and two retained source paths, only the first newly changed")
+      import DependencyValidationSpecificationFixture as F
+      import GoalPhasePrerequisitePublicationUnknownRecovery as U
+      import GoalPhaseOrderedProgression as O
+      val binding = F.binding.copy(revision = 2)
+      val old = DependencySourceRevisionSpecificationFixture.old
+      val before = old.copy(dirty = F.paths.zipWithIndex.map((path, index) => R.Dirty("A", if (index == 0) "M" else " ", path, None)),
+        selectedEntries = F.paths.map(path => R.Entry(path, "100644", "1" * 40)))
+      val candidate = GoalPhaseNativeCandidate.Payload("20", F.binding.step, Vector("screen.scala"), Vector("screen.scala"),
+        Some(O.Snapshot(F.primaryBase.head, "f" * 40)), Vector("screen.scala"), Some("Accepted primary diff"),
+        dependencyAdmission = Some(F.admission), dependencyStaged = F.paths, dependency = Some(F.capture))
+      val publicationtarget = LocalPublication.Target("fixture-wait", "org.goldenport.cncf", F.dependency.workspace,
+        Some(F.binding.identity), beforeChecks = true)
+      val input = LocalPublicationRuntime.prerequisiteInput("same-session", candidate, publicationtarget)
+      val request = LocalPublication.Request(input.copy(requestIdentity = input.requestIdentity + ":prerequisite:0"),
+        publicationtarget, LocalPublication.Source(old.head, old.indexTree,
+          F.paths.map(LocalPublication.Change(_, "A", " "))), "participant", "Actual prerequisite", None, Vector.empty)
+      val controller = Json.obj("stage" -> "Validation".asJson, "plan" -> F.plan.asJson, "base" -> F.primaryBase.asJson,
+        "generation" -> 1L.asJson, "completed" -> Json.arr(), "cursor" -> 0.asJson)
+      val origin = U.Target(U.schema, "fixture-component", "participant", "same-session", "25",
+        io.circe.Printer.noSpaces.copy(sortKeys = true).print(controller), F.plan, F.primaryBase, 1, Vector.empty,
+        GoalPhaseRepairProgress.Snapshot(0, 0, F.plan.repairLimit), "25", candidate, F.admission, Vector.empty,
+        LocalPublication.Result("uncertain", "Original publication intent", request), "{\"policy\":1}", "{\"process\":1}",
+        old, Some(old), Some(ContextReference("same-session", "24")), ContextReference("accepted-semantic-result", "1"), None)
+      val consumption = R.Consumption(F.requester.workspace, binding.root, Vector.empty,
+        F.paths.map(R.ExpectedMode(_, "100644")), Vector(R.CheckProgram("primary-test", "primary-validation", "test", "fixture-primary-check")))
+      val proposal = R.Proposal(R.sourceSchema, ContextReference(binding.identity, "2"), "selected-changes", Vector.empty,
+        F.approvals.map(a => R.Coverage(a.decision, a.proposal.acceptance, binding.checks.map(_.identity))), consumption)
+      val target = R.Target(R.waitSchema, "same-session", "", "25", "25", F.plan, F.binding.step, 1,
+        F.primaryBase, Vector.empty, origin.repairProgress, origin.requestingResult, F.admission, Vector.empty,
+        proposal, binding, old, before, waitOrigin = Some(origin))
+      val direction = R.Direction(target, ContextReference("actual-source-human", "1"), "participant", "SPECIFICATION-OWNED Wait source")
+      val after = before.copy(indexTree = "9" * 40, dirty = before.dirty.map(_.copy(worktree = " ")),
+        selectedEntries = before.selectedEntries.updated(0, before.selectedEntries.head.copy(blob = "2" * 40)))
+      val fact = R.StageFact(F.paths.head, before, after, Vector(R.StageChange("100644", "100644",
+        Some("1" * 40), Some("2" * 40), "M", F.paths.head)))
+      val capture = R.Capture(R.waitCaptureSchema, "same-session", ContextReference(F.plan.identity, F.plan.revision),
+        F.binding.step, 2, "26", F.primaryBase, direction, after, Vector(F.paths.head), before)
+      When("the exact public source target and incremental capture are decoded")
+      val decoded = take(R.targetC(R.targetRecord(target)))
+      val revised = candidate.copy(sourceRevision = "26", dependencyAdmission = None, dependencyStaged = Vector.empty,
+        dependency = None, dependencySourceDirection = Some(direction), dependencySourceGuard = Some(before),
+        dependencySourceStages = Vector(fact), dependencySourceCapture = Some(capture))
+      Then("the v6 marker round trips without a fabricated question and the completed second stage is not replayed")
+      R.targetValid(target) shouldBe true
+      decoded shouldBe target
+      target.questionIdentity shouldBe empty
+      R.stagingPaths(direction, None, before) shouldBe Vector(F.paths.head)
+      R.stageFactValid(fact) shouldBe true
+      R.captureValid(capture) shouldBe true
+      R.candidateValid(revised) shouldBe true
+      revised.candidate shouldBe candidate.candidate
+      revised.selectedPaths shouldBe candidate.selectedPaths
+      revised.stagedPaths shouldBe candidate.stagedPaths
+      revised.diff shouldBe candidate.diff
+      revised.hygiene shouldBe candidate.hygiene
+      capture.generation shouldBe target.generation + 1
+      R.captureValid(capture.copy(stagedPaths = F.paths)) shouldBe false
+      R.targetValid(target.copy(schemaVersion = R.sourceSchema)) shouldBe false
+      R.targetValid(target.copy(questionIdentity = "fabricated-question")) shouldBe false
+      R.targetValid(target.copy(waitOrigin = None)) shouldBe false
+      R.targetValid(target.copy(predecessorGuard = before)) shouldBe false
+      R.targetValid(target.copy(waitOrigin = Some(origin.copy(guard = before)))) shouldBe false
+      target.asJson.mapObject(_.add("waitOrigin", Json.Null)).as[R.Target].isLeft shouldBe true
+      target.asJson.mapObject(_.add("invented", Json.True)).as[R.Target].isLeft shouldBe true
+      R.bindingC("foreign", target, R.choices.head, direction.rationale, "participant", direction.directive).isSuccess shouldBe false
+      R.bindingC("fixture-component", target, R.choices.head, direction.rationale, "foreign", direction.directive).isSuccess shouldBe false
+      val committed = direction.copy(target = target.copy(proposal = proposal.copy(mode = "committed"), preStageGuard = old))
+      R.stagingPaths(committed, None, old) shouldBe empty
+    }
+
     "distinguish same-status unstaged bytes and absence from an empty regular file" in {
       Given("a changed source with the same Git status before and after another edit")
       val changed = R.fileIdentity(selected, bytes("object Replaced\n"))

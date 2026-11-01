@@ -260,6 +260,32 @@ final class GoalPhaseNativeCandidateBoundarySpec extends AnyWordSpec with Matche
   }
 
   "Scoped candidate ownership" should {
+    "validate selected staging within broad Step ownership while preserving unselected worktree entries" in {
+      Given("M3-PC-001: broad Step owners include an unselected preserved document alongside two selected paths")
+      val owned = Vector("value.txt", "docs/phase.md", "docs/preserved.md")
+      val selected = Vector("value.txt", "docs/phase.md")
+      val staged = selected.map(path => _dirty('M', ' ', path))
+      val preserved = Vector(_dirty(' ', 'M', "docs/preserved.md"), _dirty('?', '?', "docs/preserved.md"))
+      val invalid = Vector(
+        staged.updated(0, _dirty(' ', 'M', selected.head)),
+        staged.updated(0, _dirty('M', 'M', selected.head)),
+        staged :+ _dirty('M', ' ', "docs/preserved.md"),
+        staged :+ _dirty('U', 'U', "docs/preserved.md"),
+        staged.updated(0, _dirty('U', 'U', selected.head)),
+        staged :+ _dirty('R', ' ', "docs/preserved.md", Some("docs/phase.md")),
+        staged.updated(1, _dirty('R', ' ', "docs/phase.md", Some("docs/preserved.md"))))
+      When("the existing boundary checks selected ownership, staged candidate scope and global index safety")
+      val accepted = preserved.map(entry => B.scopedDirty(staged :+ entry, selected, true))
+      val refused = invalid.map(entries => B.scopedDirty(entries, selected, true))
+      val escaped = B.pathsOwned(selected :+ "outside/escape.md", owned)
+      Then("owned but unselected tracked or untracked worktree bytes survive while drift, foreign index, conflicts and renames refuse")
+      B.pathsOwned(selected, owned) shouldBe true
+      accepted shouldBe Vector(true, true)
+      preserved.foreach(entry => B.scopedDirty(staged :+ entry, owned, true) shouldBe false)
+      refused shouldBe Vector.fill(invalid.size)(false)
+      escaped shouldBe false
+    }
+
     "permit unrelated unstaged tracked untracked and ignored paths while requiring selected staging" in {
       Given("owned changes and unrelated modified untracked and ignored user documents")
       val foreign = Vector(_dirty(' ', 'M'), _dirty('?', '?', "notes/new.md"), _dirty('!', '!', "notes/cache"))

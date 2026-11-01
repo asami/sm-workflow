@@ -207,9 +207,33 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     val stepReviewRequired: Boolean = false) {
     def selectedRepairLimit: Int = repairControl.map(_.selectedLimit).getOrElse(plan.repairLimit)
     def effectiveRepairLimit: Int = repairControl.map(_.effectiveLimit).getOrElse(plan.repairLimit)
+    /** Native prerequisite source adoption preserves the already accepted work.
+      * The native walker authenticates the Direction before calling this pure
+      * connection; it grants neither publication nor validation authority.
+      */
+    private[admission] def adoptPrerequisiteSourceRevisionC(direction: ContextReference): Consequence[State] =
+      if (stage == Stage.Validation && cursor < plan.steps.size && candidate.nonEmpty &&
+          checksReceipt.isEmpty && reviewEvidence.isEmpty && closureIntent.isEmpty && decision.isEmpty &&
+          pendingRepair.isEmpty && repositoryReceipt.isEmpty && releaseCommit.isEmpty &&
+          generation < Long.MaxValue && direction != null && text(direction.identity) && text(direction.revision))
+        Consequence.success(new State(plan, stage, cursor, generation + 1, repairs, base, completed, candidate,
+          checksReceipt, reviewEvidence, closureIntent, decision, repositoryReceipt, repairDirective, decisionSource,
+          documentDecision, ordinaryRepairs, pendingRepair, phaseReviewedCandidate, phaseRecordingPaths,
+          candidateParent, stepAdmission, releaseCommit, repairControl, policyRepairPending, repairObservations, stepReviewRequired))
+      else invalid("prerequisite source revision requires an unstarted ordinary Validation candidate")
     private def _repair_scope: String = Json.arr(Json.fromString(plan.identity), Json.fromString(plan.revision),
       Json.fromString(if (cursor == plan.steps.size) "Release" else "Step"),
       Json.fromString(if (cursor == plan.steps.size) plan.phase else plan.steps(cursor).identity)).noSpaces
+    /** Native primary publication failed before a check receipt existed. The
+      * owning native fact supplies the actual failure reference and directive. */
+    private[admission] def continuePrimaryPublicationRepairC(failedReceipt: String,
+      directive: RepairDirective): Consequence[State] =
+      if (stage == Stage.Validation && cursor < plan.steps.size && candidate.nonEmpty &&
+          checksReceipt.isEmpty && reviewEvidence.isEmpty && closureIntent.isEmpty && decision.isEmpty &&
+          pendingRepair.isEmpty && repositoryReceipt.isEmpty && releaseCommit.isEmpty &&
+          text(failedReceipt) && _valid_directive(directive))
+        _reserve_repair_c(directive, failedReceipt, "Primary publication repair requires ContinueRepairs")
+      else invalid("primary publication repair requires its exact unstarted Step Validation frontier")
     private def _observed_repair(directive: RepairDirective, reference: String, comparable: Boolean): Vector[R.Observation] =
       if (comparable) R.Context(R.version, selectedRepairLimit, repairObservations)
         .observe(_repair_scope, reference, directive.findings).observations

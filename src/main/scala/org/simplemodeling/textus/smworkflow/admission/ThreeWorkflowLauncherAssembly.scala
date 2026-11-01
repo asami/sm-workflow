@@ -56,6 +56,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     "GoalPhaseService.startGoalPhase", "GoalPhaseService.advanceGoalPhase", "GoalPhaseService.submitGoalPhaseWorkResult",
     "GoalPhaseService.submitGoalPhaseOrderedDecision",
     "GoalPhaseService.submitGoalPhaseFindingRecording",
+    "GoalPhaseService.describeGoalPhasePrerequisitePublicationRecovery", "GoalPhaseService.recoverGoalPhasePrerequisitePublication",
     "GoalPhaseService.describeGoalPhaseValidationRecovery", "GoalPhaseService.recoverGoalPhaseValidation",
     "GoalPhaseService.describeGoalPhaseReleaseRepairContinuation",
     "GoalPhaseService.recoverGoalPhaseReleaseRepairContinuation",
