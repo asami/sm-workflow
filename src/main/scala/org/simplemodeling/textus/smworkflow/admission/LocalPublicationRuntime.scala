@@ -156,6 +156,15 @@ private[smworkflow] object LocalPublicationRuntime {
     result <- LocalPublication.collectC(input, target, participant, _port(core, policy))
   } yield result
 
+  def collectLatestC(core: ActionCall.Core, policy: Policy,
+    input: LocalPublication.LatestCollectionInput): Consequence[Option[LocalPublication.Result]] = for {
+    _ <- validateC(policy)
+    target <- policy.targets.find(_.identity == input.targetIdentity).map(Consequence.success)
+      .getOrElse(Consequence.configurationInvalid("Publication target is not declared by this host"))
+    participant = SecuritySubject.from(core.executionContext.security).subjectId
+    result <- LocalPublication.collectLatestC(input, target, participant, _port(core, policy))
+  } yield result
+
   private def _prerequisite_c(core: ActionCall.Core, policy: Policy,
     input: LocalPublication.Input): Consequence[LocalPublication.Result] = for {
     _ <- validateC(policy)

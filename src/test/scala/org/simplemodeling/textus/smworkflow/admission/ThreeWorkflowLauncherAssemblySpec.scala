@@ -126,6 +126,7 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
         "RepositorySyncService.submitRepositorySyncWorkResult", "RepositorySyncService.submitRepositoryPurposeResult", "RepositorySyncService.submitNativeMergeReview",
         "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitNativeMergeRepair",
         "LocalPublicationService.ensureLocalPublication", "LocalPublicationService.collectLocalPublication",
+        "LocalPublicationService.collectLatestLocalPublication",
         "JournalService.readJournalEntry", "EvidenceService.readEvidence", "EvidenceService.recordEvidenceJournal",
         "DevelopmentObservationService.readDevelopmentState", "DevelopmentObservationService.readDevelopmentHistory")
       Then("every published native operation has a generated counterpart and each owning advance has its paired Start")

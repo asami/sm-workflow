@@ -27,7 +27,43 @@ private[smworkflow] object LocalPublicationService {
   def bind(policy: Option[LocalPublicationRuntime.Policy],
     owner: (String, ActionCall.Core) => Consequence[Unit]): spec.ServiceDefinition =
     NativeWorkflowDescriptionMetadata.service(_declared, spec.OperationDefinitionGroup(NonEmptyVector.of(
-      new Operation(false, policy, owner), new Operation(true, policy, owner))))
+      new Operation(false, policy, owner), new Operation(true, policy, owner),
+      new LatestCollectionOperation(policy, owner))))
+
+  private final class LatestCollectionOperation(policy: Option[LocalPublicationRuntime.Policy],
+    owner: (String, ActionCall.Core) => Consequence[Unit]) extends spec.OperationDefinition {
+    val specification = NativeWorkflowDescriptionMetadata.operation(_declared.CollectLatestLocalPublicationOperation)
+    private val _parser = new io.circe.jawn.JawnParser(None, false)
+    def createOperationRequest(request: Request): Consequence[OperationRequest] =
+      if (request == null || !request.service.contains(_declared.name) || request.operation != name)
+        Consequence.stateConflict("Local publication requires its declared service and Operation")
+      else (request.toRecord.getAny("input") match {
+        case Some(raw: String) => _parser.parse(raw).fold(
+          _ => Consequence.valueInvalid("Invalid or duplicate latest publication input fields"), _ => Consequence.unit)
+        case _ => Consequence.unit
+      }).flatMap(_ => NativeWorkflowOperationInput.recordC(request, "input")).flatMap { record =>
+        if (!DevelopmentOperationalView.uniqueFields(record)) Consequence.valueInvalid("Duplicate publication input fields")
+        else LocalPublication.decodeLatestCollectionInputC(DevelopmentOperationalView.json(record))
+      }.map(input => LatestCollectionCallAction(request, input, policy, owner))
+  }
+
+  private final case class LatestCollectionCallAction(request: Request, input: LocalPublication.LatestCollectionInput,
+    policy: Option[LocalPublicationRuntime.Policy], owner: (String, ActionCall.Core) => Consequence[Unit]) extends CommandAction {
+    override def commandExecutionMode = CommandExecutionMode.Sync
+    def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
+      val core = c
+      def execute(): Consequence[OperationResponse] = for {
+        _ <- owner(input.ownerSessionId, core)
+        result <- policy match {
+          case None => Consequence.success(V.LocalPublicationResult("not-configured", "No publication target is configured", None))
+          case Some(policy) => LocalPublicationRuntime.collectLatestC(core, policy, input).map {
+            case Some(r) => V.LocalPublicationResult(r.status, r.reason, Some(GoalPhaseNativeMetadata.record(r.asJson)))
+            case None => V.LocalPublicationResult("not-found", "No publication attempt is retained for this target; no execution", None)
+          }
+        }
+      } yield NativeWorkflowOperationOutput.response(result)
+    }
+  }
 
   private final class Operation(collect: Boolean, policy: Option[LocalPublicationRuntime.Policy],
     owner: (String, ActionCall.Core) => Consequence[Unit]) extends spec.OperationDefinition {

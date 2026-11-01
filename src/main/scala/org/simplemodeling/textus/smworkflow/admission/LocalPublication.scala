@@ -32,6 +32,7 @@ private[smworkflow] object LocalPublication {
   final case class Input(requestIdentity: String, targetIdentity: String,
     ownerSessionId: Option[String] = None, explicit: Boolean = false,
     answer: Option[Answer] = None)
+  final case class LatestCollectionInput(targetIdentity: String, ownerSessionId: String)
   final case class Request(input: Input, target: Target, source: Source,
     participant: String, reason: String, question: Option[String], paths: Vector[String])
   final case class Result(status: String, reason: String, request: Request,
@@ -133,24 +134,59 @@ private[smworkflow] object LocalPublication {
   /** Target-scoped actual attempt order. Immutable records preserve interrupted
     * and superseded publications; an old source receipt is never a current-artifact index.
     */
-  private def _latest_c(target: Target, port: Port, ordinal: Long = 1L,
-    previous: Option[PublicationAttempt] = None): Consequence[(Long, Option[Result])] =
+  private def _latest_attempt_c(target: Target, port: Port, ordinal: Long = 1L,
+    previous: Option[PublicationAttempt] = None): Consequence[(Long, Option[PublicationAttempt])] =
     port.loadC(_attempt_key(target, ordinal)).flatMap {
       case Some(value) => _decode_c[PublicationAttempt](value).flatMap(attempt =>
         if (attempt.request.target == target && ordinal < Long.MaxValue)
-          _latest_c(target, port, ordinal + 1L, Some(attempt))
+          _latest_attempt_c(target, port, ordinal + 1L, Some(attempt))
         else _invalid("publication history belongs to a different target or exhausted its sequence"))
-      case None => previous match {
-        case None => Consequence.success(ordinal -> None)
-        case Some(attempt) => port.loadC(attempt.key + ":result").flatMap {
+      case None => Consequence.success(ordinal -> previous)
+    }
+
+  private def _latest_c(target: Target, port: Port): Consequence[(Long, Option[Result])] =
+    _latest_attempt_c(target, port).flatMap { (ordinal, previous) => previous match {
+      case None => Consequence.success(ordinal -> None)
+      case Some(attempt) => port.loadC(attempt.key + ":result").flatMap {
           case Some(value) => _decode_c[Result](value).flatMap(result =>
             if (result.request == attempt.request) Consequence.success(ordinal -> Some(result))
             else _invalid("latest publication result differs from its actual intent"))
           case None => Consequence.success(ordinal -> Some(Result("uncertain",
             "The latest target publication has no terminal result; no new effect", attempt.request)))
-        }
       }
+    }}
+
+  def decodeLatestCollectionInputC(value: Json): Consequence[LatestCollectionInput] =
+    if (value == null || !value.asObject.exists(_.keys.toSet == Set("targetIdentity", "ownerSessionId")))
+      _invalid("latest collection requires only target and Session identities")
+    else _decode_c[LatestCollectionInput](value).flatMap(i =>
+      if (i.targetIdentity.trim.nonEmpty && i.ownerSessionId.trim.nonEmpty) Consequence.success(i)
+      else _invalid("target or Session identity is empty"))
+
+  /** Select actual target order before checking ownership. Never search past a
+    * newer attempt belonging to another participant or Session. */
+  def collectLatestC(input: LatestCollectionInput, target: Target, participant: String,
+    port: Port): Consequence[Option[Result]] = for {
+    _ <- if (input != null && target != null && port != null && input.targetIdentity == target.identity &&
+        input.targetIdentity != null && input.targetIdentity.trim.nonEmpty && input.ownerSessionId != null &&
+        input.ownerSessionId.trim.nonEmpty && participant != null && participant.trim.nonEmpty) Consequence.unit
+      else _invalid("incomplete latest collection binding")
+    latest <- _latest_attempt_c(target, port)
+    result <- latest._2 match {
+      case None => Consequence.success(None)
+      case Some(attempt) => for {
+        _ <- if (attempt.request.target == target && attempt.request.input.targetIdentity == input.targetIdentity &&
+            attempt.request.participant == participant && attempt.request.input.ownerSessionId.contains(input.ownerSessionId))
+          Consequence.unit else _invalid("latest publication belongs to a different owner, participant or target")
+        intent <- port.loadC(attempt.key + ":intent")
+        _ <- intent.fold(Consequence.unit)(value => _decode_c[Request](value).flatMap(request =>
+          if (request == attempt.request) Consequence.unit else _invalid("latest publication intent has a different binding")))
+        collected <- collectC(attempt.request.input, target, participant, port)
+        _ <- if (collected.exists(_.request == attempt.request)) Consequence.unit
+          else _invalid("latest publication has no matching original retained request")
+      } yield collected
     }
+  } yield result
 
   def decodeInputC(value: Json): Consequence[Input] = {
     val fields = Set("requestIdentity", "targetIdentity", "ownerSessionId", "explicit", "answer")

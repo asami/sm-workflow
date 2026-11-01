@@ -12,6 +12,9 @@ import org.goldenport.cncf.processexecution.*
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.testutil.RuntimeBindingAdmissionFixture
 import org.goldenport.cncf.workspace.WorkspaceId
+import org.goldenport.cncf.workflow.ContextReference
+import org.goldenport.protocol.{Property, Request as ProtocolRequest}
+import org.goldenport.record.{Field, Record}
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -22,7 +25,8 @@ import LocalPublication.*
 /** Pure decision and continuation contracts. Supplied process facts are test
   * data; actual CLI/UoW execution is qualified separately.
   * @since   Oct. 26, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  1, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -62,13 +66,14 @@ final class LocalPublicationSpec extends AnyWordSpec with Matchers with GivenWhe
     var source = _clean
     var starts = 0
     var ids = 0
+    var sourceObservations = 0
     var next: SbtExecutionAttempt = _observed(ProcessExecutionTermination.Exited(0))
     def loadC(key: String) = Consequence.success(rows.get(key))
     def createC(key: String, value: Json): Consequence[Unit] = {
       if (rows.contains(key)) Consequence.stateConflict("Immutable duplicate")
       else { rows(key) = value; Consequence.unit }
     }
-    def sourceC(t: Target) = Consequence.success(source)
+    def sourceC(t: Target) = { sourceObservations += 1; Consequence.success(source) }
     def executeC(t: Target) = { starts += 1; Consequence.success(next) }
     def newIdentity() = { ids += 1; "runtime-issued-" + ids }
   }
@@ -104,6 +109,174 @@ final class LocalPublicationSpec extends AnyWordSpec with Matchers with GivenWhe
     narrator.Then("uncertainty remains retained and no second publication starts")
     uncertain.status shouldBe "uncertain"
     pending.starts shouldBe 1
+  }
+
+  "Latest local publication collection" should {
+    "return the latest actual append rather than request identity order or an old successful source" in {
+      Given("an earlier successful publication and a later failed attempt with a lexically older request identity")
+      val m = new Memory
+      val first = _ensure(m, "z-first")
+      m.next = _observed(ProcessExecutionTermination.Exited(7))
+      val latest = _ensure(m, "a-last", explicit = true)
+      val retained = m.rows.toMap
+      val observations = m.sourceObservations
+      val starts = m.starts
+      val ids = m.ids
+      When("the same owner repeatedly collects the declared target without supplying a request identity")
+      val input = LatestCollectionInput(_target.identity, "same-retained-session")
+      val reads = Vector.fill(3)(take(collectLatestC(input, _target, "actor", m)))
+      Then("each read returns the exact later saved request and failure with no writes, source observation or execution")
+      reads shouldBe Vector.fill(3)(Some(latest))
+      latest.request.input.requestIdentity shouldBe "a-last"
+      latest.status shouldBe "failed"
+      first.status shouldBe "published"
+      take(collectC(first.request.input, _target, "actor", m)) shouldBe Some(first)
+      m.rows.toMap shouldBe retained
+      m.sourceObservations shouldBe observations
+      m.starts shouldBe starts
+      m.ids shouldBe ids
+    }
+
+    "preserve absence preparation uncertainty and actual success through the original collector" in {
+      Given("no actual target attempt")
+      val absent = new Memory
+      val input = LatestCollectionInput(_target.identity, "same-retained-session")
+      When("latest collection has no target index")
+      val missing = take(collectLatestC(input, _target, "actor", absent))
+      Then("it is absent without acquiring source or executing")
+      missing shouldBe None
+      absent.sourceObservations shouldBe 0
+      absent.starts shouldBe 0
+
+      Given("an actual successful attempt and interruptions before and after its saved intent")
+      val m = new Memory
+      val published = _ensure(m)
+      val resultkey = "local-publication:actor:request:result"
+      val intentkey = "local-publication:actor:request:intent"
+      val observations = m.sourceObservations
+      When("the retained successful result is collected")
+      val success = take(collectLatestC(input, _target, "actor", m))
+      Then("the original result and request are returned exactly")
+      success shouldBe Some(published)
+      When("the actual result is missing but its intent remains")
+      m.rows.remove(resultkey)
+      val uncertain = take(collectLatestC(input, _target, "actor", m)).get
+      Then("the original request remains uncertain without manufactured success")
+      uncertain.status shouldBe "uncertain"
+      uncertain.request shouldBe published.request
+      When("the target append and request exist but effect intent was never saved")
+      m.rows.remove(intentkey)
+      val preparedrows = m.rows.toMap
+      val prepared = take(collectLatestC(input, _target, "actor", m)).get
+      Then("only that no-intent state is prepared and reads cause no effects")
+      prepared.status shouldBe "prepared"
+      prepared.request shouldBe published.request
+      m.rows.toMap shouldBe preparedrows
+      m.sourceObservations shouldBe observations
+      m.starts shouldBe 1
+    }
+
+    "follow retained nonstart preparations without starting the next preparation" in {
+      Given("a confirmed nonstart followed by a retained successful preparation under one original request")
+      val m = new Memory
+      m.next = _observed(ProcessExecutionTermination.NotStarted)
+      val first = _ensure(m)
+      m.next = _observed(ProcessExecutionTermination.Exited(0))
+      val last = _ensure(m)
+      val input = LatestCollectionInput(_target.identity, "same-retained-session")
+      val rows = m.rows.toMap
+      val observations = m.sourceObservations
+      When("latest collection resolves the original saved request through its actual preparation chain")
+      val collected = take(collectLatestC(input, _target, "actor", m))
+      Then("it returns the real successful preparation while preserving the original identity and all facts")
+      collected shouldBe Some(last)
+      collected.get.request shouldBe first.request
+      m.rows.toMap shouldBe rows
+      m.sourceObservations shouldBe observations
+      m.starts shouldBe 2
+    }
+
+    "reject a newer owner or participant rather than finding a convenient older attempt" in {
+      Given("an earlier owned success and a later target attempt owned by a different Session and participant")
+      val m = new Memory
+      _ensure(m, "older-owned")
+      val foreign = take(ensureC(Input("newer-foreign", _target.identity, Some("foreign-session"), explicit = true),
+        _target, "foreign-actor", m))
+      val retained = m.rows.toMap
+      val observations = m.sourceObservations
+      val reads = scala.collection.mutable.ArrayBuffer.empty[String]
+      val readonly = new Port {
+        def loadC(key: String) = { reads += key; m.loadC(key) }
+        def createC(key: String, value: Json) = fail("Latest collection must not write")
+        def sourceC(target: Target) = fail("Latest collection must not inspect source")
+        def executeC(target: Target) = fail("Latest collection must not execute")
+        def newIdentity() = fail("Latest collection must not allocate identities")
+      }
+      When("the old owner, a wrong owner and a wrong participant each request the latest attempt")
+      val rejected = Vector(
+        collectLatestC(LatestCollectionInput(_target.identity, "same-retained-session"), _target, "actor", readonly),
+        collectLatestC(LatestCollectionInput(_target.identity, "wrong-session"), _target, "foreign-actor", readonly),
+        collectLatestC(LatestCollectionInput(_target.identity, "foreign-session"), _target, "wrong-actor", readonly),
+        collectLatestC(LatestCollectionInput("wrong-target", "foreign-session"), _target, "foreign-actor", readonly))
+      Then("all refuse before intent or result disclosure and no older matching request is selected")
+      rejected.foreach(_.isSuccess shouldBe false)
+      reads.forall(_.startsWith("local-publication-target:")) shouldBe true
+      m.rows.toMap shouldBe retained
+      m.sourceObservations shouldBe observations
+      m.starts shouldBe 2
+      When("the actual latest owner and participant collect")
+      val actual = take(collectLatestC(LatestCollectionInput(_target.identity, "foreign-session"), _target, "foreign-actor", readonly))
+      Then("only that exact latest request is disclosed")
+      actual shouldBe Some(foreign)
+    }
+
+    "reject crossed retained target request result and intent bindings" in {
+      Given("a valid indexed attempt with separately crossed retained facts")
+      val input = LatestCollectionInput(_target.identity, "same-retained-session")
+      val mutations: Vector[(Memory, Result) => Unit] = Vector(
+        (m, r) => m.rows("local-publication-target:producer:1") = Json.obj(
+          "key" -> "local-publication:actor:request".asJson,
+          "request" -> r.request.copy(target = _target.copy(component = "org.example.Other")).asJson),
+        (m, r) => m.rows("local-publication:actor:request:request") = r.request.copy(reason = "crossed").asJson,
+        (m, r) => m.rows("local-publication:actor:request:result") = r.copy(request = r.request.copy(reason = "crossed")).asJson,
+        (m, r) => m.rows("local-publication:actor:request:intent") = r.request.copy(participant = "crossed").asJson)
+      When("latest collection encounters each crossed fact")
+      val rejected = mutations.map { mutate =>
+        val m = new Memory
+        val saved = _ensure(m)
+        mutate(m, saved)
+        collectLatestC(input, _target, "actor", m)
+      }
+      Then("no mismatched original request, effect intent or result can be returned")
+      rejected.foreach(_.isSuccess shouldBe false)
+    }
+
+    "strictly decode only required nonblank strings and reject duplicate wire fields" in {
+      Given("the generated latest operation and its exact required target and Session identities")
+      val service = LocalPublicationService.bind(None, (_, _) => fail("Request decoding must not read a Session"))
+      val operation = service.operations.operations.find(_.name == "collectLatestLocalPublication").get
+      val valid = Json.obj("targetIdentity" -> _target.identity.asJson, "ownerSessionId" -> "same-retained-session".asJson)
+      def _request_(value: Any) = ProtocolRequest.of(component = SmWorkflowComponent.componentId.name,
+        service = service.name, operation = operation.name, properties = List(Property("input", value, None)))
+      val malformed = Vector(Json.Null, Json.arr(), Json.obj(),
+        valid.mapObject(_.remove("targetIdentity")), valid.mapObject(_.remove("ownerSessionId")),
+        valid.mapObject(_.add("requestIdentity", "guessed".asJson)), valid.mapObject(_.add("explicit", true.asJson)),
+        valid.mapObject(_.add("ownerSessionId", Json.Null)), valid.mapObject(_.add("targetIdentity", Json.Null)),
+        valid.mapObject(_.add("ownerSessionId", 1.asJson)), valid.mapObject(_.add("targetIdentity", false.asJson)),
+        valid.mapObject(_.add("ownerSessionId", " \t".asJson)), valid.mapObject(_.add("targetIdentity", "".asJson)))
+      val duplicate = Record.empty.copy(fields = Vector(Field("targetIdentity", Field.Value.Single(_target.identity)),
+        Field("ownerSessionId", Field.Value.Single("same-retained-session")),
+        Field("ownerSessionId", Field.Value.Single("another-session"))))
+      val duplicatejson = "{\"targetIdentity\":\"producer\",\"ownerSessionId\":\"same-retained-session\",\"ownerSessionId\":\"another-session\"}"
+      When("normal operation request creation decodes valid, malformed and duplicate representations")
+      val accepted = operation.createOperationRequest(_request_(valid.noSpaces))
+      val rejected = malformed.map(value => operation.createOperationRequest(_request_(value.noSpaces))) ++ Vector(
+        operation.createOperationRequest(_request_(duplicate)), operation.createOperationRequest(_request_(duplicatejson)))
+      Then("only the exact valid contract is admitted without opening a Session or performing publication work")
+      accepted.isSuccess shouldBe true
+      rejected.foreach(_.isSuccess shouldBe false)
+      ThreeWorkflowLauncherAssembly.publishedMcpOperations should contain("LocalPublicationService.collectLatestLocalPublication")
+    }
   }
 
   "Runtime-owned publication" should {

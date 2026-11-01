@@ -217,6 +217,17 @@ OperationResult
 | ownerSessionId | string | ? |
 | explicit | boolean | 1 |
 
+## LocalPublicationLatestCollectionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| targetIdentity | string | 1 |
+| ownerSessionId | string | 1 |
+
 ## LocalPublicationResult
 
 ### ATTRIBUTE
@@ -10164,6 +10175,34 @@ LocalPublicationCollectionInput
 | name | type | multiplicity |
 |------+------|--------------|
 | input | LocalPublicationCollectionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+LocalPublicationResult
+
+#### collectLatestLocalPublication
+
+##### DESCRIPTION
+
+Collect the latest actual attempt for one declared target and the open owning Session without knowing its original request identity. The latest attempt must belong to the caller participant and supplied Session; another owner is rejected without searching older attempts. Collection returns the original saved request and result and performs no source observation, writes or execution.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+LocalPublicationLatestCollectionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | LocalPublicationLatestCollectionInput | 1 |
 
 ##### OUTPUT
 

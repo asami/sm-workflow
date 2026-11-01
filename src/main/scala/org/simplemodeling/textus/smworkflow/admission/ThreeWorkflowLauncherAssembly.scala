@@ -47,6 +47,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     "StandaloneFixService.startStandaloneFix", "StandaloneFixService.advanceStandaloneFix",
     "StandaloneFixService.submitStandaloneFixWorkResult", "StandaloneFixService.resolveStandaloneFixDiagnosticInformation",
     "LocalPublicationService.ensureLocalPublication", "LocalPublicationService.collectLocalPublication",
+    "LocalPublicationService.collectLatestLocalPublication",
     "DevelopmentObservationService.readDevelopmentState", "DevelopmentObservationService.readDevelopmentHistory",
     "EvidenceService.readEvidence", "EvidenceService.readEvidenceRange", "EvidenceService.recordEvidenceJournal",
     "EvidenceService.archiveEvidenceBatch", "EvidenceService.describeEvidence",

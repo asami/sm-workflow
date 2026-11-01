@@ -267,7 +267,7 @@ private[smworkflow] object GoalPhaseNativeRun {
           !(core.action.request.service.contains("DevelopmentObservationService") &&
             Set("readDevelopmentState", "readDevelopmentHistory")(core.action.request.operation) ||
             core.action.request.service.contains("LocalPublicationService") &&
-            Set("ensureLocalPublication", "collectLocalPublication")(core.action.request.operation) ||
+            Set("ensureLocalPublication", "collectLocalPublication", "collectLatestLocalPublication")(core.action.request.operation) ||
             core.action.request.service.contains("GoalPhaseService") &&
           Set(startOperation.operation, advanceOperation.operation, completionOperation.operation,
             IncrementalSbtDiagnosisInformation.operation,
