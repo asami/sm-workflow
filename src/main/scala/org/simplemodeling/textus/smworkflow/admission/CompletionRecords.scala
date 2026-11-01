@@ -85,7 +85,7 @@ private[smworkflow] object CompletionRecords {
         .map(Consequence.success).getOrElse(invalid("selected record must already be tracked regular text: " + p))
       blob <- E.executeGitC(core, GitOperation.BlobContent(entry.blob)).flatMap(_.valueC)
       text <- blob.text.filter(t => t.getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector == blob.bytes &&
-        t.length <= 262144 && !t.contains('\u0000')).map(Consequence.success).getOrElse(invalid("record requires complete bounded UTF-8 text"))
+        !t.contains('\u0000')).map(Consequence.success).getOrElse(invalid("record requires complete ordinary UTF-8 text"))
       file <- WorkspaceFilePath.parseC(p)
       workspace <- WorkspaceId.parseC("sm-workflow-repository")
       actual <- WorkflowFileExecution.readTextC(core, FileTarget(workspace), file)

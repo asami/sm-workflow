@@ -333,13 +333,13 @@ private[smworkflow] object GoalPhasePlanRevision {
     }
   private def _non_null(value: Json): Boolean = !value.isNull &&
     value.asObject.forall(_.values.forall(_non_null)) && value.asArray.forall(_.forall(_non_null))
-  private def _bounded(value: String, maximum: Int): Boolean = value != null && value.trim.nonEmpty &&
-    UTF_8.newEncoder().canEncode(value) && value.getBytes(UTF_8).length <= maximum
-  private def _identity(value: String): Boolean = _bounded(value, 128) &&
+  private def _bounded(value: String): Boolean = value != null && value.trim.nonEmpty &&
+    UTF_8.newEncoder().canEncode(value)
+  private def _identity(value: String): Boolean = _bounded(value) &&
     !value.exists(c => Character.isISOControl(c))
   private def _stable_id(value: String): Boolean =
     value != null && value.matches("[A-Za-z0-9][A-Za-z0-9_.-]{0,127}")
-  private def _reason(value: String): Boolean = _bounded(value, 16384) && !value.contains('\u0000')
+  private def _reason(value: String): Boolean = _bounded(value) && !value.contains('\u0000')
   private def _check(valid: Boolean, reason: String): Consequence[Unit] =
     if (valid) Consequence.unit else Consequence.stateConflict("GoalPhase Plan revision: " + reason)
 }

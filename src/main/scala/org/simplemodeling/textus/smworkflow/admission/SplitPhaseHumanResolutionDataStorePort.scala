@@ -26,5 +26,5 @@ private[smworkflow] final class SplitPhaseHumanResolutionDataStorePort private[a
       }
 
   private def _reference(value: String): Boolean = value != null && value.nonEmpty && value.trim == value &&
-    value.length <= 1024 && !value.exists(Character.isISOControl)
+    !value.exists(Character.isISOControl)
 }

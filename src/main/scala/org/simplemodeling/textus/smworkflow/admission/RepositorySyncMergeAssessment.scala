@@ -34,7 +34,7 @@ private[smworkflow] object RepositorySyncMergeAssessment {
     if (policy != null && Set("required", "conditional")(policy.detailedReview) &&
         Set("required", "not-applicable")(policy.scalaLint) &&
         Set("off", "not-applicable")(policy.carLint) && policy.lintReason != null &&
-        policy.lintReason.trim.nonEmpty && policy.lintReason.length <= 4096 &&
+        policy.lintReason.trim.nonEmpty &&
         policy.contractPaths != null && policy.contractPaths.size <= 128 &&
         policy.contractPaths.distinct == policy.contractPaths &&
         policy.contractPaths.forall(RepositorySyncNativeConflictInput.relative) &&

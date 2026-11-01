@@ -114,7 +114,7 @@ private[smworkflow] object GoalPhaseNativeReview {
 
   private def _check(valid: Boolean, reason: String): Consequence[Unit] =
     if (valid) Consequence.unit else F.invalid(reason)
-  private def _reference(value: String): Boolean = _bounded(value, 16384) &&
+  private def _reference(value: String): Boolean = _bounded(value) &&
     value.trim.nonEmpty && !value.exists(_.isControl)
   private def _stable_step(value: String): Boolean = _reference(value)
   private def _revision(value: String): Boolean = value != null && value.matches("[1-9][0-9]*") &&
@@ -132,8 +132,8 @@ private[smworkflow] object GoalPhaseNativeReview {
   private def _review_result_valid(kind: String, value: S.Result): Boolean = value != null &&
     admitPlanRevisionC(kind, value).isSuccess && value.acceptance != null &&
     value.acceptance.forall(report => GoalPhaseAcceptanceBoundary.validateReportC(report).isSuccess) &&
-    _bounded(value.summary, 16384) && value.summary.trim.nonEmpty && value.findings != null &&
-    value.findings.size <= 128 && value.findings.forall(finding => _bounded(finding, 16384) && finding.trim.nonEmpty) &&
+    _bounded(value.summary) && value.summary.trim.nonEmpty && value.findings != null &&
+    value.findings.size <= 128 && value.findings.forall(finding => _bounded(finding) && finding.trim.nonEmpty) &&
     Set("accept", "repair", "decision-needed")(value.outcome) &&
     (value.outcome != "accept" || value.findings.isEmpty) && (value.outcome != "repair" || value.findings.nonEmpty) &&
     GoalPhaseFixAssessment.admitC(kind, value.outcome, value.fixAssessment).isSuccess &&
@@ -153,7 +153,7 @@ private[smworkflow] object GoalPhaseNativeReview {
       "only one proposal kind may request a review decision")
     _ <- _check(result.planRevision.isEmpty || (kind == "ReviewPhase" && result.outcome == "decision-needed" &&
       result.findings != null && result.findings.nonEmpty &&
-      result.findings.forall(finding => _bounded(finding, 16384) && finding.trim.nonEmpty)),
+      result.findings.forall(finding => _bounded(finding) && finding.trim.nonEmpty)),
       "only a whole-Phase decision-needed review with an actual finding may propose a corrective Step")
   } yield ()
   final case class Policy(identity: String, revision: Int) {
@@ -185,8 +185,8 @@ private[smworkflow] object GoalPhaseNativeReview {
   private def _completed_state_c(result: S.Result, evidence: String,
     controller: O.State, request: Option[S.Request], reviewcontext: Option[Context]): Consequence[O.State] = for {
     _ <- if (result != null &&
-        _bounded(result.summary, 16384) && result.summary.trim.nonEmpty &&
-        result.findings != null && result.findings.size <= 128 && result.findings.forall(f => _bounded(f, 16384) && f.trim.nonEmpty) &&
+        _bounded(result.summary) && result.summary.trim.nonEmpty &&
+        result.findings != null && result.findings.size <= 128 && result.findings.forall(f => _bounded(f) && f.trim.nonEmpty) &&
         Set("accept", "repair", "decision-needed")(result.outcome) &&
         (result.outcome != "accept" || result.findings.isEmpty) &&
         (result.outcome != "repair" || result.findings.nonEmpty)) Consequence.unit
@@ -224,6 +224,5 @@ private[smworkflow] object GoalPhaseNativeReview {
     next <- controller.acceptC(O.ReviewAdmitted(work.key, work.candidate.get, work.checksReceipt.get,
       evidence, outcome, directive, allowPhaseRepair = request.exists(_.releaseRepairContract.contains(S.RELEASE_REPAIR_CONTRACT))))
   } yield next
-  private def _bounded(value: String, maximum: Int) = value != null && !value.contains('\u0000') &&
-    value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= maximum
+  private def _bounded(value: String) = value != null && !value.contains('\u0000')
 }

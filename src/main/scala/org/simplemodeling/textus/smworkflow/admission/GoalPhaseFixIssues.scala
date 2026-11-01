@@ -114,7 +114,7 @@ private[smworkflow] object GoalPhaseFixIssues {
   /** Shared by native admission and the sole actual-completion traversal. */
   def completedC(request: W.Request, result: W.Result, evidence: String): Consequence[Option[State]] = for {
     _ <- _check(request != null && result != null && request.selectedPlan != null &&
-      request.stepIdentity != null && _text(evidence, 4096), "missing assigned issue boundary")
+      request.stepIdentity != null && _text(evidence), "missing assigned issue boundary")
     _ <- validateOptionC(request.issues)
     _ <- validateReportOptionC(result.issueReport)
     current = request.issues.getOrElse(_empty)
@@ -162,7 +162,7 @@ private[smworkflow] object GoalPhaseFixIssues {
     * reviewer report or reviewer disposition is synthesized. */
   private[admission] def completeCoveredC(previous: Option[State], request: W.Request,
     result: W.Result, prior: GoalPhaseNativeReview.Prior, evidence: String): Consequence[Option[State]] = for {
-    _ <- _check(_text(evidence, 4096), "covered completion reference is absent")
+    _ <- _check(_text(evidence), "covered completion reference is absent")
     selected <- coveredIssuesC(previous, request, result, prior)
     state = previous.get
     resolved = selected.foldLeft(state)((saved, issue) => _update(saved,
@@ -191,7 +191,7 @@ private[smworkflow] object GoalPhaseFixIssues {
 
   private def _review_c(request: W.Request, result: W.Result, state: State,
     entries: Vector[Disposition], evidence: String): Consequence[State] = for {
-    _ <- _check(result.findings != null && result.findings.forall(_text(_, 16384)) &&
+    _ <- _check(result.findings != null && result.findings.forall(_text) &&
       entries.forall(e => _review(e.disposition)), "review requires review dispositions and actual findings")
     known = state.issues.filter(relevant(request, _))
     _ <- _check(entries.forall(e => known.exists(_.identity == e.issueIdentity)) &&
@@ -229,9 +229,9 @@ private[smworkflow] object GoalPhaseFixIssues {
   def validationC(instance: String, repository: String, previous: Option[State],
     payload: GoalPhaseNativeValidation.Payload, evidence: String): Consequence[Option[State]] = for {
     _ <- validateOptionC(previous)
-    _ <- _check(_text(instance, 4096) && _text(repository, 4096) && _text(evidence, 4096) &&
-      payload != null && _text(payload.step, 4096) && payload.selected != null &&
-      payload.selected.forall(c => c != null && c.kind != null && _text(c.identity, 4096)) &&
+    _ <- _check(_text(instance) && _text(repository) && _text(evidence) &&
+      payload != null && _text(payload.step) && payload.selected != null &&
+      payload.selected.forall(c => c != null && c.kind != null && _text(c.identity)) &&
       payload.receipts != null && payload.receipts.forall(r => r != null && r.sbt != null && r.exitCode != null) &&
       payload.outcome != null, "missing actual selected validation boundary")
     state = previous.getOrElse(_empty)
@@ -295,19 +295,19 @@ private[smworkflow] object GoalPhaseFixIssues {
         else Left(DecodingFailure("Invalid bounded issue value", cursor.history)))
     }
   private def _issue(i: Issue): Boolean = i != null && Vector(i.identity, i.repository, i.step, i.evidenceReference)
-    .forall(_text(_, 4096)) && i.identity.matches("issue-[1-9][0-9]{0,4}") &&
+    .forall(_text) && i.identity.matches("issue-[1-9][0-9]{0,4}") &&
     i.identity.stripPrefix("issue-").toInt <= 16384 && Set("TEST", "REVIEW")(i.source) && _statuses(i.status) &&
-    i.sourceIdentity != null && i.sourceIdentity.forall(_text(_, 4096)) && _text(i.summary, 16384) &&
+    i.sourceIdentity != null && i.sourceIdentity.forall(_text) && _text(i.summary) &&
     i.latestDisposition != null && i.latestDisposition.forall(d => _repair(d) || _review(d))
-  private def _transition(t: Transition): Boolean = t != null && _text(t.issueIdentity, 4096) &&
-    t.previousStatus != null && t.previousStatus.forall(_statuses) && _statuses(t.status) && _text(t.evidenceReference, 4096)
-  private def _movement(m: Movement): Boolean = m != null && _text(m.evidenceReference, 4096) &&
+  private def _transition(t: Transition): Boolean = t != null && _text(t.issueIdentity) &&
+    t.previousStatus != null && t.previousStatus.forall(_statuses) && _statuses(t.status) && _text(t.evidenceReference)
+  private def _movement(m: Movement): Boolean = m != null && _text(m.evidenceReference) &&
     Vector(m.openIssues, m.resolvedIssues, m.newIssues, m.reopenedIssues).forall(n => n >= 0 && n <= 16384)
-  private def _disposition(d: Disposition): Boolean = d != null && _text(d.issueIdentity, 4096) &&
-    (_repair(d.disposition) || _review(d.disposition)) && _text(d.rationale, 16384) &&
+  private def _disposition(d: Disposition): Boolean = d != null && _text(d.issueIdentity) &&
+    (_repair(d.disposition) || _review(d.disposition)) && _text(d.rationale) &&
     d.findingOrdinal != null && d.findingOrdinal.forall(_ > 0)
-  private def _text(value: String, maximum: Int): Boolean = value != null && value.trim.nonEmpty &&
-    !value.contains('\u0000') && UTF_8.newEncoder().canEncode(value) && value.getBytes(UTF_8).length <= maximum
+  private def _text(value: String): Boolean = value != null && value.trim.nonEmpty &&
+    !value.contains('\u0000') && UTF_8.newEncoder().canEncode(value)
   private def _check(value: Boolean, reason: String): Consequence[Unit] =
     if (value) Consequence.unit else _invalid(reason)
   private def _invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("GoalPhase Fix issues: " + reason)

@@ -80,6 +80,27 @@ final class NativeWorkflowResourceInputSpec extends AnyWordSpec with Matchers wi
       V.WorkflowArtifactReference("fixture-human", "1"))
   }
 
+  "Latest local publication owning-call admission" should {
+    "reach the absent native Session through the actual normal handler and generated latest input" in {
+      withPreparation() { episode =>
+        Given("the normal generated publication service and a valid latest input for an absent fixture Session")
+        val input = V.LocalPublicationLatestCollectionInput("fixture-publication-target", "absent-latest-publication-session")
+        val text = take(input.toRecord().toJsonStringC)
+        When("the actual normal handler receives the latest collection call under its owning service and component")
+        val refused = episode.owner.executeOperationResponseInContext(Request.of(
+          component = episode.component.name, service = "LocalPublicationService", operation = "collectLatestLocalPublication",
+          properties = List(Property("input", text, None))), episode.actor)
+        Then("the existing absent native Start check refuses after the exact owning-call gate admits the operation")
+        refused match {
+          case Consequence.Failure(conclusion) =>
+            conclusion.toString should include ("owning advance has no actual native ordered Start")
+            conclusion.toString should not include ("native ordered entry requires its actual owning call")
+          case _ => fail("An absent fixture Session must not receive publication collection admission")
+        }
+      }
+    }
+  }
+
   "Candidate recovery Resource transport" should {
     "bind candidate recovery without acquiring a Resource and enforce exclusive transport" in {
       Given("the actual candidate recovery Operation and an absent local file without a recovery port")

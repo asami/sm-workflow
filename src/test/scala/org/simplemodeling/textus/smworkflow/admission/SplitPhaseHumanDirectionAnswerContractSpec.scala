@@ -31,7 +31,7 @@ final class SplitPhaseHumanDirectionAnswerContractSpec extends AnyWordSpec with 
     "passive generated payloads" which {
       "round-trip every declared alternative and retain exact resolution identity/revision" in {
         Given("all declared answers and canonical reference dimensions including Unicode and separators")
-        val references = for (identity <- Vector("resolution", "計画/案", "resolution:one@two", "x" * 1024);
+        val references = for (identity <- Vector("resolution", "計画/案", "resolution:one@two", "漢" * 4097);
           revision <- Vector("1", "改訂二", "revision:3@4")) yield S.ContextReference(identity, revision)
         val answers = Vector[A.Answer](A.Answer.Defer, A.Answer.Cancel) ++ references.map(A.Answer.ProvideResolution(_))
         answers.foreach { answer =>
@@ -93,18 +93,17 @@ final class SplitPhaseHumanDirectionAnswerContractSpec extends AnyWordSpec with 
             decoded shouldBe Right(answer)
           }
           Given("the same answer with an unused diagnostic larger than the former complete-wire limit")
-          val annotated = original.mapObject(_.add("unusedDiagnostic", Json.fromString("x" * (A.maximumBytes + 1))))
+          val annotated = original.mapObject(_.add("unusedDiagnostic", Json.fromString("x" * 4097)))
           When("the owning decoder consumes only the actual choice and reference")
           val actual = A.payloadCodec.decode(annotated)
           Then("large unused diagnostics do not change business meaning or create authority")
           actual shouldBe Right(answer)
         }
       }
-      "refuse malformed references, invalid UTF-8 values and oversized complete payloads" in {
-        Given("canonical-reference violations and a complete payload exceeding the UTF-8 byte bound")
-        val invalid = Vector(null, "", " padded", "trailing ", "line\nbreak", "x" * 1025, "\uD800")
-        val references = invalid.flatMap(value => Vector(S.ContextReference(value, "1"), S.ContextReference("resolution", value))) ++
-          Vector(S.ContextReference("漢" * 1024, "漢" * 1024))
+      "refuse malformed references, invalid UTF-8 values and malformed complete payloads" in {
+        Given("canonical-reference violations and payloads without the declared answer structure")
+        val invalid = Vector(null, "", " padded", "trailing ", "line\nbreak", "\uD800")
+        val references = invalid.flatMap(value => Vector(S.ContextReference(value, "1"), S.ContextReference("resolution", value)))
         references.foreach { reference =>
           When("the unsupported resolution reference is encoded")
           val encoded = A.encodeC(A.Answer.ProvideResolution(reference))
@@ -112,7 +111,7 @@ final class SplitPhaseHumanDirectionAnswerContractSpec extends AnyWordSpec with 
           encoded.isSuccess shouldBe false
         }
         Vector(null, Json.Null, Json.obj(), Json.fromString("x" * 4097)).foreach { json =>
-          When("an absent malformed or oversized external payload is decoded")
+          When("an absent or malformed external payload is decoded")
           val decoded = A.payloadCodec.decode(json)
           Then("the input does not construct an answer")
           decoded.isLeft shouldBe true

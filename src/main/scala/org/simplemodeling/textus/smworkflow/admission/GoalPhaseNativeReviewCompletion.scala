@@ -45,7 +45,7 @@ private[smworkflow] object GoalPhaseNativeReviewCompletion {
     _ <- _check(result != null && ownedpaths != null, "completion result or ownership option is null")
     _ <- validateOptionC(result.completionConditions)
     _ <- _check(result.completionConditions.isEmpty || (kind == "ReviewStep" && result.outcome == "repair" &&
-      result.findings != null && result.findings.nonEmpty && result.findings.forall(_text(_, 16384)) &&
+      result.findings != null && result.findings.nonEmpty && result.findings.forall(_text) &&
       result.completionConditions.get.paths.size == result.findings.size &&
       result.planRevision != null && result.planRevision.isEmpty &&
       result.dependencyProposal != null && result.dependencyProposal.isEmpty &&
@@ -200,7 +200,7 @@ private[smworkflow] object GoalPhaseNativeReviewCompletion {
     blobs: Map[String, GitBlobContent]): Consequence[Option[Vector[GoalPhaseNativeClosure.Change]]] = for {
     _ <- _check(source != null && changes != null && changes.size <= 256 && blobs != null &&
       changes.forall(change => change != null && change.path != null && _path(change.path.value) &&
-        change.oldMode != null && change.newMode != null && _text(change.status, 128) &&
+        change.oldMode != null && change.newMode != null && _text(change.status) &&
         change.oldBlob != null && change.newBlob != null &&
         (change.oldBlob.toVector ++ change.newBlob.toVector).forall(blob => blob != null && _oid(blob.value))) &&
       changes.map(_.path.value).distinct.size == changes.size,
@@ -331,11 +331,11 @@ private[smworkflow] object GoalPhaseNativeReviewCompletion {
     value.changes.map(_.path).toSet == value.conditionPaths.toSet
   private def _conditions_valid(value: Conditions): Boolean = value != null && value.kind == "terminal-lf" &&
     value.paths != null && value.paths.nonEmpty && value.paths.size <= 16 && value.paths.distinct == value.paths && value.paths.forall(_path)
-  private def _path(value: String): Boolean = _text(value, 4096) && !value.exists(c => Character.isISOControl(c)) &&
+  private def _path(value: String): Boolean = _text(value) && !value.exists(c => Character.isISOControl(c)) &&
     GitPath.parseC(value).isSuccess
-  private def _text(value: String, maximum: Int): Boolean = value != null && value.trim.nonEmpty &&
-    !value.contains('\u0000') && UTF_8.newEncoder().canEncode(value) && value.getBytes(UTF_8).length <= maximum
-  private def _reference(value: String): Boolean = _text(value, 16384) && !value.exists(c => Character.isISOControl(c))
+  private def _text(value: String): Boolean = value != null && value.trim.nonEmpty &&
+    !value.contains('\u0000') && UTF_8.newEncoder().canEncode(value)
+  private def _reference(value: String): Boolean = _text(value) && !value.exists(c => Character.isISOControl(c))
   private def _revision(value: String): Boolean = value != null && value.matches("[1-9][0-9]*") && value.toLongOption.exists(_ > 0)
   private def _context_reference(value: ContextReference): Boolean = value != null && _reference(value.identity) && _revision(value.revision)
   private def _snapshot(value: O.Snapshot): Boolean = value != null && _oid(value.head) && _oid(value.tree)

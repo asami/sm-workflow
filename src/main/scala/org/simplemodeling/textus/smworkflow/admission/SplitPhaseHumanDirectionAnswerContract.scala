@@ -21,7 +21,6 @@ private[smworkflow] object SplitPhaseHumanDirectionAnswerContract {
   val choices = Vector("ProvideResolution", "Defer", "Cancel")
   val schema = "sm-workflow.split-human-direction-answer.v1"
   val resultType = "SplitPhaseHumanDirectionAnswer"
-  val maximumBytes = 4096
 
   val payloadCodec: PayloadCodec[Answer] = new PayloadCodec[Answer] {
     val typeIdentity = resultType
@@ -60,17 +59,15 @@ private[smworkflow] object SplitPhaseHumanDirectionAnswerContract {
     payload match {
       case Some(body) =>
         val json = Json.obj("schemaVersion" -> Json.fromString(schema), "payload" -> body)
-        if (_bounded(json.noSpaces)) Consequence.success(json) else _invalid("payload exceeds the UTF-8 bound")
+        Consequence.success(json)
       case None => _invalid("choice or resolution reference differs")
     }
   }
 
   private def _choice(value: String): Json = Json.obj("value" -> Json.fromString(value))
   private def _canonical(value: String): Boolean =
-    value != null && value.nonEmpty && value.length <= 1024 && value.trim == value && !value.exists(_.isControl) &&
+    value != null && value.nonEmpty && value.trim == value && !value.exists(_.isControl) &&
       UTF_8.newEncoder().canEncode(value)
-  private def _bounded(value: String): Boolean =
-    UTF_8.newEncoder().canEncode(value) && value.getBytes(UTF_8).length <= maximumBytes
   private def _invalid[A](reason: String): Consequence[A] =
     Consequence.stateConflict("SplitPhase Human answer " + reason)
 }

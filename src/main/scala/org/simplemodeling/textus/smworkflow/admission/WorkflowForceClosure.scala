@@ -60,7 +60,7 @@ private[smworkflow] object WorkflowForceClosure {
 
   private def exact(s: String): Boolean = s != null && s.nonEmpty && s.trim == s && !s.exists(_.isControl)
   private def text(s: String): Boolean = s != null && s.trim.nonEmpty && UTF_8.newEncoder().canEncode(s) &&
-    !s.contains('\u0000') && s.getBytes(UTF_8).length <= 16384
+    !s.contains('\u0000')
   def decodeTarget(value: Json): Either[String, Target] = for {
     target <- value.as[Target].left.map(_.message)
     _ <- Either.cond(target.asJson == value && target.schemaVersion == schema && families(target.family) &&

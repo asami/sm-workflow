@@ -78,7 +78,7 @@ private[smworkflow] object GoalPhaseDependencyValidation {
       Left(DecodingFailure("Dependency validation requires exact non-null business fields", cursor.history))
     else decoder(cursor)
   }
-  private def _text(value: String): Boolean = value != null && value.nonEmpty && value.length <= 4096 && !value.exists(_.isControl)
+  private def _text(value: String): Boolean = value != null && value.nonEmpty && !value.exists(_.isControl)
   private def _id(value: String): Boolean = value != null && value.matches("[A-Za-z0-9][A-Za-z0-9_.-]{0,127}")
   private def _reference(value: ContextReference): Boolean = value != null && _text(value.identity) && _text(value.revision)
   private def _snapshot(value: O.Snapshot): Boolean = value != null &&

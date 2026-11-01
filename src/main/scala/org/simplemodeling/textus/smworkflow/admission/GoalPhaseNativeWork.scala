@@ -358,7 +358,7 @@ private[smworkflow] object GoalPhaseNativeWork {
     }
 
   private def _bounded_text(value: String): Boolean = value != null && value.trim.nonEmpty &&
-    !value.contains('\u0000') && value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 16384
+    !value.contains('\u0000')
   private def _context_text(value: String): Boolean = value != null && value.trim.nonEmpty && !value.contains('\u0000')
 
   private class Codec[A](val typeIdentity: String, schema: String)(using Encoder[A], Decoder[A])

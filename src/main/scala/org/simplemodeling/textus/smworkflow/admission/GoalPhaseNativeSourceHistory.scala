@@ -47,7 +47,7 @@ private[smworkflow] object GoalPhaseNativeSourceHistory {
         case "none" => Consequence.success(None)
         case "goldenport" => selection.rule match {
           case Some(rule) => for {
-            _ <- if (paths != null && _exact(rule.identity, 1024)) Consequence.unit
+            _ <- if (paths != null && _exact(rule.identity)) Consequence.unit
               else F.invalid("source history has invalid selected paths or provider identity")
             included <- paths.foldLeft(Consequence.success(Vector.empty[String])) { (prior, path) => for {
               values <- prior
@@ -151,7 +151,7 @@ private[smworkflow] object GoalPhaseNativeSourceHistory {
     acknowledgement: String => Consequence[Unit]): Consequence[Unit] =
     if (session == null || core == null || core.executionContext == null || source == null || current == null ||
         controller == null || controller.plan == null || acknowledgement == null ||
-        !_exact(scope, 1024) || !Set("InspectCandidate", "PhaseInspection")(stage))
+        !_exact(scope) || !Set("InspectCandidate", "PhaseInspection")(stage))
       F.invalid("source history has no supported owning inspection frontier")
     else for {
       _ <- source.validateC
@@ -194,12 +194,12 @@ private[smworkflow] object GoalPhaseNativeSourceHistory {
   }
   private def _valid_payload(value: Payload): Boolean = value != null && value.sourceRevision != null &&
     value.sourceRevision.matches("[1-9][0-9]{0,18}") && value.sourceRevision.toLongOption.exists(_ > 0) &&
-    _exact(value.step, 1024) && _path(value.path) && value.style == "goldenport" &&
-    _exact(value.providerIdentity, 1024) && value.updatedOn != null &&
+    _exact(value.step) && _path(value.path) && value.style == "goldenport" &&
+    _exact(value.providerIdentity) && value.updatedOn != null &&
     scala.util.Try(LocalDate.parse(value.updatedOn)).toOption.exists(_.toString == value.updatedOn) &&
     value.outcome != null && value.outcome.forall(_outcomes)
-  private def _path(value: String): Boolean = _exact(value, 4096) &&
+  private def _path(value: String): Boolean = _exact(value) &&
     WorkspaceFilePath.parseC(value).toOption.exists(_.value == value)
-  private def _exact(value: String, limit: Int): Boolean = value != null && value.nonEmpty &&
-    value.length <= limit && value.trim == value && !value.exists(_.isControl)
+  private def _exact(value: String): Boolean = value != null && value.nonEmpty &&
+    value.trim == value && !value.exists(_.isControl)
 }

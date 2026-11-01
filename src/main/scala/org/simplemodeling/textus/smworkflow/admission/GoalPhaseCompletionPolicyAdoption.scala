@@ -225,5 +225,5 @@ private[smworkflow] object GoalPhaseCompletionPolicyAdoption {
   private def _cause(from: InstanceRecord) = "ordered-completion-policy-adoption:" + from.revision.value
   private def _exact(value: String): Boolean = value != null && value.nonEmpty && value.trim == value && !value.exists(_.isControl)
   private def _text(value: String): Boolean = value != null && value.trim.nonEmpty && !value.contains('\u0000') &&
-    java.nio.charset.StandardCharsets.UTF_8.newEncoder().canEncode(value) && value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 65536
+    java.nio.charset.StandardCharsets.UTF_8.newEncoder().canEncode(value)
 }

@@ -142,18 +142,19 @@ final class SplitPhaseExplicitCalibrationRecordSpec extends AnyWordSpec with Mat
       result.exclusions should contain(Exclusion(Reference("a", "1"), "incomplete-or-invalid-evidence"))
     }
 
-    "refuse null structures and oversized encoding" in {
-      Given("null typed structures and oversized wire values")
+    "preserve complete calibration evidence while refusing malformed structures" in {
+      Given("calibration evidence beyond the former application storage budget and malformed typed structures")
       val huge = record.copy(request = request.copy(snapshot = request.snapshot.copy(observations =
         rows.updated(0, rows.head.copy(authorityReference = "x" * (1024 * 1024))))))
       When("encoding or decoding is attempted")
       val results = Vector(encodeC(null), encodeC(record.copy(request = null)),
         encodeC(record.copy(reference = Reference("calibration", " "))),
         encodeC(record.copy(request = request.copy(snapshot = request.snapshot.copy(observations = Vector(null))))),
-        encodeC(huge), decodeC(record.reference, null),
+        decodeC(record.reference, null),
         decodeC(record.reference, schema + ":" + ("x" * (1024 * 1024))))
       Then("each input returns a structured failure without a partial record")
       results.foreach(_ shouldBe a[Consequence.Failure[?]])
+      success(decodeC(huge.reference, success(encodeC(huge)))) shouldBe huge
     }
   }
 }

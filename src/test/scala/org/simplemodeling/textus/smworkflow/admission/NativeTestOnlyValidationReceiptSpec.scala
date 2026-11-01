@@ -234,7 +234,7 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
       }
     }
 
-    "keep the exact 64-KiB structural and historical output bound and the Goal diagnostic bound" in {
+    "retain complete large structural and historical output and Goal diagnostics without another text ceiling" in {
       Given("historical Test receipts, structural captures and recovery diagnostics at and above 65536 UTF-8 bytes")
       val boundary = "x" * 65536
       val over = boundary + "x"
@@ -242,20 +242,24 @@ final class NativeTestOnlyValidationReceiptSpec extends AnyWordSpec with Matcher
       val goal = _goal.copy(selected = Vector(_goal_check.copy(kind = Kind.Test)), receipts = Vector(legacy))
       When("the existing structural converter, product gate and Goal decoder consume those texts")
       val structural = V.receiptC("index-local", _result(0, _capture(boundary), _capture("")).processResult)
-      Then("the historical and structural boundary remains inclusive with no typed promotion or diagnostic expansion")
+      Then("complete structural and historical text survives exactly without typed promotion")
       structural.isSuccess shouldBe true
-      V.receiptC("index-local", _result(0, _capture(over), _capture("")).processResult).isSuccess shouldBe false
-      V.receiptC("index-local", _result(0, _capture(""), _capture(over)).processResult).isSuccess shouldBe false
+      take(V.receiptC("index-local", _result(0, _capture(over), _capture("")).processResult)).stdout shouldBe over
+      take(V.receiptC("index-local", _result(0, _capture(""), _capture(over)).processResult)).stderr shouldBe over
       V.productSuccessful(legacy) shouldBe true
       G.codec.decode(G.codec.encode(goal)) shouldBe Right(goal)
       Vector(legacy.copy(stdout = over), legacy.copy(stderr = over), legacy.copy(stdout = "日" * 21846)).foreach { receipt =>
-        V.productSuccessful(receipt) shouldBe false
-        G.codec.decode(G.codec.encode(goal.copy(receipts = Vector(receipt)))).isLeft shouldBe true
+        V.productSuccessful(receipt) shouldBe true
+        receipt.sbt shouldBe None
+        G.codec.decode(G.codec.encode(goal.copy(receipts = Vector(receipt)))) shouldBe Right(goal.copy(receipts = Vector(receipt)))
       }
       val diagnostic = _goal.copy(receipts = Vector.empty, outcome = None,
         uncertainties = Vector(G.Uncertainty("focused", 0, boundary)))
       G.codec.decode(G.codec.encode(diagnostic)) shouldBe Right(diagnostic)
-      G.codec.decode(G.codec.encode(diagnostic.copy(uncertainties = Vector(G.Uncertainty("focused", 0, over))))).isLeft shouldBe true
+      Vector(over, "理由" * 16385).foreach { text =>
+        val complete = diagnostic.copy(uncertainties = Vector(G.Uncertainty("focused", 0, text)))
+        G.codec.decode(G.codec.encode(complete)) shouldBe Right(complete)
+      }
     }
   }
 

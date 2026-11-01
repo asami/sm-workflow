@@ -39,7 +39,7 @@ private[smworkflow] object SplitPhasePlanningCheckpointPublication {
 
   def mappingKeyC(reference: K.Reference): Consequence[String] = guarded {
     if (reference == null) invalid("mapping locator is absent")
-    else M.keyC(M.Reference(reference.identity, reference.revision)).flatMap(key => finalKeyC("planning-snapshot:" + key))
+    else M.keyC(M.Reference(reference.identity, reference.revision)).map("planning-snapshot:" + _)
   }
 
   def prepareC(captured: K.Captured, targets: Targets, closingEffects: Vector[Row] = Vector.empty): Consequence[Prepared] = guarded {
@@ -79,8 +79,6 @@ private[smworkflow] object SplitPhasePlanningCheckpointPublication {
 
   private def row(collection: DataStore.CollectionId, id: String, field: String, wire: String): Row =
     Row(collection, id, StorageRecord.data(field -> wire))
-  private def finalKeyC(key: String): Consequence[String] =
-    if (key.getBytes(UTF_8).length <= 1024) Consequence.success(key) else invalid("final physical locator exceeds 1024 bytes")
   private def canonical(value: String): Boolean = value != null && value.nonEmpty && value.trim == value &&
     !value.exists(ch => Character.isISOControl(ch)) && UTF_8.newEncoder().canEncode(value)
   private def invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("SplitPhase checkpoint publication " + reason)

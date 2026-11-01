@@ -15,17 +15,12 @@ private[smworkflow] object SplitPhaseExplicitCalibrationRecordJsonV1 {
   val schema = "sm-workflow.split-phase-explicit-calibration-record.v1"
   val storageField = "splitPhaseExplicitCalibrationPayload"
   private val prefix = schema + ":"
-  private val limit = 1024 * 1024
   final case class Record(reference: Reference, request: Request)
 
-  def encodeC(value: Record): Consequence[String] = jsonC(value).flatMap { json =>
-    val raw = prefix + json.noSpaces
-    if (raw.length <= limit) Consequence.success(raw)
-    else Consequence.stateConflict("SplitPhase explicit calibration record exceeds its storage limit")
-  }
+  def encodeC(value: Record): Consequence[String] = jsonC(value).map(json => prefix + json.noSpaces)
 
   def decodeC(expected: Reference, raw: String): Consequence[Record] =
-    if (!reference(expected) || raw == null || raw.length > limit || !raw.startsWith(prefix))
+    if (!reference(expected) || raw == null || !raw.startsWith(prefix))
       Consequence.stateConflict("SplitPhase explicit calibration storage reference/encoding is unsupported")
     else for {
       json <- parser.parse(raw.substring(prefix.length)).fold(

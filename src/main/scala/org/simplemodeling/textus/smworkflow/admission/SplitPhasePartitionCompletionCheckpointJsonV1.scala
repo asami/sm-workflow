@@ -4,7 +4,6 @@ import io.circe.{Json, Encoder, Decoder, parser}
 import io.circe.generic.auto.*
 import io.circe.generic.semiauto.{deriveEncoder, deriveDecoder}
 import io.circe.syntax.*
-import java.nio.charset.StandardCharsets.UTF_8
 import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.*
@@ -20,7 +19,6 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePartitionComple
 private[smworkflow] object SplitPhasePartitionCompletionCheckpointJsonV1 {
   val schema = "sm-workflow.split-phase-partition-completion-checkpoint.v3"
   val storageField = "splitPhasePartitionCompletionCheckpointPayload"
-  val maximumPayloadBytes = K.maximumPayloadBytes
   private final case class Payload(participantIdentity: String, next: String,
     mappingReference: Option[KP.Reference], checkpoint: Option[String])
   private given Encoder[Payload] = deriveEncoder[Payload]
@@ -33,12 +31,11 @@ private[smworkflow] object SplitPhasePartitionCompletionCheckpointJsonV1 {
       payload = Payload(value.participantIdentity, next,
         value.checkpoint.map(_.reference), checkpoint)
       raw = schema + ":" + _envelope(payload).noSpaces
-      _ <- if (raw.getBytes(UTF_8).length <= maximumPayloadBytes) Consequence.unit else _invalid("whole frame is oversized")
     } yield raw
   }
   def decodeC(raw: String, definitions: Vector[DefinitionBinding]): Consequence[A.Record] = _guarded {
-    if (raw == null || !raw.startsWith(schema + ":") || raw.getBytes(UTF_8).length > maximumPayloadBytes)
-      _invalid("frame is missing unsupported or oversized")
+    if (raw == null || !raw.startsWith(schema + ":"))
+      _invalid("frame is missing or unsupported")
     else for {
       json <- parser.parse(raw.substring(schema.length + 1)).fold(_ => _invalid("JSON is malformed"), Consequence.success)
       data <- _payload_c(json)

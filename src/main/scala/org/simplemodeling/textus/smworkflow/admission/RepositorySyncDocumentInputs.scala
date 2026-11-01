@@ -44,7 +44,7 @@ private[smworkflow] object RepositorySyncDocumentInputs {
         p.consumedPaths != null && p.consumedPaths.size <= 128 &&
         Vector(p.documentPaths, p.consumedPaths).forall(paths => paths.distinct == paths &&
           paths.forall(RepositorySyncNativeConflictInput.relative)) &&
-        p.reason != null && p.reason.trim.nonEmpty && p.reason.length <= 4096) Consequence.unit
+        p.reason != null && p.reason.trim.nonEmpty) Consequence.unit
     else invalid("requires explicit document scopes, consumed-input exclusions and their rationale")
   def decodeC(value: Json): Consequence[Policy] = {
     val parsed = for {

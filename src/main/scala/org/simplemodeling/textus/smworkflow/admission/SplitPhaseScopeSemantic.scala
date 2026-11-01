@@ -103,6 +103,6 @@ private[smworkflow] object SplitPhaseScopeSemantic {
   private def _ordered_subset(items: Vector[P.WorkItemIdentity], original: Vector[P.WorkItemIdentity]): Boolean =
     items != null && items.nonEmpty && items.distinct == items && original.filter(items.contains) == items
   private def _name(value: String): Boolean = value != null && value.trim.nonEmpty && value.trim == value &&
-    value.length <= 4096 && !value.exists(Character.isISOControl)
+    !value.exists(Character.isISOControl)
   private def _invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("SplitPhase scope semantic " + reason)
 }

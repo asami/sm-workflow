@@ -19,7 +19,7 @@ import SplitPhaseExplicitPartitionFixture.take
 final class RepositorySyncFileEffectSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _workspace = "sm-workflow-repository"
   private val paths = Set("first.txt", "second.txt")
-  private val policy = RepositorySyncNativeConflictInput.Policy(paths, maximumBlobBytes = 1024)
+  private val policy = RepositorySyncNativeConflictInput.Policy(paths)
   private def fixture(): Path = {
     val root = WorkflowFileRuntimeFixture.fresh()
     Files.writeString(root.resolve("first.txt"), "first unresolved\n", UTF_8)
@@ -39,7 +39,7 @@ final class RepositorySyncFileEffectSpec extends AnyWordSpec with Matchers with 
       val originals = names.indices.map(i => s"original $i 日本🚀\n\t\\:\n").toVector
       names.zip(originals).foreach((name, text) => Files.writeString(root.resolve(name), text, UTF_8))
       val assigned = F.Request("instance", "revision", names.map(name => F.File(name, None, "更新 é🚀\n")))
-      val selected = RepositorySyncNativeConflictInput.Policy(names.toSet, maximumBlobBytes = 1024)
+      val selected = RepositorySyncNativeConflictInput.Policy(names.toSet)
       WorkflowFileRuntimeFixture.withCore(root, workspace = _workspace, access = Some("read-only")) { core =>
         When("the actual ReadOnly call captures and observes the assigned complete text")
         val captured = take(F.captureC(core, selected, assigned))
@@ -138,8 +138,8 @@ final class RepositorySyncFileEffectSpec extends AnyWordSpec with Matchers with 
       }
     }
 
-    "enforce exact assigned paths references and semantic finite non-NUL text restrictions" in {
-      Given("ordinary selected files and a finite actual semantic policy")
+    "enforce exact assigned paths references and ordinary UTF-8 text restrictions" in {
+      Given("ordinary selected files and their actual semantic path policy")
       val root = fixture()
       val before = _contents(root)
       val invalid = Vector(
@@ -149,28 +149,62 @@ final class RepositorySyncFileEffectSpec extends AnyWordSpec with Matchers with 
         request.copy(files = Vector(request.files.head.copy(path = ".git/config"))),
         request.copy(files = Vector(request.files.head.copy(expected = None))),
         request.copy(files = Vector(request.files.head.copy(replacement = "NUL\u0000text"))),
-        request.copy(files = Vector(request.files.head.copy(replacement = "é" * 513))),
+        request.copy(files = Vector(request.files.head.copy(replacement = "\ud800"))),
         request.copy(files = Vector(request.files.head.copy(replacement = null))))
       WorkflowFileRuntimeFixture.withCore(root, workspace = _workspace) { core =>
         When("the owning call receives malformed assigned intents or an invalid selected policy")
         val refused = invalid.map(F.applyC(core, policy, _).isFaillure)
-        val invalidpolicy = F.applyC(core, policy.copy(maximumBlobBytes = 0), request)
+        val invalidpolicy = F.applyC(core, policy.copy(maximumConflicts = 0), request)
         Then("semantic admission fails before any write and preserves both actual originals")
         refused shouldBe Vector.fill(invalid.size)(true)
         invalidpolicy.isFaillure shouldBe true
         _contents(root) shouldBe before
       }
-      for (actual <- Vector("binary\u0000text", "é" * 513)) {
-        Given("a complete CNCF-readable file that exceeds the assigned business text contract")
+      for (actual <- Vector("binary\u0000text")) {
+        Given("a complete CNCF-readable file that contains NUL")
         Files.writeString(root.resolve("first.txt"), actual, UTF_8)
         WorkflowFileRuntimeFixture.withCore(root, workspace = _workspace) { core =>
-          When("actual capture returns complete text to the narrower semantic policy")
+          When("actual capture returns binary text to the semantic consumer")
           val refused = F.captureC(core, policy, request.copy(files = request.files.map(_.copy(expected = None))))
           Then("the semantic consumer refuses that content without truncation or mutation")
           refused.isFaillure shouldBe true
           Files.readString(root.resolve("first.txt"), UTF_8) shouldBe actual
           Files.readString(root.resolve("second.txt"), UTF_8) shouldBe before.last
         }
+      }
+    }
+
+    "retain complete large Unicode capture and CAS replacement while CNCF owns the configured read ceiling" in {
+      Given("one assigned ordinary file with more than 100 KiB of complete Unicode text")
+      val root = fixture()
+      val original = "界" * 40000 + "\n"
+      val replacement = "更新" * 40000 + "\n"
+      Files.writeString(root.resolve("first.txt"), original, UTF_8)
+      val assigned = F.Request("large-instance", "large-conflict-revision",
+        Vector(F.File("first.txt", None, replacement)))
+      original.getBytes(UTF_8).length should be > 102400
+      replacement.getBytes(UTF_8).length should be > 102400
+      WorkflowFileRuntimeFixture.withCore(root, workspace = _workspace) { core =>
+        When("the normal typed File UoW captures and installs the exact expected-current replacement")
+        val captured = take(F.captureC(core, policy, assigned))
+        val selected = assigned.copy(files = captured.files)
+        val applied = take(F.applyC(core, policy, selected))
+        val observed = take(F.observeC(core, policy, selected))
+        val replay = take(F.applyC(core, policy, selected))
+        Then("all text survives while the original changed intent cannot write again")
+        captured.files.head.expected shouldBe Some(original)
+        applied.status shouldBe "applied"
+        applied.files.head.replacement shouldBe replacement
+        observed.status shouldBe "applied"
+        replay.status shouldBe "conflict"
+        Files.readString(root.resolve("first.txt"), UTF_8) shouldBe replacement
+      }
+      WorkflowFileRuntimeFixture.withCore(root, workspace = _workspace, cap = 1024) { core =>
+        When("the same complete file exceeds a deliberately smaller CNCF read configuration")
+        val refused = F.captureC(core, policy, assigned)
+        Then("the CNCF acquisition fails without an application truncation or file mutation")
+        refused.isFaillure shouldBe true
+        Files.readString(root.resolve("first.txt"), UTF_8) shouldBe replacement
       }
     }
 

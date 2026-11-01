@@ -121,14 +121,15 @@ Keep the passive JSON body codec separate from its Component storage form.
 The body consumes the declared schemaVersion/payload envelope. Storage encoding
 prepends `sm-workflow.split-phase-human-scope-resolution.v1:` and the owning
 DataStore reader requires that exact prefix before invoking body decoding.
-The complete stored text, including its prefix, must satisfy the same1 MiB
-UTF-8 bound; invalid Unicode, a missing/foreign prefix or malformed body refuses.
+The complete stored text is preserved with its exact prefix, valid UTF-8 and
+declared schema; invalid Unicode, a missing/foreign prefix or malformed body refuses.
+CNCF owns resource limits; this passive codec adds no content-size budget.
 Reference/evidence/range admission remains at its actual consuming boundary.
 Unused nested annotations do not grant authority or cause passive-data refusal
 under Phase5 R17. Bare body JSON is not a storage compatibility fallback.
 
 Phase5 R9 separates those obligations: the passive producer/reader handles
-declared serializable data, selected reference, schema/frame and UTF-8 bounds,
+declared serializable data, selected reference, schema/frame and UTF-8 validity,
 without re-encoding/full-image agreement or semantic-quality re-admission.
 Range/rationale/evidence quality belongs to H.admitC at the actual Human
 transition with its genuine ObservedAnswer; passive incomplete data grants no
@@ -196,9 +197,10 @@ allocation or easier-subset ranking. Invalid input is not Defer/Cancel or succes
 ## Successful publication and retained-first observation
 
 The authored Human checkpoint codec has its own typed schema and exact storage
-prefix `sm-workflow.split-phase-human-resolution-checkpoint.v1:`. Its full UTF-8
-storage frame is bounded to1 MiB; the generic native receipt encoder separately
-checks the complete outer envelope. The entire original scope, canonical Human
+prefix `sm-workflow.split-phase-human-resolution-checkpoint.v1:`. Its complete
+valid UTF-8 storage frame has no separate application content-size budget;
+the generic CNCF native receipt encoder separately checks the complete outer
+envelope under its unchanged contract. The entire original scope, canonical Human
 question/completion/issued and answered history, separate interpretation,
 complete ordered frontier with transfers/publication flags and downstream result
 remain in the decoded passive Record. Legacy before/next slots are passive typed

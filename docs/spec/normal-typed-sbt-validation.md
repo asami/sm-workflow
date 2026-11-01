@@ -104,9 +104,11 @@ strict UTF-8 stdout and stderr without NUL. Output-limit and unconfirmed incompl
 results preserve raw captures, including truncated output. It imposes no second application byte
 ceiling on complete typed SBT output. Retained typed receipts use the same strict
 text validity without the historical 65536-byte limit, including genuine nonzero
-failed results. Structural Git captures and legacy receipts without typed `sbt`
-facts keep their 65536-byte text bound; Goal recovery diagnostics and rationale
-keep their existing bound. Historical receipts retain their original shape. New
+failed results. Complete structural Git captures, legacy receipts without typed
+`sbt` facts, and retained Goal diagnostics and rationale likewise have no second
+application text-size ceiling. Existing strict UTF-8, NUL, completeness/count,
+identity, provenance and evidence checks remain mandatory; CNCF owns execution
+resource protection. Historical receipts retain their original shape. New
 typed receipts use the closed nested `sm-workflow.native-sbt-validation-receipt.v2`
 wire: canonical Base64 bytes, exact counts/truncation, full actual termination,
 elapsed time, program identity and an explicitly empty artifact vector. The

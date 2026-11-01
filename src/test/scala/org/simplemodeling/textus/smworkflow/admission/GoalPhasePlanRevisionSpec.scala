@@ -1025,7 +1025,7 @@ final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with Giv
         A.EffectiveCondition("closure", "phase", true, "Review the whole Phase", "project"))))
     }
 
-    "refuse unknown absent null malformed oversized and already-effective proposal input" in {
+    "refuse unknown absent null malformed and already-effective proposal input" in {
       Given("valid raw and captured wires and malformed required business fields")
       val paused = _decision(_start)
       val good = _proposal(_revised(paused))
@@ -1036,8 +1036,8 @@ final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with Giv
           wire.mapObject(_.add(name, Json.True)))
       }
       val invalid = Vector(good.copy(identity = " "), good.copy(identity = "bad\tidentity"),
-        good.copy(identity = "あ" * 43), good.copy(revision = "r" * 129), good.copy(revision = "bad\nrevision"),
-        good.copy(reason = " "), good.copy(reason = "bad\u0000reason"), good.copy(reason = "あ" * 5462),
+        good.copy(revision = "bad\nrevision"),
+        good.copy(reason = " "), good.copy(reason = "bad\u0000reason"),
         good.copy(reason = "\ud800"), good.copy(plan = _raw.copy(steps = Vector.empty)),
         good.copy(plan = captured.plan))
       val capturedwire = captured.asJson
@@ -1061,6 +1061,11 @@ final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with Giv
       rejected.foreach(_ shouldBe a[Left[?, ?]])
       capturedrejected.foreach(_ shouldBe a[Left[?, ?]])
       typedrejected.foreach(_ shouldBe a[Consequence.Failure[?]])
+      Vector(good.copy(identity = "あ" * 43), good.copy(revision = "r" * 129),
+        good.copy(reason = "理由" * 12000)).foreach { complete =>
+        validateProposalC(complete).isSuccess shouldBe true
+        complete.asJson.as[Proposal] shouldBe Right(complete)
+      }
     }
 
     "capture revised checks without changing Decision and adopt only with an explicit fixture answer reference" in {

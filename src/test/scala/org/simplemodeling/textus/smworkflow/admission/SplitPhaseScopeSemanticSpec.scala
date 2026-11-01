@@ -102,6 +102,21 @@ final class SplitPhaseScopeSemanticSpec extends AnyWordSpec with Matchers with G
       J.requestCodec.decode(SplitPhaseExplicitPartitionSemanticJson.requestCodec.encode(null)).isLeft shouldBe true
     }
 
+    "retain complete scope rationale through typed decoding and actual semantic admission" in {
+      Given("the assigned scope and valid evidence with rationale beyond the former application text budget")
+      val request = take(S.requestC(_checkpoint))
+      val rationale = "完全な範囲の説明" * 1000
+      val judgment = _judgment(request).copy(rationale = rationale,
+        scopes = _judgment(request).scopes.map(_.copy(rationale = rationale)))
+      When("the original typed result is decoded and admitted against its assigned scope and result reference")
+      val decoded = J.resultCodec.decode(J.resultCodec.encode(judgment)).toOption.get
+      val admitted = take(S.admitC(request, _reference(request), decoded))
+      Then("the complete explanation survives while the unchanged scope and evidence checks still apply")
+      rationale.length should be > 4096
+      decoded shouldBe judgment
+      admitted.judgment shouldBe judgment
+    }
+
     "decode declared scope data without rerendering or granting semantic completion" in {
       Given("Spec: docs/spec/native-human-question-applicability.md; Rule: R9; Example: E22; passive scope data and a semantically incomplete judgment")
       val request = take(S.requestC(_checkpoint))
