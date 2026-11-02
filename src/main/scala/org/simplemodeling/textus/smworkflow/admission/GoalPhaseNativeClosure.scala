@@ -23,7 +23,7 @@ import GoalPhasePartialCommitClosure as P
   * storage and an intent without a recorded result is never automatically rerun.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  1, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeClosure {
@@ -211,7 +211,7 @@ private[smworkflow] object GoalPhaseNativeClosure {
               controller.plan.steps(controller.cursor).ownedPaths, d.candidatePaths, store.input.parent.tree,
               progress.failed.exists(_.payload.hygiene.exists(_.corrections.nonEmpty)))
             effective = if (check.findings.isEmpty) progress.failed.lastOption.flatMap(_.payload.hygiene)
-              .filter(_.corrections.nonEmpty).map(_.copy(outcome = "corrected", findings = Vector.empty, diagnostic = "Supported CML correction rechecked cleanly")).getOrElse(hygiene)
+              .filter(_.corrections.nonEmpty).map(_.copy(outcome = "corrected", findings = Vector.empty, diagnostic = "Supported CML or docs Markdown correction rechecked cleanly")).getOrElse(hygiene)
               else hygiene
             attempt = progress.nextAttempt.get
             payload = Payload(store.input, store.ordinal, None, attempt, Some(check),
@@ -664,7 +664,7 @@ private[smworkflow] object GoalPhaseNativeClosure {
       native <- G.inspectC(core)
       actual = native.observed
       _ <- CommitHygiene.partialDiagnostic(actual.dirty, actual.dirty.filter(p =>
-        _owned_paths.exists(covers(_, p.path)) && CommitHygiene.supported(p.path) && p.index != ' ').map(_.path))
+        scope.contains(p.path) && CommitHygiene.supported(p.path) && p.index != ' ').map(_.path))
         .fold(Consequence.unit)(F.invalid(_))
       _ <- if (root == d.target.root.toString && native.mergeHead.isEmpty && actual.branch == d.target.localBranch &&
           actual.head == input.parent.head && actual.tree == input.parent.tree &&

@@ -101,17 +101,31 @@ operations, not a shell/Python repair subprocess. Preserve unrelated changes and
 partial staging; never stage an entire file just to include a hygiene correction
 when that would include unrelated edits.
 
-The first supported automatic correction is a fully staged, explicitly registered
-selected `.cml` regular file, with complete UTF-8 LF text and an EOF-only typed
-finding. Test, fixture, expected-output, golden and snapshot directories are
+Supported automatic correction covers fully staged, selected `.cml` regular
+files and Markdown `.md` documentation beneath `docs/`, with complete UTF-8 LF
+text and an EOF-only typed finding. Test, fixture, expected-output, golden and snapshot directories are
 excluded. Empty/all-newline files, CRLF, NUL content and other whitespace findings
 remain diagnostic. Mode `100644` or `100755` and every nonterminal byte survive.
 
-When an affected CML file has a worktree version different from its index, the
+The candidate registration may be an exact file or a segment-covering directory.
+Prefer the exact registration, otherwise the first covering directory ordinal.
+Narrow that existing `goal-path-N` selection to the singleton literal affected
+file and admit it through ordinary typed Git preflight before preparation. On
+application, re-admit every retained narrowed selection before any file write,
+then stage only each exact corrected path through the existing selected Git
+owner. Current host policy must independently admit this narrowing; no grant or
+directory-wide staging is added. Persisted correction ordinals retain their
+existing meaning as the covering registered selection, including older CML records.
+
+When an affected CML or docs Markdown file has a worktree version different from its index, the
 current typed Git selection cannot repair only the index suffix. Return the
 specific partial-staging diagnostic without writing or staging anything; retain
 both versions and unrelated paths. This is a supported no-write limitation,
 not partial-index correction.
+
+Closing applies that partial-staging guard to the exact accepted candidate and
+prepared-record selection. A supported but unselected sibling beneath an owned
+directory remains unrelated work, including a new unstaged Markdown document.
 
 The selected Step owner retains the actual negative check and its original blob
 plan before applying the bounded suffix pass within the same Advance. Exact

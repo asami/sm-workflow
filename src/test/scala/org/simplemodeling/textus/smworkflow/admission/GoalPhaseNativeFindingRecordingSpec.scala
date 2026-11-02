@@ -31,7 +31,8 @@ import SplitPhaseExplicitPartitionFixture.take
   * Reviews, authority and journal edits are explicitly SPECIFICATION-OWNED inputs,
   * never genuine external reviewer or AI execution evidence.
   * @since   Oct. 18, 2026
-  * @version Oct. 27, 2026
+  *  version Oct. 27, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -42,6 +43,10 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
   private val _candidates = "docs/candidates.md"
   private val _paths = Vector("step-1.txt", "step-2.txt", _hygiene, _candidates)
   private val _inventory_path = "src/main/car/abi-manifest.json"
+  private val _document_path = "docs/spec/guide.md"
+  private val _document_sibling = "docs/spec/unrelated.md"
+  private val _document_original = "# Selected guide\n\nPreserve the accepted documentation bytes.\n\n\n"
+  private val _document_unrelated = "# Unrelated work\n\nKeep this document unstaged.\n"
   private val _policy = R.Policy(_hygiene, _candidates)
   private val _journal = DevelopmentJournal.Policy("workflow",
     DataStore.CollectionId.EntityStore(EntityCollectionId("smworkflow", "cli", "development_journal")))
@@ -62,6 +67,10 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
     original.copy(goal = original.goal.copy(input = _input, candidatePaths = _paths,
       closure = original.goal.closure.copy(programs = Vector(
         GoalPhaseNativeClosure.StepProgram("step-1", 1), GoalPhaseNativeClosure.StepProgram("step-2", 2)))))
+  }
+  private def _document_plan: O.Plan = {
+    val selected = _plan(two = true)
+    selected.copy(steps = selected.steps.updated(0, selected.steps.head.copy(ownedPaths = Vector("docs/spec"))))
   }
   private def _configured(value: R.Policy): Map[String, String] = Map(R.declaration.name -> Json.obj(
     "schemaVersion" -> Json.fromString(R.schemaVersion), "hygiene" -> Json.fromString(value.hygiene),
@@ -84,7 +93,8 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
   private def _process_plan(directory: Path, goal: ThreeWorkflowRuntimeParameters.Goal, denygit: Boolean = false): Json = {
     val target = Programs.Target(directory.resolve("repository"), "main", "origin", "main", directory.resolve("upstream.git").toString)
     val messages = goal.closure.programs.map(p => "Goal Step " + p.step)
-    val selections = goal.closure.programs.map(program => (if (program.step == GoalPhaseNativeReleaseClosure.programIdentity) Vector(_hygiene, _candidates) else Vector(program.step + ".txt", _hygiene, _candidates)) ++
+    val selections = goal.closure.programs.map(program => (if (program.step == "step-1" && goal.candidatePaths.contains("docs/spec")) Vector(_document_path)
+      else if (program.step == GoalPhaseNativeReleaseClosure.programIdentity) Vector(_hygiene, _candidates) else Vector(program.step + ".txt", _hygiene, _candidates)) ++
       Option.when(program.step == "step-2" && goal.candidatePaths.contains(_inventory_path))(_inventory_path) ++
       Option.when(goal.candidatePaths.contains("model.cml"))("model.cml"))
     val normalgit = TypedGitHostPlanFixture.plan(target, goalPaths = goal.candidatePaths, goalMessages = messages,
@@ -118,7 +128,7 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
     journal: Option[NativeWorkflowCliFixture.JournalHost] = None,
     journalInterruption: Option[String] = None, evidence: Boolean = false, inventory: Boolean = false,
     hygiene: Boolean = false, hygieneMode: Option[String] = None, completionRecords: Option[CompletionRecords.Policy] = None, releaseRecords: Boolean = false,
-    completionPolicy: Option[String] = None)(task: Episode => Unit): Unit = {
+    completionPolicy: Option[String] = None, documentHygiene: Boolean = false)(task: Episode => Unit): Unit = {
     val acknowledge: String => Consequence[Unit] = point =>
       if (interrupt && point.startsWith("goal-recording-candidate-prepared:") || journalInterruption.contains(point))
         Consequence.stateConflict("SPECIFICATION-OWNED interruption before actual staging") else Consequence.unit
@@ -131,7 +141,9 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
     val initialhost = if (releaseRecords) basehost.copy(goal = basehost.goal.copy(closure = basehost.goal.closure.copy(
       programs = basehost.goal.closure.programs :+ GoalPhaseNativeClosure.StepProgram(GoalPhaseNativeReleaseClosure.programIdentity, 3)))) else basehost
     val host = if (hygiene) initialhost.copy(goal = initialhost.goal.copy(candidatePaths = initialhost.goal.candidatePaths :+ "model.cml")) else initialhost
-    val selectedhost = if (inventory) host.copy(goal = host.goal.copy(candidatePaths = host.goal.candidatePaths :+ _inventory_path)) else host
+    val inventoryhost = if (inventory) host.copy(goal = host.goal.copy(candidatePaths = host.goal.candidatePaths :+ _inventory_path)) else host
+    val selectedhost = if (documentHygiene) inventoryhost.copy(goal = inventoryhost.goal.copy(
+      candidatePaths = inventoryhost.goal.candidatePaths :+ "docs/spec")) else inventoryhost
     _with_runtime_(directory, "FindingRecording", Some(selectedhost), parameters,
       goalAcknowledgement = Some(acknowledge)) { (owner, component, actor, prepare) =>
       if (initialize) prepare(call => call.setupC(_setup_commands_(directory, "FindingRecording").size).flatMap(_ => _install(call, selected)))
@@ -274,6 +286,7 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
   }
 
   private[admission] def qualifyCommitHygiene(): Unit = Vector(None, Some("auto-fix")).foreach { mode =>
+    Given("a normal two-Step CML episode with " + mode.getOrElse("omitted") + " commit hygiene mode")
     val directory = _root()
     val selected = _plan(two = true)
     val plan = selected.copy(steps = selected.steps.updated(0,
@@ -291,7 +304,9 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       e.authority(id, waiting)
       val before = e.observe().head
       val checks = _checks(directory)
+      When("ordinary Advance prepares the accepted CML suffix and closes its Step")
       val next = e.advance(id)
+      Then("one normal commit issues the next Step without repeating checks or semantic work")
       next.work.get.kind shouldBe "ImplementStep"
       next.work.get.stepIdentity shouldBe Some("step-2")
       val committed = e.observe().head
@@ -303,11 +318,214 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       val redisplayed = e.advance(id)
       // Closure reports its correction once; redisplay retains the same pending work.
       next.message shouldBe redisplayed.message +
-        " Commit hygiene mode=auto-fix; corrected: Supported CML correction rechecked cleanly."
+        " Commit hygiene mode=auto-fix; corrected: Supported CML or docs Markdown correction rechecked cleanly."
       redisplayed.copy(message = next.message) shouldBe next
       e.work(id) shouldBe pending
       _checks(directory) shouldBe checks
       e.observe().head shouldBe committed
+    }
+  }
+
+  /** Actual normal operations leave the specification-owned producer at its
+    * retained negative Closing check. The parent owns installed continuation.
+    * Directory ownership matches the existing candidate registration contract;
+    * the host's physical Step commit selection remains the exact guide file.
+    */
+  private[admission] def prepareDocumentHygieneForInstalledCli(): GoalPhaseNativeFindingRecordingSpec.DocumentHygieneHandoff = {
+    val directory = _root()
+    var captured = Option.empty[GoalPhaseNativeFindingRecordingSpec.DocumentHygieneHandoff]
+    Given("a fresh SPECIFICATION-OWNED host with normal directory-registered document ownership and Journal")
+    _episode(directory, initialize = true, selected = _document_plan, selectedPolicy = None,
+      documentHygiene = true, hygieneMode = Some("error"), journal = Some(NativeWorkflowCliFixture.JournalHost(_journal))) { e =>
+      val id = e.start()
+      e.advance(id).work.get.kind shouldBe "ImplementStep"
+      val implementation = e.work(id)
+      val guide = directory.resolve("repository").resolve(_document_path)
+      Files.createDirectories(guide.getParent)
+      Files.writeString(guide, _document_original)
+      e.submit(implementation)
+      val review = e.advance(id)
+      _checks(directory) shouldBe 1
+      e.submit(e.work(id), Some(review), "accept")
+      val authority = e.advance(id)
+      e.authority(id, authority)
+      val closing = e.current(id)
+      val parent = e.observe().head
+      val checks = _checks(directory)
+      When("normal Advance in mode=error performs the actual EOF-only Closing check")
+      val waiting = e.advance(id)
+      val failed = e.closurePayload(id, closing.revision.value, "check-result")
+      Then("the native negative result is retained without a commit or another check")
+      waiting.kind shouldBe "Wait"
+      waiting.condition shouldBe Some("phase.Closing")
+      failed.check.get.eofOnly shouldBe true
+      failed.check.get.eofPaths shouldBe Vector(_document_path)
+      failed.hygiene.get.mode shouldBe "error"
+      failed.hygiene.get.outcome shouldBe "diagnostic"
+      failed.commit shouldBe None
+      e.observe().head shouldBe parent
+      _checks(directory) shouldBe checks
+      Files.readString(guide) shouldBe _document_original
+      When("an unrelated document appears only after candidate capture and independent review")
+      Files.writeString(directory.resolve("repository").resolve(_document_sibling), _document_unrelated)
+      Then("the sibling is unstaged and the actual failed result remains unchanged for installed Advance")
+      e.observe().dirty.find(_.path == _document_sibling).map(d => (d.index, d.worktree)) shouldBe Some(('?', '?'))
+      e.closurePayload(id, closing.revision.value, "check-result") shouldBe failed
+      captured = Some(GoalPhaseNativeFindingRecordingSpec.DocumentHygieneHandoff(directory, id, parent, checks,
+        closing.revision.value, e.current(id), failed, _document_original.dropRight(2)))
+    }
+    NativeWorkflowCliFixture.journalReader(directory, _document_plan)
+    captured.get
+  }
+
+  /** Read the original producer only after the parent's installed ordinary
+    * Advance; no work completion, authority admission or Advance is performed.
+    */
+  private[admission] def assertDocumentHygieneAfterInstalledCli(handoff: GoalPhaseNativeFindingRecordingSpec.DocumentHygieneHandoff): Unit = {
+    Given("the original SPECIFICATION-OWNED producer after the parent's installed Closing Advance")
+    _episode(handoff.root, selected = _document_plan, selectedPolicy = None, documentHygiene = true,
+      hygieneMode = Some("auto-fix"), journal = Some(NativeWorkflowCliFixture.JournalHost(_journal))) { e =>
+      When("read-only native observations load its retained commit and next issued Step")
+      val current = e.current(handoff.sessionId)
+      val work = _business(e.work(handoff.sessionId))
+      val head = e.observe().head
+      val committed = e.closurePayload(handoff.sessionId, handoff.closingRevision, "committed")
+      Then("one exact document commit preserves checks, review, repair counters, failed result and unrelated work")
+      e.commit(head).parents shouldBe Vector(handoff.head)
+      work.kind shouldBe "ImplementStep"
+      work.stepIdentity shouldBe Some("step-2")
+      work.completed.size shouldBe 1
+      work.completed.head.commit.identity shouldBe head
+      work.completed.head.review shouldBe handoff.failed.input.reviewEvidence
+      work.repairProgress shouldBe Some(GoalPhaseRepairProgress.Snapshot(0, 0, 2,
+        Some("sm-workflow.repair-trend.v1"), Some(2), Some(2)))
+      current.history.take(handoff.pending.history.size) shouldBe handoff.pending.history
+      current.history.count(_.causation.value == "ordered-step-closure:committed") shouldBe 1
+      current.history.count(_.causation.value.startsWith("ordered-review-issued:")) shouldBe
+        handoff.pending.history.count(_.causation.value.startsWith("ordered-review-issued:"))
+      committed.hygiene.get.outcome shouldBe "corrected"
+      committed.hygiene.get.corrections.map(_.path) shouldBe Vector(_document_path)
+      committed.changes.map(_.path) shouldBe Vector(_document_path)
+      e.closurePayload(handoff.sessionId, handoff.closingRevision, "check-result") shouldBe handoff.failed
+      _checks(handoff.root) shouldBe handoff.checks
+      Files.readString(handoff.root.resolve("repository").resolve(_document_path)) shouldBe handoff.expectedGuide
+      Files.readString(handoff.root.resolve("repository").resolve(_document_sibling)) shouldBe _document_unrelated
+      e.observe().dirty.map(d => (d.path, d.index, d.worktree)) shouldBe Vector((_document_sibling, '?', '?'))
+    }
+  }
+
+  private[admission] def qualifyDocumentCommitHygiene(): Unit = {
+    val handoff = prepareDocumentHygieneForInstalledCli()
+    Given("the same actual failed document Closing check reopened with ordinary auto-fix")
+    _episode(handoff.root, selected = _document_plan, selectedPolicy = None, documentHygiene = true,
+      hygieneMode = Some("auto-fix"), journal = Some(NativeWorkflowCliFixture.JournalHost(_journal))) { e =>
+      When("ordinary Advance performs the one bounded suffix pass and selected Step commit")
+      val next = e.advance(handoff.sessionId)
+      val head = e.observe().head
+      Then("the next Step is issued once and redisplay preserves its work, checks and commit")
+      next.work.get.kind shouldBe "ImplementStep"
+      next.work.get.stepIdentity shouldBe Some("step-2")
+      val pending = e.work(handoff.sessionId)
+      val repeated = e.advance(handoff.sessionId)
+      repeated.issuedWorkContext shouldBe next.issuedWorkContext
+      e.work(handoff.sessionId) shouldBe pending
+      e.observe().head shouldBe head
+      _checks(handoff.root) shouldBe handoff.checks
+    }
+    assertDocumentHygieneAfterInstalledCli(handoff)
+  }
+
+  private[admission] def qualifyDocumentPartialStaging(): Unit = {
+    val handoff = prepareDocumentHygieneForInstalledCli()
+    Given("the accepted guide index with a later unstaged change in that exact selected file")
+    _episode(handoff.root, selected = _document_plan, selectedPolicy = None, documentHygiene = true,
+      hygieneMode = Some("auto-fix"), journal = Some(NativeWorkflowCliFixture.JournalHost(_journal))) { e =>
+      val guide = handoff.root.resolve("repository").resolve(_document_path)
+      val changed = "# Concurrent selected edit\n\n"
+      Files.writeString(guide, changed)
+      val time = Files.getLastModifiedTime(guide)
+      val index = e.index()
+      val before = e.current(handoff.sessionId)
+      When("ordinary Closing encounters the selected file's partial staged version")
+      val refused = e.call("advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(handoff.sessionId))
+      Then("it refuses before any file write, staging, commit, check or native history change")
+      refused.isSuccess shouldBe false
+      Files.readString(guide) shouldBe changed
+      Files.getLastModifiedTime(guide) shouldBe time
+      e.index() shouldBe index
+      e.observe().head shouldBe handoff.head
+      _checks(handoff.root) shouldBe handoff.checks
+      _same_instance(e.current(handoff.sessionId), before)
+      e.closurePayload(handoff.sessionId, handoff.closingRevision, "check-result") shouldBe handoff.failed
+      Files.readString(handoff.root.resolve("repository").resolve(_document_sibling)) shouldBe _document_unrelated
+    }
+  }
+
+  /** A later parent invocation can read the exported business facts without
+    * constructing or replacing a Workflow record from that handoff. */
+  private[admission] def assertDocumentHygieneAfterInstalledCli(handoffPath: Path): Unit = {
+    Given("the original specification-owned handoff file after installed ordinary Advance")
+    val handoff = io.circe.parser.parse(Files.readString(handoffPath)).toOption.get
+    val cursor = handoff.hcursor
+    cursor.get[String]("provenance").toOption.get shouldBe "SPECIFICATION-OWNED"
+    val root = Path.of(cursor.get[String]("hostRoot").toOption.get)
+    val session = cursor.get[String]("sessionId").toOption.get
+    val parent = cursor.get[String]("head").toOption.get
+    val checks = cursor.get[Int]("checks").toOption.get
+    val closing = cursor.get[Long]("closingRevision").toOption.get
+    val failed = cursor.get[GoalPhaseNativeClosure.Payload]("failedClosure").toOption.get
+    val history = cursor.get[Vector[Json]]("pendingHistory").toOption.get
+    _episode(root, selected = _document_plan, selectedPolicy = None, documentHygiene = true,
+      hygieneMode = Some("auto-fix"), journal = Some(NativeWorkflowCliFixture.JournalHost(_journal))) { e =>
+      When("read-only native observations reconstruct the installed commit and retained producer history")
+      val current = e.current(session)
+      val work = _business(e.work(session))
+      val observed = e.observe()
+      val committed = e.closurePayload(session, closing, "committed")
+      Then("the actual one-commit continuation retains its checks, review, counters, negative result and unstaged sibling")
+      e.commit(observed.head).parents shouldBe Vector(parent)
+      work.kind shouldBe "ImplementStep"
+      work.stepIdentity shouldBe Some("step-2")
+      work.completed.size shouldBe 1
+      work.completed.head.commit.identity shouldBe observed.head
+      work.completed.head.review shouldBe failed.input.reviewEvidence
+      work.repairProgress shouldBe Some(GoalPhaseRepairProgress.Snapshot(0, 0, 2,
+        Some("sm-workflow.repair-trend.v1"), Some(2), Some(2)))
+      _document_history(current).take(history.size) shouldBe history
+      current.history.count(_.causation.value == "ordered-step-closure:committed") shouldBe 1
+      current.history.count(_.causation.value.startsWith("ordered-review-issued:")) shouldBe
+        history.count(_.hcursor.get[String]("causation").toOption.exists(_.startsWith("ordered-review-issued:")))
+      committed.hygiene.get.outcome shouldBe "corrected"
+      committed.hygiene.get.corrections.map(_.path) shouldBe Vector(_document_path)
+      committed.changes.map(_.path) shouldBe Vector(_document_path)
+      e.closurePayload(session, closing, "check-result") shouldBe failed
+      _checks(root) shouldBe checks
+      Files.readString(root.resolve("repository").resolve(_document_path)) shouldBe cursor.get[String]("expectedGuide").toOption.get
+      Files.readString(root.resolve("repository").resolve(_document_sibling)) shouldBe cursor.get[String]("unrelatedText").toOption.get
+      observed.dirty.map(d => (d.path, d.index, d.worktree)) shouldBe Vector((_document_sibling, '?', '?'))
+    }
+  }
+
+  private def _document_history(record: InstanceRecord): Vector[Json] = record.history.map(entry => Json.obj(
+    "revision" -> Json.fromLong(entry.revision.value), "causation" -> Json.fromString(entry.causation.value)))
+
+  "Document commit hygiene installed handoff" should {
+    "export an actual error-mode Closing Wait for the parent-owned installed Advance" in {
+      When("the normal producer helper completes its managed candidate check, independent review and Closing check")
+      val handoff = prepareDocumentHygieneForInstalledCli()
+      Then("the handoff exposes only the actual specification-owned root and retained native facts")
+      val output = Path.of("target/sm-workflow/document-hygiene-installed-handoff.json").toAbsolutePath
+      Files.createDirectories(output.getParent)
+      Files.writeString(output, Json.obj("provenance" -> Json.fromString("SPECIFICATION-OWNED"),
+        "hostRoot" -> Json.fromString(handoff.root.toString), "sessionId" -> Json.fromString(handoff.sessionId),
+        "head" -> Json.fromString(handoff.head), "checks" -> Json.fromInt(handoff.checks),
+        "closingRevision" -> Json.fromLong(handoff.closingRevision), "sourceRevision" -> Json.fromLong(handoff.pending.revision.value),
+        "expectedGuide" -> Json.fromString(handoff.expectedGuide), "guidePath" -> Json.fromString(_document_path),
+        "unrelatedPath" -> Json.fromString(_document_sibling), "unrelatedText" -> Json.fromString(_document_unrelated),
+        "pendingHistory" -> Json.fromValues(_document_history(handoff.pending)),
+        "failedClosure" -> handoff.failed.asJson,
+        "installedAdvanceExecuted" -> Json.False).spaces2 + "\n")
+      handoff.failed.hygiene.get.mode shouldBe "error"
     }
   }
 
@@ -701,6 +919,19 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
     def index(): String = {
       var value = Option.empty[String]
       prepare(call => RepositorySyncManagedGitObservation.indexTreeC(call.core).map(v => { value = Some(v); () }))
+      value.get
+    }
+    def closurePayload(id: String, revision: Long, key: String): GoalPhaseNativeClosure.Payload = {
+      var value = Option.empty[GoalPhaseNativeClosure.Payload]
+      prepare(call => for {
+        catalog <- GoalPhaseRuntimeCatalog.loadC()
+        storage <- WorkflowComponentStorage.bindC(ComponentCreate(call.core.component.get.subsystem.get, ComponentOrigin.Builtin),
+          SmWorkflowComponent.componentId, _configuration_, Vector(catalog.definition), _collection_("instances"), _collection_("continuations"))
+        reader <- storage.bindMechanicalC(GoalPhaseNativeRun.advanceOperation, GoalPhaseNativeClosure.codec)
+        retained <- reader.loadRetainedC(WorkflowMechanicalTransition.Reference(id + ":ordered-step-closure:" + revision + ":" + key, "1"))(using call.executionContext)
+        _ <- retained.map(r => { value = Some(r.receipt.payload.value); Consequence.unit })
+          .getOrElse(Consequence.stateConflict("Specification has no actual selected closure result"))
+      } yield ())
       value.get
     }
     def submit(work: WorkflowInteraction[S.Request, Nothing], display: Option[V.GoalPhaseAdvanceResult] = None,
@@ -1632,4 +1863,6 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
 private[admission] object GoalPhaseNativeFindingRecordingSpec {
   final case class InstalledHandoff(root: Path, sessionId: String, request: R.Request,
     reply: ContinuationResult[R.Result], pending: InstanceRecord, submission: Json)
+  final case class DocumentHygieneHandoff(root: Path, sessionId: String, head: String, checks: Int,
+    closingRevision: Long, pending: InstanceRecord, failed: GoalPhaseNativeClosure.Payload, expectedGuide: String)
 }
