@@ -22,7 +22,9 @@ private[smworkflow] object RepositorySyncConflictSemantic {
     _ <- policy.validateC
     _ <- if (request != null && result != null && request.conflicts != null && result.resolutions != null &&
         request.conflicts.nonEmpty && request.conflicts.size <= policy.maximumConflicts &&
-        request.conflicts.forall(c => c != null && policy.semanticPaths(c.path)) &&
+        request.conflicts.forall(c => c != null && policy.semanticPaths(c.path) && c.base != null &&
+          (c.base.toVector ++ Vector(c.local, c.remote)).forall(b => b != null && b.identity != null &&
+            b.text != null && !b.text.contains('\u0000') && UTF_8.newEncoder().canEncode(b.text))) &&
         request.conflicts.map(_.identity).distinct.size == request.conflicts.size &&
         result.rationale != null && result.rationale.trim.nonEmpty && !result.rationale.contains('\u0000') &&
         UTF_8.newEncoder().canEncode(result.rationale))
@@ -49,8 +51,22 @@ private[smworkflow] object RepositorySyncConflictSemantic {
       parsed <- json.hcursor.get[A]("payload").left.map(_.message)
     } yield parsed
   }
-  val inputCodec: WorkflowResultJsonV1.PayloadCodec[I.Request] =
-    new Codec[I.Request]("RepositorySyncConflictRequest", "sm-workflow.repository-sync-conflict-request.v1")
+  val inputCodec: WorkflowResultJsonV1.PayloadCodec[I.Request] = new WorkflowResultJsonV1.PayloadCodec[I.Request] {
+    val typeIdentity = "RepositorySyncConflictRequest"
+    def encode(value: I.Request): Json = Json.obj(
+      "schemaVersion" -> Json.fromString(if (value.conflicts.forall(_.base.nonEmpty))
+        "sm-workflow.repository-sync-conflict-request.v1" else "sm-workflow.repository-sync-conflict-request.v2"),
+      "payload" -> value.asJson)
+    def decode(value: Json): Either[String, I.Request] = for {
+      json <- Option(value).toRight("Current typed payload is missing")
+      version <- json.hcursor.get[String]("schemaVersion").left.map(_.message)
+      _ <- Either.cond(Set("sm-workflow.repository-sync-conflict-request.v1",
+        "sm-workflow.repository-sync-conflict-request.v2")(version), (), "Current typed payload schema differs")
+      parsed <- json.hcursor.get[I.Request]("payload").left.map(_.message)
+      _ <- Either.cond(version != "sm-workflow.repository-sync-conflict-request.v1" ||
+        parsed.conflicts.forall(_.base.nonEmpty), (), "Legacy conflict input requires every actual base")
+    } yield parsed
+  }
   val resultCodec: WorkflowResultJsonV1.PayloadCodec[Result] =
     new Codec[Result]("RepositorySyncConflictResult", "sm-workflow.repository-sync-conflict-result.v1")
 

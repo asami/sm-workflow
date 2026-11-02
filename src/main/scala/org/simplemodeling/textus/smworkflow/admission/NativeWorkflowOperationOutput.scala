@@ -15,7 +15,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * outcome. No extra store read, result verifier or transport envelope.
   * @since   Oct. 12, 2026
   *  version Oct. 29, 2026
-  * @version Nov.  2, 2026
+  * @version Nov.  3, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationOutput {
@@ -177,7 +177,7 @@ private[smworkflow] object NativeWorkflowOperationOutput {
 
   def repositoryConflict(value: RepositorySyncNativeConflictInput.Request): V.RepositorySyncConflictWorkView =
     V.RepositorySyncConflictWorkView(value.localTip, value.remoteTip, value.conflicts.map(c =>
-      V.RepositorySyncNativeConflict(c.identity, c.path, V.RepositorySyncConflictBlob(c.base.identity, c.base.text),
+      V.RepositorySyncNativeConflict(c.identity, c.path, c.base.map(b => V.RepositorySyncConflictBlob(b.identity, b.text)),
         V.RepositorySyncConflictBlob(c.local.identity, c.local.text), V.RepositorySyncConflictBlob(c.remote.identity, c.remote.text),
         c.mode, c.worktree)))
 

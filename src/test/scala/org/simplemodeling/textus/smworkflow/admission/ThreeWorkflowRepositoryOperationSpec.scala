@@ -43,7 +43,7 @@ import SplitPhaseTypedStartFixture as StorageFixture
   * Optional completion timing observations delegate the actual product action.
   * @since   Oct.  7, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  2, 2026
+  * @version Nov.  3, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers {
@@ -957,7 +957,7 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
             _assert_issued_context(request.issuedWorkContext, issued.get, "implementation", RepositorySyncConflictSemantic.inputCodec)
             actualinput.get.instanceIdentity shouldBe identity.get.value
             actualinput.get.conflicts.map(_.path) shouldBe Vector(path)
-            actualinput.get.conflicts.head.base.text shouldBe "original shared line\n"
+            actualinput.get.conflicts.head.base.get.text shouldBe "original shared line\n"
             actualinput.get.conflicts.head.local.text shouldBe "local shared line\n"
             actualinput.get.conflicts.head.remote.text shouldBe "remote shared line\n"
             actualinput.get.conflicts.head.worktree shouldBe captured
@@ -1177,7 +1177,7 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
             val input = conflict.get.current.asInstanceOf[WorkflowContinuation.WorkOrder[RepositorySyncNativeConflictInput.Request]].request.input.get.value
             Then("the assigned conflict preserves the exact literal path and actual base/local/remote contents")
             input.conflicts.map(_.path) shouldBe Vector(path)
-            input.conflicts.head.base.text shouldBe "original shared line\n"
+            input.conflicts.head.base.get.text shouldBe "original shared line\n"
             input.conflicts.head.local.text shouldBe "local shared line\n"
             input.conflicts.head.remote.text shouldBe "remote shared line\n"
             input.conflicts.head.worktree should include("<<<<<<<")

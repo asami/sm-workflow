@@ -24,7 +24,8 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Shared specification-owned inputs, never a genuine Human/review issuer.
   * @since   Oct. 14, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 25, 2026
+  * @version Nov.  3, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativePreparationFixture {
@@ -90,7 +91,8 @@ private[admission] trait NativePreparationManagedFixture extends ThreeWorkflowMa
 
 /** Issued fixture questions and explicit fixture answers exercise passive preparation.
   * @since   Oct. 14, 2026
-  * @version Oct. 26, 2026
+  *  version Oct. 26, 2026
+  * @version Nov.  3, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -513,6 +515,63 @@ final class NativeHumanDecisionPreparationSpec extends AnyWordSpec with Matchers
   }
 
   "E2 Repository literal conflict and answer" should afterWord("in spec:native-host-human-preparation, example:E2, rules:R1,R2,R3, phase:6") {
+    "prepare add/add Human evidence across ordinary public Record omission of the absent base" in {
+      Given("a passive add/add Repository question with no actual base, a literal newline path and an explicit fixture resolution")
+      withCore { call =>
+        val original = _goal.repositoryQuestion.current.asInstanceOf[WorkflowContinuation.Decision[RepositorySyncHumanConflict.Input]]
+        val input = original.request.input.get.value
+        val presentinput = input.copy(conflict = input.conflict.copy(conflicts = input.conflict.conflicts.map(
+          _.copy(path = "literal\npath.scala"))))
+        val absentinput = presentinput.copy(conflict = presentinput.conflict.copy(conflicts = presentinput.conflict.conflicts.map(
+          _.copy(base = None))))
+        def _question_(value: RepositorySyncHumanConflict.Input): WorkflowInteraction[RepositorySyncHumanConflict.Input, Nothing] =
+          _goal.repositoryQuestion.copy(current = original.copy(request = original.request.copy(
+            input = Some(TypedValue(RepositorySyncHumanConflict.inputCodec.typeIdentity, value)))))
+        val question = _question_(absentinput)
+        val presentquestion = _question_(presentinput)
+        When("actual public output crosses ordinary Record and generated context intake before passive evidence preparation")
+        val output = take(NativeWorkflowOperationOutput.repositoryHumanC(question, call.core))
+        val publicrecord = wire(output)
+        val decoded = take(V.RepositorySyncAdvanceResult.createC(publicrecord))
+        val context = decoded.human.get.humanDecisionContext.get
+        val prepared = take(Preparation.repositoryC(context, repositoryAnswer, reference, execution, participant, issuer, now.minusSeconds(60)))
+        val saved = evidence(prepared)
+        val expected = take(ThreeWorkflowExternalEvidencePorts.repositoryHumanBindingC(RepositorySyncHumanConflict.AnswerContext(
+          call.core.component.get.core.instanceId, question, _goal.repositoryAnswer, participant)))
+        val presentexpected = take(ThreeWorkflowExternalEvidencePorts.repositoryHumanBindingC(RepositorySyncHumanConflict.AnswerContext(
+          call.core.component.get.core.instanceId, presentquestion, _goal.repositoryAnswer, participant)))
+        val presentoutput = take(NativeWorkflowOperationOutput.repositoryHumanC(presentquestion, call.core))
+        val presentcontext = take(V.RepositorySyncAdvanceResult.createC(wire(presentoutput))).human.get.humanDecisionContext.get
+        val presentsaved = evidence(take(Preparation.repositoryC(presentcontext, repositoryAnswer, reference, execution,
+          participant, issuer, now.minusSeconds(60))))
+        Then("Record omission becomes canonical selected null with exact native path direction actors and answer reference")
+        json(context.question).hcursor.downField("source").downField("conflict").downField("conflicts").downArray
+          .downField("base").focus shouldBe None
+        saved.binding shouldBe expected
+        saved.binding.hcursor.downField("humanAttestation").downField("question").downField("source")
+          .downField("conflict").downField("conflicts").downArray.downField("base").focus shouldBe Some(Json.Null)
+        saved.binding.hcursor.downField("humanAttestation").downField("question").downField("source")
+          .downField("conflict").downField("conflicts").downArray.get[String]("path").toOption shouldBe Some("literal\npath.scala")
+        saved.binding.hcursor.downField("humanAttestation").downField("answer").downField("resolutions")
+          .downArray.get[String]("text").toOption shouldBe Some("Actual resolved contents\n")
+        saved.binding.hcursor.get[String]("componentInstance").toOption shouldBe Some(call.core.component.get.core.instanceId.canonicalKey)
+        saved.binding.hcursor.downField("humanAttestation").get[String]("submittingParticipant").toOption shouldBe Some(participant)
+        saved.binding.hcursor.downField("humanAttestation").downField("answer").get[String]("worker").toOption shouldBe execution.workerIdentity
+        saved.binding.hcursor.downField("humanAttestation").downField("answer").downField("reference")
+          .get[String]("identity").toOption shouldBe Some(reference.identity)
+        saved.binding.hcursor.downField("humanAttestation").downField("answer").downField("reference")
+          .get[String]("revision").toOption shouldBe Some(reference.revision)
+        saved.participant shouldBe execution.workerIdentity.get
+        saved.reference shouldBe reference.identity
+        saved.revision shouldBe reference.revision
+        prepared.recordIdentity shouldBe NativeExternalEvidence.recordIdentity(Purpose.RepositoryHuman, evidenceKey)
+        observe(saved, Purpose.RepositoryHuman, expected).isSuccess shouldBe true
+        observe(presentsaved, Purpose.RepositoryHuman, presentexpected).isSuccess shouldBe true
+        observe(saved, Purpose.RepositoryHuman, presentexpected).isSuccess shouldBe false
+        observe(presentsaved, Purpose.RepositoryHuman, expected).isSuccess shouldBe false
+        Consequence.unit
+      }
+    }
     "retain native paths and resolution contents exactly through strict nested Record intake" in {
       Given("the fixture Repository question with a literal newline path and explicit ProvideResolution text")
       withCore { call =>

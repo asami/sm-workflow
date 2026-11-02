@@ -2621,7 +2621,7 @@ OperationResult
 |------+------|--------------|
 | identity | string | 1 |
 | path | string | 1 |
-| base | RepositorySyncConflictBlob | 1 |
+| base | RepositorySyncConflictBlob | ? |
 | local | RepositorySyncConflictBlob | 1 |
 | remote | RepositorySyncConflictBlob | 1 |
 | mode | string | 1 |

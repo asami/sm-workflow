@@ -69,7 +69,7 @@ final class NativeRepositorySyncMaintenanceCliSpec extends AnyWordSpec with Matc
   }
 
   "Installed RepositorySync maintenance continuation" should {
-    "complete a dirty purpose then resolve a different actual merge conflict in the same Session" in {
+    "complete a dirty purpose then resolve mixed modify/modify and add/add conflicts in the same Session" in {
       Given("the exact normal installed command using the published catalog's newest selection after repair publication and a fresh real local/bare fixture")
       val executable = _required_path("smworkflow.spec.installedCommand", executable = true)
       val scenario = F.fresh("installed-repository-maintenance", bootstrapSelectedInput = false)
@@ -80,6 +80,7 @@ final class NativeRepositorySyncMaintenanceCliSpec extends AnyWordSpec with Matc
       val configfile = root.resolve(".textus/config.json")
       val original = parse(Files.readString(configfile)).toOption.get
       val settings = maintenance_parameters() ++ Map("textus.resource.url.file.roots" -> root.toString,
+        "cncf.resource.read.max-bytes" -> "2097152",
         "textus.subsystem.process-execution.plan" -> process_plan(root, "Conflict", scenario.host.goal).noSpaces)
       Files.writeString(configfile, original.mapObject(fields => settings.foldLeft(fields.remove("sm-workflow.runtime.definition")) {
         case (prior, (key, value)) => prior.add(key, Json.fromString(value))
@@ -93,11 +94,13 @@ final class NativeRepositorySyncMaintenanceCliSpec extends AnyWordSpec with Matc
       git(root, "-C", repository.toString, "push", "origin", "HEAD:refs/heads/main")
       git(root, "clone", "--no-local", remote.toString, peer.toString)
       Files.writeString(peer.resolve(shared_path), "remote shared line\n")
-      git(root, "-C", peer.toString, "add", "--", shared_path)
+      Files.writeString(peer.resolve(add_path), add_remote_text)
+      git(root, "-C", peer.toString, "add", "--", shared_path, add_path)
       git(root, "-C", peer.toString, "commit", "-m", "remote shared documentation")
       git(root, "-C", peer.toString, "push", "origin", "HEAD:refs/heads/main")
       Files.writeString(repository.resolve(shared_path), "local shared line\n")
-      git(root, "-C", repository.toString, "add", "--", shared_path)
+      Files.writeString(repository.resolve(add_path), add_local_text)
+      git(root, "-C", repository.toString, "add", "--", shared_path, add_path)
       git(root, "-C", repository.toString, "commit", "-m", "local shared documentation")
       val started = _repository_call_("startRepositorySync", Vector("--input",
         "{\"repositoryIdentity\":\"sm-workflow\",\"syncMode\":\"FULL_STATE\"}")).business[V.RepositorySyncStartResult]
@@ -134,9 +137,22 @@ final class NativeRepositorySyncMaintenanceCliSpec extends AnyWordSpec with Matc
       val index = git(root, "-C", repository.toString, "ls-files", "--stage")
       When("a later installed Advance selects the current conflict after purpose completion")
       val conflict = _advance_().business[V.RepositorySyncAdvanceResult]
-      Then("the genuine issued conflict uses the same Session and a path outside the last purpose")
+      Then("the genuine issued conflicts retain each actual base or its absence in the same Session outside the last purpose")
       conflict.sessionId shouldBe session
-      conflict.conflict.get.conflicts.map(_.path) shouldBe Vector(shared_path)
+      conflict.conflict.get.conflicts.map(_.path) shouldBe Vector(add_path, shared_path)
+      val added = conflict.conflict.get.conflicts.find(_.path == add_path).get
+      val shared = conflict.conflict.get.conflicts.find(_.path == shared_path).get
+      added.base shouldBe None
+      added.local.text shouldBe add_local_text
+      added.remote.text shouldBe add_remote_text
+      shared.base.get.text shouldBe "original shared line\n"
+      shared.local.text shouldBe "local shared line\n"
+      shared.remote.text shouldBe "remote shared line\n"
+      conflict.conflict.get.conflicts.foreach(c => c.worktree shouldBe Files.readString(repository.resolve(c.path)))
+      def _stages_(path: String): Vector[Int] = index.linesIterator.filter(_.split("\t", 2).last == path)
+        .map(_.takeWhile(_ != '\t').split(" ").last.toInt).toVector
+      _stages_(add_path) shouldBe Vector(2, 3)
+      _stages_(shared_path) shouldBe Vector(1, 2, 3)
       _advance_().business[V.RepositorySyncAdvanceResult] shouldBe conflict
       git(root, "-C", repository.toString, "rev-parse", "HEAD") shouldBe head
       git(root, "-C", repository.toString, "rev-parse", "MERGE_HEAD") shouldBe merge
@@ -145,8 +161,13 @@ final class NativeRepositorySyncMaintenanceCliSpec extends AnyWordSpec with Matc
       pending.history.take(before.history.size) shouldBe before.history
       pending.history.count(_.currentProgression.contains(ProgressionReference("sync.PurposeInstalled"))) shouldBe 1
       val resolution = "local shared line\nremote shared line\n"
+      val addedresolution = add_local_text + add_remote_text
+      addedresolution.getBytes(java.nio.charset.StandardCharsets.UTF_8).length should be > 131072
+      added.local.text.getBytes(java.nio.charset.StandardCharsets.UTF_8).length should be > 90000
+      added.remote.text.getBytes(java.nio.charset.StandardCharsets.UTF_8).length should be > 90000
       val answer = V.RepositorySyncConflictResult("resolved", conflict.conflict.get.conflicts.map(c =>
-        V.RepositorySyncConflictResolution(c.identity, resolution)), "Authored isolated specification proposal preserving both meanings")
+        V.RepositorySyncConflictResolution(c.identity, if (c.path == add_path) addedresolution else resolution)),
+        "Authored isolated specification proposal preserving both meanings")
       _submit_(conflict, answer, "spec-installed-resolution", "specification-conflict-author")
         .business[V.RepositorySyncConflictSubmissionResult].accepted shouldBe true
       When("the installed owner materializes the actual resolution and requests independent semantic review")
@@ -154,6 +175,14 @@ final class NativeRepositorySyncMaintenanceCliSpec extends AnyWordSpec with Matc
       val review = reviewed.business[V.RepositorySyncAdvanceResult]
       review.review should not be empty
       review.review.get.changedPaths should contain(shared_path)
+      review.review.get.changedPaths should contain(add_path)
+      val actual = review.review.get
+      actual.localDiff.trim shouldBe git(root, "-C", repository.toString, "diff", "--cached", actual.localTip, "--")
+      actual.remoteDiff.trim shouldBe git(root, "-C", repository.toString, "diff", "--cached", actual.remoteTip, "--")
+      actual.localDiff should include("+" + ("語" * 30000))
+      actual.remoteDiff should include("+" + ("界" * 30000))
+      actual.localDiff.getBytes(java.nio.charset.StandardCharsets.UTF_8).length.toLong should be < 1048576L
+      actual.remoteDiff.getBytes(java.nio.charset.StandardCharsets.UTF_8).length.toLong should be < 1048576L
       _advance_().business[V.RepositorySyncAdvanceResult].copy(journalRecording = None) shouldBe review.copy(journalRecording = None)
       val verdict = V.RepositorySyncNativeMergeReviewResult("accept",
         "Specification-owned independent review of both complete actual parent diffs; no live acceptance claimed", Vector.empty)
@@ -163,6 +192,8 @@ final class NativeRepositorySyncMaintenanceCliSpec extends AnyWordSpec with Matc
         _save(root, "review-result.json", _json(verdict)), _save(root, "review-reference.json", _json(reference)),
         _save(root, "review-execution.json", _json(evidence)), "normal-development-host", "2026-10-07T00:00:00Z",
         "entity:smworkflow.cli.host_evidence", None)
+      Files.size(reviewed.invocation.stdout) should be > 1048576L
+      Files.size(reviewed.invocation.stdout) should be < 2097152L
       val prepared = _call_("NativeWorkflowPreparationService", "prepareEvidence", Vector("--input", _json(preparation)))
       withClue(prepared.invocation.logs) { prepared.exitCode shouldBe 0 }
       scenario.selectPreparedImport(prepared)
@@ -180,8 +211,14 @@ final class NativeRepositorySyncMaintenanceCliSpec extends AnyWordSpec with Matc
       git(root, "-C", repository.toString, "status", "--porcelain") shouldBe ""
       Files.exists(repository.resolve(".git/MERGE_HEAD")) shouldBe false
       Files.readString(repository.resolve(shared_path)) shouldBe resolution
+      Files.readString(repository.resolve(add_path)) shouldBe addedresolution
       Files.readString(repository.resolve(purpose_path)) shouldBe purposetext
+      val finalindex = git(root, "-C", repository.toString, "ls-files", "--stage")
       _advance_().business[V.RepositorySyncAdvanceResult] shouldBe terminal
+      git(root, "-C", repository.toString, "rev-parse", "HEAD") shouldBe tip
+      git(root, "--git-dir=" + remote, "rev-parse", "refs/heads/main") shouldBe tip
+      git(root, "-C", repository.toString, "ls-files", "--stage") shouldBe finalindex
+      Files.exists(repository.resolve(".git/MERGE_HEAD")) shouldBe false
       take(WorkflowInstanceRecordJsonV1.encodeC(_current(root, session))) shouldBe take(WorkflowInstanceRecordJsonV1.encodeC(completed))
       Files.exists(root.resolve("sbt-executions.txt")) shouldBe false
       scenario.invocations should not be empty

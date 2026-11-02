@@ -25,11 +25,25 @@ import RepositorySyncPurpose as P
 private[admission] trait RepositorySyncMaintenanceFixture extends Phase69ConfiguredRepositoryFixture {
   protected val shared_path = "docs/shared.md"
   protected val purpose_path = "docs/purpose.md"
+  protected val add_path = "docs/add-add.md"
+  protected val add_local_text = "local addition\n" + ("界" * 30000) + "\n"
+  protected val add_remote_text = "remote addition\n" + ("語" * 30000) + "\n"
   override protected def conflict_path(scenario: String): Option[String] =
-    if (scenario == "Conflict") Some(shared_path) else None
+    if (Set("Conflict", "ConflictDelete", "ConflictMode", "ConflictBinary")(scenario)) Some(shared_path) else None
   override protected def _setup_files_(root: Path, scenario: String, index: Int): Unit = {
     if (index == 2) Files.createDirectories(root.resolve("repository/docs"))
     super._setup_files_(root, scenario, index)
+    if (index == 9) {
+      val path = root.resolve("repository").resolve(shared_path)
+      scenario match {
+        case "ConflictDelete" => Files.delete(path)
+        case "ConflictMode" =>
+          Files.delete(path)
+          Files.createSymbolicLink(path, Path.of("local-target"))
+        case "ConflictBinary" => Files.write(path, Array[Byte](108, 111, 99, 97, 108, 0, 10))
+        case _ => ()
+      }
+    }
   }
   override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
     val base = super.process_plan(root, scenario, goal)
@@ -98,16 +112,29 @@ private[admission] trait RepositorySyncMaintenanceFixture extends Phase69Configu
 final class RepositorySyncMaintenanceContinuationSpec extends AnyWordSpec with Matchers with GivenWhenThen
     with RepositorySyncMaintenanceFixture {
   "RepositorySync maintenance continuation" should {
-    for (scenario <- Vector("Equal", "Conflict", "ReviewedPurposeConflict")) {
+    for (scenario <- Vector("Equal", "Conflict", "ReviewedPurposeConflict", "MixedAddAdd",
+        "ConflictDelete", "ConflictMode", "ConflictBinary")) {
       s"retain complete purpose text and continue the actual $scenario frontier in the same Session" in {
         Given("a real bare remote and local repository with one independent dirty document purpose")
         val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/repository-sync-maintenance").toAbsolutePath), "case-")
         val repository = root.resolve("repository")
         val reviewed = scenario == "ReviewedPurposeConflict"
-        val runtimecase = if (reviewed) "Conflict" else scenario
-        val text = if (scenario == "Equal") "完全な本文を保持する\n" * 25000 else "independent purpose\n"
+        val mixed = scenario == "MixedAddAdd"
+        val unsupported = Set("ConflictDelete", "ConflictMode", "ConflictBinary")(scenario)
+        val runtimecase = if (reviewed || mixed) "Conflict" else scenario
+        val text = if (scenario == "Equal" || mixed) "完全な本文を保持する\n" * 25000 else "independent purpose\n"
         _with_runtime_(root, runtimecase, hostParameters = maintenance_parameters(reviewed)) { (owner, component, actor, prepare) =>
           prepare(call => call.setupC(_setup_commands_(root, runtimecase).size))
+          if (mixed) {
+            val peer = root.resolve("peer")
+            Files.writeString(repository.resolve(add_path), add_local_text)
+            git(root, "-C", repository.toString, "add", "--", add_path)
+            git(root, "-C", repository.toString, "commit", "-m", "local independent addition")
+            Files.writeString(peer.resolve(add_path), add_remote_text)
+            git(root, "-C", peer.toString, "add", "--", add_path)
+            git(root, "-C", peer.toString, "commit", "-m", "remote independent addition")
+            git(root, "-C", peer.toString, "push", root.resolve("upstream.git").toString, "HEAD:refs/heads/main")
+          }
           def _invoke_[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A =
             read_value[A](take(owner.executeOperationResponseInContext(Request.of(component = component.name,
               service = "RepositorySyncService", operation = operation, properties = properties), actor)))
@@ -119,6 +146,16 @@ final class RepositorySyncMaintenanceContinuationSpec extends AnyWordSpec with M
             prepare(_.repositoryWorkC(InstanceIdentity(session), RepositorySyncNativeMergeReviewContinuation.completionOperation,
               RepositorySyncNativeMergeReview.inputCodec).map(value => { judgment = Some(value); () }))
             val reviewrequest = judgment.get.current.asInstanceOf[WorkflowContinuation.WorkOrder[RepositorySyncNativeMergeReview.Request]].request
+            if (mixed) {
+              val actual = reviewrequest.input.get.value
+              actual.localDiff.trim shouldBe git(root, "-C", repository.toString, "diff", "--cached", actual.localTip, "--")
+              actual.remoteDiff.trim shouldBe git(root, "-C", repository.toString, "diff", "--cached", actual.remoteTip, "--")
+              actual.localDiff should include("+" + ("語" * 30000))
+              actual.remoteDiff should include("+" + ("界" * 30000))
+              actual.localDiff.getBytes(java.nio.charset.StandardCharsets.UTF_8).length.toLong should be < 1048576L
+              actual.remoteDiff.getBytes(java.nio.charset.StandardCharsets.UTF_8).length.toLong should be < 1048576L
+              actual.uncertainties.exists(_.startsWith("Unexamined")) shouldBe false
+            }
             val judged = ContextReference(referenceidentity, "1")
             val verdict = ContinuationResult(judgment.get.handle, reviewrequest.runId, reviewrequest.continuationId,
               reviewrequest.expectedRevision, reviewrequest.context.snapshot, TypedValue(reviewrequest.resultType.get.value,
@@ -142,7 +179,7 @@ final class RepositorySyncMaintenanceContinuationSpec extends AnyWordSpec with M
           input.files.find(_.path == purpose_path).get.unexamined shouldBe None
           P.inputCodec.decode(P.inputCodec.encode(input)) shouldBe Right(input)
           P.resultCodec.decode(P.resultCodec.encode(grouping(text))) shouldBe Right(grouping(text))
-          if (scenario == "Equal") {
+          if (scenario == "Equal" || mixed) {
             val payloadbytes = text.getBytes(java.nio.charset.StandardCharsets.UTF_8).length.toLong
             payloadbytes shouldBe 775000L
             payloadbytes should be < 1048576L
@@ -177,6 +214,17 @@ final class RepositorySyncMaintenanceContinuationSpec extends AnyWordSpec with M
             val merge = git(root, "-C", repository.toString, "rev-parse", "MERGE_HEAD")
             val index = git(root, "-C", repository.toString, "ls-files", "--stage")
             index should include(shared_path)
+            if (unsupported) {
+              scenario match {
+                case "ConflictDelete" =>
+                  index.linesIterator.filter(_.split("\t", 2).last == shared_path)
+                    .map(_.takeWhile(_ != '\t').split(" ").last.toInt).toVector shouldBe Vector(1, 3)
+                case "ConflictMode" => index should include("120000 ")
+                case "ConflictBinary" =>
+                  Files.readAllBytes(repository.resolve(shared_path)).contains(0.toByte) shouldBe true
+                case _ => ()
+              }
+            }
             git(root, "-C", repository.toString, "log", "-1", "--format=%s") shouldBe "docs: retain independent purpose"
             var history = Vector.empty[HistoryEntry]
             prepare(_.currentC(InstanceIdentity(session)).map { current =>
@@ -186,9 +234,31 @@ final class RepositorySyncMaintenanceContinuationSpec extends AnyWordSpec with M
               ()
             })
             When("a separate public Advance selects actual current conflicts instead of a completed purpose")
+            if (unsupported) {
+              def _worktree_(): Either[Path, Option[Vector[Byte]]] = {
+                val path = repository.resolve(shared_path)
+                if (Files.isSymbolicLink(path)) Left(Files.readSymbolicLink(path))
+                else Right(Option.when(Files.isRegularFile(path))(Files.readAllBytes(path).toVector))
+              }
+              val worktree = _worktree_()
+              val refused = owner.executeOperationResponseInContext(Request.of(component = component.name,
+                service = "RepositorySyncService", operation = "advanceRepositorySync",
+                properties = NativeWorkflowOperationInputFixture.advance(session)), actor)
+              Then("unsupported native content is refused before any conflict work or repository materialization")
+              refused.isSuccess shouldBe false
+              git(root, "-C", repository.toString, "rev-parse", "HEAD") shouldBe head
+              git(root, "-C", repository.toString, "rev-parse", "MERGE_HEAD") shouldBe merge
+              git(root, "-C", repository.toString, "ls-files", "--stage") shouldBe index
+              _worktree_() shouldBe worktree
+              prepare(_.currentC(InstanceIdentity(session)).map { current =>
+                current.history shouldBe history
+                current.suspension shouldBe None
+                ()
+              })
+            } else {
             val conflict = _advance_()
             conflict.sessionId shouldBe session
-            conflict.conflict.get.conflicts.map(_.path) shouldBe Vector(shared_path)
+            conflict.conflict.get.conflicts.map(_.path) shouldBe (if (mixed) Vector(add_path, shared_path) else Vector(shared_path))
             conflict.conflict.get.conflicts.map(_.path) should not contain purpose_path
             purposereview.foreach(value => conflict.issuedWorkContext should not be value.issuedWorkContext)
             _advance_() shouldBe conflict
@@ -205,8 +275,35 @@ final class RepositorySyncMaintenanceContinuationSpec extends AnyWordSpec with M
               RepositorySyncConflictSemantic.inputCodec).map(value => { work = Some(value); () }))
             val assigned = work.get.current.asInstanceOf[WorkflowContinuation.WorkOrder[RepositorySyncNativeConflictInput.Request]].request
             val resolution = "local shared line\nremote shared line\n"
+            val addedresolution = add_local_text + add_remote_text
+            if (mixed) {
+              Then("actual stage rows and the v2 request distinguish absent and present bases with all ordinary bytes intact")
+              def _stages_(path: String): Vector[Int] = index.linesIterator.filter(_.split("\t", 2).last == path)
+                .map(_.takeWhile(_ != '\t').split(" ").last.toInt).toVector
+              _stages_(shared_path) shouldBe Vector(1, 2, 3)
+              _stages_(add_path) shouldBe Vector(2, 3)
+              val input = assigned.input.get.value
+              val added = input.conflicts.find(_.path == add_path).get
+              val shared = input.conflicts.find(_.path == shared_path).get
+              shared.base.get.text shouldBe "original shared line\n"
+              shared.local.text shouldBe "local shared line\n"
+              shared.remote.text shouldBe "remote shared line\n"
+              added.base shouldBe None
+              added.local.text shouldBe add_local_text
+              added.remote.text shouldBe add_remote_text
+              input.conflicts.foreach(c => c.worktree shouldBe Files.readString(repository.resolve(c.path)))
+              conflict.conflict.get.conflicts.find(_.path == add_path).get.base shouldBe None
+              conflict.conflict.get.conflicts.find(_.path == shared_path).get.base.get.text shouldBe "original shared line\n"
+              added.local.text.getBytes(java.nio.charset.StandardCharsets.UTF_8).length should be > 90000
+              added.remote.text.getBytes(java.nio.charset.StandardCharsets.UTF_8).length should be > 90000
+              addedresolution.getBytes(java.nio.charset.StandardCharsets.UTF_8).length should be > 131072
+              val wire = RepositorySyncConflictSemantic.inputCodec.encode(input)
+              wire.hcursor.get[String]("schemaVersion").toOption.get shouldBe "sm-workflow.repository-sync-conflict-request.v2"
+              RepositorySyncConflictSemantic.inputCodec.decode(wire) shouldBe Right(input)
+            }
             val result = RepositorySyncConflictSemantic.Result("resolved", assigned.input.get.value.conflicts.map(c =>
-              RepositorySyncConflictSemantic.Resolution(c.identity, resolution)), "Authored specification resolution retaining both meanings")
+              RepositorySyncConflictSemantic.Resolution(c.identity, if (c.path == add_path) addedresolution else resolution)),
+              "Authored specification resolution retaining both meanings")
             val resolved = ContextReference("spec-maintenance-resolution", "1")
             val response = ContinuationResult(work.get.handle, assigned.runId, assigned.continuationId, assigned.expectedRevision,
               assigned.context.snapshot, TypedValue(assigned.resultType.get.value, result), resolved, Vector.empty,
@@ -217,6 +314,7 @@ final class RepositorySyncMaintenanceContinuationSpec extends AnyWordSpec with M
             val review = _advance_()
             review.review should not be empty
             review.review.get.changedPaths should contain(shared_path)
+            if (mixed) review.review.get.changedPaths should contain(add_path)
             purposereview.foreach(value => review.issuedWorkContext should not be value.issuedWorkContext)
             _advance_().copy(journalRecording = None) shouldBe review.copy(journalRecording = None)
             _accept_review_(review, "spec-maintenance-independent-review",
@@ -229,14 +327,21 @@ final class RepositorySyncMaintenanceContinuationSpec extends AnyWordSpec with M
             git(root, "--git-dir=" + root.resolve("upstream.git"), "rev-parse", "refs/heads/main") shouldBe finalhead
             git(root, "-C", repository.toString, "status", "--porcelain") shouldBe ""
             Files.exists(repository.resolve(".git/MERGE_HEAD")) shouldBe false
+            val finalindex = git(root, "-C", repository.toString, "ls-files", "--stage")
             var completed = Option.empty[InstanceRecord]
             prepare(_.currentC(InstanceIdentity(session)).map(value => { completed = Some(value); () }))
             _advance_() shouldBe terminal
+            git(root, "-C", repository.toString, "rev-parse", "HEAD") shouldBe finalhead
+            git(root, "--git-dir=" + root.resolve("upstream.git"), "rev-parse", "refs/heads/main") shouldBe finalhead
+            git(root, "-C", repository.toString, "ls-files", "--stage") shouldBe finalindex
+            Files.exists(repository.resolve(".git/MERGE_HEAD")) shouldBe false
             prepare(_.currentC(InstanceIdentity(session)).map { value =>
               take(WorkflowInstanceRecordJsonV1.encodeC(value)) shouldBe take(WorkflowInstanceRecordJsonV1.encodeC(completed.get))
               ()
             })
             Files.readString(repository.resolve(shared_path)) shouldBe resolution
+            if (mixed) Files.readString(repository.resolve(add_path)) shouldBe addedresolution
+            }
           }
           Files.readString(repository.resolve(purpose_path)) shouldBe text
           Files.exists(root.resolve("sbt-executions.txt")) shouldBe false

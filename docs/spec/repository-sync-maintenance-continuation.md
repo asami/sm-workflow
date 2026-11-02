@@ -78,6 +78,32 @@ the original issued context. Later Advance materializes only that proposal and
 uses the existing validation, independent semantic review, native merge commit,
 push and final fetch. Repeated collection after Terminal is passive.
 
+Native ordinary-text conflict capture accepts exactly one index row at each of
+stages 1/2/3 (modify/modify) or 2/3 (add/add), with the same regular-file mode
+100644 or 100755 on every row. An add/add conflict has no base: its optional
+`base` is absent rather than an invented empty blob or object identity. A real
+stage-1 blob whose text is empty remains a present base with its actual identity.
+Deletion, missing or duplicate required stages, mismatched or symlink modes,
+binary content and malformed or incomplete text remain refused. Observation
+does not resolve files or grant command authority.
+
+The semantic conflict input retains type identity `RepositorySyncConflictRequest`.
+Inputs whose conflicts all have bases keep the existing
+`sm-workflow.repository-sync-conflict-request.v1` wire shape, including each
+base blob object. An input with any absent base uses
+`sm-workflow.repository-sync-conflict-request.v2`; its optional base can be JSON
+null or omitted on read. Legacy v1 input with a missing or null base is refused.
+The nested Human input follows the same rule with
+`sm-workflow.repository-human-conflict-input.v1` and `.v2`, retaining type identity
+`RepositorySyncHumanConflictRequest`. Unknown versions are refused. Semantic
+result and Human answer schemas remain v1. No retained record is rewritten or
+migrated. Public conflict output exposes the optional base, and Human evidence
+binds the original base identity string when present or JSON null when absent.
+Standard public Record transport may omit that optional null field; Human
+selection canonicalizes omission or null to JSON null while preserving an
+actual base identity string exactly.
+Malformed optional values do not supply Human evidence or admission authority.
+
 `RepositorySyncMaintenanceContinuationSpec` exercises direct public Operations
 with real local/bare repositories, complete large purpose content, a conflict
 outside the last purpose, retained history and native Git observations through
@@ -86,6 +112,20 @@ installation and a separate later merge review. Nearby text-contract specs retai
 capture regressions. `Phase69DirtyPurposeSpec` checks the retained legacy input
 compatibility rule. Authored proposal and independent-review responses are
 specification fixtures and do not attest live provider or Human acceptance.
+
+The direct `MixedAddAdd` scenario must qualify a real add/add conflict alongside
+the existing modify/modify conflict after a 775,000-byte purpose. Each added
+side carries over 90,000 bytes of complete ordinary UTF-8 text; the resolution
+retains both sides and exceeds 128 KiB. The fixture checks actual stage sets,
+present and absent bases, v2 round trip, all source and worktree text, exact
+per-path proposals, both complete actual parent diffs and normal native
+commit/push/fetch convergence. Each complete parent diff is a separate stdout
+capture below its finite 1 MiB default stream budget. The common I/O default
+does not constrain their aggregate size; aggregate resource guards remain
+separately owned by CNCF. Repeated collection checks
+native tips, index, merge state and history without replaying effects. Narrow
+real-repository deletion, symlink-mode and binary scenarios retain refusal before
+conflict work or materialization and preserve the pending native state.
 
 `NativeRepositorySyncMaintenanceCliSpec` is excluded from discovery with
 `@DoNotDiscover`. Select it explicitly only after publication, with
@@ -97,3 +137,11 @@ the installed command's ordinary published-catalog behavior; it does not pin
 an immutable image through a runtime-root property.
 The spec neither copies the application source tree nor publishes an image.
 Its installed result is separate from prepublication direct-operation evidence.
+The explicitly selected installed case must qualify the same mixed large-text
+conflicts and optional-base readback through the installed command, preserving
+the existing same-Session purpose, independent review, convergence and passive
+collection checks. These are qualification requirements, not execution claims.
+Its combined public review JSON is one file input larger than 1 MiB, so this
+isolated installed host declares `cncf.resource.read.max-bytes=2097152` and
+checks that file remains below 2 MiB before evidence preparation. Each Git
+stdout retains its 1 MiB budget; the common default is not an aggregate cap.

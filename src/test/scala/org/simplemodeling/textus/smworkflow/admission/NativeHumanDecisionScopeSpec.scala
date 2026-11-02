@@ -22,7 +22,8 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Passive typed/wire fixtures only; no enrolled Human or model execution.
   * @since   Oct.  8, 2026
-  * @version Oct. 24, 2026
+  *  version Oct. 24, 2026
+  * @version Nov.  3, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeHumanEvidenceFixture {
@@ -35,7 +36,7 @@ private[admission] object NativeHumanEvidenceFixture {
   val goalInput = Goal.Input(work, ContextReference("requesting-result", "1"),
     Work.Result("decision-needed", "Original explanation", Vector.empty), "Original question reason")
   val conflict = Conflict.Request("instance", "3", "a" * 40, "b" * 40, Vector(
-    Conflict.Conflict("conflict", "one.scala", Conflict.Blob("c" * 40, "base\n"), Conflict.Blob("d" * 40, "local\n"),
+    Conflict.Conflict("conflict", "one.scala", Some(Conflict.Blob("c" * 40, "base\n")), Conflict.Blob("d" * 40, "local\n"),
       Conflict.Blob("e" * 40, "remote\n"), worktree = "Original native conflict text\n")))
   val repositoryInput = Repository.Input(conflict, "requesting-result", "1", "Original conflict rationale")
   private def question[W](workflow: String, input: W, inputType: String, resultType: String,
@@ -187,6 +188,76 @@ final class NativeHumanDecisionScopeSpec extends AnyWordSpec with Matchers with 
         produced.noSpaces should not include "Original purpose"
         at(produced, "humanAttestation", "question").asObject.get.keys.toSet should not contain "context"
       }
+    }
+    "retain an absent repository base through Human question evidence storage and refuse crossed or malformed bases" in {
+      Given("passive typed repository Human fixtures whose actual base is absent or the original present blob")
+      val decision = repositoryQuestion.current.asInstanceOf[WorkflowContinuation.Decision[Repository.Input]]
+      val input = decision.request.input.get.value
+      val absentinput = input.copy(conflict = input.conflict.copy(conflicts = input.conflict.conflicts.map(_.copy(base = None))))
+      val question = repositoryQuestion.copy(current = decision.copy(request = decision.request.copy(
+        input = Some(TypedValue(Repository.inputCodec.typeIdentity, absentinput)))))
+      When("the production source and binding traverse question selection and independent evidence encoding and decoding")
+      val source = take(ThreeWorkflowExternalEvidencePorts.repositoryHumanSourceC(question))
+      val questiontarget = take(NativeHumanDecisionScope.questionBindingC(question, source))
+      val binding = take(ThreeWorkflowExternalEvidencePorts.repositoryHumanBindingC(
+        Repository.AnswerContext(owner, question, repositoryAnswer, "actual-submitter")))
+      val original = production(Purpose.RepositoryHuman)
+      val stored = take(encodeStorageC(evidence(Purpose.RepositoryHuman, binding)))
+      val saved = take(decodeStorageC(stored))
+      val oldsaved = read(Purpose.RepositoryHuman, original)
+      Then("explicit null and the old identity string retain distinct selected meanings without supplying Human authority")
+      NativeHumanDecisionScope.selectQuestion(questiontarget, Purpose.RepositoryHuman) shouldBe Right(questiontarget)
+      at(binding, "humanAttestation", "question") shouldBe questiontarget
+      NativeHumanDecisionScope.select(Purpose.RepositoryHuman, binding) shouldBe Right(binding)
+      NativeHumanDecisionScope.select(Purpose.RepositoryHuman, original) shouldBe Right(original)
+      NativeHumanDecisionScope.selectQuestion(at(original, "humanAttestation", "question"), Purpose.RepositoryHuman) shouldBe
+        Right(at(original, "humanAttestation", "question"))
+      at(binding, "humanAttestation", "question", "source", "conflict", "conflicts").asArray.get.head
+        .hcursor.downField("base").focus shouldBe Some(Json.Null)
+      at(original, "humanAttestation", "question", "source", "conflict", "conflicts").asArray.get.head
+        .hcursor.get[String]("base").toOption shouldBe Some(conflict.conflicts.head.base.get.identity)
+      saved.binding shouldBe binding
+      oldsaved.binding shouldBe original
+      observe(saved, Purpose.RepositoryHuman, binding).isSuccess shouldBe true
+      observe(oldsaved, Purpose.RepositoryHuman, original).isSuccess shouldBe true
+      observe(saved, Purpose.RepositoryHuman, original).isSuccess shouldBe false
+      observe(oldsaved, Purpose.RepositoryHuman, binding).isSuccess shouldBe false
+
+      Given("standard Record transport omits the same absent base field")
+      val omitted = alter(binding, Vector("humanAttestation", "question", "source", "conflict", "conflicts"))(
+        _.mapArray(_.map(_.mapObject(_.remove("base")))))
+      When("question selection, full selection and stored evidence consume that omitted optional field")
+      val omittedquestion = NativeHumanDecisionScope.selectQuestion(at(omitted, "humanAttestation", "question"), Purpose.RepositoryHuman)
+      val omittedbinding = NativeHumanDecisionScope.select(Purpose.RepositoryHuman, omitted)
+      val omittedsaved = read(Purpose.RepositoryHuman, omitted)
+      Then("omitted and null bases canonicalize to the same absence and still refuse the original actual present base")
+      omittedquestion shouldBe Right(questiontarget)
+      omittedbinding shouldBe Right(binding)
+      omittedsaved.binding shouldBe binding
+      observe(saved, Purpose.RepositoryHuman, omitted).isSuccess shouldBe true
+      observe(omittedsaved, Purpose.RepositoryHuman, binding).isSuccess shouldBe true
+      observe(omittedsaved, Purpose.RepositoryHuman, original).isSuccess shouldBe false
+      observe(oldsaved, Purpose.RepositoryHuman, omitted).isSuccess shouldBe false
+
+      Given("the same attestation with a boolean, number, object or array base")
+      val malformed = Vector(Json.True, Json.fromInt(1), Json.obj(), Json.arr()).map { base =>
+        alter(binding, Vector("humanAttestation", "question", "source", "conflict", "conflicts"))(_.mapArray(_.map(
+          _.mapObject(_.add("base", base)))))
+      }
+      val wireprefix = schema + ":"
+      val storedjson = io.circe.parser.parse(stored.stripPrefix(wireprefix)).toOption.get
+      When("the question and full selectors, storage codecs and evidence observation consume each malformed value")
+      val outcomes = malformed.map { value =>
+        val alteredstorage = wireprefix + storedjson.mapObject(_.add("binding", value)).noSpaces
+        Vector(NativeHumanDecisionScope.selectQuestion(at(value, "humanAttestation", "question"), Purpose.RepositoryHuman).isLeft,
+          NativeHumanDecisionScope.select(Purpose.RepositoryHuman, value).isLeft,
+          !encodeStorageC(evidence(Purpose.RepositoryHuman, value)).isSuccess,
+          !decodeStorageC(alteredstorage).isSuccess,
+          !observe(saved, Purpose.RepositoryHuman, value).isSuccess,
+          !observe(saved.copy(binding = value), Purpose.RepositoryHuman, binding).isSuccess)
+      }
+      Then("mistyped non-null bases fail every selected path instead of becoming an absent base")
+      outcomes.flatten.foreach(_ shouldBe true)
     }
     "ignore unused question Plan context presentation and explanatory answer copies while consuming original direction" in {
       Given("Spec: docs/spec/native-host-human-applicability.md; Rule: R1; Example: E2; independently saved actual Human direction")

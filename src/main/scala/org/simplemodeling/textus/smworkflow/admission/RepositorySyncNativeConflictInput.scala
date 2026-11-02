@@ -18,7 +18,7 @@ import WorkflowManagedProcessExecution as E
 private[smworkflow] object RepositorySyncNativeConflictInput {
   final case class Entry(mode: String, blob: String, stage: Int, path: String)
   final case class Blob(identity: String, text: String)
-  final case class Conflict(identity: String, path: String, base: Blob, local: Blob, remote: Blob,
+  final case class Conflict(identity: String, path: String, base: Option[Blob], local: Blob, remote: Blob,
     mode: String = "100644", worktree: String = "")
   final case class Request(instanceIdentity: String, conflictRevision: String, localTip: String,
     remoteTip: String, conflicts: Vector[Conflict])
@@ -48,14 +48,14 @@ private[smworkflow] object RepositorySyncNativeConflictInput {
       for {
         values <- prior
         selected = rows.filter(_.path == path)
-        _ <- if (selected.map(_.stage).sorted == Vector(1, 2, 3) &&
+        stages = selected.map(_.stage).sorted
+        _ <- if ((stages == Vector(1, 2, 3) || stages == Vector(2, 3)) &&
             selected.map(_.mode).distinct.size == 1 && Set("100644", "100755")(selected.head.mode)) Consequence.unit
           else invalid("deletion, mode or nonordinary text collision requires Human handling")
-        blobs <- (1 to 3).foldLeft(Consequence.success(Vector.empty[Blob])) { (z, stage) =>
-          z.flatMap(values => blobC(store.core, selected.find(_.stage == stage).get.blob)
-            .map(values :+ _))
+        blobs <- selected.foldLeft(Consequence.success(Map.empty[Int, Blob])) { (prior, entry) =>
+          prior.flatMap(values => blobC(store.core, entry.blob).map(blob => values.updated(entry.stage, blob)))
         }
-      } yield values :+ Conflict("conflict-" + (index + 1), path, blobs(0), blobs(1), blobs(2), selected.head.mode)
+      } yield values :+ Conflict("conflict-" + (index + 1), path, blobs.get(1), blobs(2), blobs(3), selected.head.mode)
     }
     // Current conflict text is part of the semantic edit input. Its expected
     // overwrite value is application data, not a management integrity seal.

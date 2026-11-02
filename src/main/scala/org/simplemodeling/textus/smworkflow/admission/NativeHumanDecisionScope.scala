@@ -9,7 +9,8 @@ import NativeExternalEvidence.Purpose
 /** Selected Human direction, not a question/result copy certificate.
   * Native completion owns live state, result type and CAS.
   * @since   Oct.  8, 2026
-  * @version Oct. 23, 2026
+  *  version Oct. 23, 2026
+  * @version Nov.  3, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeHumanDecisionScope {
@@ -103,8 +104,9 @@ private[smworkflow] object NativeHumanDecisionScope {
     conflicts <- entries.foldLeft[Either[String, Vector[Json]]](Right(Vector.empty))((prior, value) => for {
       values <- prior
       entry <- obj(value)
-      fields <- strings(entry, Vector("identity", "path", "base", "local", "remote", "mode"))
-    } yield values :+ Json.fromJsonObject(fields))
+      fields <- strings(entry, Vector("identity", "path", "local", "remote", "mode"))
+      base <- optionalText(entry, "base")
+    } yield values :+ Json.fromJsonObject(fields.add("base", base.map(Json.fromString).getOrElse(Json.Null))))
   } yield Json.obj("requestingResult" -> reference, "conflict" -> Json.fromJsonObject(fields.add("conflicts", Json.fromValues(conflicts))))
 
   private def answerTarget(input: JsonObject, purpose: Purpose): Either[String, Json] = for {

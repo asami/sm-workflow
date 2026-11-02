@@ -24,7 +24,8 @@ import RepositorySyncNativeProgressStore as N
   * the owning conflict port, not a caller-provided snapshot or workflow stage.
   * Answers are native atomic completion; only a subsequent advance runs effects.
   * @since   Oct.  6, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 25, 2026
+  * @version Nov.  3, 2026
   */
 private[smworkflow] object RepositorySyncHumanConflict {
   val completionOperation = StateMachineOperationIdentity("RepositorySyncService", "submitRepositoryConflictDecision")
@@ -57,8 +58,22 @@ private[smworkflow] object RepositorySyncHumanConflict {
       parsed <- json.hcursor.get[A]("payload").left.map(_.message)
     } yield parsed
   }
-  val inputCodec: WorkflowResultJsonV1.PayloadCodec[Input] =
-    new Codec[Input]("RepositorySyncHumanConflictRequest", "sm-workflow.repository-human-conflict-input.v1")
+  val inputCodec: WorkflowResultJsonV1.PayloadCodec[Input] = new WorkflowResultJsonV1.PayloadCodec[Input] {
+    val typeIdentity = "RepositorySyncHumanConflictRequest"
+    def encode(value: Input): Json = Json.obj(
+      "schemaVersion" -> Json.fromString(if (value.conflict.conflicts.forall(_.base.nonEmpty))
+        "sm-workflow.repository-human-conflict-input.v1" else "sm-workflow.repository-human-conflict-input.v2"),
+      "payload" -> value.asJson)
+    def decode(value: Json): Either[String, Input] = for {
+      json <- Option(value).toRight("Current typed payload is missing")
+      version <- json.hcursor.get[String]("schemaVersion").left.map(_.message)
+      _ <- Either.cond(Set("sm-workflow.repository-human-conflict-input.v1",
+        "sm-workflow.repository-human-conflict-input.v2")(version), (), "Current typed payload schema differs")
+      parsed <- json.hcursor.get[Input]("payload").left.map(_.message)
+      _ <- Either.cond(version != "sm-workflow.repository-human-conflict-input.v1" ||
+        parsed.conflict.conflicts.forall(_.base.nonEmpty), (), "Legacy Human conflict input requires every actual base")
+    } yield parsed
+  }
   val answerCodec: WorkflowResultJsonV1.PayloadCodec[Answer] =
     new Codec[Answer]("RepositorySyncHumanConflictAnswer", "sm-workflow.repository-human-conflict-answer.v1")
 

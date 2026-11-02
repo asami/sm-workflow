@@ -16,7 +16,8 @@ import NativeWorkflowCliFixture as F
   * Supplied observations check coherence and authenticate no provider provenance.
   * Runtime owns conflict materialization, selected staging and required checks.
   * @since   Oct. 17, 2026
-  * @version Oct. 24, 2026
+  *  version Oct. 24, 2026
+  * @version Nov.  3, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -107,12 +108,12 @@ final class NativeRepositoryProviderConflictCliSpec extends AnyWordSpec with Mat
       val conflict = issued.conflict.get
       conflict.conflicts.map(c => c.identity -> c.path) shouldBe Vector("conflict-1" -> "value.txt")
       val selected = conflict.conflicts.head
-      selected.base.text shouldBe "initial\n"
+      selected.base.get.text shouldBe "initial\n"
       selected.local.text shouldBe "local product input\n"
       selected.remote.text shouldBe "remote product input\n"
       Vector(conflict.localTip, conflict.remoteTip).foreach(_.trim should not be empty)
       conflict.localTip should not be conflict.remoteTip
-      val blobs = Vector(selected.base.identity, selected.local.identity, selected.remote.identity)
+      val blobs = Vector(selected.base.get.identity, selected.local.identity, selected.remote.identity)
       blobs.foreach(_.trim should not be empty)
       blobs.distinct.size shouldBe 3
       selected.worktree should include("<<<<<<<")
