@@ -24,7 +24,8 @@ import GoalPhaseAcceptanceBoundary as A
   * Selected inputs are specification data, never genuine Human/review evidence.
   * No Workflow state is read or seeded by this caller.
   * @since   Oct. 13, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeWorkflowCliFixture {
@@ -214,7 +215,7 @@ private[admission] object NativeWorkflowCliFixture {
     def advance(task: Path): Result = call("command", GoalPhaseNativeRun.advanceOperation.operation,
       Vector("--sessionId", retrieve(task)))
     def call(mode: String, operation: String, parameters: Vector[String]): Result =
-      _run(_launcher ++ Vector(mode, s"$_component.$_service.$operation") ++ parameters ++
+      _run(_operation_argv(mode, s"$_component.$_service.$operation") ++ parameters ++
         (if (mode == "client") _client_options else Vector.empty) ++ _output)
     /** The same isolated host can qualify a separately installed normal CLI. */
     def callInstalled(executable: Path, service: String, operation: String, parameters: Vector[String],
@@ -226,34 +227,33 @@ private[admission] object NativeWorkflowCliFixture {
           "Select only this scenario's existing explicit assembly descriptor")
         s"--textus.assembly.descriptor=$path"
       }
-      _run(Vector(executable.toString, "--runtime-root", root.toString) ++ descriptor ++
-        Vector("command", s"$_component.$service.$operation") ++
+      _run(Vector(executable.toString, s"$_component.$service.$operation") ++ descriptor ++
         parameters ++ Vector("--json"), installations)
     }
     def repositoryCall(operation: String, parameters: Vector[String]): Result =
-      _run(_launcher ++ Vector("command", s"$_component.RepositorySyncService.$operation") ++ parameters ++ _output)
+      _run(_operation_argv("command", s"$_component.RepositorySyncService.$operation") ++ parameters ++ _output)
     def readJournalEntry(input: V.JournalReadInput): Result =
-      _run(_launcher ++ Vector("command", s"$_component.JournalService.readJournalEntry", "--input",
+      _run(_operation_argv("command", s"$_component.JournalService.readJournalEntry") ++ Vector("--input",
         _take(input.toRecord().toJsonStringC, "Public Journal read input")) ++ _output)
     def readEvidence(input: V.EvidenceReadInput): Result =
-      _run(_launcher ++ Vector("command", s"$_component.EvidenceService.readEvidence", "--input",
+      _run(_operation_argv("command", s"$_component.EvidenceService.readEvidence") ++ Vector("--input",
         _take(input.toRecord().toJsonStringC, "Public Evidence read input")) ++ _output)
     def recordEvidenceJournal(input: V.EvidenceReadInput): Result =
-      _run(_launcher ++ Vector("command", s"$_component.EvidenceService.recordEvidenceJournal", "--input",
+      _run(_operation_argv("command", s"$_component.EvidenceService.recordEvidenceJournal") ++ Vector("--input",
         _take(input.toRecord().toJsonStringC, "Public Evidence Journal input")) ++ _output)
     def findJournalEntries(input: V.JournalFindInput): Result =
-      _run(_launcher ++ Vector("command", s"$_component.JournalService.findJournalEntries", "--input",
+      _run(_operation_argv("command", s"$_component.JournalService.findJournalEntries") ++ Vector("--input",
         _take(input.toRecord().toJsonStringC, "Public Journal find input")) ++ _output)
 
     def prepareHostInput(operation: String, input: org.goldenport.record.Record): Result = {
       require(Set("prepareGoalStart", "prepareRepositoryStart", "prepareSplitStart", "prepareRepositoryEffect",
         "prepareAuthority", "prepareEvidence", "prepareExecution", "recordExecution")(operation),
         "Specification must select one declared preparation Operation")
-      _run(_launcher ++ Vector("command", s"$_component.NativeWorkflowPreparationService.$operation", "--input",
+      _run(_operation_argv("command", s"$_component.NativeWorkflowPreparationService.$operation") ++ Vector("--input",
         _take(input.toJsonStringC, "Concrete preparation input"), "--json"))
     }
-    def preparationHelp(): Result = _run(_launcher ++ Vector("command", s"$_component.meta.help",
-      s"$_component.NativeWorkflowPreparationService"))
+    def preparationHelp(): Result = _run(_operation_argv("command", s"$_component.meta.help") ++
+      Vector(s"$_component.NativeWorkflowPreparationService"))
 
     /** Finite test-owned Git arrangement and observation only. Workflow candidate
       * staging, checks and Step commits always use normal typed host programs.
@@ -426,6 +426,8 @@ private[admission] object NativeWorkflowCliFixture {
     }
 
     def withServer[A](task: => A): A = {
+      require(!sys.props.contains("smworkflow.spec.installedCommand"),
+        "The selected installed entry supports command mode only; server mode requires an explicit source scenario")
       val selected = port.getOrElse(throw new AssertionError("This scenario has no selected server port"))
       val (process, invocation) = _spawn(_launcher :+ "server")
       _server_deadline = Some(System.nanoTime() + TimeUnit.SECONDS.toNanos(60))
@@ -453,12 +455,19 @@ private[admission] object NativeWorkflowCliFixture {
     private def _output = Vector("--json")
     private def _client_options = port.toVector.flatMap(selected =>
       Vector("--baseurl", s"http://127.0.0.1:$selected"))
+    private def _operation_argv(mode: String, selector: String): Vector[String] = {
+      val launcher = _launcher
+      if (sys.props.contains("smworkflow.spec.installedCommand")) {
+        require(mode == "command", "The selected installed entry supports command mode only: " + mode)
+        launcher :+ selector
+      } else launcher ++ Vector(mode, selector)
+    }
     private def _launcher = sys.props.get("smworkflow.spec.installedCommand") match {
       case Some(command) =>
         val executable = Path.of(command)
         require(executable.isAbsolute && Files.isRegularFile(executable) && Files.isExecutable(executable),
           "Select an actual absolute installed command; no source-launcher fallback")
-        Vector(command, "--runtime-root", root.toString)
+        Vector(command)
       case None => Vector(_primary.resolve("bin/launcher").toString, "--classpath-file",
         _primary.resolve("target/cncf.d/runtime-classpath.txt").toString, "--main-class",
         "org.goldenport.cncf.CncfMain", "--", "--force-exit", "--component-dev-dir", _primary.toString,
@@ -740,7 +749,8 @@ private[admission] object NativeWorkflowCliFixture {
     * Fixture setup/adoption is SPECIFICATION-OWNED, never genuine Human consent.
     */
   def freshDependency(name: String, denial: String = "none",
-    bindingTransform: GoalPhaseDependencyValidation.Binding => GoalPhaseDependencyValidation.Binding = value => value): Scenario = {
+    bindingTransform: GoalPhaseDependencyValidation.Binding => GoalPhaseDependencyValidation.Binding = value => value,
+    dependencyChecks: Option[Vector[GoalPhaseNativeValidation.Check]] = None): Scenario = {
     import io.circe.syntax.*
     import GoalPhaseDependencyValidation as DV
     val executable = TypedSbtHostPlanFixture.normalExecutable
@@ -748,6 +758,23 @@ private[admission] object NativeWorkflowCliFixture {
     val dependencyroot = initial.root.resolve("dependency")
     TypedSbtHostPlanFixture.build(dependencyroot, true)
     val repository = dependencyroot.resolve("repository").toRealPath()
+    if (dependencyChecks.exists(_.exists(_.kind == WorkflowSbtValidation.Kind.FixCheck))) {
+      // These ordinary SBT tasks belong only to the explicitly selected lint
+      // fixture. Their inputs are committed with the original dependency base.
+      Files.writeString(repository.resolve("build.sbt"), """
+        |lazy val fixCheck = taskKey[Unit]("Check the specification-owned dependency input")
+        |fixCheck := {
+        |  val root = baseDirectory.value
+        |  IO.append(root.getParentFile / "sbt-fix-check-executions.txt", java.lang.ProcessHandle.current().pid().toString + "\n")
+        |  if (IO.read(root / "value.txt") != "expected\n")
+        |    sys.error("SPECIFICATION-OWNED FixCheck: value.txt must contain expected followed by LF")
+        |}
+        |Compile / sourceGenerators += Def.task {
+        |  IO.append(baseDirectory.value.getParentFile / "sbt-compile-executions.txt", java.lang.ProcessHandle.current().pid().toString + "\n")
+        |  Seq.empty[java.io.File]
+        |}.taskValue
+        |""".stripMargin, StandardOpenOption.APPEND)
+    }
     Files.writeString(repository.resolve("value.txt"), "initial\n")
     val base = initial.prepareDependencyBase(repository)
     val binding = DV.Binding("specification-cncf-validation", 1, "step-1",
@@ -755,8 +782,8 @@ private[admission] object NativeWorkflowCliFixture {
       GoalPhaseDependencyScope.Component("org.goldenport.cncf", "goldenport-cncf", "cncf-source"),
       repository.toString, "main", Vector("value.txt"), base,
       "SPECIFICATION-OWNED adoption against the actual isolated Git objects; no retrospective Start capture",
-      Vector(GoalPhaseNativeValidation.Check("cncf-compile", 2, WorkflowSbtValidation.Kind.Compile),
-        GoalPhaseNativeValidation.Check("cncf-test", 3, WorkflowSbtValidation.Kind.Test)))
+      dependencyChecks.getOrElse(Vector(GoalPhaseNativeValidation.Check("cncf-compile", 2, WorkflowSbtValidation.Kind.Compile),
+        GoalPhaseNativeValidation.Check("cncf-test", 3, WorkflowSbtValidation.Kind.Test))))
     val selectedbinding = bindingTransform(binding)
     require(DV.bindingValid(selectedbinding), "Select a valid-shaped specification binding; native Git owns actual matching")
     val host = initial.host.copy(goal = initial.host.goal.copy(dependencyValidation = Some(selectedbinding)))

@@ -11,7 +11,8 @@ import NativeWorkflowCliFixture as F
 /** Normal isolated CLI regression with explicitly specification-owned semantics,
   * review attestations and local effect grants. No live Session or external AI.
   * @since   Oct. 21, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 25, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -164,7 +165,7 @@ final class GoalPhaseNativeCandidateCliSpec extends AnyWordSpec with Matchers wi
       scenario.candidateStatus should include("M docs/user.md")
       scenario.candidateStatus should include("?? docs/local-draft.md")
       _executions(scenario).size shouldBe 3
-      scenario.advance(episode.task).business[V.GoalPhaseAdvanceResult] shouldBe phase
+      scenario.advance(episode.task).business[V.GoalPhaseAdvanceResult] shouldBe phase.copy(message = phase.work.get.purpose)
       _executions(scenario).size shouldBe 3
     }
 

@@ -13,13 +13,15 @@ import org.goldenport.protocol.Request
   * Standard borrows the existing mapping. Opt-in mappings are host declarations,
   * never a model table, observed availability or permission to execute.
   * @since   Oct. 29, 2026
-  * @version Oct. 29, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseOperatingProfiles {
   val standard = "standard"
   val revision = "1"
-  val registered = Set(standard, "cost", "quality")
+  val localExperimentName = "local-experiment"
+  val optInNames = Set("cost", "quality", localExperimentName)
+  val registered = optInNames + standard
   final case class Selection(identity: String, revision: String, source: String) derives Codec.AsObject
   final case class Concrete(identity: String, provider: String, model: String, controls: Map[String, String]) derives Codec.AsObject
   final case class Capture(selection: Selection, reasoningClass: Option[String], mappingIdentity: Option[String],
@@ -44,7 +46,8 @@ private[smworkflow] object GoalPhaseOperatingProfiles {
     })
   val cost = _mapping("cost")
   val quality = _mapping("quality")
-  val declarations: Vector[ComponentParameterKey[?]] = Vector(declaration, cost, quality)
+  val localExperiment = _mapping(localExperimentName)
+  val declarations: Vector[ComponentParameterKey[?]] = Vector(declaration, cost, quality, localExperiment)
 
   def configuredC(parameters: ComponentInitializationParameters): Consequence[Option[String]] =
     if (parameters == null) invalid("Component initialization parameters are absent")
@@ -55,7 +58,9 @@ private[smworkflow] object GoalPhaseOperatingProfiles {
     else for {
       c <- parameters.resolve(cost).map(_.value)
       q <- parameters.resolve(quality).map(_.value)
-    } yield c.map("cost" -> _).toMap ++ q.map("quality" -> _).toMap
+      local <- parameters.resolve(localExperiment).map(_.value)
+    } yield c.map("cost" -> _).toMap ++ q.map("quality" -> _).toMap ++
+      local.map(localExperimentName -> _).toMap
 
   def validateNameC(value: String): Consequence[Unit] =
     if (registered.contains(value)) Consequence.unit

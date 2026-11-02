@@ -27,7 +27,8 @@ import org.goldenport.cncf.validation.ValidationDiscoveryV1 as D
   * plan check identities select host bindings, never commands from AI. Intent
   * commits precede each external effect. Unknown results are not replayed.
   * @since   Oct.  6, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeValidation {
@@ -76,7 +77,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
     dependencyExecutions: Vector[GoalPhaseDependencyValidation.Execution] = Vector.empty,
     assessment: Option[GoalPhaseStepAssessment.Result] = None,
     dependencySource: Option[GoalPhaseDependencySourceRevision.Capture] = None,
-    sourceConsumption: Option[GoalPhaseDependencySourceRevision.Consumption] = None)
+    sourceConsumption: Option[GoalPhaseDependencySourceRevision.ConsumptionRecord] = None)
   object Payload {
     given Encoder[Payload] = deriveEncoder[Payload].mapJson(value => value.mapObject(fields =>
       Vector("metadata", "stopped", "admissionFailures", "uncertainties", "newAttempts", "dependencyExecutions").foldLeft(fields) { (prior, key) =>
@@ -206,16 +207,60 @@ private[smworkflow] object GoalPhaseNativeValidation {
     _store_c(session, d, core, candidate, controller, _ => Consequence.unit, from, documentPolicy, recordingPaths,
       dependencyChain).flatMap(_.preconditionsC)
 
+  /** Passive admission for the failed prerequisite frontier. Load every bounded
+    * original intent namespace, including metadata selection, before direction.
+    * Freshness is deliberately checked after the corrected capture, not against
+    * the old failed dependency bytes. */
+  private[admission] def unstartedPrerequisiteC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
+    candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, from: InstanceRecord,
+    documentPolicy: Option[GoalPhaseDocumentProgress.Policy], recordingPaths: Vector[String],
+    dependencyChain: GoalPhaseNativeWorkContinuation.DependencyChain): Consequence[Unit] = for {
+    _ <- if (controller.stage == O.Stage.Validation && from == candidate.record) Consequence.unit
+      else F.invalid("Prerequisite recovery requires the original ordinary candidate frontier")
+    store <- _store_c(session, d, core, candidate, controller, _ => Consequence.unit, Some(from),
+      documentPolicy, recordingPaths, Some(dependencyChain))
+    _ <- requireUnstartedPrerequisiteC(key => store.loadC(key).map(_.nonEmpty))
+  } yield ()
+
+  private[admission] def requireUnstartedPrerequisiteC(present: String => Consequence[Boolean]): Consequence[Unit] = {
+    val keys = Vector("selection", "validation") ++ (0 until 16).toVector.flatMap(index =>
+      Vector("check-intent-", "check-result-", "check-recovery-").map(_ + index))
+    keys.foldLeft(Consequence.unit)((prior, key) => prior.flatMap(_ => present(key).flatMap(value =>
+      if (!value) Consequence.unit else F.invalid("Prerequisite recovery refuses an already started check or selection"))))
+  }
+
+  /** The primary operation may have intervening authenticated source/authority
+    * facts. Its check namespace still belongs to this actual current frontier. */
+  private[admission] def unstartedPrimaryPublicationC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
+    candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, from: InstanceRecord,
+    documentPolicy: Option[GoalPhaseDocumentProgress.Policy], recordingPaths: Vector[String],
+    dependencyChain: GoalPhaseNativeWorkContinuation.DependencyChain): Consequence[Unit] =
+    if (controller.stage != O.Stage.Validation || candidate.record.revision.value > from.revision.value)
+      F.invalid("Primary publication repair has no unstarted current Validation frontier")
+    else _store_c(session, d, core, candidate, controller, _ => Consequence.unit, Some(from),
+      documentPolicy, recordingPaths, Some(dependencyChain)).flatMap(store =>
+        requireUnstartedPrerequisiteC(key => store.loadC(key).map(_.nonEmpty)))
+
   def advanceC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, acknowledgement: String => Consequence[Unit],
     from: Option[InstanceRecord] = None,
     documentPolicy: Option[GoalPhaseDocumentProgress.Policy] = None,
     recordingPaths: Vector[String] = Vector.empty,
-    dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
+    dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None,
+    prerequisiteRecovery: Boolean = false,
+    qualifiedSuccessor: Option[LocalPublication.QualifiedSuccessor] = None,
+    prerequisiteWait: Option[LocalPublication.Result] = None,
+    existingArtifactAdoption: Option[GoalPhasePrerequisitePublicationUnknownRecovery.ExistingArtifactAdoption] = None,
+    confirmedFailureSuccessor: Option[LocalPublication.ConfirmedFailureSuccessor] = None,
+    primaryRepairPublication: Option[LocalPublication.ConfirmedFailureSuccessor] = None):
+      Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
     store <- _store_c(session, d, core, candidate, controller, acknowledgement, from, documentPolicy, recordingPaths, dependencyChain)
     retained <- store.loadC("validation")
     existingintent <- store.loadC("check-intent-0")
-    prerequisite <- if (retained.isEmpty && existingintent.isEmpty) LocalPublicationRuntime.beforeChecksC(session, d, core, candidate)
+    _ <- if ((prerequisiteRecovery || qualifiedSuccessor.nonEmpty || existingArtifactAdoption.nonEmpty || confirmedFailureSuccessor.nonEmpty || primaryRepairPublication.nonEmpty) &&
+        retained.isEmpty && existingintent.isEmpty) store.preconditionsC else Consequence.unit
+    prerequisite <- if (retained.isEmpty && existingintent.isEmpty) LocalPublicationRuntime.beforeChecksC(session, d, core, candidate,
+      qualifiedSuccessor, prerequisiteWait, existingArtifactAdoption, confirmedFailureSuccessor, primaryRepairPublication)
       else Consequence.success(None)
     response <- prerequisite match {
       case Some(waiting) => Consequence.success(waiting)
@@ -815,10 +860,11 @@ private[smworkflow] object GoalPhaseNativeValidation {
       root <- G.rootC(core)
       actual <- G.observeC(core)
       tree <- G.indexTreeC(core)
-      scoped = if (whole) candidate.payload.selectedPaths else ownedPaths
+      scoped = candidate.payload.selectedPaths
       _ <- if (root == d.target.root.toString && actual.branch == d.target.localBranch &&
           actual.head == parent.head && actual.head == initial.candidate.head && actual.tree == parent.tree &&
           tree == initial.candidate.tree && candidate.payload.selectedPaths == candidate.payload.stagedPaths &&
+          (whole || B.pathsOwned(scoped, ownedPaths)) &&
           (!whole || (if (controller.releaseRepairActive) plan.phasePathsOwned(candidate.payload.selectedPaths)
             else candidate.payload.selectedPaths.forall(managementPaths.contains))) &&
           B.scopedDirty(actual.dirty, scoped, true) && (!whole ||

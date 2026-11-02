@@ -5170,6 +5170,12 @@
               "type": "RepositorySyncNativeConvergenceResult",
               "multiplicity": "1",
               "required": true
+            },
+            {
+              "name": "metrics",
+              "type": "org.goldenport.record.Record",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },

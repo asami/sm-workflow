@@ -3,6 +3,7 @@ package org.simplemodeling.textus.smworkflow.admission
 import io.circe.Json
 import io.circe.generic.auto.*
 import io.circe.syntax.*
+import GoalPhasePhaseMetrics.given
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets.UTF_8
 import org.goldenport.{Consequence, ConsequenceT}
@@ -23,7 +24,8 @@ import RepositorySyncManagedGitObservation as G
   * the Subsystem's canonical store and managed Git execution. No private pool,
   * controller digest or AI-supplied plan admission is introduced.
   * @since   Oct.  6, 2026
-  * @version Oct. 29, 2026
+  *  version Oct. 29, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeRun {
@@ -65,14 +67,15 @@ private[smworkflow] object GoalPhaseNativeRun {
     sourceHistoryNormalization: Option[GoalPhaseSourceHistoryNormalization.Installation] = None,
     dependencySourceRevision: Option[GoalPhaseDependencySourceRevision.Installation] = None,
     dependencySourceRevisions: Vector[GoalPhaseDependencyValidation.Binding] = Vector.empty,
-    dependencySourceConsumptions: Vector[GoalPhaseDependencySourceRevision.Consumption] = Vector.empty,
+    dependencySourceConsumptions: Vector[GoalPhaseDependencySourceRevision.ConsumptionRecord] = Vector.empty,
     localPublication: Option[LocalPublicationRuntime.Policy] = None,
     commitHygieneMode: String = CommitHygiene.autoFix,
     completionRecords: Option[CompletionRecords.Policy] = None,
     phaseDependencyValidation: Option[GoalPhaseDependencyValidation.Binding] = None,
     operatingProfile: Option[String] = None,
     operatingMappings: Map[String, WorkflowExecutionProfileMapping] = Map.empty,
-    invocationOperatingProfile: Option[GoalPhaseOperatingProfiles.Selection] = None)
+    invocationOperatingProfile: Option[GoalPhaseOperatingProfiles.Selection] = None,
+    prerequisitePublicationRecovery: Option[GoalPhasePrerequisitePublicationRecovery.Installation] = None)
   final case class SelectedPlan(selectionIdentity: String, participantIdentity: String,
     plan: O.Plan, documents: Option[GoalPhaseDocumentSource.Bound] = None)
   trait PlanPort {
@@ -84,7 +87,8 @@ private[smworkflow] object GoalPhaseNativeRun {
   final case class Payload(participantIdentity: String, root: String, branch: String, plan: O.Plan, base: O.Snapshot,
     documents: Option[GoalPhaseDocumentSource.Bound] = None,
     completionPolicy: Option[String] = None, developmentStartedAt: Option[String] = None,
-    repairPolicy: Option[String] = None, operatingProfile: Option[GoalPhaseOperatingProfiles.Selection] = None)
+    repairPolicy: Option[String] = None, operatingProfile: Option[GoalPhaseOperatingProfiles.Selection] = None,
+    sourceMetrics: Option[GoalPhasePhaseMetrics.Endpoint] = None)
   final case class Session(storage: WorkflowComponentStorage,
     started: WorkflowManagedMechanicalTransition.Retained[Payload], participantIdentity: String,
     current: InstanceRecord)
@@ -97,7 +101,8 @@ private[smworkflow] object GoalPhaseNativeRun {
         val policy = if (value.completionPolicy.isEmpty) documents.remove("completionPolicy") else documents
         val occurrence = if (value.developmentStartedAt.isEmpty) policy.remove("developmentStartedAt") else policy
         val repair = if (value.repairPolicy.isEmpty) occurrence.remove("repairPolicy") else occurrence
-        if (value.operatingProfile.isEmpty) repair.remove("operatingProfile") else repair
+        val profile = if (value.operatingProfile.isEmpty) repair.remove("operatingProfile") else repair
+        if (value.sourceMetrics.isEmpty) profile.remove("sourceMetrics") else profile
       }))
     def decode(value: Json): Either[String, Payload] = for {
       wire <- Option(value).toRight("native ordered Start is missing")
@@ -145,9 +150,10 @@ private[smworkflow] object GoalPhaseNativeRun {
     _ <- if (root == d.target.root.toString && observed.branch == d.target.localBranch && observed.dirty.isEmpty)
       Consequence.unit else invalid("ordered Phase requires its selected clean native root/branch")
     base = O.Snapshot(observed.head, observed.tree)
+    metrics = GoalPhasePhaseMetrics.capture(core, GoalPhasePhaseMetrics.scope(d), base)
     payload = Payload(selected.participantIdentity, root, observed.branch, plan, base, admitted.documents,
       Some(d.selectedCompletionPolicy), d.developmentObservation.map(_ => core.executionContext.clock.instant().toString),
-      Some(GoalPhaseRuntimeRepairControl.version), d.invocationOperatingProfile)
+      Some(GoalPhaseRuntimeRepairControl.version), d.invocationOperatingProfile, Some(metrics))
     // Ordinary native Git facts and explicit plan references, not source hashes.
     cause = CausationReference("ordered-goal-start:" + token(admitted.plan.identity) + ":" +
       token(admitted.plan.revision) + ":" + base.head + ":" + base.tree)
@@ -209,6 +215,7 @@ private[smworkflow] object GoalPhaseNativeRun {
           !GoalPhaseDependencyValidation.bindingValid(b) || b.step != "phase:" + d.input.phaseIdentity ||
             b.requester.repository != d.input.repositoryIdentity) ||
         d.dependencySourceRevision == null || d.dependencySourceRevision.exists(i => i == null || !i.validateC.isSuccess) ||
+        d.prerequisitePublicationRecovery == null || d.prerequisitePublicationRecovery.exists(i => i == null || !i.validateC.isSuccess) ||
         d.dependencySourceRevisions == null || d.dependencySourceRevisions.size > 16 ||
         d.dependencySourceRevisions.exists(b => !GoalPhaseDependencyValidation.bindingValid(b)) ||
         d.dependencySourceRevisions.map(b => (b.identity, b.revision)).distinct.size != d.dependencySourceRevisions.size ||
@@ -217,7 +224,7 @@ private[smworkflow] object GoalPhaseNativeRun {
         d.dependencySourceConsumptions.distinct.size != d.dependencySourceConsumptions.size ||
         d.localPublication == null || d.localPublication.exists(p => !LocalPublicationRuntime.validateC(p).isSuccess) ||
         d.operatingMappings == null || d.operatingMappings.exists((name, mapping) =>
-          !Set("cost", "quality")(name) || mapping == null) ||
+          !GoalPhaseOperatingProfiles.optInNames(name) || mapping == null) ||
         d.invocationOperatingProfile == null || d.invocationOperatingProfile.exists(value => !GoalPhaseOperatingProfiles.selectionValid(value)) ||
         d.operatingProfile == null || d.operatingProfile.exists(value => !GoalPhaseOperatingProfiles.validateNameC(value).isSuccess) ||
         d.executionProfiles == null || d.executionProfiles.exists(_ == null) || d.findingRecordingPolicy == null ||
@@ -277,7 +284,7 @@ private[smworkflow] object GoalPhaseNativeRun {
           !(core.action.request.service.contains("DevelopmentObservationService") &&
             Set("readDevelopmentState", "readDevelopmentHistory")(core.action.request.operation) ||
             core.action.request.service.contains("LocalPublicationService") &&
-            Set("ensureLocalPublication", "collectLocalPublication")(core.action.request.operation) ||
+            Set("ensureLocalPublication", "collectLocalPublication", "collectLatestLocalPublication")(core.action.request.operation) ||
             core.action.request.service.contains("GoalPhaseService") &&
           Set(startOperation.operation, advanceOperation.operation, completionOperation.operation,
             IncrementalSbtDiagnosisInformation.operation,
@@ -290,6 +297,7 @@ private[smworkflow] object GoalPhaseNativeRun {
             GoalPhaseClosureRecovery.describeOperation, GoalPhaseClosureRecovery.recoveryOperation,
             GoalPhaseRemainingPlanAdoption.describeOperation, GoalPhaseRemainingPlanAdoption.adoptionOperation,
             GoalPhaseDependencySourceRevision.describeOperation, GoalPhaseDependencySourceRevision.adoptionOperation,
+            GoalPhasePrerequisitePublicationRecovery.describeOperation, GoalPhasePrerequisitePublicationRecovery.recoveryOperation,
             GoalPhaseLegacyPurposeRepairContinuation.describeOperation, GoalPhaseLegacyPurposeRepairContinuation.admissionOperation,
             GoalPhaseReleaseRepairContinuation.describeOperation, GoalPhaseReleaseRepairContinuation.recoveryOperation,
             GoalPhaseFailedPhaseRepairAdoption.describeOperation, GoalPhaseFailedPhaseRepairAdoption.adoptionOperation,

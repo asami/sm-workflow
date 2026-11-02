@@ -10,7 +10,8 @@ import org.simplemodeling.textus.smworkflow.admission.metafixture.SelectedMetada
 /** Public host JSON and selected product-test input only. Ordinary CNCF
   * bootstrap binds the plan; this helper never executes a tool or a driver.
   * @since   Oct. 15, 2026
-  * @version Oct. 26, 2026
+  *  version Oct. 26, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object TypedSbtHostPlanFixture {
@@ -53,7 +54,8 @@ private[admission] object TypedSbtHostPlanFixture {
       val operation = check.kind match {
         case WorkflowSbtValidation.Kind.Compile => SbtOperation.Compile
         case WorkflowSbtValidation.Kind.Test => SbtOperation.Test
-        case _ => throw new IllegalArgumentException("This CLI fixture selects ordinary Compile/Test only")
+        case WorkflowSbtValidation.Kind.FixCheck => SbtOperation.FixCheck
+        case _ => throw new IllegalArgumentException("This CLI fixture selects ordinary Compile/Test/FixCheck only")
       }
       _array_(plan(root, executable, Vector(check.ordinal), operation = operation), "sbtPrograms").map { program =>
         val identity = workspace + "-" + check.kind.wire

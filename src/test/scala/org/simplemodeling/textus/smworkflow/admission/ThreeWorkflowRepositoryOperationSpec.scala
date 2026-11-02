@@ -42,7 +42,8 @@ import SplitPhaseTypedStartFixture as StorageFixture
   * substitutes product behavior, evidence readers, engines or process drivers.
   * Optional completion timing observations delegate the actual product action.
   * @since   Oct.  7, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers {
@@ -341,7 +342,7 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
   protected def local_subject_capabilities: Vector[String] = Vector("user")
   protected def standard_runtime: Boolean = false
 
-  protected final case class InstalledBootstrapSelection(manifest: Path, component: Path)
+  protected final case class InstalledBootstrapSelection(component: Path)
 
   protected def _with_runtime_(root: Path, scenario: String,
     host: Option[ThreeWorkflowRuntimeParameters.Definition] = None,
@@ -416,7 +417,6 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
         |""".stripMargin)
     val runtime = new CncfRuntime()
     val installedargs = installedBootstrap.toVector.flatMap(value => Vector("--no-default-components",
-      s"--${org.goldenport.cncf.config.RuntimeConfig.installedRuntimeManifestKey}=${value.manifest}",
       s"--component-file=${value.component}"))
     val handle = try take(runtime.initializeHandle(BootstrapConfig(cwd = root, args = (Vector(
       s"--textus.assembly.descriptor=${directory.resolve("assembly.yaml")}",

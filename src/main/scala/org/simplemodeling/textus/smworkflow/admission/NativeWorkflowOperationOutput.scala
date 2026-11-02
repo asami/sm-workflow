@@ -14,7 +14,8 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Concrete public business output projections from their actual owning
   * outcome. No extra store read, result verifier or transport envelope.
   * @since   Oct. 12, 2026
-  * @version Oct. 29, 2026
+  *  version Oct. 29, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationOutput {
@@ -54,7 +55,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
       releaseRepairContract = value.releaseRepairContract,
       triage = value.triage.map(t => GoalPhaseNativeMetadata.record(t.asJson)),
       diagnosticHistory = value.diagnosticHistory.toVector.flatten.map(p => GoalPhaseNativeMetadata.record(p.asJson)),
-      operatingProfile = value.operatingProfile.map(p => GoalPhaseNativeMetadata.record(p.asJson)))
+      operatingProfile = value.operatingProfile.map(p => GoalPhaseNativeMetadata.record(p.asJson)),
+      publicationFailure = value.publicationFailure.map(p => GoalPhaseNativeMetadata.record(p.asJson)))
 
   def goalValidation(payload: GoalPhaseNativeValidation.Payload): V.GoalPhaseNativeValidationView = {
     val stopped = if (payload.outcome.isEmpty) payload.stopped.lastOption.filter(receipt =>
@@ -118,7 +120,7 @@ private[smworkflow] object NativeWorkflowOperationOutput {
       None, None, None, None, Some("completed"), None, None, None, None, None,
       Some(V.GoalPhaseCompletionResult(_goal_plan(plan), _goal_snapshot(base), completed.map(_goal_closed),
         _goal_snapshot(candidate), Some(repository), V.GoalPhaseSynchronizationResult("succeeded",
-          "Actual RepositorySync convergence and native completion are retained.", None, None))), None, None, None, None, None, None, None)
+          "Actual RepositorySync convergence and native completion are retained.", None, None), None)), None, None, None, None, None, None, None)
 
   def goalLocallyComplete(session: String, plan: GoalPhaseOrderedProgression.Plan, base: GoalPhaseOrderedProgression.Snapshot,
     completed: Vector[GoalPhaseOrderedProgression.ClosedStep], candidate: GoalPhaseOrderedProgression.Snapshot,
@@ -129,7 +131,7 @@ private[smworkflow] object NativeWorkflowOperationOutput {
       None, None, None, None, None, Some(V.GoalPhaseCompletionResult(_goal_plan(plan), _goal_snapshot(base),
         completed.map(_goal_closed), _goal_snapshot(candidate), repository,
         V.GoalPhaseSynchronizationResult(synchronization.state, synchronization.reason,
-          synchronization.childSessionId, synchronization.advanceOperation))), None, None, None, None, None, None, None)
+          synchronization.childSessionId, synchronization.advanceOperation), None)), None, None, None, None, None, None, None)
 
   def goalRecordingResult(value: GoalPhaseFindingRecording.Result): V.GoalPhaseFindingRecordingResult =
     V.GoalPhaseFindingRecordingResult(value.outcome, value.summary, value.items.map(item =>

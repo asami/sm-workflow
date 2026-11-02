@@ -21,7 +21,8 @@ import GoalPhaseDependencyValidation.given
 /** Ordinary CLI specifications. All semantic submissions and Human evidence are
   * SPECIFICATION-OWNED; no production adoption, installed qualification or acceptance is claimed.
   * @since   Oct. 24, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -76,7 +77,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
     val assemblybytes = Files.readAllBytes(assembly)
     val parameters = parse(Files.readString(config)).toOption.get.asObject.get.toVector.map { (key, value) =>
       key -> value.asString.getOrElse(value.noSpaces)
-    }.toMap
+    }.toMap - "textus.component.file"
     val host = SplitPhaseExplicitPartitionFixture.take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(
       parse(parameters("sm-workflow.runtime.definition")).toOption.get))
     var result = Option.empty[A]
@@ -126,14 +127,20 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
   }
   private def _selected(name: String, denial: String = "none",
     bindingTransform: D.Binding => D.Binding = value => value, legacySuccessor: Boolean = false,
-    assessmentpolicy: Option[GoalPhaseStepAssessment.Policy] = None, sourceRevisionFixture: Boolean = false): Selected = {
-    val scenario = F.freshDependency(name, denial, bindingTransform)
+    assessmentpolicy: Option[GoalPhaseStepAssessment.Policy] = None, sourceRevisionFixture: Boolean = false,
+    dependencychecks: Option[Vector[GoalPhaseNativeValidation.Check]] = None): Selected = {
+    val scenario = F.freshDependency(name, denial, bindingTransform, dependencyChecks = dependencychecks)
     // Both ordinary launchers select this fresh host's existing assembly. The
     // installed entry changes cwd only; host configuration owns its descriptor.
     val hostconfig = scenario.root.resolve(".textus/config.json")
     val hostparameters = parse(Files.readString(hostconfig)).toOption.get
-    Files.writeString(hostconfig, hostparameters.mapObject(_.add("textus.assembly.descriptor",
-      scenario.root.resolve(".textus/assembly.yaml").toString.asJson)).noSpaces)
+    val selectedparameters = hostparameters.mapObject(_.add("textus.assembly.descriptor",
+      scenario.root.resolve(".textus/assembly.yaml").toString.asJson))
+    val componentparameters = if (sys.props.contains("smworkflow.spec.installedCommand"))
+      sys.props.get("smworkflow.spec.componentFile").fold(selectedparameters)(component =>
+        selectedparameters.mapObject(_.add("textus.component.file", component.asJson)))
+    else selectedparameters
+    Files.writeString(hostconfig, componentparameters.noSpaces)
     if (sourceRevisionFixture) {
       // Arrange this isolated primary's genuine source-project consumption before
       // Start. The later host route supplies the new root; no Session is edited.
@@ -149,8 +156,6 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
         |      val marker = Class.forName("SourceRevisionMarker$")
         |      val instance = marker.getField("MODULE$").get(null)
         |      assert(marker.getMethod("source").invoke(instance) == selected, "wrong source project loaded")
-        |      val manifest = java.nio.file.Paths.get(sys.env("DSR_MANIFEST"))
-        |      assert(java.nio.file.Files.readString(manifest) == "specification-immutable-image\n")
         |    }
         |    println("PRODUCT_CHECK_PASSED")
         |""".stripMargin)
@@ -244,13 +249,9 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
     val parameters = parse(Files.readString(config)).toOption.get.asObject.get.toVector.map { (key, value) =>
       key -> value.asString.getOrElse(value.noSpaces)
     }.toMap
-    val installedparameters = if (sys.props.contains("smworkflow.spec.installedCommand")) Map(
-      org.goldenport.cncf.config.RuntimeConfig.installedRuntimeManifestKey -> sys.props.get("smworkflow.spec.runtimeManifest")
-        .getOrElse(fail("Installed interruption requires the selected actual runtime manifest"))) else Map.empty[String, String]
-    val installedbootstrap = installedparameters.get(org.goldenport.cncf.config.RuntimeConfig.installedRuntimeManifestKey).map { manifest =>
-      val distribution = SplitPhaseExplicitPartitionFixture.take(
-        org.goldenport.cncf.cli.InstalledRuntimeDistribution.readC(Path.of(manifest)))
-      InstalledBootstrapSelection(distribution.manifest, distribution.component.path)
+    val installedbootstrap = Option.when(sys.props.contains("smworkflow.spec.installedCommand")) {
+      InstalledBootstrapSelection(Path.of(sys.props.get("smworkflow.spec.componentFile")
+        .getOrElse(fail("Installed interruption requires the normally published component CAR"))))
     }
     var observed = Vector.empty[String]
     val acknowledgement: String => Consequence[Unit] = value => {
@@ -259,7 +260,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
     }
     val actualHost = SplitPhaseExplicitPartitionFixture.take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(
       parse(parameters("sm-workflow.runtime.definition")).toOption.get))
-    try _with_runtime_(scenario.root, "Goal", Some(actualHost), hostParameters = parameters ++ installedparameters,
+    try _with_runtime_(scenario.root, "Goal", Some(actualHost), hostParameters = parameters,
       nativeAcknowledgement = None, goalAcknowledgement = Some(acknowledgement), componentInstance = "default",
       installedBootstrap = installedbootstrap) { (owner, component, actor, _) =>
       owner.executeOperationResponseInContext(Request.of(component = component.name, service = "GoalPhaseService",
@@ -592,7 +593,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
       if (consumption.programs.exists(p => program.hcursor.get[String]("target").toOption.contains(p.workspace) &&
           program.hcursor.get[String]("identity").toOption.contains(p.program))) {
         val environment = program.hcursor.get[Json]("environment").toOption.get.mapObject(_.add("TEXTUS_CNCF_SOURCE_ROOT",
-          replacement.root.asJson).add("DSR_MANIFEST", selected.scenario.root.resolve("source-manifest.txt").toString.asJson))
+          replacement.root.asJson))
         program.mapObject(_.add("environment", environment))
       } else program
     }
@@ -607,10 +608,9 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
       .add("grants", Json.arr(Json.obj(
       "componentId" -> org.simplemodeling.textus.smworkflow.SmWorkflowComponent.componentId.name.asJson,
       "capabilities" -> capabilities.asJson))))
-    val revisions = host.goal.dependencySourceRevisions.filterNot(binding =>
-      binding.identity == replacement.identity && binding.revision == replacement.revision) :+ replacement
+    val revisions = host.goal.dependencySourceRevisions.filterNot(_.identity == replacement.identity) :+ replacement
     val revised = host.copy(goal = host.goal.copy(dependencySourceRevisions = revisions,
-      dependencySourceConsumptions = (host.goal.dependencySourceConsumptions :+ consumption).distinct))
+      dependencySourceConsumptions = Vector(consumption)))
     SplitPhaseExplicitPartitionFixture.take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(
       ThreeWorkflowRuntimeParameters.encode(revised))) shouldBe revised
     Files.writeString(path, config.mapObject(_.add("sm-workflow.runtime.definition",
@@ -626,8 +626,6 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
         import GoalPhaseDependencySourceRevision as R
         import org.goldenport.cncf.processexecution.GitOperation
         Given("a genuinely accepted first dependency Step and a retained failed check of the admitted second Step")
-        if (committedbase) assume(sys.props.contains("smworkflow.spec.installedCommand") &&
-          sys.props.contains("smworkflow.spec.runtimeManifest"), "V4 qualification requires the explicit dedicated installed command and manifest")
         val prefix = _accepted_prefix("dependency-source-revision-" + mode, overlap = true, sourceRevisionFixture = true)
         val implementation = _adopt_prefix(prefix)
         _complete_prefix(implementation, overlap = true, failCheck = true)
@@ -679,7 +677,6 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
         Files.createDirectories(repository.resolve("src/main/scala"))
         Files.writeString(repository.resolve("src/main/scala/SourceRevisionMarker.scala"),
           "object SourceRevisionMarker { def source: String = " + repository.toRealPath().toString.asJson.noSpaces + " }\n")
-        Files.writeString(scenario.root.resolve("source-manifest.txt"), "specification-immutable-image\n")
         Files.writeString(repository.resolve("inherited.txt"), "accepted first-Step input\n")
         if (committedbase) repository.resolve("inherited.txt").toFile.setExecutable(true, false) shouldBe true
         Files.writeString(repository.resolve("current.txt"), "new source baseline\n")
@@ -710,7 +707,6 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
           dependency = prefix.binding.dependency.copy(workspace = "cncf-revised-source"),
           paths = Vector("value.txt", "inherited.txt", "current.txt"))
         val consumption = R.Consumption(provisional.requester.workspace, provisional.root,
-          "specification-immutable-image", ContextReference("specification-immutable-manifest", "1"),
           exclusions, provisional.paths.map(path => R.ExpectedMode(path,
             if (committedbase && path == "inherited.txt") "100755" else "100644")),
           (scenario.host.goal.stepValidation.checks ++ scenario.host.goal.phaseValidation.checks).distinct.map(check =>
@@ -728,7 +724,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
           _second_proposal(prefix.binding).acceptance, replacement.checks.map(_.identity))
         val coverage = (prefix.first.admission.approvals.map(a => R.Coverage(a.decision, a.proposal.acceptance,
           replacement.checks.map(_.identity))) :+ currentApproval).distinct
-        val proposal = R.Proposal(R.schema, ContextReference(replacement.identity, "2"), mode,
+        val proposal = R.Proposal(R.sourceSchema, ContextReference(replacement.identity, "2"), mode,
           exclusions, coverage, consumption)
         val build = repository.resolve("build.sbt")
         val buildBytes = Files.readAllBytes(build)
@@ -897,20 +893,13 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
           var scopedwork = scopedrepair
           var actualruntime = Option.empty[R.Direction]
           var effectiveguard = capture.postStageGuard
-          if (sys.props.contains("smworkflow.spec.installedCommand")) {
-            Given("the actual immutable installed profile selected for this installed-route specification")
-            val manifest = sys.props.get("smworkflow.spec.runtimeManifest")
-              .getOrElse(fail("Installed source-consumption qualification requires its actual manifest input"))
-            val installation = SplitPhaseExplicitPartitionFixture.take(
-              org.goldenport.cncf.cli.InstalledRuntimeDistribution.readC(Path.of(manifest)))
-            scopeconsumption = scopeconsumption.copy(runtimeImage = installation.installationId.toString,
-              manifestReference = ContextReference("cncf-installed-runtime:" + installation.installationId, "1"))
-            _source_host(selected, scopebinding, scopeconsumption)
+          locally {
+            Given("an active source consumption on the selected ordinary or installed route")
             val blocked = scopedrepair.work.get.issues.toVector.flatMap(_.issues).filter(_.status != "RESOLVED").map(issue =>
               V.GoalPhaseIssueDisposition(issue.identity, "BLOCKED", "SPECIFICATION-OWNED installed consumption direction", None))
             When("the actual issued work requests a decision and ordinary Advance issues its new Human")
             val requested = _submit(scenario, scopedrepair, Json.obj("outcome" -> "decision-needed".asJson,
-              "summary" -> "SPECIFICATION-OWNED bounded runtime consumption succession".asJson, "findings" -> Json.arr(),
+              "summary" -> "SPECIFICATION-OWNED bounded source consumption succession".asJson, "findings" -> Json.arr(),
               "issueReport" -> json(V.GoalPhaseIssueReport(blocked).toRecord())),
               V.WorkflowArtifactReference("runtime-consumption-request", "1"))
             Then("the semantic request is accepted through its existing completion owner")
@@ -977,7 +966,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
                 GoalPhaseNativeMetadata.record(_proposal_().asJson)).toRecord()).noSpaces))
             val runtimeDescription = describedruntime.business[V.GoalPhaseDependencySourceRevisionDescriptionResult]
             val runtimeTarget = SplitPhaseExplicitPartitionFixture.take(R.targetC(runtimeDescription.target))
-            runtimeTarget.schemaVersion shouldBe (if (committedbase) R.committedSchema else if (exclusionappend) R.exclusionSchema else R.runtimeSchema)
+            runtimeTarget.schemaVersion shouldBe R.sourceSchema
             if (committedbase) {
               Then("the complete actual delta and every selected committed mode blob and absence are observed")
               val committed = runtimeTarget.committedBaseSuccession.get
@@ -992,9 +981,9 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
               committed.committedEntries.find(_.path == absentpath).get.entry shouldBe None
               committed.phaseChangedPaths should not contain "inherited.txt"
             }
-            runtimeTarget.runtime.get.parent shouldBe capture.direction.directive
-            runtimeTarget.runtime.get.installation.installation shouldBe installation.installationId.toString
-            runtimeTarget.runtime.get.installation.manifest shouldBe installation.manifest.toString
+            runtimeTarget.runtime shouldBe None
+            runtimeTarget.sourceSuccession.get.parent shouldBe capture.direction.directive
+            runtimeTarget.sourceSuccession.get.previousDirection shouldBe capture.direction.directive
             val runtimeReference = V.WorkflowArtifactReference("runtime-consumption-independent-direction", "1")
             val runtimeInput = V.GoalPhaseDependencySourceRevisionAdoptionInput(runtimehuman.sessionId,
               runtimeDescription.target, "AdoptDependencySourceRevision", "SPECIFICATION-OWNED actual installed route", runtimeReference)
@@ -1038,7 +1027,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
               _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, runtimehuman.sessionId)) shouldBe unadmitted
               Files.write(repository.resolve(additions.head), savedbytes)
             }
-            When("matching new runtime labels have no independently provisioned exact-target evidence")
+            When("matching new source declarations have no independently provisioned exact-target evidence")
             val refused = scenario.call("command", R.adoptionOperation, Vector("--input", json(runtimeInput.toRecord()).noSpaces))
             Then("adoption refuses and retains the actual native frontier")
             refused.exitCode should not be 0
@@ -1111,8 +1100,8 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
           var interruptedindices = Option.empty[Vector[Vector[Byte]]]
           val indexpaths = Vector(primaryroot.resolve(".git/index"), repository.resolve(".git/index"))
           if (exclusionappend && actualruntime.nonEmpty) {
-            Given(if (committedbase) "completed V4 work and the exact installed profile without any source-stage capability"
-              else "the completed V3 semantic work and exact installed profile with all selected-stage capabilities restored")
+            Given(if (committedbase) "completed V4 work and the active source consumption without any source-stage capability"
+              else "the completed V3 semantic work and active source consumption with all selected-stage capabilities restored")
             val excludedbytes = (exclusions ++ additions).map(path => Files.readAllBytes(repository.resolve(path)).toVector)
             val priorchecks = _executions(root)
             When("the actual adopted source candidate is saved and its ordinary acknowledgement is interrupted")
@@ -1148,8 +1137,8 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
           finalcapture.postStageGuard.excludedEntries shouldBe effectiveguard.excludedEntries
           if (exclusionappend && actualruntime.nonEmpty) {
             import org.goldenport.cncf.workflow.{WorkflowInstanceRecordJsonV1, WorkflowMechanicalTransition, WorkflowMechanicalTransitionJsonV1}
-            finalcapture.schemaVersion shouldBe (if (committedbase) R.committedCaptureSchema else R.exclusionCaptureSchema)
-            finalcapture.scope.get.schemaVersion shouldBe (if (committedbase) R.committedScopeSchema else R.exclusionScopeSchema)
+            finalcapture.schemaVersion shouldBe R.sourceCaptureSchema
+            finalcapture.scope.get.schemaVersion shouldBe R.sourceScopeSchema
             finalcapture.postStageGuard.excludedFiles.map(_.path) shouldBe (exclusions ++ additions)
             Then("collection preserves the actual source capture index and every retained source fact")
             interruptedguard shouldBe Some(finalcapture.postStageGuard)
@@ -2015,6 +2004,232 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
       review.sessionId shouldBe selected.original.sessionId
       review.repairProgress shouldBe selected.original.repairProgress
       _executions(selected.scenario.root.resolve("dependency")).size shouldBe 1
+    }
+
+    "M3Lint retain an old-shaped unknown intent through public recovery, failed FixCheck repair and fresh review" in {
+      import org.goldenport.cncf.workflow.*
+      import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
+      import GoalPhaseNativeValidation as N
+      import GoalPhaseValidationRecovery as R
+      import SplitPhaseExplicitPartitionFixture.take
+
+      Given("an isolated host with an actual primary Test and dependency Compile/FixCheck, using the selected ordinary launcher")
+      val selected = _selected("dependency-M3Lint-persistence", dependencychecks = Some(Vector(
+        N.Check("cncf-compile", 2, WorkflowSbtValidation.Kind.Compile),
+        N.Check("cncf-lint", 3, WorkflowSbtValidation.Kind.FixCheck))))
+      val scenario = selected.scenario
+      val dependencyroot = scenario.root.resolve("dependency")
+      val binding = scenario.host.goal.dependencyValidation.get
+      val input = Path.of(binding.root).resolve("value.txt")
+      val catalog = take(GoalPhaseRuntimeCatalog.loadC())
+      val definitions = take(WorkflowInstanceRecordJsonV1.catalogC(Vector(catalog.definition)))
+      def _snapshot_(): Map[String, String] =
+        _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, selected.original.sessionId)).toMap
+      def _key_(source: String, key: String): String = take(WorkflowMechanicalTransition.keyC(
+        WorkflowMechanicalTransition.Reference(selected.original.sessionId + ":ordered-validation:" + source + ":" + key, "1")))
+      def _validation_(rows: Map[String, String], source: String, key: String): N.Payload = {
+        val row = parse(rows(_key_(source, key))).fold(error => fail(error.message), identity)
+        val bytes = row.hcursor.get[String]("mechanicalPayload").fold(error => fail(error.message), identity)
+        bytes should startWith("cncf.workflow-json.v1:")
+        take(WorkflowMechanicalTransitionJsonV1.decodeC(bytes.stripPrefix("cncf.workflow-json.v1:"), definitions, N.codec)).payload.value
+      }
+      def _history_(rows: Map[String, String]) = take(WorkflowInstanceRecordJsonV1.decodeC(rows("instance"), definitions)).history
+      def _count_(name: String): Vector[String] = {
+        val path = dependencyroot.resolve(name)
+        if (Files.exists(path)) Files.readString(path).linesIterator.toVector else Vector.empty
+      }
+      def _recover_(input: V.GoalPhaseValidationRecoveryInput): F.Result = scenario.call("command",
+        R.recoveryOperation, Vector("--input", json(input.toRecord()).noSpaces))
+      def _direction_(described: F.Result, choice: String, name: String): V.GoalPhaseValidationRecoveryInput = {
+        val description = described.business[V.GoalPhaseValidationRecoveryDescriptionResult]
+        val answer = V.GoalPhaseValidationRecoveryAnswer(choice,
+          "SPECIFICATION-OWNED direction for this exact dependency lint attempt; old effects remain UNKNOWN")
+        val reference = V.WorkflowArtifactReference(name, "1")
+        _provision(selected, described, "validation-recovery", answer, reference)
+        V.GoalPhaseValidationRecoveryInput(description.sessionId, description.target, choice, answer.rationale, reference)
+      }
+
+      When("semantic completion is followed by an actual failing lint candidate and interruption after its process but before result save")
+      _complete(selected)
+      Files.writeString(input, "incorrect\n")
+      _interrupt(selected, "goal-check-executed:cncf-lint")
+      val described = scenario.call("command", R.describeOperation, Vector("--sessionId", selected.original.sessionId))
+      val description = described.business[V.GoalPhaseValidationRecoveryDescriptionResult]
+      val target = take(R.targetC(description.target))
+      val original = _snapshot_()
+      val history = _history_(original)
+      val prefix = original - "instance"
+      val primaryruns = _executions(scenario.root)
+      val compileruns = _count_("sbt-compile-executions.txt")
+      val lintruns = _count_("sbt-fix-check-executions.txt")
+      val intentkey = _key_(target.sourceRevision, "check-intent-2")
+      val intent = _validation_(original, target.sourceRevision, "check-intent-2")
+      Then("the exact resultless lint intent retains the actual successful prefix and its independent dependency target")
+      target.sessionId shouldBe selected.original.sessionId
+      target.step shouldBe binding.step
+      target.checkIdentity shouldBe "cncf-lint"
+      target.checkOrdinal shouldBe 3
+      target.attempt shouldBe 0
+      target.intentRevision shouldBe target.frontierRevision
+      target.dependency shouldBe Some(D.RecoverySubject(ContextReference(binding.identity, binding.revision.toString),
+        binding.dependency.repository, binding.dependency.workspace, binding.base, intent.dependency.get.candidate))
+      target.base shouldBe intent.dependency.get.primaryBase
+      target.candidate shouldBe intent.candidate
+      target.planIdentity shouldBe intent.dependency.get.plan.identity
+      target.planRevision shouldBe intent.dependency.get.plan.revision
+      intent.receipts.map(_.identity) shouldBe Vector("test", "cncf-compile")
+      intent.receipts.foreach(receipt => receipt.exitCode shouldBe Some(0))
+      intent.dependencyExecutions shouldBe Vector(D.Execution("cncf-compile", 0, binding.dependency.workspace, "compile"))
+      original.contains(_key_(target.sourceRevision, "check-result-2")) shouldBe false
+      primaryruns.size shouldBe 1
+      compileruns.size shouldBe 1
+      lintruns.size shouldBe 1
+      description.choices shouldBe Vector("AuthorizeNewAttempt", "Defer")
+
+      for (_ <- 1 to 2) {
+        When("ordinary installed collection encounters the same resultless intent")
+        val waiting = scenario.advance(selected.task).business[V.GoalPhaseAdvanceResult]
+        Then("the same Session remains UNKNOWN with unchanged repair progress")
+        waiting.sessionId shouldBe selected.original.sessionId
+        waiting.message should include("non-replayable")
+        waiting.repairProgress shouldBe selected.original.repairProgress
+        When("the public recovery description is read again")
+        val repeateddescription = scenario.call("command", R.describeOperation, Vector("--sessionId", selected.original.sessionId))
+          .business[V.GoalPhaseValidationRecoveryDescriptionResult]
+        Then("the exact recovery target and choices remain unchanged")
+        repeateddescription shouldBe description
+      }
+      Then("decoding and collection confer no new authority, history, receipt or process")
+      _snapshot_() shouldBe original
+      _executions(scenario.root) shouldBe primaryruns
+      _count_("sbt-compile-executions.txt") shouldBe compileruns
+      _count_("sbt-fix-check-executions.txt") shouldBe lintruns
+
+      Given("missing evidence, an explicitly prepared Defer and a stale target for this same dependency")
+      val missing = V.GoalPhaseValidationRecoveryInput(description.sessionId, description.target, "AuthorizeNewAttempt",
+        "SPECIFICATION-OWNED unbound direction", V.WorkflowArtifactReference("M3Lint-missing", "1"))
+      When("public recovery receives unbound direction")
+      val missingresult = _recover_(missing)
+      Then("the missing independent evidence refuses the recovery request")
+      missingresult.exitCode should not be 0
+      Given("independently prepared specification-owned Defer evidence")
+      val deferred = _direction_(described, "Defer", "M3Lint-defer")
+      When("public recovery receives that exact Defer direction")
+      val deferredresult = _recover_(deferred).business[V.GoalPhaseValidationRecoveryResult]
+      Then("neither recovery input adds an effect or changes the unknown native prefix")
+      deferredresult.outcome shouldBe "deferred"
+      _snapshot_() shouldBe original
+      _count_("sbt-fix-check-executions.txt") shouldBe lintruns
+
+      Given("separately prepared specification-owned Human evidence bound to the actual public target and AuthorizeNewAttempt answer")
+      val authorized = _direction_(described, "AuthorizeNewAttempt", "M3Lint-authorize")
+      When("public recovery checks direction for a stale target")
+      val staleresult = _recover_(authorized.copy(target = R.targetRecord(target.copy(planRevision = "stale-plan"))))
+      Then("the stale direction refuses without changing the original prefix")
+      staleresult.exitCode should not be 0
+      _snapshot_() shouldBe original
+      When("public recovery receives the exact independently bound direction")
+      val accepted = _recover_(authorized).business[V.GoalPhaseValidationRecoveryResult]
+      val directed = _snapshot_()
+      Then("one direction is appended for a new attempt while every old intent and successful prefix byte survives")
+      accepted.accepted shouldBe true
+      accepted.outcome shouldBe "new-attempt-authorized"
+      _history_(directed).dropRight(1) shouldBe history
+      prefix.foreach { (key, bytes) => directed.get(key) shouldBe Some(bytes) }
+      When("the already consumed authorization is submitted again")
+      val duplicateresult = _recover_(authorized)
+      Then("the duplicate refuses without another direction or process")
+      duplicateresult.exitCode should not be 0
+      _snapshot_() shouldBe directed
+      _executions(scenario.root) shouldBe primaryruns
+      _count_("sbt-compile-executions.txt") shouldBe compileruns
+      _count_("sbt-fix-check-executions.txt") shouldBe lintruns
+
+      When("a separate ordinary Advance executes only the authorized missing lint on the unchanged failing candidate")
+      val failedoutput = scenario.advance(selected.task)
+      val repair = failedoutput.business[V.GoalPhaseAdvanceResult]
+      val failedrows = _snapshot_()
+      val failed = _validation_(failedrows, target.sourceRevision, "check-result-2-retry-1")
+      val outcome = _validation_(failedrows, target.sourceRevision, "validation")
+      Then("the real nonzero FixCheck result persists and ordinary validation issues RepairStep instead of a save conflict")
+      repair.sessionId shouldBe selected.original.sessionId
+      repair.work.get.kind shouldBe "RepairStep"
+      json(repair.work.get.checkFailure.get.toRecord()).noSpaces should include("cncf-lint")
+      failed.receipts.last.identity shouldBe "cncf-lint"
+      failed.receipts.dropRight(1) shouldBe intent.receipts
+      failed.receipts.last.exitCode shouldBe Some(1)
+      (failed.receipts.last.stdout + failed.receipts.last.stderr) should include("SPECIFICATION-OWNED FixCheck")
+      failed.dependencyExecutions.last shouldBe D.Execution("cncf-lint", 1, binding.dependency.workspace, "fix-check")
+      N.successful(failed.receipts, failed.selected) shouldBe false
+      N.codec.decode(N.codec.encode(failed)) shouldBe Right(failed)
+      outcome.outcome shouldBe Some("repair-required")
+      failed.newAttempts.map(_.checkIdentity) shouldBe Vector("cncf-lint")
+      failed.newAttempts.head.attempt shouldBe 0
+      failed.newAttempts.head.intentRevision shouldBe target.intentRevision
+      failedrows(intentkey) shouldBe original(intentkey)
+      failedrows.contains(_key_(target.sourceRevision, "check-result-2")) shouldBe false
+      prefix.foreach { (key, bytes) => failedrows.get(key) shouldBe Some(bytes) }
+      _history_(failedrows).take(history.size) shouldBe history
+      _executions(scenario.root) shouldBe primaryruns
+      _count_("sbt-compile-executions.txt") shouldBe compileruns
+      _count_("sbt-fix-check-executions.txt").size shouldBe lintruns.size + 1
+      val failedcounts = _count_("sbt-fix-check-executions.txt")
+      When("ordinary collection repeats the standing failed-check RepairStep")
+      val repeatedrepair = scenario.advance(selected.task).business[V.GoalPhaseAdvanceResult]
+      Then("the same repair is returned without another check or native record")
+      repeatedrepair shouldBe repair
+      _snapshot_() shouldBe failedrows
+      _count_("sbt-fix-check-executions.txt") shouldBe failedcounts
+
+      When("the actual issued RepairStep corrects the same isolated dependency value and submits the standing binding")
+      Files.writeString(input, "expected\n")
+      val submittedrepair = _complete_repair(selected, repair).business[V.GoalPhaseWorkSubmissionResult]
+      Then("the actual issued repair submission is accepted")
+      submittedrepair.accepted shouldBe true
+      When("ordinary Advance validates the corrected candidate for independent review")
+      val review = scenario.advance(selected.task).business[V.GoalPhaseAdvanceResult]
+      val reviewed = _snapshot_()
+      val receipt = review.work.get.checksReceipt.get
+      val receiptprefix = selected.original.sessionId + ":ordered-validation:"
+      Then("fresh actual FixCheck success reaches ReviewStep with the original unknown and failed history, Plan, base and charged repair intact")
+      receipt should startWith(receiptprefix)
+      receipt should endWith(":validation")
+      val freshsource = receipt.stripPrefix(receiptprefix).stripSuffix(":validation")
+      val passed = _validation_(reviewed, freshsource, "validation")
+      review.work.get.kind shouldBe "ReviewStep"
+      review.sessionId shouldBe selected.original.sessionId
+      review.work.get.originalBase shouldBe selected.original.work.get.originalBase
+      review.work.get.selectedPlan shouldBe selected.original.work.get.selectedPlan
+      review.repairProgress shouldBe repair.repairProgress
+      review.repairProgress.get.automaticCount should be > 0
+      _latest_capture(review).admission.binding shouldBe binding
+      passed.outcome shouldBe Some("passed")
+      passed.receipts.last.identity shouldBe "cncf-lint"
+      passed.receipts.last.exitCode shouldBe Some(0)
+      passed.dependencyExecutions.last.operation shouldBe "fix-check"
+      N.successful(passed.receipts, passed.selected) shouldBe true
+      N.codec.decode(N.codec.encode(passed)) shouldBe Right(passed)
+      reviewed(intentkey) shouldBe original(intentkey)
+      reviewed.contains(_key_(target.sourceRevision, "check-result-2")) shouldBe false
+      prefix.foreach { (key, bytes) => reviewed.get(key) shouldBe Some(bytes) }
+      failedrows.filter(_._1.startsWith("mechanical:")).foreach { (key, bytes) => reviewed.get(key) shouldBe Some(bytes) }
+      _history_(reviewed).take(_history_(failedrows).size) shouldBe _history_(failedrows)
+      _executions(scenario.root).take(primaryruns.size) shouldBe primaryruns
+      _executions(scenario.root).size shouldBe primaryruns.size + 1
+      _count_("sbt-compile-executions.txt").take(compileruns.size) shouldBe compileruns
+      _count_("sbt-compile-executions.txt").size shouldBe compileruns.size + 1
+      _count_("sbt-fix-check-executions.txt").size shouldBe failedcounts.size + 1
+      val finalprimary = _executions(scenario.root)
+      val finalcompile = _count_("sbt-compile-executions.txt")
+      val finallint = _count_("sbt-fix-check-executions.txt")
+      When("ordinary collection redisplays the standing successful review")
+      val repeatedreview = scenario.advance(selected.task).business[V.GoalPhaseAdvanceResult]
+      Then("collection retains all receipts and adds no process or native history")
+      repeatedreview shouldBe review
+      _snapshot_() shouldBe reviewed
+      _executions(scenario.root) shouldBe finalprimary
+      _count_("sbt-compile-executions.txt") shouldBe finalcompile
+      _count_("sbt-fix-check-executions.txt") shouldBe finallint
     }
 
     "observe and validate the dependency independently while preserving the original Session and primary base" in {

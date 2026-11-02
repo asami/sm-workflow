@@ -181,13 +181,23 @@ private[admission] object LegacyDependencyHistoryFixture {
 /** Controlled attempts exercise the ordinary native check program, not a replacement executor.
   * They establish no actual Git/SBT execution or production Human authority.
   * @since   Oct. 24, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 25, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseNativeDependencyValidationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _check = F.check.copy(dependency = Some(F.binding.identity))
+  private val _operations = Vector(
+    (WorkflowSbtValidation.Kind.Compile, SbtOperation.Compile, "compile"),
+    (WorkflowSbtValidation.Kind.Test, SbtOperation.Test, "test"),
+    (WorkflowSbtValidation.Kind.FixCheck, SbtOperation.FixCheck, "fix-check"))
+  private def _selected_source(kind: WorkflowSbtValidation.Kind): V.Saved = {
+    val check = _check.copy(kind = kind)
+    val binding = F.binding.copy(checks = Vector(check.copy(dependency = None)))
+    _source(check, F.capture.copy(admission = F.admission.copy(binding = binding)))
+  }
   private def _source(check: V.Check = _check, capture: D.Capture = F.capture): V.Saved = {
     val initial = take(InstanceRecord(InstanceIdentity("same-session"), take(GoalPhaseRuntimeCatalog.loadC()).definition,
       initialRevision, Lifecycle.NotStarted, None, CorrelationReference("specification"),
@@ -282,32 +292,51 @@ final class GoalPhaseNativeDependencyValidationSpec extends AnyWordSpec with Mat
     }
 
     "retain the exact selected target, operation and candidate alongside actual observed results" in {
-      Given("a controlled dependency Compile result and a separately identified primary candidate")
-      val source = _source()
-      When("the ordinary native check program records the attempt")
-      val episode = new Episode(source, Vector(_observed()))
-      val saved = take(episode.runC())
-      Then("its before/after preconditions run and the receipt cannot become a primary result")
-      episode.dispatches shouldBe 1
-      episode.preconditions shouldBe 2
-      saved.payload.dependency shouldBe source.payload.dependency
-      saved.payload.candidate shouldBe F.primaryBase
-      saved.payload.dependencyExecutions shouldBe Vector(D.Execution(_check.identity, 0, F.dependency.workspace, "compile"))
-      saved.payload.receipts.map(_.identity) shouldBe Vector(_check.identity)
-      V.successful(saved.payload.receipts, saved.payload.selected) shouldBe true
-      V.codec.decode(V.codec.encode(saved.payload)) shouldBe Right(saved.payload)
-      N.publicView(saved.payload) should not be empty
+      for ((kind, operation, wire) <- _operations; exit <- Vector(0, 1)) {
+        Given(s"a selected dependency $wire check, matched binding and controlled Exited($exit) observation")
+        val source = _selected_source(kind)
+        When("the ordinary native check program records the attempt")
+        val episode = new Episode(source, Vector(_observed(ProcessExecutionTermination.Exited(exit), operation = operation)))
+        val saved = take(episode.runC())
+        Then("its before/after preconditions run and its encodable receipt retains the actual dependency outcome")
+        episode.dispatches shouldBe 1
+        episode.preconditions shouldBe 2
+        saved.payload.dependency shouldBe source.payload.dependency
+        saved.payload.candidate shouldBe F.primaryBase
+        saved.payload.dependencyExecutions shouldBe Vector(D.Execution(_check.identity, 0, F.dependency.workspace, wire))
+        saved.payload.receipts.map(_.identity) shouldBe Vector(_check.identity)
+        saved.payload.receipts.head.exitCode shouldBe Some(exit)
+        V.successful(saved.payload.receipts, saved.payload.selected) shouldBe (exit == 0)
+        V.codec.decode(V.codec.encode(saved.payload)) shouldBe Right(saved.payload)
+        N.publicView(saved.payload) should not be empty
+      }
+    }
+
+    "admit only canonical dependency execution operations through the existing payload codec" in {
+      Given("the existing closed Compile, Test, TestOnly and FixCheck execution vocabulary")
+      val execution = D.Execution(_check.identity, 0, F.dependency.workspace, "compile")
+      When("canonical and foreign execution operation strings are interpreted")
+      val accepted = Vector("compile", "test", "test-only", "fix-check").map(wire => D.executionValid(execution.copy(operation = wire)))
+      val rejected = Vector("unknown", "publish-local", "FixCheck", "fixCheck", " fix-check").map(wire =>
+        D.executionValid(execution.copy(operation = wire)))
+      Then("only the exact already-admitted validation operations are accepted")
+      accepted shouldBe Vector.fill(4)(true)
+      rejected shouldBe Vector.fill(5)(false)
     }
 
     "reject wrong target or operation for observed, rejected and uncertain attempts" in {
+      for ((kind, operation, _) <- _operations) {
       Given("a fixed dependency check that cannot borrow another repository's outcome")
-      val cases = Table("attempt", _observed(workspace = "primary-source"), _observed(operation = SbtOperation.Test),
-        SbtExecutionAttempt.AdmissionRejected(_target("primary-source"), SbtOperation.Compile, _conclusion),
-        SbtExecutionAttempt.Uncertain(_target(), SbtOperation.Test, _conclusion))
+      val source = _selected_source(kind)
+      val check = source.payload.selected.head
+      val other = if (operation == SbtOperation.Test) SbtOperation.Compile else SbtOperation.Test
+      val cases = Table("attempt", _observed(workspace = "primary-source", operation = operation), _observed(operation = other),
+        SbtExecutionAttempt.AdmissionRejected(_target("primary-source"), operation, _conclusion),
+        SbtExecutionAttempt.Uncertain(_target(), other, _conclusion))
       When("each crossed attempt reaches the actual native result constructor")
       forAll(cases) { attempt =>
         When("the crossed attempt is projected for the selected check")
-        val result = V.attemptPayloadC(_source().payload, _check, 0, attempt)
+        val result = V.attemptPayloadC(source.payload, check, 0, attempt)
         Then("no receipt, retry or success can be manufactured")
         result.isSuccess shouldBe false
       }
@@ -319,17 +348,23 @@ final class GoalPhaseNativeDependencyValidationSpec extends AnyWordSpec with Mat
       val checks = N.checksC(Vector(_check.copy(dependency = None)), Some(F.capture))
       Then("the mismatched selection is refused")
       checks.isSuccess shouldBe false
+      }
     }
 
     "retain missing permission without a process receipt and leave an unexecuted suite unverified" in {
+      for ((kind, operation, _) <- _operations) {
       Given("a selected dependency with an actual admission rejection-shaped controlled observation")
+      val source = _selected_source(kind)
+      val check = source.payload.selected.head
       When("the result owner separates admission from actual execution")
-      val rejected = take(V.attemptPayloadC(_source().payload, _check, 0,
-        SbtExecutionAttempt.AdmissionRejected(_target(), SbtOperation.Compile, _conclusion)))
+      val rejected = take(V.attemptPayloadC(source.payload, check, 0,
+        SbtExecutionAttempt.AdmissionRejected(_target(), operation, _conclusion)))
       Then("no process or dependency success is inferred")
       rejected.receipts shouldBe empty
       rejected.dependencyExecutions shouldBe empty
       rejected.admissionFailures.map(_.checkIdentity) shouldBe Vector(_check.identity)
+      V.codec.decode(V.codec.encode(rejected)) shouldBe Right(rejected)
+      }
       val test = _check.copy(kind = WorkflowSbtValidation.Kind.TestOnly)
       val capture = F.capture.copy(admission = F.admission.copy(binding = F.binding.copy(checks = Vector(test.copy(dependency = None)))))
       val source = _source(test, capture)
@@ -343,11 +378,17 @@ final class GoalPhaseNativeDependencyValidationSpec extends AnyWordSpec with Mat
 
   "DV-04,DV-07 retained failure and uncertainty" should {
     "preserve failure, retain an unknown result and never automatically repeat it" in {
+      for ((kind, operation, _) <- _operations) {
       Given("a controlled nonzero exit and a separate uncertain attempt in the same immutable assignment")
-      val failed = take(V.attemptPayloadC(_source().payload, _check, 0, _observed(ProcessExecutionTermination.Exited(1))))
+      val source = _selected_source(kind)
+      val check = source.payload.selected.head
+      When("the native result constructor interprets the controlled nonzero exit")
+      val failed = take(V.attemptPayloadC(source.payload, check, 0, _observed(ProcessExecutionTermination.Exited(1), operation = operation)))
+      Then("the retained failed receipt cannot qualify the selected checks as successful")
       V.successful(failed.receipts, failed.selected) shouldBe false
-      val source = _source()
-      val first = new Episode(source, Vector(SbtExecutionAttempt.Uncertain(_target(), SbtOperation.Compile, _conclusion)))
+      Given("a separate controlled uncertain attempt in the unchanged assignment")
+      val first = new Episode(source, Vector(SbtExecutionAttempt.Uncertain(_target(), operation, _conclusion)))
+      When("the ordinary native check program first records that uncertainty")
       val uncertain = take(first.runC())
       When("a later ordinary check invocation reconciles that unchanged native prefix")
       val resumed = new Episode(source, Vector.empty, first.attempts)
@@ -357,8 +398,30 @@ final class GoalPhaseNativeDependencyValidationSpec extends AnyWordSpec with Mat
       resumed.dispatches shouldBe 0
       retained shouldBe uncertain
       retained.payload.uncertainties.size shouldBe 1
+      retained.payload.receipts shouldBe empty
+      retained.payload.dependencyExecutions shouldBe empty
+      V.codec.decode(V.codec.encode(retained.payload)) shouldBe Right(retained.payload)
       retained.payload.newAttempts shouldBe empty
       retained.record.identity shouldBe source.record.identity
+      }
+    }
+
+    "leave a resultless dependency intent unknown without automatically repeating it" in {
+      for ((kind, _, _) <- _operations) {
+        Given("a selected dependency check with a native intent and no result or recovery direction")
+        val source = _selected_source(kind)
+        val intent = V.Saved(_append(source.record, "ordered-validation:check-intent-0"), source.payload)
+        val episode = new Episode(source, Vector.empty, Vector(V.Attempt(Some(intent), None)))
+        When("ordinary reconciliation resumes the retained intent")
+        val saved = take(episode.runC())
+        Then("no process, result or new attempt is invented")
+        episode.dispatches shouldBe 0
+        saved shouldBe intent
+        episode.attempts shouldBe Vector(V.Attempt(Some(intent), None))
+        saved.payload.receipts shouldBe empty
+        saved.payload.dependencyExecutions shouldBe empty
+        saved.payload.newAttempts shouldBe empty
+      }
     }
 
     "save the observed result before refusing changed dependency bytes" in {

@@ -1,299 +1,321 @@
 # GoalPhase dependency source revision
 
-Status: implemented and producer-qualified through normal publication and the
-installed public route. Consumer adoption remains the owning workflow's result;
-see the [2026-10-27 delivery record](../journal/2026/10/2026-10-26-goal-phase-dependency-source-revision.md).
+## Primary-failure source-only origin v7
 
-An adopted dependency source may be explicitly revised without replacing the
-GoalPhase Session, original primary base, accepted Steps, approvals or failures.
-The new dependency base belongs to that dependency; it never becomes the
-primary repository's original base. A source direction is pending qualification.
-Only fresh required checks, genuine independent review and ordinary Step closure
-can establish an accepted source successor.
+R1. `sm-workflow.goal-phase-dependency-source-revision.v7` requires the distinct
+primaryFailureOrigin: the exact v2 SourceRequired target following the original
+admitted dependency UNKNOWN artifact Direction and genuine primary beforeChecks
+failure. It has no waitOrigin, runtime/image field or fabricated Human question;
+the retained questionIdentity cell is empty. Use the existing v5 Proposal and v2
+source-only Consumption. V1-v6 canonical encodings keep the new field absent and
+reject it under their old versions. Unknown, null and mixed fields refuse.
 
-## Approved scope succession within an adopted source
+The target retains Session, unchanged primary candidate/base, Plan, completed
+prefix, original uncertainty/failure, actual current dependency guard, policies
+and exact ordered dependency/primary targets. Its selected binding is a higher
+independently declared revision of the same logical identity and workspace.
+Preserve inherited approved paths and coverage; a source declaration is not a new
+scope approval. Changed root/branch/base require the existing qualified source
+selection and committed-base evidence where applicable. A same-root selected-path
+correction can carry a fresh current guard while the original UNKNOWN guard stays
+unchanged as history.
 
-A later genuine same-Step ApproveDependencyScope may add necessary files to an
-already adopted source. Preserve the original Direction, Binding and captures.
-Record a separately versioned scope successor in the fresh candidate/capture;
-authenticate its actual approval references through native history. This is not
-another source-adoption Human answer or a general authorization upgrade for a
-legacy proposal. The existing independent host declares the effective binding
-and consumption; ordinary same-image scope succession extends only its revision,
-ordered file inventory and corresponding modes. Component, source identity/base, checks, program routes,
-exclusions and permitted effects stay fixed. Historical workspace aliases are
-resolved only through the already authenticated adopted source relation.
+R2. V7 offers `AdoptDependencySourceRevisionWithUnknownEffects`,
+`AdoptDependencySourceRevisionAndContinuePublicationWithUnknownEffects` and Defer.
+Source-only selects bytes for capture and leaves artifact/primary decisions
+uncovered. The combined choice explicitly acknowledges old uncertainty and binds
+the concrete ordered source adoption, existing-artifact acceptance for that exact
+source and ONE primary successor under the described fixed policies. Neither
+choice preapproves later failure, different bytes/programs/targets or new primary
+UNKNOWN effects.
 
-Retain inherited acceptance coverage and attach the actual additional approval's
-obligations to the existing checks. Newly owned paths must be exactly the old
-ordered selection plus genuinely approved additions. Explicit restrictions still
-apply. Missing registration is a configuration/admission gap, not missing consent
-to edit an already approved file. Admit the typed selected-stage capabilities
-before a fresh candidate starts primary history/staging effects.
+Adoption independently admits the exact source answer through the existing
+dependencySourceRevision.directive purpose and appends only a native Direction.
+It runs no Git/SBT/check/publication. Separate ordinary Advances perform missing
+source capture, one artifact-operation fact, one primary-authorization fact, and
+then the publication/check work. Derived facts identify their own actual native
+result and inheritedFrom source directive; they use authenticated native history
+instead of invented extra Human evidence. Fresh individual decisions remain
+available for uncovered operation authority. Development authorization and a
+file inventory supply no runtime approval.
 
-Capture, modes, selected staging, freshness, checks, consumption, review/issue
-attribution and closure share the same effective selection. At a candidate's
-actual native frontier, later approvals require their exact successor; omitting
-the successor cannot hide those obligations. Historical candidates preceding
-those approvals keep their original successor-free meaning. A V1 capture carries
-no successor and keeps its exact historical meaning; a new version requires its
-closed successor data. Never reinterpret old semantic completions or copy old
-capture/check receipts into the new namespace. Existing candidate recovery keeps
-ReviseWork/Defer, genuine direction and unknown-effect semantics. This contract
-adds no Operation, CML service, permission ledger or generic recovery controller.
-Implementation, producer qualification, runtime installation and actual consumer
-acceptance remain separate results.
+The existing source owner emits
+`sm-workflow.goal-phase-dependency-source-capture.v7`. Initial source generation
+advances exactly once through the existing ordered source transition, preserving
+all repair counters and the original primary delta, hygiene and accepted prefix.
+Only newly unstaged selected paths are staged, in their original selection order;
+committed mode stages nothing. A missing effect with no retained intent may be
+completed; a retained unknown stage/observation intent is never replayed. Later
+ordinary validation/FIX owns actual check failures. No dependency UNKNOWN
+publication is rerun or converted into success.
 
-The public describe/adopt operations select an exact current unanswered
-Implementation/Repair Human Decision. Description may execute managed Git
-observations, including write-tree; it executes no staging, normalization, SBT,
-commit, publication or Advance. Adoption admits independent actual Human
-evidence for the exact described target, appends through the existing Decision
-supersession mechanism and executes no implicit Advance. Defer stores nothing.
+R3. The host independently declares selected binding and active Consumption,
+managed File/Git selections and the fixed typed SBT program. The resolved primary
+PublishLocal program must have a nonempty explicitly configured environment key
+whose value equals Consumption.sourceRoot exactly. The entire resolved program
+and environment policy is bound, including the source guard and unchanged primary
+snapshot. Ambient environment, substring/path-prefix matches and caller argv do
+not qualify source selection. Missing root selection is a host-configuration
+refusal. Actual producer integration establishes consumption behavior.
 
-Keep V1 dependency Admission, Capture and AcceptedPrefix unchanged. Revised
-candidate records carry a separately versioned source direction and capture;
-contradictory legacy/revised candidate fields refuse. Historical accepted data
-must not be copied into a forged prefix for the new base. A source relation
-does not assert Git ancestry. The same logical dependency and inherited Usage
-Contract remain required regardless of workspace alias changes.
+The existing describe/adopt Operations and
+recoverGoalPhasePrerequisitePublication accept exactly one of input/inputResource.
+inputResource is an absolute local file URI without authority/query/fragment,
+containing the complete normal business input. The executing call performs CNCF
+read_resource_text with normal Resource authorization, finite acquisition and
+UTF-8 decoding; strict raw duplicate, unique Record, closed schema and null checks
+follow. Resource refusal, truncation or malformed input causes no recovery and no
+inline fallback. Configure textus.resource.read.max-bytes for the whole expanded
+envelope; no new application byte limit is introduced.
 
-## Bounded installed consumption succession
+Use the normal host to describe the current primary target, describe a declared
+source Proposal, prepare the exact source answer through existing prepareEvidence,
+and have the independent trusted host provision it. Call adopt with
+`--inputResource file:///absolute/path/complete-source-answer.json`. Advance once
+for capture. For combined authority, advance separately for the artifact fact,
+primary fact and actual primary attempt/checks; source-only authority first needs
+the exposed exact individual answers through the same preparation/provisioning
+path. Descriptions and passive prepared JSON are not evidence admission. A lost
+response is resolved from retained native history; never create a second Direction
+from an unconfirmed response. No real consumer Session or source integration is
+activated by this producer contract.
 
-A new immutable runtime is selected through the existing public source-direction
-operations, at a real current unanswered Implementation/Repair Human frontier.
-The version-2 target retains an explicit reference to the original Direction,
-actual later scope approvals, the exact new native frontier and a current
-installed-profile observation. Normal independent evidence admission binds that
-complete target. A declaration, fixture, matching UUID or AI-written success
-field cannot supply that direction. Missing eligibility or evidence refuses;
-there is no new Human Operation, registry, controller or automatic recovery.
+An adopted dependency source may be explicitly revised in the same GoalPhase
+Session. Preserve the original primary base, accepted Steps, native approvals,
+failures, UNKNOWN effects and repair accounting. A source Direction selects
+bytes for fresh qualification; only the normal required checks, independent
+review and ordinary closure can establish acceptance.
 
-Keep the original Direction and all old captures immutable. The version-2 scope
-carries the separately reconstructed consumption Direction. Its selection may
-change only the image, manifest and approved inventory/mode extension; source
-root/base/branch, logical dependency, primary workspace, checks/program routes,
-exclusions and effects remain fixed. Native replay matches the original parent
-and actual approval vector; candidate/check/review/closure share that exact
-projection. Old target and scope encodings omit the new optional fields and
-retain their old version. Null, missing, unknown or crossed version data refuses.
-This bounded transition admits one runtime successor to the retained original;
-it is not a general runtime upgrade/recovery chain.
+## Current source-only consumption and v5 records
 
-The current public installed-distribution reader supplies concrete manifest,
-installation/update IDs and module/component paths and publication provenance.
-For the new branch, image is its installation UUID and manifest reference is
-cncf-installed-runtime:<UUID>@1. Compare the entire observed association again
-before fresh candidate effects and during source freshness checks. Unsupported,
-absent or mismatched distribution, changed manifest/module/source association or
-changed selected source bytes after that direction refuses. The first new
-capture must match its exact observed source guard; later staging may change
-only index metadata, never the qualified worktree bytes or exclusions.
+The active Consumption has exactly five business fields: primaryWorkspace,
+sourceRoot, nonInputExclusions, expectedModes and programs. Its closed JSON
+encoding additionally requires schemaVersion equal to
+`sm-workflow.goal-phase-dependency-source-consumption.v2`. It contains no
+runtimeImage or manifestReference. Unknown fields, unknown or null schema
+markers, missing markers and hybrid image/source payloads refuse. The host may
+retain explicit LegacyConsumption declarations for historical reconstruction;
+these do not authorize current execution.
 
-This runtime observation is not compile/test/review qualification. The ordinary
-producer delivery and independent host owner verify the actual qualified whole
-image and source association. Host programs guarantee downstream source/manifest
-inputs: typed SBT receipts expose workspace/operation/program, not admitted
-environment. If a producer fixture input pins an older installation, update that
-same existing input to the real qualified image through normal host ownership;
-changing labels or only the engine pin is insufficient. Publication, immutable
-installation, installed-route specification qualification and actual consumer
-acceptance remain separate results. There is no fallback to an old image.
+New initial proposals and targets use
+`sm-workflow.goal-phase-dependency-source-revision.v5`. Active scopes use
+`sm-workflow.goal-phase-dependency-source-scope.v5`, and active captures use
+`sm-workflow.goal-phase-dependency-source-capture.v5`, including an initial
+capture with no scope. V5 requires active Consumption and runtime absent.
+Existing v1-v4 formats never accept active consumption or a sourceSuccession
+marker under an old schema.
 
-## Combined runtime and non-input exclusion succession
+The existing describeGoalPhaseDependencySourceRevision and
+adoptGoalPhaseDependencySourceRevision operations select the actual current
+unanswered Implementation/Repair Human Decision. Description observes managed
+Git and file data, including write-tree; adoption admits independent actual
+Human evidence for the exact described target and appends through the existing
+Decision supersession mechanism. Neither operation stages source, executes
+checks, publishes artifacts, commits or implicitly calls Advance. Defer stores
+nothing. No new Operation, CML service or recovery controller is introduced.
 
-The same bounded runtime successor may append exclusions through a closed V3
-Target (`sm-workflow.goal-phase-dependency-source-revision.v3`). Its required
-`exclusionSuccession` has exactly `schemaVersion`, `parent`,
-`previousExclusions` and `addedPaths`; its schema is
-`sm-workflow.goal-phase-noninput-exclusion-succession.v1`. `parent` is the exact
-original Direction reference, `previousExclusions` is its ordered E0, and
-`addedPaths` is a nonempty ordered vector A. The proposal exclusions and the
-independently declared Consumption.nonInputExclusions must both equal E0 ++ A.
-The complete vector is unique, canonical, bounded by 128 paths and disjoint
-from selected ownership. Removal, reorder, duplicate, unsafe type/path and
-unregistered or unqualified scope refuse. There is no exclusion-only successor,
-second consumption successor or new host grammar.
+A v5 source successor carries sourceSuccession with exactly parent, approvals
+and previousDirection. parent always identifies the ORIGINAL source Direction.
+previousDirection identifies the actual latest consumption Direction, or the
+original Direction when there is no later consumption. Native traversal
+reconstructs this predecessor before authenticating the append; a caller's
+matching assertion is insufficient. Explicit null sourceSuccession refuses;
+an absent marker denotes an initial source selection.
 
-V3 requires the existing RuntimeSuccession, authentic additional native approvals
-and actual immutable installed selection. Binding source/base/branch, ordered
-approved inventory/modes, checks/programs, acceptance coverage, original primary
-base, completed Steps and failure/UNKNOWN history remain preserved. Independent
-actual Human evidence admits the complete future target at its actual current
-unanswered frontier; design approval alone cannot supply that live choice.
+This permits explicit v5 migration after retained legacy runtime history and
+further source-only successions without an image change. Preserve every old
+Direction and receipt unchanged. The old single-runtime-successor rule remains
+in force when replaying legacy history. A new source successor must advance
+generation, native frontier and declared binding revision beyond the actual
+previous Direction as well as the original. Prior selected paths and modes,
+coverage, program routes and exclusions cannot be narrowed or silently dropped.
 
-A V3 ScopeSuccessor uses `sm-workflow.goal-phase-dependency-source-scope.v3`;
-its fresh capture uses `sm-workflow.goal-phase-dependency-source-capture.v3`.
-Existing outer fields are unchanged. V1/V2 encoders omit exclusionSuccession
-and retain fixed-exclusion semantics. Explicit null, missing required data,
-unknown fields and mixed schema versions refuse; stored old data never gains
-new exclusions from current defaults.
+The successor preserves Session, Plan, primary base, completed prefix,
+predecessor admission, ancestors, predecessor guard, participant and inherited
+acceptance obligations. Its independently declared binding and consumption must
+match the exact native approval vector. Keep logical dependency, requester,
+source root/branch, primary workspace, checks and program routes fixed. Ordered
+source inventory consists of the original selection followed by genuinely
+approved additions, with the previous expectedModes as a prefix. Inherited
+coverage remains ordered and additional approval obligations bind existing
+checks. Original primary base and dependency base remain distinct.
 
-All fresh observations, capture validity, retained source facts, staging,
-freshness and closure use one effective Consumption exclusion projection.
-Guard exclusions equal that entire vector in order. First capture equals the
-new Direction guard; subsequent selected-stage changes preserve all excluded
-bytes, presence, lengths, modes and staged entries. Native semantic instructions
-display the effective inherited scope while retaining the original Direction.
-Excluded work remains unowned and unstaged, including partial staging.
+Fresh execution inspects EFFECTIVE consumption from Direction and scope. Active
+v5 consumption uses the existing typed Git/SBT/UoW path. Legacy image-based
+consumption remains readable but fresh execution returns an explicit request to
+migrate through the existing describe/adopt operations. Decoding old schemas is
+not evidence that their image constraints were satisfied. No installed-runtime
+manifest lookup supplies current source execution authority.
 
-`nonInputExclusions` is the independent host owner's semantic qualification of
-the complete declared build/check input boundary. Runtime authenticates that
-exact declaration and enforces byte/index guards; it does not infer non-input
-status from `.md`, accept a new classification flag or prove arbitrary build
-noninterference. A missing declaration refuses. Actual consumer qualification,
-including unavailable suite provenance, remains the consumer owner's work.
-The implementation and executable specs do not claim that consumer evidence.
-Qualification applies only to the exact assessed source/program context. A later
-source, helper, plugin, discovery or program change requires consumer-owned
-reassessment of the affected input boundary before its declaration is reused.
-An absent future suite or a zero-test run cannot establish qualification.
+Historical replay authenticates the stored native supersession record and its
+exact Session, question, revisions, participant, result reference, Plan, base,
+accepted prefix and repair accounting. It does not require historical bindings
+or consumptions to remain in the current host selection list. A host may replace
+that list with its latest active declaration without rewriting old records.
+Fresh describe/adopt still requires the exact current independently declared
+binding and consumption. Historical readability grants no legacy execution.
 
-## Content and ownership
+A same-scope source revision or migration needs no new scope approval: its
+SourceSuccession and v5 scope may carry an empty additional approval vector.
+All original admission and ancestor approvals and their acceptance coverage
+remain required. Empty additional approvals never authorize new paths or
+weaken historical runtime or ordinary scope approval requirements.
 
-The selected source is either a bounded changed selection or committed source
-with no required nonempty diff. Observe regular-file bytes through
-WorkflowFileExecution.readBytesC with FileRepresentation.Identity in the current
-owning UoW, exact ReadOnly workspace paths and existing resource limits. Actual
-absence differs from a zero-byte file. Retain presence, length and SHA-256 byte
-identity as observations, never Human authority. Unsupported links, submodules,
-directories, unreadable paths or resource overflow refuse without fallback.
+The separate ordinary Advance resumes the same Session, Plan and Step with a
+fresh generation. Adoption clears current candidate/validation without erasing
+old failures or resetting repair counts. When the pending work is a check
+repair, its authenticated predecessor failure stays repair context. Explicit
+ReviseWork retains its existing implementation transition and does not carry a
+repair-only failure payload. Capture, checks, review and closure share the same
+effective source selection.
 
-Unrelated documents remain outside source ownership and content capture. Their
-path/status, byte-identity and staged-entry guards prevent silent absorption or
-change. Build-relevant unselected inputs must be clean; an excluded document
-cannot secretly be an input to a declared build/check. Keep its actual bytes and
-staging state. A full index tree is only an observed freshness guard, not an
-owned selected source tree.
+## Approved scope, exclusions and committed bases
 
-Recheck native Git and managed byte observations during description, adoption,
-capture, checks, review and closure. These repeated reads do not claim an atomic
-filesystem snapshot. Same-status unstaged byte drift must refuse. Selected
-staging uses existing per-path intent/results only. Its native TreeChanges may
-affect only that selected path and must preserve worktree content, other index
-entries and exclusion guards. Compare staged blob bytes/modes with the selected
-content. Keep distinct pre-stage and post-stage guards. An absent result is
-UNKNOWN, never an allowed stage transition or a reason to replay.
+Later genuine same-Step ApproveDependencyScope decisions may extend an adopted
+source through a separately versioned scope in the fresh candidate and capture.
+Native history authenticates actual approval references. The independent host
+declares the exact effective binding and consumption; declarations cannot
+manufacture Human authority. Historical workspace aliases resolve only through
+the authenticated source relation. At the actual candidate frontier the scope
+must include every applicable approval. Historical candidates preceding those
+approvals keep their original meaning.
 
-The independent host consumption declaration carries `nonInputExclusions`,
-ordered `expectedModes` (regular 100644/100755 or explicit removal 000000), and
-`programs` binding each primary check identity/kind to an actual workspace and
-safe program identity. The same route vector may bind dependency checks to
-separate check workspaces over the adopted source. If any dependency check is
-mapped, all of that binding's checks must have exact identity/kind routes; actual
-target/program receipts and retained execution records must match. An unmapped
-binding retains its existing single source-workspace route. V1 Check and
-dependency Admission schemas remain unchanged. Caller exclusions must equal that independently declared
-non-input scope. Actual selected stage results must match their declared modes;
-same bytes or unchanged status do not permit an executable-mode substitution.
-Selected index entries must also match those modes in every pre-stage and
-post-stage guard and retained capture, including a later repair whose staging
-operation changes nothing.
+An exclusionSuccession retains the existing closed
+`sm-workflow.goal-phase-noninput-exclusion-succession.v1` shape: schemaVersion,
+parent, previousExclusions and addedPaths. Its parent is the original Direction;
+previousExclusions is its ordered E0, and addedPaths is a nonempty ordered A.
+Proposal exclusions and declared Consumption.nonInputExclusions equal E0 ++ A.
+The whole vector is unique, canonical, bounded by 128 paths and disjoint from
+selected ownership. A later v5 append must also retain all exclusions of the
+actual previous consumption. Removal, reorder, duplicate and unsafe paths
+refuse. Excluded work remains unowned and unstaged, including partial staging.
 
-Primary Step and whole-Phase validation retain the source-consumption route and
-compare the actual typed SBT target, operation and program receipt. Normal host
-programs own source-project/environment and installed-manifest checks. SBT result
-APIs do not expose the admitted environment: this component does not infer it,
-read private CNCF APIs or parse raw host configuration. Producer fixture evidence
-and host declarations do not establish actual consumer runtime adoption. Delivery
-must include the exact proposed host environment/source-project diff, immutable
-image/module associations and the owner's ordinary checks after public adoption.
+nonInputExclusions is the independent host owner's semantic qualification of
+the complete build/check input boundary. Runtime authenticates that declaration
+and guards bytes/index metadata; it does not infer non-input status from a
+filename suffix or prove arbitrary build noninterference. Reassess the affected
+boundary after source, helper, plugin, discovery or program changes. A missing
+suite or zero-test result cannot establish qualification.
 
-Existing candidate recovery authenticates the exact revised-source fact prefix.
-It offers explicit `ReviseWork`/`Defer` for that prefix, including completed source
-capture before interrupted primary observation. It keeps the original namespace,
-capture and UNKNOWN outcomes; it imports no old capture into a new namespace and
-grants no old-stage replay or termination claim. A subsequent ordinary semantic
-generation captures the currently selected source afresh.
+A changed dependency base requires explicit committed mode and the existing
+committedBaseSuccession structure,
+`sm-workflow.goal-phase-committed-base-succession.v1`. It records parent,
+previousBase and nextBase native commit/tree pairs, complete ordered changes,
+phaseChangedPaths, previousExcludedChangedPaths, addedExcludedChangedPaths,
+baselineChangedPaths, sourceMode=committed and committedEntries. Four disjoint
+partitions cover the complete native delta. Baseline classification grants no
+edit, staging, check bypass or acceptance authority. The original base remains
+the comparison anchor; the actual previous Direction's inventory, modes,
+coverage and exclusions remain additional constraints on each append.
 
-## Eligibility, evidence and continuation
+Every effective selected path has one CommittedEntry in selection order,
+including actual absence. Optional entry is omitted for absence and rejects
+explicit null. A present CommittedObject has regular mode 100644/100755 and
+native blob. Expected removal uses declared 000000. Guard.selectedEntries
+retains its historical index-delta meaning.
 
-The exact target includes native question/source/pending/Plan/Step/generation,
-original primary base/completed prefix/repair progress, predecessor admission
-and actual closure provenance, new declared binding and base, content guards,
-coverage of all inherited acceptance obligations and declared consumption route.
-Recompute it at adoption; crossed or stale source/host/frontier/evidence refuses.
-Live, termination-unknown or unsettled effects require their existing native
-recovery before source revision. This operation supplies no general recovery,
-new repair window, count reset, fake old answer or future Plan adoption.
+Only explicit tree-entries host registration with selection
+`goal-source-committed-inventory` and exact binding.paths observes this finite
+inventory. Typed CommitMetadata verifies commit/tree pairs, TreeChanges verifies
+the complete delta, and TreeEntries verifies every selected mode/blob or absence.
+Compare actual BlobContent bytes directly with managed File bytes/presence and
+repeat observations around reads. There is no whole-repository default or
+process/argv/parser fallback.
 
-Existing passive prepareEvidence accepts the actual generated description and
-actual adoption input using the dedicated dependency-source-revision kind.
-Existing trusted independent provisioning and issuer/participant/target admission
-remain required. Caller-written files, IDs, hashes, fixture success and a mutable
-SNAPSHOT coordinate establish neither authority nor actual source consumption.
+Committed capture issues no source-stage preflight, intent or result, has empty
+stagedPaths and equal pre/post guards, and requires selected committed bytes to
+be clean. No dependency or primary empty commit is manufactured. Ordinary
+primary closure still requires actual new primary work and a genuine commit.
 
-The separate ordinary Advance issues work in the same Step. Preserve all prior
-history. When the pending work is a check repair, its authenticated predecessor
-failure remains repair context only; adoption clears current candidate and
-validation. Explicit candidate `ReviseWork` retains its existing transition to
-implementation work and does not carry a repair-only failure payload. Neither
-transition establishes new-source validation or resets repair counts.
+## Content guards and normal validation
 
-The rejected build.sbt suite-registration change remains excluded. Normal discovery,
-normal local publication and exact task-private runtime qualification remain
-separate from actual consumer acceptance.
+Observe regular-file bytes through WorkflowFileExecution.readBytesC with
+FileRepresentation.Identity in the owning UoW, exact ReadOnly workspace paths
+and existing limits. Actual absence differs from an empty file. Presence,
+length and SHA-256 identity are observations, never Human authority. Links,
+submodules, directories, unreadable paths and resource overflow refuse.
 
-## Explicit committed dependency base succession (V4)
+Unrelated documents remain outside source ownership. Their path/status,
+byte-identity and staged-entry guards prevent absorption or change. Unselected
+build-relevant inputs must be clean. A full index tree is a freshness guard,
+not an owned selected source tree. Recheck native Git and managed bytes during
+description, adoption, capture, checks, review and closure; repeated reads do
+not claim an atomic filesystem snapshot. Same-status byte drift refuses.
 
-The existing describe/adopt operations admit a closed V4 Target only with the
-required `committedBaseSuccession` and the existing single RuntimeSuccession.
-The original target must have no runtime successor. Actual later same-Step
-approvals and independently admitted whole-target Human evidence remain required.
-An optional ExclusionSuccession keeps its exact E0 followed by qualified additions.
-V1/V2/V3 writers and readers retain their historical meaning; omission never
-upgrades them. Present null, unknown, missing and crossed fields refuse.
+Selected staging uses existing per-path intent/results. Native TreeChanges may
+affect only that selected path while preserving worktree bytes, other index
+entries and exclusions. Compare staged blob bytes/modes with declared source
+content. The first successor capture matches its exact new Direction guard;
+later selected staging changes index metadata only. An absent result is UNKNOWN
+and never authorizes replay.
 
-The succession schema is `sm-workflow.goal-phase-committed-base-succession.v1`.
-It records the exact original Direction reference, `previousBase` and `nextBase`
-native commit/tree pairs, the complete ordered native `changes`, ordered
-`phaseChangedPaths`, `previousExcludedChangedPaths`, `addedExcludedChangedPaths`
-and `baselineChangedPaths`, constant `sourceMode=committed`, and `committedEntries`.
-The four disjoint vectors cover the entire actual old/new tree delta. Counts
-are observations, never fixed at the historical pre-API 117 paths. Baseline
-classification grants no edit, staging, check bypass or acceptance authority.
+expectedModes records ordered regular 100644/100755 or explicit removal 000000.
+programs binds each primary check identity/kind to its actual workspace and safe
+program identity; it may also bind dependency checks to separate workspaces.
+If any dependency check is mapped, all checks of that binding must have exact
+identity/kind routes. Actual typed SBT target/operation/program receipts and
+retained execution records must match. Unmapped dependency checks retain their
+existing single source-workspace route.
 
-Every effective selected path has one CommittedEntry in selection order, including
-actual absence. Its optional `entry` is omitted for absence and rejects explicit
-null; a present CommittedObject contains only regular `mode` (100644/100755) and
-native `blob`. Expected removal uses the existing declared 000000 mode. These
-rows observe committed entries even when HEAD/index TreeChanges is empty.
-Guard.selectedEntries keeps its historical index-delta meaning.
+Source consumption reuses normal host source-project configuration and existing
+GoalPhaseNativeValidation validation. LocalPublicationRuntime.beforeChecksC
+owns any necessary local artifact preparation through the normal publication
+service. Source adoption adds no artifact management or image installation
+mechanism. A legitimate direct ProjectRef dependency continues through ordinary
+SBT resolution. Producer publication, installed CLI qualification and actual
+consumer acceptance remain separate results.
 
-Only an explicitly registered `tree-entries` host operation with selection
-`goal-source-committed-inventory` and the exact effective binding.paths may
-observe this inventory. There is no unselected or whole-repository default.
-Typed Git CommitMetadata establishes both native commit/tree pairs; TreeChanges
-establishes the complete delta; TreeEntries establishes every selected mode/blob
-or absence. Compare each actual BlobContent byte vector directly with the actual
-managed File bytes/presence. Legacy FileIdentity fields remain readable metadata,
-not a substitute for these reads. Repeat the native/managed observations around
-reads and require stable exact guards; normal unsupported/bounded/unknown failures
-remain errors, with no process/argv/parser fallback.
+Existing candidate recovery authenticates the exact source fact prefix, offers
+ReviseWork/Defer, and retains original namespaces, captures and UNKNOWN outcomes.
+It imports no capture into a new generation and grants no old-stage replay or
+termination claim. Ordinary re-entry collects saved interruption results.
 
-The effective binding may change its revision and native base, plus the existing
-genuinely approved inventory extension. Dependency identity, root, workspace,
-branch, requester, Step, checks, routes, ownership and acceptance stay exact.
-Original Direction, primary base, accepted prefix, prior captures and actual
-repair accounting remain immutable. A later dependency commit or selected edit
-does not inherit qualification and refuses; there is no automatic later-source
-follow, second runtime succession or implicit mode reversal.
+## Historical immutable-image records (v1-v4)
 
-One effective `modeOf` projection owns preflight, capture, staging, retained
-prefixes and freshness. V4 committed capture issues no source-stage preflight,
-intent or result and has empty stagedPaths because no source-stage effect occurs.
-It observes all selected committed bytes and requires equal pre/post guards.
-Every old UNKNOWN intent/result remains unchanged. Actual acknowledgement
-interruption is collected through ordinary native re-entry; no accepted Submit,
-stage or adoption is replayed. Separate Advance resumes the same Session, Plan
-and Step at the next generation. Fresh checks and independent review remain
-obligations. Ordinary primary closure requires actual new primary work and a
-genuine primary commit; all-committed primary/no-new-delta completion remains
-unsupported. No empty dependency or primary commit is manufactured.
+LegacyConsumption retains exactly the original seven-field unmarked JSON:
+primaryWorkspace, sourceRoot, runtimeImage, manifestReference,
+nonInputExclusions, expectedModes and programs. Its original image/reference
+constraints remain strict and encoding never adds a schema marker or rewrites
+values. V1 source targets/proposals and old captures retain their original
+meaning and exact encoding. Existing dependency Admission/Capture/AcceptedPrefix
+schemas are unchanged; no old qualification receipt is copied into new evidence.
 
-Installed interruption specifications explicitly select the actual manifest and
-pinned component CAR with `--no-default-components` through a fixture-owned,
-optional Bootstrap selection. Existing source callers omit it. Ordinary installed
-policy validation remains unchanged; installed child commands require the
-dedicated executable and image without source-launcher fallback. Fixture hooks
-and producer success do not establish real consumer adoption or deployment.
+Historical v2 runtime targets retain RuntimeSuccession with original parent,
+actual approvals and the complete immutable installation observation. Its pure
+validator still requires a changed image and manifest and exact module/component
+associations. Historical v3 adds the original append-only exclusion succession;
+historical v4 adds the committed-base succession and finite committed inventory.
+Their scope/capture versions and original one-runtime-successor eligibility
+remain unchanged. Explicit null, unknown fields and mixed schemas refuse.
+These contracts describe immutable retained records, not a current installation
+prerequisite or fresh execution authority. Migration appends an explicit v5
+Direction with actual previousDirection and native approvals through the same
+public describe/adopt and normal check pipeline.
+
+Environment-dependent installed interruption specifications explicitly select a
+normally published component CAR through smworkflow.spec.componentFile and the
+existing component-file bootstrap. Installed CLI selection uses
+smworkflow.spec.installedCommand. No manifest/image metadata is created or read,
+and no source-launcher fallback supplies an installed result. Fixture hooks and
+producer success do not establish real consumer adoption or deployment.
+# Native prerequisite Wait source revision (v6)
+
+The existing describe/adopt operations also select an actual unstarted ordinary
+Validation prerequisite UNKNOWN frontier. The v6 target adds a closed
+`waitOrigin`, names the real old publication and candidate/native references,
+and uses canonical empty `questionIdentity`. Old schemas reject that marker.
+There is no invented unanswered question, H.Source, Submit or implementation
+request. See the [UNKNOWN continuation](goal-phase-prerequisite-publication-unknown-recovery.md)
+for independent lifecycle/qualification installation and exact invocation shape.
+
+The retained old recovery/capture guard supplies old source bytes; current reads
+only supply the newly selected guard. Host declarations, inheritance, finite
+committed-base inventory, modes, programs and complete coverage still apply.
+Independent writer completion precedes source work, and separate source Human
+admission appends only a mechanical Direction. Normal Advance preserves accepted
+primary work and all Plan/base/prefix/repair facts, increments generation once,
+and captures the new dependency source. V6 stages only selected paths with
+actual new unstaged changes, using their original ordinals. Completed original
+stages remain historical. Committed selection stages zero paths. UNKNOWN new
+intents never replay. Source adoption grants no publication; the old UNKNOWN
+remains the gate until its separate qualified-successor Human Direction.

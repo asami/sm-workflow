@@ -14,7 +14,8 @@ import WorkflowExecutionHarness as H
 /** Caller library bridge over the actual public Request context. Operational
   * completion supplies observations only; normal Submit owns semantic admission.
   * @since   Oct. 16, 2026
-  * @version Oct. 29, 2026
+  *  version Oct. 29, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 object NativeWorkflowCallerExecution {
@@ -31,6 +32,13 @@ object NativeWorkflowCallerExecution {
   ) {
     def recordC(selection: H.Selection, outcome: H.Outcome): Consequence[Prepared] =
       session.recordC(selection, outcome).map(value => new Prepared(issued, value))
+
+    /** An already-returned Phase completion plus caller-retained resources only.
+      * This optional projection launches nothing and does not re-complete work.
+      */
+    def phaseCompletionMetrics(completion: V.GoalPhaseCompletionResult,
+      retained: Vector[NativeCallerPhaseMetrics.RetainedExecution]): V.GoalPhaseCompletionResult =
+      NativeCallerPhaseMetrics.project(session.workReference.handle.instanceIdentity.value, completion, retained)
 
     def completionEvidenceC(references: Vector[V.WorkflowArtifactReference]): Consequence[V.WorkflowExecutionEvidence] =
       if (references == null || references.isEmpty || references.exists(x => x == null || !_exact(x.identity) || !_exact(x.revision)))
