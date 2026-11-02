@@ -13,6 +13,9 @@ import tempfile
 import unittest
 from unittest import mock
 
+# Loading the real generated installer must leave its packaged resource tree intact.
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('dispatch_adapter', ROOT / 'scripts/goal-phase-dispatch.py')
 A = importlib.util.module_from_spec(spec)

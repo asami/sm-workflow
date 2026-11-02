@@ -167,6 +167,7 @@ private[smworkflow] object GoalPhaseOperatingProfiles {
   } yield work.copy(current = order.copy(requirement = resolved._1,
     request = order.request.copy(input = order.request.input.map(_.copy(value = captured)))))
 
+  // Logical dispatch preserves optional classification; concrete mappings require it.
   def captureValid(value: Capture): Boolean = value != null && selectionValid(value.selection) &&
     value.dispatch != null && value.dispatch.forall(GoalPhaseDispatchPolicy.valid) &&
     value.reasoningClass != null && value.reasoningClass.forall(_name) && value.mappingIdentity != null &&
@@ -174,7 +175,7 @@ private[smworkflow] object GoalPhaseOperatingProfiles {
     value.mappingIdentity.forall(_name) && value.mappingRevision.forall(_name) &&
     value.configured.forall(_validConcrete) && value.selected.forall(_validConcrete) && value.fallback != null &&
     value.fallback.forall(_validConcrete) && (value.fallback.isEmpty || value.selection.identity == standard) &&
-    (if (value.dispatch.nonEmpty) value.selection.identity == standard && value.reasoningClass.nonEmpty && value.fallback.isEmpty
+    (if (value.dispatch.nonEmpty) value.selection.identity == standard && value.fallback.isEmpty
      else if (value.mappingIdentity.isEmpty) value.mappingRevision.isEmpty && value.configured.isEmpty && value.selected.isEmpty && value.fallback.isEmpty &&
       value.selection.identity == standard
      else value.mappingRevision.nonEmpty && value.configured.nonEmpty && value.selected.nonEmpty && value.reasoningClass.nonEmpty)

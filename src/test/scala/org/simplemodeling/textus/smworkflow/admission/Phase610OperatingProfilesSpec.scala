@@ -312,6 +312,49 @@ final class Phase610OperatingProfilesSpec extends AnyWordSpec with Matchers with
         .mapObject(_.add("schemaVersion", Json.fromString("sm-workflow.goal-phase-native-work-request.v2")))
       GoalPhaseNativeWork.inputCodec.decode(malformed).isLeft shouldBe true
     }
+    "retain an unclassified logical dispatch through request and WorkOrder recollection without weakening concrete mapping" in {
+      Given("a fresh standard assignment without optional Plan classification and its existing actual caller origin")
+      val original = _work()
+      val order = _order(original)
+      val unclassified = original.copy(current = order.copy(requirement = order.requirement.copy(reasoningClass = None)))
+      val declaration = _mapped.copy(dispatchPolicy = Some(GoalPhaseDispatchPolicy.defaultPolicy))
+      When("normal issuance binds the logical route and both owning codecs recollect the complete assignment")
+      val issued = take(GoalPhaseOperatingProfiles.bindFreshC(unclassified, declaration, None))
+      val input = _order(issued).request.input.get.value
+      val capture = _capture(issued)
+      val retained = take(WorkflowWorkOrderJsonV1.decodeC(
+        take(WorkflowWorkOrderJsonV1.encodeC(issued, GoalPhaseNativeWork.inputCodec)), GoalPhaseNativeWork.inputCodec))
+      Then("the exact route and absent classification survive without a fabricated concrete model or changed business request")
+      retained shouldBe issued
+      GoalPhaseNativeWork.inputCodec.decode(GoalPhaseNativeWork.inputCodec.encode(input)) shouldBe Right(input)
+      _capture(retained) shouldBe capture
+      capture.reasoningClass shouldBe None
+      _order(retained).requirement shouldBe order.requirement.copy(reasoningClass = None, disposition = Some(
+        ExecutionDisposition(ExecutionPlacement.Delegated, ExecutionIndependence.Optional, _origin.current.contextIdentity)))
+      capture.dispatch.get.candidates shouldBe Vector("ordinary", "difficult", "hardest")
+      capture.dispatch.get.edges shouldBe GoalPhaseDispatchPolicy.defaultEdges
+      capture.mappingIdentity shouldBe Some("caller-standard")
+      capture.mappingRevision shouldBe Some(GoalPhaseDispatchPolicy.revision)
+      capture.configured shouldBe None
+      capture.selected shouldBe None
+      capture.fallback shouldBe None
+      input.copy(operatingProfile = None) shouldBe _business
+      GoalPhaseOperatingProfiles.captureValid(capture) shouldBe true
+      Given("malformed logical fields and a concrete mapping with its required class removed")
+      val concrete = _capture(take(GoalPhaseOperatingProfiles.bindFreshC(_work(), _mapped, None)))
+      val invalid = Vector(capture.copy(reasoningClass = Some(" Routine")),
+        capture.copy(selection = capture.selection.copy(identity = "cost")),
+        capture.copy(dispatch = Some(capture.dispatch.get.copy(candidates = Vector("ordinary", "hardest")))),
+        concrete.copy(reasoningClass = None))
+      Then("invalid logical captures and unclassified concrete mappings still refuse both validation and decoding")
+      invalid.foreach { value =>
+        GoalPhaseOperatingProfiles.captureValid(value) shouldBe false
+        GoalPhaseNativeWork.inputCodec.decode(GoalPhaseNativeWork.inputCodec.encode(
+          input.copy(operatingProfile = Some(value)))).isLeft shouldBe true
+      }
+      GoalPhaseOperatingProfiles.bindFreshC(unclassified, _mapped, None).isSuccess shouldBe false
+      GoalPhaseOperatingProfiles.bindFreshC(issued, declaration, None).isSuccess shouldBe false
+    }
     "make the real caller consume the saved concrete selection instead of a later mapping and refuse opt-in fallback" in {
       Given("a captured opt-in issue and a caller supplying a different later mapping")
       val withFallback = take(WorkflowExecutionProfileMapping.createC("spec-with-fallback", "3", Vector(_alternative, _profile),
