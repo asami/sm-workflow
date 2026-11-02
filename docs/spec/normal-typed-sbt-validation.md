@@ -502,3 +502,17 @@ protected independent Step review/local acceptance commit. P6-EX02, installed-ta
 acceptance, security/CBD, the sole full Phase review and local release remain
 open; aggregate full-suite validation remains Phase 6.3. No raw logs or private
 evidence package are added to Git.
+
+## Default target application profile — 2026-11-02
+
+[Development-mode validation](development-mode-validation.md) makes dev the
+routine target profile through the existing project/typed execution binding.
+Preserve explicit scenario profiles and record actual child mode; SBT Test scope
+and workflow-host mode do not imply the child's mode. Select affected security/
+deployment scenarios instead of multiplying all suites by four. Required live
+demo/production acceptance retains its own configuration and evidence.
+Integration remains planned in the [workstream](../phase/development-mode-validation-plan.md).
+VM-06 additionally selects focused cases for CNCF mode-dependent behavior,
+including test-only external integrations. Use the same managed execution and
+metadata/reference selection, with actual mode/adapter attribution; no third
+full-suite run or new caller-supplied command/configuration parameters.
