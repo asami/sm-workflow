@@ -11,7 +11,8 @@ import RepositorySyncNativeMergeValidation as V
 /** Selected merge policy over actual managed validation and pending paths.
   * An admission is neither a semantic review verdict nor Git effect authority.
   * @since   Oct. 24, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  3, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncMergeAssessment {
@@ -34,7 +35,7 @@ private[smworkflow] object RepositorySyncMergeAssessment {
     if (policy != null && Set("required", "conditional")(policy.detailedReview) &&
         Set("required", "not-applicable")(policy.scalaLint) &&
         Set("off", "not-applicable")(policy.carLint) && policy.lintReason != null &&
-        policy.lintReason.trim.nonEmpty && policy.lintReason.length <= 4096 &&
+        policy.lintReason.trim.nonEmpty &&
         policy.contractPaths != null && policy.contractPaths.size <= 128 &&
         policy.contractPaths.distinct == policy.contractPaths &&
         policy.contractPaths.forall(RepositorySyncNativeConflictInput.relative) &&

@@ -15,13 +15,14 @@ import RepositorySyncNativeConflictInput as I
 /** Specification-owned business fixtures exercise pure intake and meaning only;
   * they are not native issued work or independent reviewer/effect evidence.
   * @since   Oct. 15, 2026
-  * @version Oct. 24, 2026
+  *  version Oct. 24, 2026
+  * @version Nov.  3, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class RepositorySyncNativeMergeRepairSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _paths = Vector("docs/a.md", "src/b.scala")
-  private val _policy = I.Policy(_paths.toSet, maximumConflicts = 2, maximumBlobBytes = 32)
+  private val _policy = I.Policy(_paths.toSet, maximumConflicts = 2)
   private val _review = R.Request("fixture-instance", "7", "a" * 40, "b" * 40, "c" * 40,
     _paths, "Local changed meaning", "Remote changed meaning", "required", "Affected source check",
     Vector("focused"), Vector(V.Receipt("focused", "exited", Some(0), "checked", "")))
@@ -231,41 +232,39 @@ final class RepositorySyncNativeMergeRepairSpec extends AnyWordSpec with Matcher
       When("request admission consumes each missing business value")
       val actual = candidates.map(M.admitRequestC(_, _policy)) ++ Vector(
         M.admitRequestC(_request, null), M.admitRequestC(_request, _policy.copy(semanticPaths = null)),
-        M.admitRequestC(_request, _policy.copy(maximumConflicts = 0)),
-        M.admitRequestC(_request, _policy.copy(maximumBlobBytes = 0)))
+        M.admitRequestC(_request, _policy.copy(maximumConflicts = 0)))
 
       Then("every absent consumed value or invalid policy fails without throwing")
       actual.foreach(_ shouldBe a[Consequence.Failure[?]])
     }
-    "refuse absent, blank, NUL or oversized finding and result rationale" in {
-      Given("rationale that is null, blank, binary or beyond the 16384-byte UTF8 limit")
-      val bad = Vector(null, "", " \n\t", "reason\u0000", "界" * 5462)
+    "refuse absent blank NUL or invalid UTF-8 rationale and preserve complete large rationale" in {
+      Given("rationale that is null, blank, binary or invalid Unicode alongside complete large text")
+      val bad = Vector(null, "", " \n\t", "reason\u0000", "\ud800")
 
       When("finding and result admission consume each rationale")
       val actual = bad.flatMap(reason => Vector(
         M.admitRequestC(_request.copy(findings = Vector(_findings.head.copy(rationale = reason))), _policy),
         M.admitC(_request, _result.copy(rationale = reason), _policy)))
 
-      Then("each invalid rationale fails and a multibyte rationale just below the byte limit succeeds")
+      Then("invalid rationale fails while complete multibyte rationale has no application byte ceiling")
       actual.foreach(_ shouldBe a[Consequence.Failure[?]])
-      _take(M.admitC(_request, _result.copy(rationale = "界" * 5461), _policy)) shouldBe ()
-      _take(M.admitRequestC(_request.copy(findings = Vector(_findings.head.copy(rationale = "界" * 5461))), _policy)) shouldBe ()
+      _take(M.admitC(_request, _result.copy(rationale = "界" * 40000), _policy)) shouldBe ()
+      _take(M.admitRequestC(_request.copy(findings = Vector(_findings.head.copy(rationale = "界" * 40000))), _policy)) shouldBe ()
     }
-    "measure input and replacement text in UTF8 bytes and refuse null or NUL text" in {
-      Given("a six-byte explicit policy and two-character multibyte ordinary text")
-      val policy = _policy.copy(maximumBlobBytes = 6)
-      val request = _request.copy(files = _files.map(_.copy(text = "界界")))
-      val result = _result.copy(replacements = _files.map(_.copy(text = "語語")))
-      val bad = Vector(null, "\u0000", "界界界")
+    "retain complete large input and replacement text and refuse null NUL or invalid UTF-8" in {
+      Given("selected affected paths with complete large multibyte ordinary text")
+      val request = _request.copy(files = _files.map(_.copy(text = "界" * 40000)))
+      val result = _result.copy(replacements = _files.map(_.copy(text = "語" * 40000)))
+      val bad = Vector(null, "\u0000", "\ud800")
 
-      When("request and result admission consume exact-limit and over-limit or binary texts")
-      val accepted = M.admitC(request, result, policy)
+      When("request and result admission consume complete large or invalid texts")
+      val accepted = M.admitC(request, result, _policy)
       val refused = bad.flatMap(text => Vector(
-        M.admitRequestC(request.copy(files = request.files.updated(0, request.files.head.copy(text = text))), policy),
+        M.admitRequestC(request.copy(files = request.files.updated(0, request.files.head.copy(text = text))), _policy),
         M.admitC(request, result.copy(replacements = result.replacements.updated(0,
-          result.replacements.head.copy(text = text))), policy)))
+          result.replacements.head.copy(text = text))), _policy)))
 
-      Then("six UTF8 bytes succeed while missing, NUL and nine-byte text fail")
+      Then("complete large text succeeds while missing NUL and invalid Unicode fail")
       _take(accepted) shouldBe ()
       refused.foreach(_ shouldBe a[Consequence.Failure[?]])
     }

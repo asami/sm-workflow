@@ -23,7 +23,7 @@ import RepositorySyncNativeMergeValidation as C
 /** Explicit append-only direction for an ended invocation with no check result.
   * Description observes Git; adoption only appends a native mechanical record.
   * @since Oct. 26, 2026
-  * @version Oct. 26, 2026
+  * @version Nov.  3, 2026
   */
 private[smworkflow] object RepositorySyncValidationContinuation {
   val purpose = "repository-sync-validation-continuation"
@@ -139,7 +139,7 @@ private[smworkflow] object RepositorySyncValidationContinuation {
       else N.invalid("validation continuation requires its independent host evidence port")
   }
   private def _exact(value: String): Boolean = value != null && value.nonEmpty && value.trim == value &&
-    value.length <= 4096 && !value.exists(_.isControl)
+    !value.exists(_.isControl)
   private def _revision(value: String): Boolean = value != null && value.matches("[1-9][0-9]*") &&
     BigInt(value) < BigInt(Long.MaxValue) - 8
   private def _oid(value: String): Boolean = value != null && value.matches("[0-9a-f]{40}|[0-9a-f]{64}")

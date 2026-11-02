@@ -16,7 +16,8 @@ import SplitPhaseExplicitPartitionFixture.take
  * Decoder refusals for malformed, duplicate, partial, unsafe and invalid-stage
  * records reuse the qualified CNCF GitExecutionSpec producer examples.
  * @since   Oct.  6, 2026
- * @version Oct. 24, 2026
+ *  version Oct. 24, 2026
+ * @version Nov.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -64,15 +65,20 @@ final class RepositorySyncNativeConflictInputSpec extends AnyWordSpec with Given
       val blob = I.Blob("b" * 40, "source\n")
       val request = I.Request("instance", "8", "c" * 40, "d" * 40,
         Vector(I.Conflict("conflict-1", "shared.txt", blob, blob, blob)))
-      val policy = I.Policy(Set("shared.txt"), maximumBlobBytes = 32)
+      val policy = I.Policy(Set("shared.txt"))
       val result = S.Result("resolved", Vector(S.Resolution("conflict-1", "resolved\n")), "assigned resolution")
       When("the semantic outcome is deterministically admitted against the actual assigned input")
       val admitted = S.admitC(request, result, policy)
-      Then("ordered exact coverage and finite bytes are required; DecisionNeeded cannot also choose a solution")
+      Then("ordered exact coverage is required; DecisionNeeded cannot also choose a solution")
       admitted.isSuccess shouldBe true
       S.admitC(request, result.copy(resolutions = Vector.empty), policy).isSuccess shouldBe false
       S.admitC(request, result.copy(resolutions = Vector(S.Resolution("other", "x"))), policy).isSuccess shouldBe false
-      S.admitC(request, result.copy(resolutions = Vector(S.Resolution("conflict-1", "x" * 33))), policy).isSuccess shouldBe false
+      val large = result.copy(resolutions = Vector(S.Resolution("conflict-1", "界" * 40000)),
+        rationale = "理由" * 40000)
+      S.admitC(request, large, policy).isSuccess shouldBe true
+      S.resultCodec.decode(S.resultCodec.encode(large)) shouldBe Right(large)
+      S.admitC(request, result.copy(resolutions = Vector(S.Resolution("conflict-1", "\u0000"))), policy).isSuccess shouldBe false
+      S.admitC(request, result.copy(resolutions = Vector(S.Resolution("conflict-1", "\ud800"))), policy).isSuccess shouldBe false
       S.admitC(request, result.copy(decision = "decision-needed", resolutions = Vector.empty), policy).isSuccess shouldBe true
       S.admitC(request, result.copy(decision = "decision-needed"), policy).isSuccess shouldBe false
       S.admitC(request, result, I.noSemanticPaths).isSuccess shouldBe false

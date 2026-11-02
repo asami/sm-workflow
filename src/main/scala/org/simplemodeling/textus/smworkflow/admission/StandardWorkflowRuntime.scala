@@ -21,7 +21,8 @@ import org.simplemodeling.textus.smworkflow.value.{GoalPhaseStartInput, Reposito
   * selected Phase or Plan. Read actual Start input or the retained native run
   * only when its Operation executes, within that call's ordinary storage/UoW.
   * @since   Oct. 27, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  3, 2026
   */
 private[smworkflow] object StandardWorkflowRuntime {
   private final case class Shared(persistence: GoalPhaseRuntimeParameters.Persistence,
@@ -203,7 +204,11 @@ private[smworkflow] object StandardWorkflowRuntime {
     session <- RepositorySyncManagedFetch.sessionC(identity, declaration, definition, selectedcore)
     boundary = session.started.current.history.reverseIterator.flatMap(_.suspension).find { value =>
       val name = value.continuationIdentity.value
-      name.startsWith(identity + ":native-review:") || name.startsWith(identity + ":native-triage:")
+      val prefix = Vector(identity + ":native-review:", identity + ":native-triage:").find(name.startsWith)
+      val revision = prefix.map(name.stripPrefix).filter(_.matches("[1-9][0-9]*")).flatMap(_.toLongOption)
+      session.started.current.identity.value == identity && revision.exists(source =>
+        session.started.current.history.exists(entry => entry.revision.value == source &&
+          entry.currentProgression.exists(_.value == "sync.MergeValidated")))
     }
     purposestore <- RepositorySyncNativeProgressStore.bindC(session, declaration, selectedcore, _ => Consequence.unit)
     purpose <- purposestore.currentPurposeC(session.started.current)

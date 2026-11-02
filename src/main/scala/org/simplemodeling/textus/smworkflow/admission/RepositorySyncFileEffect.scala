@@ -10,7 +10,7 @@ import RepositorySyncNativeConflictInput as I
 /** Assigned semantic text effects in the existing repository workspace.
   * CNCF owns acquisition and installation; saved workflow intent owns no replay.
   * @since   Oct. 15, 2026
-  * @version Oct. 15, 2026
+  * @version Nov.  3, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncFileEffect {
@@ -68,16 +68,14 @@ private[smworkflow] object RepositorySyncFileEffect {
         .forall(s => s != null && s.nonEmpty && s.trim == s) && request.files != null &&
         request.files.nonEmpty && request.files.size <= 128 &&
         request.files.forall(file => file != null && I.relative(file.path) && policy.semanticPaths(file.path) &&
-          valid(file.replacement, policy.maximumBlobBytes) && file.expected != null &&
-          file.expected.isEmpty == capture && file.expected.forall(valid(_, policy.maximumBlobBytes))) &&
+          valid(file.replacement) && file.expected != null &&
+          file.expected.isEmpty == capture && file.expected.forall(valid)) &&
         request.files.map(_.path).distinct.size == request.files.size) Consequence.unit
       else invalid("assigned instance/revision/paths/text intent is incomplete")
   } yield ()
 
-  // This is the business text budget, applied after CNCF's complete bounded read.
-  // A cheap length bound also keeps semantic UTF-8 counting allocation finite.
-  private def valid(text: String, maximum: Int): Boolean = text != null && !text.contains('\u0000') &&
-    text.length <= maximum && text.getBytes(StandardCharsets.UTF_8).length <= maximum
+  private def valid(text: String): Boolean = text != null && !text.contains('\u0000') &&
+    StandardCharsets.UTF_8.newEncoder().canEncode(text)
 
   private def readC(core: ActionCall.Core, policy: I.Policy, request: Request): Consequence[Vector[Option[String]]] = for {
     target <- targetC
@@ -85,8 +83,8 @@ private[smworkflow] object RepositorySyncFileEffect {
       values <- prior
       path <- WorkspaceFilePath.parseC(file.path)
       value <- WorkflowFileExecution.readTextC(core, target, path)
-      _ <- if (value.text.forall(valid(_, policy.maximumBlobBytes))) Consequence.unit
-        else invalid("actual assigned text is binary or exceeds its semantic budget")
+      _ <- if (value.text.forall(valid)) Consequence.unit
+        else invalid("actual assigned text requires ordinary UTF-8")
     } yield values :+ value.text }
   } yield values
 

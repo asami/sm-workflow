@@ -11,7 +11,8 @@ import RepositorySyncNativeConflictInput as I
 /** Closed semantic proposal only. No path, tip, operation, authority or process
   * data can be returned in a resolution. Native materialization is separate.
   * @since   Oct.  6, 2026
-  * @version Oct. 11, 2026
+  *  version Oct. 11, 2026
+  * @version Nov.  3, 2026
   */
 private[smworkflow] object RepositorySyncConflictSemantic {
   final case class Resolution(conflictIdentity: String, text: String)
@@ -23,14 +24,15 @@ private[smworkflow] object RepositorySyncConflictSemantic {
         request.conflicts.nonEmpty && request.conflicts.size <= policy.maximumConflicts &&
         request.conflicts.forall(c => c != null && policy.semanticPaths(c.path)) &&
         request.conflicts.map(_.identity).distinct.size == request.conflicts.size &&
-        result.rationale != null && result.rationale.trim.nonEmpty && result.rationale.getBytes(UTF_8).length <= 16384)
+        result.rationale != null && result.rationale.trim.nonEmpty && !result.rationale.contains('\u0000') &&
+        UTF_8.newEncoder().canEncode(result.rationale))
       Consequence.unit else invalid("assigned proposal or rationale is incomplete")
     _ <- result.decision match {
       case "resolved" =>
         if (result.resolutions.forall(r => r != null && r.text != null && !r.text.contains('\u0000') &&
-            r.text.getBytes(UTF_8).length <= policy.maximumBlobBytes) &&
+            UTF_8.newEncoder().canEncode(r.text)) &&
             result.resolutions.map(_.conflictIdentity) == request.conflicts.map(_.identity)) Consequence.unit
-        else invalid("resolution must cover exactly the ordered assigned conflict IDs within finite text limits")
+        else invalid("resolution must cover exactly the ordered assigned conflict IDs with ordinary UTF-8 text")
       case "decision-needed" => if (result.resolutions.isEmpty) Consequence.unit
         else invalid("DecisionNeeded must not also supply a resolution or authority")
       case _ => invalid("unknown conflict result decision")

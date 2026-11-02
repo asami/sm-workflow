@@ -1,5 +1,6 @@
 package org.simplemodeling.textus.smworkflow.admission
 
+import java.nio.charset.StandardCharsets.UTF_8
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.processexecution.{GitIndexStage, GitObjectId, GitOperation}
@@ -10,7 +11,8 @@ import WorkflowManagedProcessExecution as E
   * Paths remain assigned business data; native blobs and worktree text arrive
   * through typed Git/File results. Reading grants no write or resolution authority.
   * @since   Oct.  6, 2026
-  * @version Oct. 15, 2026
+  *  version Oct. 15, 2026
+  * @version Nov.  3, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeConflictInput {
@@ -20,11 +22,10 @@ private[smworkflow] object RepositorySyncNativeConflictInput {
     mode: String = "100644", worktree: String = "")
   final case class Request(instanceIdentity: String, conflictRevision: String, localTip: String,
     remoteTip: String, conflicts: Vector[Conflict])
-  final case class Policy(semanticPaths: Set[String], maximumConflicts: Int = 32,
-    maximumBlobBytes: Int = 65536) {
+  final case class Policy(semanticPaths: Set[String], maximumConflicts: Int = 32) {
     def validateC: Consequence[Unit] =
       if (semanticPaths == null || semanticPaths.exists(p => !relative(p)) ||
-          maximumConflicts <= 0 || maximumConflicts > 128 || maximumBlobBytes <= 0 || maximumBlobBytes > 262144)
+          maximumConflicts <= 0 || maximumConflicts > 128)
         invalid("host conflict policy is incomplete") else Consequence.unit
   }
   val noSemanticPaths = Policy(Set.empty)
@@ -51,7 +52,7 @@ private[smworkflow] object RepositorySyncNativeConflictInput {
             selected.map(_.mode).distinct.size == 1 && Set("100644", "100755")(selected.head.mode)) Consequence.unit
           else invalid("deletion, mode or nonordinary text collision requires Human handling")
         blobs <- (1 to 3).foldLeft(Consequence.success(Vector.empty[Blob])) { (z, stage) =>
-          z.flatMap(values => blobC(store.core, selected.find(_.stage == stage).get.blob, policy.maximumBlobBytes)
+          z.flatMap(values => blobC(store.core, selected.find(_.stage == stage).get.blob)
             .map(values :+ _))
         }
       } yield values :+ Conflict("conflict-" + (index + 1), path, blobs(0), blobs(1), blobs(2), selected.head.mode)
@@ -72,11 +73,12 @@ private[smworkflow] object RepositorySyncNativeConflictInput {
   } yield Request(store.identity, source.record.revision.value.toString, native.observed.head,
     native.mergeHead.get, conflicts.zip(files).map((c, f) => c.copy(worktree = f.expected.get)))
 
-  private def blobC(core: ActionCall.Core, identity: String, limit: Int): Consequence[Blob] = for {
+  private def blobC(core: ActionCall.Core, identity: String): Consequence[Blob] = for {
     oid <- GitObjectId.parseC(identity)
     blob <- E.executeGitC(core, GitOperation.BlobContent(oid)).flatMap(_.valueC)
-    text <- blob.text.filter(_ => blob.bytes.size <= limit).map(Consequence.success)
-      .getOrElse(invalid("blob is binary or exceeds the selected finite text budget"))
+    text <- blob.text.filter(t => !t.contains('\u0000') && UTF_8.newEncoder().canEncode(t) &&
+      t.getBytes(UTF_8).toVector == blob.bytes).map(Consequence.success)
+      .getOrElse(invalid("blob requires complete ordinary UTF-8 text"))
   } yield Blob(identity, text)
 
   private[admission] def entriesC(core: ActionCall.Core): Consequence[Vector[Entry]] =

@@ -13,7 +13,8 @@ import RepositorySyncNativeMergeValidation as V
 /** Pure affected-file proposal admission. The owning native continuation must
   * obtain a genuine retained repair review and separately authorize effects.
   * @since   Oct. 15, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 25, 2026
+  * @version Nov.  3, 2026
   */
 private[smworkflow] object RepositorySyncNativeMergeRepair {
   final case class File(path: String, text: String)
@@ -47,8 +48,8 @@ private[smworkflow] object RepositorySyncNativeMergeRepair {
     paths = if (request.validationFailure.isEmpty) request.findings.flatMap(_.affectedPaths).distinct.sorted
       else request.review.changedPaths.filter(policy.semanticPaths).distinct.sorted
     _ <- if (request.files != null && request.files.nonEmpty && request.files.size <= policy.maximumConflicts &&
-        request.files.forall(f => _file(f, policy.maximumBlobBytes)) && request.files.map(_.path) == paths) Consequence.unit
-      else _invalid("files must cover exactly the sorted affected paths within selected text limits")
+        request.files.forall(_file) && request.files.map(_.path) == paths) Consequence.unit
+      else _invalid("files must cover exactly the sorted affected paths with ordinary UTF-8 text")
   } yield ()
 
   def admitC(request: Request, result: Result, policy: I.Policy): Consequence[Unit] = for {
@@ -57,7 +58,7 @@ private[smworkflow] object RepositorySyncNativeMergeRepair {
       else _invalid("result replacements or meaningful rationale are missing")
     _ <- result.decision match {
       case "repaired" =>
-        if (result.replacements.forall(f => _file(f, policy.maximumBlobBytes)) &&
+        if (result.replacements.forall(_file) &&
             result.replacements.map(_.path) == request.files.map(_.path) &&
             result.replacements.zip(request.files).exists((replacement, assigned) => replacement.text != assigned.text))
           Consequence.unit
@@ -108,11 +109,11 @@ private[smworkflow] object RepositorySyncNativeMergeRepair {
   val resultCodec: WorkflowResultJsonV1.PayloadCodec[Result] =
     new Codec[Result]("RepositorySyncNativeMergeRepairResult", "sm-workflow.repository-native-merge-repair-result.v1")
 
-  private def _file(value: File, limit: Int): Boolean =
-    value != null && I.relative(value.path) && _bounded(value.text, limit)
-  private def _bounded(value: String, limit: Int): Boolean =
-    value != null && !value.contains('\u0000') && value.getBytes(UTF_8).length <= limit
-  private def _rationale(value: String): Boolean = _bounded(value, 16384) && value.trim.nonEmpty
+  private def _file(value: File): Boolean =
+    value != null && I.relative(value.path) && _ordinary(value.text)
+  private def _ordinary(value: String): Boolean =
+    value != null && !value.contains('\u0000') && UTF_8.newEncoder().canEncode(value)
+  private def _rationale(value: String): Boolean = _ordinary(value) && value.trim.nonEmpty
   private def _identity(value: String): Boolean =
     value != null && value.matches("[A-Za-z0-9][A-Za-z0-9_.-]{0,127}")
   private def _invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("RepositorySync native repair " + reason)

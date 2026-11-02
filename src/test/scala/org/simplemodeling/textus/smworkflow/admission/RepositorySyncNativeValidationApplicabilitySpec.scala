@@ -17,7 +17,8 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Actual selected facts, not policy metadata or re-encoded body certificates.
   * @since   Oct.  8, 2026
-  * @version Oct. 24, 2026
+  *  version Oct. 24, 2026
+  * @version Nov.  3, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -32,6 +33,50 @@ final class RepositorySyncNativeValidationApplicabilitySpec extends AnyWordSpec 
     state.selected.map(_.identity), state.receipts)
   private def nested(value: Json) = value.hcursor.downField("payload").focus.get
   private def replace(value: Json, body: Json) = value.mapObject(_.add("payload", body))
+
+  "Complete semantic content" should {
+    "retain large purpose content and messages without weakening exact inventory coverage" in {
+      Given("a complete selected Unicode file and a purpose proposal covering that actual inventory")
+      val text = "完全な作業内容\n" * 20000
+      val explanation = "判断理由" * 20000
+      val request = RepositorySyncPurpose.Request("repository", "/selected/repository", "main", "a" * 40, "b" * 40,
+        Vector(RepositorySyncPurpose.File("one.scala", "M", " ", Some(text), Some(text), Some(text), None)), Vector.empty)
+      val group = RepositorySyncPurpose.Group("retained-purpose", explanation, explanation, Vector.empty,
+        Vector(RepositorySyncPurpose.Content("one.scala", Some(text))), Vector.empty, explanation)
+      val result = RepositorySyncPurpose.Result("resolved", explanation, Vector(group), Vector.empty)
+      When("normal purpose admission and its public typed codec consume the full proposal")
+      take(RepositorySyncPurpose.admitC(request, result)) shouldBe ()
+      val restored = RepositorySyncPurpose.resultCodec.decode(RepositorySyncPurpose.resultCodec.encode(result))
+      Then("the exact content, commit message and rationale remain available, and foreign or malformed content still fails")
+      restored shouldBe Right(result)
+      text.getBytes(java.nio.charset.StandardCharsets.UTF_8).length should be > 131072
+      Vector(group.copy(content = Vector(RepositorySyncPurpose.Content("foreign.scala", Some(text)))),
+        group.copy(content = Vector(RepositorySyncPurpose.Content("one.scala", Some("\u0000")))),
+        group.copy(content = Vector(RepositorySyncPurpose.Content("one.scala", Some("\ud800"))))).foreach { invalid =>
+        RepositorySyncPurpose.admitC(request, result.copy(groups = Vector(invalid))).isSuccess shouldBe false
+      }
+    }
+
+    "retain full review and selected lint reasons while preserving finding coverage and required choices" in {
+      Given("an actual selected review request and a full multibyte explanation exceeding the obsolete semantic ceilings")
+      val text = "判断を保持する" * 20000
+      val result = R.Result("repair", text, Vector(R.Finding("finding-1", input.changedPaths, text)))
+      val reviewpolicy = R.Policy("review-policy", 1)
+      val lintpolicy = RepositorySyncMergeAssessment.Policy("conditional", "not-applicable", "not-applicable", text, Vector.empty)
+      When("ordinary review admission and merge policy validation consume those semantic values")
+      take(R.admitC(input, result, reviewpolicy)) shouldBe ()
+      take(RepositorySyncMergeAssessment.validateC(lintpolicy)) shouldBe ()
+      take(V.Policy("full-reason", 1, "required", text, policy.checks).validateC) shouldBe ()
+      take(RepositorySyncDocumentInputs.validateC(RepositorySyncDocumentInputs.Policy(Vector("docs"), Vector.empty, text))) shouldBe ()
+      Then("exact review payloads roundtrip and unsupported findings, missing reasons or invalid choices remain refused")
+      R.resultCodec.decode(R.resultCodec.encode(result)) shouldBe Right(result)
+      R.admitC(input, result.copy(findings = Vector(R.Finding("finding-1", Vector("foreign.scala"), text))), reviewpolicy).isSuccess shouldBe false
+      R.admitC(input, result.copy(rationale = "\u0000"), reviewpolicy).isSuccess shouldBe false
+      RepositorySyncMergeAssessment.validateC(lintpolicy.copy(lintReason = " ")).isSuccess shouldBe false
+      RepositorySyncMergeAssessment.validateC(lintpolicy.copy(scalaLint = "implicit")).isSuccess shouldBe false
+      RepositorySyncDocumentInputs.validateC(RepositorySyncDocumentInputs.Policy(Vector("../foreign"), Vector.empty, text)).isSuccess shouldBe false
+    }
+  }
 
   "Native validation facts" should {
     "refuse replacement of a selected Test binding by TestOnly while preserving old Test receipts" in {
@@ -161,7 +206,7 @@ final class RepositorySyncNativeValidationApplicabilitySpec extends AnyWordSpec 
       V.successful(Vector(clean, clean.copy(identity = "index-remote"), product.copy(exitCode = Some(7)))) shouldBe false
     }
 
-    "refuse unsupported malformed missing and overbound retained structural receipts" in {
+    "refuse unsupported malformed or missing structural receipts and admit complete large findings" in {
       Given("R3: the historical schema can contain failed indeterminate incomplete or contradictory stored values")
       val clean = V.Receipt("index-local", "exited", Some(0), "", "")
       val invalid = Vector(clean.copy(termination = "indeterminate", exitCode = None),
@@ -169,14 +214,15 @@ final class RepositorySyncNativeValidationApplicabilitySpec extends AnyWordSpec 
         clean.copy(stdout = "unexpected"), clean.copy(stderr = "unexpected"), clean.copy(stdout = "\u0000"),
         clean.copy(stdout = "\ud800"), clean.copy(exitCode = Some(2), stdout = "+ source only\n"),
         clean.copy(exitCode = Some(2)), clean.copy(exitCode = Some(2), stdout = "finding", stderr = "warning"),
-        clean.copy(exitCode = Some(2), stdout = "é" * 32769), clean.copy(stderr = "x" * 65537),
+        clean.copy(stderr = "x" * 65537),
         clean.copy(exitCode = Some(1)), clean.copy(exitCode = Some(7)), clean.copy(exitCode = Some(128)))
-      When("retained admission checks completion exit UTF-8 byte bounds and NUL before CNCF's pure codec")
+      When("retained admission checks completion exit ordinary UTF-8 and NUL before CNCF's pure codec")
       val accepted = invalid.map(receipt => V.successful(Vector(receipt)))
       Then("none becomes a usable structural fact and no new execution is requested")
       accepted shouldBe Vector.fill(invalid.size)(false)
       V.successful(Vector(null.asInstanceOf[V.Receipt])) shouldBe false
       V.successful(Vector(clean.copy(exitCode = Some(2), stdout = "x" * 65536))) shouldBe true
+      V.successful(Vector(clean.copy(exitCode = Some(2), stdout = "é" * 40000))) shouldBe true
     }
 
     "retain admitted actual negative captures and leave malformed captures uncertain" in {
@@ -188,12 +234,12 @@ final class RepositorySyncNativeValidationApplicabilitySpec extends AnyWordSpec 
       val failed = ProcessExecutionResult(ProcessExecutionTermination.Exited(7), _capture_("actual failure\n"),
         _capture_("diagnostic\n"), Vector.empty, 1L, "selected-check")
       val unknown = failed.copy(termination = ProcessExecutionTermination.TimedOut)
-      When("the existing receipt admission stores only complete bounded strict actual text")
+      When("the existing receipt admission stores complete strict actual text")
       val failedreceipt = take(V.receiptC("index-local", failed))
       val unknownreceipt = take(V.receiptC("index-local", unknown))
       val malformed = Vector(failed.copy(stdout = failed.stdout.copy(truncated = true)),
         failed.copy(stdout = failed.stdout.copy(byteCount = 0L)),
-        failed.copy(stdout = _capture_("x" * 65537)), failed.copy(stdout = _capture_("\u0000")),
+        failed.copy(stdout = _capture_("\u0000")),
         failed.copy(stdout = ProcessExecutionCapture(Vector(0xff.toByte), 1L, false)))
       Then("failure and actual timeout retain their real termination and captures while refused capture supplies no fabricated result for replay")
       failedreceipt shouldBe V.Receipt("index-local", "exited", Some(7), "actual failure\n", "diagnostic\n")
@@ -201,6 +247,14 @@ final class RepositorySyncNativeValidationApplicabilitySpec extends AnyWordSpec 
       V.successful(Vector(failedreceipt)) shouldBe false
       V.successful(Vector(unknownreceipt)) shouldBe false
       malformed.foreach(result => V.receiptC("index-local", result).isSuccess shouldBe false)
+      val large = failed.copy(stdout = _capture_("界" * 40000), stderr = _capture_("診断" * 40000))
+      val retained = take(V.receiptC("index-local", large))
+      retained.termination shouldBe "exited"
+      retained.exitCode shouldBe Some(7)
+      retained.stdout shouldBe "界" * 40000
+      retained.stderr shouldBe "診断" * 40000
+      V.productSuccessful(retained) shouldBe false
+      V.Receipt.mergeRepairDecoder.decodeJson(V.Receipt.mergeRepairEncoder(retained)) shouldBe Right(retained)
     }
   }
 

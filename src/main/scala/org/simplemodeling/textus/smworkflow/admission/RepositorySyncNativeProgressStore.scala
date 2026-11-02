@@ -17,7 +17,8 @@ import RepositorySyncManagedGitObservation as Git
 /** Per-call metadata binding only. Every transition borrows canonical shared
   * storage; Git effects are not captured in the DB completion transaction.
   * @since   Oct.  6, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  3, 2026
   */
 private[smworkflow] object RepositorySyncNativeProgressStore {
   val schema = "sm-workflow.repository-sync-native-progress.v3"
@@ -73,6 +74,8 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
       * reference is an ordinary progression link, not an unchanged-data seal.
       */
     def currentPurposeC(current: InstanceRecord): Consequence[Option[Stage]] = {
+      if (current.identity.value != identity) return invalid("current purpose history crosses its instance")
+      if (!RepositorySyncPurposeRuntime.selected(current)) return Consequence.success(None)
       val prefix = "native-repository:" + identity + ":"
       current.history.reverse.find(entry => entry.currentProgression.exists(p => Set("sync.PurposeChecked", "sync.PurposeRepairRequired", "sync.PendingMergePrepared")(p.value)) &&
         entry.causation.value.startsWith(prefix)) match {
