@@ -77,3 +77,13 @@ real harmless framework execution, correct empty/not-executed results and exact
 result attribution. Complete real declarations/config/CML/compiled inventory and
 caller updates through TA-S1–4. Documentation alone is not product acceptance;
 reuse applicable evidence without claiming earlier tests prove this new contract.
+
+## Mode requirements alongside standard annotations — 2026-11-02
+
+Follow [per-test mode selection](development-mode-validation.md#per-test-declarations-build-binding-and-workflow-ownership).
+CNCF metadata declares required modes independently of ADMISSION, Slow and
+DoNotDiscover. Select eligible tests first, expand required variants and only
+then prepare resources. Matching a mode never overrides an explicit-only or
+Slow exclusion. Shared build.sbt integration binds actual target mode;
+sm-workflow invokes and collects test/parameter/mode outcomes without re-parsing
+annotations or maintaining a second table. VM-07 coordinates producer adoption.
