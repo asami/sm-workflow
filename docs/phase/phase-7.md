@@ -1,9 +1,21 @@
 # Phase 7: Multi-Repository Synchronization and Development Artifact Overlay
 
+## Directory-list predecessor and local workspace scope — 2026-10-31
+
+[Phase 6.11](phase-6.11.md) owns ordinary batch synchronization of explicitly
+supplied existing checkout directories, including validated automatic merges,
+partial results and preserved lower-level APIs. That caller simplification does
+not wait for this Phase. Phase 7 retains project-local managed worktree/subtree
+lifecycle, dependency-development modes/FIFO, artifact selection and integration.
+Consume 6.11 for synchronization rather than rebuilding an AI-driven per-repository
+loop. Existing A/B/C/D and P7-DD/DAO identities and evidence remain unchanged.
+This clarifies ownership without declaring any pending Phase 7 condition accepted.
+
 ## Commit/recovery predecessor — 2026-10-26
 
 The planned rollout is Phase 6.7 -> [Phase 6.8](phase-6.8.md) ->
-[Phase 6.9](phase-6.9.md) -> [Phase 6.10](phase-6.10.md) -> Phase 7.
+[Phase 6.9](phase-6.9.md) -> [Phase 6.10](phase-6.10.md) ->
+[Phase 6.11](phase-6.11.md) -> Phase 7.
 Consume 6.10's optional operating-profile selection and endpoint metrics without
 changing issued work or requiring model comparison/complete usage measurement.
 Consume 6.9's clean/dirty single-repository orchestration and impact-selected
