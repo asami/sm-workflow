@@ -11,7 +11,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 28, 2026
+ *  version Oct. 28, 2026
+ * @version Nov.  2, 2026
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -48,8 +49,10 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
   private val _supporting_paths = Vector("docs/spec/goal-phase-purpose-repair.md", "docs/spec/standalone-fix-acceptance.md")
   private val _agent_paths = Vector("analysis", "design", "implementation", "repair", "review")
     .map(role => s"agents/sm_workflow_$role.toml")
+  private val _dispatch_paths = Vector("scripts/goal-phase-dispatch.py", "skills/sm-goal-phase/dispatch-mappings.json",
+    "skills/sm-goal-phase/cost-role-mapping.json")
   private val _distribution_paths = _skill_paths ++ _contract_paths ++ _caller_paths ++ _supporting_paths ++
-    _agent_paths ++ Vector("install-sm-workflow.py")
+    _agent_paths ++ _dispatch_paths ++ Vector("install-sm-workflow.py")
   private def _source_path(path: String): java.nio.file.Path =
     Paths.get(if (path == "install-sm-workflow.py") "scripts/sm-workflow-tools.py" else path)
 
@@ -60,7 +63,7 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
       withClue("Run packageBin before this artifact acceptance spec: ")(Files.isRegularFile(artifact) shouldBe true)
       val prefix = "META-INF/sm-workflow/skills/"
       val names = Vector("sm-goal-phase", "sm-split-phase", "sm-repository-sync", "sm-test-fix", "sm-goal-task", "sm-review-fix", "sm-delegate-task")
-      val expected = names.map(name => s"$prefix$name/SKILL.md")
+      val expected = names.map(name => s"$prefix$name/SKILL.md") ++ _dispatch_paths.filter(_.startsWith("skills/")).map("META-INF/sm-workflow/" + _)
       val jar = new JarFile(artifact.toFile)
       try {
         When("the packaged resource namespace is enumerated and each entry is read from the real JAR")

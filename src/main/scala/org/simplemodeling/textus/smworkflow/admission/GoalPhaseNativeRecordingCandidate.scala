@@ -10,6 +10,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.TypedValue
+import GoalPhasePhaseMetrics.given
 import GoalPhaseNativeRun as F
 import GoalPhaseNativeFindingRecording as N
 import GoalPhaseOrderedProgression as O
@@ -19,18 +20,20 @@ import WorkflowManagedProcessExecution as E
 /** Stage only retained Phase recording destinations after accepted source review.
   * Unknown effects retain their intent and never replay on reconstruction.
   * @since   Oct. 18, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeRecordingCandidate {
   final case class Payload(sourceRevision: String, reviewedCandidate: O.Snapshot,
     assignedPaths: Vector[String], selectedPaths: Vector[String], stagedPaths: Vector[String],
-    finalCandidate: Option[O.Snapshot], changedPaths: Vector[String], records: Option[CompletionRecords.Plan] = None)
+    finalCandidate: Option[O.Snapshot], changedPaths: Vector[String], records: Option[CompletionRecords.Plan] = None,
+    metrics: Option[GoalPhasePhaseMetrics.Summary] = None)
   final case class Saved(record: InstanceRecord, payload: Payload)
   private[admission] val codec = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "GoalPhaseNativeRecordingCandidateReceipt"
     def encode(value: Payload): Json = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-recording-candidate.v1"),
-      "payload" -> value.asJson)
+      "payload" -> value.asJson.mapObject(fields => if (value.metrics.isEmpty) fields.remove("metrics") else fields))
     def decode(value: Json): Either[String, Payload] = for {
       wire <- Option(value).toRight("recording candidate is missing")
       schema <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
@@ -55,13 +58,15 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
   } yield result
 
   def advanceC(session: F.Session, d: F.Declaration, core: ActionCall.Core, from: InstanceRecord,
-    controller: O.State, findings: N.State, acknowledge: String => Consequence[Unit]): Consequence[Saved] = for {
+    controller: O.State, findings: N.State, acknowledge: String => Consequence[Unit],
+    profiles: Vector[GoalPhaseOperatingProfiles.Capture] = Vector.empty,
+    requests: Vector[GoalPhaseWorkComparison.NativeWork] = Vector.empty): Consequence[Saved] = for {
     store <- _store_c(session, d, core, from, controller, findings, acknowledge)
     prior <- store.retainedC
     saved <- prior match {
       case Some(value) if value.payload.records.nonEmpty && value.payload.finalCandidate.isEmpty => _finish_c(store, value)
       case Some(value) => Consequence.success(value)
-      case None => _inspect_c(store)
+      case None => _inspect_c(store, profiles, requests)
     }
   } yield saved
 
@@ -83,14 +88,18 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
     adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
   } yield new Store(adapter, session, d, core, from, controller, paths, acknowledge)
 
-  private def _inspect_c(store: Store): Consequence[Saved] = for {
+  private def _inspect_c(store: Store, profiles: Vector[GoalPhaseOperatingProfiles.Capture],
+    requests: Vector[GoalPhaseWorkComparison.NativeWork]): Consequence[Saved] = for {
     actual <- store.inspectC(Vector.empty)
     index <- G.indexTreeC(store.core)
     _ <- if (index == store.reviewed.tree) Consequence.unit
       else F.invalid("recording candidate index differs from the actual reviewed source before staging")
     selected = store.assigned.filter(path => store.completionPaths.contains(path) || actual.dirty.exists(p => p.path == path || p.renamedFrom.contains(path)))
+    metrics = if (store.completionPaths.isEmpty) None else Some(GoalPhasePhaseMetrics.withComparison(
+      GoalPhasePhaseMetrics.completed(store.session, store.d, store.core, store.reviewed, profiles),
+      store.controller.plan, store.controller.completed, requests))
     initial <- store.saveC("inspection", store.from, Payload(store.from.revision.value.toString,
-      store.reviewed, store.assigned, selected, Vector.empty, None, Vector.empty))
+      store.reviewed, store.assigned, selected, Vector.empty, None, Vector.empty, metrics = metrics))
     staged <- selected.zipWithIndex.foldLeft(Consequence.success(initial)) { case (prior, (path, index)) => for {
       current <- prior
       _ <- store.inspectC(current.payload.stagedPaths)
@@ -108,7 +117,10 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
       selection <- org.goldenport.cncf.processexecution.GitSelectionId.parseC("goal-step-" + store.releaseOrdinal)
       plan <- CompletionRecords.captureC(store.core, store.from.identity.value, "phase", store.controller.plan.phase, index,
         (store.controller.checksReceipt.toVector ++ store.controller.reviewEvidence.toVector).distinct,
-        store.completionPaths, store.controller.plan.steps.flatMap(_.ownedPaths).distinct, store.d.candidatePaths, selection)
+        store.completionPaths, store.controller.plan.steps.flatMap(_.ownedPaths).distinct, store.d.candidatePaths, selection, summary = staged.payload.metrics.map(m => {
+          val rendered = GoalPhasePhaseMetrics.durableEnglish(m)
+          if (rendered.length <= 32768) rendered else rendered.take(32000) + "\nCompact summary truncated; retained metrics carry full coverage limitations.\n"
+        }))
       prepared <- store.saveC("completion-plan", staged.record, staged.payload.copy(records = Some(plan)))
     } yield prepared
     result <- _finish_c(store, prepared)
@@ -144,7 +156,7 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
     _ <- store.ackC("goal-recording-candidate-observed")
   } yield finalsaved
 
-  private final class Store(adapter: WorkflowManagedMechanicalTransition[Payload], session: F.Session,
+  private final class Store(adapter: WorkflowManagedMechanicalTransition[Payload], val session: F.Session,
     val d: F.Declaration, val core: ActionCall.Core, val from: InstanceRecord, val controller: O.State,
     val assigned: Vector[String], acknowledge: String => Consequence[Unit]) {
     val reviewed = controller.candidate.get

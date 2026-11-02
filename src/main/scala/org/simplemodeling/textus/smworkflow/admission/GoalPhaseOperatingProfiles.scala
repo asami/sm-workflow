@@ -25,9 +25,13 @@ private[smworkflow] object GoalPhaseOperatingProfiles {
   final case class Selection(identity: String, revision: String, source: String) derives Codec.AsObject
   final case class Concrete(identity: String, provider: String, model: String, controls: Map[String, String]) derives Codec.AsObject
   final case class Capture(selection: Selection, reasoningClass: Option[String], mappingIdentity: Option[String],
-    mappingRevision: Option[String], configured: Option[Concrete], selected: Option[Concrete], fallback: Option[Concrete] = None)
+    mappingRevision: Option[String], configured: Option[Concrete], selected: Option[Concrete], fallback: Option[Concrete] = None,
+    dispatch: Option[GoalPhaseDispatchPolicy.Capture] = None)
   object Capture {
-    given Codec.AsObject[Capture] = Codec.AsObject.from(deriveDecoder[Capture],
+    private val _decoder = deriveDecoder[Capture]
+    given Codec.AsObject[Capture] = Codec.AsObject.from(io.circe.Decoder.instance(cursor =>
+      if (cursor.downField("dispatch").focus.contains(Json.Null)) Left(io.circe.DecodingFailure("dispatch must be absent or a retained policy", cursor.history))
+      else _decoder(cursor)),
       deriveEncoder[Capture].mapJsonObject(_.filter { case (_, value) => !value.isNull }))
   }
   final case class Execution(selection: Selection, profiles: Option[WorkflowExecutionProfileMapping],
@@ -47,7 +51,8 @@ private[smworkflow] object GoalPhaseOperatingProfiles {
   val cost = _mapping("cost")
   val quality = _mapping("quality")
   val localExperiment = _mapping(localExperimentName)
-  val declarations: Vector[ComponentParameterKey[?]] = Vector(declaration, cost, quality, localExperiment)
+  val declarations: Vector[ComponentParameterKey[?]] = Vector(declaration, cost, quality, localExperiment,
+    GoalPhaseDispatchPolicy.declaration, GoalPhaseNativeExecution.logicalOrigin, GoalPhaseRetainedObservations.declaration)
 
   def configuredC(parameters: ComponentInitializationParameters): Consequence[Option[String]] =
     if (parameters == null) invalid("Component initialization parameters are absent")
@@ -102,6 +107,9 @@ private[smworkflow] object GoalPhaseOperatingProfiles {
   def executionC(selected: Selection, d: GoalPhaseNativeRun.Declaration): Consequence[Execution] = for {
     _ <- if (selectionValid(selected)) Consequence.unit else invalid("logical selection is invalid")
     _ <- GoalPhaseNativeExecution.validatePairC(d.executionProfiles, d.executionOrigin)
+    _ <- if (d.logicalOrigin != null && d.logicalOrigin.forall(GoalPhaseNativeExecution.contextValid) &&
+        !d.logicalOrigin.exists(value => d.executionOrigin.exists(_.current.contextIdentity != value))) Consequence.unit
+      else invalid("logical origin is invalid or differs from the actual concrete origin context")
     mapping <- if (selected.identity == standard) Consequence.success(d.executionProfiles)
       else d.operatingMappings.get(selected.identity).map(value => Consequence.success(Some(value))).getOrElse(
         invalid("profile unavailable: " + selected.identity + " has no host execution mapping; no fallback selected"))
@@ -124,12 +132,21 @@ private[smworkflow] object GoalPhaseOperatingProfiles {
     _ <- if (input.operatingProfile.isEmpty && order.requirement.disposition.isEmpty) Consequence.unit
       else invalid("already issued work must retain its profile and disposition")
     execution <- forIssueC(d, start)
-    configured <- execution.profiles match {
+    configured <- if (d.dispatchPolicy.nonEmpty && execution.selection.identity == standard)
+      Consequence.success(Option.empty[WorkflowConcreteExecutionProfile]) else execution.profiles match {
       case None => Consequence.success(Option.empty[WorkflowConcreteExecutionProfile])
       case Some(mapping) => order.requirement.reasoningClass.map(mapping.resolveClassC).getOrElse(
         invalid("profile selection requires a semantic reasoning class")).map(Some(_))
     }
-    resolved <- (execution.profiles, execution.origin) match {
+    logical <- if (d.dispatchPolicy.nonEmpty && execution.selection.identity == standard)
+      GoalPhaseDispatchPolicy.captureC(input.kind, GoalPhaseDispatchPolicy.classification(input), order.requirement, isolateContext, d.dispatchPolicy.get).map(Some(_))
+      else Consequence.success(Option.empty[GoalPhaseDispatchPolicy.Capture])
+    _ <- if (logical.exists(_.placement == "RUNTIME")) invalid("Deterministic work belongs to its existing runtime operation, not a semantic worker") else Consequence.unit
+    resolved <- if (logical.nonEmpty) d.logicalOrigin.orElse(execution.origin.map(_.current.contextIdentity)).map { origin =>
+      val placement = if (logical.get.placement == "INLINE") ExecutionPlacement.Inline else ExecutionPlacement.Delegated
+      val independence = if (order.requirement.reviewRequired || isolateContext) ExecutionIndependence.Required else ExecutionIndependence.Optional
+      Consequence.success((order.requirement.copy(disposition = Some(ExecutionDisposition(placement, independence, origin))), Option.empty[WorkflowConcreteExecutionProfile]))
+    }.getOrElse(invalid("Logical dispatch requires the actual origin context")) else (execution.profiles, execution.origin) match {
       case (Some(mapping), Some(origin)) => mapping.resolveC(order.requirement, origin.current,
         if (isolateContext) origin.preference.copy(isolateContext = true) else origin.preference).flatMap { selected =>
         if (execution.selection.identity != standard && !configured.exists(_.matches(selected.profile)))
@@ -138,29 +155,35 @@ private[smworkflow] object GoalPhaseOperatingProfiles {
       }
       case _ => Consequence.success((order.requirement, Option.empty[WorkflowConcreteExecutionProfile]))
     }
-    fallback <- if (execution.selection.identity == standard &&
+    fallback <- if (logical.isEmpty && execution.selection.identity == standard &&
         resolved._1.disposition.exists(_.placement == ExecutionPlacement.Delegated)) execution.profiles match {
       case Some(mapping) => order.requirement.reasoningClass.map(mapping.fallbackClassC).getOrElse(Consequence.success(None))
       case None => Consequence.success(Option.empty[WorkflowConcreteExecutionProfile])
     } else Consequence.success(Option.empty[WorkflowConcreteExecutionProfile])
     capture = Capture(execution.selection, order.requirement.reasoningClass.map(_.value),
-      execution.profiles.map(_.identity), execution.profiles.map(_.revision), configured.map(_concrete), resolved._2.map(_concrete), fallback.map(_concrete))
+      if (logical.nonEmpty) Some("caller-standard") else execution.profiles.map(_.identity),
+      logical.map(_.revision).orElse(execution.profiles.map(_.revision)), configured.map(_concrete), resolved._2.map(_concrete), fallback.map(_concrete), logical)
     captured = input.copy(operatingProfile = Some(capture))
   } yield work.copy(current = order.copy(requirement = resolved._1,
     request = order.request.copy(input = order.request.input.map(_.copy(value = captured)))))
 
   def captureValid(value: Capture): Boolean = value != null && selectionValid(value.selection) &&
+    value.dispatch != null && value.dispatch.forall(GoalPhaseDispatchPolicy.valid) &&
     value.reasoningClass != null && value.reasoningClass.forall(_name) && value.mappingIdentity != null &&
     value.mappingRevision != null && value.configured != null && value.selected != null &&
     value.mappingIdentity.forall(_name) && value.mappingRevision.forall(_name) &&
     value.configured.forall(_validConcrete) && value.selected.forall(_validConcrete) && value.fallback != null &&
     value.fallback.forall(_validConcrete) && (value.fallback.isEmpty || value.selection.identity == standard) &&
-    (if (value.mappingIdentity.isEmpty) value.mappingRevision.isEmpty && value.configured.isEmpty && value.selected.isEmpty && value.fallback.isEmpty &&
+    (if (value.dispatch.nonEmpty) value.selection.identity == standard && value.reasoningClass.nonEmpty && value.fallback.isEmpty
+     else if (value.mappingIdentity.isEmpty) value.mappingRevision.isEmpty && value.configured.isEmpty && value.selected.isEmpty && value.fallback.isEmpty &&
       value.selection.identity == standard
      else value.mappingRevision.nonEmpty && value.configured.nonEmpty && value.selected.nonEmpty && value.reasoningClass.nonEmpty)
 
   def admitExecutionC(capture: Option[Capture], evidence: ExecutionEvidence): Consequence[Unit] =
     capture.flatMap(_.selected) match {
+      case None if capture.flatMap(_.dispatch).nonEmpty =>
+        if (evidence != null && evidence.execution.exists(o => capture.get.dispatch.get.candidates.contains(o.profileIdentity))) Consequence.unit
+        else invalid("execution observation is outside the retained logical candidate chain")
       case None => Consequence.unit // Historical or unconfigured standard has no invented concrete selection.
       case Some(selected) =>
         val permitted = Vector(selected) ++ capture.toVector.flatMap(_.fallback)

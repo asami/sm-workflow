@@ -30,7 +30,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Specification-owned configurations and Operation construction only. No live
   * model, execution observation, workflow storage or accepted Phase is inferred.
   * @since   Oct. 29, 2026
-  * @version Oct. 29, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -208,11 +208,41 @@ final class Phase610OperatingProfilesSpec extends AnyWordSpec with Matchers with
   private val _mapped = _declaration.copy(executionProfiles = Some(_mapping), executionOrigin = Some(_origin),
     operatingMappings = Map("cost" -> _optIn, "quality" -> _optIn))
 
+  private[admission] def qualifyForwardDispatch(narrator: GivenWhenThen): Unit = {
+    narrator.Given("a fresh native WorkOrder with an explicitly adopted forward dispatch revision and an actual origin")
+    val original = _work()
+    val selected = _mapped.copy(dispatchPolicy = Some(GoalPhaseDispatchPolicy.defaultPolicy))
+    narrator.When("the ordinary fresh issuance branch captures the logical route")
+    val issued = take(GoalPhaseOperatingProfiles.bindFreshC(original, selected, None))
+    val capture = _capture(issued)
+    narrator.Then("the versioned finite policy is retained without concrete or provider claims and pending work refuses rerouting")
+    capture.dispatch.get.candidates shouldBe Vector("ordinary", "difficult", "hardest")
+    capture.mappingRevision shouldBe Some(GoalPhaseDispatchPolicy.revision)
+    capture.configured shouldBe None
+    capture.selected shouldBe None
+    capture.fallback shouldBe None
+    GoalPhaseOperatingProfiles.captureValid(capture) shouldBe true
+    _order(issued).requirement.disposition.get.placement shouldBe ExecutionPlacement.Delegated
+    _order(issued).request.input.get.value.copy(operatingProfile = None) shouldBe _business
+    GoalPhaseOperatingProfiles.bindFreshC(issued, selected.copy(dispatchPolicy = None), None).isSuccess shouldBe false
+    _capture(take(GoalPhaseOperatingProfiles.bindFreshC(original, _mapped, None))).dispatch shouldBe None
+    _capture(take(GoalPhaseOperatingProfiles.bindFreshC(original, selected.copy(operatingProfile = Some("cost")), None))).dispatch shouldBe None
+    narrator.Given("only the real logical caller context, with no concrete parent profile or model claim")
+    val logical = _declaration.copy(dispatchPolicy = Some(GoalPhaseDispatchPolicy.defaultPolicy), logicalOrigin = Some("spec-caller-context"))
+    val logicalIssued = take(GoalPhaseOperatingProfiles.bindFreshC(original, logical, None))
+    _order(logicalIssued).requirement.disposition.get.originContextIdentity shouldBe "spec-caller-context"
+    _capture(logicalIssued).configured shouldBe None
+    _capture(logicalIssued).selected shouldBe None
+    GoalPhaseOperatingProfiles.bindFreshC(original, logical.copy(logicalOrigin = None), None).isSuccess shouldBe false
+    GoalPhaseOperatingProfiles.bindFreshC(original, logical.copy(logicalOrigin = Some(" ")), None).isSuccess shouldBe false
+    GoalPhaseOperatingProfiles.bindFreshC(original, selected.copy(logicalOrigin = Some("different-context")), None).isSuccess shouldBe false
+  }
+
   "Named profile capture at fresh work issuance" should afterWord(
     "in spec:ai-operating-profiles, example:M2-E1, rules:P610-02,P610-03,P610-10, phase:6.10") {
     "resolve explicit over config over standard and let a resume parameter supersede saved Start intent only for new work" in {
       Given("registered logical profiles, saved explicit Start intent and current configuration")
-      GoalPhaseOperatingProfiles.registered shouldBe Set("standard", "cost", "quality")
+      GoalPhaseOperatingProfiles.registered shouldBe Set("standard", "cost", "quality", "local-experiment")
       val start = Some(GoalPhaseOperatingProfiles.Selection("cost", "1", "explicit"))
       val configured = _mapped.copy(operatingProfile = Some("quality"))
       When("the fresh issuance resolver selects each actual input boundary")

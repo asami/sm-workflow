@@ -1394,3 +1394,61 @@ restores the retained original Session, and retains the compatible presentation
 completion observer. Missing/crossed observations refuse before progression;
 Submit and next Advance remain separate. No execution success or installed
 provider/all-family/two-chat acceptance is claimed by authoring these examples.
+
+### Forward GoalPhase logical dispatch
+
+An explicit `sm-workflow.goal-phase.dispatch-policy=standard-2026-11-01`
+selection affects only new missing-issued-row GoalPhase work. The retained
+`operatingProfile.dispatch` carries logical role, disposition and finite candidate
+identities; the versioned product caller adapter supplies concrete model/effort
+assignments. The legacy caller harness refuses these captures rather than
+resolving them through changed current mappings. Old absent/single-alternate
+captures retain the existing harness contract.
+
+The packaged `goal-phase-dispatch.py` adapter requires the actual Request, matching
+mapping revision, admitted repository path, and caller capability evidence. Its
+`launch` object is the exact generic collaboration start arguments, including
+native semantic role instructions and a fresh independent context when delegated.
+`launched` binds those arguments to the real canonical `task_name` (or exposed
+`agent_id` alias); contradictory aliases are refused and the raw return is retained. `complete` binds
+that same agent's actual result; `inline_complete` instead binds the issued parent
+context without a launch. `execution_evidence` projects the existing public
+WorkflowExecutionEvidence fields using actual retained artifact references.
+It omits modelIdentity unless separately observed, and uses the retained logical
+candidate as profileIdentity. Existing independent host evidence preparation,
+Submit and later Advance retain their own authority. The whole dispatch state
+retains requested/resolved model and effort, policy/mapping revisions, pre-start
+fallback reasons, exact launch arguments/identity, provider observations or unknown
+and resources. Keep that caller artifact beside the actual semantic return.
+
+This is an adapter contract, not a new scheduler, provider-availability service,
+CNCF agent policy, permission to start extra trial work or assertion of installed
+qualification. A capability gap returns unknown/unavailable. A typed confirmed
+unstarted model/effort rejection may follow only the captured next edge. Started,
+uncertain, policy/refusal and semantic outcomes never enter that fallback.
+
+For this forward logical route, the host registers
+`sm-workflow.goal-phase.origin-context` with its genuine current caller context
+identity and selects the dispatch-policy. The logical identity does not require
+an observed model/provider, concrete mapping or fabricated legacy descriptor.
+It must agree with an existing concrete origin if both are configured. Missing
+logical context is an explicit preparation gap. Legacy already-issued work keeps
+its captured contract. A context registration is not an execution observation.
+
+A caller may supply `request_artifact` to adapter preparation: the exact absolute
+local path of its retained public Request JSON. Preparation checks equality with
+the original Request and retains both that reference and the unchanged Request.
+For Requests exceeding 131,072 serialized characters this reference is required;
+the launch message references it instead of duplicating unbounded logs/base64.
+Keep the public file available to the semantic worker. There is no private store
+access or shortened replacement WorkOrder. Restore checks the captured executor
+against the raw launch return and never re-resolves current configuration.
+Captured fallback subsets are validated against versioned edges, then followed
+exactly; full mapping edges cannot extend the captured chain.
+
+Passive caller observations use the existing normal Phase completion-recording
+owner, with the closed property contract in ai-operating-profiles.md. They are
+bound to actual retained native work and accepted commits, persisted once in the
+completion metrics and reused by recollection. They do not authorize an effect,
+change native outcomes or replace independent evidence preparation. Missing or
+crossed attribution stays unavailable; metrics never trigger workflow repair.

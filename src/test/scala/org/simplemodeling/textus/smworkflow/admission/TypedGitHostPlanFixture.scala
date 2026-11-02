@@ -8,7 +8,8 @@ import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms
 /** Public strict host JSON, decoded and bound only by ordinary CNCF bootstrap.
   * No producer-private declaration, codec, binding or admission is constructed.
   * @since   Oct. 15, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object TypedGitHostPlanFixture {
@@ -35,11 +36,13 @@ private[admission] object TypedGitHostPlanFixture {
     conflictPaths: Set[String] = Set.empty, goalPaths: Vector[String] = Vector.empty,
     goalMessages: Vector[String] = Vector.empty, programs: Vector[Json] = Vector.empty,
     denied: Set[String] = Set.empty, commitIdentity: Boolean = true,
-    goalSelections: Vector[Vector[String]] = Vector.empty): Json = {
+    goalSelections: Vector[Vector[String]] = Vector.empty, completionReadPaths: Vector[String] = Vector.empty): Json = {
     require(goalMessages != null && goalSelections != null && goalMessages.size == goalSelections.size &&
       goalMessages.size <= 64 && goalSelections.forall(paths => paths != null && paths.nonEmpty && paths.size <= 256 &&
         paths.distinct == paths && paths.forall(path => path != null && GitPath.parseC(path).isSuccess)),
       "Every actual Goal message requires its explicit nonempty unique valid selectedPaths")
+    require(completionReadPaths.distinct == completionReadPaths && completionReadPaths.forall(goalPaths.contains),
+      "Completion reads require exact existing registered staging paths")
     val identitykinds = Set(GitOperationKind.PendingMerge, GitOperationKind.CommitPending,
       GitOperationKind.CreateCheckpoint, GitOperationKind.CommitSelected)
     def declaration(kind: GitOperationKind, selection: Option[String] = None,
@@ -69,6 +72,8 @@ private[admission] object TypedGitHostPlanFixture {
         declaration(GitOperationKind.StageSelected, Some("conflict-" + (index + 1)), Some(path))
       } ++ goalPaths.zipWithIndex.map { case (path, index) =>
         declaration(GitOperationKind.StageSelectedAll, Some("goal-path-" + (index + 1)), Some(path))
+      } ++ completionReadPaths.map { path =>
+        declaration(GitOperationKind.TreeEntries, Some("goal-path-" + (goalPaths.indexOf(path) + 1)), paths = Vector(path))
       } ++ goalMessages.zip(goalSelections).zipWithIndex.flatMap { case ((message, paths), index) =>
         val selection = Some("goal-step-" + (index + 1))
         Vector(declaration(GitOperationKind.CheckSelectedIndex, selection, paths = paths),

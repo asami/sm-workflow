@@ -1,6 +1,6 @@
 /**
  * @since   Oct. 27, 2026
- * @version Oct. 27, 2026
+ * @version Nov.  2, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -26,8 +26,12 @@ private[smworkflow] object CompletionRecords {
   object Policy { given Encoder[Policy] = deriveEncoder; given Decoder[Policy] = deriveDecoder }
   final case class File(path: String, mode: String, originalBlob: String, before: String, after: String, stagingOrdinal: Int)
   object File { given Encoder[File] = deriveEncoder; given Decoder[File] = deriveDecoder }
-  final case class Plan(session: String, family: String, scope: String, acceptedTree: String, evidence: Vector[String], files: Vector[File])
-  object Plan { given Encoder[Plan] = deriveEncoder; given Decoder[Plan] = deriveDecoder }
+  final case class Plan(session: String, family: String, scope: String, acceptedTree: String, evidence: Vector[String], files: Vector[File], summary: Option[String] = None)
+  object Plan {
+    given Encoder[Plan] = deriveEncoder[Plan].mapJson(_.mapObject(fields =>
+      if (fields("summary").exists(_.isNull)) fields.remove("summary") else fields))
+    given Decoder[Plan] = deriveDecoder
+  }
   val declaration: ComponentParameterKey[Policy] = ComponentParameterKey.optional("sm-workflow.completion.records",
     ComponentParameterDecoder {
       case ConfigurationValue.StringValue(raw) => io.circe.parser.parse(raw).fold(e => invalid(e.message), decodeC)
@@ -56,20 +60,28 @@ private[smworkflow] object CompletionRecords {
     policy.toVector.flatMap(_.targets.filter(t => t.family == family && t.scope == scope).flatMap(_.paths))
   def valid(p: Plan): Boolean = p != null && exact(p.session) && exact(p.scope) && exact(p.family) &&
     GitObjectId.parseC(p.acceptedTree).isSuccess && p.evidence != null && p.evidence.nonEmpty && p.evidence.forall(exact) &&
+    p.summary != null && p.summary.forall(s => s.nonEmpty && s.length <= 65536 && !s.contains('\u0000')) &&
     p.files != null && p.files.size <= 128 && p.files.forall(_ != null) && p.files.map(_.path).distinct.size == p.files.size && p.files.map(_.stagingOrdinal).distinct.size == p.files.size && p.files.forall(f =>
       f != null && path(f.path) && Set("100644", "100755")(f.mode) && GitObjectId.parseC(f.originalBlob).isSuccess &&
-      f.before != null && f.after != null && f.after == projection(f.before, p.session, p.family, p.scope, p.evidence) &&
+      f.before != null && f.after != null && f.after == projection(f.before, p.session, p.family, p.scope, p.evidence, p.summary) &&
       f.stagingOrdinal > 0 && f.stagingOrdinal <= 256)
-  def projection(before: String, session: String, family: String, scope: String, evidence: Vector[String]): String = {
+  def projection(before: String, session: String, family: String, scope: String, evidence: Vector[String], summary: Option[String] = None): String = {
     val marker = "<!-- sm-workflow completion " + session + " " + family + " " + scope + " -->"
     val block = marker + "\n" + "Accepted " + family + " " + scope + ".\n" +
-      evidence.map(e => "Evidence: " + e + "\n").mkString +
+      evidence.map(e => "Evidence: " + e + "\n").mkString + summary.map(_ + "\n").getOrElse("") +
       "Local record/commit closure is runtime-owned; later publication, return and synchronization outcomes are recorded separately.\n"
     // A prior conflicting record is refused by capture rather than overwritten.
     if (before.endsWith(block)) before else before + (if (before.endsWith("\n")) "\n" else "\n\n") + block
   }
+  /** Phase release selection remains unchanged. Each record read uses its exact
+    * existing staging identity; the host independently grants that bounded read.
+    */
+  def phaseReadSelectionC(path: String, staging: Vector[String]): Consequence[GitSelectionId] =
+    if (staging == null || staging.indexOf(path) < 0 || staging.indexOf(path) >= 256)
+      invalid("Phase record read requires its exact registered staging destination")
+    else GitSelectionId.parseC("goal-path-" + (staging.indexOf(path) + 1))
   def captureC(core: ActionCall.Core, session: String, family: String, scope: String, acceptedTree: String,
-    evidence: Vector[String], paths: Vector[String], owned: Vector[String], staging: Vector[String], selection: GitSelectionId, allowApplied: Boolean = false): Consequence[Plan] = for {
+    evidence: Vector[String], paths: Vector[String], owned: Vector[String], staging: Vector[String], selection: GitSelectionId, allowApplied: Boolean = false, summary: Option[String] = None): Consequence[Plan] = for {
     _ <- if (paths != null && owned != null && staging != null && selection != null && evidence != null && paths.forall(p => path(p) && StandaloneFixExecution.owned(p, owned) && staging.contains(p)) && evidence.nonEmpty && evidence.forall(exact))
       Consequence.unit else invalid("destinations must be explicitly owned and registered for selected staging; acceptance evidence is required")
     native <- G.inspectC(core)
@@ -78,9 +90,12 @@ private[smworkflow] object CompletionRecords {
     index <- G.indexTreeC(core)
     _ <- if (index == acceptedTree || allowApplied) Consequence.unit else invalid("record preparation requires the actual accepted index")
     tree <- GitObjectId.parseC(acceptedTree)
-    entries <- E.executeGitC(core, GitOperation.TreeEntries(tree, selection)).flatMap(_.valueC)
     files <- paths.foldLeft(Consequence.success(Vector.empty[File])) { (prior, p) => for {
       saved <- prior
+      readSelection <- if (family == "phase") phaseReadSelectionC(p, staging) else Consequence.success(selection)
+      entries <- E.executeGitC(core, GitOperation.TreeEntries(tree, readSelection)).flatMap(_.valueC)
+      _ <- if (family != "phase" || entries.forall(_.path.value == p)) Consequence.unit
+        else invalid("Phase record read exceeded its exact destination")
       entry <- entries.find(_.path.value == p).flatMap(_.entry).filter(e => Set("100644", "100755")(e.mode))
         .map(Consequence.success).getOrElse(invalid("selected record must already be tracked regular text: " + p))
       blob <- E.executeGitC(core, GitOperation.BlobContent(entry.blob)).flatMap(_.valueC)
@@ -89,12 +104,12 @@ private[smworkflow] object CompletionRecords {
       file <- WorkspaceFilePath.parseC(p)
       workspace <- WorkspaceId.parseC("sm-workflow-repository")
       actual <- WorkflowFileExecution.readTextC(core, FileTarget(workspace), file)
-      _ <- if (actual.text.contains(text) || (allowApplied && actual.text.contains(projection(text, session, family, scope, evidence)))) Consequence.unit else invalid("selected record worktree differs from its accepted index or exact projection")
+      _ <- if (actual.text.contains(text) || (allowApplied && actual.text.contains(projection(text, session, family, scope, evidence, summary)))) Consequence.unit else invalid("selected record worktree differs from its accepted index or exact projection")
       marker = "<!-- sm-workflow completion " + session + " " + family + " " + scope + " -->"
-      after = projection(text, session, family, scope, evidence)
+      after = projection(text, session, family, scope, evidence, summary)
       _ <- if (!text.contains(marker) || after == text) Consequence.unit else invalid("a different completion section already exists; semantic correction requires issued work")
     } yield saved :+ File(p, entry.mode, entry.blob.value, text, after, staging.indexOf(p) + 1) }
-    result = Plan(session, family, scope, acceptedTree, evidence, files)
+    result = Plan(session, family, scope, acceptedTree, evidence, files, summary)
     _ <- if (valid(result)) Consequence.unit else invalid("record projection has invalid native facts")
   } yield result
   def fileState(file: File, actual: Option[String]): String =

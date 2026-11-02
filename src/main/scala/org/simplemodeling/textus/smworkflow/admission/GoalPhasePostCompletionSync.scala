@@ -90,7 +90,9 @@ private[smworkflow] object GoalPhasePostCompletionSync {
     controller: O.State, direction: Option[GoalPhaseCompletionPolicyAdoption.Direction],
     legacy: Option[R.Payload], findings: N.State,
     acknowledge: String => Consequence[Unit],
-    profiles: Vector[GoalPhaseOperatingProfiles.Capture] = Vector.empty): Consequence[V.GoalPhaseAdvanceResult] = for {
+    profiles: Vector[GoalPhaseOperatingProfiles.Capture] = Vector.empty,
+    requests: Vector[GoalPhaseWorkComparison.NativeWork] = Vector.empty,
+    retainedMetrics: Option[GoalPhasePhaseMetrics.Summary] = None): Consequence[V.GoalPhaseAdvanceResult] = for {
     _ <- if (usesLocalPolicy(session, direction) && from == session.current &&
         from.lifecycle == Lifecycle.Active && from.suspension.isEmpty) Consequence.unit
       else F.invalid("Local completion requires its actual adopted or newly captured policy and current frontier")
@@ -110,7 +112,8 @@ private[smworkflow] object GoalPhasePostCompletionSync {
         else F.invalid("Local completion differs from its CML/controller")
       metrics = Some(legacy.map(value => value.metrics.getOrElse(
         GoalPhasePhaseMetrics.absentCompletion(session, d, core, selected.candidate, profiles))).getOrElse(
-        GoalPhasePhaseMetrics.completed(session, d, core, selected.candidate, profiles)))
+        retainedMetrics.getOrElse(GoalPhasePhaseMetrics.withComparison(
+          GoalPhasePhaseMetrics.completed(session, d, core, selected.candidate, profiles), selected.plan, selected.completed, requests))))
       synchronization <- legacy.map(value => Consequence.success((Synchronization("unknown",
         "The existing child retains its own effects and continuation; it is never started again.", Some(value.childSessionId),
         Some("advanceRepositorySync")), false))).getOrElse(_select_c(session, d, core, selected))

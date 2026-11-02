@@ -9,8 +9,11 @@ Delivery: [Phase 6.9](../phase/phase-6.9.md).
 Both clean and dirty entry improvements belong to Phase 6.9. Phase 6.8 retains
 its existing commit completion/recovery and mechanical hygiene scope, including
 shared RepositorySync commit integration; it does not acquire these new start,
-selection or synchronization requirements. Phase 7 composes the qualified route
-across related projects rather than rebuilding it.
+selection or synchronization requirements. [Phase 6.11](../phase/phase-6.11.md)
+composes this route for an explicit directory list under the
+[batch contract](repository-sync-directory-list.md), retaining individual public
+operations. Phase 7 consumes that route for project-local worktree/subtree and
+related-project development rather than rebuilding ordinary batch synchronization.
 
 For a configured repository, the caller supplies the repository selection and
 the user's synchronization intent. Runtime resolves the branch/tracking target,

@@ -109,7 +109,9 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
     from: InstanceRecord, controller: O.State, acknowledge: String => Consequence[Unit],
     documentPolicy: Option[GoalPhaseDocumentProgress.Policy] = None,
     recordingPaths: Vector[String] = Vector.empty,
-    profiles: Vector[GoalPhaseOperatingProfiles.Capture] = Vector.empty): Consequence[V.GoalPhaseAdvanceResult] = for {
+    profiles: Vector[GoalPhaseOperatingProfiles.Capture] = Vector.empty,
+    requests: Vector[GoalPhaseWorkComparison.NativeWork] = Vector.empty,
+    retainedMetrics: Option[GoalPhasePhaseMetrics.Summary] = None): Consequence[V.GoalPhaseAdvanceResult] = for {
     installation <- d.repositoryClosure.map(Consequence.success).getOrElse(F.invalid("repository closure host is absent"))
     _ <- installation.validateC(d)
     input <- inputC(from, controller)
@@ -145,7 +147,8 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
                   "PhaseClosing", "phase-closure-intent-saved", "PhaseClosing")) Consequence.unit
                   else F.invalid("repository closure intent is absent from CML")
                 identity = core.executionContext.idGeneration.opaqueId("sm-workflow-session")
-                metrics = GoalPhasePhaseMetrics.completed(session, d, core, input.candidate, profiles)
+                metrics = retainedMetrics.getOrElse(GoalPhasePhaseMetrics.withComparison(
+                  GoalPhasePhaseMetrics.completed(session, d, core, input.candidate, profiles), input.plan, input.completed, requests))
                 intent <- store.saveC("intent", from, Payload(input, identity, None, metrics = Some(metrics)), closed = false)
                 _ <- store.ackC("goal-repository-prepared")
               } yield Some((intent._1, intent._2, true))

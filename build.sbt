@@ -160,7 +160,10 @@ lazy val root = project
         "docs/spec/runtime-caller-format-migration.md",
         "scripts/native-goal-command.py",
         "scripts/native-goal-authority.py",
-        "scripts/migrate-runtime-caller-format.py"
+        "scripts/migrate-runtime-caller-format.py",
+        "scripts/goal-phase-dispatch.py",
+        "skills/sm-goal-phase/dispatch-mappings.json",
+        "skills/sm-goal-phase/cost-role-mapping.json"
       ).map { relativepath =>
         val source = baseDirectory.value / relativepath
         if (!source.isFile) sys.error("Missing component-owned skill contract source: " + source)

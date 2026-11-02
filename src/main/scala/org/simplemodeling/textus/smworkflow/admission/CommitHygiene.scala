@@ -1,6 +1,6 @@
 /**
  * @since   Oct. 27, 2026
- * @version Oct. 27, 2026
+ * @version Nov.  2, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -51,7 +51,8 @@ private[smworkflow] object CommitHygiene {
       c.stagingOrdinal > 0 && c.stagingOrdinal <= 256) &&
     (value.outcome != "planned" || (value.mode == autoFix && value.corrections.nonEmpty && GitObjectId.parseC(value.originalIndex).isSuccess))
 
-  def supported(path: String): Boolean = path != null && path.endsWith(".cml") &&
+  def supported(path: String): Boolean = path != null &&
+    (path.endsWith(".cml") || (path.startsWith("docs/") && path.endsWith(".md"))) &&
     !path.split("/").exists(part => Set("test", "tests", "fixtures", "expected", "golden", "snapshots")(part.toLowerCase(java.util.Locale.ROOT))) &&
     WorkspaceFilePath.parseC(path).isSuccess
   def corrected(text: String): Option[String] = Option(text).filter(t => t.endsWith("\n\n") &&
@@ -61,7 +62,22 @@ private[smworkflow] object CommitHygiene {
     }
   def partialDiagnostic(dirty: Vector[G.DirtyPath], paths: Vector[String]): Option[String] =
     Option.when(dirty.exists(d => paths.contains(d.path) && d.worktree != ' '))(
-      "Commit hygiene preserves partial staging: the affected CML worktree differs from its index; typed Git cannot update only its index suffix. No hygiene write or staging was performed.")
+      "Commit hygiene preserves partial staging: the affected CML or docs Markdown worktree differs from its index; typed Git cannot update only its index suffix. No hygiene write or staging was performed.")
+
+  private def _staging_ordinal(staging: Vector[String], path: String): Int = staging.indexOf(path) match {
+    case -1 => staging.indexWhere(owner => path.startsWith(owner + "/")) + 1
+    case index => index + 1
+  }
+  private def _selection_c(correction: Correction): Consequence[GitSelectionParameters] = for {
+    identity <- GitSelectionId.parseC("goal-path-" + correction.stagingOrdinal)
+    path <- GitPath.parseC(correction.path)
+  } yield GitSelectionParameters(identity, Vector(path), None)
+  private def _preflight_c(core: ActionCall.Core, correction: Correction): Consequence[Unit] = for {
+    selection <- _selection_c(correction)
+    workspace <- WorkspaceId.parseC("sm-workflow-repository")
+    _ <- GitExecutionPreflight.validateC(core.executionContext, GitTarget(workspace, Some(selection)),
+      GitOperation.StageSelectedAll(selection.identity))
+  } yield ()
 
   def planC(core: ActionCall.Core, mode: String, check: GitIndexCheck, owned: Vector[String],
     staging: Vector[String], parentTree: String, alreadyCorrected: Boolean = false): Consequence[Record] = {
@@ -74,8 +90,9 @@ private[smworkflow] object CommitHygiene {
         else if (mode == error) Consequence.success(diagnostic("Commit hygiene mode=error; findings retained without edits or commit"))
         else if (alreadyCorrected) Consequence.success(diagnostic("Commit hygiene performed one pass; remaining findings require ordinary handling", "remaining-findings"))
         else if (!check.onlyEofBlankLines || check.eofBlankLinePaths.isEmpty || !check.eofBlankLinePaths.forall(p =>
-          supported(p.value) && owned.exists(owner => p.value == owner || p.value.startsWith(owner + "/")) && staging.contains(p.value)))
-          Consequence.success(diagnostic("Only EOF-only findings on selected registered CML files support automatic correction"))
+          supported(p.value) && owned.exists(owner => p.value == owner || p.value.startsWith(owner + "/")) &&
+            _staging_ordinal(staging, p.value) > 0 && _staging_ordinal(staging, p.value) <= 256))
+          Consequence.success(diagnostic("Only EOF-only findings on selected registered CML or docs Markdown files support automatic correction"))
         else partialDiagnostic(native.observed.dirty, check.eofBlankLinePaths.toVector.map(_.value)) match {
           case Some(message) => Consequence.success(diagnostic(message))
           case None => for {
@@ -88,13 +105,15 @@ private[smworkflow] object CommitHygiene {
                 .map(Consequence.success).getOrElse(Consequence.stateConflict("EOF finding has no complete regular index blob"))
               blob <- E.executeGitC(core, GitOperation.BlobContent(change.newBlob.get)).flatMap(_.valueC)
               text <- blob.text.filter(t => t.getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector == blob.bytes && corrected(t).nonEmpty)
-                .map(Consequence.success).getOrElse(Consequence.stateConflict("CML EOF correction requires complete UTF-8 LF text; original bytes retained"))
+                .map(Consequence.success).getOrElse(Consequence.stateConflict("CML or docs Markdown EOF correction requires complete UTF-8 LF text; original bytes retained"))
+              correction = Correction(path.value, change.newMode, change.newBlob.get.value, _staging_ordinal(staging, path.value))
+              _ <- _preflight_c(core, correction)
               file <- WorkspaceFilePath.parseC(path.value)
               workspace <- WorkspaceId.parseC("sm-workflow-repository")
               actual <- WorkflowFileExecution.readTextC(core, FileTarget(workspace), file)
-              _ <- if (actual.text.contains(text)) Consequence.unit else Consequence.stateConflict("CML worktree differs from selected index; no hygiene write")
-            } yield saved :+ Correction(path.value, change.newMode, change.newBlob.get.value, staging.indexOf(path.value) + 1) }
-          } yield Record(mode, "planned", check.findingKeys.toVector.sorted, planned, "Bounded CML terminal-LF preparation", index.value)
+              _ <- if (actual.text.contains(text)) Consequence.unit else Consequence.stateConflict("CML or docs Markdown worktree differs from selected index; no hygiene write")
+            } yield saved :+ correction }
+          } yield Record(mode, "planned", check.findingKeys.toVector.sorted, planned, "Bounded CML or docs Markdown terminal-LF preparation", index.value)
         }
     } yield record
   }
@@ -105,7 +124,10 @@ private[smworkflow] object CommitHygiene {
   def applyC(core: ActionCall.Core, record: Record): Consequence[Unit] = for {
     _ <- if (valid(record) && record.outcome == "planned") Consequence.unit
       else Consequence.stateConflict("Hygiene application has no retained bounded plan")
-    indexed <- indexCorrectionsC(core, record)
+    _ <- record.corrections.foldLeft(Consequence.unit) { (prior, correction) =>
+      prior.flatMap(_ => _preflight_c(core, correction))
+    }
+    indexed <- _index_corrections_c(core, record)
     prepared <- record.corrections.foldLeft(Consequence.success(Vector.empty[(Correction, WorkspaceFilePath, String, String)])) { (prior, c) => for {
       saved <- prior
       id <- GitObjectId.parseC(c.originalBlob)
@@ -125,14 +147,16 @@ private[smworkflow] object CommitHygiene {
       _ <- if (actual.text.contains(next)) Consequence.unit else WorkflowFileExecution.writeTextC(core, FileTarget(workspace), path,
         next, FileWriteMode.UpdateExisting(original)).flatMap { written => if (written.outcome == FileWriteOutcome.Updated)
           Consequence.unit else Consequence.stateConflict("Hygiene replacement conflicted; no commit") }
-      _ <- if (indexed.contains(c.path)) Consequence.unit else E.stageGoalCandidateC(core, c.stagingOrdinal).flatMap(_.valueC)
+      _ <- if (indexed.contains(c.path)) Consequence.unit else _selection_c(c).flatMap(selection =>
+        E.executeSelectedGitC(core, GitOperation.StageSelectedAll(selection.identity), selection,
+          "sm-workflow-repository").flatMap(_.valueC))
     } yield () } }
-    after <- indexCorrectionsC(core, record)
+    after <- _index_corrections_c(core, record)
     _ <- if (after == record.corrections.map(_.path).toSet) Consequence.unit
       else Consequence.stateConflict("Hygiene staging did not establish every exact selected postcondition")
   } yield ()
 
-  private def indexCorrectionsC(core: ActionCall.Core, record: Record): Consequence[Set[String]] = for {
+  private def _index_corrections_c(core: ActionCall.Core, record: Record): Consequence[Set[String]] = for {
     original <- GitObjectId.parseC(record.originalIndex)
     current <- G.indexTreeC(core).flatMap(GitObjectId.parseC)
     changes <- E.executeGitC(core, GitOperation.TreeChanges(original, current)).flatMap(_.valueC)

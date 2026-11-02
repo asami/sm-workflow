@@ -75,7 +75,10 @@ private[smworkflow] object GoalPhaseNativeRun {
     operatingProfile: Option[String] = None,
     operatingMappings: Map[String, WorkflowExecutionProfileMapping] = Map.empty,
     invocationOperatingProfile: Option[GoalPhaseOperatingProfiles.Selection] = None,
-    prerequisitePublicationRecovery: Option[GoalPhasePrerequisitePublicationRecovery.Installation] = None)
+    prerequisitePublicationRecovery: Option[GoalPhasePrerequisitePublicationRecovery.Installation] = None,
+    dispatchPolicy: Option[GoalPhaseDispatchPolicy.Policy] = None,
+    logicalOrigin: Option[String] = None,
+    retainedObservations: Option[GoalPhaseRetainedObservations.Retained] = None)
   final case class SelectedPlan(selectionIdentity: String, participantIdentity: String,
     plan: O.Plan, documents: Option[GoalPhaseDocumentSource.Bound] = None)
   trait PlanPort {
@@ -226,6 +229,11 @@ private[smworkflow] object GoalPhaseNativeRun {
         d.operatingMappings == null || d.operatingMappings.exists((name, mapping) =>
           !GoalPhaseOperatingProfiles.optInNames(name) || mapping == null) ||
         d.invocationOperatingProfile == null || d.invocationOperatingProfile.exists(value => !GoalPhaseOperatingProfiles.selectionValid(value)) ||
+        d.dispatchPolicy == null || d.dispatchPolicy.exists(p => !GoalPhaseDispatchPolicy.policyValid(p)) ||
+        d.logicalOrigin == null || d.logicalOrigin.exists(p => !GoalPhaseNativeExecution.contextValid(p)) ||
+        d.logicalOrigin.exists(p => Option(d.executionOrigin).flatten.exists(o =>
+          o != null && o.current != null && o.current.contextIdentity != p)) ||
+        d.retainedObservations == null || d.retainedObservations.exists(p => !GoalPhaseRetainedObservations.valid(p)) ||
         d.operatingProfile == null || d.operatingProfile.exists(value => !GoalPhaseOperatingProfiles.validateNameC(value).isSuccess) ||
         d.executionProfiles == null || d.executionProfiles.exists(_ == null) || d.findingRecordingPolicy == null ||
         d.validationRecovery == null || d.validationRecovery.exists(_ == null) || d.journalPolicy == null ||

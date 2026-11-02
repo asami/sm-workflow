@@ -224,6 +224,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     stepReviewRequest: Option[GoalPhaseStepReviewRequest.Requested] = None,
     issuedStepReviews: Set[(String, Long)] = Set.empty,
     metricProfiles: Vector[GoalPhaseOperatingProfiles.Capture] = Vector.empty,
+    metricRequests: Vector[GoalPhaseWorkComparison.NativeWork] = Vector.empty,
     releaseDependency: Option[R.Progress] = None,
     prerequisiteRecovery: Option[GoalPhasePrerequisitePublicationRecovery.Progress] = None,
     prerequisiteUnknownDirection: Option[W.Saved] = None,
@@ -1400,6 +1401,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                     result <- _walk_c(source, cursor.copy(from = next, controller = state,
                       documents = prepared.input.documents,
                       metricProfiles = (cursor.metricProfiles ++ prepared.input.operatingProfile).distinct,
+                      metricRequests = cursor.metricRequests :+ GoalPhaseWorkComparison.NativeWork(
+                        prepared.input.stepIdentity, prepared.input.kind, prepared.input.operatingProfile,
+                        Some(value.completion.result.continuationId.value), Some(value.completion.result.result.value.outcome)),
                       candidate = if (clear) None else cursor.candidate,
                       validation = if (clear) None else cursor.validation,
                       initialPhaseRepair = if (prepared.input.kind == "ReviewPhase") None else cursor.initialPhaseRepair,
@@ -2081,10 +2085,10 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           case LocatedRecording(recording) => _recording_port.issuedC(recording, core)
             .flatMap(NativeWorkflowOperationOutput.goalRecordingRequestC(_, recording.findings))
           case Paused(cursor, _, true) => GoalPhaseNativeRepositoryClosure.advanceC(source, d, core,
-            cursor.repositoryFrontier.getOrElse(cursor.from), cursor.controller, acknowledgement, cursor.documentpolicy, N.managementPaths(cursor.findings), cursor.metricProfiles)
+            cursor.repositoryFrontier.getOrElse(cursor.from), cursor.controller, acknowledgement, cursor.documentpolicy, N.managementPaths(cursor.findings), cursor.metricProfiles, cursor.metricRequests, cursor.recordingCandidate.flatMap(_.payload.metrics))
             .map(NativeWorkflowOperationOutput.withFindingRecording(_, cursor.findings))
           case Paused(cursor, _, false) if cursor.recordingCandidate.exists(s => s.payload.records.nonEmpty && s.payload.finalCandidate.isEmpty) =>
-            C.advanceC(source, d, core, cursor.repositoryFrontier.getOrElse(cursor.from), cursor.controller, cursor.findings, acknowledgement)
+            C.advanceC(source, d, core, cursor.repositoryFrontier.getOrElse(cursor.from), cursor.controller, cursor.findings, acknowledgement, cursor.metricProfiles, cursor.metricRequests)
               .flatMap(saved => F.waitC(saved.record, "Phase records retained", "Continue missing local closure without replay"))
               .flatMap(_after_native_c(source, cursor, _, core))
           case Paused(cursor, _, false) if cursor.repositoryFrontier.nonEmpty && cursor.controller.stage == O.Stage.PhaseClosing &&
@@ -2295,7 +2299,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           }
         } yield wire
       case O.Stage.PhaseClosing if (N.phasePaths(cursor.findings).nonEmpty || CompletionRecords.selected(d.completionRecords, "phase", cursor.controller.plan.phase).nonEmpty) && cursor.recordingCandidate.isEmpty => for {
-        saved <- C.advanceC(source, d, core, cursor.from, cursor.controller, cursor.findings, acknowledgement)
+        saved <- C.advanceC(source, d, core, cursor.from, cursor.controller, cursor.findings, acknowledgement, cursor.metricProfiles, cursor.metricRequests)
         fallback <- _wait_cursor_c(cursor, if (saved.payload.finalCandidate.nonEmpty)
           "Actual Phase recording candidate is retained; repository closure remains unfinished."
           else "Phase recording has an unknown staging intent; it is not automatically replayed.")
@@ -2310,11 +2314,11 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           .flatMap(_after_native_c(source, cursor, _, core))
       case O.Stage.PhaseClosing if GoalPhasePostCompletionSync.usesLocalPolicy(source, cursor.completionDirection) =>
         GoalPhasePostCompletionSync.advanceC(source, d, core, cursor.from, cursor.controller,
-          cursor.completionDirection, cursor.legacyClosure, cursor.findings, acknowledgement, cursor.metricProfiles)
+          cursor.completionDirection, cursor.legacyClosure, cursor.findings, acknowledgement, cursor.metricProfiles, cursor.metricRequests, cursor.recordingCandidate.flatMap(_.payload.metrics))
           .map(NativeWorkflowOperationOutput.withFindingRecording(_, cursor.findings))
       case O.Stage.PhaseClosing => if (d.repositoryClosure.nonEmpty)
         GoalPhaseNativeRepositoryClosure.advanceC(source, d, core, cursor.repositoryFrontier.getOrElse(cursor.from), cursor.controller, acknowledgement,
-          cursor.documentpolicy, N.managementPaths(cursor.findings), cursor.metricProfiles)
+          cursor.documentpolicy, N.managementPaths(cursor.findings), cursor.metricProfiles, cursor.metricRequests, cursor.recordingCandidate.flatMap(_.payload.metrics))
           .map(NativeWorkflowOperationOutput.withFindingRecording(_, cursor.findings))
         else _wait_cursor_c(cursor, "Whole-Phase checks and review are retained; repository closure remains unavailable.")
       case O.Stage.Decision => for {

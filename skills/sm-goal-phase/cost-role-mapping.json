@@ -1,0 +1,145 @@
+{
+  "schemaVersion": "cncf.workflow-execution-profile-mapping.v1",
+  "identity": "cost-role-candidates",
+  "revision": "2026-10-30-roles",
+  "profiles": [
+    {
+      "identity": "cost-luna",
+      "provider": "codex",
+      "model": "gpt-6-luna",
+      "controls": {
+        "effort": "medium"
+      }
+    },
+    {
+      "identity": "cost-terra",
+      "provider": "codex",
+      "model": "gpt-6.1-terra",
+      "controls": {
+        "effort": "medium"
+      }
+    },
+    {
+      "identity": "cost-sol",
+      "provider": "codex",
+      "model": "gpt-6.1-sol",
+      "controls": {
+        "effort": "high"
+      }
+    }
+  ],
+  "classes": [
+    {
+      "reasoningClass": "CodingEngineeringMechanical",
+      "profile": "cost-luna"
+    },
+    {
+      "reasoningClass": "CodingEngineeringRoutine",
+      "profile": "cost-terra"
+    },
+    {
+      "reasoningClass": "CodingEngineeringStandard",
+      "profile": "cost-terra"
+    },
+    {
+      "reasoningClass": "CodingEngineeringDeep",
+      "profile": "cost-sol"
+    },
+    {
+      "reasoningClass": "CodingProgrammingMechanical",
+      "profile": "cost-luna"
+    },
+    {
+      "reasoningClass": "CodingProgrammingRoutine",
+      "profile": "cost-terra"
+    },
+    {
+      "reasoningClass": "CodingProgrammingStandard",
+      "profile": "cost-terra"
+    },
+    {
+      "reasoningClass": "CodingProgrammingDeep",
+      "profile": "cost-sol"
+    },
+    {
+      "reasoningClass": "PlanningRoutine",
+      "profile": "cost-terra"
+    },
+    {
+      "reasoningClass": "PlanningStandard",
+      "profile": "cost-terra"
+    },
+    {
+      "reasoningClass": "PlanningDeep",
+      "profile": "cost-sol"
+    },
+    {
+      "reasoningClass": "PlanningCritical",
+      "profile": "cost-sol"
+    },
+    {
+      "reasoningClass": "AnalysisRoutine",
+      "profile": "cost-terra"
+    },
+    {
+      "reasoningClass": "AnalysisStandard",
+      "profile": "cost-terra"
+    },
+    {
+      "reasoningClass": "AnalysisDeep",
+      "profile": "cost-sol"
+    },
+    {
+      "reasoningClass": "AnalysisCritical",
+      "profile": "cost-sol"
+    },
+    {
+      "reasoningClass": "DesignRoutine",
+      "profile": "cost-terra"
+    },
+    {
+      "reasoningClass": "DesignStandard",
+      "profile": "cost-terra"
+    },
+    {
+      "reasoningClass": "DesignDeep",
+      "profile": "cost-sol"
+    },
+    {
+      "reasoningClass": "DesignCritical",
+      "profile": "cost-sol"
+    },
+    {
+      "reasoningClass": "JudgmentRoutine",
+      "profile": "cost-terra"
+    },
+    {
+      "reasoningClass": "JudgmentStandard",
+      "profile": "cost-terra"
+    },
+    {
+      "reasoningClass": "JudgmentDeep",
+      "profile": "cost-sol"
+    },
+    {
+      "reasoningClass": "JudgmentCritical",
+      "profile": "cost-sol"
+    },
+    {
+      "reasoningClass": "ReviewRoutine",
+      "profile": "cost-terra"
+    },
+    {
+      "reasoningClass": "ReviewStandard",
+      "profile": "cost-terra"
+    },
+    {
+      "reasoningClass": "ReviewDeep",
+      "profile": "cost-sol"
+    },
+    {
+      "reasoningClass": "ReviewCritical",
+      "profile": "cost-sol"
+    }
+  ]
+}

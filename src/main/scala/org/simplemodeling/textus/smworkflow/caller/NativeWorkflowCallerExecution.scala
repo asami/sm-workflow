@@ -56,6 +56,8 @@ object NativeWorkflowCallerExecution {
     reference <- _reference_c(issued)
     requirement <- _json_c(issued.executionRequirement)
     capture <- _capture_c(issued)
+    _ <- if (capture.flatMap(_.dispatch).isEmpty) Consequence.unit
+      else Consequence.stateConflict("Retained logical dispatch requires the versioned goal-phase-dispatch caller adapter; legacy harness resolution is forbidden")
     retained <- capture.filter(_.configured.nonEmpty).map(GoalPhaseOperatingProfiles.retainedMappingC)
       .getOrElse(Consequence.success(mapping))
     session <- H.prepareIssuedJsonC(reference, requirement, origin, retained)

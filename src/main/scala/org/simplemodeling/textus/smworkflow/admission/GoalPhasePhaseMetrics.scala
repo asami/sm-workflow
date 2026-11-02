@@ -39,7 +39,9 @@ private[smworkflow] object GoalPhasePhaseMetrics {
     tokensPerNetSourceLine: Option[BigDecimal], ratioReason: String)
   final case class Summary(schemaVersion: String, phaseSession: String, start: Option[Endpoint], end: Endpoint,
     netSourceLines: Option[Long], netReason: String, usage: Vector[Usage], profile: Option[GoalPhaseOperatingProfiles.Selection],
-    issuedProfiles: Vector[GoalPhaseOperatingProfiles.Capture] = Vector.empty)
+    issuedProfiles: Vector[GoalPhaseOperatingProfiles.Capture] = Vector.empty,
+    comparison: Vector[GoalPhaseWorkComparison.Summary] = Vector.empty,
+    retainedObservations: Option[GoalPhaseRetainedObservations.Retained] = None)
 
   given Encoder[ResourceTreeQueryLimits] = deriveEncoder
   given Decoder[ResourceTreeQueryLimits] = deriveDecoder
@@ -51,8 +53,16 @@ private[smworkflow] object GoalPhasePhaseMetrics {
   given Decoder[UsageObservation] = deriveDecoder
   given Encoder[Usage] = deriveEncoder
   given Decoder[Usage] = deriveDecoder
-  given Encoder[Summary] = deriveEncoder
-  given Decoder[Summary] = deriveDecoder
+  given Encoder[Summary] = deriveEncoder[Summary].mapJson(_.mapObject { fields =>
+    val withoutEmpty = if (fields("comparison").exists(_.asArray.exists(_.isEmpty))) fields.remove("comparison") else fields
+    if (withoutEmpty("retainedObservations").exists(_.isNull)) withoutEmpty.remove("retainedObservations") else withoutEmpty
+  })
+  private val _summary_decoder: Decoder[Summary] = deriveDecoder
+  given Decoder[Summary] = Decoder.instance { cursor =>
+    val normalized = cursor.value.mapObject(fields =>
+      if (fields.contains("comparison")) fields else fields.add("comparison", Json.arr()))
+    _summary_decoder.decodeJson(normalized)
+  }
 
   private val _suffixes = Vector(".scala", ".java", ".sbt", ".py", ".sh", ".cml", ".js", ".mjs", ".ts", ".tsx", ".jsx", ".go", ".rs", ".c", ".h", ".cpp", ".kt")
   private val _excludes = Vector(".git", "target", "project/target", "project/project", ".bloop", ".metals",
@@ -134,7 +144,7 @@ private[smworkflow] object GoalPhasePhaseMetrics {
     val started = session.started.receipt.payload.value
     val selected = started.sourceMetrics.map(_.scope).getOrElse(scope(d))
     summarize(session.current.identity.value, started.sourceMetrics, capture(core, selected, source), Vector.empty, started.operatingProfile)
-      .copy(issuedProfiles = profiles.distinct)
+      .copy(issuedProfiles = profiles.distinct, retainedObservations = d.retainedObservations)
   }
 
   /** Passive usage aggregation over already acquired attributable observations.
@@ -194,11 +204,43 @@ private[smworkflow] object GoalPhasePhaseMetrics {
     result.copy(completion = result.completion.map(value => value.copy(metrics = metrics.map(record))),
       message = metrics.map(value => result.message + " " + display(value)).getOrElse(result.message))
 
+  def withComparison(summary: Summary, plan: GoalPhaseOrderedProgression.Plan,
+    completed: Vector[GoalPhaseOrderedProgression.ClosedStep], requests: Vector[GoalPhaseWorkComparison.NativeWork]): Summary = {
+    val configured = summary.retainedObservations
+    val bound = configured.flatMap(value => GoalPhaseRetainedObservations.bindC(value, summary.phaseSession, plan, completed, requests).toOption)
+    val work = GoalPhaseWorkComparison.native(plan, completed, requests, bound)
+    val observations = summary.usage.flatMap(_.observations) ++ bound.toVector.flatMap(_.attempts.flatMap(_.usage))
+    val totals = aggregate(summary.phaseSession, observations, summary.netSourceLines, summary.netReason)
+    val sources = bound.toVector.flatMap(r => Vector(r.sourceReference) ++ r.attempts.map(_.sourceReference) ++ r.closures.map(_.sourceReference)).distinct
+    summary.copy(usage = totals, comparison = work.map(_.workClass).distinct.sorted.map { cls =>
+      val projected = GoalPhaseWorkComparison.project(summary.phaseSession,
+        GoalPhaseWorkComparison.Cohort(plan.identity + ":" + cls, "Step", cls, summary.start.map(_.observedAt),
+          summary.end.observedAt, summary.end.sourceTree), work, observations)
+      projected.copy(limitations = projected.limitations ++ sources.map("Retained caller source: " + _) ++
+        Option.when(configured.nonEmpty && bound.isEmpty)("Configured caller observations refused: actual Session/continuation/Step/kind/commit binding differs"))
+    })
+  }
+
+  def durableEnglish(value: Summary): String = {
+    "Phase source accepted; normal local record/commit closure follows. No later synchronization outcome is inferred.\n" +
+      "Source revision: " + value.end.sourceHead + "/" + value.end.sourceTree + ". " + display(value) + "\n" +
+      value.issuedProfiles.map(p => "Profile " + p.selection.identity + "@" + p.selection.revision +
+        "; mapping=" + p.mappingIdentity.getOrElse("unknown") + "@" + p.mappingRevision.getOrElse("unknown") +
+        "; logical dispatch=" + p.dispatch.map(_.toString).getOrElse("legacy") +
+        "; configured=" + p.configured.map(_.toString).getOrElse("unknown") +
+        "; selected=" + p.selected.map(_.toString).getOrElse("caller-retained or unknown") +
+        "; provider observations are retained separately per execution").mkString("\n") +
+      "\n" + value.usage.flatMap(_.observations).map(o => "Execution " + o.execution + "; role=" + o.role +
+        "; model=" + o.model.getOrElse("unknown") + "; destination=" + o.destination + "; interval=" +
+        o.intervalStart + ".." + o.intervalEnd + "; coverage=" + o.coverage).mkString("\n") +
+      "\nNo benchmark or model-causality claim. Missing original endpoints, usage, timestamps and launch observations remain unavailable.\n"
+  }
+
   def display(value: Summary): String = {
     def number(value: Option[Long]): String = value.map(_.toString).getOrElse("N/A")
     val source = "Source physical lines: start=" + number(value.start.flatMap(_.lines)) +
       "; end=" + number(value.end.lines) + "; net=" + number(value.netSourceLines) + ". "
-    source + "Issued profiles=" + (if (value.issuedProfiles.isEmpty) "unavailable" else
+    source + value.comparison.map(GoalPhaseWorkComparison.english).mkString(" ") + " Issued profiles=" + (if (value.issuedProfiles.isEmpty) "unavailable" else
       value.issuedProfiles.map(p => p.selection.identity + "@" + p.selection.revision).distinct.mkString(",")) + ". " + value.usage.map(u => u.destination + " tokens=" + number(u.totalTokens) + " (" + u.coverage +
       "); tokens/net source line=" + u.tokensPerNetSourceLine.map(_.bigDecimal.toPlainString).getOrElse("N/A") +
       "; " + u.ratioReason).mkString(". ")
