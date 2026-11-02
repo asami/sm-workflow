@@ -14,6 +14,7 @@ permissions and provenance remain with their existing owners.
 @since   Oct. 14, 2026
 @version Oct. 15, 2026
 @version Oct. 16, 2026
+@version Nov.  3, 2026
 @author  ASAMI, Tomoharu
 """
 
@@ -1839,6 +1840,88 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                         self.assertEqual((output / "stderr.log").read_bytes(), b"conflict warning\n")
                         self.assertEqual({path: path.read_bytes() for path in files}, before)
                         self.assertEqual({path.name for path in output.iterdir()}, {"response.json", "stderr.log"})
+
+    def test_conflict_resource_forwards_uri_without_reading_complete_result_or_expanding_argv(self):
+        """RS-COMPLETE-RESULT-TRANSPORT: only the owning native call acquires the complete result."""
+        # Given a complete multibyte DTO above ARG_MAX and metadata containing only its escaped URI.
+        route = self.retain()
+        self.request.write_text(json.dumps(self.conflict_request()))
+        complete = self.write_json("complete result.json", {"decision": "resolved", "resolutions": [
+            {"conflictIdentity": "supplied-conflict", "text": "界" * 800000}], "rationale": "Supplied proposal"})
+        self.assertGreater(complete.stat().st_size, 2300000)
+        value = {"resultResource": complete.as_uri(),
+                 "resultReference": {"identity": "supplied-complete-result", "revision": "1"},
+                 "completionFacts": [{"identity": "supplied-fact", "revision": "1"}],
+                 "executionEvidence": {"workerIdentity": "supplied-conflict-author"}}
+        self.submission.write_text(json.dumps(value))
+        before = {path: path.read_bytes() for path in (route, self.request, self.submission, complete)}
+        output = self.output()
+        process, raw = self.process_output(self.acknowledged("issued-child"))
+        original_open = Path.open
+
+        def metadata_only(path, *args, **kwargs):
+            self.assertNotEqual(path, complete, "The helper must never open complete result Resource content")
+            return original_open(path, *args, **kwargs)
+
+        # When the explicit conflict action forwards Resource metadata through the native boundary fixture.
+        with patch.object(Path, "open", metadata_only):
+            status, printed, diagnostic, native = self.call(
+                self.conflict_args("submit-repository-conflict", output), process)
+        # Then exactly one small argv carries the unquoted URI with no complete DTO, and every input is unchanged.
+        self.assertEqual((status, diagnostic, printed), (0, "", raw.decode()))
+        self.assertEqual(native.call_count, 1)
+        command = native.call_args.args[0]
+        self.assertEqual(command[command.index("--resultResource") + 1], complete.as_uri())
+        self.assertNotIn("--result", command)
+        self.assertLess(sum(len(part.encode("utf-8")) + 1 for part in command), 8192)
+        self.assertEqual(json.loads(command[command.index("--resultReference") + 1]), value["resultReference"])
+        self.assertEqual(json.loads(command[command.index("--completionFacts") + 1]), value["completionFacts"])
+        self.assertEqual(json.loads(command[command.index("--executionEvidence") + 1]), value["executionEvidence"])
+        self.assertEqual({path: path.read_bytes() for path in before}, before)
+
+    def test_conflict_resource_metadata_requires_one_transport_and_exact_existing_metadata(self):
+        """RS-COMPLETE-RESULT-TRANSPORT: invalid metadata refuses before native launch."""
+        reference = {"identity": "supplied-result", "revision": "1"}
+        cases = [{"resultReference": reference},
+                 {"result": {}, "resultResource": "file:///tmp/result.json", "resultReference": reference}]
+        cases += [{"resultResource": value, "resultReference": reference} for value in (None, 7, {}, [], "", " ")]
+        cases += [{"result": value, "resultReference": reference} for value in (None, [], "{}", 7)]
+        cases += [{"resultResource": "file:///tmp/result.json", "resultReference": value} for value in (None, [], "ref")]
+        cases += [{"resultResource": "file:///tmp/result.json", "resultReference": reference, **extra}
+                  for extra in ({"unknown": True}, {"completionFacts": {}}, {"executionEvidence": []})]
+        for value in cases:
+            with self.subTest(metadata=value):
+                # Given a valid conflict route with absent, ambiguous, wrong-shaped or extended metadata.
+                self.retain()
+                self.request.write_text(json.dumps(self.conflict_request()))
+                self.submission.write_text(json.dumps(value))
+                output = self.output()
+                process, _raw = self.process_output(self.acknowledged("issued-child"))
+                # When finite submission metadata is checked.
+                status, printed, diagnostic, native = self.call(
+                    self.conflict_args("submit-repository-conflict", output), process)
+                # Then refusal precedes launch and output creation.
+                self.assertEqual((status, printed), (2, ""))
+                self.assertTrue(diagnostic)
+                native.assert_not_called()
+                self.assertEqual(list(output.iterdir()), [])
+
+    def test_resource_result_transport_does_not_extend_other_semantic_actions(self):
+        """RS-COMPLETE-RESULT-TRANSPORT: the optional helper mode belongs only to conflict Submit."""
+        for split in (False, True):
+            with self.subTest(split=split):
+                # Given otherwise ordinary submission metadata carrying a conflict-only Resource selector.
+                self.submission.write_text(json.dumps({"resultResource": "file:///tmp/result.json",
+                    **({} if split else {"resultReference": {"identity": "result", "revision": "1"}})}))
+                # When any other action uses its unchanged default metadata mode.
+                with self.assertRaises(CALLER.CallerError):
+                    CALLER.submission_pairs({"submission": str(self.submission)}, "actual-session", split=split)
+                # Then supplying inline result as well still cannot introduce resultResource in that mode.
+                value = json.loads(self.submission.read_text())
+                value["result"] = {}
+                self.submission.write_text(json.dumps(value))
+                with self.assertRaises(CALLER.CallerError):
+                    CALLER.submission_pairs({"submission": str(self.submission)}, "actual-session", split=split)
 
     def test_e31_conflict_routes_and_consumed_aliases_refuse_before_all_three_actions(self):
         """E31 / R2,R3,R4,R10 / S6-01D14; finite retained owner and child."""

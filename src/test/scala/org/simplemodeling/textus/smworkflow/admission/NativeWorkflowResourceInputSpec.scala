@@ -17,7 +17,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Shared transport and actual Resource acquisition regressions without business authority.
   * @since Oct. 24, 2026
-  * @version Oct. 27, 2026
+  * @version Nov.  3, 2026
   * @author ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -78,6 +78,56 @@ final class NativeWorkflowResourceInputSpec extends AnyWordSpec with Matchers wi
         inspection, inspection.copy(stagedPaths = paths))), "UNKNOWN", "termination-unconfirmed")
     V.GoalPhaseCandidateRecoveryInput(session, R.targetRecord(target), "Defer", "Fixture acquisition control",
       V.WorkflowArtifactReference("fixture-human", "1"))
+  }
+
+  "Named conflict result Resource transport" should {
+    "preserve the complete result through inline selection or one deferred Resource read" in {
+      Given("the same complete RepositorySyncConflictResult and exclusive result/resultResource selectors")
+      val value = V.RepositorySyncConflictResult("resolved",
+        Vector(V.RepositorySyncConflictResolution("actual-conflict", "完全な解決\n")), "Supplied proposal")
+      val text = take(value.toRecord().toJsonStringC)
+      val inline = take(NativeWorkflowResourceInput.selectC[V.RepositorySyncConflictResult](
+        _request("result" -> text), "result", "resultResource"))
+      val resource = take(NativeWorkflowResourceInput.selectC[V.RepositorySyncConflictResult](
+        _request("resultResource" -> "file:///private/tmp/complete%20result.json"), "result", "resultResource"))
+      var reads = 0
+      When("the owning call resolves each selected complete result")
+      val a = take(NativeWorkflowResourceInput.readC(inline, _ => fail("Inline must not read a Resource"), "result"))
+      val b = take(NativeWorkflowResourceInput.readC(resource, reference => {
+        reference shouldBe take(NativeWorkflowResourceInput.referenceC("file:///private/tmp/complete%20result.json"))
+        reads += 1
+        Consequence.success(text)
+      }, "result"))
+      Then("both transports retain the identical DTO and Resource performs exactly one read")
+      a shouldBe value
+      b shouldBe value
+      reads shouldBe 1
+    }
+    "refuse absent ambiguous mistyped malformed or nonlocal named selectors" in {
+      Given("named result selectors with missing conflicting invalid business or unsafe URI values")
+      val requests = Vector(_request(), _request("result" -> "{}", "resultResource" -> "file:///tmp/a"),
+        _request("result" -> "{"), _request("result" -> "null"), _request("result" -> "[]")) ++
+        Vector[Any](null, 4, "", "relative.json", "file:relative", "file://host/tmp/a", "https://example.test/a",
+          "file:///tmp/a?q=1", "file:///tmp/a#part", " file:///tmp/a").map(value => _request("resultResource" -> value))
+      When("selection validates exactly one named source without Resource acquisition")
+      val results = requests.map(request => NativeWorkflowResourceInput.selectC[V.RepositorySyncConflictResult](
+        request, "result", "resultResource"))
+      Then("every invalid selector refuses before business admission")
+      results.foreach(_.isSuccess shouldBe false)
+    }
+    "propagate the owning Resource read and named DTO decoding failures" in {
+      Given("one valid named local Resource selector with read or JSON decoding failures")
+      val source = take(NativeWorkflowResourceInput.selectC[V.RepositorySyncConflictResult](
+        _request("resultResource" -> "file:///tmp/result.json"), "result", "resultResource"))
+      val denied: Consequence[String] = Consequence.resourceInvalid("normal Resource denied/oversized/invalid UTF-8")
+      When("the owning call reads the selected Resource or decodes malformed complete result text")
+      val failedread = NativeWorkflowResourceInput.readC(source, _ => denied, "result")
+      val faileddecode = Vector("{", "null", "[]", "{}", "{\"decision\":null}").map(text =>
+        NativeWorkflowResourceInput.readC(source, _ => Consequence.success(text), "result"))
+      Then("read failure is preserved and every malformed result refuses without a fallback")
+      failedread shouldBe denied
+      faileddecode.foreach(_.isSuccess shouldBe false)
+    }
   }
 
   "Candidate recovery Resource transport" should {

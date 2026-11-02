@@ -69,22 +69,40 @@ final class NativeRepositorySyncMaintenanceCliSpec extends AnyWordSpec with Matc
   }
 
   "Installed RepositorySync maintenance continuation" should {
-    "complete a dirty purpose then resolve mixed modify/modify and add/add conflicts in the same Session" in {
+    for (transport <- Vector("Inline", "Resource")) {
+    s"complete a dirty purpose then resolve mixed modify/modify and add/add conflicts in the same Session using $transport" in {
       Given("the exact normal installed command using the published catalog's newest selection after repair publication and a fresh real local/bare fixture")
+      val resource = transport == "Resource"
       val executable = _required_path("smworkflow.spec.installedCommand", executable = true)
-      val scenario = F.fresh("installed-repository-maintenance", bootstrapSelectedInput = false)
+      val scenario = F.fresh("installed-repository-maintenance-" + transport, bootstrapSelectedInput = false)
       val root = scenario.root
       val repository = root.resolve("repository")
       val peer = root.resolve("peer")
       val remote = root.resolve("upstream.git")
       val configfile = root.resolve(".textus/config.json")
       val original = parse(Files.readString(configfile)).toOption.get
+      val baseplan = process_plan(root, "Conflict", scenario.host.goal)
+      def _large_program_(program: Json): Json = program.mapObject { fields =>
+        val limits = fields("limits").get.mapObject { values =>
+          Vector("stdinBytes", "stdoutBytes", "artifactBytes").foldLeft(values) { (prior, key) =>
+            prior.add(key, Json.fromLong(4194304L))
+          }.add("workAreaBytes", Json.fromLong(16777216L))
+        }
+        fields.add("limits", limits)
+      }
+      val plan = if (resource) Vector("gitPrograms", "gitRepositories").foldLeft(baseplan) { (prior, name) =>
+        prior.mapObject(fields => fields.add(name, fields(name).get.mapArray(_.map(_large_program_))))
+      } else baseplan
       val settings = maintenance_parameters() ++ Map("textus.resource.url.file.roots" -> root.toString,
-        "cncf.resource.read.max-bytes" -> "2097152",
-        "textus.subsystem.process-execution.plan" -> process_plan(root, "Conflict", scenario.host.goal).noSpaces)
-      Files.writeString(configfile, original.mapObject(fields => settings.foldLeft(fields.remove("sm-workflow.runtime.definition")) {
+        "cncf.resource.read.max-bytes" -> (if (resource) "16777216" else "2097152"),
+        "textus.subsystem.process-execution.plan" -> plan.noSpaces) ++
+        (if (resource) Map("cncf.resource.write.max-bytes" -> "4194304")
+         else Map.empty[String, String])
+      val configured = original.mapObject(fields => settings.foldLeft(fields.remove("sm-workflow.runtime.definition")) {
         case (prior, (key, value)) => prior.add(key, Json.fromString(value))
-      }).noSpaces)
+      })
+      val completeconfig = if (resource) configured.mapObject(_.add("cncf.git.diff.maximum-bytes", Json.fromLong(4194304L))) else configured
+      Files.writeString(configfile, completeconfig.noSpaces)
       def _call_(service: String, operation: String, arguments: Vector[String]): F.Result =
         scenario.callInstalled(executable, service, operation, arguments, None, Some(root.resolve(".textus/assembly.yaml")))
       def _repository_call_(operation: String, arguments: Vector[String]) = _call_("RepositorySyncService", operation, arguments)
@@ -161,14 +179,59 @@ final class NativeRepositorySyncMaintenanceCliSpec extends AnyWordSpec with Matc
       pending.history.take(before.history.size) shouldBe before.history
       pending.history.count(_.currentProgression.contains(ProgressionReference("sync.PurposeInstalled"))) shouldBe 1
       val resolution = "local shared line\nremote shared line\n"
-      val addedresolution = add_local_text + add_remote_text
+      val addedresolution = add_local_text + add_remote_text + (if (resource) ("解" * 800000) + "\n" else "")
       addedresolution.getBytes(java.nio.charset.StandardCharsets.UTF_8).length should be > 131072
       added.local.text.getBytes(java.nio.charset.StandardCharsets.UTF_8).length should be > 90000
       added.remote.text.getBytes(java.nio.charset.StandardCharsets.UTF_8).length should be > 90000
       val answer = V.RepositorySyncConflictResult("resolved", conflict.conflict.get.conflicts.map(c =>
         V.RepositorySyncConflictResolution(c.identity, if (c.path == add_path) addedresolution else resolution)),
         "Authored isolated specification proposal preserving both meanings")
-      _submit_(conflict, answer, "spec-installed-resolution", "specification-conflict-author")
+      val submitted = if (resource) {
+        Given("a complete conflict DTO above the host argument budget saved under the isolated authorized Resource root")
+        val text = _json(answer)
+        text.getBytes(java.nio.charset.StandardCharsets.UTF_8).length.toLong should be > 2300000L
+        ("解" * 800000).getBytes(java.nio.charset.StandardCharsets.UTF_8).length.toLong shouldBe 2400000L
+        val uri = _save(root, "complete-conflict-result.json", text)
+        val reference = V.WorkflowArtifactReference("spec-installed-resolution", "1")
+        val evidence = V.WorkflowExecutionEvidence(Vector(reference), Some("specification-conflict-author"), None, None)
+        val metadata = Vector("--sessionId", session, "--resultReference", _json(reference), "--executionEvidence", _json(evidence))
+        val malformed = _save(root, "malformed-conflict-result.json", "{}")
+        val oversized = root.resolve("over-budget-conflict-result.json")
+        Files.write(oversized, Array.fill[Byte](16777217)('x'.toByte))
+        Files.size(oversized) shouldBe 16777217L
+        val outside = Files.createTempFile(root.getParent, "outside-conflict-result-", ".json")
+        Files.writeString(outside, text, java.nio.charset.StandardCharsets.UTF_8)
+        val small = _json(V.RepositorySyncConflictResult("resolved", Vector.empty, "Ambiguous transport refusal"))
+        val refusals = Vector(
+          "both sources" -> Vector("--result", small, "--resultResource", uri),
+          "neither source" -> Vector.empty[String],
+          "nonlocal URI" -> Vector("--resultResource", "file://foreign/tmp/result.json"),
+          "nonexistent file" -> Vector("--resultResource", root.resolve("absent-conflict-result.json").toUri.toASCIIString),
+          "unauthorized outside-root file" -> Vector("--resultResource", outside.toUri.toASCIIString),
+          "malformed DTO" -> Vector("--resultResource", malformed),
+          "finite read budget overflow" -> Vector("--resultResource", oversized.toUri.toASCIIString))
+        try {
+          refusals.foreach { (label, arguments) =>
+            Given("the actual pending conflict assignment before " + label)
+            val saved = take(WorkflowInstanceRecordJsonV1.encodeC(_current(root, session)))
+            val savedhead = git(root, "-C", repository.toString, "rev-parse", "HEAD")
+            val savedmerge = git(root, "-C", repository.toString, "rev-parse", "MERGE_HEAD")
+            val savedindex = git(root, "-C", repository.toString, "ls-files", "--stage")
+            When("the installed conflict Submit receives " + label)
+            val refused = _repository_call_(conflict.submitOperation.get, metadata ++ arguments)
+            Then("the actual native record including revision/history and Git merge state remain unchanged")
+            withClue(label + ": " + refused.invocation.logs) { refused.exitCode should not be 0 }
+            take(WorkflowInstanceRecordJsonV1.encodeC(_current(root, session))) shouldBe saved
+            git(root, "-C", repository.toString, "rev-parse", "HEAD") shouldBe savedhead
+            git(root, "-C", repository.toString, "rev-parse", "MERGE_HEAD") shouldBe savedmerge
+            git(root, "-C", repository.toString, "ls-files", "--stage") shouldBe savedindex
+          }
+          When("one installed Submit reads the complete valid conflict DTO through its local Resource URI")
+          _repository_call_(conflict.submitOperation.get, metadata ++ Vector("--resultResource", uri))
+        } finally Files.deleteIfExists(outside)
+      } else _submit_(conflict, answer, "spec-installed-resolution", "specification-conflict-author")
+      Then("the exact supplied conflict result is accepted without advancing materialization")
+      submitted
         .business[V.RepositorySyncConflictSubmissionResult].accepted shouldBe true
       When("the installed owner materializes the actual resolution and requests independent semantic review")
       val reviewed = _advance_()
@@ -181,8 +244,16 @@ final class NativeRepositorySyncMaintenanceCliSpec extends AnyWordSpec with Matc
       actual.remoteDiff.trim shouldBe git(root, "-C", repository.toString, "diff", "--cached", actual.remoteTip, "--")
       actual.localDiff should include("+" + ("語" * 30000))
       actual.remoteDiff should include("+" + ("界" * 30000))
-      actual.localDiff.getBytes(java.nio.charset.StandardCharsets.UTF_8).length.toLong should be < 1048576L
-      actual.remoteDiff.getBytes(java.nio.charset.StandardCharsets.UTF_8).length.toLong should be < 1048576L
+      if (resource) {
+        actual.localDiff should include("+" + ("解" * 800000))
+        actual.remoteDiff should include("+" + ("解" * 800000))
+        actual.localDiff.getBytes(java.nio.charset.StandardCharsets.UTF_8).length.toLong should be < 4194304L
+        actual.remoteDiff.getBytes(java.nio.charset.StandardCharsets.UTF_8).length.toLong should be < 4194304L
+        Files.readAllBytes(repository.resolve(add_path)) shouldBe addedresolution.getBytes(java.nio.charset.StandardCharsets.UTF_8)
+      } else {
+        actual.localDiff.getBytes(java.nio.charset.StandardCharsets.UTF_8).length.toLong should be < 1048576L
+        actual.remoteDiff.getBytes(java.nio.charset.StandardCharsets.UTF_8).length.toLong should be < 1048576L
+      }
       _advance_().business[V.RepositorySyncAdvanceResult].copy(journalRecording = None) shouldBe review.copy(journalRecording = None)
       val verdict = V.RepositorySyncNativeMergeReviewResult("accept",
         "Specification-owned independent review of both complete actual parent diffs; no live acceptance claimed", Vector.empty)
@@ -193,7 +264,7 @@ final class NativeRepositorySyncMaintenanceCliSpec extends AnyWordSpec with Matc
         _save(root, "review-execution.json", _json(evidence)), "normal-development-host", "2026-10-07T00:00:00Z",
         "entity:smworkflow.cli.host_evidence", None)
       Files.size(reviewed.invocation.stdout) should be > 1048576L
-      Files.size(reviewed.invocation.stdout) should be < 2097152L
+      Files.size(reviewed.invocation.stdout) should be < (if (resource) 16777216L else 2097152L)
       val prepared = _call_("NativeWorkflowPreparationService", "prepareEvidence", Vector("--input", _json(preparation)))
       withClue(prepared.invocation.logs) { prepared.exitCode shouldBe 0 }
       scenario.selectPreparedImport(prepared)
@@ -212,6 +283,7 @@ final class NativeRepositorySyncMaintenanceCliSpec extends AnyWordSpec with Matc
       Files.exists(repository.resolve(".git/MERGE_HEAD")) shouldBe false
       Files.readString(repository.resolve(shared_path)) shouldBe resolution
       Files.readString(repository.resolve(add_path)) shouldBe addedresolution
+      if (resource) Files.readAllBytes(repository.resolve(add_path)) shouldBe addedresolution.getBytes(java.nio.charset.StandardCharsets.UTF_8)
       Files.readString(repository.resolve(purpose_path)) shouldBe purposetext
       val finalindex = git(root, "-C", repository.toString, "ls-files", "--stage")
       _advance_().business[V.RepositorySyncAdvanceResult] shouldBe terminal
@@ -223,6 +295,7 @@ final class NativeRepositorySyncMaintenanceCliSpec extends AnyWordSpec with Matc
       Files.exists(root.resolve("sbt-executions.txt")) shouldBe false
       scenario.invocations should not be empty
       scenario.invocations.foreach(_.argv.head shouldBe executable.toString)
+    }
     }
   }
 }

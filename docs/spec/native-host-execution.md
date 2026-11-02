@@ -1261,7 +1261,42 @@ nonblank child submitSessionId must differ. Split refuses Repository pairs.
 Require Request kind and agreeing consumed declaration/snake aliases. Each action
 still requires exactly request/submission files. Forward supplied object result
 and required object resultReference, with only optional array completionFacts
-and object executionEvidence. Require the fixed target's actual acknowledgement
+and object executionEvidence. Only `submit-repository-conflict` also accepts
+`resultResource`: supply exactly one object `result` or nonblank string
+`resultResource`, together with the same required object `resultReference` and
+optional metadata. The helper forwards the URI unmodified as one
+`--resultResource` argument; it does not open, copy or split the complete result
+file, infer a size threshold or retry using another transport. Other semantic
+actions retain their existing inline metadata contract.
+
+For example, the conflict helper's `--submission` file may contain:
+
+```json
+{
+  "resultResource": "file:///absolute/authorized/complete-conflict-result.json",
+  "resultReference": {"identity": "actual-conflict-result", "revision": "1"}
+}
+```
+
+The referenced UTF-8 file contains the complete `RepositorySyncConflictResult`
+JSON object (decision, resolutions and rationale), without wrapper metadata.
+The equivalent public native command is:
+
+```text
+sm-workflow org.simplemodeling.textus.SmWorkflow.RepositorySyncService.submitRepositorySyncWorkResult --sessionId <actual-issued-session> --resultResource file:///absolute/authorized/complete-conflict-result.json --resultReference '{"identity":"actual-conflict-result","revision":"1"}' --json
+```
+
+Exactly one of `--result` and `--resultResource` is required. Resource selection
+does no I/O; the owning executing call reads after loading the actual Session
+and current assignment. Only absolute local file URIs without authority, query
+or fragment are accepted. The normal Resource boundary enforces configured
+roots, finite byte budgets and UTF-8 decoding; a URI grants no read permission.
+Configure `textus.resource.url.file.roots` and `cncf.resource.read.max-bytes`
+for the authorized host before boot. There is no application-specific byte cap
+or implicit inline fallback. Current context, revision, result-reference,
+participant and conflict-coverage admission still apply to the complete DTO.
+
+Require the fixed target's actual acknowledgement
 ID, Boolean accepted=true, outcome=accepted and nonblank message. Bodies remain
 opaque; Submit supplies no effects, retry, authority or automatic Advance.
 

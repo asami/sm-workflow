@@ -7855,7 +7855,7 @@ RepositorySyncConflictSubmissionResult
 
 ##### DESCRIPTION
 
-Consume the pending conflict decision, resolution texts, rationale and genuinely consumed result/evidence reference. The issued work owns coverage and interpretation. Return committed acceptance and useful chat text. A proposal is not write/command/commit/push authority or convergence; only explicit Advance applies authorized following progression.
+Consume the pending conflict decision, resolution texts, rationale and genuinely consumed result/evidence reference. Supply exactly one of result or resultResource; resultResource is an absolute local file URI containing the complete RepositorySyncConflictResult JSON, read as UTF-8 through the normal authorized Resource boundary. The issued work owns coverage and interpretation. Return committed acceptance and useful chat text. A proposal is not write/command/commit/push authority or convergence; only explicit Advance applies authorized following progression.
 
 ##### TYPE
 
@@ -7872,7 +7872,8 @@ RepositorySyncConflictResult
 | name | type | multiplicity |
 |------+------|--------------|
 | sessionId | string | 1 |
-| result | RepositorySyncConflictResult | 1 |
+| result | RepositorySyncConflictResult | ? |
+| resultResource | string | ? |
 | resultReference | WorkflowArtifactReference | 1 |
 | completionFacts | WorkflowArtifactReference | * |
 | executionEvidence | WorkflowExecutionEvidence | ? |

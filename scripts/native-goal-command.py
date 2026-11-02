@@ -11,6 +11,7 @@ PHASE-6 / S6-01 / S6-01D3D and S6-01D3F, finite caller rules.
 @version Oct. 19, 2026
 @version Oct. 25, 2026
 @version Oct. 29, 2026
+@version Nov.  3, 2026
 @author  ASAMI, Tomoharu
 """
 
@@ -455,14 +456,20 @@ def issued_repository_conflict_route(options, task_fd):
     return issued_repository_route(options, task_fd, "submit-repository-conflict")
 
 
-def submission_pairs(options, session_id, split=False):
+def submission_pairs(options, session_id, split=False, resource_result=False):
     """Forward supplied opaque values under the existing metadata contract."""
     _text, submission = read_object(explicit_path(options["submission"]))
-    required = {"result"} if split else {"result", "resultReference"}
+    required = {"resultReference"} if resource_result else {"result"} if split else {"result", "resultReference"}
+    transports = {"result", "resultResource"} if resource_result else set()
     require(required <= submission.keys()
-            and submission.keys() <= required | {"completionFacts", "executionEvidence"},
+            and submission.keys() <= required | transports | {"completionFacts", "executionEvidence"},
             "invalid submission call metadata")
-    require(isinstance(submission["result"], dict)
+    if resource_result:
+        require(("result" in submission) != ("resultResource" in submission),
+                "requires exactly one of result or resultResource")
+        require("resultResource" not in submission or nonblank(submission["resultResource"]),
+                "resultResource must be a nonblank string")
+    require(("result" not in submission or isinstance(submission["result"], dict))
             and (split or isinstance(submission["resultReference"], dict)),
             "result and resultReference must be objects")
     require("completionFacts" not in submission or isinstance(submission["completionFacts"], list),
@@ -470,9 +477,10 @@ def submission_pairs(options, session_id, split=False):
     require("executionEvidence" not in submission or isinstance(submission["executionEvidence"], dict),
             "executionEvidence must be an object")
     pairs = ["--sessionId", session_id]
-    for name in ("result", "resultReference", "completionFacts", "executionEvidence"):
+    for name in ("result", "resultResource", "resultReference", "completionFacts", "executionEvidence"):
         if name in submission:
-            pairs.extend(["--" + name, json.dumps(submission[name], ensure_ascii=False, allow_nan=False)])
+            value = submission[name] if name == "resultResource" else json.dumps(submission[name], ensure_ascii=False, allow_nan=False)
+            pairs.extend(["--" + name, value])
     return pairs
 
 
@@ -607,7 +615,7 @@ def action_command(options, executable, runtime_root, task_fd):
         service = REPOSITORY_FQN
     elif action == "submit-repository-conflict":
         operation, session_id = issued_repository_conflict_route(options, task_fd)
-        pairs = submission_pairs(options, session_id)
+        pairs = submission_pairs(options, session_id, resource_result=True)
         service = REPOSITORY_FQN
     else:
         operation, pairs, session_id = submit(options, task_fd)

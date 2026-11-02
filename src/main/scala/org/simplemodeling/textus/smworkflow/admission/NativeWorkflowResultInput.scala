@@ -2,11 +2,13 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import cats.data.NonEmptyVector
 import io.circe.Json
+import java.nio.charset.StandardCharsets
 import scala.reflect.ClassTag
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall}
 import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.resource.ResourceReference
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{Configuration, DefinitionBinding, InstanceIdentity, InstanceRecord}
@@ -22,7 +24,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * Native completion consumes the typed result and owns its state, scope,
   * participant and update boundary. Public callers supply no control envelope.
   * @since   Oct.  9, 2026
-  * @version Oct. 28, 2026
+  * @version Nov.  3, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowResultInput {
@@ -66,12 +68,13 @@ private[smworkflow] object NativeWorkflowResultInput {
       override def commandExecutionMode = command.commandExecutionMode
       def createCall(core: ActionCall.Core): ActionCall = command.createCall(core)
     }
-  private final case class Submission(session: String, value: Value,
+  private final case class SelectedValue(resolve: (ResourceReference => Consequence[String]) => Consequence[Value])
+  private final case class Submission(session: String, value: SelectedValue,
     reference: Option[ContextReference], facts: Vector[ContextReference], evidence: ExecutionEvidence,
     issuedContext: Option[Json] = None)
   private final case class Assigned(handle: WorkflowHandle, request: ContinuationRequest[?], issuedContext: Option[Json] = None)
   private final case class Target(operation: StateMachineOperationIdentity,
-    readC: Request => Consequence[Value],
+    readC: Request => Consequence[SelectedValue],
     load: (WorkflowComponentStorage, ContinuationIdentity, ExecutionContext) => Consequence[Assigned])
 
   def standalone(service: spec.ServiceDefinition, creation: ComponentCreate,
@@ -141,7 +144,10 @@ private[smworkflow] object NativeWorkflowResultInput {
             RepositorySyncPurpose.fromPublicC(value).map[Value](identity))),
         _work(RepositorySyncNativeConflictContinuation.completionOperation, RepositorySyncConflictSemantic.inputCodec, request =>
           NativeWorkflowOperationInput.valueC[V.RepositorySyncConflictResult](request, "result").map[Value](value =>
-            RepositorySyncConflictSemantic.Result(value.decision, value.resolutions.map(_resolution), value.rationale))),
+            RepositorySyncConflictSemantic.Result(value.decision, value.resolutions.map(_resolution), value.rationale)))
+          .copy(readC = request => NativeWorkflowResourceInput.selectC[V.RepositorySyncConflictResult](request, "result", "resultResource")
+            .map(source => SelectedValue(read => NativeWorkflowResourceInput.readC(source, read, "result").map[Value](value =>
+              RepositorySyncConflictSemantic.Result(value.decision, value.resolutions.map(_resolution), value.rationale))))),
         _work(RepositorySyncNativeMergeReviewContinuation.completionOperation, RepositorySyncNativeMergeReview.inputCodec, request =>
           NativeWorkflowOperationInput.valueC[V.RepositorySyncNativeMergeReviewResult](request, "result").map[Value](value =>
             RepositorySyncNativeMergeReview.Result(value.decision, value.rationale, value.findings.map(f =>
@@ -156,7 +162,8 @@ private[smworkflow] object NativeWorkflowResultInput {
 
   def split(service: spec.ServiceDefinition, creation: ComponentCreate,
     declaration: SplitPhaseManagedStartAssembly.Declaration, definition: DefinitionBinding): spec.ServiceDefinition = {
-    val human = Target(SplitPhaseNativeHumanDirection.completionOperation, _human_c, (storage, identity, context) =>
+    val human = Target(SplitPhaseNativeHumanDirection.completionOperation,
+      request => _human_c(request).map(value => SelectedValue(_ => Consequence.success(value))), (storage, identity, context) =>
       if (SplitPhaseManagedReasoningHumanCompletion.isReasoning(identity))
         _decision(SplitPhaseNativeHumanDirection.completionOperation, SplitPhaseReasoningHumanDirection.inputCodec, _human_c)
           .load(storage, identity, context)
@@ -172,7 +179,7 @@ private[smworkflow] object NativeWorkflowResultInput {
 
   private def _work[W](operation: StateMachineOperationIdentity,
     codec: WorkflowResultJsonV1.PayloadCodec[W], read: Request => Consequence[Value]): Target =
-    Target(operation, read, (storage, identity, context) =>
+    Target(operation, request => read(request).map(value => SelectedValue(_ => Consequence.success(value))), (storage, identity, context) =>
       storage.bindIssuedC(operation, codec).flatMap(_.loadC(identity)(using context)).flatMap {
         case Some(value) => value.current match {
           case order: WorkflowContinuation.WorkOrder[?] =>
@@ -191,7 +198,7 @@ private[smworkflow] object NativeWorkflowResultInput {
 
   private def _decision[W](operation: StateMachineOperationIdentity,
     codec: WorkflowResultJsonV1.PayloadCodec[W], read: Request => Consequence[Value]): Target =
-    Target(operation, read, (storage, identity, context) =>
+    Target(operation, request => read(request).map(value => SelectedValue(_ => Consequence.success(value))), (storage, identity, context) =>
       storage.bindDecisionC(operation, codec).flatMap(_.loadC(identity)(using context)).flatMap {
         case Some(value) => value.current match {
           case question: WorkflowContinuation.Decision[?] => Consequence.success(Assigned(value.handle, question.request))
@@ -252,7 +259,8 @@ private[smworkflow] object NativeWorkflowResultInput {
         assigned <- target.load(storage, identity, context)
         _ <- if (target.operation == GoalTaskNativeRun.completionOperation)
           _admit_task_context_c(storage, current, assigned, submission, context) else Consequence.unit
-        submitted <- _result_c(assigned, submission)
+        value <- submission.value.resolve(reference => read_resource_text(reference, Some(StandardCharsets.UTF_8)))
+        submitted <- _result_c(assigned, submission, value)
         operation <- original match {
           case receiver: Receiver => receiver.createResultOperationRequestC(BoundAction.this.request, submitted)
           case _ => _invalid("completion has no resolved result receiver")
@@ -303,12 +311,12 @@ private[smworkflow] object NativeWorkflowResultInput {
     }
   } yield ()
 
-  private def _result_c(assigned: Assigned, submission: Submission): Consequence[ContinuationResult[Value]] = {
+  private def _result_c(assigned: Assigned, submission: Submission, value: Value): Consequence[ContinuationResult[Value]] = {
     val request = assigned.request
     request.resultType.map(_.value).map { resulttype =>
       _result_reference_c(request, submission.reference).map(reference =>
         ContinuationResult(assigned.handle, request.runId, request.continuationId,
-          request.expectedRevision, request.context.snapshot, TypedValue(resulttype, submission.value),
+          request.expectedRevision, request.context.snapshot, TypedValue(resulttype, value),
           reference, submission.facts, submission.evidence))
     }.getOrElse(_invalid("issued result has no declared result type"))
   }

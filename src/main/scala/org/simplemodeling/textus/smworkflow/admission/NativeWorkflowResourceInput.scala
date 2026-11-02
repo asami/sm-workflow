@@ -8,7 +8,7 @@ import org.goldenport.protocol.Request
 /** Shared transport only. The executing call owns Resource authorization,
   * finite streaming acquisition and UTF-8 decoding; business admission follows.
   * @since   Oct. 24, 2026
-  * @version Oct. 24, 2026
+  * @version Nov.  3, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowResourceInput {
@@ -26,18 +26,24 @@ private[smworkflow] object NativeWorkflowResourceInput {
       case _ => _invalid("requires an absolute local file URI without authority, query or fragment")
     }
 
-  def selectC[A: ValueReader](request: Request): Consequence[Source[A]] = {
+  def selectC[A: ValueReader](request: Request): Consequence[Source[A]] =
+    selectC[A](request, "input", "inputResource")
+
+  def selectC[A: ValueReader](request: Request, inlineName: String, resourceName: String): Consequence[Source[A]] = {
     val record = Option(request).map(_.toRecord)
-    (record.flatMap(_.getAny("input")), record.flatMap(_.getAny("inputResource"))) match {
-      case (Some(_), None) => NativeWorkflowOperationInput.valueC[A](request, "input").map(Inline(_))
+    (record.flatMap(_.getAny(inlineName)), record.flatMap(_.getAny(resourceName))) match {
+      case (Some(_), None) => NativeWorkflowOperationInput.valueC[A](request, inlineName).map(Inline(_))
       case (None, Some(value: String)) => referenceC(value).map(Resource(_))
-      case _ => _invalid("requires exactly one of input or inputResource")
+      case _ => _invalid("requires exactly one of " + inlineName + " or " + resourceName)
     }
   }
   def readC[A: ValueReader](source: Source[A], readText: ResourceReference => Consequence[String]): Consequence[A] =
+    readC[A](source, readText, "input")
+
+  def readC[A: ValueReader](source: Source[A], readText: ResourceReference => Consequence[String], valueName: String): Consequence[A] =
     source match {
       case Inline(value) => Consequence.success(value)
-      case Resource(reference) => readText(reference).flatMap(NativeWorkflowOperationInput.decodeValueC[A](_, "input"))
+      case Resource(reference) => readText(reference).flatMap(NativeWorkflowOperationInput.decodeValueC[A](_, valueName))
     }
   private def _invalid[A](message: String): Consequence[A] = Consequence.stateConflict("Workflow Resource input " + message)
 }

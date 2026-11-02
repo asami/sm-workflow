@@ -1,5 +1,37 @@
 # RepositorySync conflict materialization
 
+## Complete conflict result transport
+
+`RepositorySyncService.submitRepositorySyncWorkResult` accepts exactly one of
+inline `--result` or `--resultResource file:///absolute/authorized/result.json`,
+with the existing `--sessionId` and `--resultReference` metadata. The Resource
+file contains the complete `RepositorySyncConflictResult` JSON object, including
+every resolution text; it contains no submission wrapper. It is read as UTF-8
+by the owning ProcedureActionCall after the actual Session and current issued
+assignment are loaded. Selection performs no file I/O. Missing, ambiguous,
+malformed, unauthorized and over-budget inputs refuse before semantic completion.
+
+```text
+sm-workflow org.simplemodeling.textus.SmWorkflow.RepositorySyncService.submitRepositorySyncWorkResult --sessionId <actual-issued-session> --resultResource file:///absolute/authorized/result.json --resultReference '{"identity":"actual-conflict-result","revision":"1"}' --json
+```
+
+Use an absolute local file URI without authority, query or fragment. Normal
+Resource roots (`textus.resource.url.file.roots`), finite read budgets
+(`cncf.resource.read.max-bytes`) and UTF-8 decoding remain authoritative. No
+helper-side result file read, arbitrary application byte cap, automatic
+transport substitution or split submission is supported. The thin caller's
+`submit-repository-conflict` submission metadata uses
+`{"resultResource":"file:///absolute/authorized/result.json","resultReference":{"identity":"actual-conflict-result","revision":"1"}}`;
+its other actions retain their existing metadata contracts. See the
+[native host contract](native-host-execution.md) for exact helper usage.
+
+The Resource transport retains the same DTO, context, revision, result reference,
+participant and coverage rules as inline completion. Accepted Submit only saves
+the result; it never calls Advance and grants no write, command, commit or push
+authority. Existing native progression owns subsequent materialization and review.
+
+## Retained materialization evidence
+
 Date: 2026-10-06
 Status: connected boundary validated by999; practical delivery not accepted
 
