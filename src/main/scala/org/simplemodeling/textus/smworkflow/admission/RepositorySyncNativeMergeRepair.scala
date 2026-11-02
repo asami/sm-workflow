@@ -46,9 +46,10 @@ private[smworkflow] object RepositorySyncNativeMergeRepair {
         request.findings.map(_.identity).distinct.size == request.findings.size) Consequence.unit
       else _invalid("review findings are incomplete or outside selected changed text paths")
     paths = if (request.validationFailure.isEmpty) request.findings.flatMap(_.affectedPaths).distinct.sorted
-      else request.review.changedPaths.filter(policy.semanticPaths).distinct.sorted
+      else Option(request.files).toVector.flatten.filter(_ != null).map(_.path).distinct.sorted
     _ <- if (request.files != null && request.files.nonEmpty && request.files.size <= policy.maximumConflicts &&
-        request.files.forall(_file) && request.files.map(_.path) == paths) Consequence.unit
+        request.files.forall(f => _file(f) && request.review.changedPaths.contains(f.path) && policy.semanticPaths(f.path)) &&
+        request.files.map(_.path) == paths) Consequence.unit
       else _invalid("files must cover exactly the sorted affected paths with ordinary UTF-8 text")
   } yield ()
 

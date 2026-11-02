@@ -1074,6 +1074,81 @@ OperationResult
 | message | string | 1 |
 | evidenceRecording | EvidenceRecordingState | * |
 
+## RepositorySyncRepairScopeCorrectionDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+## RepositorySyncRepairScopeCorrectionDescriptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| componentInstance | string | 1 |
+| target | record | 1 |
+| choices | string | * |
+| adoptionOperation | string | 1 |
+
+## RepositorySyncRepairScopeCorrectionAnswer
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| choice | string | 1 |
+| paths | string | * |
+| rationale | string | 1 |
+| priorExecutionEnded | boolean | 1 |
+| acceptOriginalUncertainty | boolean | 1 |
+
+## RepositorySyncRepairScopeCorrectionAdoptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | record | 1 |
+| choice | string | 1 |
+| paths | string | * |
+| rationale | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+| priorExecutionEnded | boolean | 1 |
+| acceptOriginalUncertainty | boolean | 1 |
+| executionEvidence | WorkflowExecutionEvidence | 1 |
+
+## RepositorySyncRepairScopeCorrectionAdoptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+
 ## RepositorySyncValidationContinuationDescriptionInput
 
 - input-kind :: COMMAND
@@ -5554,6 +5629,14 @@ operation = RepositorySyncService.advanceRepositorySync
 
 operation = RepositorySyncService.describeRepositorySyncValidationContinuation
 
+#### describeRepositorySyncRepairScopeCorrection
+
+operation = RepositorySyncService.describeRepositorySyncRepairScopeCorrection
+
+#### adoptRepositorySyncRepairScopeCorrection
+
+operation = RepositorySyncService.adoptRepositorySyncRepairScopeCorrection
+
 #### adoptRepositorySyncValidationContinuation
 
 operation = RepositorySyncService.adoptRepositorySyncValidationContinuation
@@ -7791,6 +7874,63 @@ RepositorySyncValidationContinuationDescriptionInput
 
 RepositorySyncValidationContinuationDescriptionResult
 
+#### describeRepositorySyncRepairScopeCorrection
+
+##### DESCRIPTION
+
+Observe one actual available unclaimed incomplete FULL_STATE failed-check repair whose assigned paths omit permissible current integration text paths. Bind the component, retained Start participant and context, root, endpoint, current frontier and original WorkOrder identity/revisions, actual failed check receipt, candidate references/revisions, HEAD/tracking/MERGE_HEAD/index and complete permitted changed-path set. No native claim or completion found does not prove nonexecution. The actual Human must attest that the original semantic worker stopped or ended and accept its UNKNOWN external proposal effects. Description never mutates, validates, submits or advances.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+RepositorySyncRepairScopeCorrectionDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+RepositorySyncRepairScopeCorrectionDescriptionResult
+
+#### adoptRepositorySyncRepairScopeCorrection
+
+##### DESCRIPTION
+
+Select exactly input or inputResource through the owning Resource reader. AdoptCurrentIntegrationRepairScope requires explicit nonempty sorted distinct paths within the described permitted integration set and existing finite assignment limit, a complete exact target, actual matching participant execution, existing reference and independently provisioned Human evidence. priorExecutionEnded=true and acceptOriginalUncertainty=true acknowledge that the original semantic worker stopped or ended while its effects remain UNKNOWN. Native atomic WorkOrder supersession stores only typed direction and retains the original issue, failed checks, receipts and history. Defer with empty paths writes nothing. Repeated identical direction is passive; contradictory, stale, cross-Session, claimed, completed, review-origin, changed candidate or foreign reference input refuses. Separate ordinary Advance captures and issues one corrected assignment without resetting or increasing the original repair attempt. Adoption performs no source/Git effect, check, result acceptance, commit or push.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+RepositorySyncRepairScopeCorrectionAdoptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | RepositorySyncRepairScopeCorrectionAdoptionInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+RepositorySyncRepairScopeCorrectionAdoptionResult
+
 #### adoptRepositorySyncValidationContinuation
 
 ##### DESCRIPTION
@@ -7823,7 +7963,7 @@ RepositorySyncValidationContinuationAdoptionResult
 
 ##### DESCRIPTION
 
-Return only the issued dirty purpose/dependency grouping and intended content projections. This saves a semantic proposal, never check/review acceptance or commit authority. Existing native progression owns candidate preparation, actual selected validation, acceptance and installation.
+Return only the issued dirty purpose/dependency grouping and intended content projections. Supply exactly one of result or resultResource; resultResource is an absolute local authorized file URI containing the complete RepositorySyncPurposeResult JSON, read as UTF-8 through the owning Resource/UoW boundary. This saves a semantic proposal, never check/review acceptance or commit authority. Existing native progression owns candidate preparation, actual selected validation, acceptance and installation.
 
 ##### TYPE
 
@@ -7840,7 +7980,8 @@ RepositorySyncPurposeResult
 | name | type | multiplicity |
 |------+------|--------------|
 | sessionId | string | 1 |
-| result | RepositorySyncPurposeResult | 1 |
+| result | RepositorySyncPurposeResult | ? |
+| resultResource | string | ? |
 | resultReference | WorkflowArtifactReference | 1 |
 | completionFacts | WorkflowArtifactReference | * |
 | executionEvidence | WorkflowExecutionEvidence | ? |
@@ -7920,7 +8061,7 @@ RepositorySyncNativeMergeReviewSubmissionResult
 
 ##### DESCRIPTION
 
-Consume only the current assigned native repair result, actual reference and completion evidence. A repaired proposal grants no file, command, validation or convergence authority; Submit never calls Advance. Decision-needed stays nonterminal for separate actual Human handling. Return committed accepted/outcome/message under the owning session.
+Consume only the current assigned native repair result, actual reference and completion evidence. Supply exactly one of result or resultResource; resultResource is an absolute local authorized file URI containing the complete RepositorySyncNativeMergeRepairResult JSON, read as UTF-8 through the owning Resource/UoW boundary. A repaired proposal grants no file, command, validation or convergence authority; Submit never calls Advance. Decision-needed stays nonterminal for separate actual Human handling. Return committed accepted/outcome/message under the owning session.
 
 ##### TYPE
 
@@ -7937,7 +8078,8 @@ RepositorySyncNativeMergeRepairResult
 | name | type | multiplicity |
 |------+------|--------------|
 | sessionId | string | 1 |
-| result | RepositorySyncNativeMergeRepairResult | 1 |
+| result | RepositorySyncNativeMergeRepairResult | ? |
+| resultResource | string | ? |
 | resultReference | WorkflowArtifactReference | 1 |
 | completionFacts | WorkflowArtifactReference | * |
 | executionEvidence | WorkflowExecutionEvidence | ? |
@@ -10661,6 +10803,8 @@ GoalPhase kind repair-policy-adoption requires participant, the actual GoalPhase
 GoalPhase kind source-history-normalization requires participant, the actual GoalPhaseSourceHistoryNormalizationDescriptionResult and GoalPhaseSourceHistoryNormalizationAnswer, matching execution worker, actual existing policy-direction artifact reference, issuer and time. Bind the complete strict target and answer including priorExecutionEnded under the dedicated goal-phase-source-history-normalization purpose. AdoptSameAuthorityNormalization requires priorExecutionEnded=true independently attested by the trusted host from actual terminal evidence. Passive preparation verifies supplied typed data only; it does not prove termination, invent consent, answer the old Human, provision storage, adopt policy or Advance. No old source-history-recovery purpose or generic authorization fallback is admitted.
 
 RepositorySync kind validation-continuation requires participant, the actual RepositorySyncValidationContinuationDescriptionResult and strict RepositorySyncValidationContinuationAnswer, matching execution worker, existing direction artifact reference, issuer and time. Bind every target/answer field under dedicated repository-sync-validation-continuation purpose. An adopting answer requires independently host-attested priorExecutionEnded=true and acceptOriginalUncertainty=true. The trusted host must verify actual terminal or not-started lifecycle externally before provisioning; live or unknown termination refuses. Passive preparation only encodes supplied facts: it cannot observe termination, manufacture consent, issue/provision evidence, adopt or execute. The old UNKNOWN effects remain unknown.
+
+Dedicated family RepositorySyncRepairScopeCorrection and kind adoption require participant, the actual RepositorySyncRepairScopeCorrectionDescriptionResult and strict RepositorySyncRepairScopeCorrectionAnswer, explicit sorted selected paths, matching execution worker, existing direction artifact reference, issuer and time. Bind the complete target and answer under dedicated repository-sync-repair-scope-correction purpose. Adoption requires actual Human assertions priorExecutionEnded=true and acceptOriginalUncertainty=true: the original semantic worker stopped or ended while external proposal effects remain UNKNOWN. Preparation only encodes those externally supplied facts and never observes termination, manufactures consent, provisions evidence, supersedes work or executes a source/Git effect.
 
 Passively prepare the explicitly selected Evidence input. Read only the declared absolute local file: URI references in the executing call. GoalPhase kind candidate-recovery requires participant, the actual GoalPhaseCandidateRecoveryDescriptionResult as request and GoalPhaseCandidateRecoveryAnswer as result, with matching execution worker and actual reference, for a separately bound new remaining candidate observation that retains the old UNKNOWN termination-unconfirmed status. GoalPhase kind source-history-recovery requires participant, the actual GoalPhaseSourceHistoryRecoveryDescriptionResult as request and GoalPhaseSourceHistoryRecoveryAnswer as result, with matching execution worker and actual reference, for a separately bound new normalization attempt. GoalPhase kind validation-recovery requires participant, the actual generated recovery description as request and a supplied GoalPhaseValidationRecoveryAnswer as result, with matching execution worker and actual reference. Decode the actual target and require its complete ordered description choices: AuthorizeNewAttempt and Defer for unknown/known-failed, or AuthorizeNewAttempt, LimitedRepair, Defer only for confirmed timeout. Reject LimitedRepair for non-timeout and any broadened, omitted or reordered supplied choices. Encode the exact independently observed Human target/answer/participant/reference binding; LimitedRepair only prepares bounded investigation authorization and grants no retry or Plan adoption. Preserve strict canonical timeout fields and independent issuer/time/provenance admission. GoalPhase kind remaining-plan-adoption requires participant, the actual GoalPhaseRemainingPlanDescriptionResult as request and GoalPhaseRemainingPlanAdoptionInput as result, with matching directive reference and execution worker. It encodes a separately observed new directive, never an answer to the old question. The trusted host remains responsible for real Human provenance and independent provisioning. Return existing structured datastore rows without provisioning or workflow transition. Supplied metadata grants no authority, and preparation alone grants no adoption, recovery or execution.
 

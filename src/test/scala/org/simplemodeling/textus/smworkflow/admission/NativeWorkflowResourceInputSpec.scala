@@ -2,6 +2,7 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
 import io.circe.parser.parse
+import io.circe.syntax.*
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.{Files, Path}
 import org.goldenport.Consequence
@@ -78,6 +79,96 @@ final class NativeWorkflowResourceInputSpec extends AnyWordSpec with Matchers wi
         inspection, inspection.copy(stagedPaths = paths))), "UNKNOWN", "termination-unconfirmed")
     V.GoalPhaseCandidateRecoveryInput(session, R.targetRecord(target), "Defer", "Fixture acquisition control",
       V.WorkflowArtifactReference("fixture-human", "1"))
+  }
+
+  "Named Purpose result Resource transport" should {
+    "preserve the complete nested Purpose value through inline selection or one deferred Resource read" in {
+      Given("a complete public Purpose DTO containing an actual group and its entire content text")
+      import io.circe.generic.auto.*
+      val group = RepositorySyncPurpose.Group("document-purpose", "Retain the complete document", "docs: retain purpose",
+        Vector.empty, Vector(RepositorySyncPurpose.Content("docs/purpose.md", Some("完全な本文を保持する\n"))),
+        Vector.empty, "Independent document purpose")
+      val value = V.RepositorySyncPurposeResult("resolved", "Supplied purpose proposal",
+        Vector(GoalPhaseNativeMetadata.record(group.asJson)), Vector.empty)
+      val expected = take(RepositorySyncPurpose.fromPublicC(value))
+      val text = take(value.toRecord().toJsonStringC)
+      val inline = take(NativeWorkflowResourceInput.selectC[V.RepositorySyncPurposeResult](
+        _request("result" -> text), "result", "resultResource"))
+      val resource = take(NativeWorkflowResourceInput.selectC[V.RepositorySyncPurposeResult](
+        _request("resultResource" -> "file:///private/tmp/complete%20purpose.json"), "result", "resultResource"))
+      var reads = 0
+      When("the owning reader decodes each exclusive transport and converts the complete public Purpose value")
+      val a = take(NativeWorkflowResourceInput.readC(inline, _ => fail("Inline must not read a Resource"), "result")
+        .flatMap(RepositorySyncPurpose.fromPublicC))
+      val b = take(NativeWorkflowResourceInput.readC(resource, reference => {
+        reference shouldBe take(NativeWorkflowResourceInput.referenceC("file:///private/tmp/complete%20purpose.json"))
+        reads += 1
+        Consequence.success(text)
+      }, "result").flatMap(RepositorySyncPurpose.fromPublicC))
+      Then("both transports preserve the complete Purpose and its nested content with exactly one Resource read")
+      a shouldBe expected
+      b shouldBe expected
+      b.groups shouldBe Vector(group)
+      reads shouldBe 1
+    }
+    "retain exclusive selector and owning read or complete DTO decoding failures" in {
+      Given("the shared named selector machinery with absent or ambiguous sources and a selected local Purpose Resource")
+      val requests = Vector(_request(), _request("result" -> "{}", "resultResource" -> "file:///tmp/purpose.json"))
+      val source = take(NativeWorkflowResourceInput.selectC[V.RepositorySyncPurposeResult](
+        _request("resultResource" -> "file:///tmp/purpose.json"), "result", "resultResource"))
+      val denied: Consequence[String] = Consequence.resourceInvalid("normal Resource denied/oversized/invalid UTF-8")
+      When("Purpose uses the same selection and deferred reader failure propagation as other named results")
+      val selections = requests.map(request => NativeWorkflowResourceInput.selectC[V.RepositorySyncPurposeResult](
+        request, "result", "resultResource"))
+      val failedread = NativeWorkflowResourceInput.readC(source,
+        _ => denied, "result")
+      val faileddecode = Vector("{", "{}").map(text => NativeWorkflowResourceInput.readC(source,
+        _ => Consequence.success(text), "result").flatMap(RepositorySyncPurpose.fromPublicC))
+      Then("exclusive selection read failures and malformed complete Purpose DTOs remain failures without fallback")
+      selections.foreach(_.isSuccess shouldBe false)
+      failedread shouldBe denied
+      faileddecode.foreach(_.isSuccess shouldBe false)
+    }
+  }
+
+  "Named repair result Resource transport" should {
+    "preserve the complete ordered replacement DTO through either exclusive transport without reading inline content" in {
+      Given("a complete two-file repair result whose multibyte document exceeds ordinary argument capacity")
+      val value = V.RepositorySyncNativeMergeRepairResult("repaired", "Align the selected product check and documentation",
+        Vector(V.RepositorySyncNativeMergeRepairFile("docs/repair.md", "界" * 800000),
+          V.RepositorySyncNativeMergeRepairFile("src/test/scala/ProductCheck.scala", "actual check\n")))
+      val text = take(value.toRecord().toJsonStringC)
+      text.getBytes(UTF_8).length should be > 2300000
+      val inline = take(NativeWorkflowResourceInput.selectC[V.RepositorySyncNativeMergeRepairResult](
+        _request("result" -> text), "result", "resultResource"))
+      val resource = take(NativeWorkflowResourceInput.selectC[V.RepositorySyncNativeMergeRepairResult](
+        _request("resultResource" -> "file:///private/tmp/complete%20repair.json"), "result", "resultResource"))
+      var reads = 0
+      When("the owning reader resolves the complete public DTO through each selected transport")
+      val a = take(NativeWorkflowResourceInput.readC(inline, _ => fail("Inline must not read a Resource"), "result"))
+      val b = take(NativeWorkflowResourceInput.readC(resource, _ => { reads += 1; Consequence.success(text) }, "result"))
+      Then("all ordered paths and complete texts survive with one deferred read and no business admission inferred")
+      a shouldBe value
+      b shouldBe value
+      b.replacements.head.text.length shouldBe 800000
+      reads shouldBe 1
+    }
+    "retain exclusive selection acquisition and complete DTO decoding failures without a fallback" in {
+      Given("absent and ambiguous repair selectors and a deferred complete repair Resource")
+      val source = take(NativeWorkflowResourceInput.selectC[V.RepositorySyncNativeMergeRepairResult](
+        _request("resultResource" -> "file:///tmp/repair.json"), "result", "resultResource"))
+      val denied: Consequence[String] = Consequence.resourceInvalid("normal Resource refused repair acquisition")
+      When("the selector and owning reader encounter unavailable or malformed complete values")
+      val selections = Vector(_request(), _request("result" -> "{}", "resultResource" -> "file:///tmp/repair.json"))
+        .map(NativeWorkflowResourceInput.selectC[V.RepositorySyncNativeMergeRepairResult](_, "result", "resultResource"))
+      val failedread = NativeWorkflowResourceInput.readC(source, _ => denied, "result")
+      val faileddecode = Vector("{", "{}", "[]").map(text => NativeWorkflowResourceInput.readC(source,
+        _ => Consequence.success(text), "result"))
+      Then("every refusal remains a refusal and the exact owning failure is propagated")
+      selections.foreach(_.isSuccess shouldBe false)
+      failedread shouldBe denied
+      faileddecode.foreach(_.isSuccess shouldBe false)
+    }
   }
 
   "Named conflict result Resource transport" should {

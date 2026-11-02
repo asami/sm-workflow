@@ -1907,7 +1907,7 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                 self.assertEqual(list(output.iterdir()), [])
 
     def test_resource_result_transport_does_not_extend_other_semantic_actions(self):
-        """RS-COMPLETE-RESULT-TRANSPORT: the optional helper mode belongs only to conflict Submit."""
+        """RS-COMPLETE-RESULT-TRANSPORT: only conflict and repair Submit select optional Resource mode."""
         for split in (False, True):
             with self.subTest(split=split):
                 # Given otherwise ordinary submission metadata carrying a conflict-only Resource selector.
@@ -1922,6 +1922,84 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                 self.submission.write_text(json.dumps(value))
                 with self.assertRaises(CALLER.CallerError):
                     CALLER.submission_pairs({"submission": str(self.submission)}, "actual-session", split=split)
+
+    def test_repair_resource_forwards_complete_file_uri_outside_argv_and_preserves_metadata(self):
+        """RS-REPAIR-RESULT-RESOURCE: the native owner alone reads complete repair content."""
+        # Given the actual repair route and a complete multibyte two-file DTO exceeding ARG_MAX.
+        route = self.retain_repository()
+        request, _issued = self.standalone_repository_request("submitNativeMergeRepair", "RepositorySyncNativeMergeRepairResult")
+        self.request.write_text(json.dumps(request))
+        complete = self.write_json("complete repair result.json", {"decision": "repaired", "rationale": "Supplied exact assigned repair",
+            "replacements": [{"path": "docs/repair.md", "text": "界" * 800000},
+                             {"path": "src/test/scala/ProductCheck.scala", "text": "actual selected check\n"}]})
+        self.assertGreater(complete.stat().st_size, 2300000)
+        value = {"resultResource": complete.as_uri(), "resultReference": {"identity": "supplied-repair", "revision": "3"},
+                 "completionFacts": [{"identity": "supplied-fact", "revision": "2"}],
+                 "executionEvidence": {"workerIdentity": "supplied-repair-author"}}
+        self.submission.write_text(json.dumps(value))
+        before = {path: path.read_bytes() for path in (route, self.request, self.submission, complete)}
+        original_open = Path.open
+
+        def metadata_only(path, *args, **kwargs):
+            self.assertNotEqual(path, complete, "The helper must never open the complete repair Resource")
+            return original_open(path, *args, **kwargs)
+
+        output = self.output()
+        process, raw = self.process_output(self.acknowledged("actual-repository"))
+        # When the repair action forwards only exact transport and completion metadata.
+        with patch.object(Path, "open", metadata_only):
+            status, printed, diagnostic, native = self.call(self.standalone_repository_args("submit-repository-repair", output), process)
+        # Then one small native argv preserves the URI, reference, facts and execution without reading the file.
+        self.assertEqual((status, printed, diagnostic), (0, raw.decode(), ""))
+        self.assertEqual(native.call_count, 1)
+        command = native.call_args.args[0]
+        self.assertIn(CALLER.REPOSITORY_FQN + "submitNativeMergeRepair", command)
+        self.assertEqual(command[command.index("--resultResource") + 1], complete.as_uri())
+        self.assertNotIn("--result", command)
+        self.assertLess(sum(len(part.encode("utf-8")) + 1 for part in command), 8192)
+        for name in ("resultReference", "completionFacts", "executionEvidence"):
+            self.assertEqual(json.loads(command[command.index("--" + name) + 1]), value[name])
+        self.assertEqual({path: path.read_bytes() for path in before}, before)
+
+    def test_repair_resource_requires_exclusive_transport_and_unchanged_metadata_contract(self):
+        """RS-REPAIR-RESULT-RESOURCE: malformed repair metadata refuses before native launch."""
+        reference = {"identity": "supplied-repair", "revision": "1"}
+        cases = [{"resultReference": reference}, {"result": {}, "resultResource": "file:///tmp/repair.json", "resultReference": reference}]
+        cases += [{"resultResource": value, "resultReference": reference} for value in (None, 7, {}, [], "", " ")]
+        cases += [{"resultResource": "file:///tmp/repair.json", "resultReference": reference, **extra}
+                  for extra in ({"unknown": True}, {"completionFacts": {}}, {"executionEvidence": []})]
+        for value in cases:
+            with self.subTest(metadata=value):
+                # Given a genuine route fixture and absent, ambiguous or malformed supplied transport metadata.
+                self.retain_repository()
+                request, _issued = self.standalone_repository_request("submitNativeMergeRepair", "RepositorySyncNativeMergeRepairResult")
+                self.request.write_text(json.dumps(request))
+                self.submission.write_text(json.dumps(value))
+                output = self.output()
+                process, _raw = self.process_output(self.acknowledged("actual-repository"))
+                # When the finite caller validates the repair metadata.
+                status, printed, diagnostic, native = self.call(self.standalone_repository_args("submit-repository-repair", output), process)
+                # Then no native process or output is created.
+                self.assertEqual((status, printed), (2, ""))
+                self.assertTrue(diagnostic)
+                native.assert_not_called()
+                self.assertEqual(list(output.iterdir()), [])
+
+    def test_repair_resource_is_refused_by_other_default_and_split_submission_modes(self):
+        """RS-REPAIR-RESULT-RESOURCE: adding repair transport does not extend unrelated actions."""
+        for split in (False, True):
+            # Given unrelated default or Split metadata containing the repair-only Resource selector.
+            value = {"resultResource": "file:///tmp/repair.json"}
+            if not split:
+                value["resultReference"] = {"identity": "supplied-result", "revision": "1"}
+            self.submission.write_text(json.dumps(value))
+            # When that action selects its existing default transport contract.
+            with self.assertRaises(CALLER.CallerError):
+                CALLER.submission_pairs({"submission": str(self.submission)}, "actual-session", split=split)
+            # Then supplying inline result too still refuses the unsupported Resource selector.
+            self.submission.write_text(json.dumps({**value, "result": {}}))
+            with self.assertRaises(CALLER.CallerError):
+                CALLER.submission_pairs({"submission": str(self.submission)}, "actual-session", split=split)
 
     def test_e31_conflict_routes_and_consumed_aliases_refuse_before_all_three_actions(self):
         """E31 / R2,R3,R4,R10 / S6-01D14; finite retained owner and child."""

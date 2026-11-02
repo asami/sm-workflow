@@ -280,6 +280,42 @@ final class RepositorySyncNativeMergeRepairSpec extends AnyWordSpec with Matcher
     }
   }
 
+  "RS-CHECK-REPAIR-SCOPE assigned check-origin subsets" should {
+    "admit only the nonempty sorted issued subset of current permitted changed files with a real failed selected check" in {
+      Given("a retained failed selected check and two actual changed paths with one explicitly issued file")
+      val failed = _review.copy(checks = Vector(V.Receipt("focused", "exited", Some(1), "actual failure", "")))
+      val request = M.Request(failed, Vector.empty, _files.take(1), Some("focused"))
+      When("request admission consumes the issued check-origin subset and invalid alternatives")
+      val accepted = M.admitRequestC(request, _policy)
+      val refused = Vector(request.copy(files = Vector.empty), request.copy(files = _files.reverse),
+        request.copy(files = _files.take(1) ++ _files.take(1)),
+        request.copy(files = Vector(M.File("foreign.md", "foreign"))),
+        request.copy(validationFailure = Some("not-selected")),
+        request.copy(review = failed.copy(checks = Vector(V.Receipt("focused", "exited", Some(0), "", "")))),
+        request.copy(review = failed.copy(checks = Vector(V.Receipt("focused", "unknown", None, "", "")))))
+        .map(M.admitRequestC(_, _policy))
+      Then("only the exact bounded issued subset of actual permitted changed text is admitted")
+      _take(accepted) shouldBe ()
+      refused.foreach(_.isSuccess shouldBe false)
+      M.admitRequestC(request, _policy.copy(semanticPaths = Set(_paths(1)))).isSuccess shouldBe false
+      M.admitRequestC(_request.copy(files = _files.take(1)), _policy).isSuccess shouldBe false
+    }
+    "require repaired replacements to equal the actual issued subset even when other candidate files changed" in {
+      Given("a check-origin issue assigning only the first changed file")
+      val request = M.Request(_review.copy(checks = Vector(V.Receipt("focused", "exited", Some(1), "", ""))),
+        Vector.empty, _files.take(1), Some("focused"))
+      val result = _result.copy(replacements = _result.replacements.take(1))
+      When("result admission compares the complete proposal with the actual issue")
+      val accepted = M.admitC(request, result, _policy)
+      val enlarged = M.admitC(request, _result, _policy)
+      val unchanged = M.admitC(request, result.copy(replacements = request.files), _policy)
+      Then("one changed exact assigned file succeeds while an enlarged or unchanged proposal refuses")
+      _take(accepted) shouldBe ()
+      enlarged.isSuccess shouldBe false
+      unchanged.isSuccess shouldBe false
+    }
+  }
+
   "E7 current typed semantic codecs" must afterWord(
     "in spec:repository-sync-native-merge-repair, example:E7, rules:R1,R2,R3,R4,R5"
   ) {

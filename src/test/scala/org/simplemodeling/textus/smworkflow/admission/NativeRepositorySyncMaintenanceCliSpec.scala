@@ -68,7 +68,207 @@ final class NativeRepositorySyncMaintenanceCliSpec extends AnyWordSpec with Matc
     } finally connection.close()
   }
 
+  private def _finish_large_purpose(scenario: F.Scenario, session: String, issued: V.RepositorySyncAdvanceResult,
+    purposetext: String, head: String, commitcount: Long): Unit = {
+      import io.circe.generic.auto.*
+      val executable = _required_path("smworkflow.spec.installedCommand", executable = true)
+      val root = scenario.root
+      val repository = root.resolve("repository")
+      val remote = root.resolve("upstream.git")
+      def _repository_call_(operation: String, arguments: Vector[String]): F.Result =
+        scenario.callInstalled(executable, "RepositorySyncService", operation, arguments, None,
+          Some(root.resolve(".textus/assembly.yaml")))
+      def _advance_() = _repository_call_("advanceRepositorySync", Vector("--sessionId", session))
+      val purposebytes = purposetext.getBytes(java.nio.charset.StandardCharsets.UTF_8)
+      purposebytes.length shouldBe 2170000
+      purposebytes.length should be > 1048576
+      Then("the actual issued Purpose request contains the entire ordinary text beyond the argument budget")
+      issued.sessionId shouldBe session
+      issued.kind shouldBe "Request"
+      issued.submitSessionId shouldBe Some(session)
+      issued.submitOperation shouldBe Some("submitRepositoryPurposeResult")
+      issued.purposeWork should not be empty
+      val files = parse(take(issued.purposeWork.get.toJsonStringC)).toOption.get.hcursor.get[Vector[Json]]("files").toOption.get
+      val file = files.find(_.hcursor.get[String]("path").toOption.contains(purpose_path)).get.hcursor
+      file.get[String]("worktree").toOption.get shouldBe purposetext
+      file.downField("unexamined").focus.forall(_.isNull) shouldBe true
+      val proposal = grouping(purposetext)
+      val purpose = V.RepositorySyncPurposeResult(proposal.decision, proposal.rationale,
+        proposal.groups.map(value => GoalPhaseNativeMetadata.record(value.asJson)), proposal.excludedPaths)
+      val text = _json(purpose)
+      text.getBytes(java.nio.charset.StandardCharsets.UTF_8).length should be > 2170000
+      val uri = _save(root, "complete-purpose-result.json", text)
+      val reference = V.WorkflowArtifactReference("spec-installed-large-purpose", "1")
+      val evidence = V.WorkflowExecutionEvidence(Vector(reference), Some("specification-purpose-author"), None, None)
+      val metadata = Vector("--sessionId", session, "--resultReference", _json(reference), "--executionEvidence", _json(evidence))
+      val malformed = _save(root, "malformed-purpose-result.json", "{}")
+      val oversized = root.resolve("over-budget-purpose-result.json")
+      Files.write(oversized, Array.fill[Byte](16777217)('x'.toByte))
+      Files.size(oversized) shouldBe 16777217L
+      val outside = Files.createTempFile(root.getParent, "outside-purpose-result-", ".json")
+      val small = _json(V.RepositorySyncPurposeResult("resolved", "Ambiguous transport refusal", Vector.empty, Vector.empty))
+      val refusals = Vector(
+        "both sources" -> Vector("--result", small, "--resultResource", uri),
+        "neither source" -> Vector.empty[String],
+        "nonlocal URI" -> Vector("--resultResource", "file://foreign/tmp/purpose.json"),
+        "nonexistent file" -> Vector("--resultResource", root.resolve("absent-purpose-result.json").toUri.toASCIIString),
+        "unauthorized outside-root file" -> Vector("--resultResource", outside.toUri.toASCIIString),
+        "malformed DTO" -> Vector("--resultResource", malformed),
+        "finite read budget overflow" -> Vector("--resultResource", oversized.toUri.toASCIIString))
+      try {
+        Files.writeString(outside, text, java.nio.charset.StandardCharsets.UTF_8)
+        refusals.foreach { (label, arguments) =>
+          Given("the actual pending Purpose assignment before " + label)
+          val saved = take(WorkflowInstanceRecordJsonV1.encodeC(_current(root, session)))
+          val savedhead = git(root, "-C", repository.toString, "rev-parse", "HEAD")
+          val savedindex = git(root, "-C", repository.toString, "ls-files", "--stage")
+          val savedtext = Files.readAllBytes(repository.resolve(purpose_path))
+          Files.exists(repository.resolve(".git/MERGE_HEAD")) shouldBe false
+          When("the installed Purpose Submit receives " + label)
+          val refused = _repository_call_(issued.submitOperation.get, metadata ++ arguments)
+          Then("refusal preserves the full native revision/history HEAD index and complete worktree text without any merge")
+          withClue(label + ": " + refused.invocation.logs) { refused.exitCode should not be 0 }
+          take(WorkflowInstanceRecordJsonV1.encodeC(_current(root, session))) shouldBe saved
+          git(root, "-C", repository.toString, "rev-parse", "HEAD") shouldBe savedhead
+          git(root, "-C", repository.toString, "ls-files", "--stage") shouldBe savedindex
+          Files.readAllBytes(repository.resolve(purpose_path)) shouldBe savedtext
+          Files.readAllBytes(repository.resolve(purpose_path)) shouldBe purposebytes
+          Files.exists(repository.resolve(".git/MERGE_HEAD")) shouldBe false
+        }
+        When("one installed Purpose Submit reads the complete public DTO from its authorized local Resource URI")
+        val submitted = _repository_call_(issued.submitOperation.get, metadata ++ Vector("--resultResource", uri))
+          .business[V.RepositorySyncConflictSubmissionResult]
+        Then("the genuine result is accepted once while HEAD still awaits the owning Advance")
+        submitted.accepted shouldBe true
+        submitted.sessionId shouldBe session
+        git(root, "-C", repository.toString, "rev-parse", "HEAD") shouldBe head
+        git(root, "-C", repository.toString, "rev-list", "--count", "HEAD").toLong shouldBe commitcount
+        _current(root, session).history.count(_.currentProgression.contains(ProgressionReference("sync.PurposeInstalled"))) shouldBe 0
+      } finally Files.deleteIfExists(outside)
+      When("normal installed Advance owns Purpose candidate acceptance installation local commit push and final fetch")
+      val terminal = _advance_().business[V.RepositorySyncAdvanceResult]
+      Then("the same Session completes with exactly one purpose installation and commit and byte-exact local and pushed contents")
+      terminal.kind shouldBe "Terminal"
+      terminal.sessionId shouldBe session
+      val completed = _current(root, session)
+      completed.lifecycle shouldBe Lifecycle.Completed
+      completed.history.count(_.currentProgression.contains(ProgressionReference("sync.PurposeInstalled"))) shouldBe 1
+      val tip = git(root, "-C", repository.toString, "rev-parse", "HEAD")
+      tip should not be head
+      git(root, "-C", repository.toString, "show", "-s", "--format=%P", "HEAD") shouldBe head
+      git(root, "-C", repository.toString, "rev-list", "--count", "HEAD").toLong shouldBe (commitcount + 1L)
+      git(root, "-C", repository.toString, "log", "-1", "--format=%s") shouldBe "docs: retain independent purpose"
+      git(root, "--git-dir=" + remote, "rev-parse", "refs/heads/main") shouldBe tip
+      Files.readAllBytes(repository.resolve(purpose_path)) shouldBe purposebytes
+      val blob = git(root, "-C", repository.toString, "hash-object", "--", purpose_path)
+      git(root, "-C", repository.toString, "rev-parse", "HEAD:" + purpose_path) shouldBe blob
+      git(root, "--git-dir=" + remote, "rev-parse", "refs/heads/main:" + purpose_path) shouldBe blob
+      git(root, "--git-dir=" + remote, "cat-file", "-s", blob).toLong shouldBe purposebytes.length.toLong
+      git(root, "-C", repository.toString, "status", "--porcelain") shouldBe ""
+      Files.exists(repository.resolve(".git/MERGE_HEAD")) shouldBe false
+      val finalindex = git(root, "-C", repository.toString, "ls-files", "--stage")
+      val finalrecord = take(WorkflowInstanceRecordJsonV1.encodeC(completed))
+      When("a passive terminal installed Advance collects the same completed Session")
+      val collected = _advance_().business[V.RepositorySyncAdvanceResult]
+      Then("the terminal result full record repository and remote retain the single completed effect")
+      collected shouldBe terminal
+      take(WorkflowInstanceRecordJsonV1.encodeC(_current(root, session))) shouldBe finalrecord
+      git(root, "-C", repository.toString, "rev-parse", "HEAD") shouldBe tip
+      git(root, "-C", repository.toString, "rev-list", "--count", "HEAD").toLong shouldBe (commitcount + 1L)
+      git(root, "--git-dir=" + remote, "rev-parse", "refs/heads/main") shouldBe tip
+      git(root, "-C", repository.toString, "ls-files", "--stage") shouldBe finalindex
+      Files.readAllBytes(repository.resolve(purpose_path)) shouldBe purposebytes
+      git(root, "-C", repository.toString, "status", "--porcelain") shouldBe ""
+      Files.exists(repository.resolve(".git/MERGE_HEAD")) shouldBe false
+      Files.exists(root.resolve("sbt-executions.txt")) shouldBe false
+      scenario.invocations should not be empty
+      scenario.invocations.foreach(_.argv.head shouldBe executable.toString)
+  }
+
   "Installed RepositorySync maintenance continuation" should {
+    "complete a large purpose Resource through one accepted Submit and one purpose commit before terminal convergence" in {
+      Given("the normal installed command and a fresh equal local/bare fixture with finite authorized Resource and Git budgets")
+      val executable = _required_path("smworkflow.spec.installedCommand", executable = true)
+      val scenario = F.fresh("installed-repository-large-purpose-resource", bootstrapSelectedInput = false)
+      val root = scenario.root
+      val repository = root.resolve("repository")
+      val configfile = root.resolve(".textus/config.json")
+      val original = parse(Files.readString(configfile)).toOption.get
+      val baseplan = process_plan(root, "Equal", scenario.host.goal)
+      def _large_program_(program: Json): Json = program.mapObject { fields =>
+        val limits = fields("limits").get.mapObject { values =>
+          Vector("stdinBytes", "stdoutBytes", "artifactBytes").foldLeft(values) { (prior, key) =>
+            prior.add(key, Json.fromLong(8388608L))
+          }.add("workAreaBytes", Json.fromLong(33554432L))
+        }
+        fields.add("limits", limits)
+      }
+      val plan = Vector("gitPrograms", "gitRepositories").foldLeft(baseplan) { (prior, name) =>
+        prior.mapObject(fields => fields.add(name, fields(name).get.mapArray(_.map(_large_program_))))
+      }
+      // The existing independent-document rule selects no product checks or
+      // mandatory detailed review. This is applicability, never a fake pass.
+      val settings = maintenance_parameters() ++ Map("textus.resource.url.file.roots" -> root.toString,
+        "cncf.resource.read.max-bytes" -> "16777216", "cncf.resource.write.max-bytes" -> "8388608",
+        "textus.subsystem.process-execution.plan" -> plan.noSpaces)
+      val configured = original.mapObject(fields => settings.foldLeft(fields.remove("sm-workflow.runtime.definition")) {
+        case (prior, (key, value)) => prior.add(key, Json.fromString(value))
+      }).mapObject(_.add("cncf.git.diff.maximum-bytes", Json.fromLong(8388608L)))
+      Files.writeString(configfile, configured.noSpaces)
+      def _repository_call_(operation: String, arguments: Vector[String]): F.Result =
+        scenario.callInstalled(executable, "RepositorySyncService", operation, arguments, None,
+          Some(root.resolve(".textus/assembly.yaml")))
+      val head = git(root, "-C", repository.toString, "rev-parse", "HEAD")
+      val commitcount = git(root, "-C", repository.toString, "rev-list", "--count", "HEAD").toLong
+      val purposetext = "完全な本文を保持する\n" * 70000
+      val purposebytes = purposetext.getBytes(java.nio.charset.StandardCharsets.UTF_8)
+      purposebytes.length shouldBe 2170000
+      purposebytes.length should be > 1048576
+      Files.write(repository.resolve(purpose_path), purposebytes)
+      When("normal installed Start and Advance issue the genuine dirty Purpose assignment")
+      val started = _repository_call_("startRepositorySync", Vector("--input",
+        "{\"repositoryIdentity\":\"sm-workflow\",\"syncMode\":\"FULL_STATE\"}")).business[V.RepositorySyncStartResult]
+      val session = started.sessionId
+      val issued = _repository_call_("advanceRepositorySync", Vector("--sessionId", session)).business[V.RepositorySyncAdvanceResult]
+      _finish_large_purpose(scenario, session, issued, purposetext, head, commitcount)
+    }
+
+    "complete retained large purpose Resource without restarting" in {
+      Given("the canonical retained fixture with its actual pending large Purpose issue and unchanged default host metadata")
+      import io.circe.generic.auto.*
+      val root = _required_path("smworkflow.spec.purposeResourceRetainedRoot")
+      val repository = root.resolve("repository")
+      val original = ThreeWorkflowNormalHostFixture.definition(root)
+      val host = original.copy(target = original.target.copy(root = repository.toString),
+        repository = original.repository.copy(input = original.repository.input.copy(
+          repositoryIdentity = original.goal.input.repositoryIdentity)))
+      val plan = parse(Files.readString(root.resolve("goal-plan.json"))).toOption.get
+        .as[GoalPhaseOrderedProgression.Plan].toOption.get
+      val existinglogs = Files.list(root.resolve("logs"))
+      val startinglogindex = try {
+        math.max(1000, existinglogs.filter(path => Files.isRegularFile(path) &&
+          path.getFileName.toString.matches("[0-9]+\\.(stdout\\.json|stderr)"))
+          .mapToInt(path => path.getFileName.toString.takeWhile(_.isDigit).toInt).max().orElse(999) + 1)
+      } finally existinglogs.close()
+      val scenario = F.reopenInstalledRepository(root, host, plan, startinglogindex)
+      val record = take(new org.goldenport.record.io.RecordDecoder().json(Files.readString(root.resolve("logs/7.stdout.json"))))
+      val issued = take(V.RepositorySyncAdvanceResult.createC(record))
+      val session = issued.sessionId
+      val current = _current(root, session)
+      current.identity.value shouldBe session
+      current.lifecycle should not be Lifecycle.Completed
+      current.suspension should not be empty
+      val request = parse(take(issued.purposeWork.get.toJsonStringC)).toOption.get.hcursor
+      val head = git(root, "-C", repository.toString, "rev-parse", "HEAD")
+      head shouldBe request.get[String]("parent").toOption.get
+      git(root, "-C", repository.toString, "write-tree") shouldBe request.get[String]("index_tree").toOption.get
+      val purposetext = "完全な本文を保持する\n" * 70000
+      Files.readString(repository.resolve(purpose_path)) shouldBe purposetext
+      val commitcount = git(root, "-C", repository.toString, "rev-list", "--count", "HEAD").toLong
+      When("only the pending Purpose completion and its owning Advance continue the actual retained Session")
+      _finish_large_purpose(scenario, session, issued, purposetext, head, commitcount)
+    }
+
     for (transport <- Vector("Inline", "Resource")) {
     s"complete a dirty purpose then resolve mixed modify/modify and add/add conflicts in the same Session using $transport" in {
       Given("the exact normal installed command using the published catalog's newest selection after repair publication and a fresh real local/bare fixture")

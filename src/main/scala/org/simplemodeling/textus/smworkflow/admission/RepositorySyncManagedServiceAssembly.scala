@@ -30,11 +30,13 @@ private[smworkflow] object RepositorySyncManagedServiceAssembly {
     nativeReview: Option[RepositorySyncNativeMergeReview.Installation] = None,
     convergence: Option[RepositorySyncNativeConvergence.AuthorityPort] = None,
     humanConflict: Option[RepositorySyncHumanConflict.Installation] = None,
-    repositoryContinuation: Option[RepositorySyncValidationContinuation.Installation] = None): Consequence[spec.ServiceDefinition] =
+    repositoryContinuation: Option[RepositorySyncValidationContinuation.Installation] = None,
+    repositoryRepairScopeCorrection: Option[RepositorySyncRepairScopeCorrection.Installation] = None): Consequence[spec.ServiceDefinition] =
     if (params == null)
       Consequence.configurationInvalid("RepositorySync host assembly requires its owning Subsystem")
     else bindC(params, declaration, acknowledgement, nativeProgression,
-      nativeAcknowledgement, conflictPolicy, validationPolicy, nativeReview, convergence, humanConflict, repositoryContinuation)
+      nativeAcknowledgement, conflictPolicy, validationPolicy, nativeReview, convergence, humanConflict, repositoryContinuation,
+      repositoryRepairScopeCorrection)
 
   def bindC(params: ComponentCreate, declaration: Fetch.Declaration,
     acknowledgement: () => Consequence[Unit] = () => Consequence.unit,
@@ -45,7 +47,8 @@ private[smworkflow] object RepositorySyncManagedServiceAssembly {
     nativeReview: Option[RepositorySyncNativeMergeReview.Installation] = None,
     convergence: Option[RepositorySyncNativeConvergence.AuthorityPort] = None,
     humanConflict: Option[RepositorySyncHumanConflict.Installation] = None,
-    repositoryContinuation: Option[RepositorySyncValidationContinuation.Installation] = None): Consequence[spec.ServiceDefinition] = for {
+    repositoryContinuation: Option[RepositorySyncValidationContinuation.Installation] = None,
+    repositoryRepairScopeCorrection: Option[RepositorySyncRepairScopeCorrection.Installation] = None): Consequence[spec.ServiceDefinition] = for {
     _ <- Fetch.validateDeclarationC(declaration)
     _ <- if (params != null && acknowledgement != null && nativeAcknowledgement != null && conflictPolicy != null) Consequence.unit
       else Consequence.configurationInvalid("RepositorySync managed host dependencies are incomplete")
@@ -82,6 +85,8 @@ private[smworkflow] object RepositorySyncManagedServiceAssembly {
     repairCompletion <- if (repair.nonEmpty)
       RepositorySyncNativeMergeRepairContinuation.bindCompletionC(params, declaration, definition, conflictPolicy,
         validationPolicy.get, review.get).map(Some(_)) else Consequence.success(None)
+    _ <- if (repositoryRepairScopeCorrection != null) repositoryRepairScopeCorrection.fold(Consequence.unit)(_.validateC)
+      else Consequence.configurationInvalid("Repair scope correction installation is absent")
     conflicts <- if (conflictPolicy.semanticPaths.nonEmpty)
       RepositorySyncNativeConflictContinuation.bindC(declaration, definition, conflictPolicy, nativeAcknowledgement, validationPolicy, review, humanConflict, convergence, repair).map(Some(_))
       else Consequence.success(None)
@@ -102,7 +107,9 @@ private[smworkflow] object RepositorySyncManagedServiceAssembly {
     new Operation(false, declaration, definition, acknowledgement, nativeProgression, nativeAcknowledgement, conflicts, validationPolicy, review, convergence, repair))
     .concat(completion.toVector ++ reviewCompletion.toVector ++ humanCompletion.toVector ++ repairCompletion.toVector ++ Vector(purposeCompletion) ++
       repositoryContinuation.toVector.flatMap(installation => RepositorySyncValidationContinuation.operations(
-        declaration, definition, validationPolicy.get, installation, nativeAcknowledgement)))))
+        declaration, definition, validationPolicy.get, installation, nativeAcknowledgement)) ++
+      repair.toVector.flatMap(port => repositoryRepairScopeCorrection.toVector.flatMap(installation =>
+        RepositorySyncRepairScopeCorrection.operations(port, installation))))))
 
   private final class Operation(start: Boolean, declaration: Fetch.Declaration, definition: DefinitionBinding,
     acknowledgement: () => Consequence[Unit],

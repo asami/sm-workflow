@@ -135,6 +135,75 @@ validation. The adopted operational route uses existing commands, with one
 lightweight normal FQN client Start connection qualification. Existing skill
 procedures and Operation/business parameter semantics are retained.
 
+## Failed-check assignment scope and explicit correction
+
+For the standard FULL_STATE owner, a fresh check-origin repair captures the
+actual retained candidate's changed paths after its preconditions hold. It
+does not retain a call-entry conflict-only selection. All files must be present
+ordinary UTF-8 text and fit the configured assignment count (32 by default,
+with the existing framework guard of 128). An unsupported or oversized set
+refuses explicitly for Human handling. Restricted host policies and
+review-origin findings retain their existing scope.
+
+An already issued narrow failed-check repair can be corrected through
+`describeRepositorySyncRepairScopeCorrection --sessionId` and the separate
+`adoptRepositorySyncRepairScopeCorrection`. Description binds the component,
+retained Start context/participant, FULL_STATE root/endpoint, actual current
+revision, original WorkOrder identity/expected revision/entity revision,
+formal failure receipt, candidate references/revisions, HEAD/tracking,
+MERGE_HEAD/index and the complete permissible changed text path set. Deleted
+or binary paths are outside the ordinary text capability. The target contains
+no complete file contents. Only an active available unclaimed incomplete
+check-origin issue with omitted permissible paths is eligible.
+
+Adoption accepts exactly `input` or `inputResource`. The exact structured input
+contains `sessionId`, `target`, `choice`, `paths`, `rationale`, `reference`,
+`priorExecutionEnded`, `acceptOriginalUncertainty` and `executionEvidence`.
+`AdoptCurrentIntegrationRepairScope` selects an explicit nonempty sorted
+distinct subset within the target and the existing assignment count. `Defer`
+uses empty paths and writes nothing. The retained participant must match the
+execution worker. Independent actual Human evidence must cover the exact
+target, paths, choice, rationale, reference and both true lifecycle assertions.
+No native claim/completion found is not proof of nonexecution: the Human must
+attest that the original semantic worker stopped or ended and accept its
+UNKNOWN external proposal effects. Development approval cannot supply this
+Session-specific consent.
+
+Passive `NativeWorkflowPreparationService.prepareEvidence` uses dedicated
+family `RepositorySyncRepairScopeCorrection` and kind `adoption` with the actual
+description, supplied answer, reference, execution, participant, issuer and
+time. It only encodes supplied facts in the existing evidence format. It
+neither verifies termination nor manufactures Human consent or provisions it.
+
+The existing native atomic WorkOrder supersession stores one typed direction
+and retains the original issue, failed checks, receipts and history. Adoption
+executes no source/Git effect, check, result acceptance, commit or push.
+Repeated identical direction is passive; contradiction, stale or crossed
+scope, known execution and completion refuse. A separate ordinary Advance
+captures the chosen files and issues one corrected continuation. Its
+`:scope:<adoption-revision>` suffix normalizes to the original repair attempt
+for budget accounting. A later failed candidate has a different source and
+cannot reuse the correction. The result still covers exactly its actual issued
+files, in order, with at least one text change. Materialization stages using
+the full invocation's Git selection ordering. A genuinely new candidate must
+pass its own checks and independent review; old successful Compile and failed
+Test receipts remain historical.
+
+## Complete repair result Resource transport
+
+`submitNativeMergeRepair` accepts exactly `result` or `resultResource`. The
+Resource selector is one absolute local authorized file URI containing the
+complete `RepositorySyncNativeMergeRepairResult` JSON. The executing owner
+acquires and decodes it through normal bounded Resource/UoW access. Reference,
+completion facts, execution evidence, current assignment and semantic admission
+retain their existing meaning. No split payload, size fallback or transport
+threshold is introduced.
+
+The finite `submit-repository-repair` caller forwards only the URI and unchanged
+completion metadata; it never reads the complete result file. Only conflict and
+repair Submit select that Resource mode. Other caller actions retain their
+existing inline transport contract.
+
 ## Executable examples
 
 `RepositorySyncNativeMergeRepairSpec` exercises observable decoder/admission
@@ -147,7 +216,7 @@ behavior. Each group has adjacent Given/When/Then and should assertions.
 | E3 | R2,R5 | Decision-needed with rationale and no replacement succeeds; proposals and unknown decisions fail. |
 | E4 | R1,R3,R4 | Foreign/out-of-policy/traversal paths, incomplete findings, duplicate IDs and incomplete/reordered/foreign file coverage fail. |
 | E5 | R2,R3 | Incomplete/reordered/duplicate/foreign replacements and all-no-op repair fail; one changed file with another unchanged succeeds. |
-| E6 | R1,R4 | Missing consumed values, blank/NUL/oversized rationale and null/NUL/oversized texts fail; multibyte byte limits are enforced. |
+| E6 | R1,R4 | Missing consumed values and blank/NUL/invalid UTF-8 rationale or texts fail; complete large ordinary multibyte rationale and texts survive without an application byte ceiling. |
 | E7 | R1,R2,R3,R4,R5 | Current codecs preserve actual semantic fields with inert annotations and refuse missing/mistyped fields or unsupported schemas. |
 
 The installed connection has separately authored executable examples:

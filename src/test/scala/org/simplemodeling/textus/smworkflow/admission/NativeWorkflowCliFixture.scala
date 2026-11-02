@@ -1862,6 +1862,21 @@ private[admission] object NativeWorkflowCliFixture {
     scenario
   }
 
+  /** Reconstruct only the caller of one retained normal installed RepositorySync
+    * episode. Host and plan are fixture metadata, never native evidence. */
+  def reopenInstalledRepository(root: Path, host: ThreeWorkflowRuntimeParameters.Definition,
+    plan: GoalPhaseOrderedProgression.Plan, startingLogIndex: Int): Scenario = {
+    require(root.isAbsolute && root.normalize == root && Files.isDirectory(root) && root.toRealPath() == root &&
+      root.getParent == _primary.resolve("target/sm-workflow/work/native-cli"), "Select the actual retained isolated repository fixture")
+    require(host != null && plan != null && host.target.root == root.resolve("repository").toString &&
+      Path.of(host.target.root).toRealPath() == root.resolve("repository") &&
+      Files.isRegularFile(root.resolve(".textus/config.json")) && Files.isRegularFile(root.resolve(".textus/assembly.yaml")),
+      "Reopen the exact existing normal host and physical repository")
+    require(startingLogIndex > 0 && !Files.exists(root.resolve(s"logs/$startingLogIndex.stdout.json")) &&
+      !Files.exists(root.resolve(s"logs/$startingLogIndex.stderr")), "Preserve all earlier installed invocation logs")
+    new Scenario(root, host, plan, None, Some(TypedSbtHostPlanFixture.normalExecutable), startingLogIndex)
+  }
+
   def reopenRepositoryConflict(root: Path, executable: Path): Scenario = {
     val parent = _primary.resolve("target/sm-workflow/work/native-cli")
     require(root.isAbsolute && root.normalize == root && root.getParent == parent &&

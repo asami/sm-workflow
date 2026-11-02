@@ -1296,6 +1296,30 @@ for the authorized host before boot. There is no application-specific byte cap
 or implicit inline fallback. Current context, revision, result-reference,
 participant and conflict-coverage admission still apply to the complete DTO.
 
+The helper has no Purpose submission action. For an actual issued
+`submitRepositoryPurposeResult`, use the normal installed Operation directly:
+
+```text
+sm-workflow org.simplemodeling.textus.SmWorkflow.RepositorySyncService.submitRepositoryPurposeResult --sessionId <actual-issued-session> --resultResource file:///absolute/authorized/complete-purpose-result.json --resultReference '{"identity":"actual-purpose-result","revision":"1"}' --json
+```
+
+The referenced UTF-8 file contains the complete public
+`RepositorySyncPurposeResult` object: decision, rationale, every group including
+each intended `content.text`, and excludedPaths. It contains no submission
+wrapper, source hashes or partial replacement for the issued result. Supply
+exactly one of inline `--result` and `--resultResource`; the same required
+`--sessionId`, `--resultReference` and optional facts/evidence apply. The owning
+ProcedureActionCall reads the Resource after loading the actual Session and
+current assignment, using normal Resource/UoW authorization and UTF-8 decoding.
+Configure the actual authorized file root and a finite
+`cncf.resource.read.max-bytes` budget before host boot; the common default
+remains 1 MiB. A URI supplies no permission. There is no helper file reading,
+size-based transport fallback, split result or omitted content. Existing
+current-context, revision, result-reference, participant and Purpose coverage
+admission remain authoritative. Accepted Submit saves the proposal; separate
+normal Advance owns candidate checks, acceptance, installation and synchronization.
+The conflict transport and its retained qualification remain applicable.
+
 Require the fixed target's actual acknowledgement
 ID, Boolean accepted=true, outcome=accepted and nonblank message. Bodies remain
 opaque; Submit supplies no effects, retry, authority or automatic Advance.
@@ -1487,3 +1511,39 @@ bound to actual retained native work and accepted commits, persisted once in the
 completion metrics and reused by recollection. They do not authorize an effect,
 change native outcomes or replace independent evidence preparation. Missing or
 crossed attribution stays unavailable; metrics never trigger workflow repair.
+
+## Repository repair scope and complete result transport
+
+The standard FULL_STATE owner derives a fresh failed-check repair assignment
+from the actual current integration candidate. It refuses unsupported text or
+assignment counts rather than silently issuing only the earlier conflict paths.
+The configured assignment limit remains 32 by default, with the existing 128
+framework guard.
+
+For an already issued narrow check-origin repair, describe through
+`RepositorySyncService.describeRepositorySyncRepairScopeCorrection --sessionId`.
+The returned exact target binds its native issue, failed-check receipt, current
+candidate, Git frontier and permissible changed text paths. Submit actual Human
+direction through `adoptRepositorySyncRepairScopeCorrection`, choosing exactly
+`input` or `inputResource`. `AdoptCurrentIntegrationRepairScope` needs explicit
+sorted selected paths, the original retained participant's execution, an
+existing reference and dedicated independent Human evidence, including
+`priorExecutionEnded=true` and `acceptOriginalUncertainty=true`. Available and
+unclaimed does not establish nonexecution; original external effects remain
+UNKNOWN. `Defer` writes nothing.
+
+Passive preparation uses `prepareEvidence` family
+`RepositorySyncRepairScopeCorrection`, kind `adoption`, the actual public
+description and supplied answer/reference/execution/participant/issuer/time.
+It supplies no termination observation or consent. Native atomic supersession
+retains the original issue, failed checks, receipts and history. A separate
+ordinary Advance captures and issues the selected subset without changing the
+original repair attempt count. Adoption performs no check or source/Git effect.
+
+`submitNativeMergeRepair` also accepts exactly one of `result` and
+`resultResource`. A Resource is an absolute local authorized file URI containing
+the complete repair result DTO. The owning Resource/UoW reader handles finite
+acquisition and UTF-8 decoding before unchanged semantic/current-assignment
+admission. The `submit-repository-repair` caller forwards the URI unread with
+unchanged result reference, facts and execution evidence, as conflict Submit
+already does. No other helper action gains Resource result transport.

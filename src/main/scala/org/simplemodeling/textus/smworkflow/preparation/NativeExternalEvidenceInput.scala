@@ -22,7 +22,9 @@ private[smworkflow] object NativeExternalEvidenceInput {
   private val _required = Set("family", "kind", "request", "result", "reference", "execution-evidence", "issuer", "occurred-at", "collection")
 
   def prepareC(supplied: Map[String, String], readText: String => Consequence[String]): Consequence[Record] = try {
-    if (supplied.get("kind").contains("goal-phase-prerequisite-publication-recovery"))
+    if (supplied.get("family").contains("RepositorySyncRepairScopeCorrection"))
+      _repair_scope_c(supplied, readText)
+    else if (supplied.get("kind").contains("goal-phase-prerequisite-publication-recovery"))
       _prerequisite_recovery_c(supplied, readText)
     else if (supplied.get("kind").contains("goal-phase-prerequisite-publication-observation"))
       _prerequisite_observation_c(supplied, readText)
@@ -92,6 +94,34 @@ private[smworkflow] object NativeExternalEvidenceInput {
     } yield bootstrap
     }
   } catch { case NonFatal(_) => _invalid("invalid explicit argument, file or typed input") }
+
+  private def _repair_scope_c(supplied: Map[String, String], readtext: String => Consequence[String]): Consequence[Record] = for {
+    options <- NativePreparationInput.optionsC(supplied, _required, readtext, Set("participant"))
+    _ <- if (options("family") == "RepositorySyncRepairScopeCorrection" && options("kind") == "adoption" &&
+        options.contains("participant")) Consequence.unit else _invalid("repair scope correction requires its dedicated family, adoption kind and actual Human participant")
+    occurred <- NativePreparationInput.instantC(options("occurred-at"))
+    _ <- NativePreparationInput.collectionC(options("collection"))
+    requesttext <- readtext(options("request"))
+    requestjson <- io.circe.parser.parse(requesttext).fold(error => _invalid(error.message), Consequence.success)
+    rawtarget <- requestjson.hcursor.get[io.circe.Json]("target").fold(error => _invalid(error.message), Consequence.success)
+    _ <- org.simplemodeling.textus.smworkflow.admission.RepositorySyncRepairScopeCorrection.decodePublicTarget(rawtarget)
+      .fold(_invalid(_), _ => Consequence.unit)
+    request <- new org.goldenport.record.io.RecordDecoder().json(requesttext)
+    resulttext <- readtext(options("result"))
+    resultjson <- io.circe.parser.parse(resulttext).fold(error => _invalid(error.message), Consequence.success)
+    _ <- org.simplemodeling.textus.smworkflow.admission.RepositorySyncRepairScopeCorrection.decodePublicAnswer(resultjson)
+      .fold(_invalid(_), _ => Consequence.unit)
+    result <- new org.goldenport.record.io.RecordDecoder().json(resulttext)
+    description <- summon[ValueReader[V.RepositorySyncRepairScopeCorrectionDescriptionResult]].readC(request)
+    answer <- summon[ValueReader[V.RepositorySyncRepairScopeCorrectionAnswer]].readC(result)
+    reference <- NativePreparationInput.readC(options("reference"), readtext).flatMap(summon[ValueReader[V.WorkflowArtifactReference]].readC)
+    execution <- NativePreparationInput.readC(options("execution-evidence"), readtext).flatMap(summon[ValueReader[V.WorkflowExecutionEvidence]].readC)
+    prepared <- NativeRepositoryRepairScopeCorrectionPreparation.prepareC(description, answer, reference, execution,
+      options("participant"), options("issuer"), occurred)
+    payload <- prepared.record.getString(NativeExternalEvidence.storageField).map(Consequence.success)
+      .getOrElse(_invalid("prepared repair scope row has no typed payload"))
+    row = Record.data("id" -> prepared.recordIdentity, NativeExternalEvidence.storageField -> payload)
+  } yield Record.data("datastore" -> Vector(Record.data("collection" -> options("collection"), "records" -> Vector(row))))
 
   private def _prerequisite_recovery_c(supplied: Map[String, String], readText: String => Consequence[String]):
     Consequence[Record] = for {

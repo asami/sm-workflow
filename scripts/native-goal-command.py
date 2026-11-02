@@ -611,7 +611,7 @@ def action_command(options, executable, runtime_root, task_fd):
         service = REPOSITORY_FQN
     elif action == "submit-repository-repair":
         operation, session_id = issued_repository_repair_route(options, task_fd)
-        pairs = submission_pairs(options, session_id)
+        pairs = submission_pairs(options, session_id, resource_result=True)
         service = REPOSITORY_FQN
     elif action == "submit-repository-conflict":
         operation, session_id = issued_repository_conflict_route(options, task_fd)
