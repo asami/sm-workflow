@@ -229,7 +229,7 @@ private[smworkflow] object StandardWorkflowRuntime {
         unmerged <- WorkflowManagedProcessExecution.executeGitC(selectedcore,
           org.goldenport.cncf.processexecution.GitOperation.UnmergedIndex).flatMap(_.valueC)
         selected <- if (unmerged.nonEmpty || !session.started.current.currentProgression.exists(p =>
-            Set("sync.PendingMergePrepared", "sync.RequiredLintContinuationAdmitted", "sync.ValidationChecking", "sync.ValidationRepairRequired", "sync.MergeValidated",
+            Set("sync.PendingMergePrepared", "sync.RequiredLintContinuationAdmitted", "sync.ReviewInputContinuationAdmitted", "sync.ValidationChecking", "sync.ValidationRepairRequired", "sync.MergeValidated",
               "sync.RepairProposalAdmitted", "sync.MaterializingRepair")(p.value))) Consequence.success(unmerged.map(_.path.value).toSet)
           else for {
             store <- RepositorySyncNativeProgressStore.bindC(session, declaration, selectedcore, _ => Consequence.unit)

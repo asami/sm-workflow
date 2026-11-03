@@ -5178,6 +5178,8 @@ subject-type = RepositorySyncHumanConflictRequest
 
 ##### RequiredLintContinuationAdmitted
 
+##### ReviewInputContinuationAdmitted
+
 ##### IntegrationValidated
 
 ##### PendingMergePrepared
@@ -5364,6 +5366,11 @@ when = sync.ValidationContinuationAdmitted, conflict.Retained, nativeReview.Reta
 
 state = RequiredLintContinuationAdmitted
 when = sync.RequiredLintContinuationAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### review-input-continuation-admitted
+
+state = ReviewInputContinuationAdmitted
+when = sync.ReviewInputContinuationAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### merge-conflicted
 
@@ -5904,6 +5911,13 @@ on = native-push-prepared
 to = PendingMergePrepared
 on = native-required-lint-pending-prepared
 
+#### ReviewInputContinuationAdmitted
+
+##### TRANSITION
+
+to = MergeValidated
+on = native-review-inputs-validation-retained
+
 #### PendingMergePrepared
 
 ##### TRANSITION
@@ -6149,6 +6163,11 @@ on = native-repair-candidate-observed
 #### RepairDecisionRequired
 
 #### ReviewDecisionRequired
+
+##### TRANSITION
+
+to = ReviewInputContinuationAdmitted
+on = native-review-input-continuation-admitted
 
 #### ReviewRejected
 
@@ -7896,6 +7915,8 @@ Observe the exact active unsuspended nonmerge IntegrationValidationChecking resu
 
 Explicit state dispatch also supports sm-workflow.repository-sync-required-lint-continuation.v2 for an active unsuspended genuine MergeValidated frontier whose original successful ordered checks omitted required lint. Return AuthorizeMissingRequiredLint and Defer. The compact strict target binds Session/Start principal, Component, repository and tracking scope, actual current pending source namespace/reference/revision (including repair-N), MergeValidated reference/revision, original selection and each actual intent/result reference/revision with terminal-success facts, immutable merge parents/index tree, current observation and actual current expanded fixed host policy. Exactly one FixCheck may be appended; the old identity/ordinal/kind/order and candidate inputs remain. Raw historical stdout/stderr stays in its original native receipts. No later review, commit, convergence or uncertain invocation is eligible. Invoke description with --sessionId; adoption uses structured --input.
 
+Explicit policy sm-workflow.repository-sync-review-input-continuation.v3 describes only the active unsuspended ReviewDecisionRequired frontier with its actual paired detailed decision-needed result. The corrected normal host document-inputs declaration is a new proposal, never an edit of old validation or review. Bind the Component and Session, pending namespace, original validated and review references/revisions, unchanged parents/tree/index/current observation, old assessment, proposed mapping and complete freshly captured assessment, current fixed selected checks and explicit applicability issues. Return AdoptInputClassificationAndContinueReview and Defer only when old unknown paths are now fully classified with unchanged check applicability. Ineligible descriptions offer Defer only. Previously known consumed/document classifications cannot be demoted or changed. Program-inputs coverage takes consumed precedence even for scripts or skills ending in .md. Binary, unavailable/new unknown, uncovered consumed inputs and real selected execution/input drift remain issues. No successful check or semantic result is invented or replayed. Unknown or malformed v3 refuses without older-decoder fallback.
+
 For a genuinely new Scala pending merge candidate, actual typed parent/index PendingPaths and current impact-selected fixed checks must establish an applicable FixCheck before the first SBT effect. Missing lint selection refuses before Compile/Test; neither document-path classification nor an unselected extra host check waives it. Existing completed old validation stays available for the explicitly adopted supplement. Current CNCF permission remains an actual typed UoW decision and is never asserted by description or adoption.
 
 ##### TYPE
@@ -8013,6 +8034,8 @@ RepositorySyncRepairScopeCorrectionAdoptionResult
 Admit only the complete exact target, typed choice/rationale and existing direction artifact/execution under dedicated independent repository-sync-validation-continuation evidence. The trusted host must externally verify original invocation terminal or not-started lifecycle before provisioning priorExecutionEnded=true and acceptOriginalUncertainty=true; passive preparation never proves termination or supplies consent. Preserve the original UNKNOWN intent and all historical results. AuthorizeNewValidation requires the unchanged clean candidate and reuses only its validated successful prefix in a fresh namespace. AdoptCurrentFullState explicitly covers all described staged and unstaged FULL_STATE paths, invalidates old check scope and allows mixed staging only there. It authorizes current selected path contents at normal staging time, not an immutable content seal or byte-identical Human review. Additional/removed paths, status/index/HEAD/tracking drift refuse. Append only one managed ValidationContinuationAdmitted transition. Defer writes nothing; stale/duplicate direction refuses without effects. Separate ordinary Advance preserves a fresh checkpoint when needed and runs unfinished checks and normal convergence under current grants. Fetch and the old checkpoint are never repeated. Every new resultless invocation requires fresh public adoption and independent terminal evidence. This bounded contract does not recover arbitrary merge, commit, push or fetch interruptions.
 
 The explicit v2 required-lint branch binds the same independent evidence purpose to the complete actual target, AuthorizeMissingRequiredLint choice, rationale, participant, existing reference and false/false not-applicable booleans. It authenticates original successful selection and receipt lineage through native readers and re-observes after evidence admission before managed CAS. Adoption appends only RequiredLintContinuationAdmitted via native-required-lint-continuation-admitted. Separate ordinary Advance creates PendingMergePrepared via native-required-lint-pending-prepared in the namespace required-lint- followed by the actual adoption target frontier revision, without Git source changes. Old successful receipts seed the verified ordered prefix without new execution rows; only appended FixCheck uses normal fixed CNCF SBT/UoW and current permission. Failure follows existing check-origin repair; a resultless or UNKNOWN new lint remains non-replayable. Later repaired candidates select their own checks without inheriting this seed. V1 codecs and historical rows remain unchanged; malformed or unknown v2 never falls back to v1. No whole-body seal, permission grant, successful-check replay or accepted-result resubmission is implied.
+
+The explicit v3 review-input branch uses AdoptInputClassificationAndContinueReview or passive Defer, with priorExecutionEnded=false and acceptOriginalUncertainty=false (not applicable). Independent repository-sync-validation-continuation evidence binds the complete current v3 target, choice, rationale, participant, existing reference and Component. After evidence admission reobserve the full target before managed CAS. Adoption stores only ReviewInputContinuationAdmitted through native-review-input-continuation-admitted at review-inputs-REVISION-adopted. Separate normal Advance authenticates the direction and native lineage, reobserves the unchanged candidate/current mapping, and saves a NEW MergeValidated source through native-review-inputs-validation-retained at review-inputs-REVISION-validated. Copy the genuine original validation receipt objects and candidate/checkpoint/required-lint provenance, adding only corrected input and impact assessment. Never reenter check execution. Normal independent detailed review uses the new source revision and continuation identity, retaining the old accepted decision-needed issue/result and its rationale/limitations as context. Keep full original candidate diffs and changed paths; old decision-needed prose supplies no typed accepted path coverage. Request fresh judgment of unresolved coverage without check replay or inferred semantic PASS. An interruption resumes from that revised source. Later real repair creates its own candidate without inheriting the old classification direction. Existing review acceptance, repair, Human decision and authorized convergence remain the owners of later effects; adoption performs none of them.
 
 ##### TYPE
 

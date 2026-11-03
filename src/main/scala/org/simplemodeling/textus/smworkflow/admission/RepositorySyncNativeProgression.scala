@@ -58,6 +58,11 @@ private[smworkflow] object RepositorySyncNativeProgression {
           case None => invalid("retained purpose continuation has no actual inventory")
         }
       case None if session.started.current.currentProgression.contains(
+          WorkflowInstancePersistence.ProgressionReference("sync.ReviewInputContinuationAdmitted")) => validationPolicy match {
+        case Some(policy) => RepositorySyncReviewInputContinuation.advanceC(continuationstore, session.started.current, policy, review)
+        case None => invalid("adopted review-input continuation requires its current fixed validation policy")
+      }
+      case None if session.started.current.currentProgression.contains(
           WorkflowInstancePersistence.ProgressionReference("sync.RequiredLintContinuationAdmitted")) => validationPolicy match {
         case Some(policy) => RepositorySyncRequiredLintContinuation.advanceC(continuationstore, session.started.current,
           policy, review, convergence, repair)
@@ -79,12 +84,21 @@ private[smworkflow] object RepositorySyncNativeProgression {
           WorkflowInstancePersistence.ProgressionReference("sync.PendingMergePrepared"))) => for {
         store <- bindC(session, declaration, core, acknowledgement)
         candidate <- store.currentMergeCandidateC(session.started.current)
+        revised <- RepositorySyncReviewInputContinuation.latestValidatedC(store, session.started.current, candidate)
+        _ <- revised match {
+          case Some(source) if session.started.current.currentProgression.exists(p =>
+              Set("sync.MergeValidated", "sync.ReviewDecisionRequired", "sync.ReviewAccepted")(p.value)) =>
+            validationPolicy.map(policy => RepositorySyncReviewInputContinuation.qualifyCurrentC(
+            store, session.started.current, source, policy)).getOrElse(invalid("revised validation requires current selected validation bindings"))
+          case _ => Consequence.unit
+        }
         accepted <- review.fold(Consequence.success(Option.empty[Stage]))(_.acceptedC(identity, core))
         output <- (accepted, convergence) match {
           case (Some(value), Some(authority)) => for {
             journal <- DevelopmentJournalMergeAssessment.recordC(store, value.payload, value.record)
             result <- RepositorySyncNativeConvergence.advanceC(store, value, authority, validationPolicy)
           } yield result.copy(journalRecording = journal)
+          case _ if revised.nonEmpty => review.map(_.advanceC(identity, core)).getOrElse(invalid("revised validation requires installed independent review"))
           case _ => pendingMergeC(store, candidate.pending, validationPolicy, review, convergence, candidate.namespace, repair)
         }
       } yield output

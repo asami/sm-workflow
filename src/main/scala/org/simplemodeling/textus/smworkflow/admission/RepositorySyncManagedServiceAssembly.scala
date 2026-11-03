@@ -107,7 +107,7 @@ private[smworkflow] object RepositorySyncManagedServiceAssembly {
     new Operation(false, declaration, definition, acknowledgement, nativeProgression, nativeAcknowledgement, conflicts, validationPolicy, review, convergence, repair))
     .concat(completion.toVector ++ reviewCompletion.toVector ++ humanCompletion.toVector ++ repairCompletion.toVector ++ Vector(purposeCompletion) ++
       repositoryContinuation.toVector.flatMap(installation => RepositorySyncValidationContinuation.operations(
-        declaration, definition, validationPolicy.get, installation, nativeAcknowledgement)) ++
+        declaration, definition, validationPolicy.get, installation, nativeAcknowledgement, review)) ++
       repair.toVector.flatMap(port => repositoryRepairScopeCorrection.toVector.flatMap(installation =>
         RepositorySyncRepairScopeCorrection.operations(port, installation))))))
 

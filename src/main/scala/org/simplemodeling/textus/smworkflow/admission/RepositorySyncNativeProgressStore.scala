@@ -32,7 +32,8 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     hygiene: Option[CommitHygiene.Record] = None,
     records: Option[CompletionRecords.Plan] = None,
     purposes: Option[RepositorySyncPurpose.Progress] = None,
-    requiredLint: Option[RepositorySyncRequiredLintContinuation.Direction] = None)
+    requiredLint: Option[RepositorySyncRequiredLintContinuation.Direction] = None,
+    reviewInputs: Option[RepositorySyncReviewInputContinuation.Direction] = None)
   final case class Stage(record: InstanceRecord, payload: Payload)
   final case class Candidate(namespace: String, pending: Stage)
   def candidateKey(namespace: String, key: String): String =
@@ -41,7 +42,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
   private given Decoder[RepositorySyncNativeMergeValidation.State] = Decoder.instance(cursor =>
     RepositorySyncNativeMergeValidation.stateCodec.decode(cursor.value).left.map(reason => DecodingFailure(reason, cursor.history)))
   private given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
-    case ("assessment" | "repairContext" | "continuation" | "hygiene" | "records" | "purposes" | "requiredLint", value) => !value.isNull
+    case ("assessment" | "repairContext" | "continuation" | "hygiene" | "records" | "purposes" | "requiredLint" | "reviewInputs", value) => !value.isNull
     case _ => true
   }))
   private given Decoder[Payload] = deriveDecoder
@@ -62,7 +63,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     val declaration: RepositorySyncManagedFetch.Declaration, val core: ActionCall.Core,
     val original: RepositorySyncManagedFetch.Payload, val context: RepositorySyncManagedFetch.StartContext,
     val identity: String,
-    adapter: WorkflowManagedMechanicalTransition[Payload], storage: WorkflowComponentStorage,
+    adapter: WorkflowManagedMechanicalTransition[Payload], val storage: WorkflowComponentStorage,
     acknowledgement: String => Consequence[Unit],
     val namespace: String = "",
     val continuation: Option[RepositorySyncValidationContinuation.Direction] = None) {
@@ -138,7 +139,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
       // A real repair materializes new inputs. Supplement provenance remains
       // in its original rows and is never a seed for that changed candidate.
       selectedpayload = if (this.key(key).startsWith("repair-") &&
-          Set("MaterializingRepair", "PendingMergePrepared")(payload.stage)) payload.copy(requiredLint = None) else payload
+          Set("MaterializingRepair", "PendingMergePrepared")(payload.stage)) payload.copy(requiredLint = None, reviewInputs = None) else payload
       saved <- adapter.executeC(WorkflowMechanicalTransition.Intent(declaration.configuration, reference(key),
         from, from.revision, entry, TypedValue(codec.typeIdentity, selectedpayload.copy(continuation = continuation.orElse(selectedpayload.continuation)))),
         ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](()))(using core.executionContext)

@@ -245,3 +245,74 @@ accepted semantic result to upgrade it. All semantic, reviewer and lifecycle
 inputs in these cases are specification-owned; the cases make no live provider
 acceptance claim. This section defines the contract and selected scenarios,
 without claiming their execution results.
+
+## Retained review input classification continuation v3
+
+The same describe/adopt operations explicitly dispatch
+`sm-workflow.repository-sync-review-input-continuation.v3`. Failed or unknown
+decoders never fall back to an older contract. The choices are
+`AdoptInputClassificationAndContinueReview` and `Defer`. Both existing lifecycle
+assertion fields must be **false/false**, because this direction concerns completed
+successful checks and a saved decision-needed review. No UNKNOWN execution or
+termination assertion is made. V1 and v2 keep their original wire meaning.
+
+This branch requires the active, unsuspended `ReviewDecisionRequired` frontier,
+the actual paired detailed-review issue and decision-needed result, and the
+actual pending merge and complete successful validation in native history.
+Purpose candidates, later effects, already adopted directions and completed or
+suspended Sessions do not qualify. The public target binds the Component,
+Session, original host context, native source references and revisions, actual
+parents and candidate tree, old input assessment, proposed current mapping and
+fresh assessment, selected fixed checks, current index/status and applicability
+issues. It contains no copied check output or duplicated review body.
+
+The owner corrects the normal CNCF host `document-inputs` declaration as a **new
+proposal**. That configuration does not rewrite the old assessment or review.
+Description captures complete typed Git blob/mode/path observations against
+the same immutable candidate tree. Previously known consumed inputs cannot be
+demoted, and previously known document classifications cannot change. Only old
+unknown paths may acquire classifications. Consumed scope takes precedence;
+scripts and skills covered by selected `program-inputs` consumption scopes must
+remain consumed even when their filenames end in `.md`. There is no generic
+filename-based classification rule.
+
+Binary or unavailable text, remaining/new unknown paths, changed actual scope,
+missing program policy, missing consumed input coverage, or changed ordered
+check applicability appear as explicit issues. Such targets offer only `Defer`;
+non-Defer adoption refuses. The proposed program-impact selection must exactly
+match the genuine old selected checks, whose identities, kinds and ordinals
+must still be fixed by the current policy. The original structural and program
+receipt objects retain their original native namespace and success provenance.
+
+The owner describes the current frontier, independently provisions the existing
+dedicated `repository-sync-validation-continuation` evidence for its v3 target,
+choice, rationale, participant, reference and false/false flags, then calls
+adopt. Passive preparation carries the supplied binding; it does not establish
+classification correctness or semantic acceptance. Adoption re-observes the
+full target after independent evidence admission and appends only
+`ReviewInputContinuationAdmitted`, event
+`native-review-input-continuation-admitted`, at key
+`review-inputs-REVISION-adopted`. `Defer` stores nothing. Stale and duplicate
+targets refuse.
+
+Separate ordinary Advance authenticates the adjacent adoption and actual native
+lineage, current mapped policy, candidate and Git observation. It appends a new
+`MergeValidated` source via `native-review-inputs-validation-retained` at key
+`review-inputs-REVISION-validated`. It preserves candidate, checkpoint, repair
+and required-lint provenance and original validation receipts, adding only the
+new input/impact assessment and direction. It never enters check selection or
+execution again. Interruption after this save resumes from the same revised
+source. The original pending candidate pointer and all old rows stay intact.
+
+Normal independent detailed review uses the revised source revision to issue a
+new continuation exactly once. Its full original candidate diffs and changed
+paths remain available. Existing request context retains the old result and
+continuation references, decision-needed rationale, honest original limitations,
+corrected unknown paths and preserved check applicability. The old result has
+no typed accepted subcoverage: its prose is not projected into accepted paths.
+The fresh reviewer assesses unresolved semantic coverage and supplies a fresh
+result. Adoption never accepts review or invents a PASS. Existing review
+accept/repair/decision-needed and convergence routes retain ownership. A later
+real repair creates its own candidate and drops the old classification
+direction. This section defines source behavior; validation and installed
+qualification results are recorded separately.
