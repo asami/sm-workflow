@@ -358,3 +358,57 @@ are authored requirements; only the owning parent's normal generation,
 compilation, old capture, publication and same-Session installed continuation
 provide execution evidence. The fixture does not inspect or modify a live
 consumer Session and never writes native datastore rows.
+
+## ID08: known failed first-Purpose preparation
+
+`describeRepositorySyncPurposePreparationContinuation --sessionId` observes the
+actual current `PurposeUnfinished` native receipt and its directly preceding
+immutable intent. The caller supplies no native receipt key and reads no private
+storage. Its target retains the complete failed progress JSON and complete real
+provider effect JSON as opaque strings. Journal payload names, arrays, explicit
+nulls, old effects and accepted ownership text survive public Record conversion.
+The process observation includes the original stdout, stderr, byte counts,
+truncation flags and termination; an unavailable or incomplete result is never
+replaced by a fabricated failure.
+
+Only the first ordered Purpose repair is eligible: cursor zero, no installed
+Purpose commits, positive existing repair attempt, defined baseline tree, no
+candidate, intact original plan and accepted ownership. The actual paired intent
+must be `PurposePreparing`, with a `Failed(nonzero)` result and matching exited
+nonzero process termination, complete untruncated streams and no pending merge.
+The actual source HEAD, index, branch, root mapping, retained endpoint/principal
+and every selected expected worktree text must remain applicable. Drift and
+unknown, truncated, materialization or commit results retain their actual receipt
+but offer only `Defer`. This contract does not authorize arbitrary later-Purpose
+or uncertain installation failures.
+
+`adoptRepositorySyncPurposePreparationContinuation` accepts typed `input` or
+`inputResource`: sessionId, the exact described target, choice, ordinary nonempty
+Unicode rationale, directionReference and matching executionEvidence. The choices
+are `AuthorizeNewPreparation` and passive `Defer`; rationale has no application
+size limit. The independent evidence purpose is
+`repository-sync-purpose-preparation-continuation`. Passive preparation uses
+family `RepositorySync`, kind `purpose-preparation-continuation` and the exact
+DescriptionResult plus Answer. Supplied external reference, participant, worker,
+issuer and time are encoded, not manufactured or interpreted as proven Human
+approval. No `priorWorkerEnded` assertion substitutes for the actual stored
+process termination.
+
+Adoption re-observes the exact current facts and appends one managed mechanical
+`purpose-preparation-continuation` event from `PurposeUnfinished` to
+`PurposeGrouped`. Progress changes only its optional `preparationNamespace` to
+`prepare-continuation-<failed-frontier-revision>`; the payload additionally retains
+the exact direction. The adoption receipt key is that namespace plus `-adopted`.
+The accepted repair, prior UNKNOWN effects, immutable failed intent/result,
+request, plan, ownership, effects, cursor, attempt, slot and repair accounting
+remain unchanged. Identical repeated adoption collects the same receipt; crossed,
+stale or contradictory directions refuse. Adoption executes no Git, SBT,
+validation, Submit, Start, commit or push.
+
+Separate ordinary Advance authenticates the immutable adoption and original
+paired failure again, checks actual source applicability and writes one new
+preparation intent under the distinct namespace. The old prepare keys are never
+overwritten. A new unknown effect is retained without automatic replay. The
+namespace and direction do not authorize another repair attempt or subsequent
+Purpose; normal candidate verification, validation, independent review, commit
+and terminal handling remain authoritative.

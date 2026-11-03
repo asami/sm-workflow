@@ -1161,6 +1161,75 @@ OperationResult
 | outcome | string | 1 |
 | message | string | 1 |
 
+## RepositorySyncPurposePreparationContinuationDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+## RepositorySyncPurposePreparationContinuationDescriptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| componentInstance | string | 1 |
+| target | record | 1 |
+| choices | string | * |
+| adoptionOperation | string | 1 |
+
+## RepositorySyncPurposePreparationContinuationAnswer
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| choice | string | 1 |
+| rationale | string | 1 |
+
+## RepositorySyncPurposePreparationContinuationAdoptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | record | 1 |
+| choice | string | 1 |
+| rationale | string | 1 |
+| directionReference | WorkflowArtifactReference | 1 |
+| executionEvidence | WorkflowExecutionEvidence | 1 |
+
+## RepositorySyncPurposePreparationContinuationAdoptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+
 ## RepositorySyncValidationContinuationDescriptionInput
 
 - input-kind :: COMMAND
@@ -5717,6 +5786,14 @@ operation = RepositorySyncService.startRepositorySync
 
 operation = RepositorySyncService.advanceRepositorySync
 
+#### describeRepositorySyncPurposePreparationContinuation
+
+operation = RepositorySyncService.describeRepositorySyncPurposePreparationContinuation
+
+#### adoptRepositorySyncPurposePreparationContinuation
+
+operation = RepositorySyncService.adoptRepositorySyncPurposePreparationContinuation
+
 #### describeRepositorySyncValidationContinuation
 
 operation = RepositorySyncService.describeRepositorySyncValidationContinuation
@@ -6443,6 +6520,11 @@ to = RepairDecisionRequired
 on = native-repair-decision-required
 
 #### PurposeUnfinished
+
+##### TRANSITION
+
+to = PurposeGrouped
+on = purpose-preparation-continuation
 
 #### FormalFailureContinuationAdmitted
 
@@ -8117,6 +8199,63 @@ RepositorySyncValidationContinuationDescriptionInput
 ###### TYPE
 
 RepositorySyncValidationContinuationDescriptionResult
+
+#### describeRepositorySyncPurposePreparationContinuation
+
+##### DESCRIPTION
+
+Describe the actual immutable failed Purpose receipt selected by the current native frontier and its directly paired intent. Return complete opaque progress and process observations, including retained stdout, stderr and termination. Only a complete known nonzero exited preparation for the unchanged first ordered accepted Purpose repair offers AuthorizeNewPreparation. Unknown, incomplete, different effects and source drift offer Defer only. This operation has no source, validation, workflow mutation or Git preparation effect.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+RepositorySyncPurposePreparationContinuationDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+RepositorySyncPurposePreparationContinuationDescriptionResult
+
+#### adoptRepositorySyncPurposePreparationContinuation
+
+##### DESCRIPTION
+
+Accept exactly the described target and independent actual Human evidence through input or inputResource. AuthorizeNewPreparation appends one managed mechanical purpose-preparation-continuation transition to PurposeGrouped, preserving the accepted repair, original intent/result, progress, effects, attempts and history. A distinct preparation namespace authorizes only the separate ordinary Advance; adoption executes no Git, SBT, Submit or Start. Repeated identical adoption collects its receipt without another transition; crossed or stale directions refuse. Defer is passive. Eligibility is deliberately limited to the first ordered Purpose repair with no installed commits, an intact baseline and no candidate; later failures are not implicitly authorized.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+RepositorySyncPurposePreparationContinuationAdoptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | RepositorySyncPurposePreparationContinuationAdoptionInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+RepositorySyncPurposePreparationContinuationAdoptionResult
 
 #### describeRepositorySyncRepairScopeCorrection
 
@@ -11089,6 +11228,8 @@ RepositorySync kind validation-continuation requires participant, the actual Rep
 For the explicit required-lint-continuation.v2 discriminator, preparation selects the actual description choices AuthorizeMissingRequiredLint/Defer and requires false/false not-applicable booleans. It binds original native receipt references and compact successful facts without copying their logs; it never asserts a successful old invocation was UNKNOWN. All target/answer bindings use the existing repository-sync-validation-continuation purpose and Component/principal scope. Unknown or malformed discriminators refuse rather than falling back to v1.
 
 Dedicated family RepositorySyncRepairScopeCorrection and kind adoption require participant, the actual RepositorySyncRepairScopeCorrectionDescriptionResult and strict RepositorySyncRepairScopeCorrectionAnswer, matching execution worker, existing direction artifact reference, issuer and time. Policy v2 ContinueAfterPriorWorkerEndedAcceptingUnknown carries empty answer paths and only actual lifecycle assertions; runtime-qualified file inventory belongs to the prepared target and requires no Human file selection. Legacy policy v1 retains its explicit sorted selected-path answer. Bind the complete versioned target and answer under dedicated repository-sync-repair-scope-correction purpose. Adoption requires actual Human assertions priorExecutionEnded=true and acceptOriginalUncertainty=true: the original semantic worker stopped or ended while external proposal effects remain UNKNOWN. Preparation only encodes those externally supplied facts and never observes termination, manufactures consent, provisions evidence, supersedes work or executes a source/Git effect.
+
+RepositorySync evidence kind `purpose-preparation-continuation` passively encodes the exact public preparation description and the supplied choice/rationale Answer. The actual matching participant, execution worker, artifact reference, issuer and time are supplied externally. It neither proves Human approval nor executes preparation; actual provider termination is read from the native immutable receipt, never asserted by a priorWorkerEnded flag.
 
 Passively prepare the explicitly selected Evidence input. Read only the declared absolute local file: URI references in the executing call. GoalPhase kind candidate-recovery requires participant, the actual GoalPhaseCandidateRecoveryDescriptionResult as request and GoalPhaseCandidateRecoveryAnswer as result, with matching execution worker and actual reference, for a separately bound new remaining candidate observation that retains the old UNKNOWN termination-unconfirmed status. GoalPhase kind source-history-recovery requires participant, the actual GoalPhaseSourceHistoryRecoveryDescriptionResult as request and GoalPhaseSourceHistoryRecoveryAnswer as result, with matching execution worker and actual reference, for a separately bound new normalization attempt. GoalPhase kind validation-recovery requires participant, the actual generated recovery description as request and a supplied GoalPhaseValidationRecoveryAnswer as result, with matching execution worker and actual reference. Decode the actual target and require its complete ordered description choices: AuthorizeNewAttempt and Defer for unknown/known-failed, or AuthorizeNewAttempt, LimitedRepair, Defer only for confirmed timeout. Reject LimitedRepair for non-timeout and any broadened, omitted or reordered supplied choices. Encode the exact independently observed Human target/answer/participant/reference binding; LimitedRepair only prepares bounded investigation authorization and grants no retry or Plan adoption. Preserve strict canonical timeout fields and independent issuer/time/provenance admission. GoalPhase kind remaining-plan-adoption requires participant, the actual GoalPhaseRemainingPlanDescriptionResult as request and GoalPhaseRemainingPlanAdoptionInput as result, with matching directive reference and execution worker. It encodes a separately observed new directive, never an answer to the old question. The trusted host remains responsible for real Human provenance and independent provisioning. Return existing structured datastore rows without provisioning or workflow transition. Supplied metadata grants no authority, and preparation alone grants no adoption, recovery or execution.
 

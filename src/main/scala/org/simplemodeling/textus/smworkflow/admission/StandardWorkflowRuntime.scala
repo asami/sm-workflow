@@ -196,7 +196,8 @@ private[smworkflow] object StandardWorkflowRuntime {
       convergence = Some(if (selectedInput._2) StandardRepositorySyncIntent.authority else shared.ports.convergence),
       humanConflict = if (paths.isEmpty) None else Some(RepositorySyncHumanConflict.Installation(shared.ports.repositoryHuman)),
       repositoryContinuation = Some(RepositorySyncValidationContinuation.Installation(shared.ports.repositoryValidationContinuation)),
-      repositoryRepairScopeCorrection = Some(RepositorySyncRepairScopeCorrection.Installation(shared.ports.repositoryRepairScopeCorrection)))
+      repositoryRepairScopeCorrection = Some(RepositorySyncRepairScopeCorrection.Installation(shared.ports.repositoryRepairScopeCorrection)),
+      purposePreparation = Some(RepositorySyncPurposePreparationContinuation.Installation(shared.ports.repositoryPurposePreparationContinuation)))
     selected <- RuntimeGitSelections.repositoryC(NativeWorkflowSessionInput.repository(
       NativeWorkflowResultInput.repository(service, creation, declaration, definition), creation, declaration, definition, runtimeIntent = true), paths)
   } yield StandardRepositorySyncIntent.bindInput(selected, input)
@@ -274,6 +275,8 @@ private[smworkflow] object StandardWorkflowRuntime {
     if (Set(RepositorySyncRepairScopeCorrection.adoptionOperation,
         RepositorySyncRepairScopeCorrection.prepareOperation)(request.operation))
       RepositorySyncRepairScopeCorrection.sessionC(request, core)
+    else if (request.operation == RepositorySyncPurposePreparationContinuation.adoptionOperation)
+      RepositorySyncPurposePreparationContinuation.sessionC(request, core)
     else if (request.operation == RepositorySyncValidationContinuation.adoptionOperation)
       RepositorySyncValidationContinuation.sessionC(request, core)
     else NativeWorkflowOperationInput.textC(request, "sessionId")

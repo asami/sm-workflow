@@ -31,6 +31,10 @@ import RepositorySyncRepairInventory.given
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeRepositoryPurposeRepairScopeCorrectionCliSpec extends AnyWordSpec with Matchers with GivenWhenThen
     with NativeRepositorySelectionCorrectionFixture {
+  private val _phase = sys.props.getOrElse("smworkflow.spec.purposeRepairPhase",
+    fail("Select -Dsmworkflow.spec.purposeRepairPhase=capture|continue|finish|completion|ownership-capture|ownership-continue|prepare-capture|prepare-continue"))
+  require(Set("capture", "continue", "finish", "completion", "ownership-capture", "ownership-continue", "prepare-capture", "prepare-continue")(_phase),
+    "Select exactly one Purpose repair phase")
   private val _baseline = "src/test/scala/fixture/BaselineSpec.scala"
   private val _later = "src/test/scala/fixture/FutureSpec.scala"
   private val _future = "docs/future.md"
@@ -40,14 +44,16 @@ final class NativeRepositoryPurposeRepairScopeCorrectionCliSpec extends AnyWordS
   private val _later_new = _later_old + "\n// Independently intended later Purpose test explanation.\n"
   private val _future_new = "Independent future document text\n"
   private val _ownership_comment = "\n// Independently intended later Purpose baseline explanation.\n"
-  private val _ownership_old = _baseline_old + _ownership_comment
-  private val _ownership_new = _baseline_new + _ownership_comment
+  private val _ownership_old = if (_phase.startsWith("prepare-"))
+    _baseline_old.replace("actual shouldBe \"initial\\n\"", "actual.trim shouldBe \"initial\"")
+    else _baseline_old + _ownership_comment
+  private val _ownership_new = if (_phase.startsWith("prepare-"))
+    _baseline_new.replace("actual shouldBe \"expected\\n\"", "actual.trim shouldBe \"expected\"")
+    else _baseline_new + _ownership_comment
   private val _ownership_conflict = _test("BaselineSpec", "future-only\n")
-  private val _phase = sys.props.getOrElse("smworkflow.spec.purposeRepairPhase",
-    fail("Select -Dsmworkflow.spec.purposeRepairPhase=capture|continue|finish|completion|ownership-capture|ownership-continue"))
-  require(Set("capture", "continue", "finish", "completion", "ownership-capture", "ownership-continue")(_phase), "Select exactly one Purpose repair phase")
   private def _episode_path: Path = {
-    val property = if (_phase.startsWith("ownership-")) "smworkflow.spec.purposeOwnershipEpisode" else "smworkflow.spec.purposeRepairEpisode"
+    val property = if (_phase.startsWith("prepare-")) "smworkflow.spec.purposePreparationEpisode"
+      else if (_phase.startsWith("ownership-")) "smworkflow.spec.purposeOwnershipEpisode" else "smworkflow.spec.purposeRepairEpisode"
     val value = Path.of(sys.props.getOrElse(property, fail("Select -D" + property + "=<absolute episodeJSON>")))
     require(value.isAbsolute && value.normalize == value && Files.isDirectory(value.getParent))
     value
@@ -132,7 +138,12 @@ final class NativeRepositoryPurposeRepairScopeCorrectionCliSpec extends AnyWordS
     "diff" -> git(scenario.root, "-C", _repository(scenario).toString, "diff", "HEAD", "--").asJson,
     "checks" -> formalReceipts(scenario, session).asJson,
     "invocations" -> _invocations(scenario).asJson,
-    "nativeReceipts" -> receipts(scenario, session).map(receipt => receipt.reference.identity -> receipt.payload.value.asJson.noSpaces).sortBy(_._1).asJson)
+    "nativeReceipts" -> receipts(scenario, session).map { receipt =>
+      val payload = receipt.payload.value
+      val observed = payload.asJson.mapObject(fields =>
+        if (payload.purposePreparation.isEmpty) fields.remove("purposePreparation") else fields)
+      receipt.reference.identity -> observed.noSpaces
+    }.sortBy(_._1).asJson)
   private def _work(scenario: F.Scenario, identity: String): M.Request = {
     val values = stored(scenario).flatMap(raw => WorkflowWorkOrderJsonV1.decodeC(raw, M.inputCodec).toOption)
       .flatMap(_.current match {
@@ -286,12 +297,412 @@ final class NativeRepositoryPurposeRepairScopeCorrectionCliSpec extends AnyWordS
       }
     }
   }
+  "ID08 installed same-Session Purpose preparation continuation" should {
+    if (_phase == "prepare-capture") {
+      "retain the actual old same-hunk preparation failure after accepting the repair once" in {
+        Given("one new or unchanged pre-adoption episode and an absent failure checkpoint under the old normally installed product")
+        val destination = _episode_path
+        val checkpoint = destination.resolveSibling(destination.getFileName.toString + ".prepare-failure.json")
+        Files.exists(checkpoint) shouldBe false
+        sys.props.get("smworkflow.spec.purposePreparationRetainedCapture") match {
+          case Some(metadata) => _recover_preparation_capture(destination, checkpoint, Path.of(metadata))
+          case None => {
+        val episode = if (Files.exists(destination)) {
+          Files.isRegularFile(destination) shouldBe true
+          val retained = parse(Files.readString(destination)).toOption.get.as[Episode].toOption.get
+          retained.installedCommand shouldBe installed().toString
+          retained.progress.selection.get.checks shouldBe (originalChecks :+ appendedCheck)
+          retained.progress.request.files.find(_.path == _baseline).get.worktree shouldBe Some(_ownership_old)
+          retained
+        } else _capture(focused = true, legacy = false, ownership = true,
+          preparationCapture = true, destination = destination)
+        val (scenario, target, assignment) = _ownership_qualification(episode)
+        val session = episode.session
+        val continuation = P.OwnershipContinuation(Vector(P.OwnershipGroup("future-purpose",
+          Vector(P.Content(_baseline, Some(_ownership_new))))),
+          "Fixture-authored integration keeps the current corrected expectation and the later same-line trim assertion")
+        val record = take(new org.goldenport.record.io.RecordDecoder().json(continuation.asJson.noSpaces))
+        val result = V.RepositorySyncNativeMergeRepairResult("repaired",
+          "Correct the stale current assertion while explicitly retaining the independently intended same-hunk trim assertion",
+          Vector(V.RepositorySyncNativeMergeRepairFile(_baseline, _baseline_new)), Some(record))
+        val beforesubmit = _state(scenario, session)
+        When("the current correction and complete later integration are submitted exactly once")
+        val submission = _ownership_submit(scenario, session, result)
+        val acknowledgement = successful(submission).business[V.RepositorySyncNativeMergeRepairSubmissionResult]
+        Then("the actual repair is accepted without executing further validation")
+        acknowledgement.accepted shouldBe true
+        _invocations(scenario).size shouldBe 2
+        formalReceipts(scenario, session) shouldBe episode.formal
+        val accepted = _state(scenario, session)
+        When("separate ordinary Advance installs the accepted repair progress without resubmission")
+        val groupedresponse = successful(advance(scenario, session))
+        groupedresponse.business[V.RepositorySyncAdvanceResult].condition shouldBe Some("PurposeGrouped")
+        val grouped = receipts(scenario, session).filter(_.payload.value.stage == "PurposeGrouped")
+          .maxBy(_.next.revision.value)
+        val progress = grouped.payload.value.purposes.get
+        progress.request shouldBe episode.progress.request
+        progress.plan.get.groups.tail shouldBe episode.progress.plan.get.groups.tail
+        progress.plan.get.groups.head.content should contain(P.Content(_baseline, Some(_baseline_new)))
+        progress.ownership shouldBe Some(continuation)
+        (progress.cursor, progress.attempt, progress.slotCursor, progress.baselineTree, progress.effects, progress.commits) shouldBe
+          ((episode.progress.cursor, episode.progress.attempt + 1, episode.progress.slotCursor + 1,
+            Some(episode.progress.candidate.get.tree), episode.progress.effects, episode.progress.commits))
+        val beforeprepare = _state(scenario, session)
+        When("old ordinary typed Git preparation attempts the actual overlapping assertion hunk")
+        val prepared = successful(advance(scenario, session))
+        val wait = prepared.business[V.RepositorySyncAdvanceResult]
+        Then("the real failed provider result is retained instead of silently dropping the separately integrated later text")
+        wait.kind shouldBe "Wait"
+        wait.condition shouldBe Some("purpose-effect-unfinished")
+        wait.message should include("Purpose candidate preparation did not succeed")
+        wait.message should include("Failed(1)")
+        val failed = receipts(scenario, session).filter(_.payload.value.stage == "PurposeUnfinished")
+          .maxBy(_.next.revision.value)
+        val intent = receipts(scenario, session).find(receipt => receipt.payload.value.stage == "PurposePreparing" &&
+          receipt.next.revision.next == failed.next.revision).get
+        failed.reference.identity should endWith("-prepare-result")
+        intent.reference.identity should endWith("-prepare-intent")
+        val failedprogress = failed.payload.value.purposes.get
+        failedprogress.effects.dropRight(1) shouldBe progress.effects
+        val effect = failedprogress.effects.last
+        effect.hcursor.get[String]("outcome").toOption shouldBe Some("Failed(1)")
+        val process = WorkflowSbtCapture.decode(effect.hcursor.downField("process").focus.get).toOption.get
+        WorkflowSbtCapture.termination(process) shouldBe "exited"
+        WorkflowSbtCapture.exitCode(process) shouldBe Some(1)
+        _invocations(scenario).size shouldBe 2
+        formalReceipts(scenario, session) shouldBe episode.formal
+        val failurestate = _state(scenario, session)
+        Vector("head", "indexTree", "status", "diff", "checks", "invocations").foreach { name =>
+          failurestate.hcursor.downField(name).focus shouldBe beforeprepare.hcursor.downField(name).focus
+        }
+        _work(scenario, episode.originalWorkIdentity) shouldBe episode.originalRequest
+        stored(scenario).exists(raw => parse(raw).toOption.exists(_.findAllByKey("externalEffects")
+          .contains(Json.fromString("UNKNOWN")))) shouldBe true
+        When("ordinary Advance observes the retained preparation failure again")
+        val repeated = successful(advance(scenario, session))
+        Then("the retained unfinished Wait returns without another Git preparation or SBT execution")
+        val repeatedwait = repeated.business[V.RepositorySyncAdvanceResult]
+        repeatedwait.kind shouldBe "Wait"
+        repeatedwait.condition shouldBe Some("purpose-unfinished")
+        _state(scenario, session) shouldBe failurestate
+        def invocation(value: F.Result): Json = Json.obj("exitCode" -> value.exitCode.asJson,
+          "argv" -> value.invocation.argv.asJson, "pid" -> value.invocation.pid.asJson,
+          "stdout" -> value.invocation.stdout.toString.asJson, "stderr" -> value.invocation.stderr.toString.asJson)
+        val saved = Json.obj("qualificationPhase" -> "prepare-capture".asJson,
+          "qualificationProvenance" -> "actual old installed same-hunk preparation failure; fixture-owned integration and lifecycle inputs".asJson,
+          "episode" -> episode.asJson, "session" -> session.asJson,
+          "target" -> target.asJson, "issuedOwnership" -> assignment, "ownershipContinuation" -> continuation.asJson,
+          "repairResult" -> json(result).asJson, "acceptedAcknowledgement" -> json(acknowledgement).asJson,
+          "beforeSubmission" -> beforesubmit, "acceptedState" -> accepted,
+          "groupedProgress" -> P.repairProgressJson(progress), "groupedResponse" -> invocation(groupedresponse),
+          "beforePreparation" -> beforeprepare, "failedProgress" -> P.repairProgressJson(failedprogress),
+          "failedState" -> failurestate, "failedIntentReference" -> intent.reference.asJson,
+          "failedIntentRecord" -> take(WorkflowInstanceRecordJsonV1.encodeC(intent.next)).asJson,
+          "failedResultReference" -> failed.reference.asJson,
+          "failedResultRecord" -> take(WorkflowInstanceRecordJsonV1.encodeC(failed.next)).asJson,
+          "failedEffect" -> effect, "prepareResponse" -> invocation(prepared), "repeatResponse" -> invocation(repeated),
+          "sbtInvocations" -> _invocations(scenario).asJson, "formalReceipts" -> formalReceipts(scenario, session).asJson,
+          "acceptedRepairResubmitted" -> false.asJson, "realConsumerOperations" -> false.asJson)
+        Files.writeString(checkpoint, saved.noSpaces, UTF_8, StandardOpenOption.CREATE_NEW)
+          }
+        }
+      }
+    }
+    if (_phase == "prepare-continue") {
+      "continue the retained actual preparation failure in the same Session through ordinary completion" in {
+        import RepositorySyncPurposePreparationContinuation as A
+        Given("the exact failed old-product episode after its repair was accepted once and the updated normal installed product")
+        val destination = _episode_path
+        val checkpoint = destination.resolveSibling(destination.getFileName.toString + ".prepare-failure.json")
+        val completedpath = destination.resolveSibling(destination.getFileName.toString + ".prepare-completion.json")
+        Files.isRegularFile(destination) shouldBe true
+        Files.isRegularFile(checkpoint) shouldBe true
+        Files.exists(completedpath) shouldBe false
+        val episode = parse(Files.readString(destination)).toOption.get.as[Episode].toOption.get
+        val captured = parse(Files.readString(checkpoint)).toOption.get
+        captured.hcursor.get[Json]("episode").toOption shouldBe Some(episode.asJson)
+        captured.hcursor.get[String]("session").toOption shouldBe Some(episode.session)
+        val acknowledgement = take(new org.goldenport.record.io.RecordDecoder().json(
+          captured.hcursor.get[String]("acceptedAcknowledgement").toOption.get)
+          .flatMap(summon[ValueReader[V.RepositorySyncNativeMergeRepairSubmissionResult]].readC))
+        acknowledgement.accepted shouldBe true
+        captured.hcursor.get[Boolean]("acceptedRepairResubmitted").toOption shouldBe Some(false)
+        installed()
+        val scenario = _reopen(episode)
+        val session = episode.session
+        val retainedstate = captured.hcursor.downField("failedState").focus.get
+        _state(scenario, session) shouldBe retainedstate
+        _work(scenario, episode.originalWorkIdentity) shouldBe episode.originalRequest
+        formalReceipts(scenario, session) shouldBe episode.formal
+        _invocations(scenario).size shouldBe 2
+        val originalfailure = receipts(scenario, session).find(receipt =>
+          receipt.reference.asJson == captured.hcursor.downField("failedResultReference").focus.get).get
+        def verifyOriginalFailure(): Unit = {
+          val retained = receipts(scenario, session).filter(_.reference == originalfailure.reference)
+          retained.size shouldBe 1
+          take(WorkflowInstanceRecordJsonV1.encodeC(retained.head.next)) shouldBe
+            take(WorkflowInstanceRecordJsonV1.encodeC(originalfailure.next))
+          RepositorySyncNativeProgressStore.codec.encode(retained.head.payload.value) shouldBe
+            RepositorySyncNativeProgressStore.codec.encode(originalfailure.payload.value)
+        }
+        val failedprogress = originalfailure.payload.value.purposes.get
+        P.repairProgressJson(failedprogress) shouldBe captured.hcursor.downField("failedProgress").focus.get
+        val continuation = failedprogress.ownership.get
+        val observedcalls = Vector.newBuilder[Json]
+        def invocation(value: F.Result): Json = Json.obj("exitCode" -> value.exitCode.asJson,
+          "argv" -> value.invocation.argv.asJson, "pid" -> value.invocation.pid.asJson,
+          "stdout" -> value.invocation.stdout.toString.asJson, "stderr" -> value.invocation.stderr.toString.asJson)
+        def describe(): F.Result = {
+          val result = scenario.repositoryCall(A.describeOperation, Vector("--sessionId", session))
+          observedcalls += invocation(result)
+          result
+        }
+        def adopt(input: V.RepositorySyncPurposePreparationContinuationAdoptionInput): F.Result = {
+          val result = scenario.repositoryCall(A.adoptionOperation, Vector("--input", json(input)))
+          observedcalls += invocation(result)
+          result
+        }
+        def direction(described: F.Result, choice: String, suffix: String): V.RepositorySyncPurposePreparationContinuationAdoptionInput = {
+          val description = successful(described).business[V.RepositorySyncPurposePreparationContinuationDescriptionResult]
+          val target = take(A.targetC(description.target))
+          val directory = Files.createTempDirectory(scenario.root, "fixture-preparation-direction-" + suffix + "-")
+          val reference = V.WorkflowArtifactReference(directory.getFileName.toString, "1")
+          val answer = V.RepositorySyncPurposePreparationContinuationAnswer(choice,
+            "Fixture-authored " + choice + " for the exact known failed preparation; no real Human consent is claimed")
+          val execution = V.WorkflowExecutionEvidence(Vector(reference), Some(target.context.participantIdentity), None, None)
+          val input = V.WorkflowEvidencePreparationInput("RepositorySync", "purpose-preparation-continuation",
+            described.invocation.stdout.toUri.toASCIIString, save(directory, "answer.json", json(answer)),
+            save(directory, "reference.json", json(reference)), save(directory, "execution.json", json(execution)),
+            "normal-development-host", java.time.Instant.now().toString, "entity:smworkflow.cli.host_evidence",
+            Some(target.context.participantIdentity))
+          val prepared = scenario.prepareHostInput("prepareEvidence", take(new org.goldenport.record.io.RecordDecoder().json(json(input))))
+          observedcalls += invocation(prepared)
+          successful(prepared)
+          scenario.selectPreparedImport(prepared)
+          V.RepositorySyncPurposePreparationContinuationAdoptionInput(session, description.target, answer.choice,
+            answer.rationale, reference, execution)
+        }
+        When("the new public description reads the actual old failed provider receipt without repeating preparation")
+        val described = describe()
+        val description = successful(described).business[V.RepositorySyncPurposePreparationContinuationDescriptionResult]
+        description.outcome shouldBe "adoption-required"
+        description.choices shouldBe A.choices
+        description.adoptionOperation shouldBe A.adoptionOperation
+        val target = take(A.targetC(description.target))
+        A.effect(target).toOption.get shouldBe captured.hcursor.downField("failedEffect").focus.get
+        A.progress(target).toOption.get shouldBe failedprogress
+        target.intentKey should endWith("-prepare-intent")
+        target.failureKey should endWith("-prepare-result")
+        val effect = A.effect(target).toOption.get
+        val process = WorkflowSbtCapture.decode(effect.hcursor.downField("process").focus.get).toOption.get
+        effect.hcursor.get[String]("outcome").toOption shouldBe Some("Failed(1)")
+        WorkflowSbtCapture.termination(process) shouldBe "exited"
+        WorkflowSbtCapture.exitCode(process) shouldBe Some(1)
+        Then("the complete retained stdout stderr failed progress and repeated description remain passive")
+        take(A.targetC(successful(describe()).business[V.RepositorySyncPurposePreparationContinuationDescriptionResult].target)) shouldBe target
+        _state(scenario, session) shouldBe retainedstate
+        val adoptionresume = sys.props.get("smworkflow.spec.purposePreparationAdoptionResume").map { value =>
+          val path = Path.of(value)
+          require(path.isAbsolute && path.normalize == path && Files.isRegularFile(path))
+          path
+        }
+        if (adoptionresume.isEmpty) {
+        val driftinput = direction(described, A.choices.head, "drift")
+        val baselinepath = _repository(scenario).resolve(_baseline)
+        val roottext = Files.readString(baselinepath)
+        When("the selected root text drifts after an exact direction was prepared")
+        try {
+          Files.writeString(baselinepath, roottext + "\n// fixture root drift\n")
+          val driftstate = _state(scenario, session)
+          val ineligible = successful(describe()).business[V.RepositorySyncPurposePreparationContinuationDescriptionResult]
+          ineligible.outcome shouldBe "ineligible"
+          ineligible.choices shouldBe Vector("Defer")
+          take(A.targetC(ineligible.target)).eligibilityReason should not be empty
+          adopt(driftinput).exitCode should not be 0
+          _state(scenario, session) shouldBe driftstate
+        } finally Files.writeString(baselinepath, roottext)
+        _state(scenario, session) shouldBe retainedstate
+        When("crossed Session changed target and missing rationale are supplied")
+        Vector(driftinput.copy(sessionId = session + "-foreign"),
+          driftinput.copy(target = A.targetRecord(target.copy(indexTree = "f" * 40))),
+          driftinput.copy(rationale = "")).foreach { input =>
+          adopt(input).exitCode should not be 0
+          _state(scenario, session) shouldBe retainedstate
+        }
+        When("the fixture supplies an explicit Defer through the dedicated passive evidence route")
+        val deferinput = direction(describe(), "Defer", "defer")
+        val deferred = successful(adopt(deferinput)).business[V.RepositorySyncPurposePreparationContinuationAdoptionResult]
+        deferred.accepted shouldBe false
+        deferred.outcome shouldBe "deferred"
+        Then("Defer preserves the original failure accepted repair counters and all effect history")
+        _state(scenario, session) shouldBe retainedstate
+        _invocations(scenario).size shouldBe 2
+        }
+        When("the fixture explicitly authorizes one new preparation against a fresh exact public target")
+        val authorizedescription = describe()
+        val authorizationtarget = take(A.targetC(successful(authorizedescription)
+          .business[V.RepositorySyncPurposePreparationContinuationDescriptionResult].target))
+        authorizationtarget shouldBe target
+        val input = adoptionresume match {
+          case Some(path) =>
+            val retained = take(new org.goldenport.record.io.RecordDecoder().json(Files.readString(path))
+              .flatMap(summon[ValueReader[V.RepositorySyncPurposePreparationContinuationAdoptionInput]].readC))
+            retained.sessionId shouldBe session
+            retained.choice shouldBe A.choices.head
+            retained.rationale.trim should not be empty
+            take(A.targetC(retained.target)) shouldBe authorizationtarget
+            retained.executionEvidence.workerIdentity shouldBe Some(authorizationtarget.context.participantIdentity)
+            retained.executionEvidence.references should contain(retained.directionReference)
+            A.bindingC(authorizationtarget.componentInstance, authorizationtarget, retained.choice, retained.rationale,
+              authorizationtarget.context.participantIdentity, org.goldenport.cncf.workflow.ContextReference(
+                retained.directionReference.identity, retained.directionReference.revision)).isSuccess shouldBe true
+            retained
+          case None => direction(authorizedescription, A.choices.head, "authorize")
+        }
+        val adoptedresult = adopt(input)
+        val adopted = successful(adoptedresult).business[V.RepositorySyncPurposePreparationContinuationAdoptionResult]
+        adopted.accepted shouldBe true
+        adopted.outcome shouldBe "adopted"
+        val adoptedstate = _state(scenario, session)
+        Then("adoption records only a distinct namespace and duplicates have no preparation or validation effects")
+        _invocations(scenario).size shouldBe 2
+        formalReceipts(scenario, session) shouldBe episode.formal
+        Vector("head", "indexTree", "status", "diff", "checks", "invocations").foreach(name =>
+          adoptedstate.hcursor.downField(name).focus shouldBe retainedstate.hcursor.downField(name).focus)
+        val grouped = receipts(scenario, session).filter(_.payload.value.stage == "PurposeGrouped")
+          .maxBy(_.next.revision.value).payload.value.purposes.get
+        grouped.preparationNamespace shouldBe Some(A.namespace(target))
+        grouped.copy(preparationNamespace = failedprogress.preparationNamespace) shouldBe failedprogress
+        RepositorySyncPurposeRuntime.attemptPrefix(grouped) should not be RepositorySyncPurposeRuntime.attemptPrefix(failedprogress)
+        successful(adopt(input)).business[V.RepositorySyncPurposePreparationContinuationAdoptionResult].outcome shouldBe "already-adopted"
+        _state(scenario, session) shouldBe adoptedstate
+        verifyOriginalFailure()
+        val qualification = Json.obj("qualificationPhase" -> "prepare-continue".asJson,
+          "qualificationProvenance" -> "same actual old failed preparation Session; fixture-authored Human directions and reviews".asJson,
+          "oldPreparationCheckpoint" -> checkpoint.toString.asJson, "oldPreparationFailure" -> captured,
+          "publicTarget" -> target.asJson, "publicInvocations" -> observedcalls.result().asJson,
+          "retainedFailureState" -> retainedstate, "adoptedState" -> adoptedstate,
+          "newPreparationNamespace" -> grouped.preparationNamespace.asJson,
+          "adoptionResumeInput" -> adoptionresume.map(_.toString).asJson,
+          "negativeQualification" -> (if (adoptionresume.nonEmpty)
+            "Previously successful drift, crossed-input, rationale and Defer checks retained in installed advance01; not rerun"
+            else "Drift, crossed-input, rationale and Defer checks completed in this invocation").asJson,
+          "acceptedRepairResubmitted" -> false.asJson, "realConsumerOperations" -> false.asJson)
+        When("separate ordinary Advance performs new preparation and the remaining normal checks reviews and Purpose commits")
+        val completed = _finish(scenario, episode, qualification, Some(continuation), Some(grouped))
+        Then("the exact old failure stays retained and the one accepted repair has not been resubmitted")
+        verifyOriginalFailure()
+        _work(scenario, episode.originalWorkIdentity) shouldBe episode.originalRequest
+        val preserved = current(scenario, session).history.count(_.currentProgression
+          .contains(ProgressionReference("sync.RepairProposalAdmitted")))
+        preserved shouldBe _current_from(captured.hcursor.get[String]("failedResultRecord").toOption.get).history
+          .count(_.currentProgression.contains(ProgressionReference("sync.RepairProposalAdmitted")))
+        Files.writeString(completedpath, completed.noSpaces, UTF_8, StandardOpenOption.CREATE_NEW)
+      }
+    }
+  }
+  private def _recover_preparation_capture(destination: Path, checkpoint: Path, metadata: Path): Unit = {
+    Given("the retained actual CLI responses after a fixture-only assertion failed, with no permission to repeat their effects")
+    require(metadata.isAbsolute && metadata.normalize == metadata && Files.isRegularFile(metadata))
+    Files.isRegularFile(destination) shouldBe true
+    Files.exists(checkpoint) shouldBe false
+    val episode = parse(Files.readString(destination)).toOption.get.as[Episode].toOption.get
+    val scenario = _reopen(episode)
+    val session = episode.session
+    val locations = parse(Files.readString(metadata)).toOption.get.asObject.get
+    locations.keys.toSet shouldBe Set("acknowledgement", "grouped", "prepare", "repeat")
+    val sources = locations.toMap.map { case (name, value) =>
+      val path = Path.of(value.asString.get)
+      require(path.isAbsolute && path.normalize == path && Files.isRegularFile(path))
+      path.getParent shouldBe Path.of(episode.root).resolve("logs")
+      name -> path
+    }
+    def raw(name: String): String = Files.readString(sources(name))
+    def business[A: ValueReader](name: String): A = take(new org.goldenport.record.io.RecordDecoder().json(raw(name))
+      .flatMap(summon[ValueReader[A]].readC))
+    When("the collector reads only the four saved ordinary operation responses")
+    val acknowledgement = business[V.RepositorySyncNativeMergeRepairSubmissionResult]("acknowledgement")
+    acknowledgement.sessionId shouldBe session
+    acknowledgement.accepted shouldBe true
+    acknowledgement.outcome shouldBe "accepted"
+    val groupedresponse = business[V.RepositorySyncAdvanceResult]("grouped")
+    groupedresponse.sessionId shouldBe session
+    groupedresponse.condition shouldBe Some("PurposeGrouped")
+    val prepared = business[V.RepositorySyncAdvanceResult]("prepare")
+    prepared.sessionId shouldBe session
+    prepared.kind shouldBe "Wait"
+    prepared.condition shouldBe Some("purpose-effect-unfinished")
+    prepared.message should include("Purpose candidate preparation did not succeed")
+    prepared.message should include("Failed(1)")
+    val repeated = business[V.RepositorySyncAdvanceResult]("repeat")
+    repeated.sessionId shouldBe session
+    repeated.kind shouldBe "Wait"
+    repeated.condition shouldBe Some("purpose-unfinished")
+    Then("actual immutable native progress proves the already completed preparation and leaves all old effects alone")
+    val native = receipts(scenario, session)
+    val failed = native.filter(_.payload.value.stage == "PurposeUnfinished").maxBy(_.next.revision.value)
+    take(WorkflowInstanceRecordJsonV1.encodeC(failed.next)) shouldBe
+      take(WorkflowInstanceRecordJsonV1.encodeC(current(scenario, session)))
+    val intent = native.find(receipt => receipt.payload.value.stage == "PurposePreparing" &&
+      receipt.next.revision.next == failed.next.revision).get
+    failed.reference.identity should endWith("-prepare-result")
+    intent.reference.identity should endWith("-prepare-intent")
+    val grouped = native.filter(receipt => receipt.payload.value.stage == "PurposeGrouped" &&
+      receipt.next.revision.value < intent.next.revision.value).maxBy(_.next.revision.value)
+    val progress = grouped.payload.value.purposes.get
+    val failedprogress = failed.payload.value.purposes.get
+    intent.payload.value.purposes shouldBe Some(progress)
+    failedprogress.effects.dropRight(1) shouldBe progress.effects
+    failedprogress.copy(effects = progress.effects) shouldBe progress
+    progress.request shouldBe episode.progress.request
+    progress.plan.get.groups.tail shouldBe episode.progress.plan.get.groups.tail
+    progress.plan.get.groups.head.content should contain(P.Content(_baseline, Some(_baseline_new)))
+    progress.ownership.get.groups shouldBe Vector(P.OwnershipGroup("future-purpose",
+      Vector(P.Content(_baseline, Some(_ownership_new)))))
+    (progress.cursor, progress.attempt, progress.slotCursor, progress.baselineTree, progress.effects, progress.commits) shouldBe
+      ((episode.progress.cursor, episode.progress.attempt + 1, episode.progress.slotCursor + 1,
+        Some(episode.progress.candidate.get.tree), episode.progress.effects, episode.progress.commits))
+    val effect = failedprogress.effects.last
+    effect.hcursor.get[String]("outcome").toOption shouldBe Some("Failed(1)")
+    val process = WorkflowSbtCapture.decode(effect.hcursor.downField("process").focus.get).toOption.get
+    WorkflowSbtCapture.termination(process) shouldBe "exited"
+    WorkflowSbtCapture.exitCode(process) shouldBe Some(1)
+    val failurestate = _state(scenario, session)
+    Vector("head", "indexTree", "status", "diff", "checks", "invocations").foreach(name =>
+      failurestate.hcursor.downField(name).focus shouldBe episode.snapshot.hcursor.downField(name).focus)
+    _work(scenario, episode.originalWorkIdentity) shouldBe episode.originalRequest
+    formalReceipts(scenario, session) shouldBe episode.formal
+    _invocations(scenario).size shouldBe 2
+    Files.readString(_repository(scenario).resolve(_baseline)) shouldBe _ownership_old
+    Files.readString(_repository(scenario).resolve(_later)) shouldBe _later_new
+    Files.readString(_repository(scenario).resolve(_future)) shouldBe _future_new
+    failed.next.history.count(_.currentProgression.contains(ProgressionReference("sync.RepairProposalAdmitted"))) shouldBe 1
+    stored(scenario).exists(value => parse(value).toOption.exists(_.findAllByKey("externalEffects")
+      .contains(Json.fromString("UNKNOWN")))) shouldBe true
+    val saved = Json.obj("qualificationPhase" -> "prepare-capture".asJson,
+      "qualificationProvenance" -> "read-only recovered retained actualCLIresults after fixtureassertion failure".asJson,
+      "episode" -> episode.asJson, "session" -> session.asJson,
+      "acceptedAcknowledgement" -> raw("acknowledgement").asJson,
+      "acceptedRepairResubmitted" -> false.asJson, "realConsumerOperations" -> false.asJson,
+      "failedState" -> failurestate, "failedResultReference" -> failed.reference.asJson,
+      "failedResultRecord" -> take(WorkflowInstanceRecordJsonV1.encodeC(failed.next)).asJson,
+      "failedIntentReference" -> intent.reference.asJson,
+      "failedIntentRecord" -> take(WorkflowInstanceRecordJsonV1.encodeC(intent.next)).asJson,
+      "failedProgress" -> P.repairProgressJson(failedprogress), "failedEffect" -> effect,
+      "groupedProgress" -> P.repairProgressJson(progress),
+      "retainedResponseFiles" -> Json.obj(sources.toVector.map { case (name, path) => name -> path.toString.asJson }*),
+      "retainedResponses" -> Json.obj(sources.keys.toVector.map(name => name -> parse(raw(name)).toOption.get)*),
+      "sbtInvocations" -> _invocations(scenario).asJson, "formalReceipts" -> formalReceipts(scenario, session).asJson)
+    _state(scenario, session) shouldBe failurestate
+    Files.writeString(checkpoint, saved.noSpaces, UTF_8, StandardOpenOption.CREATE_NEW)
+  }
   private def _capture(focused: Boolean = false, legacy: Boolean = true, ownership: Boolean = false,
-    conflict: Boolean = false, destination: Path = _episode_path): Episode = {
+    conflict: Boolean = false, preparationCapture: Boolean = false, destination: Path = _episode_path): Episode = {
     Given(if (legacy) "the old installed CLI, normal SBT Java host and a tiny repository with a stale tracked baseline test"
       else "the current installed CLI and one new tiny completion control with all fixed checks declared initially")
     installed()
-    val scenario = fresh(if (legacy) "purpose-repair-scope-old" else "purpose-repair-scope-completion", checked = true)
+    val scenario = fresh(if (preparationCapture) "purpose-preparation-old" else if (legacy)
+      "purpose-repair-scope-old" else "purpose-repair-scope-completion", checked = true)
     val repository = _repository(scenario)
     val descriptor = scenario.root.resolve(".textus/assembly.yaml")
     Files.writeString(descriptor, Files.readString(descriptor).replace("      id: participant\n", "      id: sm-workflow-local\n"), UTF_8)
@@ -358,6 +769,11 @@ final class NativeRepositoryPurposeRepairScopeCorrectionCliSpec extends AnyWordS
         refused.invocation.logs should include(_baseline)
         refused.invocation.logs should include("future-purpose")
       }
+    } else if (preparationCapture) {
+      Then("the current v5 product qualifies exact later ownership while the original failed Session remains unchanged")
+      refused.exitCode shouldBe 0
+      successful(refused).business[V.RepositorySyncRepairScopeCorrectionDescriptionResult].outcome shouldBe "adoption-required"
+      _target(refused).correctionPolicy shouldBe N.ownershipPolicy
     } else {
       Then("the current product requires preparation while the failed Session and original logs remain unchanged")
       refused.exitCode shouldBe 0
@@ -601,10 +1017,17 @@ final class NativeRepositoryPurposeRepairScopeCorrectionCliSpec extends AnyWordS
     val session = episode.session
     val repository = _repository(scenario)
     val roottext = episode.progress.request.files.find(_.path == _baseline).get.worktree.get
-    episode.oldDescriptionExit should not be 0
-    episode.oldDescriptionLogs should include("409")
-    episode.oldDescriptionLogs should include(_baseline)
-    episode.oldDescriptionLogs should include("future-purpose")
+    if (_phase == "prepare-capture") {
+      episode.oldDescriptionExit shouldBe 0
+      val captured = parse(Files.readString(Path.of(episode.oldDescriptionStdout))).toOption.get
+      captured.hcursor.get[String]("outcome").toOption shouldBe Some("adoption-required")
+      captured.hcursor.get[String]("adoption_operation").toOption shouldBe Some(N.adoptionOperation)
+    } else {
+      episode.oldDescriptionExit should not be 0
+      episode.oldDescriptionLogs should include("409")
+      episode.oldDescriptionLogs should include(_baseline)
+      episode.oldDescriptionLogs should include("future-purpose")
+    }
     Files.isRegularFile(Path.of(episode.oldDescriptionStdout)) shouldBe true
     _state(scenario, session) shouldBe episode.snapshot
     _work(scenario, episode.originalWorkIdentity) shouldBe episode.originalRequest
@@ -736,15 +1159,17 @@ final class NativeRepositoryPurposeRepairScopeCorrectionCliSpec extends AnyWordS
       "ownershipContinuation" -> continuation.asJson), Some(continuation))
   }
   private def _finish(scenario: F.Scenario, episode: Episode, qualification: Json,
-    ownership: Option[P.OwnershipContinuation] = None): Json = {
+    ownership: Option[P.OwnershipContinuation] = None, retainedGrouped: Option[P.Progress] = None): Json = {
     val repository = _repository(scenario)
     val session = episode.session
-    When("ordinary Advance transitions the accepted repair back to grouped Purpose work")
-    val grouped = successful(advance(scenario, session)).business[V.RepositorySyncAdvanceResult]
-    Then("the expanded group retains the original provenance and later groups while advancing only the repair attempt and slot")
-    grouped.condition shouldBe Some("PurposeGrouped")
-    val repaired = receipts(scenario, session).filter(_.payload.value.stage == "PurposeGrouped")
-      .maxBy(_.next.revision.value).payload.value.purposes.get
+    val repaired = retainedGrouped.getOrElse {
+      When("ordinary Advance transitions the accepted repair back to grouped Purpose work")
+      val grouped = successful(advance(scenario, session)).business[V.RepositorySyncAdvanceResult]
+      Then("the expanded group retains the original provenance and later groups while advancing only the repair attempt and slot")
+      grouped.condition shouldBe Some("PurposeGrouped")
+      receipts(scenario, session).filter(_.payload.value.stage == "PurposeGrouped")
+        .maxBy(_.next.revision.value).payload.value.purposes.get
+    }
     repaired.request.files.take(episode.progress.request.files.size) shouldBe episode.progress.request.files
     repaired.request.records shouldBe episode.progress.request.records
     if (ownership.isEmpty) {
@@ -760,7 +1185,7 @@ final class NativeRepositoryPurposeRepairScopeCorrectionCliSpec extends AnyWordS
     repaired.plan.get.groups.head.content should contain(P.Content(_baseline, Some(_baseline_new)))
     (repaired.cursor, repaired.attempt, repaired.slotCursor, repaired.baselineTree, repaired.commits, repaired.effects) shouldBe
       ((episode.progress.cursor, episode.progress.attempt + 1, episode.progress.slotCursor + 1,
-        Some(episode.progress.candidate.get.tree), episode.progress.commits, episode.progress.effects))
+        Some(episode.progress.candidate.get.tree), episode.progress.commits, retainedGrouped.fold(episode.progress.effects)(_.effects)))
     When("ordinary runtime prepares the expanded candidate and obtains fresh affected checks and independent review")
     val reviewed = successful(advance(scenario, session))
     Then("fresh successful checks cover the corrected slot and native review waits while the root and later work remain preserved")

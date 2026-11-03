@@ -4,6 +4,7 @@ import io.circe.Json
 import io.circe.generic.auto.*
 import io.circe.syntax.*
 import java.nio.charset.StandardCharsets.UTF_8
+import org.goldenport.Consequence
 import RepositorySyncPurpose as P
 
 /** Exact later-owner projections; the captured request and original later groups
@@ -28,12 +29,26 @@ private[smworkflow] object RepositorySyncPurposeOwnership {
     group.copy(content = group.content.map(content => projections.find(_.path == content.path).getOrElse(content)))
   }
 
+  /** Explicitly admitted later text is distinct from the current commit. */
+  def worktreeProjectionC(progress: P.Progress, group: P.Group): Consequence[Vector[P.Content]] =
+    if (!validProgress(progress)) RepositorySyncNativeProgressStore.invalid("purpose ownership is malformed")
+    else if (progress.baselineTree.isEmpty) Consequence.success(Vector.empty)
+    else group.content.foldLeft(Consequence.success(Vector.empty[P.Content])) { (prior, content) => for {
+      values <- prior
+      later = progress.plan.toVector.flatMap(_.groups.drop(progress.cursor + 1)).filter(_.content.exists(_.path == content.path))
+      supplied = progress.ownership.toVector.flatMap(_.groups).filter(owner => later.exists(_.identity == owner.identity))
+        .flatMap(_.content.filter(_.path == content.path))
+      texts = supplied.map(_.text).distinct
+      _ <- if (texts.size <= 1) Consequence.unit else RepositorySyncNativeProgressStore.invalid(
+        "Actual semantic/Human resolution is required for conflicting later owners of " + content.path)
+    } yield values ++ texts.headOption.map(text => P.Content(content.path, text)) }
+
   def ordinary(text: String): Boolean = text != null && !text.contains('\u0000') && UTF_8.newEncoder().canEncode(text)
   def valid(value: P.OwnershipContinuation): Boolean = value != null && value.groups != null && value.groups.nonEmpty &&
     ordinary(value.rationale) && value.rationale.trim.nonEmpty &&
     value.groups.forall(group => group != null && group.identity != null && group.identity.matches("[a-z][a-z0-9-]{0,63}") &&
       group.content != null && group.content.nonEmpty && group.content.forall(content => content != null &&
-        RepositorySyncNativeConflictInput.relative(content.path) && content.text != null && content.text.exists(ordinary)) &&
+        RepositorySyncNativeConflictInput.relative(content.path) && content.text != null && content.text.forall(ordinary)) &&
       group.content.map(_.path).distinct.size == group.content.size) &&
     value.groups.map(_.identity).distinct.size == value.groups.size
 
@@ -42,6 +57,7 @@ private[smworkflow] object RepositorySyncPurposeOwnership {
       groups.map(group => group.identity -> group.content.map(_.path))
 
   def validProgress(progress: P.Progress): Boolean = progress.ownership != null && progress.projectedWorktree != null &&
+    progress.preparationNamespace != null && progress.preparationNamespace.forall(_.matches("prepare-continuation-[1-9][0-9]*")) &&
     progress.ownership.forall(value => valid(value) && progress.plan.exists(plan =>
       value.groups.forall(group => plan.groups.exists(original => original.identity == group.identity &&
         group.content.forall(content => original.content.exists(_.path == content.path)))))) &&

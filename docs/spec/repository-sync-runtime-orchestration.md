@@ -256,3 +256,36 @@ clean convergence observation. Re-entry collects retained publication/stage/comm
 facts; missing or uncertain effects are not retried. Unrelated output or dirty
 work prevents completion and is preserved. A publication-generated change is not
 an exemption from the clean-tree completion condition.
+
+## ID08: distinct current commit and accepted root projection
+
+A repaired Purpose may commit a current baseline correction while a later
+original Purpose retains a different integrated final worktree text for the same
+path. These are separate typed Git inputs. The current group's corrected content
+remains `GitPurposeChange.content`, and the captured actual root remains
+`expectedWorktree`. When a baseline tree exists and an accepted later original
+owner covers that path, its complete integrated text is supplied separately as
+`GitPurposeWorktreeProjection`. This affects CNCF's root-after projection only;
+index projection, staged remainder and source precondition checks stay owned by
+CNCF and are unchanged.
+
+Every accepted later original owner of the same path must agree on the exact
+optional integrated content. Different values require actual semantic/Human
+resolution before any preparation effect; first-owner or last-owner selection is
+forbidden. Explicit `None` content means deletion and is distinct from absence of
+an explicit projection. Without a baseline tree or accepted later ownership, no
+projection is invented.
+
+The optional `Candidate.worktreeProjection` retains unique selected-path content
+and is reconstructed into the full same CNCF request for both Materialize and
+Commit. Duplicate paths, paths outside the current selected changes and explicit
+projection without a baseline refuse. Legacy candidates with the field absent
+retain their original meaning. No old accepted result is replayed and no legacy
+candidate is silently upgraded.
+
+The public failed-preparation continuation is specified in
+[formal failure continuation](repository-sync-formal-failure-continuation.md).
+It preserves the already accepted repair and immutable original failure, records
+one explicit Human direction, then leaves the new namespaced preparation to the
+ordinary typed Git/UoW progression. It neither grants authority to later Purpose
+failures nor changes existing validation, review, commit or terminal acceptance.

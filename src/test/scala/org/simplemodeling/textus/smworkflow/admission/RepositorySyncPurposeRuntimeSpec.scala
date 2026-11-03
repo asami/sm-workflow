@@ -308,4 +308,84 @@ final class RepositorySyncPurposeRuntimeSpec extends AnyWordSpec with Matchers w
       decision.replacements shouldBe Vector.empty
     }
   }
+
+  "ID08 explicit accepted later-root projection" should {
+    "reconstruct the complete CNCF request for materialization and commit while legacy candidates retain absence" in {
+      Given("an accepted same-hunk correction with different current commit and integrated later-owner text")
+      val f = RepositorySyncPurposeRepairScopeFixture
+      val progress = take(RepositorySyncPurposeRuntime.repairedProgressC(f.progress, f.ownershipInput, f.ownershipResult,
+        RepositorySyncNativeConflictInput.Policy(f.ownershipPaths.toSet)))
+      val group = RepositorySyncPurposeOwnership.effectiveGroup(progress, progress.plan.get.groups.head)
+      val projection = take(RepositorySyncPurposeOwnership.worktreeProjectionC(progress, group))
+      val candidate = f.candidate.copy(changes = group.content,
+        expected = group.content.map(content => RepositorySyncPurposeOwnership.expected(progress, content.path).get),
+        baselineTree = progress.baselineTree, worktreeBefore = Some("7" * 40), worktreeAfter = Some("8" * 40),
+        worktreeProjection = Some(projection))
+      When("the retained candidate is reconstructed for either ordinary downstream Git operation")
+      val reconstructed = take(RepositorySyncPurpose.producerC(candidate))
+      val repeated = take(RepositorySyncPurpose.producerC(candidate))
+      val path = reconstructed.request.changes.find(_.path.value == f.laterPath).get
+      Then("only the explicit root-after projection differs from the captured expectation and current corrected commit")
+      repeated shouldBe reconstructed
+      path.content shouldBe Some("corrected baseline")
+      path.expectedWorktree shouldBe Some("future test")
+      path.worktreeProjection.map(_.content) shouldBe Some(Some("corrected baseline plus future test"))
+      reconstructed.request.baselineTree.map(_.value) shouldBe progress.baselineTree
+      reconstructed.worktreeBefore.map(_.value) shouldBe candidate.worktreeBefore
+      reconstructed.worktreeAfter.map(_.value) shouldBe candidate.worktreeAfter
+      reconstructed.projectedIndex.value shouldBe candidate.projectedIndex
+      val legacy = candidate.copy(worktreeProjection = None)
+      take(RepositorySyncPurpose.producerC(legacy)).request.changes.forall(_.worktreeProjection.isEmpty) shouldBe true
+      val oldCandidateJson = legacy.asJson.mapObject(_.remove("worktreeProjection"))
+      val decodedLegacy = oldCandidateJson.as[RepositorySyncPurpose.Candidate]
+      decodedLegacy shouldBe Right(legacy)
+      decodedLegacy.toOption.get.asJson shouldBe oldCandidateJson
+      decodedLegacy.toOption.get.asJson.hcursor.downField("worktreeProjection").focus shouldBe None
+      candidate.asJson.as[RepositorySyncPurpose.Candidate] shouldBe Right(candidate)
+      candidate.asJson.hcursor.downField("worktreeProjection").focus.exists(_.isArray) shouldBe true
+      RepositorySyncPurposeOwnership.worktreeProjectionC(progress.copy(baselineTree = None), group).toOption shouldBe Some(Vector.empty)
+    }
+    "retain explicit deletion and reject duplicated or foreign root-projection paths" in {
+      Given("a selected path whose accepted integrated worktree outcome is deletion")
+      val f = RepositorySyncPurposeRepairScopeFixture
+      val candidate = f.candidate.copy(baselineTree = Some("d" * 40),
+        worktreeProjection = Some(Vector(RepositorySyncPurpose.Content("value.txt", None))))
+      When("the complete typed request is reconstructed")
+      val change = take(RepositorySyncPurpose.producerC(candidate)).request.changes.head
+      Then("explicit deletion remains distinguishable from legacy absence and crossed projections refuse")
+      change.worktreeProjection.map(_.content) shouldBe Some(None)
+      change.content shouldBe Some("expected")
+      val restored = candidate.asJson.as[RepositorySyncPurpose.Candidate]
+      restored shouldBe Right(candidate)
+      restored.toOption.get.worktreeProjection shouldBe Some(Vector(RepositorySyncPurpose.Content("value.txt", None)))
+      take(RepositorySyncPurpose.producerC(restored.toOption.get)).request.changes.head.worktreeProjection.map(_.content) shouldBe Some(None)
+      RepositorySyncPurpose.producerC(candidate.copy(baselineTree = None)).isSuccess shouldBe false
+      RepositorySyncPurpose.producerC(candidate.copy(worktreeProjection = Some(Vector.fill(2)(RepositorySyncPurpose.Content("value.txt", None))))).isSuccess shouldBe false
+      RepositorySyncPurpose.producerC(candidate.copy(worktreeProjection = Some(Vector(RepositorySyncPurpose.Content("foreign.txt", None))))).isSuccess shouldBe false
+    }
+    "require consensus among every accepted later original owner instead of choosing an arbitrary owner" in {
+      Given("two original later groups own the same path with explicitly supplied integrated projections")
+      val f = RepositorySyncPurposeRepairScopeFixture
+      val progress = take(RepositorySyncPurposeRuntime.repairedProgressC(f.progress, f.ownershipInput, f.ownershipResult,
+        RepositorySyncNativeConflictInput.Policy(f.ownershipPaths.toSet)))
+      val third = f.later.copy(identity = "third-purpose", dependencies = Vector(f.later.identity))
+      val expanded = progress.copy(plan = progress.plan.map(plan => plan.copy(groups = plan.groups :+ third)),
+        ownership = progress.ownership.map(owner => owner.copy(groups = owner.groups :+
+          RepositorySyncPurpose.OwnershipGroup(third.identity, f.continuation.groups.head.content))))
+      val group = expanded.plan.get.groups.head
+      When("matching and conflicting complete later projections are resolved")
+      val same = RepositorySyncPurposeOwnership.worktreeProjectionC(expanded, group)
+      val conflicting = expanded.copy(ownership = expanded.ownership.map(owner => owner.copy(groups = owner.groups.updated(1,
+        owner.groups(1).copy(content = Vector(RepositorySyncPurpose.Content(f.laterPath, Some("different semantic outcome"))))))))
+      Then("agreement is explicit and disagreement stays decision-needed before any Git effect")
+      same.toOption shouldBe Some(f.continuation.groups.head.content)
+      RepositorySyncPurposeOwnership.worktreeProjectionC(conflicting, group).isSuccess shouldBe false
+      val deleted = expanded.copy(ownership = expanded.ownership.map(owner => owner.copy(groups = owner.groups.map(owner =>
+        owner.copy(content = Vector(RepositorySyncPurpose.Content(f.laterPath, None)))))))
+      RepositorySyncPurposeOwnership.worktreeProjectionC(deleted, group).toOption shouldBe Some(Vector(RepositorySyncPurpose.Content(f.laterPath, None)))
+      progress.plan.get.groups.tail shouldBe Vector(f.later)
+      progress.request shouldBe f.request
+    }
+  }
+
 }
