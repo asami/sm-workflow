@@ -54,6 +54,12 @@ final class CompletionRecordClosureSpec extends AnyWordSpec with Matchers with G
     "require real registered repository record selection and preserve actual native merge parents" in {
       new CompletionRecordRepositoryFixture().qualify(this)
     }
+    "preserve a complete large Unicode record through normal Git capture and File closure" in {
+      Given("a configured record whose accepted narrative exceeds the former application character ceiling")
+      When("normal RepositorySync captures and projects that record through typed Git and File operations")
+      new CompletionRecordRepositoryFixture(largeRecord = true).qualify(this)
+      Then("the complete original narrative and actual accepted completion remain in the converged record")
+    }
     "continue a known failed delivery publication and collect unresolved delivery without replay" in {
       new LocalPublicationSpec().qualifyDeliveryContinuation(this)
     }

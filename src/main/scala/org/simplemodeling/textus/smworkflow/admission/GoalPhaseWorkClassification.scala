@@ -71,6 +71,30 @@ private[smworkflow] object GoalPhaseWorkClassification {
       else for { _ <- implementation.validateC; _ <- repair.validateC; _ <- review.validateC } yield this
   }
 
+  /** Reconstruct only retained semantic intent. Invocation-time mapping owns
+    * concrete placement; a phase-wide repair has no selected Step to invent.
+    */
+  def requirementC(kind: String, stepIdentity: Option[String],
+    selectedPlan: GoalPhaseOrderedProgression.Plan, base: ExecutionRequirement): Consequence[ExecutionRequirement] = {
+    val classification = if (kind == "ReviewPhase") selectedPlan.phaseReviewClassification
+      else if (kind == "RepairStep" && stepIdentity.isEmpty) {
+        selectedPlan.steps.map(_.workClassification.map(_.repair)).distinct match {
+          case Vector(Some(value)) => Some(value)
+          case _ => None
+        }
+      } else stepIdentity.flatMap(identity => selectedPlan.steps.find(_.identity == identity))
+        .flatMap(_.workClassification).map { work => kind match {
+          case "ImplementStep" => work.implementation
+          case "RepairStep" => work.repair
+          case "TriageStep" => work.review
+          case _ => work.review
+        }}
+    classification match {
+      case Some(value) => value.requirementC(base)
+      case None => Consequence.success(base) // Optional classification remains absent, not defaulted.
+    }
+  }
+
   given Encoder[Classification] = Encoder.instance(value => Json.obj(
     "kind" -> Json.fromString(value.kind.toString), "complexity" -> Json.fromString(value.complexity.toString),
     "domain" -> Json.fromString(value.domain.toString), "footprint" -> Json.fromString(value.footprint.toString)).mapObject(fields =>

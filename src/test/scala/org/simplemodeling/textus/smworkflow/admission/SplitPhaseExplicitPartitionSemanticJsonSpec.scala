@@ -283,8 +283,8 @@ final class SplitPhaseExplicitPartitionSemanticJsonSpec extends AnyWordSpec with
       Then("the exact text remains inert evidence")
       take(WorkflowResultJsonV1.decodeC(take(J.encodeResultC(submitted)), J.resultCodec)) shouldBe submitted
     }
-    "report incomplete typed data and enforce the UTF-8 byte transport bound before common encoding" in {
-      Given("null nested values absent WorkOrder input and a non-ASCII payload below the character limit but above the byte limit")
+    "report incomplete typed data while preserving complete semantic evidence through common encoding" in {
+      Given("null nested values absent WorkOrder input and valid non-ASCII evidence beyond the former application byte budget")
       val f = fixture()
       val request = f.request
       val data = judgment(f)
@@ -294,23 +294,37 @@ final class SplitPhaseExplicitPartitionSemanticJsonSpec extends AnyWordSpec with
         request.copy(boundaries = Vector(request.boundaries.head.copy(left = null))), request.copy(reply = null),
         request.copy(reply = request.reply.copy(result = null)), request.copy(reply = request.reply.copy(resolutions = null)))
       val malformedResults = Vector(null, data.copy(decision = null), data.copy(evidence = Vector(null)), data.copy(estimates = null))
-      val text = "界" * (J.maximumPayloadBytes / 2)
-      val oversized = rewrite(take(J.resultCodec.encodeC(data)), List("payload", "rationale"))(_ => Json.fromString(text))
+      val text = "界" * (1024 * 1024 / 2)
+      val complete = data.copy(rationale = text)
+      val completerequest = request.copy(items = request.items.map(_.copy(reason = text)))
       When("checked codecs and wrappers receive those external values")
-      malformedRequests.foreach(r => { J.requestCodec.encodeC(r) shouldBe a[Consequence.Failure[?]]; J.requestCodec.encode(r) shouldBe Json.Null })
-      malformedResults.foreach(r => { J.resultCodec.encodeC(r) shouldBe a[Consequence.Failure[?]]; J.resultCodec.encode(r) shouldBe Json.Null })
+      val requestresults = malformedRequests.map(r => J.requestCodec.encodeC(r) -> J.requestCodec.encode(r))
+      val resultresults = malformedResults.map(r => J.resultCodec.encodeC(r) -> J.resultCodec.encode(r))
+      val unsupportedframes = Vector(J.encodeResultC(null), J.encodeWorkOrderC(null),
+        J.encodeWorkOrderC(order.copy(current = work.copy(request = work.request.copy(input = None)))),
+        J.encodeWorkOrderC(order.copy(current = WorkflowContinuation.Decision(work.request, work.presentation))),
+        J.encodeWorkOrderC(order.copy(current = work.copy(request = work.request.copy(input = Some(TypedValue("ForeignRequest", request)))))))
       Then("failures are structured and no partial common frame is returned")
-      oversized.noSpaces.length should be < J.maximumPayloadBytes
-      oversized.noSpaces.getBytes(StandardCharsets.UTF_8).length should be > J.maximumPayloadBytes
-      J.resultCodec.decode(oversized).isLeft shouldBe true
-      J.resultCodec.encodeC(data.copy(rationale = text)) shouldBe a[Consequence.Failure[?]]
-      J.requestCodec.encodeC(request.copy(items = request.items.map(_.copy(reason = text)))) shouldBe a[Consequence.Failure[?]]
-      J.encodeResultC(result(f, order).copy(result = TypedValue(J.resultCodec.typeIdentity, data.copy(rationale = text)))) shouldBe a[Consequence.Failure[?]]
-      J.encodeResultC(null) shouldBe a[Consequence.Failure[?]]
-      J.encodeWorkOrderC(null) shouldBe a[Consequence.Failure[?]]
-      J.encodeWorkOrderC(order.copy(current = work.copy(request = work.request.copy(input = None)))) shouldBe a[Consequence.Failure[?]]
-      J.encodeWorkOrderC(order.copy(current = WorkflowContinuation.Decision(work.request, work.presentation))) shouldBe a[Consequence.Failure[?]]
-      J.encodeWorkOrderC(order.copy(current = work.copy(request = work.request.copy(input = Some(TypedValue("ForeignRequest", request)))))) shouldBe a[Consequence.Failure[?]]
+      requestresults.foreach { (checked, encoded) =>
+        checked shouldBe a[Consequence.Failure[?]]
+        encoded shouldBe Json.Null
+      }
+      resultresults.foreach { (checked, encoded) =>
+        checked shouldBe a[Consequence.Failure[?]]
+        encoded shouldBe Json.Null
+      }
+      unsupportedframes.foreach(_ shouldBe a[Consequence.Failure[?]])
+      When("complete Unicode evidence crosses the application and common result frames")
+      val completejson = take(J.resultCodec.encodeC(complete))
+      val decodedresult = J.resultCodec.decode(completejson)
+      val decodedrequest = J.requestCodec.decode(take(J.requestCodec.encodeC(completerequest)))
+      val submitted = result(f, order).copy(result = TypedValue(J.resultCodec.typeIdentity, complete))
+      val decodedframe = take(WorkflowResultJsonV1.decodeC(take(J.encodeResultC(submitted)), J.resultCodec))
+      Then("the complete application and common frames retain the exact Unicode evidence")
+      completejson.noSpaces.getBytes(StandardCharsets.UTF_8).length should be > (1024 * 1024)
+      decodedresult shouldBe Right(complete)
+      decodedrequest shouldBe Right(completerequest)
+      decodedframe shouldBe submitted
     }
   }
 }

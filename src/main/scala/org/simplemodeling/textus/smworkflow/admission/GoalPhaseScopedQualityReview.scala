@@ -1,6 +1,5 @@
 package org.simplemodeling.textus.smworkflow.admission
 
-import java.nio.charset.StandardCharsets.UTF_8
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.config.ResolvedParameters
@@ -97,10 +96,8 @@ private[smworkflow] object GoalPhaseScopedQualityReview {
       }
       materials = sources.flatten ++ Vector(Record.dataAuto("identity" -> "diff-1", "kind" -> "diff",
         "content" -> context.diff)) ++ metadata
-      contents = materials.map(_.getString("content").get)
-      _ <- _check(materials.size <= 64 && requirements.size <= 64 && contents.forall(_bytes(_) <= 262144) &&
-        (contents ++ requirements).map(value => _bytes(value).toLong).sum <= 1048576L,
-        "selected materials or requirements exceed review bounds")
+      _ <- _check(materials.size <= 64 && requirements.size <= 64,
+        "selected materials or requirements exceed review entry counts")
       request = Record.dataAuto("reviewId" -> selected.reviewId, "revision" -> selected.revision,
         "subjectId" -> selected.subjectId, "subjectRevision" -> selected.subjectRevision,
         "checks" -> selected.checks, "paths" -> selected.paths, "modelSubjects" -> selected.modelSubjects,
@@ -151,7 +148,6 @@ private[smworkflow] object GoalPhaseScopedQualityReview {
     value.length <= 1024 && !value.exists(_.isControl)
   private def _filename(value: String): Boolean = _label(value) && !value.startsWith("/") &&
     !value.contains('\\') && !value.matches("(?s)[A-Za-z][A-Za-z0-9+.-]*:.*")
-  private def _bytes(value: String): Int = value.getBytes(UTF_8).length
   private def _check(valid: Boolean, detail: String): Consequence[Unit] =
     if (valid) Consequence.unit else _invalid(detail)
   private def _invalid[A](detail: String): Consequence[A] = Consequence.stateConflict("Scoped quality review: " + detail)

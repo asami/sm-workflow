@@ -42,7 +42,8 @@ object LabelledTests {
     else definitions.filter(definition => request.patterns.exists { pattern =>
       val regex = pattern.split("\\*", -1).map(java.util.regex.Pattern.quote).mkString(".*")
       definition.name.matches(regex)
-    })
+    }).map(definition => new TestDefinition(definition.name, definition.fingerprint,
+      request.patterns.contains(definition.name), definition.selectors))
 
   /** One SBT runner receives the exact suite-local selectors. There is no
     * conversion back to framework arguments and no union of test names.
@@ -95,15 +96,15 @@ object LabelledTests {
       val bridge = loader.loadClass("org.simplemodeling.textus.smworkflow.testing.LabelledTestSelection$")
       val instance = bridge.getField("MODULE$").get(null)
       val rows = try bridge.getMethod("select", classOf[String], classOf[String], classOf[String],
-        classOf[Array[String]], classOf[Array[String]], classOf[Array[String]])
+        classOf[Array[String]], classOf[Array[String]], classOf[Array[String]], classOf[Array[String]])
         .invoke(instance, classes.getCanonicalPath, revision, purpose, definitions.map(_.name).toArray,
-          exact.toArray, containing.toArray)
+          exact.toArray, containing.toArray, definitions.filter(_.explicitlySpecified).map(_.name).toArray)
         .asInstanceOf[Array[Array[String]]].toSeq
       catch { case error: java.lang.reflect.InvocationTargetException => throw error.getCause }
       val selected = rows.groupBy(_(0))
       definitions.flatMap { definition => selected.get(definition.name).map { operations =>
         Selected(new TestDefinition(definition.name, definition.fingerprint,
-          purpose == "EXPLICIT" || definition.explicitlySpecified,
+          definition.explicitlySpecified,
           operations.map(row => new TestSelector(row(1))).toArray),
           operations.filter(_(2) == "true").map(_(1)).toSet)
       }}

@@ -1,6 +1,5 @@
 package org.simplemodeling.textus.smworkflow.admission
 
-import java.nio.charset.StandardCharsets
 import io.circe.{Decoder, Encoder, Json}
 import io.circe.generic.auto.*
 import io.circe.syntax.*
@@ -21,8 +20,8 @@ private[smworkflow] object SplitPhaseScopeSemanticJson {
       extends WorkflowResultJsonV1.PayloadCodec[A] {
     def encode(value: A): Json = Json.obj("schemaVersion" -> Json.fromString(schema), "payload" -> value.asJson)
     def decode(value: Json): Either[String, A] =
-      if (value == null || value.noSpaces.getBytes(StandardCharsets.UTF_8).length > 1024 * 1024)
-        Left("Scope semantic payload is absent or oversized")
+      if (value == null)
+        Left("Scope semantic payload is absent")
       else for {
         version <- value.hcursor.get[String]("schemaVersion").left.map(_.message)
         _ <- Either.cond(version == schema, (), "Unknown scope semantic schema")

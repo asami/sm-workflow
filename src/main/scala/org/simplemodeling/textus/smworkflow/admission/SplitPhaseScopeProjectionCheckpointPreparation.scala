@@ -1,7 +1,6 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
-import java.nio.charset.StandardCharsets.UTF_8
 import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.{WorkflowMechanicalTransition as M, *}
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{InstanceRecord,
@@ -49,11 +48,7 @@ private[smworkflow] object SplitPhaseScopeProjectionCheckpointPreparation {
 
   def keyC(reference: Reference): Consequence[String] =
     if (reference == null) _invalid("successor reference is absent")
-    else M.keyC(M.Reference(reference.identity, reference.revision)).flatMap { escaped =>
-      val key = "scope-successor:" + escaped
-      if (key.getBytes(UTF_8).length <= 1024) Consequence.success(key)
-      else _invalid("final purpose-prefixed key exceeds1024 UTF-8 bytes")
-    }
+    else M.keyC(M.Reference(reference.identity, reference.revision)).map("scope-successor:" + _)
 
   /** Build inert intent data from the actual owning source. Native execution
     * reads current state and consumes expectedRevision at the effect boundary;

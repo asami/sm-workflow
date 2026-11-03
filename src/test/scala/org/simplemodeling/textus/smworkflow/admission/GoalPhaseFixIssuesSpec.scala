@@ -95,7 +95,7 @@ final class GoalPhaseFixIssuesSpec extends AnyWordSpec with Matchers with GivenW
       results.foreach(_ shouldBe a[Left[?, ?]])
     }
 
-    "reject null nested options closed vocabularies invalid UTF8 and oversized values" in {
+    "reject null nested options closed vocabularies invalid UTF8 and excess collection counts" in {
       Given("one valid bounded issue state and deliberately malformed nested business values")
       val state = _test_state
       val issue = state.issues.head
@@ -104,7 +104,6 @@ final class GoalPhaseFixIssuesSpec extends AnyWordSpec with Matchers with GivenW
         state.copy(issues = Vector(issue.copy(latestDisposition = Some(null)))),
         state.copy(issues = Vector(issue.copy(source = "UNKNOWN"))), state.copy(issues = Vector(issue.copy(status = "FIXED"))),
         state.copy(issues = Vector(issue.copy(identity = "x" * 4097))),
-        state.copy(issues = Vector(issue.copy(summary = "x" * 16385))),
         state.copy(issues = Vector(issue.copy(summary = "bad\u0000value"))),
         state.copy(issues = Vector(issue.copy(summary = "\ud800"))), state.copy(issues = Vector.fill(16385)(issue)),
         state.copy(history = Vector.fill(65537)(state.history.head)))
@@ -118,6 +117,9 @@ final class GoalPhaseFixIssuesSpec extends AnyWordSpec with Matchers with GivenW
       publicrejected.foreach(_ shouldBe a[Consequence.Failure[?]])
       state.asJson.mapObject(_.add("movement", Json.Null)).as[State] shouldBe a[Left[?, ?]]
       issue.asJson.mapObject(_.add("sourceIdentity", Json.Null)).as[Issue] shouldBe a[Left[?, ?]]
+      val complete = state.copy(issues = Vector(issue.copy(summary = "x" * 65537)))
+      validateC(complete) shouldBe Consequence.unit
+      complete.asJson.as[State] shouldBe Right(complete)
       _claim().asJson.mapObject(_.add("findingOrdinal", Json.Null)).as[Disposition] shouldBe a[Left[?, ?]]
     }
   }
@@ -172,7 +174,7 @@ final class GoalPhaseFixIssuesSpec extends AnyWordSpec with Matchers with GivenW
       val invalid = Vector(W.Result("completed", "No accounting", Vector.empty), _result(Vector.empty),
         _result(Vector(_claim(), _claim())), _result(Vector(_claim("unknown"))), _result(Vector(_claim(), _claim("unsolicited"))),
         _result(Vector(_claim(disposition = "RESOLVED"))), _result(Vector(_claim(ordinal = Some(1)))),
-        _result(Vector(_claim().copy(rationale = " "))), _result(Vector(_claim().copy(rationale = "x" * 16385))),
+        _result(Vector(_claim().copy(rationale = " "))),
         _result(Vector(_claim().copy(findingOrdinal = null))), _result(Vector(_claim(disposition = "UNKNOWN"))),
         _result(Vector.fill(16385)(_claim())), _result(null), _result(Vector(null)),
         _result(Vector(_claim())).copy(issueReport = null))
@@ -180,6 +182,9 @@ final class GoalPhaseFixIssuesSpec extends AnyWordSpec with Matchers with GivenW
       val rejected = invalid.map(W.admitSemanticResultC(req, _))
       Then("absence cannot waive accounting and malformed or invented claims cannot progress")
       rejected.foreach(_ shouldBe a[Consequence.Failure[?]])
+      val complete = _result(Vector(_claim().copy(rationale = "x" * 65537)))
+      W.admitSemanticResultC(req, complete).isSuccess shouldBe true
+      W.resultCodec.decode(W.resultCodec.encode(complete)) shouldBe Right(complete)
     }
 
     "reject reports on initial implementation and invented FIXED claims without issued IDs" in {

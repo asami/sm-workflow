@@ -59,7 +59,7 @@ private[smworkflow] object DelegateTask {
       reference(observation.sourceReference) && observation.artifactSelection.nonEmpty, (), "Malformed or crossed requester adoption target")
   } yield adoptionBinding(target, observation)
 
-  private def exact(s: String): Boolean = s != null && s.trim.nonEmpty && s.trim == s && s.length <= 16384 && !s.exists(_.isControl)
+  private def exact(s: String): Boolean = s != null && s.trim.nonEmpty && s.trim == s && !s.exists(_.isControl)
   private def reference(r: ContextReference): Boolean = r != null && exact(r.identity) && exact(r.revision)
   def valid(c: Contract): Boolean = c != null && Vector(c.requesterIdentity, c.destinationIdentity, c.returnDestination,
     c.componentIdentity, c.consumerInstructions).forall(exact) && c.requesterIdentity != c.destinationIdentity &&

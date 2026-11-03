@@ -1007,3 +1007,53 @@ Evidence MUST be sufficient to answer: which purpose/metadata revision ran; why 
 - duplicate full test-log storage.
 - global build-tool serialization.
 - treating duration as correctness.
+
+## Runtime profile is independent of test purpose — 2026-11-02
+
+Adopt [dev-first validation](../spec/development-mode-validation.md): routine
+managed development tests use the target application's dev profile by default.
+ADMISSION and standard Slow/DoNotDiscover classification do not select operation
+mode; full/focused describe execution scopes.
+Slice verification plans can require explicit test/demo/production scenarios;
+existing explicit profiles are not overwritten by the default.
+
+Mode/authentication/authorization/configuration impact selects relevant boundary
+checks, not a full four-mode matrix for every change. Existing execution evidence
+retains actual profile and fixture/live attribution; dev success cannot close
+a declared live participant-demo requirement. No new caller parameters, duplicated
+suite registry, hash/copy gate or retrospective retesting requirement is added.
+Delivery: [workstream](../phase/development-mode-validation-plan.md).
+
+Nightly automatic validation preserves explicit per-test mode requirements and
+uses **dev and production** defaults only for tests without a mode declaration,
+using isolated test resources and the same selected revision. Retain per-mode
+results/durations and require all selected required variants for aggregate success.
+Daytime remains dev-first; Slow/explicit-only/live-provider work retains declared
+selection. See [nightly validation](../spec/development-mode-validation.md#nightly-dev-and-production-validation)
+and VM-05. Production-mode testing is not permission to use customer systems.
+
+Modes also select specific behavior. Under CNCF MODE-07 and VM-06, test-only
+features (including selectively enabled real integrations) receive focused
+coverage through existing feature metadata and explicit operation references.
+Verify configured adapter/recipient, allowed/denied effects, excluded modes and
+missing bindings. Select affected checks during development and a declared
+lightweight nightly regression set; no third full suite or separate registry.
+Dev/production results cannot cover a test-only path, and required focused
+failure/not-run prevents overall nightly success. Real-provider and substitute
+results retain their actual scope and existing cost/execution requirements.
+
+## Per-test modes and SBT ownership — 2026-11-02
+
+The [mode declaration/selection contract](../spec/development-mode-validation.md#per-test-declarations-build-binding-and-workflow-ownership)
+assigns required modes and assertions to tests, normalization to CNCF discovery,
+actual mode application to build.sbt/shared SBT integration, and selection/
+invocation/results to sm-workflow. The current target uses ADMISSION and
+standard Slow/DoNotDiscover; earlier multi-purpose examples retain historical
+context and do not define new mode authoring.
+
+Explicit modes override class defaults; absent declarations use daily/nightly
+policy. A selected explicit requirement cannot silently shrink to dev. Keep
+test/parameter/mode variants distinct and retain actual child mode, outcomes
+and timing; test assertions own expected behavior differences. VM-07 and CNCF
+TM-01..04 connect one real harmless dispatch before widening migration. No
+duplicate suite/mode registry or arbitrary caller execution parameters.

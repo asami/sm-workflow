@@ -19,7 +19,7 @@ file texts. Finding identities use `[A-Za-z0-9][A-Za-z0-9_.-]{0,127}`, are uniqu
 and the collection is bounded to 128 findings. Each finding has nonempty distinct
 ordinary relative affected paths in both the review's changed paths and the
 explicit `RepositorySyncNativeConflictInput.Policy.semanticPaths`. The selected
-policy's existing validation and finite file-count/text limits apply. There is
+policy's existing validation and finite file-count limits apply. There is
 no permissive policy fallback. This primitive consumes affected business facts;
 it does not recertify complete review state, history, OIDs, policy markers or
 copied-body equality, and cannot authenticate the review's provenance.
@@ -38,14 +38,14 @@ Repaired replacements cover exactly the request file paths in the same order.
 Paths satisfy the existing ordinary relative-path rule; absolute paths, empty
 segments, dot/dot-dot segments, `.git` segments and NUL are refused.
 
-**R4 — Finite ordinary text and required values.** Every consumed object and
-collection is present. File and replacement texts are nonnull, contain no NUL
-and fit `maximumBlobBytes` measured in UTF8 bytes; empty file text is valid.
-Finding and result rationale is nonnull, nonblank, contains no NUL and fits
-16384 UTF8 bytes. Multibyte characters consume their UTF8 byte length. Actual File capture returns typed complete text, preserving exact Unicode,
+**R4 — Complete ordinary text and required values.** Every consumed object and
+collection is present. File and replacement texts are nonnull, valid UTF8 and
+contain no NUL; empty file text is valid. Finding and result rationale is
+nonnull, nonblank, valid UTF8 and contains no NUL. Actual File capture returns
+typed complete text, preserving exact Unicode,
 newlines and literal path characters without a process JSON/stdout envelope.
-CNCF applies the current runtime byte cap during acquisition; the consumer then
-applies this narrower semantic text budget. Normal preparation and workflow
+CNCF applies the current runtime byte cap during acquisition; the consumer
+does not impose another content-size ceiling. Normal preparation and workflow
 Operations return structured business Values; ordinary current-context reads
 use the typed File/resource contracts. All nine original product mains and
 their executable launch routes are absent from source and the current packaged
@@ -96,7 +96,7 @@ Only later explicit Advance records the materialization intent, applies the
 actual proposal through typed `RepositorySyncFileEffect.observeC/applyC` and
 stages assigned paths through the existing typed Git policy ordinals. File and
 Git share the trusted `sm-workflow-repository` workspace binding. The application
-retains exact assigned paths, semantic text budgets and expected-current values;
+retains exact assigned paths, ordinary-text requirements and expected-current values;
 CNCF owns current Component authority, root/grant/cap, complete acquisition and
 per-file installation. No File `.git` directory/linked-worktree metadata lookup,
 backlink discovery or metadata lock remains. Reads need no writable file.
@@ -268,7 +268,7 @@ behavior. Each group has adjacent Given/When/Then and should assertions.
 | E3 | R2,R5 | Decision-needed with rationale and no replacement succeeds; proposals and unknown decisions fail. |
 | E4 | R1,R3,R4 | Foreign/out-of-policy/traversal paths, incomplete findings, duplicate IDs and incomplete/reordered/foreign file coverage fail. |
 | E5 | R2,R3 | Incomplete/reordered/duplicate/foreign replacements and all-no-op repair fail; one changed file with another unchanged succeeds. |
-| E6 | R1,R4 | Missing consumed values and blank/NUL/invalid UTF-8 rationale or texts fail; complete large ordinary multibyte rationale and texts survive without an application byte ceiling. |
+| E6 | R1,R4 | Missing consumed values, blank/NUL/invalid-UTF8 rationale and null/NUL/invalid-UTF8 texts fail; complete large Unicode text remains exact without an application byte ceiling. |
 | E7 | R1,R2,R3,R4,R5 | Current codecs preserve actual semantic fields with inert annotations and refuse missing/mistyped fields or unsupported schemas. |
 
 The installed connection has separately authored executable examples:
@@ -280,7 +280,7 @@ The installed connection has separately authored executable examples:
 | C3 | R1,R6 | Old or missing independent evidence cannot accept the new review; fresh acceptance still requires separate current convergence grants. |
 | C4 | R6 | Actual ordinary SBT failure (exit 1), managed timeout (indeterminate/no exit) and NUL-refused receipt with retained intent prevent new review and check replay. |
 | F1 | R3,R4,R5,R6 | Actual typed capture/observe/apply preserves literal paths, Unicode, assigned unchanged-file coverage, complete preflight and no replay under current coarse workspace authority. |
-| F2 | R4,R6 | Typed complete capture distinguishes absent from empty and preserves exact non-ASCII text; semantic NUL/finite budgets remain enforced after CNCF bounded acquisition. |
+| F2 | R4,R6 | Typed complete capture distinguishes absent from empty and preserves exact large non-ASCII text; a lower configured CNCF acquisition limit still refuses without file mutation. |
 | P1 | R5,R6 | The finite normal-command caller preserves opaque Unicode rationale/replacements and a Unicode acknowledgement only on the actual assigned child route, refuses crossed routes and leaves outer routing unchanged; its subprocess is mocked. |
 
 `RepositorySyncNativeMergeRepairContinuationSpec` owns C1–C4,

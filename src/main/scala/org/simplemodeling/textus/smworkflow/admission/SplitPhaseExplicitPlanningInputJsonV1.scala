@@ -2,7 +2,6 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.{Decoder, Encoder, Json, parser}
 import io.circe.syntax.*
-import java.nio.charset.StandardCharsets
 import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitProposalPrecheck as P,
@@ -18,7 +17,6 @@ private[smworkflow] object SplitPhaseExplicitPlanningInputJsonV1 {
   import SplitPhaseExplicitPartitionRawCodecs.given
   val schema = "sm-workflow.split-phase-planning-input.v1"
   val storageField = "splitPhasePlanningInputPayload"
-  val maximumPayloadBytes = 1024 * 1024
   private val _prefix = schema + ":"
   enum Purpose(val key: String) {
     case Source extends Purpose("source-collection")
@@ -90,13 +88,12 @@ private[smworkflow] object SplitPhaseExplicitPlanningInputJsonV1 {
     if (value == null) Consequence.stateConflict("SplitPhase planning input data is absent")
     else try {
       val raw = _prefix + _envelope(purpose, value.asJson).noSpaces
-      if (_bytes(raw) <= maximumPayloadBytes) Consequence.success(raw)
-      else Consequence.stateConflict("SplitPhase planning input exceeds its UTF-8 storage limit")
+      Consequence.success(raw)
     } catch { case NonFatal(_) => Consequence.stateConflict("SplitPhase planning input cannot be encoded") }
 
   private def _decode_c[A: Decoder](purpose: Purpose, expected: Option[(String, String)],
     raw: String, reference: A => (String, String)): Consequence[A] =
-    if (expected.isEmpty || raw == null || _bytes(raw) > maximumPayloadBytes || !raw.startsWith(_prefix))
+    if (expected.isEmpty || raw == null || !raw.startsWith(_prefix))
       Consequence.stateConflict("SplitPhase planning input encoding or selected reference is unsupported")
     else for {
       json <- parser.parse(raw.substring(_prefix.length)).fold(
@@ -121,5 +118,4 @@ private[smworkflow] object SplitPhaseExplicitPlanningInputJsonV1 {
     } catch { case NonFatal(_) => Consequence.stateConflict("SplitPhase planning input reference is absent") }
   private def _envelope(purpose: Purpose, payload: Json): Json = Json.obj(
     "schemaVersion" -> Json.fromString(schema), "purpose" -> Json.fromString(purpose.toString), "payload" -> payload)
-  private def _bytes(raw: String): Int = raw.getBytes(StandardCharsets.UTF_8).length
 }

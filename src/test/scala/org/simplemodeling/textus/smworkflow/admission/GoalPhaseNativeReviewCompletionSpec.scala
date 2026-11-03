@@ -148,7 +148,6 @@ final class GoalPhaseNativeReviewCompletionSpec extends AnyWordSpec with Matcher
         _conditions.copy(paths = Vector.empty).asJson, _conditions.copy(paths = Vector.fill(2)(_paths.head)).asJson,
         _conditions.copy(paths = (1 to 17).map(n => "path-" + n).toVector).asJson,
         _conditions.copy(paths = Vector("../foreign", "/absolute", "with\u0001control")).asJson,
-        _conditions.copy(paths = Vector("a" * 4097)).asJson,
         _conditions.asJson.mapObject(_.add("extra", Json.True)))
       When("the ordinary result codec reads absent, valid and malformed condition values")
       val decoded = W.resultCodec.decode(wire)
@@ -158,6 +157,8 @@ final class GoalPhaseNativeReviewCompletionSpec extends AnyWordSpec with Matcher
       oldwire.hcursor.downField("payload").downField("completionConditions").focus shouldBe None
       W.resultCodec.decode(oldwire) shouldBe Right(absent)
       decoded shouldBe Right(_report)
+      val complete = _report.copy(completionConditions = Some(_conditions.copy(paths = Vector("a" * 4097))))
+      W.resultCodec.decode(W.resultCodec.encode(complete)) shouldBe Right(complete)
       invalid.foreach(_.isLeft shouldBe true)
     }
 

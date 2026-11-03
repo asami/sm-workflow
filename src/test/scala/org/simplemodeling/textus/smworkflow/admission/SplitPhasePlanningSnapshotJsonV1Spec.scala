@@ -200,25 +200,26 @@ final class SplitPhasePlanningSnapshotJsonV1Spec extends AnyWordSpec with Matche
       frontier.isSuccess shouldBe false
     }
 
-    "enforce the UTF-8 bound without truncating unknown work or implying native receipt capacity" in {
+    "preserve complete unknown work beyond the former application byte budget" in {
       Given("a valid unknown-only record enlarged with multibyte semantic evidence")
       val s = base(Vector(360, 360))
       val unknown = s.copy(records = s.records.copy(estimates = s.records.estimates.copy(items = s.records.estimates.items.updated(0,
         s.records.estimates.items.head.copy(duration = E.Duration.Unresolved("novel"))))))
       val r = run(unknown, allocate = false)
-      val reason = "語" * (J.maximumPayloadBytes / 2)
+      val reason = "語" * (1024 * 1024 / 2)
       val estimates = r.selection.partition.estimates.copy(items = r.selection.partition.estimates.items.updated(0,
         r.selection.partition.estimates.items.head.copy(duration = E.Duration.Unresolved(reason))))
       val huge = r.copy(selection = r.selection.copy(partition = r.selection.partition.copy(estimates = estimates)),
         partition = R.PartitionView.SemanticRequired(Vector(E.UnresolvedItem(P.WorkItemIdentity("item-0"), reason)), Vector.empty))
-      When("encoding or decoding exceeds the standalone payload bound")
-      val tooLarge = J.schema + ":" + (" " * J.maximumPayloadBytes)
-      Then("the whole payload is refused, not shortened or silently replaced")
-      reason.getBytes(UTF_8).length should be > J.maximumPayloadBytes
+      When("the complete record crosses both the storage frame and passive payload codecs")
+      val frame = take(J.encodeC(huge))
+      val payload = J.payloadCodec.encode(huge)
+      Then("all semantic evidence is preserved without implying native receipt capacity")
+      reason.getBytes(UTF_8).length should be > (1024 * 1024)
       R.dispositionC(huge).isSuccess shouldBe true
-      J.encodeC(huge).isSuccess shouldBe false
-      J.decodeC(tooLarge).isSuccess shouldBe false
-      intercept[IllegalArgumentException](J.payloadCodec.encode(huge))
+      take(J.decodeC(frame)) shouldBe huge
+      J.payloadCodec.decode(payload) shouldBe Right(huge)
+      J.decodeC(J.schema + ":" + (" " * (1024 * 1024))).isSuccess shouldBe false
     }
   }
 }

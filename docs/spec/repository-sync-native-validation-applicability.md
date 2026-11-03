@@ -159,6 +159,15 @@ refuse. This selector case is not a physical full validation/effect run.
 
 ## R2 — Consume the original independently assigned review
 
+Complete CNCF results and semantic explanations are not subject to another
+application content-size ceiling. Historical structural receipts retain full
+ordinary UTF-8 stdout/stderr and their actual negative exit/termination facts;
+capture truncation, count mismatch, malformed UTF-8 and NUL remain refusals.
+Purpose content, review findings and rationale preserve exact full text while
+path coverage, selected checks, collection cardinality and authority stay strict.
+Review archives/previews retain their separate presentation limits and full
+original retrieval; a preview is not full coverage.
+
 CML and application review Request remove validation/review policy identity and
 revision fields. Request v2 omits them; v1 reads discard their arbitrary obsolete
 values without a new metadata gate or renewed authority. Actual validation mode,

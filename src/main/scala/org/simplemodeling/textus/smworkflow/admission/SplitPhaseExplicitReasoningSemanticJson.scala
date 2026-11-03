@@ -1,6 +1,5 @@
 package org.simplemodeling.textus.smworkflow.admission
 
-import java.nio.charset.StandardCharsets
 import io.circe.{Decoder, Encoder, Json}
 import io.circe.generic.auto.*
 import io.circe.syntax.*
@@ -19,7 +18,6 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitReasoni
   * @author ASAMI, Tomoharu
   */
 private[smworkflow] object SplitPhaseExplicitReasoningSemanticJson {
-  val MAXIMUM_PAYLOAD_BYTES = 1024 * 1024
   private given Encoder[R.Classification] = Encoder.encodeString.contramap(_.toString)
   private given Decoder[R.Classification] = Decoder.decodeString.emap(value =>
     R.Classification.values.find(_.toString == value).toRight("Unknown reasoning classification"))
@@ -34,16 +32,14 @@ private[smworkflow] object SplitPhaseExplicitReasoningSemanticJson {
       if (!serializable(value)) Consequence.stateConflict("Reasoning semantic payload is structurally incomplete")
       else {
         val json = Json.obj("schemaVersion" -> Json.fromString(schema), "payload" -> value.asJson)
-        if (_payload_bytes(json) > MAXIMUM_PAYLOAD_BYTES)
-          Consequence.stateConflict("Reasoning semantic payload exceeds its transport limit")
-        else Consequence.success(json)
+        Consequence.success(json)
       }
 
     def encode(value: A): Json = encodeC(value).toOption.getOrElse(Json.Null)
 
     def decode(value: Json): Either[String, A] =
-      if (value == null || _payload_bytes(value) > MAXIMUM_PAYLOAD_BYTES)
-        Left("Reasoning semantic payload is absent or oversized")
+      if (value == null)
+        Left("Reasoning semantic payload is absent")
       else for {
         version <- value.hcursor.get[String]("schemaVersion").left.map(_.message)
         _ <- Either.cond(version == schema, (),
@@ -107,5 +103,4 @@ private[smworkflow] object SplitPhaseExplicitReasoningSemanticJson {
   private def _item(item: B.Item): Boolean = item != null && _work(item.identity) &&
     item.closureCriteria != null && item.closureCriteria.forall(criterion => criterion != null && criterion.value != null) &&
     item.prerequisiteItems != null && item.prerequisiteItems.forall(_work) && _authority(item.authority)
-  private def _payload_bytes(value: Json): Int = value.noSpaces.getBytes(StandardCharsets.UTF_8).length
 }

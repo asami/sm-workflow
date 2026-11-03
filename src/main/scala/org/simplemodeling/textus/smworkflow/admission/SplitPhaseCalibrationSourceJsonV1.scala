@@ -16,7 +16,6 @@ private[smworkflow] object SplitPhaseCalibrationSourceJsonV1 {
   val policySchema = "sm-workflow.split-phase-calibration-policy.v1"
   val snapshotField = "splitPhaseCalibrationSnapshotPayload"
   val policyField = "splitPhaseCalibrationPolicyPayload"
-  private val limit = 1024 * 1024
 
   def encodeSnapshotC(value: Snapshot): Consequence[String] = encodeC(snapshotSchema, value, validSnapshot)
   def encodePolicyC(value: PolicyRecord): Consequence[String] = encodeC(policySchema, value, validPolicy)
@@ -28,13 +27,11 @@ private[smworkflow] object SplitPhaseCalibrationSourceJsonV1 {
   private def encodeC[A: Encoder](schema: String, value: A, valid: A => Boolean): Consequence[String] =
     if (!valid(value)) Consequence.stateConflict("SplitPhase calibration source structure is incomplete")
     else {
-      val raw = schema + ":" + envelope(schema, value).noSpaces
-      if (raw.length <= limit) Consequence.success(raw)
-      else Consequence.stateConflict("SplitPhase calibration source exceeds its storage limit")
+      Consequence.success(schema + ":" + envelope(schema, value).noSpaces)
     }
   private def _decode_c[A: Decoder](schema: String, expected: Reference, raw: String,
     ref: A => Reference): Consequence[A] =
-    if (!reference(expected) || raw == null || raw.length > limit || !raw.startsWith(schema + ":"))
+    if (!reference(expected) || raw == null || !raw.startsWith(schema + ":"))
       Consequence.stateConflict("SplitPhase calibration source reference/encoding is unsupported")
     else for {
       json <- parser.parse(raw.drop(schema.length + 1)).fold(

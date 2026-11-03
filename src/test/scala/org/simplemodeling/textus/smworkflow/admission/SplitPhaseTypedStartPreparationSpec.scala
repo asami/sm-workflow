@@ -69,7 +69,7 @@ final class SplitPhaseTypedStartPreparationSpec extends AnyWordSpec with Matcher
       When("the public typed Start encoder and decoder retain each full passive record")
       val stored = records.map(value => take(J.encodeC(value)))
       val decoded = stored.map(value => take(J.decodeC(record.reference, value)))
-      Then("generic aggregate derivation retains all record values within the unchanged Start storage bound")
+      Then("generic aggregate derivation retains all record values in the unchanged Start schema")
       decoded shouldBe records
       decoded.map(value => take(value.configuration.mechanicalReceiptLimitsC).maxBytes) shouldBe
         Vector(1048576, 16777216)
@@ -81,7 +81,6 @@ final class SplitPhaseTypedStartPreparationSpec extends AnyWordSpec with Matcher
           expected.configuration.mechanicalReceiptMaxBytes.fold(Json.Null)(Json.fromInt)
       }
       J.schema shouldBe "sm-workflow.split-phase-typed-start-record.v3"
-      J.maximumPayloadBytes shouldBe 1048576
     }
 
     "E1 interpret absent and null optional Start bytes as the historical one MiB default" in {
@@ -292,10 +291,10 @@ final class SplitPhaseTypedStartPreparationSpec extends AnyWordSpec with Matcher
       val malformed = J.decodeC(record.reference, J.schema + ":{")
       Then("malformed input is refused")
       malformed.isSuccess shouldBe false
-      When("a multibyte payload exceeds the bounded wire capacity")
-      val oversized = J.decodeC(record.reference, J.schema + ":" + "あ" * (J.maximumPayloadBytes / 2))
-      Then("the oversized payload is refused")
-      oversized.isSuccess shouldBe false
+      When("a large multibyte payload is malformed JSON")
+      val invalid = J.decodeC(record.reference, J.schema + ":" + "あ" * (1024 * 1024 / 2))
+      Then("the malformed payload is refused")
+      invalid.isSuccess shouldBe false
       When("the same exact record is represented with JSON whitespace")
       val spaced = take(J.decodeC(record.reference, J.schema + ":" + original.spaces2))
       Then("whitespace does not change the inert record")

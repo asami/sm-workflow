@@ -24,6 +24,8 @@ private[smworkflow] object NativeExternalEvidenceInput {
   def prepareC(supplied: Map[String, String], readText: String => Consequence[String]): Consequence[Record] = try {
     if (supplied.get("family").contains("RepositorySyncRepairScopeCorrection"))
       _repair_scope_c(supplied, readText)
+    else if (supplied.get("kind").contains("force-closure"))
+      NativeWorkflowForceClosurePreparation.prepareSuppliedC(supplied, readText)
     else if (supplied.get("kind").contains("goal-phase-prerequisite-publication-recovery"))
       _prerequisite_recovery_c(supplied, readText)
     else if (supplied.get("kind").contains("goal-phase-prerequisite-publication-observation"))

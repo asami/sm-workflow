@@ -195,8 +195,7 @@ private[smworkflow] object GoalPhaseAcceptanceBoundary {
     values.map(_.identity).distinct.size == values.size
   private def _identity(value: String): Boolean = value != null && value.matches("[A-Za-z0-9][A-Za-z0-9_.-]{0,127}")
   private def _scope(value: String): Boolean = Set("all", "step", "phase")(value)
-  private def _text(value: String): Boolean = value != null && value.trim.nonEmpty && !value.contains('\u0000') &&
-    value.getBytes(UTF_8).length <= 8192
+  private def _text(value: String): Boolean = value != null && value.trim.nonEmpty && !value.contains('\u0000')
   private def _check(valid: Boolean, reason: String): Consequence[Unit] = if (valid) Consequence.unit else _invalid(reason)
   private def _invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("GoalPhase acceptance: " + reason)
   private def _json(value: ConfigurationValue): Json = value match {

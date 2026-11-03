@@ -35,6 +35,34 @@ final class RepositorySyncNativeValidationApplicabilitySpec extends AnyWordSpec 
   private def replace(value: Json, body: Json) = value.mapObject(_.add("payload", body))
 
   "Complete semantic content" should {
+    "retain large program coverage and FULL selection reasons through the actual typed policy and selection codecs" in {
+      Given("declared consumed-input coverage with full explanations exceeding 64 KiB")
+      val rationale = "選択根拠を保持する" * 10000
+      val focused = V.Check("focused", 1)
+      val full = V.Check("full", 2)
+      val impact = RepositorySyncProgramImpact.Policy(
+        Vector(RepositorySyncProgramImpact.Coverage(focused, Vector("src"), Vector("src", "build.sbt"), rationale)),
+        Vector(full), Vector("build.sbt"), rationale, Vector.empty)
+      val wire = io.circe.Encoder[RepositorySyncProgramImpact.Policy].apply(impact)
+      val source = RepositorySyncDocumentInputs.Assessment(Vector("src/Example.scala"), Vector("src/Example.scala"),
+        Vector.empty, Vector.empty, "Selected consumed source")
+      When("normal policy decoding and program impact selection consume focused and broad changes")
+      val restored = take(RepositorySyncProgramImpact.decodeC(wire))
+      val selected = RepositorySyncProgramImpact.select(restored, source)
+      val broad = RepositorySyncProgramImpact.select(restored, source.copy(consumedPaths = Vector("build.sbt")))
+      Then("both selected reasons retain their complete explanation and exact check choices")
+      restored shouldBe impact
+      selected.reason shouldBe "FOCUSED: changed bounded inputs=src/Example.scala; " + rationale
+      selected.checks shouldBe Vector(focused)
+      broad.reason shouldBe "FULL: changed broad inputs=build.sbt; uncovered inputs=build.sbt; " + rationale
+      broad.checks shouldBe Vector(full)
+      Vector(selected, broad).foreach { value =>
+        io.circe.Encoder[RepositorySyncProgramImpact.Selection].apply(value).as[RepositorySyncProgramImpact.Selection] shouldBe Right(value)
+      }
+      RepositorySyncProgramImpact.validateC(impact.copy(reason = rationale + "\n")).isSuccess shouldBe false
+      RepositorySyncProgramImpact.validateC(impact.copy(coverage = impact.coverage.map(_.copy(inputPaths = Vector("../foreign"))))).isSuccess shouldBe false
+    }
+
     "retain large purpose content and messages without weakening exact inventory coverage" in {
       Given("a complete selected Unicode file and a purpose proposal covering that actual inventory")
       val text = "完全な作業内容\n" * 20000

@@ -112,11 +112,39 @@ failure meaning remain unchanged. Split classification cannot waive independence
 or evidence to obtain INLINE. New E6 helper examples are authored for parent
 validation; they establish no provider or independent review execution.
 
+## R7 — Unanimous retained classification for Phase-wide repair
+
+A `RepairStep` without a Step identity is a Phase-wide release-delta repair.
+Its requirement reuses a repair Classification only when **every** Step in the
+retained selected Plan explicitly supplies an Assignment and all of their
+`repair` Classification values are exactly equal, including kind, complexity,
+domain and footprint. Implementation/review classifications may differ. The
+package-internal `GoalPhaseWorkClassification.requirementC` owns reconstruction;
+the normal native continuation calls it for the actual assigned work.
+
+An empty Plan, all-absent classifications, any missing classification or different
+repair values retain the previous absent-classification requirement. No arbitrary
+Step, aggregated/default policy, Phase-review classification or concrete model is
+substituted. This bounded rule does not make an unclassified requirement resolvable
+by a mapping that requires a ReasoningClass. Normal Step implementation, repair,
+triage/review and whole-Phase review retain their previous selection and strict
+review-boundary validation. Capabilities, risk, review responsibility and existing
+disposition remain untouched by semantic derivation. No Plan field, public API,
+codec, Session, counter or storage change is introduced.
+
+E7–E9 below are authored regression specifications, including actual public CNCF
+`WorkflowExecutionProfileMapping` resolution with specification-owned profiles.
+They establish no executed test result, provider invocation, installed runtime
+refresh, repair of a retained consumer Session or independent review acceptance.
+Fresh native compile/focused/FULL and genuine independent review remain required.
+
 ## Executable specification coverage
 
 `GoalPhaseWorkClassificationSpec` covers E1 (144 classification combinations),
 E2 (assigned frontier separation), E3 (selected Plan storage), E4 (native Start
 and Work request codecs), E5 (invalid input) and E6 (internal Split semantic-only derivation with preserved
-independent obligation and unchanged strict refusal). Connected Operation verification
+independent obligation and unchanged strict refusal), E7 (unanimous Phase-wide repair and public
+profile resolution), E8 (absent/missing/different repair classifications) and E9
+(unchanged ordinary frontiers and codecs). Connected Operation verification
 and runtime execution evidence remain required for the applicable Phase 5 scope;
 helper-level success cannot close the integrated batch or reopen Phase 2.

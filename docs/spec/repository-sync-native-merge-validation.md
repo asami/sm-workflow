@@ -38,8 +38,11 @@ ordinary staged-only status and actual index tree. These are commit/validation
 preconditions, not unchanged-content or management-integrity certificates.
 Structural validation uses managed Git cached-diff checks against both selected
 parents, rejecting newly introduced findings common to both comparisons.
-Complete bounded stdout/stderr and actual process termination establish results;
-an AI result or prebuilt digest receipt cannot do so.
+Complete stdout/stderr within CNCF's configured execution limits and actual
+process termination establish results; an AI result or prebuilt digest receipt
+cannot do so. The application retains complete results without a second content
+ceiling. Truncated, byte-count-mismatched, malformed UTF-8 or NUL captures remain
+unusable and do not authorize replay.
 
 A native conditional transition saves each check intent before invocation and
 each actual result afterward. Retained recorded checks are not rerun. A retained

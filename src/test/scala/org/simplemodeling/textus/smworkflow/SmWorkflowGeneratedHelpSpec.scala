@@ -18,7 +18,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Oct.  5, 2026
  *  version Oct. 28, 2026
- * @version Nov.  2, 2026
+ *  version Nov.  2, 2026
+ * @version Nov.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -68,6 +69,8 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
     SmWorkflowComponent.RepositorySyncServiceService -> Vector(
       "startRepositorySync", "advanceRepositorySync", "submitRepositoryPurposeResult", "submitRepositorySyncWorkResult",
       "describeRepositorySyncValidationContinuation", "adoptRepositorySyncValidationContinuation",
+      "describeRepositorySyncRepairScopeCorrection", "prepareRepositorySyncRepairScopeCorrection",
+      "adoptRepositorySyncRepairScopeCorrection",
       "submitNativeMergeReview", "submitNativeMergeRepair", "submitRepositoryConflictDecision"
     ),
     SmWorkflowComponent.StandaloneFixServiceService -> Vector("startStandaloneFix", "startStandaloneReviewFix", "advanceStandaloneFix",
@@ -85,6 +88,7 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
     SmWorkflowComponent.DelegateTaskSemanticAdmissionServiceService -> Vector("admitDelegateTaskReview"),
     SmWorkflowComponent.DelegateTaskDeliveryServiceService -> Vector("observeDelegateTaskDelivery", "describeDelegateTaskAdoption"),
     SmWorkflowComponent.CompletionRecordClosureServiceService -> Vector("describeCompletionRecordClosure", "advanceCompletionRecordClosure"),
+    SmWorkflowComponent.WorkflowForceClosureServiceService -> Vector("describeWorkflowForceClosure", "forceCloseWorkflow"),
     SmWorkflowComponent.GoalTaskImplementationServiceService -> Vector("implementGoalTask"),
     SmWorkflowComponent.GoalTaskRepairServiceService -> Vector("repairGoalTask"),
     SmWorkflowComponent.GoalTaskReviewServiceService -> Vector("reviewGoalTask"),

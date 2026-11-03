@@ -3,7 +3,6 @@ package org.simplemodeling.textus.smworkflow.admission
 import io.circe.{Decoder, Encoder, Json}
 import io.circe.generic.auto.*
 import io.circe.syntax.*
-import java.nio.charset.StandardCharsets
 import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.{WorkflowResultJsonV1, WorkflowWorkOrderJsonV1}
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.{ContinuationResult, WorkflowInteraction, WorkflowContinuation}
@@ -17,7 +16,6 @@ import SplitPhasePartitionEnumeration.EdgeDisposition
   * @version Oct. 10, 2026
   */
 private[smworkflow] object SplitPhaseExplicitPartitionSemanticJson {
-  val maximumPayloadBytes = 1024 * 1024
   private given Encoder[EdgeDisposition] = Encoder.encodeString.contramap(_.toString)
   private given Decoder[EdgeDisposition] = Decoder.decodeString.emap(value =>
     EdgeDisposition.values.find(_.toString == value).toRight("Unknown explicit partition edge disposition"))
@@ -32,14 +30,12 @@ private[smworkflow] object SplitPhaseExplicitPartitionSemanticJson {
       if (!serializable(value)) Consequence.stateConflict("Explicit partition semantic payload is structurally incomplete")
       else {
         val json = Json.obj("schemaVersion" -> Json.fromString(schema), "payload" -> value.asJson)
-        if (payloadBytes(json) > maximumPayloadBytes)
-          Consequence.stateConflict("Explicit partition semantic payload exceeds its transport limit")
-        else Consequence.success(json)
+        Consequence.success(json)
       }
     def encode(value: A): Json = encodeC(value).toOption.getOrElse(Json.Null)
     def decode(value: Json): Either[String, A] =
-      if (value == null || payloadBytes(value) > maximumPayloadBytes)
-        Left("Explicit partition semantic payload is absent or oversized")
+      if (value == null)
+        Left("Explicit partition semantic payload is absent")
       else for {
         version <- value.hcursor.get[String]("schemaVersion").left.map(_.message)
         _ <- Either.cond(version == schema, (), "Unsupported explicit partition semantic schema")
@@ -93,7 +89,6 @@ private[smworkflow] object SplitPhaseExplicitPartitionSemanticJson {
     r.boundaries != null && r.boundaries.forall(e => e != null && work(e.afterItem) && e.disposition != null && e.rationale != null) &&
     r.evidence != null && r.evidence.forall(e => e != null && e.identity != null && e.revision != null)
   private def context(r: S.ContextReference): Boolean = r != null && r.identity != null && r.revision != null
-  private def payloadBytes(value: Json): Int = value.noSpaces.getBytes(StandardCharsets.UTF_8).length
   private def source(r: P.SourceReference): Boolean = r != null && r.identity != null && r.revision != null
   private def authority(r: P.AuthorityReference): Boolean = r != null && r.identity != null && r.revision != null
   private def work(r: P.WorkItemIdentity): Boolean = r != null && r.value != null

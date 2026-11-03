@@ -320,6 +320,6 @@ private[smworkflow] object StandaloneFixExecution {
   private def paths(values: Vector[String]): Boolean = strings(values, true) && values.forall(GoalPhasePurposeRepair.path)
   private def strings(values: Vector[String], nonempty: Boolean = false): Boolean = values != null &&
     (!nonempty || values.nonEmpty) && values.size <= 256 && values.distinct == values && values.forall(text)
-  private def text(value: String): Boolean = value != null && value.trim.nonEmpty && value.length <= 16384 && !value.exists(_.isControl)
+  private def text(value: String): Boolean = value != null && value.trim.nonEmpty && !value.exists(_.isControl)
   private def invalid[A](message: String): Consequence[A] = Consequence.stateConflict("Standalone repair: " + message)
 }

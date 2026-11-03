@@ -194,7 +194,7 @@ private[smworkflow] object GoalPhaseNativeMetadata {
     }
   private def _text(value: String): Boolean = value != null && value.nonEmpty && !value.exists(_.isControl)
   def hostIdentityValid(value: String): Boolean = value != null && value.matches("[A-Za-z0-9][A-Za-z0-9_.-]{0,127}")
-  def runtimeIdentityValid(value: String): Boolean = _text(value) && UTF_8.newEncoder().canEncode(value) && value.getBytes(UTF_8).length <= 4096
+  def runtimeIdentityValid(value: String): Boolean = _text(value) && UTF_8.newEncoder().canEncode(value)
   def referenceValid(value: D.OperationReference): Boolean = value != null &&
     Vector(value.component, value.specification, value.operation).forall(_text)
   private def _json_valid(value: Json): Boolean = value != null && value.fold(true, _ => true, _ != null,

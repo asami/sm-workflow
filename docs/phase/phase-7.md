@@ -1,9 +1,21 @@
 # Phase 7: Multi-Repository Synchronization and Development Artifact Overlay
 
+## Directory-list predecessor and local workspace scope — 2026-10-31
+
+[Phase 6.11](phase-6.11.md) owns ordinary batch synchronization of explicitly
+supplied existing checkout directories, including validated automatic merges,
+partial results and preserved lower-level APIs. That caller simplification does
+not wait for this Phase. Phase 7 retains project-local managed worktree/subtree
+lifecycle, dependency-development modes/FIFO, artifact selection and integration.
+Consume 6.11 for synchronization rather than rebuilding an AI-driven per-repository
+loop. Existing A/B/C/D and P7-DD/DAO identities and evidence remain unchanged.
+This clarifies ownership without declaring any pending Phase 7 condition accepted.
+
 ## Commit/recovery predecessor — 2026-10-26
 
 The planned rollout is Phase 6.7 -> [Phase 6.8](phase-6.8.md) ->
-[Phase 6.9](phase-6.9.md) -> [Phase 6.10](phase-6.10.md) -> Phase 7.
+[Phase 6.9](phase-6.9.md) -> [Phase 6.10](phase-6.10.md) ->
+[Phase 6.11](phase-6.11.md) -> Phase 7.
 Consume 6.10's optional operating-profile selection and endpoint metrics without
 changing issued work or requiring model comparison/complete usage measurement.
 Consume 6.9's clean/dirty single-repository orchestration and impact-selected
@@ -716,3 +728,37 @@ See [Development Workspace operation candidates](../journal/2026/10/2026-10-21-d
 ## Natural inclusion of operation candidates (2026-10-21)
 
 During ordinary Phase 7 implementation, include Dependency Status, Artifact Freshness, and basic Dependency Impact when they follow naturally from the existing Development Workspace graph, Artifact Overlay status/verify, publication provenance, and dependency-aware validation. Prefer enriching existing typed operations/results rather than introducing separate operations, duplicate state, approval steps, or a new Phase. No additional approval is needed for such bounded implementation within Phase 7's existing acceptance boundary. Do not interpret the candidate journal as an unconditional new checklist or broaden Phase 7 into a general dependency-management system; materially larger scope requires a separate decision. See [candidate journal](../journal/2026/10/2026-10-21-development-workspace-operation-candidates.md).
+
+## Validation profiles across participating repositories — 2026-11-02
+
+Apply [dev-first validation](../spec/development-mode-validation.md) and consume
+[VM-01..04](development-mode-validation-plan.md). Routine consumer/build
+verification uses each project's common dev binding; explicit test/demo/
+production acceptance stays selected and attributable to its actual repository,
+artifact selection and scenario. Preserve normal suite obligations and use
+impact-selected mode checks rather than four copies of each full suite.
+Do not propagate the orchestrator's own mode as an implicit authorization or
+overwrite a participant's explicit verification profile.
+
+For nightly automation, also consume VM-05: select each participating project's
+declared nightly suite and preserve explicit per-test mode requirements. Use dev
+and production only as defaults for tests without a mode declaration, on isolated
+test resources. Retain separate results and require all selected required variants
+for that project's nightly success. Preserve
+dependency/artifact selection and normal SBT serialization; this does not double
+every daytime validation or implicitly select Slow/explicit-only/live-provider work.
+Consume VM-06 for declared test-specific paths in each participating component:
+focused feature/scenario checks include intended real/substitute adapter selection,
+authorization, excluded modes and missing configuration. The declared lightweight
+nightly set accompanies dev/production; required failures/not-run remain visible
+and prevent overall success. No third full-suite pass or duplicate registry.
+
+## Per-test mode producer/build integration — 2026-11-02
+
+Consume VM-07 and [CNCF TM-01..04](https://github.com/asami/goldenport-cncf/blob/main/docs/phase/test-execution-mode-plan.md)
+for participating repositories: metadata owns each test's required modes;
+build.sbt wires the shared execution binding; sm-workflow selects exact variants,
+starts/awaits the managed command and collects results by test/parameters/mode.
+Keep explicit requirements distinct from dev-first/nightly defaults. Mixed-mode
+suites and forked consumers must receive the actual mode without leakage or
+duplicate declaration lists. No new Phase closure or implementation is claimed.
