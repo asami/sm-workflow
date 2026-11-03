@@ -52,12 +52,13 @@ final class SplitPhasePlanningCheckpointJsonV1Spec extends AnyWordSpec with Matc
         frame.hcursor.downField("payload").downField("origin").downField("Mechanical")
           .downField("checkpoint").withFocus(_.mapObject(_.remove("revision"))).top.get,
         frame.mapObject(_.add("schemaVersion", Json.fromString("unsupported"))))
-      When("used addresses schema types or byte bounds are invalid")
+      When("used addresses or schema types are invalid")
       val results = malformed.map(value => J.decodeLocatorC(reference, raw(value, J.locatorSchema))) ++ Vector(
-        J.decodeLocatorC(reference.copy(revision = "other"), encoded), J.decodeLocatorC(reference, null),
-        J.decodeLocatorC(reference, encoded + (" " * J.maximumPayloadBytes)))
+        J.decodeLocatorC(reference.copy(revision = "other"), encoded), J.decodeLocatorC(reference, null))
       Then("no discarded used field newest address or alternate native origin is admitted")
       results.foreach(_.isSuccess shouldBe false)
+      take(J.decodeLocatorC(reference, encoded + (" " * (1024 * 1024)))) shouldBe
+        K.Locator(saved.reference, saved.origin)
     }
 
     "roundtrip complete original Start context snapshot and both origins" in {

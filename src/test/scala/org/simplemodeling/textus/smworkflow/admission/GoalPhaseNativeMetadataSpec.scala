@@ -224,6 +224,26 @@ final class GoalPhaseNativeMetadataSpec extends AnyWordSpec with Matchers with G
   }
 
   "Exact named-input public transport" should {
+    "preserve a complete large runtime identity without widening host ids or accepting foreign metadata selection" in {
+      Given("APP-CONTENT-CAP-A01: a real discovered batch and separate large literal reference transport data")
+      val (checks, batches) = prepared
+      val reference = batches.head.references.head.copy(operation = "literal-operation-" + ("項目" * 3000))
+      val identity = N.logicalIdentity(check.identity, reference)
+      val transported = checks.head.copy(identity = identity, operation = Some(reference))
+      When("runtime identity admission and the public Check codec consume that exact literal value")
+      val decoded = transported.asJson.as[V.Check]
+      Then("large complete text roundtrips while the original selected batch still rejects the crossed operation")
+      identity.getBytes(java.nio.charset.StandardCharsets.UTF_8).length should be > 4096
+      N.runtimeIdentityValid(identity) shouldBe true
+      N.referenceValid(reference) shouldBe true
+      decoded shouldBe Right(transported)
+      N.hostIdentityValid(identity) shouldBe false
+      Vector(null, "", "bad\u0000identity", "bad\nidentity", "\ud800").foreach { invalid =>
+        N.runtimeIdentityValid(invalid) shouldBe false
+      }
+      N.validateRetainedC(Vector(check), checks.updated(0, transported), batches).isSuccess shouldBe false
+    }
+
     "retain distinct producer names through canonical normalization public projection and typed rebinding" in {
       Given("the actual named-inputs artifact source-bound Plan with global values and an explicit second variant")
       val plan = K.plan

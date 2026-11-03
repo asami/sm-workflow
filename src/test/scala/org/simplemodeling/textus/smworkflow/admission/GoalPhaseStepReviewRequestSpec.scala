@@ -80,8 +80,9 @@ private[smworkflow] trait GoalPhaseStepReviewRequestBehavior extends AnyWordSpec
           target.copy(candidate = target.candidate.copy(tree = "f" * 40)),
           target.copy(plan = target.plan.copy(revision = "foreign-plan")), target.copy(completed = Vector.empty))
         val crossedresults = crossed.map(value => e.call(R.requestOperation, input.get.copy(target = R.targetRecord(value)).toRecord()))
-        val reasonresults = Vector("", "   ", "x" * 16385, "control\u0000payload", "\ud800").map(reason =>
+        val reasonresults = Vector("", "   ", "control\u0000payload", "\ud800").map(reason =>
           e.call(R.requestOperation, input.get.copy(reason = reason).toRecord()))
+        R.validReason("x" * 65537) shouldBe true
         val extra = GoalPhaseNativeMetadata.record(target.asJson.mapObject(_.add("verdict", Json.fromString("accept"))))
         val nulltarget = GoalPhaseNativeMetadata.record(target.asJson.mapObject(_.add("participant", Json.Null)))
         val shaperesults = Vector(extra, nulltarget).map(value => e.call(R.requestOperation, input.get.copy(target = value).toRecord()))

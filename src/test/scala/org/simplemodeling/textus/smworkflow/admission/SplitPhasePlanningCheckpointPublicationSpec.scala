@@ -140,7 +140,7 @@ final class SplitPhasePlanningCheckpointPublicationSpec extends AnyWordSpec with
         row.identity == baseline.rows.head.identity) shouldBe 2
       Given("closing data with extra fields, a different local purpose and bytes exceeding an unrelated frame limit")
       val supplemental = Vector(rows(1).head.copy(collection = t.estimates,
-        payload = StorageRecord.data("text" -> ("語" * (J.maximumPayloadBytes / 2)), "diagnostic" -> 7)))
+        payload = StorageRecord.data("text" -> ("語" * (1024 * 1024 / 2)), "diagnostic" -> 7)))
       When("the producer forwards the complete closing data without an additional purpose or frame readmission")
       val forwarded = take(U.prepareC(saved, t, supplemental))
       Then("the original descriptors survive exactly without provider access or execution authority")

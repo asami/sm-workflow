@@ -601,16 +601,25 @@ final class GoalPhaseNativeCheckRepairSpec extends AnyWordSpec with Matchers wit
         result.isSuccess shouldBe false
       }
       val invalidresults = Vector(_result.copy(outcome = "passed"), _result.copy(outcome = "accept"),
-        _result.copy(summary = "x" * 16385), _result.copy(summary = "x\u0000y"),
+        _result.copy(summary = "x\u0000y"),
         _result.copy(findings = Vector("unresolved")),
-        _result.copy(outcome = "decision-needed", findings = Vector.fill(129)("finding")),
-        _result.copy(outcome = "decision-needed", findings = Vector("x" * 16385)))
+        _result.copy(outcome = "decision-needed", findings = Vector.fill(129)("finding")))
       invalidresults.foreach { result =>
-        Given("a valid repair assignment with a command/review outcome or unbounded semantic fields")
+        Given("a valid repair assignment with a command/review outcome or malformed semantic fields")
         When("result admission consumes that reply")
         val admitted = W.admitSemanticResultC(_request(), result)
         Then("check failure context never grants check, review or malformed-result admission")
         admitted.isSuccess shouldBe false
+      }
+      Vector(_result.copy(summary = "x" * 16385),
+        _result.copy(outcome = "decision-needed", findings = Vector("x" * 16385))).foreach { result =>
+        Given("ordinary complete semantic text beyond the removed application byte ceiling")
+        When("the same repair-source admission and saved result codec consume the reply")
+        val admitted = W.admitSemanticResultC(_request(), result)
+        val restored = W.resultCodec.decode(W.resultCodec.encode(result))
+        Then("text length alone neither rejects nor truncates an otherwise valid semantic result")
+        admitted.isSuccess shouldBe true
+        restored shouldBe Right(result)
       }
     }
 

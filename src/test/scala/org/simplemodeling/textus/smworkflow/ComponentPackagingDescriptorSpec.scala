@@ -103,7 +103,7 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
         "StandaloneFixSemanticAdmissionService", "GoalTaskService", "GoalTaskRepairService", "GoalTaskReviewService",
         "GoalTaskSemanticAdmissionService", "GoalTaskImplementationService", "NativeWorkflowPreparationService",
         "DelegateTaskService", "DelegateTaskRepairService", "DelegateTaskReviewService",
-        "DelegateTaskSemanticAdmissionService", "DelegateTaskImplementationService", "DelegateTaskDeliveryService")
+        "DelegateTaskSemanticAdmissionService", "DelegateTaskImplementationService", "DelegateTaskDeliveryService", "WorkflowForceClosureService")
 
       When("the complete selected public Operation signatures are compared with their source declarations")
       services.foreach { service =>
@@ -131,7 +131,9 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
           "WorkflowGoalTaskStartPreparationInput", "WorkflowCallerExecutionPrepareInput", "WorkflowCallerExecutionRecordInput",
           "WorkflowCallerExecutionState", "WorkflowTaskFixDeliveryPreparationInput", "WorkflowTaskFixDelivery",
           "WorkflowTaskFixAdoptionPreparationInput", "WorkflowTaskFixAdoption", "DelegateTaskContract",
-          "DelegateTaskObservationInput", "DelegateTaskAdoptionContext", "WorkflowDelegateTaskStartPreparationInput")
+          "DelegateTaskObservationInput", "DelegateTaskAdoptionContext", "WorkflowDelegateTaskStartPreparationInput",
+          "WorkflowForceClosureDescriptionInput", "WorkflowForceClosureAnswer", "DescribeWorkflowForceClosureInput",
+          "ForceCloseWorkflowInput", "WorkflowForceClosureView")
       values.foreach { name =>
         val fields = "(?m)^\\| (\\w+) \\| ([\\w.]+) \\| ([1?*+]) \\|".r.findAllMatchIn(sections(name)).map { m =>
           Json.obj("name" -> Json.fromString(m.group(1)), "type" -> Json.fromString(m.group(2)),

@@ -1306,8 +1306,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
   private def _text(value: String): Boolean = value != null && value.trim.nonEmpty &&
     !value.exists(c => c == '\u0000' || c == '\r' || c == '\n')
   private def _stored_text(value: String): Boolean = value != null && !value.contains('\u0000') &&
-    java.nio.charset.StandardCharsets.UTF_8.newEncoder().canEncode(value) &&
-    value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 65536
+    java.nio.charset.StandardCharsets.UTF_8.newEncoder().canEncode(value)
   private[admission] def successful(receipts: Vector[V.Receipt], selected: Vector[Check]): Boolean =
     receipts != null && selected != null && receipts.size <= selected.size && receipts.zip(selected).forall((receipt, check) =>
       check != null && receipt != null && receipt.identity == check.identity && V.productSuccessful(receipt, check.kind))

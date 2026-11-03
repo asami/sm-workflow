@@ -1,0 +1,40 @@
+{
+  "name": "local-experiment",
+  "status": "inactive-candidate",
+  "baseProfile": "cost",
+  "activation": "explicit-only-with-complete-runtime-mapping-and-supported-adapter",
+  "phase610CompletionRequirement": false,
+  "overrides": [
+    {
+      "work": "bounded-classification-extraction-summary",
+      "replaceOnlyModel": "gpt-6-luna",
+      "model": "qwen3.5:4b",
+      "reasoningEffort": "none"
+    },
+    {
+      "work": "exact-prescribed-mechanical-code-edit",
+      "replaceOnlyModel": "gpt-6-luna",
+      "model": "gpt-oss:20b",
+      "reasoningEffort": "low"
+    },
+    {
+      "work": "bounded-rule-guided-hygiene",
+      "replaceOnlyModel": "gpt-6-luna",
+      "model": "gpt-oss:20b",
+      "reasoningEffort": "medium"
+    }
+  ],
+  "unmatchedAssignments": "inherit-cost",
+  "cloudFallback": "disabled-unless-explicitly-configured",
+  "preserve": [
+    "parent",
+    "inline-eligibility",
+    "deterministic-runtime-operations",
+    "terra-and-sol-assignments",
+    "acceptance-conditions",
+    "validation-scope",
+    "review-independence",
+    "repair-policy",
+    "issued-work-captures"
+  ]
+}

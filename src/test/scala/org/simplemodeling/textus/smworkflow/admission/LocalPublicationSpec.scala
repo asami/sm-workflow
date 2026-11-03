@@ -12,6 +12,9 @@ import org.goldenport.cncf.processexecution.*
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.testutil.RuntimeBindingAdmissionFixture
 import org.goldenport.cncf.workspace.WorkspaceId
+import org.goldenport.cncf.workflow.ContextReference
+import org.goldenport.protocol.{Property, Request as ProtocolRequest}
+import org.goldenport.record.{Field, Record}
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -22,7 +25,8 @@ import LocalPublication.*
 /** Pure decision and continuation contracts. Supplied process facts are test
   * data; actual CLI/UoW execution is qualified separately.
   * @since   Oct. 26, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  1, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -62,19 +66,566 @@ final class LocalPublicationSpec extends AnyWordSpec with Matchers with GivenWhe
     var source = _clean
     var starts = 0
     var ids = 0
+    var sourceObservations = 0
     var next: SbtExecutionAttempt = _observed(ProcessExecutionTermination.Exited(0))
     def loadC(key: String) = Consequence.success(rows.get(key))
     def createC(key: String, value: Json): Consequence[Unit] = {
       if (rows.contains(key)) Consequence.stateConflict("Immutable duplicate")
       else { rows(key) = value; Consequence.unit }
     }
-    def sourceC(t: Target) = Consequence.success(source)
+    def sourceC(t: Target) = { sourceObservations += 1; Consequence.success(source) }
     def executeC(t: Target) = { starts += 1; Consequence.success(next) }
     def newIdentity() = { ids += 1; "runtime-issued-" + ids }
   }
   private def _ensure(m: Memory, identity: String = "request", explicit: Boolean = false,
     answer: Option[Answer] = None): Result = take(LocalPublication.ensureC(
     Input(identity, _target.identity, Some("same-retained-session"), explicit, answer), _target, "actor", m))
+
+  private def _request_key(request: Request): String = "local-publication:" +
+    java.net.URLEncoder.encode(request.participant, "UTF-8") + ":" +
+    java.net.URLEncoder.encode(request.input.requestIdentity, "UTF-8")
+  private def _unknown_prerequisite(m: Memory): Request = {
+    val original = take(ensurePrerequisiteC(Input("unknown-prerequisite", _target.identity,
+      Some("same-retained-session")), _target, "actor", m))
+    m.rows.remove(_request_key(original.request) + ":result")
+    original.request
+  }
+  private def _successor(previous: Request, source: Source = _clean): QualifiedSuccessor =
+    QualifiedSuccessor(ContextReference("runtime-issued-publication-direction", "revision-1"), previous, source)
+  private def _successor_input(identity: String = "qualified-successor"): Input =
+    Input(identity, _target.identity, Some("same-retained-session"))
+
+  private def _failed_primary(memory: Memory, target: Target): Result = {
+    memory.next = _observed(ProcessExecutionTermination.Exited(7))
+    take(ensurePrerequisiteC(Input("primary-before-checks", target.identity, Some("same-retained-session")), target, "actor", memory))
+  }
+  private def _failure_permit(previous: Result, revision: String = "30"): ConfirmedFailureSuccessor =
+    ConfirmedFailureSuccessor(ContextReference("same-retained-session", revision), previous, _clean,
+      ContextReference("same-retained-session", "27"), "{\"program\":1}", "{\"targets\":2}")
+
+  "Terminated primary failure continuation" should afterWord(
+    "in spec:goal-phase-prerequisite-publication-recovery, example:E1,E2,E3,E4,E5, rules:R1,R2,R3, phase:M3-PRIMARY-CONTINUATION-409") {
+    "E1 reserve one version-two successor and recollect without replaying the original failure" in {
+      Given("docs/spec/goal-phase-prerequisite-publication-recovery.md R1 E1: an actual typed nonzero primary result")
+      val memory = new Memory
+      val target = _target.copy(beforeChecks = true)
+      val failed = _failed_primary(memory, target)
+      val permit = _failure_permit(failed)
+      val input = _successor_input("primary-directed-once")
+      memory.next = _observed(ProcessExecutionTermination.Exited(0))
+      When("the admitted primary Direction is advanced and then repeatedly collected")
+      val published = take(ensureConfirmedFailureSuccessorC(input, target, "actor", permit, memory))
+      val rows = memory.rows.toMap
+      val observations = memory.sourceObservations
+      val repeated = take(ensureConfirmedFailureSuccessorC(input, target, "actor", permit, memory))
+      val latest = take(collectLatestC(LatestCollectionInput(target.identity, "same-retained-session"), target, "actor", memory))
+      Then("one successor is saved under the existing qualification store and every old result remains queryable")
+      published.status shouldBe "published"
+      repeated shouldBe published
+      latest shouldBe Some(published)
+      take(collectC(failed.request.input, target, "actor", memory)) shouldBe Some(failed)
+      memory.rows.toMap shouldBe rows
+      memory.sourceObservations shouldBe observations
+      memory.starts shouldBe 2
+      rows(_request_key(published.request) + ":qualification").hcursor.get[Int]("version") shouldBe Right(2)
+      ensureC(input, target, "actor", memory).isSuccess shouldBe false
+      ensureQualifiedSuccessorC(input.copy(requestIdentity = "wrong-unknown-route"), target, "actor",
+        QualifiedSuccessor(permit.direction, failed.request, _clean), memory).isSuccess shouldBe false
+    }
+
+    "E2 retain genuine nonstarts and consume the single start grant only after preparation" in {
+      Given("docs/spec/goal-phase-prerequisite-publication-recovery.md R2 E2: an admitted primary permit and confirmed NotExecuted observations")
+      val memory = new Memory
+      val target = _target.copy(beforeChecks = true)
+      val failed = _failed_primary(memory, target)
+      val input = _successor_input("primary-preparation")
+      val permit = _failure_permit(failed)
+      memory.next = _observed(ProcessExecutionTermination.NotStarted)
+      When("two ordinary advances each perform one preparation while intervening collection remains passive")
+      val first = take(ensureConfirmedFailureSuccessorC(input, target, "actor", permit, memory))
+      val firstrows = memory.rows.toMap
+      take(collectC(input, target, "actor", memory)) shouldBe Some(first)
+      memory.rows.toMap shouldBe firstrows
+      memory.starts shouldBe 2
+      val second = take(ensureConfirmedFailureSuccessorC(input, target, "actor", permit, memory))
+      memory.next = _observed(ProcessExecutionTermination.Exited(9))
+      val terminal = take(ensureConfirmedFailureSuccessorC(input, target, "actor", permit, memory))
+      val repeated = take(ensureConfirmedFailureSuccessorC(input, target, "actor", permit, memory))
+      Then("each preparation token is retained and a started failure cannot renew its own authority")
+      first.status shouldBe "not-started"
+      first.nextPreparation should not be empty
+      second.nextPreparation should not be first.nextPreparation
+      terminal.status shouldBe "failed"
+      terminal.nextPreparation shouldBe empty
+      repeated shouldBe terminal
+      memory.starts shouldBe 4
+      take(collectC(failed.request.input, target, "actor", memory)) shouldBe Some(failed)
+      When("a fresh actual Direction authorizes the retained new terminal failure")
+      memory.next = _observed(ProcessExecutionTermination.Exited(0))
+      val fresh = take(ensureConfirmedFailureSuccessorC(input.copy(requestIdentity = "new-primary-answer"), target, "actor",
+        _failure_permit(terminal, "31"), memory))
+      Then("only the fresh permit creates a new started successor")
+      fresh.status shouldBe "published"
+      memory.starts shouldBe 5
+    }
+
+    "E3 keep primary UNKNOWN collect-only and reject uncertainty as a terminated-failure grant" in {
+      Given("docs/spec/goal-phase-prerequisite-publication-recovery.md R3 E3: a genuine failure followed by termination-unconfirmed")
+      val memory = new Memory
+      val target = _target.copy(beforeChecks = true)
+      val failed = _failed_primary(memory, target)
+      memory.next = _observed(ProcessExecutionTermination.TerminationUnconfirmed)
+      val input = _successor_input("primary-unknown")
+      val permit = _failure_permit(failed)
+      When("the same admitted Direction is advanced repeatedly")
+      val unknown = take(ensureConfirmedFailureSuccessorC(input, target, "actor", permit, memory))
+      val repeated = take(ensureConfirmedFailureSuccessorC(input, target, "actor", permit, memory))
+      val refused = ensureConfirmedFailureSuccessorC(input.copy(requestIdentity = "unapproved-unknown-retry"), target, "actor",
+        _failure_permit(unknown, "31"), memory)
+      Then("the actual UNKNOWN is preserved and no second process start is inferred")
+      unknown.status shouldBe "uncertain"
+      unknown.nextPreparation shouldBe empty
+      repeated shouldBe unknown
+      refused.isSuccess shouldBe false
+      memory.starts shouldBe 2
+    }
+
+    "E4 refuse incomplete reservations without guessing or replaying their missing effects" in {
+      Given("docs/spec/goal-phase-prerequisite-publication-recovery.md R3 E4: interrupted immutable qualification, request or intent writes")
+      Vector(":request", ":intent", ":result").foreach { suffix =>
+        var interrupted = false
+        val memory = new Memory {
+          override def createC(key: String, value: Json): Consequence[Unit] =
+            if (interrupted && key.endsWith(suffix)) { interrupted = false; Consequence.stateConflict("SPECIFICATION interruption") }
+            else super.createC(key, value)
+        }
+        val target = _target.copy(beforeChecks = true)
+        val failed = _failed_primary(memory, target)
+        val input = _successor_input("partial-primary-" + suffix.drop(1))
+        val permit = _failure_permit(failed)
+        interrupted = true
+        When("an advance loses an immutable write and the exact Direction is resumed")
+        ensureConfirmedFailureSuccessorC(input, target, "actor", permit, memory).isSuccess shouldBe false
+        val starts = memory.starts
+        val rows = memory.rows.toMap
+        val resumed = ensureConfirmedFailureSuccessorC(input, target, "actor", permit, memory)
+        Then("retained partial intent remains uncertain or a typed refusal, with no repair write or replay")
+        resumed.toOption.foreach(_.status shouldBe "uncertain")
+        memory.starts shouldBe starts
+        memory.rows.toMap shouldBe rows
+      }
+    }
+
+    "E5 reject stale, crossed-source and non-primary permits" in {
+      Given("docs/spec/goal-phase-prerequisite-publication-recovery.md R1 E5: an exact primary failure with a source-bound grant")
+      val memory = new Memory
+      val target = _target.copy(beforeChecks = true)
+      val failed = _failed_primary(memory, target)
+      val input = _successor_input("primary-stale")
+      val permit = _failure_permit(failed)
+      memory.source = _clean.copy(tree = "f" * 40)
+      When("the primary source differs or another actual publication is now latest")
+      val drift = ensureConfirmedFailureSuccessorC(input, target, "actor", permit, memory)
+      memory.source = _clean
+      take(ensureC(input.copy(requestIdentity = "another-primary-attempt"), target, "actor", memory))
+      val stale = ensureConfirmedFailureSuccessorC(input, target, "actor", permit, memory)
+      Then("neither the old failure nor the changed source can spend the permit")
+      drift.isSuccess shouldBe false
+      stale.isSuccess shouldBe false
+      ensureConfirmedFailureSuccessorC(input, target.copy(dependency = Some("dependency")), "actor", permit, memory).isSuccess shouldBe false
+      ensureConfirmedFailureSuccessorC(input, target, "actor", permit.copy(sourceCapture = ContextReference("foreign-session", "27")), memory).isSuccess shouldBe false
+      memory.starts shouldBe 2
+    }
+  }
+
+  "Exact primary continuation collection" should {
+    "reject real prefix and suffix lookalike publications outside the canonical native request" in {
+      Given("CB-M3-02: a genuine original prerequisite failure and caller-selected ordinary request identities")
+      import PrimaryPublicationContinuationSpecificationFixture as P
+      val session = "same-retained-session"
+      val target = _target.copy(beforeChecks = true)
+      Vector(false, true).foreach { aftergrant =>
+        val memory = new Memory
+        memory.next = _observed(ProcessExecutionTermination.Exited(7))
+        val originalinput = LocalPublicationRuntime.prerequisiteInput(session, P.candidate, target)
+        val failed = take(ensurePrerequisiteC(originalinput, target, "actor", memory))
+        val permit = _failure_permit(failed)
+        val identity = if (aftergrant) "unrelated-stem:primary:" + permit.direction.identity + ":" + permit.direction.revision
+          else originalinput.requestIdentity + ":prerequisite:unrelated"
+        When("an ordinary public publication with a matching name fragment becomes the actual latest failure")
+        val unrelated = take(ensureC(_successor_input(identity), target, "actor", memory))
+        val rows = memory.rows.toMap
+        val starts = memory.starts
+        val collected = LocalPublicationRuntime.collectPrimaryPrerequisiteC(session, "actor", P.candidate,
+          P.currentCandidate, target, Option.when(aftergrant)(permit), memory)
+        Then("the exact native collector refuses the unrelated real result without writes or execution")
+        unrelated.status shouldBe "failed"
+        collected.isSuccess shouldBe false
+        take(collectPrerequisiteC(originalinput, target, "actor", memory)) shouldBe Some(failed)
+        memory.rows.toMap shouldBe rows
+        memory.starts shouldBe starts
+      }
+    }
+
+    "collect the exact current-candidate qualification and genuine preparation children without starting them" in {
+      Given("CB-M3-01/02: retained native authority at a new source revision before any successor reservation")
+      import PrimaryPublicationContinuationSpecificationFixture as P
+      val memory = new Memory
+      val session = "same-retained-session"
+      val target = _target.copy(beforeChecks = true)
+      memory.next = _observed(ProcessExecutionTermination.Exited(7))
+      val failed = take(ensurePrerequisiteC(LocalPublicationRuntime.prerequisiteInput(session, P.candidate, target), target, "actor", memory))
+      val permit = _failure_permit(failed)
+      val input = LocalPublicationRuntime.confirmedFailureInput(session, P.currentCandidate, target, permit)
+      def _collect_() = LocalPublicationRuntime.collectPrimaryPrerequisiteC(session, "actor", P.candidate,
+        P.currentCandidate, target, Some(permit), memory)
+      When("collection observes unused authority, then follows the retained exact qualification and its same-request preparation")
+      val initialrows = memory.rows.toMap
+      take(_collect_()) shouldBe failed
+      memory.rows.toMap shouldBe initialrows
+      memory.starts shouldBe 1
+      memory.next = _observed(ProcessExecutionTermination.NotStarted)
+      val prepared = take(ensureConfirmedFailureSuccessorC(input, target, "actor", permit, memory))
+      val preparedrows = memory.rows.toMap
+      take(_collect_()) shouldBe prepared
+      memory.rows.toMap shouldBe preparedrows
+      memory.starts shouldBe 2
+      memory.next = _observed(ProcessExecutionTermination.Exited(0))
+      val published = take(ensureConfirmedFailureSuccessorC(input, target, "actor", permit, memory))
+      val rows = memory.rows.toMap
+      val observations = memory.sourceObservations
+      val collected = take(_collect_())
+      Then("the original candidate identifies only the old failure and the captured candidate identifies the qualified chain")
+      input should not be LocalPublicationRuntime.confirmedFailureInput(session, P.candidate, target, permit)
+      prepared.status shouldBe "not-started"
+      collected shouldBe published
+      collected.status shouldBe "published"
+      collected.request.input shouldBe input
+      memory.rows.toMap shouldBe rows
+      memory.sourceObservations shouldBe observations
+      memory.starts shouldBe 3
+      collectConfirmedFailureSuccessorC(input, target, "actor", permit.copy(processPolicy = "{\"program\":2}"), memory).isSuccess shouldBe false
+      collectConfirmedFailureSuccessorC(input, target, "actor", permit.copy(direction = ContextReference(session, "31")), memory).isSuccess shouldBe false
+    }
+
+    "reject an exact request identity created through ordinary publication without its version-two qualification" in {
+      Given("CB-M3-02: a caller can choose even the exact qualified request name through ordinary publication")
+      import PrimaryPublicationContinuationSpecificationFixture as P
+      val memory = new Memory
+      val session = "same-retained-session"
+      val target = _target.copy(beforeChecks = true)
+      memory.next = _observed(ProcessExecutionTermination.Exited(7))
+      val failed = take(ensurePrerequisiteC(LocalPublicationRuntime.prerequisiteInput(session, P.candidate, target), target, "actor", memory))
+      val permit = _failure_permit(failed)
+      val input = LocalPublicationRuntime.confirmedFailureInput(session, P.currentCandidate, target, permit)
+      When("the ordinary route saves that request without the owning primary qualification")
+      take(ensureC(input, target, "actor", memory)).status shouldBe "failed"
+      val rows = memory.rows.toMap
+      val collected = LocalPublicationRuntime.collectPrimaryPrerequisiteC(session, "actor", P.candidate,
+        P.currentCandidate, target, Some(permit), memory)
+      Then("the same text identity supplies no qualified authority and collection remains passive")
+      collected.isSuccess shouldBe false
+      memory.rows.toMap shouldBe rows
+      memory.starts shouldBe 2
+    }
+
+    "refuse incomplete qualification and request writes even while the old failure remains latest" in {
+      Given("CB-M3-01/02: reservation is interrupted before its request or target-wide attempt write")
+      import PrimaryPublicationContinuationSpecificationFixture as P
+      val session = "same-retained-session"
+      val target = _target.copy(beforeChecks = true)
+      Vector(false, true).foreach { afterrequest =>
+        var interrupted = false
+        val memory = new Memory {
+          override def createC(key: String, value: Json): Consequence[Unit] =
+            if (interrupted && (if (afterrequest) key.startsWith("local-publication-target:") else key.endsWith(":request"))) {
+              interrupted = false
+              Consequence.stateConflict("SPECIFICATION interrupted primary reservation")
+            } else super.createC(key, value)
+        }
+        memory.next = _observed(ProcessExecutionTermination.Exited(7))
+        val failed = take(ensurePrerequisiteC(LocalPublicationRuntime.prerequisiteInput(session, P.candidate, target), target, "actor", memory))
+        val permit = _failure_permit(failed)
+        val input = LocalPublicationRuntime.confirmedFailureInput(session, P.currentCandidate, target, permit)
+        interrupted = true
+        When("advance retains only part of its immutable qualification and passive collection resumes")
+        ensureConfirmedFailureSuccessorC(input, target, "actor", permit, memory).isSuccess shouldBe false
+        val rows = memory.rows.toMap
+        val collected = LocalPublicationRuntime.collectPrimaryPrerequisiteC(session, "actor", P.candidate,
+          P.currentCandidate, target, Some(permit), memory)
+        Then("the old latest failure cannot disguise a partial reservation as unused authority")
+        take(collectLatestC(LatestCollectionInput(target.identity, session), target, "actor", memory)) shouldBe Some(failed)
+        collected.isSuccess shouldBe false
+        memory.rows.toMap shouldBe rows
+        memory.starts shouldBe 1
+      }
+    }
+  }
+
+  "Qualified uncertain publication successor" should afterWord(
+    "in spec:local-publication-qualified-successor, example:E1,E2,E3,E4,E5,E6,E7, rules:R1,R2,R3, phase:M3-UNKNOWN323-PUBLICATION") {
+    "E1 retain intent-only uncertainty and refuse ordinary permission" in {
+      Given("LocalPublicationSpec.scala E1 R1: an original prerequisite intent with no terminal result")
+      val m = new Memory
+      val previous = _unknown_prerequisite(m)
+      val before = take(collectC(previous.input, _target, "actor", m)).get
+      val observations = m.sourceObservations
+      val rows = m.rows.toMap
+      When("the original owner collects that request and latest attempt")
+      val latest = take(collectLatestC(LatestCollectionInput(_target.identity, "same-retained-session"),
+        _target, "actor", m))
+      val original = take(collectC(previous.input, _target, "actor", m))
+      Then("both collectors preserve the actual original UNKNOWN without source reads or execution")
+      before.status shouldBe "uncertain"
+      original shouldBe Some(before)
+      latest shouldBe original
+      m.rows.toMap shouldBe rows
+      m.sourceObservations shouldBe observations
+      m.starts shouldBe 1
+      When("an ordinary new request or resumed prerequisite seeks another effect")
+      val ordinary = take(ensureC(_successor_input("ordinary"), _target, "actor", m))
+      val resumed = take(ensurePrerequisiteC(Input("unknown-prerequisite", _target.identity,
+        Some("same-retained-session")), _target, "actor", m))
+      Then("ordinary admission retains UNKNOWN and creates no successor execution")
+      ordinary.status shouldBe "uncertain"
+      resumed.status shouldBe "uncertain"
+      m.starts shouldBe 1
+    }
+
+    "E2 execute one exactly bound successor and collect its retained result after later attempts" in {
+      Given("LocalPublicationSpec.scala E2 R1,R2: a latest UNKNOWN and an independently admitted runtime Direction")
+      val m = new Memory
+      val previous = _unknown_prerequisite(m)
+      val permit = _successor(previous)
+      val input = _successor_input()
+      val oldfacts = m.rows.toMap
+      When("the owning Direction supplies its distinct nonexplicit successor")
+      val result = take(ensureQualifiedSuccessorC(input, _target, "actor", permit, m))
+      Then("one actual typed publication succeeds and the original immutable facts remain")
+      result.status shouldBe "published"
+      result.request.input shouldBe input
+      result.request.input.explicit shouldBe false
+      result.request.source shouldBe _clean
+      m.starts shouldBe 2
+      oldfacts.foreach { (key, value) => m.rows(key) shouldBe value }
+      val saved = m.rows.toMap
+      val observations = m.sourceObservations
+      When("the same input and Direction are repeated and collected")
+      val repeated = take(ensureQualifiedSuccessorC(input, _target, "actor", permit, m))
+      val collected = take(collectC(input, _target, "actor", m))
+      Then("the exact retained result is returned without new source observation or writes")
+      repeated shouldBe result
+      collected shouldBe Some(result)
+      m.rows.toMap shouldBe saved
+      m.sourceObservations shouldBe observations
+      m.starts shouldBe 2
+      When("a later foreign publication completes and the old Direction arrives again")
+      take(ensureC(Input("later-independent", _target.identity, Some("foreign-session"), explicit = true),
+        _target, "foreign-actor", m)).status shouldBe "published"
+      val laterobservations = m.sourceObservations
+      take(ensureQualifiedSuccessorC(input, _target, "actor", permit, m)) shouldBe result
+      ensureQualifiedSuccessorC(_successor_input("stale-after-foreign"), _target, "actor", permit, m)
+        .isFaillure shouldBe true
+      Then("delayed collection returns its historical result without adopting the later effect")
+      m.starts shouldBe 3
+      m.sourceObservations shouldBe laterobservations
+      take(collectC(previous.input, _target, "actor", m)).get.status shouldBe "uncertain"
+    }
+
+    "E3 reject crossed identities sources purposes and Directions before any effect" in {
+      Given("LocalPublicationSpec.scala E3 R1: an actual latest UNKNOWN with exact target and Session binding")
+      val m = new Memory
+      val previous = _unknown_prerequisite(m)
+      val input = _successor_input()
+      val permit = _successor(previous)
+      val rows = m.rows.toMap
+      val cases = Vector(
+        (input.copy(ownerSessionId = Some("foreign-session")), _target, "actor", permit),
+        (input.copy(ownerSessionId = None), _target, "actor", permit),
+        (input.copy(targetIdentity = "foreign-target"), _target, "actor", permit),
+        (input, _target.copy(workspace = "foreign-workspace"), "actor", permit),
+        (input, _target, "foreign-actor", permit),
+        (input.copy(explicit = true), _target, "actor", permit),
+        (input.copy(answer = Some(Answer("generic", true, "not an admission"))), _target, "actor", permit),
+        (previous.input, _target, "actor", permit),
+        (input, _target, "actor", permit.copy(direction = ContextReference(" ", "revision-1"))),
+        (input, _target, "actor", permit.copy(direction = ContextReference("direction", " revision-1"))),
+        (input, _target, "actor", permit.copy(previous = previous.copy(input = previous.input.copy(explicit = true)))),
+        (input, _target, "actor", permit.copy(previous = previous.copy(input = previous.input.copy(requestIdentity = "ordinary")))),
+        (input, _target, "actor", permit.copy(previous = previous.copy(reason = "foreign retained request"))),
+        (input, _target, "actor", permit.copy(source = _clean.copy(head = "invalid"))),
+        (input, _target, "actor", permit.copy(source = _clean.copy(tree = "c" * 40))))
+      When("crossed or malformed internal successors are supplied")
+      val refused = cases.map { (selected, target, participant, successor) =>
+        ensureQualifiedSuccessorC(selected, target, participant, successor, m)
+      }
+      Then("every crossed binding refuses without retaining a request or executing")
+      refused.foreach(_.isFaillure shouldBe true)
+      m.rows.toMap shouldBe rows
+      m.starts shouldBe 1
+      When("the actual source drifts after admission")
+      m.source = _clean.copy(tree = "d" * 40)
+      val drifted = ensureQualifiedSuccessorC(input, _target, "actor", permit, m)
+      Then("the admitted source cannot execute against changed native inputs")
+      drifted.isFaillure shouldBe true
+      m.rows.toMap shouldBe rows
+      m.starts shouldBe 1
+      When("the exact source returns and a different Direction tries the already retained successor identity")
+      m.source = _clean
+      take(ensureQualifiedSuccessorC(input, _target, "actor", permit, m)).status shouldBe "published"
+      val saved = m.rows.toMap
+      val observations = m.sourceObservations
+      val crossed = ensureQualifiedSuccessorC(input, _target, "actor",
+        permit.copy(direction = permit.direction.copy(revision = "revision-2")), m)
+      Then("the immutable Direction binding refuses even when all other fields match")
+      crossed.isFaillure shouldBe true
+      ensureC(input, _target, "actor", m).isFaillure shouldBe true
+      m.rows.toMap shouldBe saved
+      m.sourceObservations shouldBe observations
+      m.starts shouldBe 2
+    }
+
+    "E4 reserve the next target append once under competing and duplicate calls" in {
+      Given("LocalPublicationSpec.scala E4 R2: two admitted callers compete at immutable target reservation")
+      var competing = Option.empty[Consequence[Result]]
+      var duplicate = Option.empty[Consequence[Result]]
+      var armed = false
+      var permit = Option.empty[QualifiedSuccessor]
+      val m = new Memory {
+        override def createC(key: String, value: Json): Consequence[Unit] = {
+          if (armed && key == "local-publication-target:producer:2") {
+            armed = false
+            competing = Some(ensureQualifiedSuccessorC(_successor_input("competing-successor"), _target,
+              "actor", permit.get, this))
+            duplicate = Some(ensureQualifiedSuccessorC(_successor_input(), _target, "actor", permit.get, this))
+          }
+          super.createC(key, value)
+        }
+      }
+      val previous = _unknown_prerequisite(m)
+      permit = Some(_successor(previous))
+      armed = true
+      When("a second caller reserves the same exact ordinal before the first immutable create completes")
+      val lost = ensureQualifiedSuccessorC(_successor_input(), _target, "actor", permit.get, m)
+      Then("the unique target append permits exactly one publication and never replays the loser")
+      lost.isFaillure shouldBe true
+      take(competing.get).status shouldBe "published"
+      duplicate.get.isFaillure shouldBe true
+      m.starts shouldBe 2
+      ensureQualifiedSuccessorC(_successor_input(), _target, "actor", permit.get, m).isFaillure shouldBe true
+      m.starts shouldBe 2
+    }
+
+    "E5 retain UNKNOWN after interruption at reservation or intent without replay" in {
+      Given("LocalPublicationSpec.scala E5 R2: an interruption after saving the successor reservation or intent")
+      Vector(":intent", ":result").foreach { suffix =>
+        var armed = false
+        val m = new Memory {
+          override def createC(key: String, value: Json): Consequence[Unit] =
+            if (armed && key == "local-publication:actor:qualified-successor" + suffix)
+              Consequence.stateConflict("fixture-owned interrupted write")
+            else super.createC(key, value)
+        }
+        val previous = _unknown_prerequisite(m)
+        val permit = _successor(previous)
+        val input = _successor_input()
+        armed = true
+        When("the response is interrupted and the same Direction resumes repeatedly")
+        ensureQualifiedSuccessorC(input, _target, "actor", permit, m).isFaillure shouldBe true
+        val rows = m.rows.toMap
+        val observations = m.sourceObservations
+        val starts = m.starts
+        val repeated = Vector.fill(2)(take(ensureQualifiedSuccessorC(input, _target, "actor", permit, m)))
+        val collected = take(collectC(input, _target, "actor", m)).get
+        val latest = take(collectLatestC(LatestCollectionInput(_target.identity, "same-retained-session"),
+          _target, "actor", m)).get
+        Then("reservation and intent interruptions both remain UNKNOWN with no writes source reads or replay")
+        repeated.map(_.status) shouldBe Vector("uncertain", "uncertain")
+        collected shouldBe repeated.head
+        latest shouldBe collected
+        starts shouldBe (if (suffix == ":intent") 1 else 2)
+        m.starts shouldBe starts
+        m.rows.toMap shouldBe rows
+        m.sourceObservations shouldBe observations
+        ensureC(input, _target, "actor", m).isFaillure shouldBe true
+        m.starts shouldBe starts
+      }
+    }
+
+    "E6 retain failed unknown and nonstarted successors without authorizing another successor" in {
+      Given("LocalPublicationSpec.scala E6 R3: one Direction independently admits exactly one successor")
+      val cases = Vector(_observed(ProcessExecutionTermination.Exited(8)) -> "failed",
+        _observed(ProcessExecutionTermination.TimedOut) -> "uncertain",
+        _observed(ProcessExecutionTermination.NotStarted) -> "not-started")
+      cases.foreach { (attempt, status) =>
+        val m = new Memory
+        val previous = _unknown_prerequisite(m)
+        val permit = _successor(previous)
+        val input = _successor_input()
+        m.next = attempt
+        When("the successor produces an actual non-success outcome and its Direction repeats")
+        val first = take(ensureQualifiedSuccessorC(input, _target, "actor", permit, m))
+        val rows = m.rows.toMap
+        val observations = m.sourceObservations
+        take(ensureQualifiedSuccessorC(input, _target, "actor", permit, m)) shouldBe first
+        take(collectC(input, _target, "actor", m)) shouldBe Some(first)
+        Then("the exact terminal outcome is retained without a preparation or second execution")
+        first.status shouldBe status
+        first.nextPreparation shouldBe None
+        m.rows.toMap shouldBe rows
+        m.sourceObservations shouldBe observations
+        m.starts shouldBe 2
+        When("the old permit is reused for another successor after that newer actual attempt")
+        val additional = ensureQualifiedSuccessorC(_successor_input("unadmitted-next"), _target, "actor", permit, m)
+        Then("the previous permit is stale and cannot authorize any additional attempt")
+        additional.isFaillure shouldBe true
+        m.rows.toMap shouldBe rows
+        m.starts shouldBe 2
+      }
+    }
+
+    "E7 accept an actual uncertain outcome while refusing terminal or unstarted previous requests" in {
+      Given("LocalPublicationSpec.scala E7 R1,R3: a prerequisite with an actual typed uncertain process outcome")
+      val m = new Memory
+      val originalinput = Input("unknown-prerequisite", _target.identity, Some("same-retained-session"))
+      m.next = _observed(ProcessExecutionTermination.TimedOut)
+      val original = take(ensurePrerequisiteC(originalinput, _target, "actor", m))
+      original.status shouldBe "uncertain"
+      m.next = _observed(ProcessExecutionTermination.Exited(0))
+      When("the independently admitted Direction identifies that exact uncertain previous request")
+      val successful = take(ensureQualifiedSuccessorC(_successor_input(), _target, "actor",
+        _successor(original.request), m))
+      Then("one actual successor succeeds while the previous uncertain result is unchanged")
+      successful.status shouldBe "published"
+      m.starts shouldBe 2
+      take(collectC(original.request.input, _target, "actor", m)) shouldBe Some(original)
+
+      Given("a successful failed nonstarted or reservation-only previous prerequisite")
+      Vector("published", "failed", "not-started", "prepared").foreach { status =>
+        val retained = new Memory
+        retained.next = status match {
+          case "failed" => _observed(ProcessExecutionTermination.Exited(3))
+          case "not-started" => _observed(ProcessExecutionTermination.NotStarted)
+          case _ => _observed(ProcessExecutionTermination.Exited(0))
+        }
+        val prior = take(ensurePrerequisiteC(originalinput, _target, "actor", retained))
+        if (status == "prepared") {
+          retained.rows.remove(_request_key(prior.request) + ":result")
+          retained.rows.remove(_request_key(prior.request) + ":intent")
+        }
+        val rows = retained.rows.toMap
+        val observations = retained.sourceObservations
+        When("a typed successor claims that non-uncertain previous request")
+        val refused = ensureQualifiedSuccessorC(_successor_input(), _target, "actor",
+          _successor(prior.request), retained)
+        Then("a typed value supplies no permission to replace a terminal or merely prepared publication")
+        refused.isFaillure shouldBe true
+        retained.rows.toMap shouldBe rows
+        retained.sourceObservations shouldBe observations
+        retained.starts shouldBe 1
+      }
+    }
+  }
 
   /** Invoked by the selected completion suite; all effect observations are fixture-owned. */
   def qualifyDeliveryContinuation(narrator: GivenWhenThen): Unit = {
@@ -104,6 +655,174 @@ final class LocalPublicationSpec extends AnyWordSpec with Matchers with GivenWhe
     narrator.Then("uncertainty remains retained and no second publication starts")
     uncertain.status shouldBe "uncertain"
     pending.starts shouldBe 1
+  }
+
+  "Latest local publication collection" should {
+    "return the latest actual append rather than request identity order or an old successful source" in {
+      Given("an earlier successful publication and a later failed attempt with a lexically older request identity")
+      val m = new Memory
+      val first = _ensure(m, "z-first")
+      m.next = _observed(ProcessExecutionTermination.Exited(7))
+      val latest = _ensure(m, "a-last", explicit = true)
+      val retained = m.rows.toMap
+      val observations = m.sourceObservations
+      val starts = m.starts
+      val ids = m.ids
+      When("the same owner repeatedly collects the declared target without supplying a request identity")
+      val input = LatestCollectionInput(_target.identity, "same-retained-session")
+      val reads = Vector.fill(3)(take(collectLatestC(input, _target, "actor", m)))
+      Then("each read returns the exact later saved request and failure with no writes, source observation or execution")
+      reads shouldBe Vector.fill(3)(Some(latest))
+      latest.request.input.requestIdentity shouldBe "a-last"
+      latest.status shouldBe "failed"
+      first.status shouldBe "published"
+      take(collectC(first.request.input, _target, "actor", m)) shouldBe Some(first)
+      m.rows.toMap shouldBe retained
+      m.sourceObservations shouldBe observations
+      m.starts shouldBe starts
+      m.ids shouldBe ids
+    }
+
+    "preserve absence preparation uncertainty and actual success through the original collector" in {
+      Given("no actual target attempt")
+      val absent = new Memory
+      val input = LatestCollectionInput(_target.identity, "same-retained-session")
+      When("latest collection has no target index")
+      val missing = take(collectLatestC(input, _target, "actor", absent))
+      Then("it is absent without acquiring source or executing")
+      missing shouldBe None
+      absent.sourceObservations shouldBe 0
+      absent.starts shouldBe 0
+
+      Given("an actual successful attempt and interruptions before and after its saved intent")
+      val m = new Memory
+      val published = _ensure(m)
+      val resultkey = "local-publication:actor:request:result"
+      val intentkey = "local-publication:actor:request:intent"
+      val observations = m.sourceObservations
+      When("the retained successful result is collected")
+      val success = take(collectLatestC(input, _target, "actor", m))
+      Then("the original result and request are returned exactly")
+      success shouldBe Some(published)
+      When("the actual result is missing but its intent remains")
+      m.rows.remove(resultkey)
+      val uncertain = take(collectLatestC(input, _target, "actor", m)).get
+      Then("the original request remains uncertain without manufactured success")
+      uncertain.status shouldBe "uncertain"
+      uncertain.request shouldBe published.request
+      When("the target append and request exist but effect intent was never saved")
+      m.rows.remove(intentkey)
+      val preparedrows = m.rows.toMap
+      val prepared = take(collectLatestC(input, _target, "actor", m)).get
+      Then("only that no-intent state is prepared and reads cause no effects")
+      prepared.status shouldBe "prepared"
+      prepared.request shouldBe published.request
+      m.rows.toMap shouldBe preparedrows
+      m.sourceObservations shouldBe observations
+      m.starts shouldBe 1
+    }
+
+    "follow retained nonstart preparations without starting the next preparation" in {
+      Given("a confirmed nonstart followed by a retained successful preparation under one original request")
+      val m = new Memory
+      m.next = _observed(ProcessExecutionTermination.NotStarted)
+      val first = _ensure(m)
+      m.next = _observed(ProcessExecutionTermination.Exited(0))
+      val last = _ensure(m)
+      val input = LatestCollectionInput(_target.identity, "same-retained-session")
+      val rows = m.rows.toMap
+      val observations = m.sourceObservations
+      When("latest collection resolves the original saved request through its actual preparation chain")
+      val collected = take(collectLatestC(input, _target, "actor", m))
+      Then("it returns the real successful preparation while preserving the original identity and all facts")
+      collected shouldBe Some(last)
+      collected.get.request shouldBe first.request
+      m.rows.toMap shouldBe rows
+      m.sourceObservations shouldBe observations
+      m.starts shouldBe 2
+    }
+
+    "reject a newer owner or participant rather than finding a convenient older attempt" in {
+      Given("an earlier owned success and a later target attempt owned by a different Session and participant")
+      val m = new Memory
+      _ensure(m, "older-owned")
+      val foreign = take(ensureC(Input("newer-foreign", _target.identity, Some("foreign-session"), explicit = true),
+        _target, "foreign-actor", m))
+      val retained = m.rows.toMap
+      val observations = m.sourceObservations
+      val reads = scala.collection.mutable.ArrayBuffer.empty[String]
+      val readonly = new Port {
+        def loadC(key: String) = { reads += key; m.loadC(key) }
+        def createC(key: String, value: Json) = fail("Latest collection must not write")
+        def sourceC(target: Target) = fail("Latest collection must not inspect source")
+        def executeC(target: Target) = fail("Latest collection must not execute")
+        def newIdentity() = fail("Latest collection must not allocate identities")
+      }
+      When("the old owner, a wrong owner and a wrong participant each request the latest attempt")
+      val rejected = Vector(
+        collectLatestC(LatestCollectionInput(_target.identity, "same-retained-session"), _target, "actor", readonly),
+        collectLatestC(LatestCollectionInput(_target.identity, "wrong-session"), _target, "foreign-actor", readonly),
+        collectLatestC(LatestCollectionInput(_target.identity, "foreign-session"), _target, "wrong-actor", readonly),
+        collectLatestC(LatestCollectionInput("wrong-target", "foreign-session"), _target, "foreign-actor", readonly))
+      Then("all refuse before intent or result disclosure and no older matching request is selected")
+      rejected.foreach(_.isSuccess shouldBe false)
+      reads.forall(_.startsWith("local-publication-target:")) shouldBe true
+      m.rows.toMap shouldBe retained
+      m.sourceObservations shouldBe observations
+      m.starts shouldBe 2
+      When("the actual latest owner and participant collect")
+      val actual = take(collectLatestC(LatestCollectionInput(_target.identity, "foreign-session"), _target, "foreign-actor", readonly))
+      Then("only that exact latest request is disclosed")
+      actual shouldBe Some(foreign)
+    }
+
+    "reject crossed retained target request result and intent bindings" in {
+      Given("a valid indexed attempt with separately crossed retained facts")
+      val input = LatestCollectionInput(_target.identity, "same-retained-session")
+      val mutations: Vector[(Memory, Result) => Unit] = Vector(
+        (m, r) => m.rows("local-publication-target:producer:1") = Json.obj(
+          "key" -> "local-publication:actor:request".asJson,
+          "request" -> r.request.copy(target = _target.copy(component = "org.example.Other")).asJson),
+        (m, r) => m.rows("local-publication:actor:request:request") = r.request.copy(reason = "crossed").asJson,
+        (m, r) => m.rows("local-publication:actor:request:result") = r.copy(request = r.request.copy(reason = "crossed")).asJson,
+        (m, r) => m.rows("local-publication:actor:request:intent") = r.request.copy(participant = "crossed").asJson)
+      When("latest collection encounters each crossed fact")
+      val rejected = mutations.map { mutate =>
+        val m = new Memory
+        val saved = _ensure(m)
+        mutate(m, saved)
+        collectLatestC(input, _target, "actor", m)
+      }
+      Then("no mismatched original request, effect intent or result can be returned")
+      rejected.foreach(_.isSuccess shouldBe false)
+    }
+
+    "strictly decode only required nonblank strings and reject duplicate wire fields" in {
+      Given("the generated latest operation and its exact required target and Session identities")
+      val service = LocalPublicationService.bind(None, (_, _) => fail("Request decoding must not read a Session"))
+      val operation = service.operations.operations.find(_.name == "collectLatestLocalPublication").get
+      val valid = Json.obj("targetIdentity" -> _target.identity.asJson, "ownerSessionId" -> "same-retained-session".asJson)
+      def _request_(value: Any) = ProtocolRequest.of(component = SmWorkflowComponent.componentId.name,
+        service = service.name, operation = operation.name, properties = List(Property("input", value, None)))
+      val malformed = Vector(Json.Null, Json.arr(), Json.obj(),
+        valid.mapObject(_.remove("targetIdentity")), valid.mapObject(_.remove("ownerSessionId")),
+        valid.mapObject(_.add("requestIdentity", "guessed".asJson)), valid.mapObject(_.add("explicit", true.asJson)),
+        valid.mapObject(_.add("ownerSessionId", Json.Null)), valid.mapObject(_.add("targetIdentity", Json.Null)),
+        valid.mapObject(_.add("ownerSessionId", 1.asJson)), valid.mapObject(_.add("targetIdentity", false.asJson)),
+        valid.mapObject(_.add("ownerSessionId", " \t".asJson)), valid.mapObject(_.add("targetIdentity", "".asJson)))
+      val duplicate = Record.empty.copy(fields = Vector(Field("targetIdentity", Field.Value.Single(_target.identity)),
+        Field("ownerSessionId", Field.Value.Single("same-retained-session")),
+        Field("ownerSessionId", Field.Value.Single("another-session"))))
+      val duplicatejson = "{\"targetIdentity\":\"producer\",\"ownerSessionId\":\"same-retained-session\",\"ownerSessionId\":\"another-session\"}"
+      When("normal operation request creation decodes valid, malformed and duplicate representations")
+      val accepted = operation.createOperationRequest(_request_(valid.noSpaces))
+      val rejected = malformed.map(value => operation.createOperationRequest(_request_(value.noSpaces))) ++ Vector(
+        operation.createOperationRequest(_request_(duplicate)), operation.createOperationRequest(_request_(duplicatejson)))
+      Then("only the exact valid contract is admitted without opening a Session or performing publication work")
+      accepted.isSuccess shouldBe true
+      rejected.foreach(_.isSuccess shouldBe false)
+      ThreeWorkflowLauncherAssembly.publishedMcpOperations should contain("LocalPublicationService.collectLatestLocalPublication")
+    }
   }
 
   "Runtime-owned publication" should {

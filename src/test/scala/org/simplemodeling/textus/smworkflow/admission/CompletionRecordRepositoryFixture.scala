@@ -20,12 +20,14 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Selected-suite fixture using normal configured Git authority, public Operations,
   * and independent specification-owned review evidence. No live approval is supplied.
   */
-private[admission] final class CompletionRecordRepositoryFixture extends ThreeWorkflowManagedRepositoryFixture {
+private[admission] final class CompletionRecordRepositoryFixture(largeRecord: Boolean = false) extends ThreeWorkflowManagedRepositoryFixture {
   private val path = "docs/completion.md"
+  private val _narrative = "# Repository facts\n\nExisting narrative.\n" +
+    (if (largeRecord) "既存の記録を保持する。\n" * 30000 else "")
   override protected def _prepare_sbt_build_(root: Path, scenario: String): Unit = {
     super._prepare_sbt_build_(root, scenario)
     Files.createDirectories(root.resolve("repository/docs"))
-    Files.writeString(root.resolve("repository").resolve(path), "# Repository facts\n\nExisting narrative.\n")
+    Files.writeString(root.resolve("repository").resolve(path), _narrative)
   }
   override protected def _setup_commands_(root: Path, scenario: String): Vector[Vector[String]] = {
     val commands = super._setup_commands_(root, scenario)
@@ -42,11 +44,16 @@ private[admission] final class CompletionRecordRepositoryFixture extends ThreeWo
     val original = TypedGitHostPlanFixture.plan(target, goalPaths = Vector(path),
       goalMessages = Vector("Record accepted repository completion"), goalSelections = Vector(Vector(path)))
     val declared = original.hcursor.get[Vector[Json]]("gitPrograms").toOption.get.map { program =>
-      if (program.hcursor.get[String]("selectionId").toOption.contains("goal-step-1")) program.mapObject(fields => fields
+      val selected = if (program.hcursor.get[String]("selectionId").toOption.contains("goal-step-1")) program.mapObject(fields => fields
         .add("selectionId", Json.fromString("repository-completion-records"))
         .add("capability", Json.fromString("repository-records-" + fields("operation").get.asString.get))
         .add("identity", Json.fromString("repository-records-" + fields("operation").get.asString.get)))
       else program
+      if (largeRecord && selected.hcursor.get[String]("operation").toOption.contains(
+          org.goldenport.cncf.processexecution.GitOperationKind.BlobContent.wireName))
+        selected.mapObject(_.add("limits", TypedGitHostPlanFixture.limits.mapObject(_.add("stdoutBytes", Json.fromInt(1048576))
+          .add("artifactBytes", Json.fromInt(1048576)))))
+      else selected
     }.filterNot(program => root.getFileName.toString.startsWith("missing-") &&
       program.hcursor.get[String]("selectionId").toOption.contains("repository-completion-records"))
     val grants = original.hcursor.get[Vector[Json]]("grants").toOption.get.map(_.mapObject(_.add("capabilities",
@@ -55,7 +62,8 @@ private[admission] final class CompletionRecordRepositoryFixture extends ThreeWo
     TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable, Vector(1), Some(git))
   }
 
-  def qualify(narrator: GivenWhenThen): Unit = for ((scenario, missing) <- Vector(("Equal", false), ("Diverged", false), ("Equal", true))) {
+  def qualify(narrator: GivenWhenThen): Unit = for ((scenario, missing) <-
+      (if (largeRecord) Vector(("Equal", false)) else Vector(("Equal", false), ("Diverged", false), ("Equal", true)))) {
     narrator.Given("a " + scenario + " repository and explicitly configured completion destination; missing selection = " + missing)
     val directory = Files.createTempDirectory(Files.createDirectories(Path.of("target/sm-workflow/work/completion-repository").toAbsolutePath),
       if (missing) "missing-" else "registered-")
@@ -96,12 +104,14 @@ private[admission] final class CompletionRecordRepositoryFixture extends ThreeWo
       if (missing) {
         narrator.Then("missing normal Git registration refuses before record mutation or Terminal")
         actual.isSuccess shouldBe false
-        Files.readString(directory.resolve("repository").resolve(path)) shouldBe "# Repository facts\n\nExisting narrative.\n"
+        Files.readString(directory.resolve("repository").resolve(path)) shouldBe _narrative
       } else {
         val completed = read_value[V.RepositorySyncAdvanceResult](take(actual))
         narrator.Then("the completion record is in the actual converged commit and native merge parents are preserved")
         completed.kind shouldBe "Terminal"
         val text = Files.readString(directory.resolve("repository").resolve(path))
+        text should startWith (_narrative)
+        if (largeRecord) _narrative.length should be > 262144
         text should include("Accepted repository-sync " + input.repositoryIdentity)
         var commit = Option.empty[RepositorySyncManagedGitObservation.Commit]
         prepare(setup => RepositorySyncManagedGitObservation.commitC(setup.core, completed.convergence.get.tip).map(value => { commit = Some(value); () }))

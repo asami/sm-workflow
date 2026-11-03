@@ -107,7 +107,7 @@ final class GoalPhaseAcceptanceBoundarySpec extends AnyWordSpec with Matchers wi
     "reject duplicate contradictory malformed and null configuration or adoption before capture" in {
       val conditions = Vector(_behavior.copy(identity = " padded "), _behavior.copy(identity = "x" * 129),
         _behavior.copy(scope = "unknown"), _behavior.copy(description = " "),
-        _behavior.copy(description = "a\u0000b"), _behavior.copy(description = "あ" * 2731), null)
+        _behavior.copy(description = "a\u0000b"), null)
       val projects = Vector(null, B.Project(null), B.Project(Vector(_behavior, _behavior)),
         B.Project(Vector.tabulate(65)(i => _behavior.copy(identity = "condition" + i)))) ++ conditions.map(c => B.Project(Vector(c)))
       projects.foreach { project =>
@@ -118,7 +118,7 @@ final class GoalPhaseAcceptanceBoundarySpec extends AnyWordSpec with Matchers wi
         result.isSuccess shouldBe false
       }
       val adoptions = Vector(null, _adoption.copy(usage = null), _adoption.copy(usage = " "),
-        _adoption.copy(usage = "x" * 8193), _adoption.copy(conditions = null),
+        _adoption.copy(conditions = null),
         _adoption.copy(conditions = Vector(_extra, _extra.copy(required = false)))) ++
         conditions.map(c => _adoption.copy(conditions = Vector(c)))
       adoptions.foreach { adoption =>
@@ -128,6 +128,10 @@ final class GoalPhaseAcceptanceBoundarySpec extends AnyWordSpec with Matchers wi
         Then("planning must settle the declaration rather than unioning stronger conditions")
         result.isSuccess shouldBe false
       }
+      val complete = take(B.captureC(Some(B.Project(Vector(_behavior.copy(description = "あ" * 2731)))),
+        _plain.copy(acceptance = Some(_adoption.copy(usage = "x" * 8193)))))
+      complete.effectiveAcceptance.get.usage shouldBe Some("x" * 8193)
+      complete.effectiveAcceptance.get.conditions.head.description shouldBe "あ" * 2731
       Given("missing or wrong project schema, invalid JSON and invalid typed option containers")
       val json = _project_json(_project)
       val duplicateconfig = _project_json(B.Project(Vector(_behavior, _behavior.copy(required = false))))
@@ -155,9 +159,8 @@ final class GoalPhaseAcceptanceBoundarySpec extends AnyWordSpec with Matchers wi
         good.copy(conditions = good.conditions.updated(0, good.conditions.head.copy(status = "unknown"))),
         good.copy(conditions = good.conditions.updated(0, good.conditions.head.copy(detail = " "))),
         good.copy(conditions = good.conditions.updated(0, good.conditions.head.copy(detail = "x\u0000y"))),
-        good.copy(conditions = good.conditions.updated(0, good.conditions.head.copy(detail = "あ" * 2731))),
         good.copy(conditions = Vector(null)), good.copy(advisories = Vector(null)),
-        good.copy(advisories = Vector(" ")), good.copy(advisories = Vector("x" * 8193)),
+        good.copy(advisories = Vector(" ")),
         good.copy(advisories = Vector.fill(129)("idea")),
         good.copy(conditions = Vector.tabulate(65)(i => B.Observation("c" + i, "satisfied", "Detail"))))
       malformed.foreach { report =>
@@ -167,6 +170,10 @@ final class GoalPhaseAcceptanceBoundarySpec extends AnyWordSpec with Matchers wi
         Then("invalid required coverage, shape, status, scope or bounds cannot complete the assignment")
         result.isSuccess shouldBe false
       }
+      val complete = good.copy(conditions = good.conditions.updated(0, good.conditions.head.copy(detail = "あ" * 2731)),
+        advisories = Vector("x" * 8193))
+      B.admitC(_plan, "ImplementStep", _result(report = complete)).isSuccess shouldBe true
+      B.internalReport(Some(B.publicReport(Some(complete)).get)) shouldBe Some(complete)
       Given("a configured assignment with absent report or a null report option")
       When("shared quality admission consumes those missing forms")
       val failures = Vector(B.admitC(_plan, "ImplementStep", _result().copy(acceptance = None)),
@@ -241,13 +248,16 @@ final class GoalPhaseAcceptanceBoundarySpec extends AnyWordSpec with Matchers wi
         Then("the existing explicit Human route remains available")
         decision.isSuccess shouldBe true
         Given("an otherwise valid quality report with malformed existing summary or findings")
-        val invalid = Vector(_result().copy(summary = "x\u0000y"), _result().copy(summary = "x" * 16385),
-          _result("decision-needed").copy(findings = Vector.fill(129)("Finding")),
-          _result("decision-needed").copy(findings = Vector("x" * 16385)))
+        val invalid = Vector(_result().copy(summary = "x\u0000y"),
+          _result("decision-needed").copy(findings = Vector.fill(129)("Finding")))
         When("the owning semantic result admission validates the existing bounded fields")
         val failed = invalid.map(S.admitSemanticResultC(request, _))
         Then("the quality report does not bypass existing result validity")
         failed.foreach(_.isSuccess shouldBe false)
+        val complete = _result("decision-needed", _report(status = "not-evaluated")).copy(
+          summary = "x" * 16385, findings = Vector("x" * 16385))
+        S.admitSemanticResultC(request, complete).isSuccess shouldBe true
+        S.resultCodec.decode(S.resultCodec.encode(complete)) shouldBe Right(complete)
       }
     }
   }

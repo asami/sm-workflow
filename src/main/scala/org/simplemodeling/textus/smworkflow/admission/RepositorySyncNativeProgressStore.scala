@@ -32,6 +32,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     hygiene: Option[CommitHygiene.Record] = None,
     records: Option[CompletionRecords.Plan] = None,
     purposes: Option[RepositorySyncPurpose.Progress] = None,
+    publication: Option[RepositorySyncPublication.State] = None,
     requiredLint: Option[RepositorySyncRequiredLintContinuation.Direction] = None,
     reviewInputs: Option[RepositorySyncReviewInputContinuation.Direction] = None,
     formalFailure: Option[RepositorySyncFormalFailureContinuation.Direction] = None,
@@ -43,8 +44,10 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
   private given Encoder[RepositorySyncNativeMergeValidation.State] = Encoder.instance(RepositorySyncNativeMergeValidation.stateCodec.encode)
   private given Decoder[RepositorySyncNativeMergeValidation.State] = Decoder.instance(cursor =>
     RepositorySyncNativeMergeValidation.stateCodec.decode(cursor.value).left.map(reason => DecodingFailure(reason, cursor.history)))
+  private given publicationEncoder: Encoder[RepositorySyncPublication.State] = RepositorySyncPublication.stateEncoder
+  private given publicationDecoder: Decoder[RepositorySyncPublication.State] = RepositorySyncPublication.stateDecoder
   private given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
-    case ("assessment" | "repairContext" | "continuation" | "hygiene" | "records" | "purposes" | "requiredLint" | "reviewInputs" | "formalFailure" | "purposeContent", value) => !value.isNull
+    case ("assessment" | "repairContext" | "continuation" | "hygiene" | "records" | "purposes" | "requiredLint" | "reviewInputs" | "publication" | "formalFailure" | "purposeContent", value) => !value.isNull
     case _ => true
   }))
   private given Decoder[Payload] = deriveDecoder

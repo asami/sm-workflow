@@ -4,7 +4,6 @@ import io.circe.{Decoder, Encoder, Json, parser}
 import io.circe.generic.auto.*
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
-import java.nio.charset.StandardCharsets.UTF_8
 import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.WorkflowResultJsonV1.PayloadCodec
@@ -21,7 +20,6 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhasePlanningSnapsho
 private[smworkflow] object SplitPhasePlanningSnapshotJsonV1 {
   val schema = "sm-workflow.split-phase-planning-snapshot.v1"
   val storageField = "splitPhasePlanningSnapshotPayload"
-  val maximumPayloadBytes = 1024 * 1024
   private val prefix = schema + ":"
   import SplitPhaseExplicitPartitionRawCodecs.given
 
@@ -84,16 +82,16 @@ private[smworkflow] object SplitPhasePlanningSnapshotJsonV1 {
   val payloadCodec: PayloadCodec[R.Record] = new PayloadCodec[R.Record] {
     val typeIdentity = "SplitPhasePlanningSnapshot"
     def encode(value: R.Record): Json = _json_c(value).toOption.getOrElse(
-      throw new IllegalArgumentException("Invalid or oversized SplitPhase planning snapshot"))
+      throw new IllegalArgumentException("Invalid SplitPhase planning snapshot"))
     def decode(value: Json): Either[String, R.Record] =
-      _guarded(_bounded_c(value).flatMap(_ => _decode_payload_c(value))).toOption
-        .toRight("Invalid or oversized SplitPhase planning snapshot")
+      _guarded(_json_present_c(value).flatMap(_ => _decode_payload_c(value))).toOption
+        .toRight("Invalid SplitPhase planning snapshot")
   }
 
   def encodeC(record: R.Record): Consequence[String] = _json_c(record).map(json => prefix + json.noSpaces)
   def decodeC(raw: String): Consequence[R.Record] =
-    if (raw == null || _bytes(raw) > maximumPayloadBytes || !raw.startsWith(prefix))
-      _invalid("encoding is unsupported or oversized")
+    if (raw == null || !raw.startsWith(prefix))
+      _invalid("encoding is unsupported")
     else parser.parse(raw.substring(prefix.length)).fold(
       _ => _invalid("JSON is invalid"), json => _guarded(_decode_payload_c(json)))
 
@@ -101,11 +99,11 @@ private[smworkflow] object SplitPhasePlanningSnapshotJsonV1 {
     if (record == null) _invalid("data is absent")
     else {
       val json = Json.obj("schemaVersion" -> Json.fromString(schema), "payload" -> record.asJson)
-      _bounded_c(json).map(_ => json)
+      Consequence.success(json)
     }
   }
 
-  // Each ingress bounds its own representation; typed decoding runs only once.
+  // Typed decoding runs only once; acquisition resources remain CNCF-owned.
   private def _decode_payload_c(json: Json): Consequence[R.Record] = for {
     version <- json.hcursor.get[String]("schemaVersion").fold(
       _ => _invalid("schema is missing"), Consequence.success)
@@ -114,10 +112,8 @@ private[smworkflow] object SplitPhasePlanningSnapshotJsonV1 {
       _ => _invalid("raw data is malformed"), Consequence.success)
   } yield record
 
-  private def _bounded_c(json: Json): Consequence[Unit] =
-    if (json != null && _bytes(prefix + json.noSpaces) <= maximumPayloadBytes) Consequence.unit
-    else _invalid("payload exceeds its UTF-8 bound")
-  private def _bytes(text: String): Int = text.getBytes(UTF_8).length
+  private def _json_present_c(json: Json): Consequence[Unit] =
+    if (json != null) Consequence.unit else _invalid("payload is absent")
   private def _invalid[T](reason: String): Consequence[T] = Consequence.stateConflict("SplitPhase planning snapshot " + reason)
   private def _guarded[T](body: => Consequence[T]): Consequence[T] = try body catch {
     case NonFatal(_) => _invalid("data cannot be encoded or decoded")

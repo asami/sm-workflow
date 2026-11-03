@@ -145,7 +145,7 @@ final class GoalPhasePurposeRepairSpec extends AnyWordSpec with Matchers with Gi
         source.mapObject(_.add("conditionIdentity", "excluded-one".asJson)), source.mapObject(_.add("unknown", true.asJson)),
         source.mapObject(_.add("findingOrdinal", 0.asJson)), source.mapObject(_.add("findingOrdinal", 129.asJson)),
         source.mapObject(_.add("rationale", Json.Null)), source.mapObject(_.add("rationale", " ".asJson)),
-        source.mapObject(_.add("rationale", ("x" * 16385).asJson)), source.mapObject(_.add("rationale", "bad\u0000text".asJson)),
+        source.mapObject(_.add("rationale", "bad\u0000text".asJson)),
         source.mapObject(_.add("affectedPaths", Vector.empty[String].asJson)),
         source.mapObject(_.add("affectedPaths", Vector.fill(2)("current.scala").asJson)),
         source.mapObject(_.add("affectedPaths", (1 to 257).map(n => s"current.scala/$n").asJson))) ++
@@ -156,6 +156,8 @@ final class GoalPhasePurposeRepairSpec extends AnyWordSpec with Matchers with Gi
       val outside = result.copy(repairFindingSources = Some(Vector(P.StepPurpose(1, "current", "Another scope", Vector("first.scala")))))
       Then("malformed shapes, sequence defects, excess findings and foreign scope reject")
       decoded.foreach(_.isLeft shouldBe true)
+      val complete = source.mapObject(_.add("rationale", ("x" * 65537).asJson))
+      complete.as[P.Source].map(_.asJson) shouldBe Right(complete)
       B.admitRequestC(request, outside).isSuccess shouldBe false
       P.validateSourcesC(Some(Vector(purpose, purpose))).isSuccess shouldBe false
       P.validateSourcesC(Some(Vector.empty)).isSuccess shouldBe false

@@ -287,7 +287,7 @@ behavior. Each group has adjacent Given/When/Then and should assertions.
 | E3 | R2,R5 | Decision-needed with rationale and no replacement succeeds; proposals and unknown decisions fail. |
 | E4 | R1,R3,R4 | Foreign/out-of-policy/traversal paths, incomplete findings, duplicate IDs and incomplete/reordered/foreign file coverage fail. |
 | E5 | R2,R3 | Incomplete/reordered/duplicate/foreign replacements and all-no-op repair fail; one changed file with another unchanged succeeds. |
-| E6 | R1,R4 | Missing consumed values and blank/NUL/invalid UTF-8 rationale or texts fail; complete large ordinary multibyte rationale and texts survive without an application byte ceiling. |
+| E6 | R1,R4 | Missing consumed values, blank/NUL/invalid-UTF8 rationale and null/NUL/invalid-UTF8 texts fail; complete large Unicode text remains exact without an application byte ceiling. |
 | E7 | R1,R2,R3,R4,R5 | Current codecs preserve actual semantic fields with inert annotations and refuse missing/mistyped fields or unsupported schemas. |
 
 The installed connection has separately authored executable examples:

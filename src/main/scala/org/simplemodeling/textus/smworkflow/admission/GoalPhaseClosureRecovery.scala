@@ -199,7 +199,7 @@ private[smworkflow] object GoalPhaseClosureRecovery {
     value.operation == "commit-selected" && value.target == "sm-workflow-repository" &&
     Set("succeeded", "failed", "incomplete", "invalid-output", "conflict-observation-required")(value.outcome) &&
     value.termination != null && value.termination.forall(_exact) && value.exitCode != null &&
-    value.stderr != null && value.stderr.length <= 8192 && !value.stderr.contains('\u0000') &&
+    value.stderr != null && !value.stderr.contains('\u0000') &&
     value.selectedPaths != null && value.selectedPaths.size <= 256 &&
     value.selectedPaths.distinct == value.selectedPaths && value.selectedPaths.forall(p => p != null && GitPath.parseC(p).isSuccess)
   def validTarget(value: RecoveryTarget): Boolean = value != null &&
@@ -489,6 +489,6 @@ private[smworkflow] object GoalPhaseClosureRecovery {
   private def _snapshot(value: O.Snapshot): Boolean = value != null && _oid(value.head) && _oid(value.tree)
   private def _exact(value: String): Boolean = value != null && value.nonEmpty && value.trim == value && !value.exists(_.isControl)
   private def _text(value: String): Boolean = value != null && value.trim.nonEmpty && !value.contains('\u0000') &&
-    java.nio.charset.StandardCharsets.UTF_8.newEncoder().canEncode(value) && value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 65536
+    java.nio.charset.StandardCharsets.UTF_8.newEncoder().canEncode(value)
   private def _invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("Closure recovery: " + reason)
 }

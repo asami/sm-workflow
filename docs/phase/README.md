@@ -1,5 +1,18 @@
 # sm-workflow incremental-use roadmap
 
+Directory-list RepositorySync adopted 2026-10-31:
+[Phase 6.11](phase-6.11.md) follows active 6.10 and precedes Phase 7. One normal
+entry accepts existing checkout directories and sync intent, resolves settings,
+executes equal/push/fast-forward and validated automatic merge paths, and returns
+aggregate results without routine AI decisions. Dirty/conflict meaning returns
+only when unresolved; completed targets are retained. Preserve lower-level Git
+workflow APIs for explicit adjustments. Phase 7 retains project-local managed
+worktree/subtree and dependency-development management, consuming this route.
+See [contract](../spec/repository-sync-directory-list.md),
+[checklist](phase-6.11-checklist.md) and
+[English handoff](../journal/2026/10/2026-10-31-phase-6.11-repository-sync-directory-list-handoff.md).
+This adds no gate or state change to ongoing Phase 6.10.
+
 Docker installation/customization qualification adopted 2026-10-28:
 [Phase 19](phase-19.md) establishes empty-environment installation/bootstrap/use
 before configuration, customization-preserving update and failure/cleanup cases.
@@ -58,7 +71,7 @@ and delegated delivery; Phase 7 composes the qualified routes. See the
 
 
 Commit/recovery standardization adopted 2026-10-26:
-[Phase 6.8](phase-6.8.md) follows active Phase 6.7; Phases 6.9 and 6.10 then precede Phase 7.
+[Phase 6.8](phase-6.8.md) follows active Phase 6.7; Phases 6.9, 6.10 and 6.11 then precede Phase 7.
 Reuse the bounded P67-T1 repair, purpose-based authorization and completed-result
 collection; finish common authority/recovery, configurable automatic commit
 hygiene and Step/release/RepositorySync integration. Document SHA and fixed file

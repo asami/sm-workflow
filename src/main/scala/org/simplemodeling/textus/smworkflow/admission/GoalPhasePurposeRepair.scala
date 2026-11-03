@@ -150,8 +150,7 @@ private[smworkflow] object GoalPhasePurposeRepair {
     }
   } yield ()
 
-  def text(value: String): Boolean = value != null && value.trim.nonEmpty && !value.contains('\u0000') &&
-    value.getBytes(UTF_8).length <= 16384
+  def text(value: String): Boolean = value != null && value.trim.nonEmpty && !value.contains('\u0000')
   def path(value: String): Boolean = text(value) && !value.exists(_.isControl) && !value.startsWith("/") &&
     !value.contains("\\") && value.split("/", -1).forall(part => part.nonEmpty && part != "." && part != ".." && part != ".git")
   def paths(value: Vector[String]): Boolean = value != null && value.nonEmpty && value.size <= 256 &&

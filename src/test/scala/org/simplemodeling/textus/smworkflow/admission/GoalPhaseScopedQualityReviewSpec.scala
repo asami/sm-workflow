@@ -341,25 +341,40 @@ final class GoalPhaseScopedQualityReviewSpec extends AnyWordSpec with Matchers w
       providerPort.requests.size shouldBe 1
     }
 
-    val boundedCases = Vector(
+    val completecontentcases = Vector(
       "UTF8 source material" -> (_input, Map("one.scala" -> Some("界" * 87382))),
       "diff material" -> (_input.copy(review = Some(_context.copy(diff = "d" * 262145))), Map("one.scala" -> Some("source"))),
       "combined material bytes" -> (_input.copy(review = Some(_context.copy(changedPaths = (1 to 5).map(i => s"$i.scala").toVector))),
         (1 to 5).map(i => s"$i.scala" -> Some("x" * 220000)).toMap),
-      "material vector" -> (_input.copy(review = Some(_context.copy(changedPaths = (1 to 64).map(i => s"$i.scala").toVector))),
-        (1 to 64).map(i => s"$i.scala" -> Some("source")).toMap),
       "requirement bytes" -> (_input.copy(purpose = "r" * 1048577), Map("one.scala" -> Some("source"))))
-    boundedCases.foreach { (name, data) =>
-      s"B2-14 reject oversized $name without provider invocation" in {
-        Given(s"selected actual $name exceeding the CBD request bound")
+    completecontentcases.foreach { (name, data) =>
+      s"B2-14 preserve complete $name through the configured review port" in {
+        Given(s"selected actual $name exceeding the former application content budget")
         val (input, files) = data
         val port = new RecordingPort(files)
         When("accept constructs its complete material and requirement request")
         val result = _run(port, input)
-        Then("the request fails without truncation, scope dropping or provider calls")
-        result.isSuccess shouldBe false
-        port.requests shouldBe empty
+        Then("one review receives every selected material and requirement without truncation or scope dropping")
+        result.isSuccess shouldBe true
+        port.requests.size shouldBe 1
+        val request = port.requests.head
+        val materials = _field[Vector[Record]](request, "materials")
+        materials.map(_field[String](_, "content")) shouldBe
+          (input.review.get.changedPaths.flatMap(path => files(path)) :+ input.review.get.diff)
+        _field[Vector[String]](request, "requirements").head shouldBe input.purpose
       }
+    }
+
+    "B2-14 reject more than 64 material entries without dropping selected sources" in {
+      Given("64 selected source files plus their candidate diff")
+      val paths = (1 to 64).map(i => s"$i.scala").toVector
+      val input = _input.copy(review = Some(_context.copy(changedPaths = paths)))
+      val port = new RecordingPort(paths.map(_ -> Some("source")).toMap)
+      When("accept constructs the complete material vector")
+      val result = _run(port, input)
+      Then("the entry-count contract fails before provider invocation")
+      result.isSuccess shouldBe false
+      port.requests shouldBe empty
     }
 
     "B2-15 reject a requirement vector above 64 entries" in {
@@ -402,15 +417,18 @@ final class GoalPhaseScopedQualityReviewSpec extends AnyWordSpec with Matchers w
       port.requests shouldBe empty
     }
 
-    "B2-18 reject oversized selected metadata without provider invocation" in {
-      Given("valid explicit model scope with actual metadata text exceeding the per-material UTF8 bound")
-      val port = new RecordingPort(Map("one.scala" -> Some("source"), "model/metadata.json" -> Some("m" * 262145)))
+    "B2-18 preserve complete selected metadata through the configured review port" in {
+      Given("valid explicit model scope with actual metadata text exceeding the former per-material budget")
+      val metadata = "m" * 262145
+      val port = new RecordingPort(Map("one.scala" -> Some("source"), "model/metadata.json" -> Some(metadata)))
       When("accept acquires the configured metadata through the same logical File port")
       val result = _run(port, parameters = _model())
-      Then("the complete request fails without dropping metadata or invoking the provider")
-      result.isSuccess shouldBe false
+      Then("the review receives exact metadata alongside the selected source and diff")
+      result.isSuccess shouldBe true
       port.reads shouldBe Vector("one.scala", "model/metadata.json")
-      port.requests shouldBe empty
+      port.requests.size shouldBe 1
+      _field[Vector[Record]](port.requests.head, "materials").map(_field[String](_, "content")) shouldBe
+        Vector("source", _context.diff, metadata)
     }
 
     "B2-19 reject an invalid submitted review identity before acquisition" in {

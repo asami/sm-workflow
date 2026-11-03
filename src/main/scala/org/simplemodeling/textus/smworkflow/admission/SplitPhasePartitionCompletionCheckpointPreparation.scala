@@ -1,7 +1,6 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
-import java.nio.charset.StandardCharsets.UTF_8
 import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.*
@@ -25,8 +24,7 @@ private[smworkflow] object SplitPhasePartitionCompletionCheckpointPreparation {
 
   def lineageKeyC(identity: org.goldenport.cncf.workflow.ContinuationIdentity): Consequence[String] = _guarded {
     WorkflowMechanicalTransition.keyC(WorkflowMechanicalTransition.Reference(identity.value, "1"))
-      .flatMap(k => if (("partition-completion:" + k).getBytes(UTF_8).length <= 1024)
-        Consequence.success("partition-completion:" + k) else _invalid("lineage locator exceeds its final bound"))
+      .map("partition-completion:" + _)
   }
   def mappingReference(result: ContinuationResult[S.Judgment]): K.Reference = K.Reference(
     Json.arr(Json.fromString(result.continuationId.value), Json.fromString(result.resultReference.identity),

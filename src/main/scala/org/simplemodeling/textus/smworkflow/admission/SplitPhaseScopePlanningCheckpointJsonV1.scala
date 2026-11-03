@@ -19,7 +19,6 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseScopePlanningCh
 private[smworkflow] object SplitPhaseScopePlanningCheckpointJsonV1 {
   val schema = "sm-workflow.split-phase-scope-planning-checkpoint.v1"
   val storageField = "splitPhaseScopePlanningCheckpointPayload"
-  val maximumPayloadBytes = 1024 * 1024
   private val _prefix = schema + ":"
   private final case class Payload(reference: C.Reference, downstream: Json)
   private given _reference_encoder: Encoder[C.Reference] = deriveEncoder[C.Reference]
@@ -30,9 +29,9 @@ private[smworkflow] object SplitPhaseScopePlanningCheckpointJsonV1 {
   val payloadCodec: PayloadCodec[C.SavedResult] = new PayloadCodec[C.SavedResult] {
     val typeIdentity = C.payloadType
     def encode(value: C.SavedResult): Json = _json_c(value).toOption.getOrElse(
-      throw new IllegalArgumentException("Invalid or oversized full scope planning checkpoint"))
+      throw new IllegalArgumentException("Invalid full scope planning checkpoint"))
     def decode(value: Json): Either[String, C.SavedResult] = _decode_json_c(value, None).toOption
-      .toRight("Invalid or oversized full scope planning checkpoint")
+      .toRight("Invalid full scope planning checkpoint")
   }
 
   def encodeC(record: C.Record): Consequence[String] = _guarded {
@@ -40,8 +39,8 @@ private[smworkflow] object SplitPhaseScopePlanningCheckpointJsonV1 {
   }
 
   def decodeC(reference: C.Reference, raw: String): Consequence[C.SavedResult] = _guarded {
-    if (reference == null || raw == null || !raw.startsWith(_prefix) || !_bounded(raw))
-      _invalid("selected complete storage frame is absent unsupported or oversized")
+    if (reference == null || raw == null || !raw.startsWith(_prefix) || !_utf8(raw))
+      _invalid("selected complete storage frame is absent unsupported or invalid UTF-8")
     else parser.parse(raw.substring(_prefix.length)).fold(_ => _invalid("JSON is malformed"),
       value => _decode_json_c(value, Some(reference)))
   }
@@ -49,14 +48,14 @@ private[smworkflow] object SplitPhaseScopePlanningCheckpointJsonV1 {
   private def _json_c(record: C.SavedResult): Consequence[Json] = _guarded {
     val json = Json.obj("schemaVersion" -> Json.fromString(schema), "payload" -> Payload(record.reference,
       R.payloadCodec.encode(record.downstream)).asJson)
-    if (_bounded(_prefix + json.noSpaces)) Consequence.success(json)
-    else _invalid("whole UTF-8 frame exceeds bound")
+    if (_utf8(_prefix + json.noSpaces)) Consequence.success(json)
+    else _invalid("whole frame is not valid UTF-8")
   }
 
   private def _decode_json_c(json: Json, selected: Option[C.Reference]):
       Consequence[C.SavedResult] = _guarded {
     for {
-      _ <- if (json != null && _bounded(_prefix + json.noSpaces)) Consequence.unit else _invalid("whole frame exceeds bound")
+      _ <- if (json != null && _utf8(_prefix + json.noSpaces)) Consequence.unit else _invalid("whole frame is absent or invalid UTF-8")
       root <- json.asObject.map(Consequence.success).getOrElse(_invalid("root is not an object"))
       _ <- if (root("schemaVersion").flatMap(_.asString).contains(schema)) Consequence.unit else _invalid("schema differs")
       payload <- root("payload").get.as[Payload].fold(_ => _invalid("payload shape differs"), Consequence.success)
@@ -66,8 +65,7 @@ private[smworkflow] object SplitPhaseScopePlanningCheckpointJsonV1 {
     } yield record
   }
 
-  private def _bounded(raw: String): Boolean = raw != null &&
-    UTF_8.newEncoder().canEncode(raw) && raw.getBytes(UTF_8).length <= maximumPayloadBytes
+  private def _utf8(raw: String): Boolean = raw != null && UTF_8.newEncoder().canEncode(raw)
   private def _invalid[A](reason: String): Consequence[A] =
     Consequence.stateConflict("SplitPhase full scope planning codec " + reason)
   private def _guarded[A](body: => Consequence[A]): Consequence[A] = try body catch {

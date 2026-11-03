@@ -46,8 +46,8 @@ final class SplitPhaseHumanScopeResolutionSpec extends AnyWordSpec with Matchers
       J.decodeC(record.reference, stored).isSuccess shouldBe false
     }
 
-    "refuse foreign storage forms without relaxing body, revision or full-size admission" in {
-      Given("one exact storage record and malformed, foreign, oversized or contradictory variants")
+    "refuse foreign storage forms without relaxing body or revision admission" in {
+      Given("one exact storage record and malformed, foreign or contradictory variants")
       val record = _record
       val body = take(J.encodeC(record))
       val stored = take(J.encodeStorageC(record))
@@ -56,7 +56,7 @@ final class SplitPhaseHumanScopeResolutionSpec extends AnyWordSpec with Matchers
         error => org.goldenport.Consequence.stateConflict(error.message), org.goldenport.Consequence.success))
         .hcursor.downField("payload").withFocus(_.mapObject(_.add("authority", Json.fromString("owned")))).top.get
       val invalid = Vector(null, "", body, "foreign:" + body, prefix + "{",
-        prefix + ("x" * J.maximumBytes))
+        prefix + ("x" * 65537))
       When("the owning storage decoder consumes these variants or a stale selected revision")
       val annotated = J.decodeStorageC(record.reference, prefix + extra.noSpaces)
       val rejected = invalid.map(value => J.decodeStorageC(record.reference, value))
@@ -101,18 +101,25 @@ final class SplitPhaseHumanScopeResolutionSpec extends AnyWordSpec with Matchers
       unobserved.foreach(_.isSuccess shouldBe false)
     }
 
-    "refuse structurally absent or oversized data without performing semantic interpretation" in {
+    "refuse structurally absent data and preserve complete large text without performing semantic interpretation" in {
       Given("a complete interpretation and incomplete range/evidence variants")
       val record = _record
       val invalid = Vector(null, record.copy(scopes = null), record.copy(scopes = Vector(null)),
         record.copy(evidence = null), record.copy(evidence = Vector(null)), record.copy(rationale = null),
         record.copy(decision = null), record.copy(reference = record.reference.copy(identity = null)))
-      When("data encoding and bounded decoding interpret these records")
+      When("data encoding and decoding interpret these records")
       val rejected = invalid.map(J.encodeC)
-      val oversized = J.decodeC(record.reference, "x" * (J.maximumBytes + 1))
-      Then("invalid records and oversized frames produce refusal, not admitted capabilities")
+      val malformed = J.decodeC(record.reference, "x" * 65537)
+      val complete = record.copy(rationale = "解釈の理由" * 100000)
+      val body = take(J.encodeC(complete))
+      val stored = take(J.encodeStorageC(complete))
+      Then("malformed data refuses and complete large text survives without granting Human admission")
       rejected.foreach(_.isSuccess shouldBe false)
-      oversized.isSuccess shouldBe false
+      malformed.isSuccess shouldBe false
+      take(J.decodeC(complete.reference, body)) shouldBe complete
+      take(J.decodeStorageC(complete.reference, stored)) shouldBe complete
+      H.inspectC(complete).isSuccess shouldBe true
+      H.admitC(null, complete).isSuccess shouldBe false
     }
 
     "transport semantic-incomplete interpretation data without treating it as Human consent" in {

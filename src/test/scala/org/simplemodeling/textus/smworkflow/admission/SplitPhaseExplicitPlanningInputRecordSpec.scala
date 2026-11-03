@@ -117,7 +117,7 @@ final class SplitPhaseExplicitPlanningInputRecordSpec extends AnyWordSpec with M
       }
     }
 
-    "consume decoder-supported durations while refusing unknown variants and oversized UTF-8 data" in {
+    "consume complete decoder-supported durations while refusing unknown variants" in {
       Given("known and unresolved duration rows plus a typed ownership enum")
       val estimates = json(take(J.encodeEstimatesC(facts.partition.estimates)))
       val items = estimates.hcursor.downField("payload").downField("items").focus.get.asArray.get
@@ -128,8 +128,8 @@ final class SplitPhaseExplicitPlanningInputRecordSpec extends AnyWordSpec with M
           "minutes" -> Json.fromString("260"), "reason" -> Json.fromString("unused"))))))))
       val ownership = json(take(J.encodeOwnershipC(facts.boundary.ownership)))
       val huge = facts.partition.estimates.copy(items = facts.partition.estimates.items.updated(1,
-        facts.partition.estimates.items(1).copy(duration = E.Duration.Unresolved("語" * (J.maximumPayloadBytes / 3 + 1)))))
-      When("the existing type decoder consumes durations and enums within the storage bound")
+        facts.partition.estimates.items(1).copy(duration = E.Duration.Unresolved("語" * (1024 * 1024 / 3 + 1)))))
+      When("the existing type decoder consumes complete durations and enums")
       val accepted = J.decodeEstimatesC(facts.partition.estimates.reference, wire(annotated))
       val refused = invalidDurations.map { duration =>
         val variant = payload(estimates)(_.add("items", Json.fromValues(items.updated(0,
@@ -138,13 +138,13 @@ final class SplitPhaseExplicitPlanningInputRecordSpec extends AnyWordSpec with M
       }
       val wrongenum = J.decodeOwnershipC(facts.boundary.ownership.reference,
         wire(payload(ownership)(_.add("timing", Json.fromString("Unknown")))))
-      val oversized = J.encodeEstimatesC(huge)
+      val complete = take(J.encodeEstimatesC(huge))
       Then("unknown variants and unreadable values fail, while supported numeric strings and inert annotations recover the same duration")
       take(accepted) shouldBe facts.partition.estimates
       refused.foreach(_.isSuccess shouldBe false)
       wrongenum.isSuccess shouldBe false
-      oversized.isSuccess shouldBe false
-      rows.foreach(r => r.valid(J.schema + ":" + "語" * (J.maximumPayloadBytes / 3 + 1)) shouldBe false)
+      take(J.decodeEstimatesC(huge.reference, complete)) shouldBe huge
+      rows.foreach(r => r.valid(J.schema + ":" + "語" * (1024 * 1024 / 3 + 1)) shouldBe false)
     }
 
     "leave numerical admission to the owning semantic constructor" in {

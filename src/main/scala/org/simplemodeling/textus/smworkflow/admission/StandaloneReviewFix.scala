@@ -30,7 +30,7 @@ private[smworkflow] object StandaloneReviewFix {
     case None => Consequence.unit
     case Some(origin) =>
       val valid = try input.task.isEmpty && origin != null && reference(origin.originalReview) &&
-        origin.context != null && origin.context.trim.nonEmpty && origin.context.length <= 65536 &&
+        origin.context != null && origin.context.trim.nonEmpty &&
         !origin.context.exists(c => c.isControl && c != '\n' && c != '\t' && c != '\r') &&
         origin.findings != null && origin.findings.nonEmpty && origin.findings.size <= 128 &&
         origin.findings.forall(f => f != null && text(f.identity) && text(f.summary) && paths(f.paths, input.ownedPaths, true) &&
@@ -91,6 +91,6 @@ private[smworkflow] object StandaloneReviewFix {
   private def strings(values: Vector[String], nonempty: Boolean = false): Boolean = values != null &&
     (!nonempty || values.nonEmpty) && values.size <= 256 && values.distinct == values && values.forall(text)
   private def reference(value: ContextReference): Boolean = value != null && text(value.identity) && text(value.revision)
-  private def text(value: String): Boolean = value != null && value.trim.nonEmpty && value.length <= 16384 && !value.exists(_.isControl)
+  private def text(value: String): Boolean = value != null && value.trim.nonEmpty && !value.exists(_.isControl)
   private def invalid[A](message: String): Consequence[A] = Consequence.stateConflict("Standalone review fix: " + message)
 }

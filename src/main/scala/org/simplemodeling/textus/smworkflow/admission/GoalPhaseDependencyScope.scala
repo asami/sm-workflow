@@ -152,15 +152,14 @@ private[smworkflow] object GoalPhaseDependencyScope {
     _check(value != null && _identifier(value.identity) && _identifier(value.repository) &&
       WorkspaceId.parseC(value.workspace).isSuccess, "Component identifiers or logical workspace are invalid")
 
-  private def _bounded(value: String, maximum: Int): Boolean =
-    value != null && value.nonEmpty && UTF_8.newEncoder().canEncode(value) &&
-      value.getBytes(UTF_8).length <= maximum
-  private def _identifier(value: String): Boolean = _bounded(value, 1024) &&
+  private def _bounded(value: String): Boolean =
+    value != null && value.nonEmpty && UTF_8.newEncoder().canEncode(value)
+  private def _identifier(value: String): Boolean = _bounded(value) &&
     !value.exists(c => c.isControl || c.isWhitespace || Character.isSpaceChar(c) || c == '/' || c == '\\')
   private def _reference(value: ContextReference): Boolean = value != null &&
     Vector(value.identity, value.revision).forall(text =>
-      _bounded(text, 1024) && text.trim.nonEmpty && !text.exists(_.isControl))
-  private def _description(value: String): Boolean = _bounded(value, 16384) &&
+      _bounded(text) && text.trim.nonEmpty && !text.exists(_.isControl))
+  private def _description(value: String): Boolean = _bounded(value) &&
     value.exists(c => !c.isWhitespace && !Character.isSpaceChar(c)) && !value.contains('\u0000')
   private def _path(value: String): Boolean = value != null &&
     !value.exists(c => c.isControl || c == ':' || c == '\\') && WorkspaceFilePath.parseC(value).isSuccess

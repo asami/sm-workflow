@@ -11,7 +11,8 @@ import org.simplemodeling.textus.smworkflow.value.RepositorySyncStartInput
 
 /**
  * @since   Oct.  6, 2026
- * @version Oct. 28, 2026
+ *  version Oct. 28, 2026
+ * @version Nov.  3, 2026
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -25,7 +26,10 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
     SmWorkflowComponent.RepositorySyncServiceService.SubmitNativeMergeRepairOperation,
     SmWorkflowComponent.RepositorySyncServiceService.SubmitRepositoryConflictDecisionOperation,
     SmWorkflowComponent.RepositorySyncServiceService.DescribeRepositorySyncValidationContinuationOperation,
-    SmWorkflowComponent.RepositorySyncServiceService.AdoptRepositorySyncValidationContinuationOperation)
+    SmWorkflowComponent.RepositorySyncServiceService.AdoptRepositorySyncValidationContinuationOperation,
+    SmWorkflowComponent.RepositorySyncServiceService.DescribeRepositorySyncRepairScopeCorrectionOperation,
+    SmWorkflowComponent.RepositorySyncServiceService.PrepareRepositorySyncRepairScopeCorrectionOperation,
+    SmWorkflowComponent.RepositorySyncServiceService.AdoptRepositorySyncRepairScopeCorrectionOperation)
   private def request(operation: OperationDefinition, properties: List[Property]): Request =
     Request.of(component = SmWorkflowComponent.componentId.name, service = "RepositorySyncService",
       operation = operation.specification.name, arguments = Nil, switches = Nil,
@@ -40,11 +44,17 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
       When("the generated readers construct actions from their named parameters")
       val started = operations(0).createOperationRequest(request(operations(0), start))
       val advanced = operations(1).createOperationRequest(request(operations(1), advance))
-      val absent = operations.map(op => op.createOperationRequest(request(op, Nil)))
+      val optionaltransports = Set("prepareRepositorySyncRepairScopeCorrection", "adoptRepositorySyncRepairScopeCorrection")
+      val absent = operations.filterNot(op => optionaltransports(op.specification.name))
+        .map(op => op.createOperationRequest(request(op, Nil)))
       Then("Start accepts its business selection and Advance requires the canonical session")
       started.isSuccess shouldBe true
       advanced.isSuccess shouldBe true
       absent.foreach(_.isSuccess shouldBe false)
+      And("optional input/inputResource transports remain generated envelopes whose exclusive input admission belongs to the native operation")
+      operations.filter(op => optionaltransports(op.specification.name)).foreach { op =>
+        op.createOperationRequest(request(op, Nil)).isSuccess shouldBe true
+      }
       val provided = RepositorySyncWorkflowStateMachineProvidedApi3.workflow.providedOperations
       provided.map(_.name).toSet shouldBe operations.map(_.specification.name).toSet
       And("all Provided operations declare business types without control envelopes")
@@ -58,7 +68,10 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
         "submitNativeMergeRepair" -> Some("RepositorySyncNativeMergeRepairResult"),
         "submitRepositoryConflictDecision" -> Some("RepositorySyncHumanConflictAnswer"),
         "describeRepositorySyncValidationContinuation" -> Some("RepositorySyncValidationContinuationDescriptionInput"),
-        "adoptRepositorySyncValidationContinuation" -> Some("RepositorySyncValidationContinuationAdoptionInput"))
+        "adoptRepositorySyncValidationContinuation" -> Some("RepositorySyncValidationContinuationAdoptionInput"),
+        "describeRepositorySyncRepairScopeCorrection" -> Some("RepositorySyncRepairScopeCorrectionDescriptionInput"),
+        "prepareRepositorySyncRepairScopeCorrection" -> Some("RepositorySyncRepairScopeCorrectionPreparationInput"),
+        "adoptRepositorySyncRepairScopeCorrection" -> Some("RepositorySyncRepairScopeCorrectionAdoptionInput"))
     }
 
     "consume the repository business selection without an unused policy version" in {

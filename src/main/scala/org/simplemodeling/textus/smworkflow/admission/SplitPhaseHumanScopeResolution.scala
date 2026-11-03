@@ -56,9 +56,9 @@ private[smworkflow] object SplitPhaseHumanScopeResolution {
   private def _items(items: Vector[SplitPhaseExplicitProposalPrecheck.WorkItemIdentity]): Boolean =
     items != null && items.nonEmpty && items.distinct == items &&
       items.forall(item => item != null && _reference(item.value))
-  private def _reference(value: String): Boolean = _text(value) && value.length <= 1024
+  private def _reference(value: String): Boolean = _text(value)
   private def _text(value: String): Boolean = value != null && value.nonEmpty && value.trim == value &&
-    value.length <= 4096 && !value.exists(Character.isISOControl)
+    !value.exists(Character.isISOControl)
   private def _invalid[A](reason: String): Consequence[A] =
     Consequence.stateConflict("SplitPhase Human scope resolution " + reason)
 }

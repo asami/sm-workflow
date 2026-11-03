@@ -49,7 +49,7 @@ private[smworkflow] object RepositorySyncProgramImpact {
   def resolveC(parameters: ComponentInitializationParameters): Consequence[Option[Policy]] = parameters.resolve(declaration).map(_.value)
   private def paths(value: Vector[String]): Boolean = value != null && value.nonEmpty && value.size <= 128 &&
     value.distinct == value && value.forall(RepositorySyncNativeConflictInput.relative)
-  private def text(value: String): Boolean = value != null && value.trim.nonEmpty && value.length <= 4096 && !value.exists(_.isControl)
+  private def text(value: String): Boolean = value != null && value.trim.nonEmpty && !value.exists(_.isControl)
   def covers(paths: Vector[String], path: String): Boolean = paths.exists(p => path == p || path.startsWith(p + "/"))
   def validateC(p: Policy): Consequence[Unit] = if (p != null && p.coverage != null && p.coverage.nonEmpty &&
       p.coverage.size <= 16 && p.coverage.forall(c => c != null && paths(c.affectedPaths) && paths(c.inputPaths) &&

@@ -301,26 +301,30 @@ final class SplitPhaseExplicitReasoningSemanticJsonSpec extends AnyWordSpec with
         resultresults.foreach(_ shouldBe a[Consequence.Failure[?]])
       }
 
-      "carry reasoning evidence longer than4096 characters and bound the application payload by UTF-8 bytes" in {
-        Given("a legitimate long rationale and a shorter-character-count rationale whose UTF-8 bytes exceed one MiB")
-        val supported = _judgment.copy(rationale = "根拠" * 10000)
-        val oversized = _judgment.copy(rationale = "あ" * (J.MAXIMUM_PAYLOAD_BYTES / 3 + 1))
-        val oversizedwire = take(J.resultCodec.encodeC(_judgment)).hcursor.downField("payload").focus.get
-          .mapObject(_.add("rationale", Json.fromString(oversized.rationale)))
-        val envelope = Json.obj("schemaVersion" -> Json.fromString(J.resultCodec.schema), "payload" -> oversizedwire)
+      "preserve complete reasoning evidence beyond the former application byte budget" in {
+        Given("a valid rationale whose UTF-8 representation exceeds one MiB")
+        val judgment = _judgment.copy(rationale = "あ" * (1024 * 1024 / 3 + 1))
+        When("the complete rationale crosses the checked application codec")
+        val encoded = take(J.resultCodec.encodeC(judgment))
+        val decoded = J.resultCodec.decode(encoded)
+        Then("the original reasoning evidence is retained exactly")
+        judgment.rationale.length should be > 4096
+        encoded.noSpaces.getBytes(StandardCharsets.UTF_8).length should be > (1024 * 1024)
+        decoded shouldBe Right(judgment)
+      }
 
-        When("the supported rationale is round-tripped and both oversized input routes are checked")
-        val restored = J.resultCodec.decode(take(J.resultCodec.encodeC(supported)))
-        val encoded = J.resultCodec.encodeC(oversized)
-        val decoded = J.resultCodec.decode(envelope)
-
-        Then("transport accepts ordinary long evidence but refuses the actual byte-limit excess")
-        supported.rationale.length should be > 4096
-        restored shouldBe Right(supported)
-        oversized.rationale.length should be < J.MAXIMUM_PAYLOAD_BYTES
-        envelope.noSpaces.getBytes(StandardCharsets.UTF_8).length should be > J.MAXIMUM_PAYLOAD_BYTES
-        encoded shouldBe a[Consequence.Failure[?]]
-        decoded.isLeft shouldBe true
+      "retain complete Human interpretation references and evidence in the existing storage frame" in {
+        Given("an enriched Human interpretation with canonical references longer than4096 characters and evidence beyond one MiB")
+        val reference = "解釈" * 4097
+        val record = SplitPhaseHumanReasoningResolution.Record(S.ContextReference(reference, "1"),
+          reference + ":decision", FrameworkReference(reference + ":result", "1"),
+          _judgment.copy(rationale = "根拠" * (1024 * 1024 / 6 + 1)))
+        When("the complete interpretation is encoded and decoded through its current prefixed format")
+        val frame = take(SplitPhaseHumanReasoningResolution.encodeC(record))
+        val decoded = take(SplitPhaseHumanReasoningResolution.decodeC(frame))
+        Then("all reference dimensions and interpretation evidence remain exact without creating Human consent")
+        frame.getBytes(StandardCharsets.UTF_8).length should be > (1024 * 1024)
+        decoded shouldBe record
       }
     }
 

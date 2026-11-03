@@ -389,6 +389,56 @@ final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with Giv
 
   "E1 explicit Phase acceptance deferral" should afterWord(
     "in spec:goal-phase-acceptance-deferral, example:E1, rules:R1,R2,R3,R4, phase:P68-PLAN-DEFERRAL-01") {
+    "prepare eligibility only for the explicit valid deferral without adopting or changing the controller" in {
+      Given("R1–R4 E1: an actual-shaped all-closed Phase review Decision and its explicit saved deferral")
+      val review = _deferral_review
+      val request = _review_request(review)
+      val result = _deferral_result(review)
+      val paused = _take(GoalPhaseNativeReview.completedStateC(result, "SPECIFICATION-OWNED review", review))
+      val captured = _take(captureSemanticProposalC(paused, result.planRevision.get, None))
+      val progress = GoalPhaseRepairProgress.snapshot(paused)
+      val generation = paused.generation
+      val decision = paused.decision
+      val invalidscopes = Vector(None, Some(remainingPurposeScope), Some(phaseRepairInventoryScope))
+      val unrelatedplan = captured.plan.copy(phaseChecks = Vector("other-phase-check"))
+      val unrelated = captured.copy(plan = unrelatedplan,
+        proposal = captured.proposal.copy(plan = unrelatedplan.copy(effectiveAcceptance = None)))
+      val adopted = _take(adoptedC(paused, captured, "SPECIFICATION-OWNED exact independent Human answer"))
+      When("read-only eligibility checks the saved capture and refuses crossed scopes deltas or controller frontiers")
+      val eligible = eligibleC(paused, captured)
+      val refusedscopes = invalidscopes.map(scope => eligibleC(paused, captured.copy(revisionScope = scope)))
+      val refusedcaptures = Vector(unrelated, captured.copy(plan = captured.plan.copy(revision = "crossed")))
+        .map(value => eligibleC(paused, value))
+      val refusedfrontiers = Vector(review, _decision(_start), adopted).map(state => eligibleC(state, captured))
+      val ordinary = captureC(paused, result.planRevision.get, Some(_project))
+      Then("eligibility grants no adoption and leaves the required condition candidate checks accepted Steps and counters exact")
+      eligible shouldBe Consequence.unit
+      refusedscopes.foreach(_ shouldBe a[Consequence.Failure[?]])
+      refusedcaptures.foreach(_ shouldBe a[Consequence.Failure[?]])
+      refusedfrontiers.foreach(_ shouldBe a[Consequence.Failure[?]])
+      ordinary shouldBe a[Consequence.Failure[?]]
+      paused.stage shouldBe O.Stage.Decision
+      paused.decisionSource shouldBe Some(O.Stage.PhaseReview)
+      paused.decision shouldBe decision
+      paused.plan shouldBe request.selectedPlan
+      paused.base shouldBe request.originalBase
+      paused.completed shouldBe request.completed
+      paused.cursor shouldBe request.completed.size
+      paused.generation shouldBe generation
+      GoalPhaseRepairProgress.snapshot(paused) shouldBe progress
+      paused.candidate shouldBe request.candidate
+      paused.checksReceipt shouldBe request.checksReceipt
+      paused.repositoryReceipt shouldBe review.repositoryReceipt
+      paused.repairControl shouldBe review.repairControl
+      paused.repairObservations shouldBe review.repairObservations
+      paused.repairDirective shouldBe review.repairDirective
+      paused.plan.acceptance.get.conditions.find(_.identity == "closure").get.required shouldBe true
+      paused.plan.effectiveAcceptance.get.conditions.find(_.identity == "closure").get.required shouldBe true
+      captured.plan.acceptance.get.conditions.find(_.identity == "closure").get.required shouldBe false
+      captured.proposal shouldBe result.planRevision.get
+      captured.revisionScope shouldBe Some(phaseAcceptanceDeferralScope)
+    }
+
     "retain successful checks all closed Steps and consumed repair history before fresh Phase review" in {
       Given("docs/spec/goal-phase-acceptance-deferral.md R1–R4 E1: actual-shaped independent unmet Phase review after one normal reserved repair")
       val review = _deferral_review
@@ -975,7 +1025,7 @@ final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with Giv
         A.EffectiveCondition("closure", "phase", true, "Review the whole Phase", "project"))))
     }
 
-    "refuse unknown absent null malformed oversized and already-effective proposal input" in {
+    "refuse unknown absent null malformed and already-effective proposal input" in {
       Given("valid raw and captured wires and malformed required business fields")
       val paused = _decision(_start)
       val good = _proposal(_revised(paused))
@@ -986,8 +1036,8 @@ final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with Giv
           wire.mapObject(_.add(name, Json.True)))
       }
       val invalid = Vector(good.copy(identity = " "), good.copy(identity = "bad\tidentity"),
-        good.copy(identity = "あ" * 43), good.copy(revision = "r" * 129), good.copy(revision = "bad\nrevision"),
-        good.copy(reason = " "), good.copy(reason = "bad\u0000reason"), good.copy(reason = "あ" * 5462),
+        good.copy(revision = "bad\nrevision"),
+        good.copy(reason = " "), good.copy(reason = "bad\u0000reason"),
         good.copy(reason = "\ud800"), good.copy(plan = _raw.copy(steps = Vector.empty)),
         good.copy(plan = captured.plan))
       val capturedwire = captured.asJson
@@ -1011,6 +1061,11 @@ final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with Giv
       rejected.foreach(_ shouldBe a[Left[?, ?]])
       capturedrejected.foreach(_ shouldBe a[Left[?, ?]])
       typedrejected.foreach(_ shouldBe a[Consequence.Failure[?]])
+      Vector(good.copy(identity = "あ" * 43), good.copy(revision = "r" * 129),
+        good.copy(reason = "理由" * 12000)).foreach { complete =>
+        validateProposalC(complete).isSuccess shouldBe true
+        complete.asJson.as[Proposal] shouldBe Right(complete)
+      }
     }
 
     "capture revised checks without changing Decision and adopt only with an explicit fixture answer reference" in {

@@ -17,6 +17,10 @@ Planned: 2026-10-08
 Depends on: Phase 6.3, Phase 8
 Related: CAR lint, deterministic validation, Provider Routing, textus-experiment
 
+Checklist: [Phase 9 delivery ledger](phase-9-checklist.md)
+Producer integration: the selected [CNCF Phase 80](https://github.com/asami/goldenport-cncf/blob/main/docs/phase/phase-80.md)
+interface slice, not completion of every Phase 80 extension candidate.
+
 ## Phase 6 split dependency correction — 2026-10-13
 
 The earlier broad Phase 6 references in this document denote the accepted
@@ -79,6 +83,87 @@ Planning review happens in the separate planning process and checks usage-contra
 Usage Contract denotes user-observable operation, behavior and result, not merely an external interface signature. A consumer can be human or software. Use Cases, APIs/Operations, CLI/MCP commands, UI actions and events/messages are valid top-down entry points. Each Development Slice implements a bounded part of the adopted Usage Contract with early connected evidence.
 
 Planning and its review remain pre-execution activities. Phase 9 assesses convergence, integration, scope drift and review findings against the adopted Usage Contract and Effective Acceptance Boundary. Component-level completion alone does not establish acceptance; speculative assurance outside the boundary cannot become blocking work.
+
+## Delivery order: review connection before Takeover (2026-10-30)
+
+Source: [AI execution provider interface journal](https://github.com/asami/sm-workflow/blob/main/docs/journal/2026/10/2026-10-30-ai-execution-provider-interface-phase80-phase9.md).
+The following slices make the provider-routing work concrete while preserving
+the existing convergence and Acceptance Boundary requirements below.
+
+| Slice | Main route | Exit condition |
+| --- | --- | --- |
+| R1: equivalent bounded review | Supplied diff + specification + relevant validation -> configured API Direct or Agent Continuation -> typed review result -> normal result acceptance/Admission. | Demonstrate one actually available API adapter and one actually available agent adapter using the same review contract and fixture; each invocation has its own issued identity and actual evidence. |
+| R2: implementation/repair Takeover | An admitted provider returns DECLINED or required validation shows non-convergence -> select a capable provider -> transfer candidate/context/history -> focused verification -> existing acceptance route. | One connected development task preserves semantic work, accepted artifacts, validation history and remaining repair allowance across Takeover. |
+| R3: bounded routing completion | Exercise the existing policy cases, acceptance-boundary classification and remaining Phase 9 executable specifications. | Required convergence/limit/independence cases and integrated acceptance pass with retained evidence; optional model comparison is not a delivery gate. |
+
+### R1 implementation tasks and acceptance
+
+1. Consume CNCF Phase 80's concrete gap map and interfaces. Record which runtime
+   invokes which adapter and where results re-enter the Workflow. The current
+   `WorkflowExecutionHarness` is pure selection/observation code, not an AI
+   launcher. Connect effectful invocation through the existing runtime route.
+2. Map existing WorkClassification and ExecutionRequirement to configuration.
+   API Direct / Agent Continuation is independent of INLINE / DELEGATED and
+   independence requirements. Keep model/effort/endpoint values in configuration;
+   do not introduce a routing-only AI classifier or change active profiles.
+3. Use textus-ai-runtime or another actually available API execution adapter for
+   direct invocation, and the execution environment's existing Continuation
+   adapter for agent invocation. CNCF owns shared contracts; sm-workflow owns
+   software-development policy; adapters own actual transport/invocation.
+4. Begin with a supplied-input review, not repository exploration or autonomous
+   editing. Both paths return the same typed review-result contract through the
+   same Admission route; their review text need not be identical. Compare
+   contract conformance and acceptance, not model quality scores.
+5. Supply an independent reviewer only the diff, specification and necessary
+   validation context, excluding the implementer's conversation. The same model
+   in a distinct permitted context is acceptable; changing models with shared
+   conversation does not satisfy independence.
+6. Retain actual provider/interface/profile/context and request/result references.
+   Preserve COMPLETED, DECLINED, BLOCKED, UNAVAILABLE, FAILED and
+   UncertainExecution. A result returned by a provider is not automatically
+   accepted work. Unknown usage is not zero.
+
+One configured API route and one agent route are required to claim R1's connected
+acceptance; deterministic fixtures cover failure cases but cannot replace that
+proof. If one route is unavailable, retain the working route and name the precise
+missing connection without claiming interchange is complete. Dot, Codex and
+OpenClaw need not all be integrated. No local-model installation or benchmark is
+required, and no new periodic AI progress monitoring is introduced.
+
+### R2 implementation tasks and acceptance
+
+- Establish the concrete context-reading and edit-application capabilities for
+  the selected implementation/repair executors before assigning that work.
+  An inference-only API does not acquire editing capability from R1 acceptance.
+  Git/SBT, validation, commit and publication remain runtime-owned.
+- Keep semantic work identity, accepted artifacts, actual candidate, acceptance
+  criteria, previous provider outcomes, validation evidence and remaining shared
+  repair allowance. Reset only the provider-local observations already specified
+  below; switching never refunds automatic Fix cycles.
+- Use existing issuance/completion for each successive assignment. Preserve the
+  logical work relationship without completing a finished Continuation again.
+  Late/duplicate results cannot satisfy a replacement assignment.
+- Separate semantic Takeover from transport recovery. BLOCKED does not trigger
+  blind escalation; a proven nonstart may use an admitted alternate; a lost
+  response after start remains uncertain until existing recovery/result
+  collection resolves it. Do not hide FAILED as DECLINED to obtain a retry.
+- Reconcile the current Harness's finite primary/alternate contract with
+  sm-workflow-owned Takeover. Do not extend the pure Harness into an application
+  convergence loop or add a second retry/repair ledger.
+
+### Adoption and completion boundaries
+
+This is future Phase 9 work. Preserve ongoing Phases, existing Sessions, issued
+assignments, accepted results, history, repair counts and successful validation.
+No re-Start, accepted-result re-Submit or retrospective profile substitution is
+part of this planning change. Reuse Phase 6.6 diagnostics, runtime repair control,
+ordinary review/Admission, and Phase 6.10 profile/observation facilities where
+available rather than reimplementing them.
+
+R1 -> R2 -> R3 is the delivery priority. Full adapter coverage, mandatory model
+comparison, automatic policy learning and CBD integration remain outside its
+critical path. Any required API/adapter gap is scoped as producer work, not a
+reason to build every future provider before demonstrating this main route.
 
 ## Two escalation sources
 
@@ -159,7 +244,11 @@ adds observed re-routing. A switch does not automatically import the full parent
 conversation or discard necessary review context. Retain relevant facts below
 in their owning records and supply the subset needed for the assigned work.
 
-A model switch is re-execution of the same semantic WorkOrder under a newly selected admitted provider/profile. It is not a new user task.
+A model switch continues the same logical work under a newly selected admitted
+provider/profile. It is not a new user task or permission to replay a completed
+or execution-uncertain invocation. Each new assignment follows existing
+Continuation issuance and one-shot completion, correlated with the preserved
+semantic work identity.
 
 Preserve:
 
@@ -299,6 +388,11 @@ Demonstrate at least:
 15. unnecessary assurance that increases main-route complexity is removed/simplified while the required acceptance conditions remain satisfied.
 
 ## Completion
+
+The [delivery checklist](phase-9-checklist.md) covers R1's real API/agent review
+connection, R2's retained-work Takeover and R3's existing policy scenarios. These
+are cumulative completion conditions; the two-route review demonstration alone
+does not close Phase 9.
 
 Phase 6.2 owns implementation and connected acceptance of approval-based and
 Step-completion resets (P6-TS05). Reuse that accepted evidence here and verify

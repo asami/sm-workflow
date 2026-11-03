@@ -23,7 +23,6 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseHumanResolution
 private[smworkflow] object SplitPhaseHumanResolutionCheckpointJsonV1 {
   val schema = "sm-workflow.split-phase-human-resolution-checkpoint.v1"
   val storageField = "splitPhaseHumanResolutionCheckpointPayload"
-  val maximumPayloadBytes = 1024 * 1024
   private val _prefix = schema + ":"
   private final case class CandidateFrame(key: R.CandidateKey, transfers: Vector[Q.TransferScope], alreadyPublished: Boolean)
   private final case class Payload(reference: C.Reference, resolutionReference: D.Reference, resolution: Json,
@@ -42,9 +41,9 @@ private[smworkflow] object SplitPhaseHumanResolutionCheckpointJsonV1 {
   val payloadCodec: PayloadCodec[C.SavedResult] = new PayloadCodec[C.SavedResult] {
     val typeIdentity = C.payloadType
     def encode(value: C.SavedResult): Json = _json_c(value).toOption.getOrElse(
-      throw new IllegalArgumentException("Invalid or oversized full Human checkpoint"))
+      throw new IllegalArgumentException("Invalid full Human checkpoint"))
     def decode(value: Json): Either[String, C.SavedResult] = _decode_json_c(value, None).toOption
-      .toRight("Invalid or oversized full Human checkpoint")
+      .toRight("Invalid full Human checkpoint")
   }
 
   def encodeC(record: C.Record): Consequence[String] = _guarded {
@@ -52,8 +51,8 @@ private[smworkflow] object SplitPhaseHumanResolutionCheckpointJsonV1 {
   }
 
   def decodeC(reference: C.Reference, raw: String): Consequence[C.SavedResult] = _guarded {
-    if (reference == null || raw == null || !raw.startsWith(_prefix) || !_bounded(raw))
-      _invalid("selected complete storage frame is absent unsupported or oversized")
+    if (reference == null || raw == null || !raw.startsWith(_prefix) || !_utf8(raw))
+      _invalid("selected complete storage frame is absent unsupported or invalid UTF-8")
     else parser.parse(raw.substring(_prefix.length)).fold(_ => _invalid("JSON is malformed"),
       json => _decode_json_c(json, Some(reference)))
   }
@@ -61,7 +60,7 @@ private[smworkflow] object SplitPhaseHumanResolutionCheckpointJsonV1 {
   private def _json_c(record: C.SavedResult): Consequence[Json] = _guarded {
     for {
       json <- _render_c(record)
-      _ <- if (_bounded(_prefix + json.noSpaces)) Consequence.unit else _invalid("whole UTF-8 frame exceeds bound")
+      _ <- if (_utf8(_prefix + json.noSpaces)) Consequence.unit else _invalid("whole frame is not valid UTF-8")
     } yield json
   }
 
@@ -80,7 +79,7 @@ private[smworkflow] object SplitPhaseHumanResolutionCheckpointJsonV1 {
   private def _decode_json_c(json: Json, selected: Option[C.Reference]):
       Consequence[C.SavedResult] = _guarded {
     for {
-      _ <- if (json != null && _bounded(_prefix + json.noSpaces)) Consequence.unit else _invalid("whole frame exceeds bound")
+      _ <- if (json != null && _utf8(_prefix + json.noSpaces)) Consequence.unit else _invalid("whole frame is absent or invalid UTF-8")
       root <- json.asObject.map(Consequence.success).getOrElse(_invalid("root is not an object"))
       _ <- if (root("schemaVersion").flatMap(_.asString).contains(schema)) Consequence.unit else _invalid("schema differs")
       payload <- root("payload").get.as[Payload].fold(_ => _invalid("payload shape differs"), Consequence.success)
@@ -101,8 +100,7 @@ private[smworkflow] object SplitPhaseHumanResolutionCheckpointJsonV1 {
 
   private def _parse_c(raw: String): Consequence[Json] =
     parser.parse(raw).fold(_ => _invalid("nested native JSON is malformed"), Consequence.success)
-  private def _bounded(raw: String): Boolean =
-    raw != null && UTF_8.newEncoder().canEncode(raw) && raw.getBytes(UTF_8).length <= maximumPayloadBytes
+  private def _utf8(raw: String): Boolean = raw != null && UTF_8.newEncoder().canEncode(raw)
   private def _invalid[T](reason: String): Consequence[T] =
     Consequence.stateConflict("SplitPhase full Human checkpoint codec " + reason)
   private def _guarded[T](body: => Consequence[T]): Consequence[T] = try body catch {

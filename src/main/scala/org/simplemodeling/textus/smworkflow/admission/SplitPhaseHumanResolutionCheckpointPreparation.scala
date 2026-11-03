@@ -1,7 +1,6 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
-import java.nio.charset.StandardCharsets.UTF_8
 import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.{WorkflowMechanicalTransition as M, *}
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{InstanceRecord, HistoryEntry,
@@ -49,11 +48,7 @@ private[smworkflow] object SplitPhaseHumanResolutionCheckpointPreparation {
 
   def keyC(reference: Reference): Consequence[String] =
     if (reference == null) _invalid("checkpoint reference is absent")
-    else M.keyC(M.Reference(reference.identity, reference.revision)).flatMap { escaped =>
-      val key = "human-successor:" + escaped
-      if (key.getBytes(UTF_8).length <= 1024) Consequence.success(key)
-      else _invalid("complete purpose key exceeds1024 UTF-8 bytes")
-    }
+    else M.keyC(M.Reference(reference.identity, reference.revision)).map("human-successor:" + _)
 
   /** Copy privately constructed outputs once. The native observer supplied the
     * actual issued Decision, canonical completion and complete current prefix.

@@ -122,7 +122,7 @@ final class GoalPhaseFindingRecordingSpec extends AnyWordSpec with Matchers with
       Given("nulls invalid identities categories summaries rationales duplicates and excessive vectors")
       val baditems = Vector(null, _observation.copy(identity = " padded "), _observation.copy(identity = "a" * 129),
         _observation.copy(category = "REQUIRED"), _observation.copy(summary = " "),
-        _observation.copy(rationale = "x\u0000y"), _observation.copy(summary = "あ" * 5462))
+        _observation.copy(rationale = "x\u0000y"))
       val malformed = baditems.map(i => R.Observations(Vector(i))) ++ Vector(R.Observations(null),
         R.Observations(Vector(_observation, _observation)), R.Observations(Vector.tabulate(129)(i => _observation.copy(identity = "h" + i))))
       When("typed admission and saved JSON decoding consume those values")
@@ -138,6 +138,17 @@ final class GoalPhaseFindingRecordingSpec extends AnyWordSpec with Matchers with
       badwire.foreach(v => S.resultCodec.decode(_payload(wire)(_.mapObject(_.add("reviewObservations", v)))).isLeft shouldBe true)
       R.publicObservations(null) shouldBe null
       R.publicObservations(Some(null)) shouldBe Some(null)
+
+      Given("an ordinary Unicode summary beyond the removed application byte ceiling")
+      val complete = R.Observations(Vector(_observation.copy(summary = "あ" * 5462)))
+      val report = absent.copy(reviewObservations = Some(complete))
+      When("observation admission and the saved result codec consume its complete contents")
+      val admitted = R.validateObservationsOptionC(Some(complete))
+      val restored = S.resultCodec.decode(S.resultCodec.encode(report))
+      Then("the complete summary survives without weakening malformed-content or vector guards")
+      admitted.isSuccess shouldBe true
+      restored shouldBe Right(report)
+      take(R.internalObservationsC(take(R.publicObservationsC(Some(complete))))) shouldBe Some(complete)
     }
   }
 

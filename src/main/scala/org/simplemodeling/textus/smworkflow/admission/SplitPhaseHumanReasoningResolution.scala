@@ -34,11 +34,10 @@ private[smworkflow] object SplitPhaseHumanReasoningResolution {
       "decision" -> Json.fromString(record.decision), "reasoningResult" -> _reference(record.reasoningResult.identity, record.reasoningResult.revision),
       "interpretation" -> judgment)
     wire = schema + ":" + json.noSpaces
-    _ <- if (wire.getBytes(UTF_8).length <= 1024 * 1024) Consequence.unit else _invalid("interpretation exceeds its UTF-8 bound")
   } yield wire
 
   def decodeC(wire: String): Consequence[Record] = for {
-    _ <- if (wire != null && wire.startsWith(schema + ":") && wire.getBytes(UTF_8).length <= 1024 * 1024)
+    _ <- if (wire != null && wire.startsWith(schema + ":"))
       Consequence.unit else _invalid("interpretation frame differs")
     json <- parser.parse(wire.substring(schema.length + 1)).fold(_ => _invalid("interpretation JSON differs"), Consequence.success)
     fields <- json.asObject
@@ -97,6 +96,6 @@ private[smworkflow] object SplitPhaseHumanReasoningResolution {
       case _ => _invalid("interpretation reference fields differ")
     }
   private def _canonical(value: String): Boolean = value != null && value.nonEmpty && value.trim == value &&
-    value.length <= 1024 && !value.exists(_.isControl) && UTF_8.newEncoder().canEncode(value)
+    !value.exists(_.isControl) && UTF_8.newEncoder().canEncode(value)
   private def _invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("SplitPhase Human reasoning resolution " + reason)
 }

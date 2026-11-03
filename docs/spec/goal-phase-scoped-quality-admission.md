@@ -262,7 +262,7 @@ SM does not duplicate CBD's schema or declaration lint.
 Executable examples: B2-04, B2-06 through B2-11 and B2-19 in
 [GoalPhaseScopedQualityReviewSpec](../../src/test/scala/org/simplemodeling/textus/smworkflow/admission/GoalPhaseScopedQualityReviewSpec.scala).
 
-## R7: Complete bounded material and requirement acquisition
+## R7: Complete material and requirement acquisition
 
 Each selected changed filename is read through `WorkflowFileExecution.readTextC`
 on logical `FileTarget` workspace `sm-workflow-repository`, under the actual
@@ -279,11 +279,11 @@ from `GoalPhaseDocumentSource.instructionsC(input.documents, input.stepIdentity)
 and applicable saved effective-acceptance usage/descriptions. Worker success or
 its acceptance summary is never substituted for those requirements.
 
-Every request vector is bounded by 64 entries. Each material content is bounded
-by 262144 UTF-8 bytes, and all material plus requirement content together is
-bounded by 1048576 UTF-8 bytes. Requests exceeding any bound fail before provider
-invocation. Material is not truncated, split into extra requests, or removed to
-fit the bound; selected files and conditions are never silently dropped.
+Every request vector is bounded by 64 entries. Complete material and requirement
+content has no separate application byte budget. CNCF owns acquisition and
+provider resource limits; its failures propagate without truncation or discarded
+content. Selected files and conditions are never silently dropped or split into
+extra requests to fit an application budget.
 
 Executable examples: B2-01, B2-09 through B2-15 and B2-18 in
 [GoalPhaseScopedQualityReviewSpec](../../src/test/scala/org/simplemodeling/textus/smworkflow/admission/GoalPhaseScopedQualityReviewSpec.scala).

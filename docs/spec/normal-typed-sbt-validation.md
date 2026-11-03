@@ -104,9 +104,11 @@ strict UTF-8 stdout and stderr without NUL. Output-limit and unconfirmed incompl
 results preserve raw captures, including truncated output. It imposes no second application byte
 ceiling on complete typed SBT output. Retained typed receipts use the same strict
 text validity without the historical 65536-byte limit, including genuine nonzero
-failed results. Structural Git captures and legacy receipts without typed `sbt`
-facts keep their 65536-byte text bound; Goal recovery diagnostics and rationale
-keep their existing bound. Historical receipts retain their original shape. New
+failed results. Complete structural Git captures, legacy receipts without typed
+`sbt` facts, and retained Goal diagnostics and rationale likewise have no second
+application text-size ceiling. Existing strict UTF-8, NUL, completeness/count,
+identity, provenance and evidence checks remain mandatory; CNCF owns execution
+resource protection. Historical receipts retain their original shape. New
 typed receipts use the closed nested `sm-workflow.native-sbt-validation-receipt.v2`
 wire: canonical Base64 bytes, exact counts/truncation, full actual termination,
 elapsed time, program identity and an explicitly empty artifact vector. The
@@ -500,3 +502,17 @@ protected independent Step review/local acceptance commit. P6-EX02, installed-ta
 acceptance, security/CBD, the sole full Phase review and local release remain
 open; aggregate full-suite validation remains Phase 6.3. No raw logs or private
 evidence package are added to Git.
+
+## Default target application profile — 2026-11-02
+
+[Development-mode validation](development-mode-validation.md) makes dev the
+routine target profile through the existing project/typed execution binding.
+Preserve explicit scenario profiles and record actual child mode; SBT Test scope
+and workflow-host mode do not imply the child's mode. Select affected security/
+deployment scenarios instead of multiplying all suites by four. Required live
+demo/production acceptance retains its own configuration and evidence.
+Integration remains planned in the [workstream](../phase/development-mode-validation-plan.md).
+VM-06 additionally selects focused cases for CNCF mode-dependent behavior,
+including test-only external integrations. Use the same managed execution and
+metadata/reference selection, with actual mode/adapter attribution; no third
+full-suite run or new caller-supplied command/configuration parameters.

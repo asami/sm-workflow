@@ -201,24 +201,28 @@ final class NativeGoalValidationOutputSpec extends AnyWordSpec with Matchers wit
   }
 
   "Verified TestOnly output" should {
-    "O8 refuse oversized or control-character metadata receipt identities and preserve ordinary receipt identity limits" in {
+    "O8 retain complete metadata receipt identities and reject control characters while preserving generic receipt limits" in {
       Given("an explicitly synthetic nonzero result for identity admission only and a real bounded metadata selection")
       val (selected, _) = GoalPhaseNativeMetadataFixture.prepared
       val raw = ProcessExecutionResult(ProcessExecutionTermination.Exited(7), _capture(_stdout), _capture(_stderr),
         Vector.empty, 7L, "synthetic-negative")
       val result = SbtExecutionResult(SbtTarget(take(WorkspaceId.parseC("sm-workflow-repository-validation-1"))),
         SbtOperation.TestOnly, raw)
-      val rejectedids = Vector("metadata:" + ("x" * 4096), "metadata:invalid\u0000identity", "metadata:invalid\nidentity",
+      val completeidentity = "metadata:" + ("x" * 4096)
+      val rejectedids = Vector("metadata:invalid\u0000identity", "metadata:invalid\nidentity",
         "x" * 129, "foreign:identity")
 
       When("SBT receipt admission checks those identities and generic receipts retain the ordinary host identity contract")
       val rejected = rejectedids.map(identity => R.sbtReceiptC(identity, Kind.TestOnly, result))
+      val completemetadata = R.sbtReceiptC(completeidentity, Kind.TestOnly, result)
       val ordinary = R.receiptC("ordinary", raw)
       val genericmetadata = R.receiptC(selected.head.identity, raw)
       val genericoversized = R.receiptC("x" * 129, raw)
 
       Then("invalid identities fail without weakening generic receipt limits or inventing selected-test success")
       rejected.foreach(_.isSuccess shouldBe false)
+      take(completemetadata).identity shouldBe completeidentity
+      take(completemetadata).exitCode shouldBe Some(7)
       ordinary.isSuccess shouldBe true
       take(ordinary).exitCode shouldBe Some(7)
       genericmetadata.isSuccess shouldBe false
