@@ -373,7 +373,7 @@ private[smworkflow] object GoalPhaseStepTestReportRepair {
   private def _diff_text(value: String): Boolean = value != null && value.trim.nonEmpty && !value.contains('\u0000') &&
     UTF_8.newEncoder().canEncode(value)
   private def _text(value: String): Boolean = value != null && value.trim.nonEmpty && !value.contains('\u0000') &&
-    UTF_8.newEncoder().canEncode(value) && value.getBytes(UTF_8).length <= 16384
+    UTF_8.newEncoder().canEncode(value)
   private def _check(valid: Boolean, reason: String): Consequence[Unit] =
     if (valid) Consequence.unit else F.invalid("Step test report repair: " + reason)
 }

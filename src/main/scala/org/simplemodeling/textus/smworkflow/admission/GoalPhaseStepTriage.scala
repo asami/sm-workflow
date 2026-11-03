@@ -40,7 +40,7 @@ private[smworkflow] object GoalPhaseStepTriage {
     val validcontext = try { request != null && request.kind == "TriageStep" && request.triage != null &&
       request.triage.exists(c => c != null && c.changedPaths != null && c.changedPaths.nonEmpty &&
         c.changedPaths.forall(text) && c.diff != null && c.diff.trim.nonEmpty &&
-        c.diff.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 2097152 && c.checks != null && c.checks.nonEmpty &&
+        c.checks != null && c.checks.nonEmpty &&
         GoalPhaseStepAssessment.validResult(c.assessment) && c.assessment.branch == "triage" &&
         request.candidate.contains(c.assessment.candidate) && request.checksReceipt.contains(c.assessment.validationReference) &&
         _receipt_identities_match(c.checks.map(_.identity), c.assessment.checks)) && request.review.isEmpty && request.checkFailure.isEmpty
@@ -148,5 +148,5 @@ private[smworkflow] object GoalPhaseStepTriage {
   } catch { case scala.util.control.NonFatal(_) => false }
 
   private def text(value: String): Boolean = value != null && value.trim.nonEmpty &&
-    !value.contains('\u0000') && value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 16384
+    !value.contains('\u0000')
 }

@@ -472,6 +472,6 @@ private[smworkflow] object GoalPhaseCandidateObservationContinuation {
   private def _object(value: String): Boolean = value != null && value.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")
   private def _exact(value: String): Boolean = value != null && value.nonEmpty && value.trim == value && !value.exists(_.isControl)
   private def _text(value: String): Boolean = value != null && value.trim.nonEmpty && !value.contains('\u0000') &&
-    java.nio.charset.StandardCharsets.UTF_8.newEncoder().canEncode(value) && value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 65536
+    java.nio.charset.StandardCharsets.UTF_8.newEncoder().canEncode(value)
   private def invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("Candidate observation continuation: " + reason)
 }

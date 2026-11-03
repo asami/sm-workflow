@@ -25,6 +25,7 @@ import GoalPhaseDependencyValidation.given
   * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
+@org.scalatest.DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.DependencyValidationTestDeclaration])
 final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Matchers with GivenWhenThen
@@ -126,10 +127,10 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
     Files.writeString(scenario.root.resolve("selected-input.json"), SplitPhaseExplicitPartitionFixture.take(prepared.toJsonStringC))
   }
   private def _selected(name: String, denial: String = "none",
-    bindingTransform: D.Binding => D.Binding = value => value, legacySuccessor: Boolean = false,
-    assessmentpolicy: Option[GoalPhaseStepAssessment.Policy] = None, sourceRevisionFixture: Boolean = false,
+    bindingtransform: D.Binding => D.Binding = value => value, legacysuccessor: Boolean = false,
+    assessmentpolicy: Option[GoalPhaseStepAssessment.Policy] = None, sourcerevisionfixture: Boolean = false,
     dependencychecks: Option[Vector[GoalPhaseNativeValidation.Check]] = None): Selected = {
-    val scenario = F.freshDependency(name, denial, bindingTransform, dependencyChecks = dependencychecks)
+    val scenario = F.freshDependency(name, denial, bindingtransform, dependencyChecks = dependencychecks)
     // Both ordinary launchers select this fresh host's existing assembly. The
     // installed entry changes cwd only; host configuration owns its descriptor.
     val hostconfig = scenario.root.resolve(".textus/config.json")
@@ -141,7 +142,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
         selectedparameters.mapObject(_.add("textus.component.file", component.asJson)))
     else selectedparameters
     Files.writeString(hostconfig, componentparameters.noSpaces)
-    if (sourceRevisionFixture) {
+    if (sourcerevisionfixture) {
       // Arrange this isolated primary's genuine source-project consumption before
       // Start. The later host route supplies the new root; no Session is edited.
       val repository = Path.of(scenario.host.target.root)
@@ -167,7 +168,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
         "-c", "user.email=source@example.invalid", "commit", "--no-verify", "--no-gpg-sign",
         "-m", "Specification-owned primary source consumption")))
     }
-    if (legacySuccessor) _legacy_successor_plan(scenario)
+    if (legacysuccessor) _legacy_successor_plan(scenario)
     assessmentpolicy.foreach { policy =>
       val planpath = scenario.root.resolve("goal-plan.json")
       val original = parse(Files.readString(planpath)).toOption.get.as[GoalPhaseOrderedProgression.Plan].toOption.get
@@ -407,8 +408,8 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
     current: V.GoalPhaseAdvanceResult, binding: D.Binding)
   private def _accepted_prefix(name: String, overlap: Boolean, legacySuccessor: Boolean = false,
     sourceRevisionFixture: Boolean = false): PrefixStep = {
-    val selected = _selected(name, bindingTransform = _.copy(paths = Vector("value.txt", "inherited.txt")),
-      legacySuccessor = legacySuccessor, sourceRevisionFixture = sourceRevisionFixture)
+    val selected = _selected(name, bindingtransform = _.copy(paths = Vector("value.txt", "inherited.txt")),
+      legacysuccessor = legacySuccessor, sourcerevisionfixture = sourceRevisionFixture)
     val binding = selected.scenario.host.goal.dependencyValidation.get
     _select_binding(selected, binding)
     Files.writeString(Path.of(binding.root).resolve("inherited.txt"), "accepted first-Step input\n")
@@ -2297,7 +2298,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
       When("each independently prepared CLI scenario reaches actual native candidate capture")
       Then("the property holds that declarations cannot substitute for matching Git objects and root")
       forAll(cases) { (name, change) =>
-        val selected = _selected("dependency-validation-wrong-" + name, bindingTransform = change)
+        val selected = _selected("dependency-validation-wrong-" + name, bindingtransform = change)
         _complete(selected)
         selected.scenario.advance(selected.task).exitCode should not be 0
         _executions(selected.scenario.root.resolve("dependency")) shouldBe empty

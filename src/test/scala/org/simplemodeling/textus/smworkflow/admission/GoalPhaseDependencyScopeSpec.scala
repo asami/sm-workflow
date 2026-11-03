@@ -191,18 +191,16 @@ final class GoalPhaseDependencyScopeSpec extends AnyWordSpec with Matchers with 
       (refused ++ badoptions).foreach(_.isSuccess shouldBe false)
     }
 
-    "apply UTF-8 and collection bounds while preserving literal multiline descriptions and reference text" in {
-      Given("logical identifiers and descriptions at their byte limits, and finite exact collections")
-      val bounded = _proposed.copy(identity = "x" * 1024, revision = "依" * 341,
-        reason = "r" * 16384, acceptance = Vector("a" * 16384),
-        usageContract = ContextReference(" Usage Contract with exact spacing ", "依" * 341))
+    "preserve complete UTF-8 descriptions and reference text while retaining collection bounds" in {
+      Given("logical identifiers and descriptions beyond former byte limits, and finite exact collections")
+      val bounded = _proposed.copy(identity = "x" * 1025, revision = "依" * 342,
+        reason = "理由" * 12000, acceptance = Vector("a" * 16385),
+        usageContract = ContextReference("x" * 1025, "依" * 342))
       val maximum = _escaped.copy(paths = Vector.tabulate(128)(i => s"src/selected-$i.scala"),
         acceptance = Vector.tabulate(32)(i => s"Selected acceptance $i"),
         dependentWork = Vector.tabulate(32)(i => ContextReference(s"dependent-work:$i", "1")),
         discoveredEdits = Vector.tabulate(128)(i => s"src/selected-$i.scala"))
-      val invalid = Vector(bounded.copy(identity = "依" * 342), bounded.copy(reason = "あ" * 5462),
-        _proposed.copy(reason = " \n\t"), _proposed.copy(reason = "report\u0000text"), _proposed.copy(acceptance = Vector(" ")),
-        _proposed.copy(usageContract = ContextReference("x" * 1025, "1")),
+      val invalid = Vector(_proposed.copy(reason = " \n\t"), _proposed.copy(reason = "report\u0000text"), _proposed.copy(acceptance = Vector(" ")),
         _proposed.copy(usageContract = ContextReference("contract", "rev\n1")),
         _proposed.copy(paths = Vector.empty), _proposed.copy(acceptance = Vector.empty), _proposed.copy(dependentWork = Vector.empty),
         maximum.copy(paths = maximum.paths :+ "src/extra.scala"),
@@ -213,7 +211,7 @@ final class GoalPhaseDependencyScopeSpec extends AnyWordSpec with Matchers with 
       val admitted = Vector(bounded, maximum).map(value => validateProposalC(value))
       val roundtrips = Vector(bounded, maximum).map(value => value.asJson.as[Proposal])
       val refused = invalid.map(validateProposalC)
-      Then("valid exact content survives while byte overflow, blank or NUL text and collection violations fail")
+      Then("valid exact content survives while blank or NUL text and collection violations fail")
       admitted.foreach(_ shouldBe Consequence.unit)
       roundtrips shouldBe Vector(Right(bounded), Right(maximum))
       refused.foreach(_.isSuccess shouldBe false)

@@ -331,11 +331,11 @@ final class SplitPhaseScopeProjectionSnapshotJsonV1Spec extends AnyWordSpec with
         incomplete shouldBe a[Consequence.Failure[?]]
       }
     }
-    "whole frame capacity" which {
-      "reject aggregate overflow even when the assigned judgment and individual documents fit their bounds" in {
-        Given("a valid record with many distinct individually bounded Unicode evidence identities")
+    "complete passive frames" which {
+      "preserve aggregate evidence beyond the former application budget" in {
+        Given("a valid record with many distinct Unicode evidence identities")
         val record = _record()
-        val evidence = Vector.tabulate((J.maximumPayloadBytes - 4096) / 12080)(index =>
+        val evidence = Vector.tabulate((1024 * 1024 - 4096) / 12080)(index =>
           T.EvidenceReference(("語" * 4000) + index.toString, "1"))
         val judgment = record.judgment.copy(evidence = evidence)
         val enlarged = record.copy(judgment = judgment)
@@ -355,25 +355,25 @@ final class SplitPhaseScopeProjectionSnapshotJsonV1Spec extends AnyWordSpec with
             SplitPhaseExplicitPlanningInputJsonV1.encodeOwnershipC(documents.ownership),
             SplitPhaseExplicitPlanningInputJsonV1.encodeHandoffsC(documents.handoffs))
         }
-        Then("the complete prefixed UTF-8 frame is refused while the judgment and document frames remain individually admissible")
+        Then("the complete prefixed UTF-8 frame and its typed semantic evidence survive exactly")
         inspected shouldBe ()
-        replyjson.noSpaces.getBytes(UTF_8).length should be < J.maximumPayloadBytes
+        replyjson.noSpaces.getBytes(UTF_8).length should be < (1024 * 1024)
         decodedjudgment shouldBe Right(judgment)
         documentencodings.foreach(_.foreach(_.isSuccess shouldBe true))
-        _raw(json).getBytes(UTF_8).length should be > J.maximumPayloadBytes
-        encoded shouldBe a[Consequence.Failure[?]]
-        decoded shouldBe a[Consequence.Failure[?]]
+        _raw(json).getBytes(UTF_8).length should be > (1024 * 1024)
+        take(J.decodeC(enlarged.first.reference, enlarged.result, take(encoded))) shouldBe enlarged
+        take(decoded) shouldBe enlarged
       }
       "count escaped embedded frames and UTF-8 bytes without replacing Unicode or truncating" in {
         Given("bounded Unicode and quoted evidence in a complete successor")
         val record = _record()
         val changed = record.copy(judgment = record.judgment.copy(rationale = "語と \"引用\" と \\ を保持"))
-        When("the aggregate frame is roundtripped and an oversized UTF-8 frame is rejected")
+        When("the aggregate frame is roundtripped and a large malformed UTF-8 frame is rejected")
         val raw = take(J.encodeC(changed))
         val decoded = take(J.decodeC(changed.first.reference, changed.result, raw))
         val oversized = J.decodeC(changed.first.reference, changed.result, J.schema + ":" +
-          Json.fromString("語" * (J.maximumPayloadBytes / 2)).noSpaces)
-        Then("data and escaping remain exact and the byte bound is not mistaken for a character count")
+          Json.fromString("語" * (1024 * 1024 / 2)).noSpaces)
+        Then("data and escaping remain exact while malformed frame structure is refused")
         decoded shouldBe changed
         raw.getBytes(UTF_8).length should be > raw.length
         raw.contains("\\\"") shouldBe true

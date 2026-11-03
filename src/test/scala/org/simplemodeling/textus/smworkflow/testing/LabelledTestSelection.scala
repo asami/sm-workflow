@@ -8,11 +8,11 @@ import org.simplemodeling.textus.smworkflow.admission.ValidationTestPolicy
 /** Java-only handback for the Scala 2 SBT build, using the Scala 3 CNCF producer.
   * This adapter owns no suite catalog, annotation interpreter or metadata merge.
   * @since   Oct. 24, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 31, 2026
   */
 object LabelledTestSelection {
   def select(root: String, revision: String, purpose: String, suites: Array[String],
-    exact: Array[String], containing: Array[String]): Array[Array[String]] = {
+    exact: Array[String], containing: Array[String], explicitSuites: Array[String]): Array[Array[String]] = {
     val loader = getClass.getClassLoader
     val scope = D.DiscoveryScope("sm-workflow-tests", "1", Vector(D.ArtifactScope(
       "component:sm-workflow", "sm-workflow-tests", revision, "working-tree",
@@ -22,8 +22,9 @@ object LabelledTestSelection {
     // DoNotDiscover excludes automatic purpose discovery, not a caller's actual
     // explicit suite selection. Metadata and nonempty-operation admission still
     // apply to every explicitly selected suite below.
-    val candidates = suites.toSet.filter(name => purpose == "EXPLICIT" ||
-      !Class.forName(name, false, loader).isAnnotationPresent(classOf[DoNotDiscover]))
+    val candidates = suites.toSet.filter(name =>
+      !Class.forName(name, false, loader).isAnnotationPresent(classOf[DoNotDiscover]) ||
+        (Set("EXPLICIT", "FOCUSED")(purpose) && explicitSuites.contains(name)))
     val relevant = inventory.operations.filter(operation => candidates(operation.selector.suiteClassName))
     val missing = candidates -- relevant.map(_.selector.suiteClassName).toSet
     val diagnostics = inventory.diagnostics.filter(d => candidates(d.source) ||
@@ -47,6 +48,11 @@ object LabelledTestSelection {
     executions.flatMap(_.operations).map(operation => Array(operation.selector.suiteClassName,
       operation.selector.testName, ValidationTestPolicy.requiresRuntime(operation).toString)).toArray
   }
+
+  def select(root: String, revision: String, purpose: String, suites: Array[String],
+    exact: Array[String], containing: Array[String]): Array[Array[String]] =
+    select(root, revision, purpose, suites, exact, containing,
+      if (Set("EXPLICIT", "FOCUSED")(purpose)) suites else Array.empty[String])
 
   def select(root: String, revision: String, purpose: String, suites: Array[String]): Array[Array[String]] =
     select(root, revision, purpose, suites, Array.empty[String], Array.empty[String])

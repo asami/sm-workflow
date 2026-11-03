@@ -66,8 +66,7 @@ private[smworkflow] object GoalPhaseStepReviewRequest {
   }
 
   def validReason(value: String): Boolean = value != null && value.trim.nonEmpty &&
-    !value.exists(_.isControl) && java.nio.charset.StandardCharsets.UTF_8.newEncoder().canEncode(value) &&
-    value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 16384
+    !value.exists(_.isControl) && java.nio.charset.StandardCharsets.UTF_8.newEncoder().canEncode(value)
   def targetRecord(value: Target): Record = GoalPhaseNativeMetadata.record(value.asJson)
   def decodeTarget(value: Json): Either[String, Target] = Option(value).toRight("Step review target is absent")
     .flatMap(_.as[Target].left.map(_.message))

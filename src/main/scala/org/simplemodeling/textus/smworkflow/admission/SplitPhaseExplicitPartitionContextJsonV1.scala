@@ -4,7 +4,6 @@ import io.circe.{Decoder, Encoder, Json, parser}
 import io.circe.generic.auto.*
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
-import java.nio.charset.StandardCharsets
 import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitPartitionContext as C,
@@ -18,7 +17,6 @@ import org.simplemodeling.textus.smworkflow.admission.{SplitPhaseExplicitPartiti
 private[smworkflow] object SplitPhaseExplicitPartitionContextJsonV1 {
   val schema = "sm-workflow.split-phase-partition-context.v1"
   val storageField = "splitPhasePartitionContextPayload"
-  val maximumPayloadBytes = 1024 * 1024
   private val _prefix = schema + ":"
   import SplitPhaseExplicitPartitionRawCodecs.given
   private given _owner_encoder: Encoder[C.Owner] = deriveEncoder[C.Owner]
@@ -43,11 +41,7 @@ private[smworkflow] object SplitPhaseExplicitPartitionContextJsonV1 {
       else Consequence.stateConflict("SplitPhase partition context selected reference differs")
     }
 
-  private def _encode_c[A: Encoder](value: A): Consequence[String] = _json_c(value).flatMap { json =>
-    val raw = _prefix + json.noSpaces
-    if (_bytes(raw) <= maximumPayloadBytes) Consequence.success(raw)
-    else Consequence.stateConflict("SplitPhase partition context exceeds its UTF-8 storage limit")
-  }
+  private def _encode_c[A: Encoder](value: A): Consequence[String] = _json_c(value).map(json => _prefix + json.noSpaces)
   def decodeC(reference: S.ContextReference, raw: String): Consequence[C.Record] =
     decodeC(raw).flatMap { value =>
       if (value.reference == reference) Consequence.success(value)
@@ -58,7 +52,7 @@ private[smworkflow] object SplitPhaseExplicitPartitionContextJsonV1 {
     _parse_c(raw).flatMap(_decode_json_c[C.Record])
 
   private def _parse_c(raw: String): Consequence[Json] =
-    if (raw == null || _bytes(raw) > maximumPayloadBytes || !raw.startsWith(_prefix))
+    if (raw == null || !raw.startsWith(_prefix))
       Consequence.stateConflict("SplitPhase partition context encoding is unsupported")
     else parser.parse(raw.substring(_prefix.length)).fold(
         _ => Consequence.stateConflict("SplitPhase partition context JSON is invalid"), Consequence.success)
@@ -77,5 +71,4 @@ private[smworkflow] object SplitPhaseExplicitPartitionContextJsonV1 {
     else try Consequence.success(Json.obj(
       "schemaVersion" -> Json.fromString(schema), "payload" -> value.asJson))
     catch { case NonFatal(_) => Consequence.stateConflict("SplitPhase partition context data cannot be encoded") }
-  private def _bytes(raw: String): Int = raw.getBytes(StandardCharsets.UTF_8).length
 }

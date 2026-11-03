@@ -90,21 +90,21 @@ final class SplitPhaseMechanicalCandidateAllocationSpec extends AnyWordSpec with
       H.recoverMechanicalC(selected, anchor, allocated.data.copy(reference = selected.selection.data.reference)).isSuccess shouldBe false
     }
 
-    "refuse incomplete noncanonical and oversized anchors or data before publication" in {
+    "refuse incomplete noncanonical anchors while retaining complete planning data before publication" in {
       Given("a host policy with no default checkpoint or AI-result fallback")
       val selected = need(base(Vector(260, 180, 260)))
       val source = base(Vector(260, 180, 260))
       val huge = O.Records(None, Some(O.DemandRecord(O.DemandReference("demand", "1"), source.source.reference,
         source.source.authority, source.inventory.orderedUnfinishedItems.map(id =>
-          O.ItemDemand(id, O.Demand.Unresolved("語" * SplitPhaseExplicitPlanningInputJsonV1.maximumPayloadBytes))))), None)
-      When("allocation receives invalid checkpoint metadata or an unbounded whole row")
+          O.ItemDemand(id, O.Demand.Unresolved("語" * (1024 * 1024)))))), None)
+      When("allocation receives invalid checkpoint metadata or a complete large row")
       val results = Vector(null, M.Reference("", "1"), M.Reference(" leading", "1"), M.Reference("bad\n", "1"),
         M.Reference("\uD800", "1"), M.Reference("é" * 200, "1"), M.Reference("x" * 1025, "1"))
         .map(value => policy.allocateMechanicalC(selected, value))
-      val oversized = policy.allocateMechanicalC(need(source, huge), anchor)
-      Then("the closed input is refused rather than trimmed or replaced")
+      val complete = policy.allocateMechanicalC(need(source, huge), anchor)
+      Then("invalid anchors are refused and complete data is not trimmed or replaced")
       results.foreach(_.isSuccess shouldBe false)
-      oversized.isSuccess shouldBe false
+      complete.isSuccess shouldBe true
       policy.allocateMechanicalC(null, anchor).isSuccess shouldBe false
       H.recoverMechanicalC(selected, null, null).isSuccess shouldBe false
       W.continueMechanicalAllocatedC(null).isSuccess shouldBe false

@@ -39,7 +39,7 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
     assessment: Option[RepositorySyncMergeAssessment.Policy] = None,
     impact: Option[RepositorySyncProgramImpact.Policy] = None) {
     def validateC: Consequence[Unit] = if (id(identity) && revision > 0 && reason != null &&
-        reason.trim.nonEmpty && reason.length <= 4096 && checks != null && checks.size <= 16 &&
+        reason.trim.nonEmpty && checks != null && checks.size <= 16 &&
         checks.forall(c => c != null && id(c.identity) && !Set("index-local", "index-remote")(c.identity) &&
           c.kind != null && c.ordinal > 0 && c.ordinal <= 16) && checks.map(_.identity).distinct.size == checks.size &&
         checks.map(_.ordinal).distinct.size == checks.size &&
@@ -330,18 +330,15 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
   } yield ()
 
   private[admission] def receiptC(identity: String, result: ProcessExecutionResult): Consequence[Receipt] =
-    _receipt_c(identity, result, id(identity), true)
+    _receipt_c(identity, result, id(identity))
 
-  private def _receipt_c(identity: String, result: ProcessExecutionResult, valididentity: Boolean,
-    bounded: Boolean): Consequence[Receipt] = {
+  private def _receipt_c(identity: String, result: ProcessExecutionResult, valididentity: Boolean): Consequence[Receipt] = {
     if (!valididentity || result == null || result.stdout == null || result.stderr == null ||
         result.stdout.content == null || result.stderr.content == null ||
         result.stdout.truncated || result.stderr.truncated ||
         result.stdout.byteCount < 0 || result.stderr.byteCount < 0 ||
         result.stdout.byteCount != result.stdout.content.size.toLong || result.stderr.byteCount != result.stderr.content.size.toLong)
       N.uncertain("validation result has invalid identity, missing capture, truncation or byte-count mismatch; retained intent is not replayable")
-    else if (bounded && (result.stdout.byteCount > 65536 || result.stderr.byteCount > 65536))
-      N.uncertain("structural validation capture exceeds the 65536-byte text bound; retained intent is not replayable")
     else try {
       def _text_(bytes: Vector[Byte]) = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
         .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes.toArray)).toString
@@ -381,7 +378,7 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
         WorkflowSbtCapture.text(p.stdout).textStatus == "complete" && WorkflowSbtCapture.text(p.stderr).textStatus == "complete") &&
       receipt.sbt.forall(_.outcome == WorkflowSbtValidation.Outcome.Succeeded)
 
-  /** CNCF bounds actual typed SBT captures; historical untyped text keeps its local bound. */
+  /** CNCF bounds acquisition; retained historical and typed text preserve complete results. */
   private[admission] def storedProductOutputValid(receipt: Receipt): Boolean =
     receipt != null && receipt.sbt != null && receipt.processObservation != null && (receipt.processObservation match {
       case Some(process) => receipt.sbt.exists(facts => WorkflowSbtCapture.valid(process, facts)) &&
@@ -414,7 +411,6 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
   }
   private def _ordinary_text(text: String): Boolean = text != null && !text.contains('\u0000') &&
     StandardCharsets.UTF_8.newEncoder().canEncode(text)
-  private def _stored_text(text: String): Boolean = _ordinary_text(text) &&
-    text.getBytes(StandardCharsets.UTF_8).length <= 65536
+  private def _stored_text(text: String): Boolean = _ordinary_text(text)
   private def id(value: String): Boolean = value != null && value.matches("[A-Za-z0-9][A-Za-z0-9_.-]{0,127}")
 }

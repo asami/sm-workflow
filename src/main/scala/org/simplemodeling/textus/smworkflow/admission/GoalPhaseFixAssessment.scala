@@ -44,9 +44,9 @@ private[smworkflow] object GoalPhaseFixAssessment {
       val v = value.convergence
       _classes(c.changeClass) && c.affectedLogicalUnits != null && c.affectedLogicalUnits.nonEmpty &&
         c.affectedLogicalUnits.size <= 128 && c.affectedLogicalUnits.distinct == c.affectedLogicalUnits &&
-        c.affectedLogicalUnits.forall(_text(_, 1024)) && _text(c.rationale, 16384) &&
+        c.affectedLogicalUnits.forall(_text) && _text(c.rationale) &&
         c.crossFileLogic == (c.changeClass == "COMPLEX_LOGIC") &&
-        _statuses(v.status) && _confidence(v.confidence) && _text(v.rationale, 16384)
+        _statuses(v.status) && _confidence(v.confidence) && _text(v.rationale)
     }
     if (valid) Consequence.unit else _invalid("classification, logical units or convergence claim is invalid")
   }
@@ -101,8 +101,7 @@ private[smworkflow] object GoalPhaseFixAssessment {
   def publicReportC(value: Option[Report]): Consequence[Option[V.GoalPhaseFixAssessment]] =
     validateOptionC(value).map(_ => publicReport(value))
 
-  private def _text(value: String, maximum: Int): Boolean = value != null && value.trim.nonEmpty &&
-    !value.contains('\u0000') && value.getBytes(UTF_8).length <= maximum
+  private def _text(value: String): Boolean = value != null && value.trim.nonEmpty && !value.contains('\u0000')
   private def _invalid[A](reason: String): Consequence[A] =
     Consequence.stateConflict("GoalPhase Fix assessment: " + reason)
 }

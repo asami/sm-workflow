@@ -101,10 +101,10 @@ private[smworkflow] object RepositorySyncNativeMergeReview {
 
   def admitC(input: Request, result: Result, policy: Policy): Consequence[Unit] = for {
     _ <- if (result != null && (!Set("accept", "clean")(result.decision) ||
-        !input.uncertainties.exists(_.startsWith("Unexamined"))) && bounded(result.rationale, 16384) && result.rationale.trim.nonEmpty && result.findings != null &&
+        !input.uncertainties.exists(_.startsWith("Unexamined"))) && _ordinary_text(result.rationale) && result.rationale.trim.nonEmpty && result.findings != null &&
         result.findings.size <= 128 && result.findings.forall(f => f != null && id(f.identity) &&
           f.affectedPaths != null && f.affectedPaths.nonEmpty && f.affectedPaths.distinct == f.affectedPaths &&
-          f.affectedPaths.forall(input.changedPaths.contains) && bounded(f.rationale, 16384) && f.rationale.trim.nonEmpty) &&
+          f.affectedPaths.forall(input.changedPaths.contains) && _ordinary_text(f.rationale) && f.rationale.trim.nonEmpty) &&
         result.findings.map(_.identity).distinct.size == result.findings.size &&
         (if (input.judgmentMode == "triage") Set("clean", "suspicious", "decline")(result.decision) && result.findings.isEmpty
           else input.judgmentMode == "detailed-review" && Set("accept", "repair", "decision-needed", "reject")(result.decision)) &&
@@ -188,7 +188,7 @@ private[smworkflow] object RepositorySyncNativeMergeReview {
     new Codec[Request]("RepositorySyncNativeMergeReviewRequest", "sm-workflow.repository-native-merge-review-request.v2")
   val resultCodec: WorkflowResultJsonV1.PayloadCodec[Result] =
     new Codec[Result]("RepositorySyncNativeMergeReviewResult", "sm-workflow.repository-native-merge-review-result.v1")
-  private def bounded(value: String, bytes: Int): Boolean = value != null && !value.contains('\u0000') && value.getBytes(UTF_8).length <= bytes
+  private def _ordinary_text(value: String): Boolean = value != null && !value.contains('\u0000')
   private def id(value: String): Boolean = value != null && value.matches("[A-Za-z0-9][A-Za-z0-9_.-]{0,127}")
   private def invalid[A](reason: String): Consequence[A] = N.invalid("native review " + reason)
 }

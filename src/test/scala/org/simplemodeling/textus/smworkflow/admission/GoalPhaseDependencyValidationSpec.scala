@@ -53,6 +53,26 @@ final class GoalPhaseDependencyValidationSpec extends AnyWordSpec with Matchers 
   import DependencyValidationSpecificationFixture.*
 
   "Public result constructor migration" should {
+    "preserve complete large approval references without treating reference data as Human consent" in {
+      Given("APP-CONTENT-CAP-A01: reference-only specification data with an independently named large approval source")
+      val reference = ContextReference("元の承認参照" * 12000, "r" * 4097)
+      val selected = selection.copy(approvals = selection.approvals.updated(0, selection.approvals.head.copy(decision = reference)))
+      val result = GoalPhaseNativeWork.Result("completed", "Complete selected reference data", Vector.empty,
+        dependencyValidation = Some(selected))
+      When("selection validity and strict retained-result codecs consume the complete declared references")
+      val decoded = GoalPhaseNativeWork.resultCodec.decode(GoalPhaseNativeWork.resultCodec.encode(result))
+      Then("exact reference data survives while missing malformed and control-bearing references remain invalid")
+      reference.identity.length should be > 65536
+      D.selectionValid(selected) shouldBe true
+      selected.asJson.as[D.Selection] shouldBe Right(selected)
+      decoded shouldBe Right(result)
+      Vector(null, "", "bad\u0000reference", "bad\nreference").foreach { invalid =>
+        D.selectionValid(selected.copy(approvals = selected.approvals.updated(0,
+          selected.approvals.head.copy(decision = reference.copy(identity = invalid))))) shouldBe false
+      }
+      selected.asJson.mapObject(_.add("authority", Json.True)).as[D.Selection].isLeft shouldBe true
+    }
+
     "refuse a dependency selection on decision-needed work before committing unreadable native results" in {
       Given("the actual implementation result shape and a reference-only selected dependency")
       val completed = GoalPhaseNativeWork.Result("completed", "Specification completion", Vector.empty,

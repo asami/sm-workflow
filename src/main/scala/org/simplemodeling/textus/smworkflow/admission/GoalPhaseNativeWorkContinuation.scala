@@ -303,6 +303,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
 
     def advanceC(identity: String, core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
       retained <- F.retainedSessionC(identity, d, definition, core)
+      _ <- WorkflowForceClosure.requireOpenC(retained.current)
       closure <- CompletionRecordContinuation.retainedC(retained.storage, retained.current, core)
       completed <- closure match {
         case Some(value) => Consequence.success(Some(NativeWorkflowOperationOutput.goalWait(identity,
@@ -2788,21 +2789,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       independent: Boolean): Consequence[ExecutionRequirement] = {
       val base = ExecutionRequirement(Vector(CapabilityRequirement(required.identity.capability)),
         RiskLevel("SOURCE_IMPLEMENTATION"), ReasoningLevel.Standard, independent)
-      val classification = if (input.kind == "ReviewPhase") input.selectedPlan.phaseReviewClassification
-        else input.stepIdentity.flatMap(identity => input.selectedPlan.steps.find(_.identity == identity))
-          .flatMap(_.workClassification).map { work => input.kind match {
-            case "ImplementStep" => work.implementation
-            case "RepairStep" => work.repair
-            case "TriageStep" => work.review
-            case _ => work.review
-          }}
-      classification match {
-        // Reconstruct semantic work from its retained selected Plan, never
-        // from a later Component profile mapping. Only fresh issue after an
-        // absent issued-row lookup binds disposition; reconstruction stays semantic.
-        case Some(value) => value.requirementC(base)
-        case None => Consequence.success(base) // Current Plan classification is optional business input.
-      }
+      // The retained Plan owns semantic classification. Concrete mapping still
+      // belongs only to fresh issuance after the absent issued-row lookup.
+      GoalPhaseWorkClassification.requirementC(input.kind, input.stepIdentity, input.selectedPlan, base)
     }
 
     private[GoalPhaseNativeWorkContinuation] def operationC(core: Option[ActionCall.Core], native: WorkflowManagedCompletion[S.Result],

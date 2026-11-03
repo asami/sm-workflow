@@ -4,7 +4,6 @@ import io.circe.{Decoder, Encoder, Json, parser}
 import io.circe.generic.auto.*
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
-import java.nio.charset.StandardCharsets.UTF_8
 import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.WorkflowResultJsonV1.PayloadCodec
@@ -23,7 +22,6 @@ private[smworkflow] object SplitPhaseScopeProjectionSnapshotJsonV1 {
   import SplitPhaseExplicitPartitionRawCodecs.given
   val schema = "sm-workflow.split-phase-scope-successor.v1"
   val storageField = "splitPhaseScopeSuccessorPayload"
-  val maximumPayloadBytes = 1024 * 1024
   private val _prefix = schema + ":"
   private final case class BuiltFrame(proposalReference: P.ProposalReference, proposal: String,
     ownershipReference: B.OwnershipReference, ownership: String,
@@ -62,25 +60,22 @@ private[smworkflow] object SplitPhaseScopeProjectionSnapshotJsonV1 {
   val payloadCodec: PayloadCodec[V.Record] = new PayloadCodec[V.Record] {
     val typeIdentity = "SplitPhaseScopeProjectionSuccessor"
     def encode(value: V.Record): Json = _json_c(value).toOption.getOrElse(
-      throw new IllegalArgumentException("Invalid or oversized scope successor"))
+      throw new IllegalArgumentException("Invalid scope successor"))
     def decode(value: Json): Either[String, V.Record] = _decode_json_c(value, None).toOption
-      .toRight("Invalid or oversized scope successor")
+      .toRight("Invalid scope successor")
   }
 
   def encodeC(record: V.Record): Consequence[String] = _json_c(record).map(json => _prefix + json.noSpaces)
   def decodeC(firstReference: K.Reference, resultReference: T.ResultReference, raw: String): Consequence[V.Record] =
-    if (raw == null || _bytes(raw) > maximumPayloadBytes || !raw.startsWith(_prefix))
-      _invalid("unsupported or oversized frame")
+    if (raw == null || !raw.startsWith(_prefix))
+      _invalid("unsupported frame")
     else parser.parse(raw.substring(_prefix.length)).fold(_ => _invalid("invalid JSON"),
       json => _decode_json_c(json, Some(firstReference -> resultReference)))
 
   private def _json_c(record: V.Record): Consequence[Json] = _guarded {
     if (record == null || record.first == null || record.result == null || record.judgment == null || record.frontier == null)
       _invalid("passive data is incomplete")
-    else _render_c(record).flatMap { json =>
-      if (_bytes(_prefix + json.noSpaces) <= maximumPayloadBytes) Consequence.success(json)
-      else _invalid("whole frame exceeds UTF-8 bound")
-    }
+    else _render_c(record)
   }
   private def _render_c(record: V.Record): Consequence[Json] = _guarded {
     val frontier = record.frontier match {
@@ -106,8 +101,7 @@ private[smworkflow] object SplitPhaseScopeProjectionSnapshotJsonV1 {
   }
   private def _decode_json_c(json: Json, selected: Option[(K.Reference, T.ResultReference)]): Consequence[V.Record] = _guarded {
     for {
-      _ <- if (json != null && _bytes(_prefix + json.noSpaces) <= maximumPayloadBytes) Consequence.unit
-        else _invalid("whole frame exceeds UTF-8 bound")
+      _ <- if (json != null) Consequence.unit else _invalid("whole frame is absent")
       root <- json.asObject.map(Consequence.success).getOrElse(_invalid("root is not an object"))
       _ <- if (root("schemaVersion").flatMap(_.asString).contains(schema)) Consequence.unit else _invalid("schema differs")
       payload <- root("payload").get.as[Payload].fold(_ => _invalid("payload shape differs"), Consequence.success)
@@ -144,7 +138,6 @@ private[smworkflow] object SplitPhaseScopeProjectionSnapshotJsonV1 {
       prior.flatMap(items => next.map(items :+ _))
     }
   private def _envelope(payload: Json): Json = Json.obj("schemaVersion" -> Json.fromString(schema), "payload" -> payload)
-  private def _bytes(value: String): Int = value.getBytes(UTF_8).length
   private def _invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("SplitPhase scope successor codec " + reason)
   private def _guarded[A](body: => Consequence[A]): Consequence[A] = try body catch {
     case NonFatal(_) => _invalid("passive data cannot be encoded or decoded")

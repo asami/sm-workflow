@@ -507,9 +507,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       _ <- GoalPhaseAcceptanceBoundary.savedPlanC(proposed)
       _ <- if (text(evidence) && !evidence.exists(_.isControl) && directive != null && text(directive.reason) &&
           directive.findings != null && directive.findings.size == 1 &&
-          directive.reason.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 16384 &&
-          directive.findings.forall(finding => finding != null && finding.trim.nonEmpty && !finding.contains('\u0000') &&
-            finding.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 16384)) Consequence.unit
+          directive.findings.forall(finding => finding != null && finding.trim.nonEmpty && !finding.contains('\u0000'))) Consequence.unit
         else invalid("Review remaining Plan adoption requires its independently admitted directive and exact finding")
       _ <- if (stage == Stage.Decision && decisionSource.contains(Stage.Review) && !documentDecision &&
           pendingRepair.isEmpty && closureIntent.isEmpty && phaseReviewedCandidate.isEmpty &&
@@ -827,8 +825,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         success(Stage.Decision, reason = Some(reason))
       case DocumentConflictObserved(conflicts) if stage != Stage.Decision && stage != Stage.Closed &&
           conflicts != null && conflicts.nonEmpty && conflicts.size <= 128 &&
-          conflicts.distinct == conflicts && conflicts.forall(value => text(value) &&
-            value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 16384) =>
+          conflicts.distinct == conflicts && conflicts.forall(text) =>
         Consequence.success(new State(plan, Stage.Decision, cursor, generation, repairs, base, completed,
           candidate, checksReceipt, reviewEvidence, closureIntent,
           Some("Latest document acceptance conflicts: " + conflicts.mkString(", ")), repositoryReceipt,

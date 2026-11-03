@@ -1,6 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
+import io.circe.syntax.*
 import org.goldenport.Consequence
 import org.goldenport.protocol.{Property, Request}
 import org.goldenport.record.io.RecordDecoder
@@ -95,11 +96,9 @@ final class GoalPhaseFixAssessmentSpec extends AnyWordSpec with Matchers with Gi
       "null unit" -> (r => r.copy(change = _change.copy(affectedLogicalUnits = Vector(null)))),
       "blank unit" -> (r => r.copy(change = _change.copy(affectedLogicalUnits = Vector(" ")))),
       "NUL unit" -> (r => r.copy(change = _change.copy(affectedLogicalUnits = Vector("one\u0000unit")))),
-      "oversize UTF8 unit" -> (r => r.copy(change = _change.copy(affectedLogicalUnits = Vector("界" * 342)))),
       "null change rationale" -> (r => r.copy(change = _change.copy(rationale = null))),
       "blank change rationale" -> (r => r.copy(change = _change.copy(rationale = " "))),
       "NUL change rationale" -> (r => r.copy(change = _change.copy(rationale = "why\u0000"))),
-      "oversize change rationale" -> (r => r.copy(change = _change.copy(rationale = "x" * 16385))),
       "unknown status" -> (r => r.copy(convergence = _convergence.copy(status = "CONVERGING"))),
       "padded status" -> (r => r.copy(convergence = _convergence.copy(status = " PROGRESSING"))),
       "null status" -> (r => r.copy(convergence = _convergence.copy(status = null))),
@@ -108,8 +107,7 @@ final class GoalPhaseFixAssessmentSpec extends AnyWordSpec with Matchers with Gi
       "null confidence" -> (r => r.copy(convergence = _convergence.copy(confidence = null))),
       "null convergence rationale" -> (r => r.copy(convergence = _convergence.copy(rationale = null))),
       "blank convergence rationale" -> (r => r.copy(convergence = _convergence.copy(rationale = " "))),
-      "NUL convergence rationale" -> (r => r.copy(convergence = _convergence.copy(rationale = "why\u0000"))),
-      "oversize convergence rationale" -> (r => r.copy(convergence = _convergence.copy(rationale = "x" * 16385))))
+      "NUL convergence rationale" -> (r => r.copy(convergence = _convergence.copy(rationale = "why\u0000"))))
     malformed.foreach { case (description, alter) =>
       s"reject $description without replacing it with an absent assessment" in {
         Given("an otherwise valid actual repair assessment")
@@ -121,17 +119,18 @@ final class GoalPhaseFixAssessmentSpec extends AnyWordSpec with Matchers with Gi
       }
     }
 
-    "admit maximum bounded logical units and rationales without truncation" in {
-      Given("128 distinct units and rationales at their UTF8 byte limits")
-      val units = Vector.tabulate(128)(i => s"$i-" + ("x" * (1023 - i.toString.length)))
-      val value = _report.copy(change = _change.copy(affectedLogicalUnits = units, rationale = "x" * 16384),
-        convergence = _convergence.copy(rationale = "y" * 16384))
-      When("the boundary-sized report is admitted")
+    "admit the maximum logical unit count and complete large rationales without truncation" in {
+      Given("128 distinct units and complete text beyond the former UTF8 byte limits")
+      val units = Vector.tabulate(128)(i => s"$i-" + ("界" * 342))
+      val value = _report.copy(change = _change.copy(affectedLogicalUnits = units, rationale = "x" * 65537),
+        convergence = _convergence.copy(rationale = "理由" * 16385))
+      When("the complete report is admitted")
       val admitted = validateC(value)
       Then("all exact text remains present")
       admitted shouldBe Consequence.unit
       value.change.affectedLogicalUnits shouldBe units
-      value.change.rationale.length shouldBe 16384
+      value.change.rationale shouldBe "x" * 65537
+      value.asJson.as[Report] shouldBe Right(value)
     }
 
     "reject null report values and null or populated-invalid report options" in {

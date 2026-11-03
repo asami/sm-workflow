@@ -61,7 +61,7 @@ private[smworkflow] object GoalPhaseNativeReleaseClosure {
     value.execution.forall(e => e != null && Set("succeeded", "failed", "incomplete", "invalid-output",
       "conflict-observation-required")(e.outcome) && e.termination != null && e.termination.nonEmpty &&
       e.exitCode != null && (e.outcome != "succeeded" || e.exitCode.contains(0)) &&
-      e.stderr != null && e.stderr.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 32768 &&
+      e.stderr != null &&
       e.selectedPaths != null && e.selectedPaths.nonEmpty && e.selectedPaths.size <= 256 &&
       e.selectedPaths.distinct == e.selectedPaths && value.input.plan.phasePathsOwned(e.selectedPaths)) &&
     value.commit.forall(c => c != null &&

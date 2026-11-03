@@ -84,3 +84,13 @@ Complete P611 only with actual evidence and a durable English Phase record conta
 source/installed revisions, tested relations, validation selection/reuse reasons,
 semantic-call counts, aggregate/per-repository results and remaining limitations.
 Do not alter current live Sessions or sync repositories merely by adopting this plan.
+
+## Ordinary validation profile allocation — 2026-11-02
+
+B2 consumes the [dev-first validation workstream](development-mode-validation-plan.md)
+(VM-01/03/04) when resolving the existing project validation binding.
+Dev is the routine target default; explicit scenario modes remain selected and
+actual child mode is recorded. No AI-written per-repository launcher or silent
+fixture substitution for required live demo/production evidence. Preserve
+current Phase/session history and integrate this as a bounded binding refinement,
+not a restart or a repeated four-mode full validation.

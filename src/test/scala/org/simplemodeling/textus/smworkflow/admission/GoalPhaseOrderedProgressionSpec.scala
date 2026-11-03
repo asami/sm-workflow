@@ -45,6 +45,43 @@ final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers wi
   }
 
   "Requested precommit Step review" should {
+    "retain accepted work and repair accounting when the native prerequisite source generation advances" in {
+      Given("M3-UNKNOWN323-STATE: a genuine accepted first Step and unstarted second Validation candidate")
+      val first = close(initial, oid('c'), oid('d'))
+      val completed = take(first.acceptC(SemanticCompleted(work(first), "Accepted M3-like work")))
+      val source = take(completed.acceptC(CandidateObserved(Snapshot(first.tipSnapshot.head, oid('e')))))
+      val reference = ContextReference("specification-owned-wait-source-direction", "1")
+      When("the authenticated native owner adopts one dependency source generation")
+      val next = take(source.adoptPrerequisiteSourceRevisionC(reference))
+      Then("only generation changes, while accepted primary work, prefix and repair accounting remain exact")
+      next.stage shouldBe Stage.Validation
+      next.generation shouldBe source.generation + 1
+      next.plan shouldBe source.plan
+      next.base shouldBe source.base
+      next.completed shouldBe source.completed
+      next.candidate shouldBe source.candidate
+      next.cursor shouldBe source.cursor
+      next.repairs shouldBe source.repairs
+      next.ordinaryRepairs shouldBe source.ordinaryRepairs
+      next.repairControl shouldBe source.repairControl
+      next.repairObservations shouldBe source.repairObservations
+      next.repairDirective shouldBe source.repairDirective
+      next.candidateParent shouldBe source.candidateParent
+      next.stepAdmission shouldBe source.stepAdmission
+      next.stepReviewRequired shouldBe source.stepReviewRequired
+      next.phaseReviewedCandidate shouldBe source.phaseReviewedCandidate
+      next.phaseRecordingPaths shouldBe source.phaseRecordingPaths
+      next.checksReceipt shouldBe source.checksReceipt
+      next.reviewEvidence shouldBe source.reviewEvidence
+      next.closureIntent shouldBe source.closureIntent
+      next.repositoryReceipt shouldBe source.repositoryReceipt
+      initial.adoptPrerequisiteSourceRevisionC(reference).isSuccess shouldBe false
+      completed.adoptPrerequisiteSourceRevisionC(reference).isSuccess shouldBe false
+      source.adoptPrerequisiteSourceRevisionC(null).isSuccess shouldBe false
+      val checked = take(source.acceptC(ChecksObserved(source.candidate.get, plan.steps(1).checks, "actual-check", true)))
+      checked.adoptPrerequisiteSourceRevisionC(reference).isSuccess shouldBe false
+    }
+
     "preserve the checked prefix and eight consumed repairs and charge the genuine ninth repair only once" in {
       Given("P69-PRECOMMIT-REVIEW-01: a conditional Step after eight actual test repair transitions")
       val policy = GoalPhaseStepAssessment.Policy("conditional-doc", "documentation", "conditional", "off", "off", Vector.empty)

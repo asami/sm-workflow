@@ -47,27 +47,26 @@ final class SplitPhaseScopeProjectionCheckpointPreparationSpec extends AnyWordSp
         variants.distinct.size shouldBe variants.size
         variants.foreach(_ should not be reference)
         key shouldBe "scope-successor:" + nativekey
-        key.getBytes(UTF_8).length should be <= 1024
       }
-      "refuse incomplete source roles and retain the private legacy address helper" in {
-        Given("valid short roles and an obsolete application-copy address, not a runtime selection gate")
+      "refuse incomplete source roles while preserving complete purpose-prefixed keys" in {
+        Given("valid source roles and an address whose purpose prefix exceeds the former application byte cap")
         val first = K.Reference("first", "1")
         val work = ContinuationIdentity("scope")
         val result = ContextReference("result", "1")
-        val oversized = C.Reference("a" * 1010, "1")
+        val complete = C.Reference("a" * 1010, "1")
         When("missing or noncanonical roles and the final successor key are prepared")
         val invalid = Vector(
           C.referenceC(null, work, result), C.referenceC(first, null, result), C.referenceC(first, work, null),
           C.referenceC(first.copy(revision = " "), work, result),
           C.referenceC(first, ContinuationIdentity("bad\nwork"), result),
           C.referenceC(first, work, result.copy(identity = "")))
-        val nativekey = take(M.keyC(M.Reference(oversized.identity, oversized.revision)))
-        val refused = C.keyC(oversized)
-        Then("source-role construction rejects incomplete inputs; the legacy-only address helper remains separate from native selection")
+        val nativekey = take(M.keyC(M.Reference(complete.identity, complete.revision)))
+        val key = take(C.keyC(complete))
+        Then("source-role construction rejects incomplete inputs and exact key composition preserves the complete reference")
         invalid.foreach(_ shouldBe a[Consequence.Failure[?]])
         nativekey.getBytes(UTF_8).length should be <= 1024
         ("scope-successor:" + nativekey).getBytes(UTF_8).length should be > 1024
-        refused shouldBe a[Consequence.Failure[?]]
+        key shouldBe "scope-successor:" + nativekey
       }
     }
     "native construction boundary" which {
@@ -81,12 +80,12 @@ final class SplitPhaseScopeProjectionCheckpointPreparationSpec extends AnyWordSp
       }
     }
     "full passive frame refusal" which {
-      "reject absent unsupported malformed and oversized frames without constructing a native capability" in {
+      "reject absent unsupported and malformed frames without constructing a native capability" in {
         Given("a selected successor purpose and untrusted full-frame inputs")
         val reference = C.Reference("scope-projection:selected", "1")
         val prefix = J.schema + ":"
         val frames = Vector(null, "sm-workflow.split-phase-scope-checkpoint.v0:{}", prefix + "{",
-          prefix + "{}", prefix + "語" * (J.maximumPayloadBytes / 3 + 1))
+          prefix + "{}", prefix + "語" * (1024 * 1024 / 3 + 1))
         When("the complete frame decoder and passive encoders receive those inputs")
         val refused = frames.map(raw => J.decodeC(reference, raw))
         val unselected = J.decodeC(null, prefix + "{}")

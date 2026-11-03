@@ -4,7 +4,6 @@ import io.circe.{Decoder, Encoder, Json, parser}
 import io.circe.generic.auto.*
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
-import java.nio.charset.StandardCharsets.UTF_8
 import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.WorkflowResultJsonV1.PayloadCodec
@@ -23,7 +22,6 @@ private[smworkflow] object SplitPhasePlanningCheckpointJsonV1 {
   val schema = "sm-workflow.split-phase-planning-checkpoint.v2"
   val storageField = "splitPhasePlanningCheckpointPayload"
   val locatorSchema = "sm-workflow.split-phase-planning-checkpoint-locator.v2"
-  val maximumPayloadBytes = 1024 * 1024
   private final case class Payload(reference: K.Reference, contextReference: S.ContextReference,
     startReference: TS.Reference, originalContext: String, originalStart: String, origin: K.Origin,
     snapshot: Json, predecessorRevision: Long, committedRevision: Long)
@@ -39,11 +37,11 @@ private[smworkflow] object SplitPhasePlanningCheckpointJsonV1 {
   val payloadCodec: PayloadCodec[K.Record] = new PayloadCodec[K.Record] {
     val typeIdentity = "SplitPhasePlanningCheckpoint"
     def encode(value: K.Record): Json = mappingJsonC(value).toOption.getOrElse(
-      throw new IllegalArgumentException("Invalid or oversized planning checkpoint"))
+      throw new IllegalArgumentException("Invalid planning checkpoint"))
     def decode(value: Json): Either[String, K.Record] = guarded {
       value.hcursor.downField("payload").get[K.Reference]("reference")
         .fold(_ => invalid("mapping reference is absent"), ref => decodeMappingC(ref, value))
-    }.toOption.toRight("Invalid or oversized planning checkpoint")
+    }.toOption.toRight("Invalid planning checkpoint")
   }
 
   def encodeC(value: K.Record): Consequence[String] = mappingJsonC(value).map(j => schema + ":" + j.noSpaces)
@@ -56,9 +54,7 @@ private[smworkflow] object SplitPhasePlanningCheckpointJsonV1 {
   def encodeLocatorC(value: K.Locator): Consequence[String] = guarded {
     val payload = value.asJson
     val json = envelope(locatorSchema, payload)
-    for {
-      _ <- boundedC(locatorSchema, json)
-    } yield locatorSchema + ":" + json.noSpaces
+    Consequence.success(locatorSchema + ":" + json.noSpaces)
   }
   def decodeLocatorC(reference: K.Reference, raw: String): Consequence[K.Locator] = guarded {
     for {
@@ -77,12 +73,11 @@ private[smworkflow] object SplitPhasePlanningCheckpointJsonV1 {
       payload = Payload(value.reference, value.originalContext.reference, value.originalStart.reference,
         context, start, value.origin, snapshot, value.predecessorRevision.value, value.committedRevision.value)
       json = envelope(schema, payload.asJson)
-      _ <- boundedC(schema, json)
     } yield json
   }
   private def decodeMappingC(reference: K.Reference, json: Json): Consequence[K.Record] = guarded {
     for {
-      _ <- boundedC(schema, json)
+      _ <- _json_present_c(json)
       raw <- payloadC(schema, json)
       payload <- raw.as[Payload].fold(_ => invalid("mapping shape differs"), Consequence.success)
       _ <- if (payload.reference == reference) Consequence.unit else invalid("selected mapping revision differs")
@@ -100,12 +95,11 @@ private[smworkflow] object SplitPhasePlanningCheckpointJsonV1 {
       .flatMap(_("payload")).map(Consequence.success)
       .getOrElse(invalid("envelope fields or schema differ"))
   private def parseC(version: String, raw: String): Consequence[Json] =
-    if (raw == null || raw.getBytes(UTF_8).length > maximumPayloadBytes || !raw.startsWith(version + ":"))
-      invalid("frame is absent, unsupported or oversized")
+    if (raw == null || !raw.startsWith(version + ":"))
+      invalid("frame is absent or unsupported")
     else parser.parse(raw.substring(version.length + 1)).fold(_ => invalid("JSON is invalid"), Consequence.success)
-  private def boundedC(version: String, json: Json): Consequence[Unit] =
-    if (json != null && (version + ":" + json.noSpaces).getBytes(UTF_8).length <= maximumPayloadBytes) Consequence.unit
-    else invalid("whole frame exceeds its UTF-8 bound")
+  private def _json_present_c(json: Json): Consequence[Unit] =
+    if (json != null) Consequence.unit else invalid("whole frame is absent")
   private def invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("SplitPhase planning checkpoint " + reason)
   private def guarded[A](body: => Consequence[A]): Consequence[A] = try body catch {
     case NonFatal(_) => invalid("encoding or data shape is invalid")

@@ -194,15 +194,15 @@ private[smworkflow] object GoalPhaseFindingRecording {
   }
 
   private def _identity(value: String): Boolean = value != null && value.matches("[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}")
-  private def _text(value: String, maximum: Int): Boolean = value != null && value.trim.nonEmpty &&
-    !value.contains('\u0000') && UTF_8.newEncoder().canEncode(value) && value.getBytes(UTF_8).length <= maximum
-  private def _exact(value: String): Boolean = _text(value, 1024) && value.trim == value && !value.exists(_.isControl)
+  private def _text(value: String): Boolean = value != null && value.trim.nonEmpty &&
+    !value.contains('\u0000') && UTF_8.newEncoder().canEncode(value)
+  private def _exact(value: String): Boolean = _text(value) && value.trim == value && !value.exists(_.isControl)
   private def _oid(value: String): Boolean = value != null && value.matches("[0-9a-f]{40}")
   private def _reference(value: ContextReference): Boolean = value != null && _exact(value.identity) && _exact(value.revision)
   private def _key(reference: ContextReference, identity: String): (String, String, String) =
     (reference.identity, reference.revision, identity)
   private def _observation(value: Observation): Boolean = value != null && _identity(value.identity) &&
-    Set("HYGIENE", "DEVELOPMENT_CANDIDATE")(value.category) && _text(value.summary, 16384) && _text(value.rationale, 16384)
+    Set("HYGIENE", "DEVELOPMENT_CANDIDATE")(value.category) && _text(value.summary) && _text(value.rationale)
   private def _observations(value: Observations): Boolean = value != null && value.items != null && value.items.size <= 128 &&
     value.items.forall(_observation) && value.items.map(_.identity).distinct.size == value.items.size
   private def _item(value: Item): Boolean = value != null && _reference(value.sourceReference) &&
@@ -215,13 +215,13 @@ private[smworkflow] object GoalPhaseFindingRecording {
   private def _section(value: SavedSection): Boolean = value != null && RepositorySyncNativeConflictInput.relative(value.file) && _exact(value.section)
   private def _item_result(value: ItemResult): Boolean = value != null && _reference(value.sourceReference) && _identity(value.identity) &&
     value.records != null && value.records.size <= 128 && value.records.forall(_section) &&
-    value.records.map(r => (r.file, r.section)).distinct.size == value.records.size && _text(value.rationale, 16384) &&
+    value.records.map(r => (r.file, r.section)).distinct.size == value.records.size && _text(value.rationale) &&
     (value.outcome match {
       case "recorded" | "partial" => value.records.nonEmpty
       case "failed" => value.records.isEmpty
       case _ => false
     })
-  private def _result(value: Result): Boolean = value != null && _text(value.summary, 16384) && value.items != null &&
+  private def _result(value: Result): Boolean = value != null && _text(value.summary) && value.items != null &&
     value.items.nonEmpty && value.items.size <= 256 && value.items.forall(_item_result) &&
     value.items.map(i => _key(i.sourceReference, i.identity)).distinct.size == value.items.size &&
     value.outcome == (if (value.items.forall(_.outcome == "recorded")) "completed"

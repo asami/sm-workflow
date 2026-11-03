@@ -5,6 +5,14 @@ description: Deliver one authorized development request to an available existing
 
 # sm-delegate-task
 
+## Test classification and selection
+
+Follow the [standard-annotation policy](../../docs/spec/native-host-execution.md#validation-cadence-with-standard-annotations).
+ADMISSION is the sole custom label; FULL/focused are run scopes. Use standard
+Slow for heavy selection and DoNotDiscover for explicit-only suites. Preserve
+captured checks/results and use the runtime's supported selection route.
+
+
 Use the [delegation contract](../../docs/spec/delegate-task.md),
 [finite public caller contract](../../docs/spec/native-delegate-task-caller.md),
 [native execution contract](../../docs/spec/native-host-execution.md) and
@@ -48,6 +56,13 @@ sibling skill as an executor, run SBT/publication, add FULL merely for delegatio
 create receipts or replay unknown effects. Standalone FIX retains its original
 uncommitted completion contract. Observe missing capabilities through the issued
 public route rather than building a second runner or control engine.
+
+For repair qualification, apply [same-scope engineering continuation](../../docs/spec/native-host-execution.md#same-scope-engineering-continuation--2026-10-30).
+Reuse covering authority for changed candidates and necessary checks; do not add
+per-attempt consent. Present an actual runtime stop with its evidence, distinguish
+coarse failure status from convergence evidence, and correct a producer gap
+without fabricating Human direction. Preserve explicit user limits and consumer
+Session exclusions.
 
 Record actual dispatch/result/return using
 `DelegateTaskDeliveryService.observeDelegateTaskDelivery`. Requester adoption

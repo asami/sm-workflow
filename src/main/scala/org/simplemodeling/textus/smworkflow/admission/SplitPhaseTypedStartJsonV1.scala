@@ -4,7 +4,6 @@ import io.circe.{Decoder, Encoder, Json, parser}
 import io.circe.generic.auto.*
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
-import java.nio.charset.StandardCharsets.UTF_8
 import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
@@ -20,7 +19,6 @@ private[smworkflow] object SplitPhaseTypedStartJsonV1 {
   val schema = "sm-workflow.split-phase-typed-start-record.v3"
   val allocationSchema = "sm-workflow.split-phase-typed-start-allocation.v3"
   val storageField = "splitPhaseTypedStartPayload"
-  val maximumPayloadBytes = 1024 * 1024
   import SplitPhaseExplicitPartitionRawCodecs.given
   private final case class Payload(reference: T.Reference, instanceIdentity: InstanceIdentity,
     configuration: Configuration, input: Json, participantIdentity: String,
@@ -93,7 +91,7 @@ private[smworkflow] object SplitPhaseTypedStartJsonV1 {
 
   private def payloadC(version: String, reference: T.Reference, raw: String): Consequence[Json] =
     if (reference == null || !name(reference.identity) || !name(reference.revision) ||
-        raw == null || bytes(raw) > maximumPayloadBytes || !raw.startsWith(version + ":"))
+        raw == null || !raw.startsWith(version + ":"))
       invalid("encoding or selected reference is unsupported")
     else for {
       json <- parser.parse(raw.substring(version.length + 1)).fold(_ => invalid("JSON is malformed"), Consequence.success)
@@ -105,10 +103,8 @@ private[smworkflow] object SplitPhaseTypedStartJsonV1 {
 
   private def renderC(version: String, payload: Json): Consequence[String] = {
     val raw = version + ":" + Json.obj("schemaVersion" -> Json.fromString(version), "payload" -> payload).noSpaces
-    if (bytes(raw) <= maximumPayloadBytes) Consequence.success(raw)
-    else invalid("payload exceeds its UTF-8 storage limit")
+    Consequence.success(raw)
   }
-  private def bytes(raw: String): Int = raw.getBytes(UTF_8).length
   private def name(value: String): Boolean = value != null && value.nonEmpty && value.trim == value
   private def invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("SplitPhase typed Start " + reason)
   private def guarded[A](body: => Consequence[A]): Consequence[A] = try body catch {

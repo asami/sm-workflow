@@ -117,10 +117,10 @@ final class SplitPhaseCandidateAllocationPolicySpec extends AnyWordSpec with Mat
       policy.allocateC(need, _result.copy(identity = "\n")).isSuccess shouldBe false
       policy.allocateC(need, _result.copy(identity = "é" * 200)).isSuccess shouldBe false
       val source = base(Vector(260, 180, 260))
-      val oversized = O.Records(None, Some(O.DemandRecord(O.DemandReference("demand", "1"), source.source.reference,
+      val complete = O.Records(None, Some(O.DemandRecord(O.DemandReference("demand", "1"), source.source.reference,
         source.source.authority, source.inventory.orderedUnfinishedItems.map(id => O.ItemDemand(id,
-          O.Demand.Unresolved("あ" * SplitPhaseExplicitPlanningInputJsonV1.maximumPayloadBytes))))), None)
-      policy.allocateC(_need(oversized), _result).isSuccess shouldBe false
+          O.Demand.Unresolved("あ" * (1024 * 1024)))))), None)
+      policy.allocateC(_need(complete), _result).isSuccess shouldBe true
     }
   }
 }

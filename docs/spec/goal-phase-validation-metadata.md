@@ -777,3 +777,16 @@ semantic caller adoption remain with the parent. Primary Step/Phase acceptance,
 fullsuite6.3, CBD10 and all other whole6.2 obligations remain open; original Goal,
 Plan/epoch, K2/L3 history and repair accounting are retained. No evidence logs are
 committed by this driver contract.
+
+## Planned test-mode variant selection — 2026-11-02
+
+The [per-test mode integration](development-mode-validation.md#per-test-declarations-build-binding-and-workflow-ownership)
+adds CNCF-normalized mode requirements to selection and exact binding through
+VM-07. The current V1 input/selection schema described above does not yet expose
+this extension; do not smuggle it through arbitrary executionParameters.
+CNCF owns declaration parsing, inheritance and version handling; Slice plans
+select tests/acceptance and provide defaults only where metadata has no modes.
+The adopted extension deduplicates by logical reference, normalized parameters
+and effective mode, preserving distinct mode outcomes through shared SBT/build
+execution. Existing historical bindings/results remain readable at their
+original scope; no Session replay or declaration table duplication.

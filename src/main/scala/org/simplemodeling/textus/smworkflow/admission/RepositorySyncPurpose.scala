@@ -111,8 +111,8 @@ private[smworkflow] object RepositorySyncPurpose {
     workspace <- WorkspaceId.parseC("sm-workflow-repository")
     path <- WorkspaceFilePath.parseC(name)
     actual <- WorkflowFileExecution.readTextC(store.core, FileTarget(workspace), path)
-  } yield actual.text -> (if (actual.text.exists(text => text.contains('\u0000') || text.getBytes(UTF_8).length > 131072))
-    Some("binary or oversized worktree text remains unexamined") else None)
+  } yield actual.text -> (if (actual.text.exists(text => text.contains('\u0000') || !UTF_8.newEncoder().canEncode(text)))
+    Some("nonordinary worktree text remains unexamined") else None)
 
   private def _blob_c(store: N.Store, value: Option[GitRegularTreeEntry]): Consequence[(Option[String], Option[String])] = value match {
     case None => Consequence.success(None -> None)
@@ -128,11 +128,11 @@ private[smworkflow] object RepositorySyncPurpose {
         result.groups.nonEmpty && result.groups.size <= 16 && result.groups.map(_.identity).distinct.size == result.groups.size &&
         result.groups.forall(group => group != null && group.identity.matches("[a-z][a-z0-9-]{0,63}") &&
           _text(group.purpose) && _text(group.rationale) && _text(group.message) && group.message == group.message.trim &&
-          group.message.getBytes(UTF_8).length <= 4096 && group.dependencies != null && group.dependencies.distinct == group.dependencies &&
+          group.dependencies != null && group.dependencies.distinct == group.dependencies &&
           group.content != null && group.content.nonEmpty && group.content.size <= 256 &&
           group.content.map(_.path).distinct == group.content.map(_.path) && group.content.forall(content => content != null &&
             files(content.path) && content.text != null &&
-            content.text.forall(text => text != null && !text.contains('\u0000') && UTF_8.newEncoder().canEncode(text) && text.getBytes(UTF_8).length <= 131072) &&
+            content.text.forall(text => text != null && !text.contains('\u0000') && UTF_8.newEncoder().canEncode(text)) &&
             request.files.find(_.path == content.path).exists(_.unexamined.isEmpty)) &&
           group.inseparable != null && group.inseparable.distinct == group.inseparable &&
           (group.inseparable.isEmpty || (group.inseparable.size >= 2 && group.rationale.trim.nonEmpty))) &&
@@ -199,7 +199,7 @@ private[smworkflow] object RepositorySyncPurpose {
       }
     } yield values :+ loaded }
 
-  private def _text(value: String): Boolean = value != null && value.trim.nonEmpty && !value.contains('\u0000') && value.getBytes(UTF_8).length <= 16384
+  private def _text(value: String): Boolean = value != null && value.trim.nonEmpty && !value.contains('\u0000')
   private def _configuration_json(value: ConfigurationValue): Json = value match {
     case ConfigurationValue.StringValue(text) => Json.fromString(text)
     case ConfigurationValue.ObjectValue(fields) => Json.obj(fields.toVector.map((key, value) => key -> _configuration_json(value))*)

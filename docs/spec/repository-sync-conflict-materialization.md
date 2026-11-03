@@ -33,8 +33,10 @@ A runtime-fixed JVM program observes/writes only configured ordinary text paths
 under its fixed repository root. It accepts typed expected/replacement text as
 application data, not an immutability certificate. Before writing, owning advance
 persists MaterializingConflict with that concrete overwrite intent. Preflight all
-files; reject symlink ancestors, special files, oversized/binary data and changed
-preconditions. Atomic replacement preserves file permissions. Multiple files
+files; reject symlink ancestors, special files, nonordinary text and changed
+preconditions. CNCF enforces configured acquisition limits while reading; the
+application consumes complete ordinary UTF-8 without another text-size ceiling.
+Atomic replacement preserves file permissions. Multiple files
 are not crash-atomic. Reopen observes ready/partial/applied/conflict and may apply
 only missing replacements of this actual saved intent; contradictory edits stop.
 

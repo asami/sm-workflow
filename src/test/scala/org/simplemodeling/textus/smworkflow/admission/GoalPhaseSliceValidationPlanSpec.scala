@@ -125,7 +125,7 @@ final class GoalPhaseSliceValidationPlanSpec extends AnyWordSpec with Matchers w
       val variants = badqueries.map(value => _payload(payload.mapObject(_.add("metadataSelection", value)))) ++
         badreferences.map(value => _payload(payload.mapObject(_.add("additionalOperations",
           Json.arr(invocation.mapObject(_.add("reference", value)))))))
-      val sources = Vector(source.copy(identity = " "), source.copy(identity = "x" * 4097),
+      val sources = Vector(source.copy(identity = " "),
         source.copy(acceptanceConditions = Vector.empty),
         source.copy(acceptanceConditions = source.acceptanceConditions :+ source.acceptanceConditions.head),
         source.copy(acceptanceConditions = (1 to 17).toVector.map(index => "condition-" + index)))
@@ -135,6 +135,16 @@ final class GoalPhaseSliceValidationPlanSpec extends AnyWordSpec with Matchers w
       Then("unknown producer declarations malformed exact references and invalid bounded source contracts are rejected")
       refusedplans.foreach(_.isSuccess shouldBe false)
       refusedsources.foreach(_.isLeft shouldBe true)
+
+      Given("an ordinary complete source identity beyond the removed application length ceiling")
+      val complete = source.copy(identity = "x" * 4097)
+      val matching = original.copy(identity = complete.identity)
+      When("the source codec and exact plan binding consume that identity")
+      val restored = complete.asJson.as[L.Source]
+      val admitted = L.admitC(complete, matching)
+      Then("the identity remains complete while source scope and producer-reference checks still apply")
+      restored shouldBe Right(complete)
+      take(admitted) shouldBe matching
     }
 
     "refuse wrong identity slice condition sets bounds and incomplete or duplicate coverage" in {

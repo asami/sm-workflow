@@ -140,7 +140,7 @@ final class SplitPhasePartitionCompletionCheckpointPreparationSpec extends AnyWo
       rows.size shouldBe 1
       rows.head.identity shouldBe take(A.lineageKeyC(captured.continuationId))
     }
-    "serialize inert facts without readmitting a completion and bound physical lineage keys" in {
+    "serialize inert facts without readmitting a completion and preserve complete lineage keys" in {
       Given("stored data variants that cannot construct a selected Plan or a Captured publication")
       val saved = capture().record
       val identity = ContinuationIdentity("実例:[]\"\\")
@@ -152,12 +152,17 @@ final class SplitPhasePartitionCompletionCheckpointPreparationSpec extends AnyWo
         take(SplitPhasePartitionCompletionCheckpointJsonV1.encodeC(v)),
         Vector(f.catalog.definition))))
       val keys = Vector(A.lineageKeyC(identity), A.lineageKeyC(identity))
+      val complete = ContinuationIdentity("x" * 1000)
+      val nativekey = take(org.goldenport.cncf.workflow.WorkflowMechanicalTransition.keyC(
+        org.goldenport.cncf.workflow.WorkflowMechanicalTransition.Reference(complete.value, "1")))
       val invalidkeys = Vector(A.lineageKeyC(ContinuationIdentity("x" * 1024)), A.lineageKeyC(null))
       val absentplan = A.captureC(null)
-      Then("consumed result planning and presentation data remain available while physical address bounds still apply")
+      Then("consumed result planning and presentation data remain available and CNCF-owned key checks remain authoritative")
       decoded.map(_.participantIdentity) shouldBe variants.map(_.participantIdentity)
       decoded.map(_.checkpoint.map(_.snapshot)) shouldBe variants.map(_.checkpoint.map(_.snapshot))
       keys.map(take(_)).distinct.size shouldBe 1
+      take(A.lineageKeyC(complete)) shouldBe "partition-completion:" + nativekey
+      ("partition-completion:" + nativekey).getBytes(java.nio.charset.StandardCharsets.UTF_8).length should be > 1024
       invalidkeys.foreach(_.isSuccess shouldBe false)
       absentplan.isSuccess shouldBe false
     }

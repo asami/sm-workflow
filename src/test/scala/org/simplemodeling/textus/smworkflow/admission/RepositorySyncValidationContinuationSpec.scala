@@ -48,6 +48,31 @@ private[smworkflow] trait RepositorySyncValidationContinuationBehavior extends A
   import RepositorySyncValidationContinuationFixture.*
 
   "RS-VC1 strict persisted and public contracts" should {
+    "retain a complete large Human rationale in the exact answer direction and evidence binding" in {
+      Given("a valid unchanged candidate target and an explicit Human explanation exceeding 64 KiB")
+      val rationale = "継続を判断した理由" * 10000
+      val answer = N.Answer("AuthorizeNewValidation", rationale, true, true)
+      val direction = N.Direction(target, answer.choice, rationale, context.participantIdentity, reference, true, true)
+      rationale.getBytes(java.nio.charset.StandardCharsets.UTF_8).length should be > 65536
+      When("the public answer and saved direction codecs bind the complete Human selection")
+      val bound = take(N.bindingC("component", target, answer.choice, rationale,
+        context.participantIdentity, reference, true, true))
+      Then("the full rationale roundtrips without weakening participant terminal uncertainty or Defer rules")
+      N.decodeAnswer(answer.asJson) shouldBe Right(answer)
+      direction.asJson.as[N.Direction] shouldBe Right(direction)
+      N.selectBinding(bound) shouldBe Right(bound)
+      bound.hcursor.downField("repositoryValidationContinuation").downField("answer").get[String]("rationale") shouldBe Right(rationale)
+      Vector((false, true), (true, false)).foreach { (ended, accepted) =>
+        N.bindingC("component", target, answer.choice, rationale, context.participantIdentity,
+          reference, ended, accepted).isSuccess shouldBe false
+      }
+      N.bindingC("component", target, answer.choice, rationale, "other", reference, true, true).isSuccess shouldBe false
+      N.decodeAnswer(answer.copy(rationale = rationale + "\n").asJson).isLeft shouldBe true
+      val deferred = answer.copy(choice = "Defer", priorExecutionEnded = false, acceptOriginalUncertainty = false)
+      N.decodeAnswer(deferred.asJson) shouldBe Right(deferred)
+      direction.copy(choice = "Defer").asJson.as[N.Direction].isLeft shouldBe true
+    }
+
     "roundtrip historical v3 payloads exactly while omitting the absent new direction" in new NativePreparationManagedFixture {
       Given("a native v3 Integrated record before validation continuation existed")
       val old = Json.obj("schemaVersion" -> RepositorySyncNativeProgressStore.schema.asJson, "payload" -> Json.obj(

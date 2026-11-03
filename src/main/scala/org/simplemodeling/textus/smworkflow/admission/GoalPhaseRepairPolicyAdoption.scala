@@ -343,7 +343,7 @@ private[smworkflow] object GoalPhaseRepairPolicyAdoption {
   private def _valid_reference(value: ContextReference): Boolean = value != null && R.exact(value.identity) && R.exact(value.revision)
   private def _positive(value: String): Boolean = value != null && value.toLongOption.exists(n => n > 0 && n.toString == value)
   private def _text(value: String): Boolean = value != null && value.trim.nonEmpty && !value.contains('\u0000') &&
-    java.nio.charset.StandardCharsets.UTF_8.newEncoder().canEncode(value) && value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 65536
+    java.nio.charset.StandardCharsets.UTF_8.newEncoder().canEncode(value)
   private def _reference_for(from: InstanceRecord) = WorkflowMechanicalTransition.Reference(
     from.identity.value + ":ordered-repair-policy-adoption:" + from.revision.value, "1")
   def cause(from: InstanceRecord): String = "ordered-repair-policy-adoption:" + from.revision.value +

@@ -576,7 +576,7 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
       case "Defer" => "Human deferred this decision. No automatic question, work, command or closure follows."
       case _ => "Human cancelled this decision path. Repository state and history remain; the Phase is not completed."
     })
-  private def _text(value: String) = value != null && value.trim.nonEmpty && value.length <= 16384 && !value.contains('\u0000')
+  private def _text(value: String) = value != null && value.trim.nonEmpty && !value.contains('\u0000')
   private def _uncertain[A](reason: String): Consequence[A] =
     org.goldenport.cncf.datastore.DataStoreConditionalTransitionFailure.transactionIndeterminate(reason)
 }

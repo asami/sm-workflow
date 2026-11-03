@@ -69,7 +69,7 @@ final class SplitPhaseExplicitPartitionContextSpec extends AnyWordSpec with Matc
       When("the current passive context encoding and decoding retain each full record")
       val stored = records.map(value => take(J.encodeC(value)))
       val decoded = stored.map(value => take(J.decodeC(record.reference, value)))
-      Then("generic aggregate derivation retains all record values within the unchanged v1 context bound")
+      Then("generic aggregate derivation retains all record values in the unchanged v1 context schema")
       decoded shouldBe records
       decoded.map(value => take(value.owner.configuration.mechanicalReceiptLimitsC).maxBytes) shouldBe
         Vector(1048576, 16777216)
@@ -81,7 +81,6 @@ final class SplitPhaseExplicitPartitionContextSpec extends AnyWordSpec with Matc
           expected.owner.configuration.mechanicalReceiptMaxBytes.fold(Json.Null)(Json.fromInt)
       }
       J.schema shouldBe "sm-workflow.split-phase-partition-context.v1"
-      J.maximumPayloadBytes shouldBe 1048576
     }
 
     "E1 interpret absent and null optional bytes as the historical one MiB default" in {
@@ -201,23 +200,20 @@ final class SplitPhaseExplicitPartitionContextSpec extends AnyWordSpec with Matc
       J.decodeTemplateC(template.reference, "foreign:" + original.noSpaces).isSuccess shouldBe false
     }
 
-    "E7 apply the current UTF-8 storage limit to template encoding and decoding" in {
-      Given("R7/E7: passive template presentation with multibyte text and the current byte limit")
+    "E7 preserve complete UTF-8 template presentation without an application storage budget" in {
+      Given("R7/E7: passive template presentation with multibyte text beyond the former byte budget")
       val template = C.Template(record.reference,
         C.TemplateOwner(record.owner.requirement, record.owner.presentation.copy(currentSituation = "語")), facts)
       val stored = take(J.encodeTemplateC(template))
-      val bytes = stored.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
-      val atlimit = stored + (" " * (J.maximumPayloadBytes - bytes))
+      val padded = stored + (" " * (1024 * 1024))
       val huge = template.copy(owner = template.owner.copy(presentation = template.owner.presentation.copy(
-        currentSituation = "語" * (J.maximumPayloadBytes / 3 + 1))))
-      When("the exact boundary, one extra byte and oversized typed presentation reach the codecs")
-      val decoded = take(J.decodeTemplateC(template.reference, atlimit))
-      val oversized = J.decodeTemplateC(template.reference, atlimit + " ")
-      val encoded = J.encodeTemplateC(huge)
-      Then("the exact UTF-8 bound succeeds and excess bytes are refused for both directions")
+        currentSituation = "語" * (1024 * 1024 / 3 + 1))))
+      When("complete JSON whitespace and typed presentation reach the codecs")
+      val decoded = take(J.decodeTemplateC(template.reference, padded))
+      val encoded = take(J.encodeTemplateC(huge))
+      Then("the complete original values survive through both encoding and decoding")
       decoded shouldBe template
-      oversized.isSuccess shouldBe false
-      encoded.isSuccess shouldBe false
+      take(J.decodeTemplateC(huge.reference, encoded)) shouldBe huge
     }
   }
 
@@ -399,7 +395,7 @@ final class SplitPhaseExplicitPartitionContextSpec extends AnyWordSpec with Matc
       results.foreach(_.toOption.get shouldBe record)
     }
 
-    "enforce the UTF-8 byte bound and keep semantic numerical validation outside raw decoding" in {
+    "preserve complete presentation and keep semantic numerical validation outside raw decoding" in {
       Given("raw structurally complete context data, not an admitted executable state")
       val invalidrange = record.copy(facts = facts.copy(partition = facts.partition.copy(policy = facts.partition.policy.copy(phaseOverheadMinutes = -1))))
       When("storage decoding and semantic construction are performed separately")
@@ -407,9 +403,9 @@ final class SplitPhaseExplicitPartitionContextSpec extends AnyWordSpec with Matc
       val decoded = take(J.decodeC(record.reference, take(J.encodeC(invalidrange))))
       C.prepareC(decoded, decoded.facts, instance, configuration, catalog).isSuccess shouldBe false
       val huge = record.copy(owner = record.owner.copy(presentation = record.owner.presentation.copy(
-        currentSituation = "語" * (J.maximumPayloadBytes / 3 + 1))))
-      J.encodeC(huge).isSuccess shouldBe false
-      J.decodeC(record.reference, J.schema + ":" + "語" * (J.maximumPayloadBytes / 3 + 1)).isSuccess shouldBe false
+        currentSituation = "語" * (1024 * 1024 / 3 + 1))))
+      take(J.decodeC(huge.reference, take(J.encodeC(huge)))) shouldBe huge
+      J.decodeC(record.reference, J.schema + ":" + "語" * (1024 * 1024 / 3 + 1)).isSuccess shouldBe false
     }
   }
 }

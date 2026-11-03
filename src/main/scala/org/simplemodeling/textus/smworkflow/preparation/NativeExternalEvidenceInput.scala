@@ -22,7 +22,9 @@ private[smworkflow] object NativeExternalEvidenceInput {
   private val _required = Set("family", "kind", "request", "result", "reference", "execution-evidence", "issuer", "occurred-at", "collection")
 
   def prepareC(supplied: Map[String, String], readText: String => Consequence[String]): Consequence[Record] = try {
-    if (supplied.get("kind").contains("goal-phase-prerequisite-publication-recovery"))
+    if (supplied.get("kind").contains("force-closure"))
+      NativeWorkflowForceClosurePreparation.prepareSuppliedC(supplied, readText)
+    else if (supplied.get("kind").contains("goal-phase-prerequisite-publication-recovery"))
       _prerequisite_recovery_c(supplied, readText)
     else if (supplied.get("kind").contains("goal-phase-prerequisite-publication-observation"))
       _prerequisite_observation_c(supplied, readText)

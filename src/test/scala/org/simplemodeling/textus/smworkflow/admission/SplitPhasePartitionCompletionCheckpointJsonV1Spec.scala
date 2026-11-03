@@ -90,7 +90,7 @@ final class SplitPhasePartitionCompletionCheckpointJsonV1Spec extends AnyWordSpe
       Then("unsupported mistyped and unpaired consumed data refuse rather than becoming readable records")
       results.foreach(_.isSuccess shouldBe false)
     }
-    "reject missing participant malformed publication postimage and whole-frame overflow" in {
+    "reject missing participant and malformed publication postimage while preserving complete passive frames" in {
       Given("one canonical stored capture and independently malformed envelopes")
       val value = capture().record
       val raw = take(J.encodeC(value))
@@ -101,10 +101,13 @@ final class SplitPhasePartitionCompletionCheckpointJsonV1Spec extends AnyWordSpe
         json.mapObject(_.add("payload", payload.mapObject(_.add("next", Json.fromString("malformed"))))))
       When("each damaged frame is observed at the current codec boundary")
       val results = variants.map(v => J.decodeC(_frame_(v), Vector(f.catalog.definition)))
-      Then("missing or malformed consumed data and oversized frames are refused")
+      Then("missing or malformed consumed data is refused while content length alone does not reject a frame")
       results.foreach(_.isSuccess shouldBe false)
-      J.decodeC(raw + (" " * J.maximumPayloadBytes), Vector(f.catalog.definition)).isSuccess shouldBe false
-      J.encodeC(value.copy(participantIdentity = " " * J.maximumPayloadBytes)).isSuccess shouldBe false
+      val padded = take(J.decodeC(raw + (" " * (1024 * 1024)), Vector(f.catalog.definition)))
+      padded.participantIdentity shouldBe value.participantIdentity
+      val complete = value.copy(participantIdentity = "participant-" + ("x" * (1024 * 1024)))
+      take(J.decodeC(take(J.encodeC(complete)), Vector(f.catalog.definition))).participantIdentity shouldBe
+        complete.participantIdentity
       J.decodeC(null, Vector(f.catalog.definition)).isSuccess shouldBe false
     }
   }
