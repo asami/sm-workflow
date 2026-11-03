@@ -271,10 +271,12 @@ proposal**. That configuration does not rewrite the old assessment or review.
 Description captures complete typed Git blob/mode/path observations against
 the same immutable candidate tree. Previously known consumed inputs cannot be
 demoted, and previously known document classifications cannot change. Only old
-unknown paths may acquire classifications. Consumed scope takes precedence;
-scripts and skills covered by selected `program-inputs` consumption scopes must
-remain consumed even when their filenames end in `.md`. There is no generic
-filename-based classification rule.
+unknown paths may acquire classifications. For these newly classified paths,
+consumed scope takes precedence: scripts and skills covered by selected
+`program-inputs` consumption scopes must be consumed even when their filenames
+end in `.md`. Previously known documents retain their classification even under
+broader unchanged program coverage. There is no generic filename-based
+classification rule.
 
 Binary or unavailable text, remaining/new unknown paths, changed actual scope,
 missing program policy, missing consumed input coverage, or changed ordered

@@ -185,6 +185,53 @@ final class RepositorySyncReviewInputContinuationSpec extends AnyWordSpec with M
   }
 
   "RRI-02 actual production input qualification" should {
+    "preserve CATALOG-APPLICABILITY known documents under broad selected consumed coverage while rejecting new misclassification" in {
+      Given("an already-known catalog document under unchanged broad src program coverage and old unknown README script and skill inputs")
+      val catalog = "src/main/catalog/probe.yaml"
+      val knownpaths = (paths :+ catalog).sorted
+      val knownoriginal = original.copy(changedPaths = knownpaths)
+      val knownproposed = proposed.copy(changedPaths = knownpaths)
+      val knownmapping = mapping.copy(documentPaths = mapping.documentPaths :+ catalog,
+        consumedPaths = mapping.consumedPaths.filterNot(_ == "src") :+ "src/Input.scala")
+      val knowntarget = target.copy(originalInputs = knownoriginal, proposedInputs = knownproposed, proposedPolicy = Some(knownmapping))
+      val retained = C.State("required", "Pure unchanged original selection", checks, target.candidate.pending.nativeRevision,
+        receipts, Some(knownoriginal), Some(P.select(impact, knownoriginal)))
+      val demotedprograms = knownproposed.copy(consumedPaths = knownproposed.consumedPaths.filterNot(path =>
+        path.startsWith("scripts/") || path.startsWith("skills/")))
+      val newdocument = "src/main/catalog/new.yaml"
+      val newpaths = (knownpaths :+ newdocument).sorted
+      val neworiginal = knownoriginal.copy(changedPaths = newpaths, unknownPaths = (knownoriginal.unknownPaths :+ newdocument).sorted)
+      val newproposed = knownproposed.copy(changedPaths = newpaths)
+      val changedknown = knownproposed.copy(consumedPaths = (knownproposed.consumedPaths :+ catalog).sorted)
+      When("the actual production predicates qualify the preserved known document and compare only proposed new classifications")
+      val eligible = R.eligibilityIssues(knownoriginal, knownproposed, validation, checks)
+      val current = R.currentApplicabilityIssues(retained, knowntarget, validation, knownproposed)
+      val programissues = R.eligibilityIssues(knownoriginal, demotedprograms, validation, checks)
+      val newissues = R.eligibilityIssues(neworiginal, newproposed, validation, checks)
+      val knownissues = R.eligibilityIssues(knownoriginal, changedknown, validation, checks)
+      Then("the known catalog retains its classification without weakening unknown script skill or newly documented src input guards")
+      eligible shouldBe empty
+      current shouldBe empty
+      R.validTarget(knowntarget) shouldBe true
+      R.availableChoices(knowntarget) shouldBe R.choices
+      knownoriginal.changedPaths should contain(catalog)
+      knownoriginal.consumedPaths should not contain catalog
+      knownoriginal.unknownPaths should not contain catalog
+      knownproposed.consumedPaths should not contain catalog
+      knownproposed.unknownPaths should not contain catalog
+      impact.coverage.foreach(coverage => P.covers(coverage.inputPaths, catalog) shouldBe true)
+      programissues shouldBe Vector("Proposed document is a selected consumed program input: scripts/probe.py",
+        "Proposed document is a selected consumed program input: skills/probe/SKILL.md")
+      newissues shouldBe Vector("Proposed document is a selected consumed program input: " + newdocument)
+      knownissues shouldBe Vector("Previously known document classification changed: " + catalog)
+      knowntarget.originalInputs shouldBe knownoriginal
+      knowntarget.proposedInputs shouldBe knownproposed
+      knowntarget.validationPolicy shouldBe validation
+      retained.receipts shouldBe receipts
+      target.originalInputs shouldBe original
+      original.changedPaths shouldBe paths
+    }
+
     "refuse CB-RRI-01 current mode check effect order and consumed coverage drift while allowing unrelated metadata" in {
       Given("pure retained validation state and an adopted target with the original selected check objects and consumed scopes")
       val retained = C.State("required", "Pure original retained selection", checks, target.candidate.pending.nativeRevision,

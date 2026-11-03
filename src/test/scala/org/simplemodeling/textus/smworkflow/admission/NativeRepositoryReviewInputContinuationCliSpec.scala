@@ -37,6 +37,8 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
     C.Check("test2", 2, WorkflowSbtValidation.Kind.Test), C.Check("lint3", 3, WorkflowSbtValidation.Kind.FixCheck))
   private val _unknown = Vector("README.md", "scripts/probe.py", "skills/probe/SKILL.md")
   private val _consumed = Vector("value.txt", "src", "build.sbt", "project", ".scalafix.conf", "scripts", "skills")
+  private val _catalog_path = "src/main/catalog/probe.yaml"
+  private def _known_catalog: Boolean = sys.props.get("smworkflow.spec.reviewInputKnownCatalog").contains("true")
   private val _rationale = "Specification-owned independent review: the complete parent diffs show the resolved value and Scala value agree. " +
     "README, script and skill classification remains Unexamined; this decision-needed result accepts no path or partial semantic coverage."
   private lazy val _catalog = take(WorkflowInstanceRecordJsonV1.catalogC(Vector(take(RepositorySyncDefinitionBinding.bindC))))
@@ -142,8 +144,10 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
       .add("workspaceGrants", Json.fromValues((_array_(base, "workspaceGrants") ++ plans.flatMap(_array_(_, "workspaceGrants"))).distinct))
       .add("grants", fields("grants").get.mapArray(_.map(_.mapObject(grant => grant.add("capabilities",
         grant("capabilities").get.mapArray(existing => (existing ++ programs.map(_.hcursor.get[Json]("capability").toOption.get)).distinct)))))))
-    val documents = Vector("docs") ++ Option.when(corrected)("README.md") ++ (if (demote) Vector("scripts", "skills") else Vector.empty)
-    val consumed = _consumed.filterNot(path => path == "scripts" || path == "skills") ++
+    val documents = Vector("docs") ++ Option.when(_known_catalog)(_catalog_path) ++ Option.when(corrected)("README.md") ++
+      (if (demote) Vector("scripts", "skills") else Vector.empty)
+    val documentscopes = if (_known_catalog) _consumed.filterNot(_ == "src") ++ Vector("src/main/scala", "src/test") else _consumed
+    val consumed = documentscopes.filterNot(path => path == "scripts" || path == "skills") ++
       (if (corrected && !demote) Vector("scripts", "skills") else Vector.empty)
     val inputs = RepositorySyncDocumentInputs.Policy(documents, consumed, "Explicit proposed classification of the actual tiny fixture inputs")
     val file = root.resolve(".textus/config.json")
@@ -164,6 +168,10 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
     Files.createDirectories(repository.resolve("src/main/scala"))
     Files.createDirectories(repository.resolve("scripts"))
     Files.createDirectories(repository.resolve("skills/probe"))
+    if (_known_catalog) {
+      Files.createDirectories(repository.resolve("src/main/catalog"))
+      Files.writeString(repository.resolve(_catalog_path), "name: probe\npublishedAt: 2026-11-02T00:00:00Z\n")
+    }
     Files.writeString(repository.resolve("src/main/scala/ReviewInput.scala"), "object ReviewInput { val value = 0 }\n")
     Files.writeString(repository.resolve("README.md"), "# Probe\nInitial fixture documentation.\n")
     Files.writeString(repository.resolve("scripts/probe.py"), "VALUE = 0\n")
@@ -206,6 +214,7 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
     Files.writeString(peer.resolve("README.md"), "# Probe\nThe fixture reads value 1.\n")
     Files.writeString(peer.resolve("scripts/probe.py"), "VALUE = 1\n")
     Files.writeString(peer.resolve("skills/probe/SKILL.md"), "# Probe skill\nRead value 1.\n")
+    if (_known_catalog) Files.writeString(peer.resolve(_catalog_path), "name: probe\npublishedAt: 2026-11-03T00:00:00Z\n")
     git(root, "-C", peer.toString, "add", "--", "value.txt", "src", "README.md", "scripts", "skills")
     git(root, "-C", peer.toString, "commit", "-m", "Remote actual product and unknown classification inputs")
     git(root, "-C", peer.toString, "push", root.resolve("upstream.git").toString, "HEAD:refs/heads/main")
@@ -302,6 +311,35 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
       live.advance().business[V.RepositorySyncAdvanceResult].kind shouldBe "Wait"
       Then("the native instance candidate original result and check counters stay unchanged and one episode is retained")
       _snapshot(live) shouldBe saved
+      if (_known_catalog) {
+        Given("CATALOG-APPLICABILITY retains a changed known catalog document under the existing broad src program coverage")
+        val originalvalidation = _receipts(live).find(_.payload.value.stage == "MergeValidated").get.payload.value.validation.get
+        val originalassessment = originalvalidation.inputs.get
+        originalassessment.changedPaths should contain(_catalog_path)
+        originalassessment.consumedPaths should not contain _catalog_path
+        originalassessment.unknownPaths should not contain _catalog_path
+        originalvalidation.selected shouldBe _checks
+        _impact().coverage.foreach(coverage => coverage.inputPaths should contain("src"))
+        val rows = _stored(live.root).sorted
+        When("the old normal CAR describes the exact corrected unknown-input proposal before publication")
+        _configure(live.scenario, corrected = true)
+        val described = live.repositoryCall(N.describeOperation, Vector("--sessionId", live.session))
+        val description = described.business[V.RepositorySyncValidationContinuationDescriptionResult]
+        val beforetarget = R.decodePublicTarget(parse(take(description.target.toJsonStringC)).toOption.get).toOption.get
+        Then("the genuine old description permits only Defer solely because of the preserved known catalog overlap and leaves native effects unchanged")
+        description.choices shouldBe Vector("Defer")
+        beforetarget.applicabilityIssues shouldBe Vector("Proposed document is a selected consumed program input: " + _catalog_path)
+        beforetarget.originalInputs shouldBe originalassessment
+        beforetarget.proposedInputs.changedPaths should contain(_catalog_path)
+        beforetarget.proposedInputs.consumedPaths should not contain _catalog_path
+        beforetarget.proposedInputs.unknownPaths should not contain _catalog_path
+        beforetarget.selectedChecks shouldBe _checks
+        beforetarget.validationPolicy.impact.get.coverage.foreach(coverage => coverage.inputPaths should contain("src"))
+        _snapshot(live) shouldBe saved
+        _stored(live.root).sorted shouldBe rows
+        _configure(live.scenario, corrected = false)
+        _snapshot(live) shouldBe saved
+      }
       val episode = Episode(live.root.toString, ThreeWorkflowRuntimeParameters.encode(scenario.host), scenario.plan.asJson, live.session,
         take(WorkflowInstanceRecordJsonV1.encodeC(current)), review.localTip, review.indexTree, review.remoteTip,
         output.invocation.stdout.toString, issued.issuedWorkContext.get.continuationId, _json(result), _json(reference), _json(execution), _stored(live.root), formal,
@@ -364,6 +402,17 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
       target.proposedInputs.consumedPaths should not contain "README.md"
       target.selectedChecks shouldBe _checks
       target.applicabilityIssues shouldBe empty
+      if (_known_catalog) {
+        target.originalInputs.changedPaths should contain(_catalog_path)
+        target.originalInputs.consumedPaths should not contain _catalog_path
+        target.originalInputs.unknownPaths should not contain _catalog_path
+        target.proposedInputs.changedPaths should contain(_catalog_path)
+        target.proposedInputs.consumedPaths should not contain _catalog_path
+        target.proposedInputs.unknownPaths should not contain _catalog_path
+        target.validationPolicy.impact.get.coverage.foreach(coverage => coverage.inputPaths should contain("src"))
+        oldrequest.changedPaths should contain(_catalog_path)
+        oldrequest.uncertainties should not contain ("Unexamined unknown input: " + _catalog_path)
+      }
       description.choices shouldBe Vector(answer.choice, "Defer")
       _snapshot(live) shouldBe initial
       val input = V.RepositorySyncValidationContinuationAdoptionInput(live.session, description.target, answer.choice,

@@ -123,7 +123,10 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
     val originaldocs = original.changedPaths.filterNot(path => original.consumedPaths.contains(path) || original.unknownPaths.contains(path))
     val proposeddocs = proposed.changedPaths.filterNot(path => proposed.consumedPaths.contains(path) || proposed.unknownPaths.contains(path))
     val coverage = validation.impact.toVector.flatMap(_.coverage).filter(c => selected.contains(c.check))
-    val programdocs = proposeddocs.filter(path => coverage.exists(c => RepositorySyncProgramImpact.covers(c.inputPaths, path)))
+    // Preserve already-known documents even under broad program coverage;
+    // only newly classified old unknown paths require this consumption check.
+    val programdocs = proposeddocs.filter(original.unknownPaths.contains)
+      .filter(path => coverage.exists(c => RepositorySyncProgramImpact.covers(c.inputPaths, path)))
     val newconsumed = proposed.consumedPaths.filter(original.unknownPaths.contains)
     val uncovered = newconsumed.filterNot(path => coverage.exists(c => RepositorySyncProgramImpact.covers(c.inputPaths, path)))
     val selection = validation.impact.map(p => RepositorySyncProgramImpact.select(p, proposed).checks)
