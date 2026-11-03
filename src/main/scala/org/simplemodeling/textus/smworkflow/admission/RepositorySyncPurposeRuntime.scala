@@ -223,7 +223,10 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
           _ <- if (actual == expected) Consequence.unit else N.invalid("purpose check workspace does not consume the actual materialized candidate root")
         } yield ())
         intent <- _save_("check-" + done + "-intent", "PurposeChecking", source, progress)
-        receipt <- reused.get(check.identity) match {
+        // Selection-correction additions require a real new typed invocation;
+        // historical reuse cannot stand in for the missing TestOnly evidence.
+        receipt <- reused.get(check.identity).filterNot(_ => progress.hostContinuation.exists(direction =>
+          direction.target.proposedChecks.exists(_.contains(check)) && !direction.target.selectedChecks.contains(check))) match {
           case Some(value) => Consequence.success(value)
           case None => E.repositoryValidationAttemptC(store.core, check.ordinal, check.kind, Some(slot.checkWorkspaces.getOrElse(check.identity, slot.workspace))).flatMap {
             case SbtExecutionAttempt.Observed(value) => C.sbtReceiptC(check.identity, check.kind, value)

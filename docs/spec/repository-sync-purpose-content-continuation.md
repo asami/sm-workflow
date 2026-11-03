@@ -28,6 +28,15 @@ old WorkOrder and original `purpose-inventory` row. The old continuation cannot
 complete after supersession. An identical adoption repeat at the same frontier
 is observable; stale or conflicting repetition refuses. Defer writes no direction.
 
+The shared adoption Operation supports exactly one of optional `input` or
+`inputResource`. Resource input contains the same complete normal adoption DTO,
+read inside the executing call through current CNCF roots, finite read policy
+and strict UTF-8. Installed Session extraction uses that same Resource-aware
+strict decoder. Duplicate, null, unknown, missing and crossed business fields
+refuse before independent evidence admission or effects. Opaque host-plan strings
+on other explicitly discriminated targets remain complete. There is no command
+line, shell or stdin fallback and no application byte cap or truncation.
+
 A separate ordinary Advance reobserves the exact adopted current Request. If
 content changed again, it refuses instead of replacing the adopted target. With
 unchanged inputs it creates a new immutable

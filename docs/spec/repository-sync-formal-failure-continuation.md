@@ -48,6 +48,45 @@ worker and its UNKNOWN external effects. The check itself remains formally
 failed. Without a pending issue, both assertions are false and not applicable.
 Absence of a claim is never evidence that a worker had no effects.
 
+The explicit `sm-workflow.repository-sync-formal-failure-continuation.v2`
+policy covers a failed Purpose whose retained original selection has no
+`TestOnly`, when both the current fixed validation policy and current Purpose
+slot register applicable `TestOnly` checks. Its required `proposedChecks` is
+the unchanged original ordered batch followed by all applicable additions in
+current policy order. Every addition has a new identity and the exact registered
+ordinal/kind. Deletion, weakening, reordering, renaming, arbitrary tests, missing
+or null proposals and use on a pending merge refuse. No applicable addition
+means the existing v1 description remains in use; no registration is invented.
+
+V2 offers `AuthorizeNewValidationAfterSelectionCorrection` and `Defer`, under
+the same independent evidence purpose. V1 retains its original choices and
+encoding, with no `proposedChecks` field. Each version rejects the other adopting
+choice. Preparation checks the actual target's ordered choices; the evidence
+binds the complete proposal, original failed selection, candidate, prefix,
+current slot/workspaces and opaque resolved host plan. Typed CNCF SBT admission
+continues to own program validity and execution permission.
+
+Separate Advance copies the failed Purpose progress with `selection.checks`
+set to the exact proposed batch, only its identical successful prefix receipts,
+and the saved direction in a fresh existing host namespace. Grouping, candidate,
+request, base, commits, slot and repair counters remain unchanged. Authentication
+permits that transformed selection only against this actual retained direction.
+Old original selection and receipt history remains readable after subsequent
+failures and directions. Appended `TestOnly` requires an actual fresh invocation
+and nonempty selected-test evidence; prior reusable receipts cannot replace it.
+Normal independent review follows completed validation. Correcting PATH alone
+or omitting selected tests supplies no candidate acceptance.
+
+The existing adoption Operation accepts exactly one of optional `input` and
+`inputResource`. The latter is an absolute local file URI containing the entire
+normal adoption DTO, including every opaque `processPlan` string. Installed
+Session routing and the native executing call use the same strict decoder and
+normal CNCF Resource reader. Duplicate keys are checked before Record conversion;
+null, unknown, missing, coerced and crossed fields refuse before evidence
+admission or effects. Both/neither refuse without a fallback. CNCF owns roots,
+finite byte limits and strict UTF-8 acquisition; sm-workflow imposes no byte cap
+and never truncates or rebuilds the supplied business data.
+
 Adoption supersedes the exact pending native WorkOrder through
 WorkflowManagedWorkOrderSupersession, or appends a mechanical direction when no
 issue exists. It records `FormalFailureContinuationAdmitted` without checks,
@@ -80,6 +119,20 @@ Authored evidence:
   repositories, actual SBT launcher failure under an isolated invalid JVM launch option,
   public describe/preparation/adoption, host drift refusal, old Submit rejection,
   separate Advance and successful-prefix preservation on Purpose and merge routes.
+- `NativeRepositoryValidationSelectionCorrectionCliSpec`: explicitly selected
+  installed tiny Purpose fixture with an actual failed SBT receipt, pending old
+  worker UNKNOWN supersession, exact v2 adoption, real nonempty TestOnly and
+  normal independent review after separate Advance.
+- `NativeRepositoryValidationResourceContinuationCliSpec`: the same tiny product
+  with normally configured complete host registrations yielding a target larger
+  than 4,653,720 UTF-8 bytes, strict Resource refusals, faithful passive adoption,
+  complete opaque-plan retention and exactly one subsequent selected-test run.
+
+The two new installed suites are `@DoNotDiscover` runtime specifications and
+require the actual installed command plus ordinary SBT executable. They create
+their own tiny Git roots and SQLite Sessions and never copy a consumer repository
+or database. Fixture host registrations are configured before description;
+described target content is never padded or truncated.
 
 These are authored specifications. Generation, compilation and execution results
 belong to the parent verification workflow.

@@ -11,6 +11,30 @@ import org.scalatest.wordspec.AnyWordSpec
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class RepositorySyncPurposeRuntimeSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "RS-FORMAL-02 purpose attempt provenance" should {
+    "retain original checks in history while each corrected attempt uses the exact proposed selection and a fresh host namespace" in {
+      Given("an actual selection-correction direction on the original failed Purpose")
+      val target = RepositorySyncFormalFailureContinuationFixture.corrected
+      val direction = RepositorySyncFormalFailureContinuation.Direction(target,
+        RepositorySyncFormalFailureContinuation.selectionChoices.head, "Append registered selected tests", "participant",
+        ContextReference("selection-direction", "1"), false, false)
+      val original = target.purpose.get
+      When("the new attempt is prepared without resetting repair counters")
+      val next = original.copy(receipts = target.successfulPrefix, selection = RepositorySyncFormalFailureContinuation.attemptSelection(target),
+        assessment = None, review = None, hostContinuation = Some(direction))
+      Then("only the precise stored direction admits transformed selection and original prefix receipts")
+      RepositorySyncFormalFailureContinuation.validPurposeAttempt(next, direction) shouldBe true
+      RepositorySyncPurposeRuntime.attemptPrefix(next) shouldBe "purpose-1-host-12"
+      next.selection.get.checks shouldBe target.proposedChecks.get
+      next.selection.get.copy(checks = original.selection.get.checks) shouldBe original.selection.get
+      (next.cursor, next.attempt, next.slotCursor, next.baselineTree, next.candidate, next.commits, next.effects, next.reusable) shouldBe
+        ((original.cursor, original.attempt, original.slotCursor, original.baselineTree, original.candidate, original.commits, original.effects, original.reusable))
+      next.asJson.as[RepositorySyncPurpose.Progress] shouldBe Right(next)
+      val failedAgain = next.copy(receipts = target.successfulPrefix :+ target.failed)
+      RepositorySyncFormalFailureContinuation.validPurposeAttempt(failedAgain, direction) shouldBe true
+      RepositorySyncPurposeRuntime.attemptPrefix(failedAgain) shouldBe "purpose-1-host-12"
+      original.receipts.last shouldBe target.failed
+      original.selection.get.checks shouldBe target.selectedChecks
+    }
     "allocate a distinct validation attempt without moving repair cursor slot candidate or commits" in {
       Given("the unchanged failed purpose candidate and a Human-authorized host correction")
       val target = RepositorySyncFormalFailureContinuationFixture.purpose

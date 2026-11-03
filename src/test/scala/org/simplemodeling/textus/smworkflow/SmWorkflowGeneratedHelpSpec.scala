@@ -124,6 +124,10 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
   private val _host_service_names = Vector("meta", "system")
 
   private val _limits = Vector(
+    ("RepositorySyncService", "adoptRepositorySyncValidationContinuation", Vector(
+      "exactly one of input or inputResource", "finite UTF-8", "AuthorizeNewValidationAfterSelectionCorrection",
+      "actual appended TestOnly", "separate Advance"
+    )),
     ("GoalPhaseService", "describeGoalPhaseClosureRecovery", Vector(
       "CompletePartialCommit", "succeeded/Exited(0)", "exact remainder paths/blobs/modes"
     )),

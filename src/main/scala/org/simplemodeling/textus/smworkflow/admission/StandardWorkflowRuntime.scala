@@ -15,8 +15,7 @@ import org.goldenport.protocol.Request
 import org.goldenport.protocol.spec as spec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms
-import org.simplemodeling.textus.smworkflow.value.{GoalPhaseStartInput, RepositorySyncStartInput,
-  RepositorySyncValidationContinuationAdoptionInput}
+import org.simplemodeling.textus.smworkflow.value.{GoalPhaseStartInput, RepositorySyncStartInput}
 
 /** Standard composition contains policies and logical destinations, never a
   * selected Phase or Plan. Read actual Start input or the retained native run
@@ -276,11 +275,7 @@ private[smworkflow] object StandardWorkflowRuntime {
         RepositorySyncRepairScopeCorrection.prepareOperation)(request.operation))
       RepositorySyncRepairScopeCorrection.sessionC(request, core)
     else if (request.operation == RepositorySyncValidationContinuation.adoptionOperation)
-      NativeWorkflowOperationInput.valueC[RepositorySyncValidationContinuationAdoptionInput](request, "input").flatMap { input =>
-        if (input != null && input.sessionId != null && input.sessionId.nonEmpty &&
-            input.sessionId.trim == input.sessionId && !input.sessionId.exists(_.isControl)) Consequence.success(input.sessionId)
-        else invalid("Repository validation continuation adoption requires its exact input Session identity")
-      }
+      RepositorySyncValidationContinuation.sessionC(request, core)
     else NativeWorkflowOperationInput.textC(request, "sessionId")
 
   private def boundedC(creation: ComponentCreate, shared: Shared, request: Request,

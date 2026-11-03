@@ -44,7 +44,8 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
       When("the generated readers construct actions from their named parameters")
       val started = operations(0).createOperationRequest(request(operations(0), start))
       val advanced = operations(1).createOperationRequest(request(operations(1), advance))
-      val optionaltransports = Set("prepareRepositorySyncRepairScopeCorrection", "adoptRepositorySyncRepairScopeCorrection")
+      val optionaltransports = Set("prepareRepositorySyncRepairScopeCorrection", "adoptRepositorySyncRepairScopeCorrection",
+        "adoptRepositorySyncValidationContinuation")
       val absent = operations.filterNot(op => optionaltransports(op.specification.name))
         .map(op => op.createOperationRequest(request(op, Nil)))
       Then("Start accepts its business selection and Advance requires the canonical session")
@@ -55,6 +56,8 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
       operations.filter(op => optionaltransports(op.specification.name)).foreach { op =>
         op.createOperationRequest(request(op, Nil)).isSuccess shouldBe true
       }
+      val validationAdoption = operations.find(_.specification.name == "adoptRepositorySyncValidationContinuation").get
+      validationAdoption.specification.request.parameters.map(_.name).toVector shouldBe Vector("input", "inputResource")
       val provided = RepositorySyncWorkflowStateMachineProvidedApi3.workflow.providedOperations
       provided.map(_.name).toSet shouldBe operations.map(_.specification.name).toSet
       And("all Provided operations declare business types without control envelopes")
