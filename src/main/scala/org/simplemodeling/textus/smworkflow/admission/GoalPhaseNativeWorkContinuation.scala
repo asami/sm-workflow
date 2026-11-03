@@ -30,6 +30,7 @@ import GoalPhasePrerequisitePublicationUnknownRecovery as W
 import GoalPhasePrerequisitePublicationRecovery as B
 import GoalPhasePrerequisitePrimaryRepair as A
 import GoalPhaseCurrentSourceArtifactAdoption as Z
+import GoalPhaseCurrentInventoryContinuation as L
 
 /** Ordered implementation, repair and review work and their provided result are installed
   * together. Canonical atomic suspension/completion owns all writes. No result
@@ -283,7 +284,22 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           _ <- K.targetForC(value, d.copy(candidatePaths = paths), core, selected)
         } yield paths
       }
-    } yield (controller.plan, paths)
+      currentinventory <- located match {
+        case Frontier(cursor) => _current_inventory_source_c(source, cursor)
+        case Human(human, _, cursor) => _current_inventory_source_c(source, cursor, Some(human))
+        case _ => Consequence.success(Option.empty[L.Source])
+      }
+      extended <- currentinventory match {
+        case None => Consequence.success(paths)
+        case Some(value) => for {
+          added <- O.currentInventoryPathsC(controller.plan,
+            value.result.result.value.planRevision.get.plan.copy(effectiveAcceptance = controller.plan.effectiveAcceptance),
+            controller.step.identity)
+          selected = (paths ++ added).distinct
+          _ <- L.targetForC(value, d.copy(candidatePaths = selected), core)
+        } yield selected
+      }
+    } yield (controller.plan, extended)
 
     def diagnosticInformationC(input: org.simplemodeling.textus.smworkflow.value.GoalPhaseDiagnosticInformationInput,
       core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseDiagnosticInformationResult] = for {
@@ -571,6 +587,23 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         candidate = None, validation = None, decisioncontext = None, recordingCandidate = None,
         inspectionSource = None, candidateObservation = None, candidateObservationContinuation = None,
         wholePhaseCandidateRecovery = None)
+
+    private def _current_inventory_source_c(source: F.Session, cursor: Cursor,
+      human: Option[H.Source] = None): Consequence[Option[L.Source]] =
+      if (cursor.dependencyAdmission.nonEmpty || cursor.dependencySourceDirection.nonEmpty ||
+          cursor.sourceHistoryRecovery.nonEmpty || cursor.prerequisiteRecovery.exists(!_.complete) ||
+          cursor.candidateObservation.nonEmpty || cursor.wholePhaseCandidateRecovery.nonEmpty)
+        Consequence.success(None)
+      else L.selectC(source, human.map(_.from).getOrElse(cursor.from), cursor.controller, cursor.lastresult, human)
+
+    private def _current_inventory_cursor(cursor: Cursor, saved: L.Saved): Cursor =
+      cursor.copy(from = saved.record, controller = saved.controller, candidate = None, validation = None,
+        decisioncontext = None, recordingCandidate = None)
+
+    private def _current_inventory_covered(source: L.Source): Boolean =
+      source.result.result.value.planRevision.exists(proposal => O.currentInventoryPathsC(source.controller.plan,
+        proposal.plan.copy(effectiveAcceptance = source.controller.plan.effectiveAcceptance), source.controller.step.identity)
+        .toOption.exists(_.forall(d.candidatePaths.contains)))
 
     private def _dependency_source_revision_source_c(identity: String, core: ActionCall.Core):
       Consequence[GoalPhaseDependencySourceRevision.Source] = for {
@@ -1254,7 +1287,13 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                     entry.currentProgression.contains(ProgressionReference("phase.Repair"))))
               _phase_inventory_human_source_c(source, cursor, decision, None).flatMap(K.retainedC(_, d, core))
               else Consequence.success(Option.empty[K.Saved])
-            adopted <- if (policy.nonEmpty || inventory.nonEmpty || decision.sourceHistoryRecovery.nonEmpty) Consequence.success(Option.empty[GoalPhaseRemainingPlanAdoption.Selected])
+            currentinventory <- if (policyfollowing.exists(_.causation.value == L.humanCausation)) for {
+              selected <- _current_inventory_source_c(source, cursor, Some(decision)).flatMap(_.map(Consequence.success)
+                .getOrElse(F.invalid("current inventory supersession has no exact actual semantic source")))
+              saved <- L.retainedC(selected, d, core).flatMap(_.map(Consequence.success)
+                .getOrElse(F.invalid("current inventory supersession has no retained receipt")))
+            } yield Some(saved) else Consequence.success(Option.empty[L.Saved])
+            adopted <- if (policy.nonEmpty || inventory.nonEmpty || currentinventory.nonEmpty || decision.sourceHistoryRecovery.nonEmpty) Consequence.success(Option.empty[GoalPhaseRemainingPlanAdoption.Selected])
               else GoalPhaseRemainingPlanAdoption.retainedC(decision, core, Some(d))
             result <- if (normalization.nonEmpty) {
               val saved = normalization.get
@@ -1265,7 +1304,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
               val resumed = policy.get
               _walk_c(source, cursor.copy(from = resumed.record, controller = resumed.controller),
                 soughtwork, soughthuman, soughtrecording, core, historyonly)
-            } else if (inventory.nonEmpty)
+            } else if (currentinventory.nonEmpty)
+              _walk_c(source, _current_inventory_cursor(cursor, currentinventory.get), soughtwork, soughthuman, soughtrecording, core, historyonly)
+            else if (inventory.nonEmpty)
               _walk_c(source, _phase_inventory_cursor(cursor, inventory.get), soughtwork, soughthuman, soughtrecording, core, historyonly)
             else adopted match {
               case Some(value) => for {
@@ -1573,6 +1614,14 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         retained <- K.retainedC(selected, d, core).flatMap(_.map(Consequence.success)
           .getOrElse(F.invalid("Phase inventory history has no exact retained native receipt")))
         result <- _walk_c(source, _phase_inventory_cursor(cursor, retained),
+          soughtwork, soughthuman, soughtrecording, core, historyonly)
+      } yield result
+      case O.Stage.Decision if entry.causation.value == L.causation => for {
+        selected <- _current_inventory_source_c(source, cursor).flatMap(_.map(Consequence.success)
+          .getOrElse(F.invalid("current inventory history has no actual typed semantic proposal")))
+        retained <- L.retainedC(selected, d, core).flatMap(_.map(Consequence.success)
+          .getOrElse(F.invalid("current inventory history has no exact retained native receipt")))
+        result <- _walk_c(source, _current_inventory_cursor(cursor, retained),
           soughtwork, soughthuman, soughtrecording, core, historyonly)
       } yield result
       case O.Stage.Decision if entry.causation.value == J.causation => for {
@@ -2080,8 +2129,12 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           case Work(plan) => _work_output_c(plan, core)
             .map(_.copy(validation = plan.validation.map(saved => NativeWorkflowOperationOutput.goalValidation(saved.payload))))
             .map(NativeWorkflowOperationOutput.withFindingRecording(_, plan.findings))
-          case Human(decision, findings, cursor) => _human_output_c(decision, findings, core)
-            .map(_.copy(validation = cursor.validation.map(saved => NativeWorkflowOperationOutput.goalValidation(saved.payload))))
+          case Human(decision, findings, cursor) => _current_inventory_source_c(source, cursor, Some(decision)).flatMap {
+            case Some(selected) if _current_inventory_covered(selected) => L.advanceC(selected, d, core).flatMap(saved =>
+              F.waitC(saved.record, "Current Step inventory continued", L.message).flatMap(_after_native_c(source, cursor, _, core)))
+            case _ => _human_output_c(decision, findings, core)
+              .map(_.copy(validation = cursor.validation.map(saved => NativeWorkflowOperationOutput.goalValidation(saved.payload))))
+          }
           case LocatedRecording(recording) => _recording_port.issuedC(recording, core)
             .flatMap(NativeWorkflowOperationOutput.goalRecordingRequestC(_, recording.findings))
           case Paused(cursor, _, true) => GoalPhaseNativeRepositoryClosure.advanceC(source, d, core,
@@ -2324,7 +2377,11 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       case O.Stage.Decision => for {
         initial <- _initial_phase_repair_source_c(cursor)
         inventory <- K.selectC(source, cursor.from, cursor.controller, cursor.lastresult)
-        wire <- if (inventory.nonEmpty) K.advanceC(inventory.get, d, core).flatMap { saved =>
+        currentinventory <- _current_inventory_source_c(source, cursor)
+        wire <- if (currentinventory.exists(_current_inventory_covered)) L.advanceC(currentinventory.get, d, core).flatMap { saved =>
+          F.waitC(saved.record, "Current Step inventory continued", L.message)
+            .flatMap(_after_native_c(source, cursor, _, core))
+        } else if (inventory.nonEmpty) K.advanceC(inventory.get, d, core).flatMap { saved =>
           F.waitC(saved.record, "Phase repair inventory continued", K.message)
             .flatMap(_after_native_c(source, cursor, _, core))
         } else initial match {
@@ -2748,7 +2805,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         (if (input.kind == "ReviewStep") " Report design or requirement gaps as findings for later repair; ReviewStep never proposes or adopts Plan revisions. Optional completionConditions may appear only on an original repair verdict after every semantic judgment is settled and its only remaining ordered findings are extra terminal LF corrections, exactly one finding per explicit current Step owned path. Use kind terminal-lf with 1..16 distinct relative paths in finding order. Omit this option whenever any semantic question remains; supplying it is never required. Review stays read-only. Runtime must observe the actual repair delta and fresh complete selected Compile and Test receipts before ordinary Closing admission; this original repair report never becomes a new PASS."
           else if (input.kind == "ReviewPhase") " An actual integrated blocker may request decision-needed with a genuine nonempty finding and one raw complete planRevision Proposal appending exactly one corrective Step. Preserve every old Step exactly, the Plan identity/Phase/repository/repair limit/Phase checks/review classification and raw/effective acceptance; use a fresh revision, depend on all old Step identities exactly, and keep nonempty owned paths within original owned-path scopes and nonempty checks within the predeclared host policy. The old Plan must have fewer than 64 Steps. Alternatively, a genuine decision-needed review with nonempty findings and an actual unsatisfied or not-evaluated adopted Phase condition may optionally propose a raw complete planRevision with the same Step count whose only business delta is changing those Phase conditions from required true to false. Use a fresh revision and preserve identical Usage, descriptions, every Step, scopes, checks, policies and default selection. Never fabricate satisfaction or verification. Actual independent Human adoption is required, followed by fresh independent Phase review with the original candidate and check receipts. No dependencyProposal may accompany either alternative. Document-backed Phase amendment is unsupported. Review remains read-only: never edit or adopt; actual Human adoption and existing execution, validation, review and closure authority remain required."
           else if (input.kind == "TriageStep") ""
-          else " Report genuine test, suite, requirement or design gaps as decision-needed with a raw complete bounded planRevision Proposal. Do not amend the current Plan or broaden the selected host profile before explicit Human adoption; source mutation and permissions remain separately admitted.") +
+          else " If concrete necessary files are missing from the current Step inventory, return decision-needed with an actual raw complete bounded planRevision Proposal appending only those literal ownedPaths and a causal reason. Preserve every purpose, Usage, acceptance condition, Step identity, dependency, check, operation and policy. Runtime evaluates that exact same-Component inventory automatically under the retained original purpose, without a fresh per-file Human grant. Genuine requirement, acceptance, ownership, operation or lifecycle concerns remain decision-needed for Human direction. Never adopt a Plan yourself; actual file and effect capabilities remain required.") +
         (if (independent && input.review.exists(_.priorReviews.nonEmpty))
           " For affected re-review, use the actual prior reports and findings, current combined diff and check outcomes, and adopted requirements. Reuse unrelated still-applicable judgment and assess outstanding integration findings and regressions. Do not require a reviewer for each edit, skip approval, or automatically rerun all Step semantics."
           else ""),

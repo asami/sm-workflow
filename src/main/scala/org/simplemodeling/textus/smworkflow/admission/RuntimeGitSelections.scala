@@ -72,6 +72,7 @@ private[smworkflow] object RuntimeGitSelections {
       case GitOperation.CommitSelected(id) => Some(id)
       case GitOperation.CheckSelectedIndex(id, _) => Some(id)
       case GitOperation.SelectedIndexChanges(id, _) => Some(id)
+      case GitOperation.TreeEntries(_, id) => Some(id)
       case _ => None
     }
     val data = core.action.request.properties.collectFirst { case property if property.name == key => property.value }

@@ -19,12 +19,15 @@ object NativeRepositoryRepairScopeCorrectionPreparation {
     answer: V.RepositorySyncRepairScopeCorrectionAnswer, reference: V.WorkflowArtifactReference,
     execution: V.WorkflowExecutionEvidence, participant: String, issuer: String,
     occurredAt: Instant): Consequence[Prepared] = for {
-    _ <- if (description != null && description.outcome == "adoption-required" && description.choices == N.choices &&
+    _ <- if (description != null && description.outcome == "adoption-required" &&
+        (description.choices == N.choices || description.choices == N.lifecycleChoices) &&
         description.adoptionOperation == N.adoptionOperation && answer != null && reference != null &&
         execution != null && execution.workerIdentity != null && execution.workerIdentity.contains(participant) &&
         _exact(participant) && _exact(issuer) && occurredAt != null) Consequence.unit
       else Consequence.stateConflict("Repair scope preparation requires the actual description, supplied answer, existing reference, matching worker, issuer and time")
     target <- N.targetC(description.target)
+    _ <- if (description.choices == N.targetChoices(target)) Consequence.unit
+      else Consequence.stateConflict("Repair continuation choices differ from the actual target version")
     _ <- if (description.sessionId == target.sessionId && description.componentInstance == target.componentInstance) Consequence.unit
       else Consequence.stateConflict("Repair scope preparation crosses the described Session or component")
     binding <- N.bindingC(description.componentInstance, target, answer.choice, answer.paths, answer.rationale, participant,

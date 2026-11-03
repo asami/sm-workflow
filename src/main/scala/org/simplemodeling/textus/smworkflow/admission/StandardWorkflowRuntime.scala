@@ -241,10 +241,34 @@ private[smworkflow] object StandardWorkflowRuntime {
           } yield (localPaths ++ remotePaths).map(_.value).toSet
       } yield selected
     }
-  } yield paths
+    supplied <- if (Set(RepositorySyncRepairScopeCorrection.prepareOperation,
+        RepositorySyncRepairScopeCorrection.adoptionOperation)(request.operation))
+      RepositorySyncRepairScopeCorrection.requestedInventoryPathsC(request, core) else Consequence.success(Vector.empty[String])
+    correction = session.started.current.history.reverseIterator.find(_.causation.value.startsWith(
+      RepositorySyncRepairScopeCorrection.resumeCause))
+    inventory <- correction match {
+      case None => Consequence.success(Vector.empty[String])
+      case Some(entry) => for {
+        adapter <- session.storage.bindWorkOrderSupersessionC(RepositorySyncNativeMergeRepairContinuation.completionOperation,
+          RepositorySyncNativeMergeRepair.inputCodec, RepositorySyncRepairScopeCorrection.checkpointCodec)
+        old = entry.causation.value.stripPrefix(RepositorySyncRepairScopeCorrection.resumeCause)
+        retained <- adapter.loadRetainedC(org.goldenport.cncf.workflow.ContinuationIdentity(old),
+          session.started.current.identity)(using context)
+          .flatMap(_.map(Consequence.success).getOrElse(invalid("Automatic inventory has no actual native supersession")))
+        target = retained.receipt.payload.direction.target
+        _ <- if (target.sessionId == identity && target.context == session.context &&
+            retained.receipt.nextRevision == entry.revision && RepositorySyncRepairScopeCorrection.validTarget(target))
+          Consequence.unit else invalid("Automatic inventory crosses the current Session or retained history")
+        latest = session.started.current.history.reverseIterator.flatMap(_.suspension).find(
+          _.continuationIdentity.value.startsWith(identity + ":native-repair:"))
+      } yield if (latest.exists(value => RepositorySyncRepairScopeCorrection.budgetIdentity(
+        value.continuationIdentity.value) == old)) target.inventory.toVector.flatMap(_.paths) else Vector.empty[String]
+    }
+  } yield paths ++ (if (declaration.runtimeCleanSync) supplied ++ inventory else Vector.empty[String])
 
   private def _repository_session_c(request: Request, core: ActionCall.Core): Consequence[String] =
-    if (request.operation == RepositorySyncRepairScopeCorrection.adoptionOperation)
+    if (Set(RepositorySyncRepairScopeCorrection.adoptionOperation,
+        RepositorySyncRepairScopeCorrection.prepareOperation)(request.operation))
       RepositorySyncRepairScopeCorrection.sessionC(request, core)
     else NativeWorkflowOperationInput.textC(request, "sessionId")
 

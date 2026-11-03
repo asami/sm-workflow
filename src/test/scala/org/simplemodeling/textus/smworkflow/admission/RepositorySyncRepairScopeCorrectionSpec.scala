@@ -153,6 +153,66 @@ final class RepositorySyncRepairScopeCorrectionSpec extends AnyWordSpec with Mat
       refused.foreach(_.isSuccess shouldBe false)
     }
   }
+  "AUTO-FILE-RS automatic inventory and lifecycle separation" should {
+    "expose structured passive preparation in the real deferred host while retaining Session-only description" in {
+      Given("the generated preparation contract and normal deferred RepositorySync service")
+      val generated = SmWorkflowComponent.RepositorySyncServiceService.PrepareRepositorySyncRepairScopeCorrectionOperation.specification
+      val service = ThreeWorkflowLauncherAssembly.deferredDeclarations.find(_.name == "RepositorySyncService").get
+      When("the deferred operation inventory is selected")
+      val prepare = service.operations.operations.toVector.find(_.name == N.prepareOperation).get.specification
+      val describe = service.operations.operations.toVector.find(_.name == N.describeOperation).get.specification
+      Then("preparation uses input or inputResource and the legacy describe contract continues to take only sessionId")
+      prepare.request shouldBe generated.request
+      prepare.response shouldBe generated.response
+      prepare.request.parameters.map(_.name) shouldBe List("input", "inputResource")
+      describe.request.parameters.map(_.name) shouldBe List("sessionId")
+      ThreeWorkflowLauncherAssembly.publishedMcpOperations should not contain ("RepositorySyncService." + N.prepareOperation)
+    }
+    "retain unchanged tracked additions without changing factual changed paths or converting v1 history" in {
+      Given("a runtime-shaped qualified inventory containing a baseline regression outside the factual diff")
+      val paths = Vector("src/test/scala/UnchangedRegressionSpec.scala")
+      val scope = RepositorySyncRepairInventory.Scope(RepositorySyncRepairInventory.policy, "session", "11", "10",
+        _target.failureReference, "formalTest", _target.localTip, _target.remoteTip, _target.candidateTree,
+        paths, "The retained formalTest failure requires updating this baseline regression",
+        Vector(RepositorySyncRepairInventory.Entry(paths.head, "100644", "f" * 40)))
+      val target = _target.copy(correctionPolicy = N.automaticPolicy, inventory = Some(scope))
+      When("the exact v2 target and historical v1 target are decoded")
+      val current = N.decodeTarget(target.asJson)
+      val legacy = N.decodeTarget(_target.asJson)
+      Then("only the explicit v2 inventory adds eligibility and both factual diff and historical representation survive")
+      current shouldBe Right(target)
+      target.changedPaths shouldBe _paths
+      target.changedPaths should not contain paths.head
+      legacy shouldBe Right(_target)
+      _target.asJson.hcursor.downField("inventory").focus shouldBe None
+      N.decodeTarget(target.copy(correctionPolicy = N.policy).asJson).isLeft shouldBe true
+      N.decodeTarget(target.copy(inventory = Some(scope.copy(additions = Vector.empty))).asJson).isLeft shouldBe true
+      N.decodeTarget(target.copy(inventory = Some(scope.copy(failureIdentity = "foreign"))).asJson).isLeft shouldBe true
+    }
+    "require only actual lifecycle continuation and refuse a new Human file selection" in {
+      Given("one automatically qualified unchanged regression and a fixture-authored lifecycle answer")
+      val paths = Vector("src/test/scala/UnchangedRegressionSpec.scala")
+      val scope = RepositorySyncRepairInventory.Scope(RepositorySyncRepairInventory.policy, "session", "11", "10",
+        _target.failureReference, "formalTest", _target.localTip, _target.remoteTip, _target.candidateTree,
+        paths, "Repair the actual retained check", Vector(RepositorySyncRepairInventory.Entry(paths.head, "100644", "f" * 40)))
+      val target = _target.copy(correctionPolicy = N.automaticPolicy, inventory = Some(scope))
+      def _binding_(selected: Vector[String], choice: String, ended: Boolean, accepted: Boolean) = N.bindingC("component",
+        target, choice, selected, "Fixture-owned prior worker lifecycle assertion", "participant", _reference, ended, accepted)
+      When("continuation admission separates the fixed automatic inventory from the prior-worker uncertainty")
+      val accepted = take(_binding_(Vector.empty, N.lifecycleChoices.head, true, true))
+      val refused = Vector(_binding_(paths, N.choices.head, true, true),
+        _binding_(_paths.take(1), N.lifecycleChoices.head, true, true),
+        _binding_(paths, N.lifecycleChoices.head, true, true),
+        _binding_(Vector.empty, N.lifecycleChoices.head, false, true), _binding_(Vector.empty, N.lifecycleChoices.head, true, false))
+      Then("the lifecycle-only direction binds exact prepared inventory and never invents a worker-ended answer")
+      N.selectBinding(accepted) shouldBe Right(accepted)
+      refused.foreach(_.isSuccess shouldBe false)
+      _binding_(Vector.empty, "Defer", false, false).isSuccess shouldBe true
+      val direction = N.Direction(target, paths, N.lifecycleChoices.head, "Fixture lifecycle acceptance", "participant", _reference, true, true)
+      N.checkpointCodec.decode(N.checkpointCodec.encode(N.Checkpoint(direction, "UNKNOWN"))) shouldBe Right(N.Checkpoint(direction, "UNKNOWN"))
+    }
+  }
+
   "RS-CHECK-REPAIR-SCOPE repair accounting" should {
     "count administrative scope successors as their original repair while retaining separate candidate failures" in {
       Given("one original failed candidate and its administrative corrected continuation plus a later failed candidate")

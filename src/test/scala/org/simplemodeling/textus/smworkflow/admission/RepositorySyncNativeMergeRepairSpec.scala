@@ -50,6 +50,84 @@ final class RepositorySyncNativeMergeRepairSpec extends AnyWordSpec with Matcher
     obj => Json.fromFields(obj.toVector.map { case (key, nested) => key -> _annotate(nested) })
       .mapObject(_.add("inertDiagnostic", Json.True)))
 
+  "AUTO-FILE-RS admitted unchanged regression" should {
+    "admit one qualified tracked regression after 128 factual candidate paths without expanding the repair assignment" in {
+      Given("a specification-owned failed candidate with 128 earlier factual paths and one qualified unchanged tracked regression")
+      val changedpaths = (1 to 128).map(ordinal => f"src/main/scala/Input$ordinal%03d.scala").toVector
+      val regression = "src/test/scala/TrackedRegressionSpec.scala"
+      val failed = _review.copy(changedPaths = changedpaths,
+        checks = Vector(V.Receipt("focused", "exited", Some(1), "unchanged baseline regression failed", "")))
+      val scope = RepositorySyncRepairInventory.Scope(RepositorySyncRepairInventory.policy, failed.instanceIdentity,
+        "11", failed.validatedRevision, org.goldenport.cncf.workflow.ContextReference("fixture-instance:native-validation-result-1", "1"),
+        "focused", failed.localTip, failed.remoteTip, failed.indexTree, Vector(regression),
+        "The actual selected failed check requires this existing tracked regression only",
+        Vector(RepositorySyncRepairInventory.Entry(regression, "100644", "f" * 40)))
+      val request = M.Request(failed, Vector.empty, Vector(M.File(regression, "old expectation")), Some("focused"), Some(scope))
+      val policy = I.Policy((changedpaths :+ regression).toSet, maximumConflicts = 32)
+      val result = M.Result("repaired", "Repair the sole assigned regression", Vector(M.File(regression, "new expectation")))
+
+      When("pure admission distinguishes the full factual candidate selection from the exact one-file repair assignment")
+      val selection = policy.semanticPaths.toVector.sorted
+      val stagingordinal = selection.indexOf(regression) + 1
+      val admitted = M.admitC(request, result, policy)
+      val restored = M.inputCodec.decode(M.inputCodec.encode(request))
+
+      Then("ordinal 129 remains legitimate assignment data while factual paths, the finite repair count and exact result scope remain intact")
+      stagingordinal shouldBe 129
+      admitted.isSuccess shouldBe true
+      restored shouldBe Right(request)
+      request.review.changedPaths shouldBe changedpaths
+      request.review.changedPaths should not contain regression
+      request.files.map(_.path) shouldBe Vector(regression)
+      request.files.size should be <= policy.maximumConflicts
+      policy.maximumConflicts shouldBe 32
+      M.admitC(request, result.copy(replacements = Vector(M.File(changedpaths.head, "unassigned output"))), policy).isSuccess shouldBe false
+      M.admitRequestC(request.copy(admittedInventory = None), policy).isSuccess shouldBe false
+      Vector("../outside.scala", "/outside.scala", ".git/config").foreach { path =>
+        val invalidscope = scope.copy(paths = Vector(path), additions = Vector(scope.additions.head.copy(path = path)))
+        val invalid = request.copy(files = Vector(M.File(path, "invalid selection")), admittedInventory = Some(invalidscope))
+        M.admitRequestC(invalid, policy.copy(semanticPaths = policy.semanticPaths + path)).isSuccess shouldBe false
+      }
+    }
+
+    "permit the exact qualified failed-check assignment while preserving diff facts and legacy request history" in {
+      Given("an actual-shaped failed check and an explicit v2 scope for an unchanged tracked regression")
+      val regression = "src/test/scala/UnchangedRegressionSpec.scala"
+      val failed = _review.copy(checks = Vector(V.Receipt("focused", "exited", Some(1), "baseline expectation failed", "")))
+      val scope = RepositorySyncRepairInventory.Scope(RepositorySyncRepairInventory.policy, failed.instanceIdentity,
+        "11", failed.validatedRevision, org.goldenport.cncf.workflow.ContextReference("fixture-instance:native-validation-result-1", "1"),
+        "focused", failed.localTip, failed.remoteTip, failed.indexTree, Vector(regression),
+        "Update the unchanged regression required by this selected failed check",
+        Vector(RepositorySyncRepairInventory.Entry(regression, "100644", "f" * 40)))
+      val request = M.Request(failed, Vector.empty, Vector(M.File(regression, "old expectation")), Some("focused"), Some(scope))
+      val policy = I.Policy(_paths.toSet + regression, maximumConflicts = 2)
+      val result = M.Result("repaired", "Repair the actual regression", Vector(M.File(regression, "new expectation")))
+      When("admission and native request restoration consume the qualified exact assignment")
+      val restored = M.inputCodec.decode(M.inputCodec.encode(request))
+      val legacy = M.inputCodec.decode(M.inputCodec.encode(_request))
+      Then("only explicit qualified v2 scope permits the addition and old request bytes keep their meaning")
+      M.admitC(request, result, policy).isSuccess shouldBe true
+      restored shouldBe Right(request)
+      legacy shouldBe Right(_request)
+      request.review.changedPaths shouldBe _paths
+      request.review.changedPaths should not contain regression
+      _body(M.inputCodec.encode(_request)).hcursor.downField("admittedInventory").focus shouldBe None
+      M.admitRequestC(request.copy(admittedInventory = None), policy).isSuccess shouldBe false
+      M.admitRequestC(request, _policy).isSuccess shouldBe false
+      M.admitC(request, result.copy(replacements = Vector(M.File("other.scala", "unassigned"))), policy).isSuccess shouldBe false
+      val crossed = Vector(scope.copy(candidateTree = "e" * 40), scope.copy(failureIdentity = "other"),
+        scope.copy(sourceRevision = "6"), scope.copy(instanceIdentity = "other-session"),
+        scope.copy(additions = Vector.empty), scope.copy(additions = Vector(scope.additions.head.copy(mode = "120000"))),
+        scope.copy(paths = Vector("../outside.scala")))
+      crossed.foreach { value =>
+        val changed = request.copy(admittedInventory = Some(value))
+        M.admitRequestC(changed, policy).isSuccess shouldBe false
+        M.inputCodec.decode(M.inputCodec.encode(changed)).isLeft shouldBe true
+      }
+      M.admitRequestC(request.copy(findings = _findings), policy).isSuccess shouldBe false
+    }
+  }
+
   "E1 generated normal business intake" must afterWord(
     "in spec:repository-sync-native-merge-repair, example:E1, rules:R1,R2,R3,R5"
   ) {

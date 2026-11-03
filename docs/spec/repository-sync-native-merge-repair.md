@@ -145,6 +145,48 @@ with the existing framework guard of 128). An unsupported or oversized set
 refuses explicitly for Human handling. Restricted host policies and
 review-origin findings retain their existing scope.
 
+## Automatic existing-file inventory (AUTO-FILE-RS-01)
+
+`prepareRepositorySyncRepairScopeCorrection` accepts exactly `input` or
+`inputResource` with `{sessionId, paths, rationale}`. The caller supplies the
+complete sorted desired assignment and its causal connection to the actual
+retained failed check. Runtime qualification reads only these concrete paths
+through typed Git `TreeEntries`/`BlobContent` and managed File operations.
+Existing unchanged tracked regular UTF-8 files are eligible within the same
+FULL_STATE repository, Component, purpose, acceptance and current capabilities.
+Missing, untracked, outside-root, symlink, tree, binary, crossed or stale files
+refuse. Existing finite assignment counts and CNCF acquisition budgets remain;
+there is no arbitrary text-size threshold or full-repository scan.
+
+The exact v2 target preserves factual `changedPaths` and stores optional typed
+`inventory`: the qualified assignment, causal rationale, actual source and
+failed-check reference, immutable candidate facts and mode/blob facts for
+additions outside the diff. The native repair Request carries that explicit
+`admittedInventory`. Capture, Submit, materialization and history restoration
+validate it against the owning failed candidate; no general path check is
+removed. File materialization and typed Git staging use the same full sorted
+invocation selection and ordinals. Review-origin findings and restricted manual
+host compositions retain their original scope; manual hosts do not advertise
+automatic preparation.
+
+File eligibility is automatic and requires no Human file grant. An existing
+available unclaimed old WorkOrder nevertheless has a separate lifecycle
+concern: absence of a claim or completion cannot prove nonexecution. The v2
+Human answer `ContinueAfterPriorWorkerEndedAcceptingUnknown` supplies only actual
+independent prior-worker-ended and UNKNOWN acceptance evidence. Its `paths`
+must be empty; runtime derives the exact assignment from the prepared inventory.
+The target binds that evidence to the same Session, source and candidate rather
+than asking the Human to select files. `Defer` remains passive. Preparation
+does not manufacture the answer or issue, supersede, validate or mutate files.
+The existing atomic supersession retains the original UNKNOWN issue, receipts,
+history and repair budget. Separate ordinary Advance captures and issues the
+qualified assignment. Ordinary new failed-check issuance already selects its
+eligible actual changed text inventory without a per-file Human grant.
+
+Old policy v1 targets and requests omit inventory metadata and retain their
+original meaning. There is no implicit conversion or historical changed-path
+rewrite. The following describes that retained v1 correction contract.
+
 An already issued narrow failed-check repair can be corrected through
 `describeRepositorySyncRepairScopeCorrection --sessionId` and the separate
 `adoptRepositorySyncRepairScopeCorrection`. Description binds the component,
@@ -188,6 +230,16 @@ files, in order, with at least one text change. Materialization stages using
 the full invocation's Git selection ordering. A genuinely new candidate must
 pass its own checks and independent review; old successful Compile and failed
 Test receipts remain historical.
+
+The focused `AUTO-FILE-RS` executable specifications cover generated deferred
+registration, unchanged regression admission, exact v1 history, v2 lifecycle
+separation and an isolated installed normal CLI same-Session continuation. The
+CLI case starts with a baseline unchanged regression, retains a real native
+Compile success and Test failure caused by changed product input, automatically
+qualifies the regression, receives fixture-authored lifecycle evidence, and
+uses actual native issue/Submit/Advance/File/Git operations before fresh checks
+and separately supplied independent review. These isolated supplied answers
+are specification facts and make no claim about any real consumer worker.
 
 ## Complete repair result Resource transport
 

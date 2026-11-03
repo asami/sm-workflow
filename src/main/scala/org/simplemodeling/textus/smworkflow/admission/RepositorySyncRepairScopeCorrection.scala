@@ -20,7 +20,7 @@ import RepositorySyncNativeMergeRepair as M
 import RepositorySyncNativeMergeRepairContinuation as R
 import RepositorySyncNativeProgressStore as N
 
-/** Human-selected correction of one unclaimed failed-check repair assignment.
+/** Automatic file qualification and separate prior-worker lifecycle direction.
   * Native supersession retains the original issue and its UNKNOWN effects.
   * @since Nov. 3, 2026
   * @version Nov. 3, 2026
@@ -28,10 +28,19 @@ import RepositorySyncNativeProgressStore as N
 private[smworkflow] object RepositorySyncRepairScopeCorrection {
   val purpose = "repository-sync-repair-scope-correction"
   val policy = "sm-workflow.repository-sync-repair-scope-correction.v1"
+  val automaticPolicy = "sm-workflow.repository-sync-repair-scope-correction.v2"
+  val prepareOperation = "prepareRepositorySyncRepairScopeCorrection"
   val describeOperation = "describeRepositorySyncRepairScopeCorrection"
   val adoptionOperation = "adoptRepositorySyncRepairScopeCorrection"
   val resumeCause = "native-repair-scope-adopted:"
   val choices = Vector("AdoptCurrentIntegrationRepairScope", "Defer")
+  val lifecycleChoices = Vector("ContinueAfterPriorWorkerEndedAcceptingUnknown", "Defer")
+  val automaticMessage = "The exact supplied file inventory was qualified automatically for the retained failed check. " +
+    "File eligibility requires no Human permission. The prior available worker may nevertheless have executed: " +
+    "only an actual independent lifecycle answer can attest that it ended and accept its UNKNOWN effects. " +
+    "Paths are fixed by the prepared inventory; separate ordinary Advance captures and issues them. Defer writes nothing."
+  def targetChoices(target: Target): Vector[String] = if (target != null && target.correctionPolicy == automaticPolicy) lifecycleChoices else choices
+  def targetMessage(target: Target): String = if (target.correctionPolicy == automaticPolicy) automaticMessage else message
   val message = "No native completion or claim was found for this available repair issue. This does not prove " +
     "nonexecution. The actual Human must attest that the original semantic worker stopped or ended and accept " +
     "its UNKNOWN external proposal effects. Select a nonempty sorted subset of the permitted current integration " +
@@ -46,7 +55,7 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
     failureReference: ContextReference, failureRevision: String, failedCheck: RepositorySyncNativeMergeValidation.Receipt,
     localTip: String, remoteTip: String, candidateTree: String, actual: G.Native,
     indexTree: String, changedPaths: Vector[String], oldAssignedPaths: Vector[String],
-    maximumFiles: Int, correctionPolicy: String)
+    maximumFiles: Int, correctionPolicy: String, inventory: Option[RepositorySyncRepairInventory.Scope] = None)
   object Target {
     private def _canonical(value: Json): Json = value.mapObject(_.filter { case (_, field) => !field.isNull }
       .mapValues(_canonical)).mapArray(_.map(_canonical))
@@ -75,7 +84,8 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
       "changedPaths" -> value.changedPaths.asJson,
       "oldAssignedPaths" -> value.oldAssignedPaths.asJson,
       "maximumFiles" -> value.maximumFiles.asJson,
-      "correctionPolicy" -> value.correctionPolicy.asJson)))
+      "correctionPolicy" -> value.correctionPolicy.asJson,
+      "inventory" -> value.inventory.asJson)))
     private val _raw: Decoder[Target] = Decoder.instance(cursor => for {
       componentinstance <- cursor.get[String]("componentInstance")
       sessionid <- cursor.get[String]("sessionId")
@@ -102,11 +112,12 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
       oldassignedpaths <- cursor.get[Vector[String]]("oldAssignedPaths")
       maximumfiles <- cursor.get[Int]("maximumFiles")
       correctionpolicy <- cursor.get[String]("correctionPolicy")
+      inventory <- cursor.get[Option[RepositorySyncRepairInventory.Scope]]("inventory")
     } yield Target(componentinstance, sessionid, context, root, endpoint, frontierrevision,
       frontiercause, oldcontinuationid, expectedrevision, entityrevision, sourcerevision,
       candidatereference, candidaterevision, failurereference, failurerevision, failedcheck,
       localtip, remotetip, candidatetree, actual, indextree, changedpaths, oldassignedpaths,
-      maximumfiles, correctionpolicy))
+      maximumfiles, correctionpolicy, inventory))
     given Decoder[Target] = Decoder.instance(cursor => _raw(cursor).flatMap(value =>
       if (validTarget(value) && value.asJson == cursor.value) Right(value)
       else Left(io.circe.DecodingFailure("Repair scope target requires the exact complete canonical contract", cursor.history))))
@@ -119,8 +130,10 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
     given Encoder[Direction] = deriveEncoder
     private val _raw: Decoder[Direction] = deriveDecoder
     given Decoder[Direction] = Decoder.instance(cursor => _raw(cursor).flatMap(value =>
-      if (value.choice == choices.head && value.asJson == cursor.value && bindingC(value.target.componentInstance,
-          value.target, value.choice, value.paths, value.rationale, value.participant, value.reference,
+      if (validTarget(value.target) && value.choice == targetChoices(value.target).head && value.asJson == cursor.value &&
+          value.target.inventory.forall(_.paths == value.paths) && bindingC(value.target.componentInstance,
+          value.target, value.choice, if (value.target.correctionPolicy == automaticPolicy) Vector.empty else value.paths,
+          value.rationale, value.participant, value.reference,
           value.priorExecutionEnded, value.acceptOriginalUncertainty).isSuccess) Right(value)
       else Left(io.circe.DecodingFailure("Repair scope direction is incomplete or invalid", cursor.history))))
   }
@@ -177,8 +190,19 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
     t.actual.observed.counts.exists(c => c.localAhead > 0 && c.remoteAhead > 0) &&
     t.actual.observed.mergeBase != null && t.actual.observed.mergeBase.exists(_oid) &&
     _paths(t.changedPaths) && _paths(t.oldAssignedPaths) &&
-    t.oldAssignedPaths.forall(t.changedPaths.contains) && t.changedPaths.exists(p => !t.oldAssignedPaths.contains(p)) &&
-    t.maximumFiles > 0 && t.maximumFiles <= 128 && t.oldAssignedPaths.size <= t.maximumFiles && t.correctionPolicy == policy
+    t.oldAssignedPaths.forall(t.changedPaths.contains) &&
+    t.maximumFiles > 0 && t.maximumFiles <= 128 && t.oldAssignedPaths.size <= t.maximumFiles && t.inventory != null &&
+    (if (t.correctionPolicy == policy) t.inventory.isEmpty && t.changedPaths.exists(p => !t.oldAssignedPaths.contains(p))
+      else t.correctionPolicy == automaticPolicy && t.inventory.exists(scope => scope != null &&
+        scope.inventoryPolicy == RepositorySyncRepairInventory.policy && scope.instanceIdentity == t.sessionId &&
+        scope.sourceRevision == t.sourceRevision && scope.failureReference == t.failureReference &&
+        scope.failureIdentity == t.failedCheck.identity && scope.localTip == t.localTip && scope.remoteTip == t.remoteTip &&
+        scope.candidateTree == t.candidateTree && _revision(scope.validatedRevision) &&
+        scope.validatedRevision.toLong < t.sourceRevision.toLong && _paths(scope.paths) && scope.paths.size <= t.maximumFiles &&
+        scope.rationale != null && scope.rationale.trim.nonEmpty && !scope.rationale.contains('\u0000') &&
+        java.nio.charset.StandardCharsets.UTF_8.newEncoder().canEncode(scope.rationale) && scope.additions != null &&
+        scope.additions.forall(entry => entry != null && Set("100644", "100755")(entry.mode) && _oid(entry.blob)) &&
+        scope.additions.map(_.path) == scope.paths.filterNot(t.changedPaths.contains)))
   def decodeTarget(value: Json): Either[String, Target] = Option(value).toRight("Repair scope target is absent")
     .flatMap(_.as[Target].left.map(_.message))
   def decodePublicTarget(value: Json): Either[String, Target] = GoalPhaseNativeMetadata.normalizePublicJson(value).flatMap(decodeTarget)
@@ -189,18 +213,21 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
   def decodeAnswer(value: Json): Either[String, Answer] = for {
     wire <- Option(value).toRight("Repair scope answer is absent")
     answer <- wire.as[Answer].left.map(_.message)
-    _ <- Either.cond(answer.asJson == wire && choices.contains(answer.choice) && _exact(answer.rationale) &&
+    _ <- Either.cond(answer.asJson == wire && (choices ++ lifecycleChoices).contains(answer.choice) && _exact(answer.rationale) &&
       answer.paths != null && (if (answer.choice == "Defer") answer.paths.isEmpty
-        else _paths(answer.paths) && answer.priorExecutionEnded && answer.acceptOriginalUncertainty), (),
+        else (if (answer.choice == lifecycleChoices.head) answer.paths.isEmpty else _paths(answer.paths)) &&
+          answer.priorExecutionEnded && answer.acceptOriginalUncertainty), (),
       "Repair scope answer requires exact fields, explicit selected paths and terminal/uncertainty acceptance")
   } yield answer
   def decodePublicAnswer(value: Json): Either[String, Answer] = GoalPhaseNativeMetadata.normalizePublicJson(value).flatMap(decodeAnswer)
   def bindingC(component: String, target: Target, choice: String, paths: Vector[String], rationale: String,
     participant: String, reference: ContextReference, ended: Boolean, accepted: Boolean): Consequence[Json] =
     if (!validTarget(target) || component != target.componentInstance || participant != target.context.participantIdentity ||
-        !choices.contains(choice) || !_exact(rationale) || !_reference(reference) || paths == null ||
-        (if (choice == "Defer") paths.nonEmpty else !_paths(paths) || paths.size > target.maximumFiles ||
-          !paths.forall(target.changedPaths.contains) || !ended || !accepted))
+        !targetChoices(target).contains(choice) || !_exact(rationale) || !_reference(reference) || paths == null ||
+        (if (choice == "Defer") paths.nonEmpty else
+          (if (target.correctionPolicy == automaticPolicy) paths.nonEmpty
+            else !_paths(paths) || paths.size > target.maximumFiles || !paths.forall(target.changedPaths.contains)) ||
+          !ended || !accepted))
       N.invalid("repair scope requires the exact target, bounded selected paths, participant, reference and explicit terminal/uncertainty assertions")
     else Consequence.success(Json.obj("componentInstance" -> component.asJson,
       "repositoryRepairScopeCorrection" -> Json.obj("target" -> target.asJson,
@@ -245,7 +272,9 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
             target.failureRevision == source.basis.validated.record.revision.value.toString &&
             target.failedCheck == source.basis.input.checks.last && target.candidateTree == source.basis.input.indexTree &&
             target.localTip == source.basis.input.localTip && target.remoteTip == source.basis.input.remoteTip &&
-            target.changedPaths.forall(source.basis.input.changedPaths.contains)) Consequence.unit
+            (if (target.correctionPolicy == automaticPolicy) target.changedPaths == source.basis.input.changedPaths
+              else target.changedPaths.forall(source.basis.input.changedPaths.contains)) && target.inventory.forall(scope =>
+              RepositorySyncRepairInventory.valid(scope, source.basis.input, source.basis.validationFailure))) Consequence.unit
           else N.invalid("repair scope correction crosses the original failed candidate or native history")
       } yield Some(saved)
     }
@@ -257,7 +286,8 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
     if (record.causation.value.startsWith(prefix)) Consequence.success(ContextReference(identity + ":native-" +
       record.causation.value.stripPrefix(prefix), "1")) else N.invalid("repair scope source has no native retained reference")
   }
-  private def _observe_c(identity: String, port: R.Port, core: ActionCall.Core): Consequence[Observation] = for {
+  private def _observe_c(identity: String, port: R.Port, core: ActionCall.Core,
+    preparing: Boolean = false): Consequence[Observation] = for {
     source <- port.sourceC(identity, core)
     _ <- if (source.session.context.syncMode == "FULL_STATE" && source.basis.validationFailure.nonEmpty &&
         source.basis.findings.isEmpty && source.basis.validated.payload.purposes.isEmpty &&
@@ -287,7 +317,7 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
     failurereference <- _reference(source.basis.validated.record, identity)
     actual <- G.inspectC(core)
     tree <- G.indexTreeC(core)
-    permitted <- port.permittedPathsC(source)
+    permitted <- if (preparing) Consequence.success(source.basis.input.changedPaths) else port.permittedPathsC(source)
     target = Target(core.component.get.core.instanceId.canonicalKey, identity, source.session.context,
       source.basis.validated.payload.root, source.store.declaration.target.endpoint,
       pending.current.revision.value.toString, pending.current.causation.value, old,
@@ -296,21 +326,78 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
       failurereference, source.basis.validated.record.revision.value.toString, source.basis.input.checks.last,
       source.basis.input.localTip, source.basis.input.remoteTip, source.basis.input.indexTree,
       actual, tree, permitted, input.files.map(_.path), port.maximumFiles, policy)
-    _ <- if (validTarget(target)) Consequence.unit else N.invalid("repair issue has no omitted permissible current integration paths")
+    _ <- if (preparing || validTarget(target)) Consequence.unit else N.invalid("repair issue has no omitted permissible current integration paths")
     _ <- RepositorySyncNativeMergeValidation.preconditionsC(source.store, source.basis.validated)
   } yield Observation(source, target, pending.current, pending.entityRevision)
 
   def operations(port: R.Port, installation: Installation): Vector[spec.OperationDefinition] =
-    Vector(new Operation(true, port, installation), new Operation(false, port, installation))
+    Vector(new Operation(true, port, installation), new Operation(false, port, installation)) ++
+      (if (port.automaticInventory) Vector(new PreparationOperation(port)) else Vector.empty)
   def sessionC(suppliedRequest: Request, call: ActionCall.Core): Consequence[String] = {
     final class Reader extends ProcedureActionCall {
       val core = call
       def readSessionC: Consequence[String] = NativeWorkflowResourceInput.selectC[Record](suppliedRequest).flatMap(source =>
         NativeWorkflowResourceInput.readC(source, reference => read_resource_text(reference,
-          Some(java.nio.charset.StandardCharsets.UTF_8))).flatMap(_input_c).map(_.sessionId))
+          Some(java.nio.charset.StandardCharsets.UTF_8))).flatMap(record =>
+            if (suppliedRequest.operation == prepareOperation) _prepare_input_c(record).map(_.sessionId)
+            else _input_c(record).map(_.sessionId)))
       def execute(): Consequence[OperationResponse] = N.invalid("repair scope reader is not an Operation")
     }
     new Reader().readSessionC
+  }
+  final case class Preparation(sessionId: String, paths: Vector[String], rationale: String)
+  private def _prepare_input_c(record: Record): Consequence[Preparation] = for {
+    json <- record.toJsonStringC.flatMap(raw => io.circe.parser.parse(raw).left.map(_.message)
+      .flatMap(GoalPhaseNativeMetadata.normalizePublicJson).fold(N.invalid, Consequence.success))
+    value <- json.as[Preparation].left.map(_.message).fold(N.invalid, Consequence.success)
+    _ <- if (value.asJson == json && _exact(value.sessionId) && _paths(value.paths) && value.rationale != null &&
+        value.rationale.trim.nonEmpty && !value.rationale.contains('\u0000') &&
+        java.nio.charset.StandardCharsets.UTF_8.newEncoder().canEncode(value.rationale))
+      Consequence.unit else N.invalid("automatic inventory preparation requires exact sessionId, sorted concrete paths and causal rationale")
+  } yield value
+  def requestedInventoryPathsC(suppliedRequest: Request, call: ActionCall.Core): Consequence[Vector[String]] = {
+    final class Reader extends ProcedureActionCall {
+      val core = call
+      def readC: Consequence[Vector[String]] = NativeWorkflowResourceInput.selectC[Record](suppliedRequest).flatMap(source =>
+        NativeWorkflowResourceInput.readC(source, reference => read_resource_text(reference,
+          Some(java.nio.charset.StandardCharsets.UTF_8))).flatMap { record =>
+          if (suppliedRequest.operation == prepareOperation) _prepare_input_c(record).map(_.paths)
+          else _input_c(record).flatMap(input => targetC(input.target)).map(_.inventory.toVector.flatMap(_.paths))
+        })
+      def execute(): Consequence[OperationResponse] = N.invalid("inventory reader is not an Operation")
+    }
+    new Reader().readC
+  }
+  private def _prepare_c(identity: String, paths: Vector[String], rationale: String, port: R.Port,
+    core: ActionCall.Core): Consequence[Observation] = for {
+    _ <- if (port.automaticInventory) Consequence.unit else N.invalid("automatic inventory requires the installed runtime composition")
+    observed <- _observe_c(identity, port, core, preparing = true)
+    scope <- RepositorySyncRepairInventory.qualifyC(observed.source, paths, rationale, port.maximumFiles,
+      observed.target.failureReference)
+    target = observed.target.copy(correctionPolicy = automaticPolicy, inventory = Some(scope))
+    _ <- if (validTarget(target)) Consequence.unit else N.invalid("automatic inventory target is incomplete")
+  } yield observed.copy(target = target)
+  private final class PreparationOperation(port: R.Port) extends spec.OperationDefinition {
+    val specification = NativeWorkflowDescriptionMetadata.operation(
+      SmWorkflowComponent.RepositorySyncServiceService.PrepareRepositorySyncRepairScopeCorrectionOperation)
+    def createOperationRequest(request: Request): Consequence[OperationRequest] =
+      if (request == null || !request.service.contains("RepositorySyncService") || request.operation != prepareOperation)
+        N.invalid("automatic inventory Operation identity differs")
+      else NativeWorkflowResourceInput.selectC[Record](request).map(source => Action(request, source))
+    private final case class Action(request: Request, input: NativeWorkflowResourceInput.Source[Record]) extends CommandAction {
+      override def commandExecutionMode = CommandExecutionMode.Sync
+      def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
+        val core = c
+        def execute(): Consequence[OperationResponse] = for {
+          value <- NativeWorkflowResourceInput.readC(input, reference => read_resource_text(reference,
+            Some(java.nio.charset.StandardCharsets.UTF_8))).flatMap(_prepare_input_c)
+          context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(value.sessionId))
+          observed <- _prepare_c(value.sessionId, value.paths, value.rationale, port, core.copy(executionContext = context))
+        } yield NativeWorkflowOperationOutput.response(V.RepositorySyncRepairScopeCorrectionDescriptionResult(value.sessionId,
+          "adoption-required", automaticMessage, observed.target.componentInstance, targetRecord(observed.target),
+          lifecycleChoices, adoptionOperation))
+      }
+    }
   }
   private final class Operation(describe: Boolean, port: R.Port, installation: Installation) extends spec.OperationDefinition {
     val specification = NativeWorkflowDescriptionMetadata.operation(if (describe)
@@ -339,8 +426,8 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
           saved <- selectedC(source)
           result <- (value, saved) match {
             case (None, Some(saved)) => Consequence.success(NativeWorkflowOperationOutput.response(
-              V.RepositorySyncRepairScopeCorrectionDescriptionResult(session, "already-adopted", message,
-                saved.direction.target.componentInstance, targetRecord(saved.direction.target), choices, adoptionOperation)))
+              V.RepositorySyncRepairScopeCorrectionDescriptionResult(session, "already-adopted", targetMessage(saved.direction.target),
+                saved.direction.target.componentInstance, targetRecord(saved.direction.target), targetChoices(saved.direction.target), adoptionOperation)))
             case (None, None) => _observe_c(session, port, selected).map(observed => NativeWorkflowOperationOutput.response(
               V.RepositorySyncRepairScopeCorrectionDescriptionResult(session, "adoption-required", message,
                 observed.target.componentInstance, targetRecord(observed.target), choices, adoptionOperation)))
@@ -375,18 +462,21 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
     binding <- bindingC(core.component.get.core.instanceId.canonicalKey, target, input.choice, input.paths,
       input.rationale, participant, reference, input.priorExecutionEnded, input.acceptOriginalUncertainty)
     _ <- installation.evidence.admitC(core, reference, binding)
-    direction = Direction(target, input.paths, input.choice, input.rationale, participant, reference,
+    selectedpaths = target.inventory.fold(input.paths)(_.paths)
+    direction = Direction(target, selectedpaths, input.choice, input.rationale, participant, reference,
       input.priorExecutionEnded, input.acceptOriginalUncertainty)
     outcome <- saved match {
       case Some(previous) => if (previous.direction == direction) Consequence.success("already-adopted")
         else N.invalid("repeated repair scope correction contradicts the actual saved direction")
       case None => for {
-        observed <- _observe_c(input.sessionId, port, core)
+        observed <- if (target.correctionPolicy == automaticPolicy) _prepare_c(input.sessionId,
+          target.inventory.get.paths, target.inventory.get.rationale, port, core) else _observe_c(input.sessionId, port, core)
         _ <- if (observed.target == target) Consequence.unit else N.invalid("repair scope target is stale or crossed; describe again")
         result <- if (input.choice == "Defer") Consequence.success("deferred") else for {
           // Capture only for eligibility now; ordinary Advance owns the issued text.
-          _ <- port.captureC(observed.source, Some(input.paths))
-          actual <- _observe_c(input.sessionId, port, core)
+          _ <- port.captureC(observed.source, Some(selectedpaths), target.inventory)
+          actual <- if (target.correctionPolicy == automaticPolicy) _prepare_c(input.sessionId,
+            target.inventory.get.paths, target.inventory.get.rationale, port, core) else _observe_c(input.sessionId, port, core)
           _ <- if (actual.target == target) Consequence.unit else N.invalid("repair scope drifted before native supersession")
           adapter <- observed.source.session.storage.bindWorkOrderSupersessionC(R.completionOperation, M.inputCodec, checkpointCodec)
           current = actual.current

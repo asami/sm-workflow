@@ -377,7 +377,12 @@ private[smworkflow] object GoalPhaseRepairInventoryContinuation {
   private[admission] def runtimeCandidatePathsC(session: F.Session, initial: Vector[String],
     core: ActionCall.Core): Consequence[Vector[String]] =
     session.current.history.filter(entry => entry.causation.value == causation ||
-      entry.causation.value.startsWith(humanCausationPrefix)).foldLeft(Consequence.success(initial)) { (prior, entry) => for {
+      entry.causation.value.startsWith(humanCausationPrefix) ||
+      Set(GoalPhaseCurrentInventoryContinuation.causation, GoalPhaseCurrentInventoryContinuation.humanCausation)(entry.causation.value))
+      .foldLeft(Consequence.success(initial)) { (prior, entry) =>
+      if (Set(GoalPhaseCurrentInventoryContinuation.causation, GoalPhaseCurrentInventoryContinuation.humanCausation)(entry.causation.value))
+        prior.flatMap(paths => GoalPhaseCurrentInventoryContinuation.runtimeEntryPathsC(session, paths, entry, core))
+      else for {
       paths <- prior
       before <- GoalPhaseNativeHistory.prefixC(session.current, InstanceRevision(entry.revision.value - 1))
       value <- if (entry.causation.value == causation) for {
@@ -399,7 +404,7 @@ private[smworkflow] object GoalPhaseRepairInventoryContinuation {
         "runtime inventory belongs to another native Session")
       _ <- retainedCandidatePathsC(paths, value.target.candidatePaths)
     } yield value.target.candidatePaths }
-  private def _paths(values: Vector[String]): Boolean = values != null && values.nonEmpty && values.size <= 256 &&
+  private def _paths(values: Vector[String]): Boolean = values != null && values.nonEmpty &&
     values.distinct == values && values.forall(value => _exact(value) && RepositorySyncNativeConflictInput.relative(value) &&
       !value.exists(c => "*?[]{}".contains(c)))
   private def _revision(value: String): Boolean = value != null && value.toLongOption.exists(n => n > 0 && n.toString == value)

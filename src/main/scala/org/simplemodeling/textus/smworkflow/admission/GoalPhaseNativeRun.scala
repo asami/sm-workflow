@@ -210,7 +210,7 @@ private[smworkflow] object GoalPhaseNativeRun {
     if (d == null || d.configuration == null || d.instances == null || d.continuations == null ||
         d.instances == d.continuations || d.input == null || d.target == null || d.target.root == null ||
         !d.target.root.isAbsolute || d.target.root.normalize != d.target.root || d.target.localBranch == null ||
-        d.candidatePaths == null || d.candidatePaths.size > 256 || d.candidatePaths.distinct != d.candidatePaths ||
+        d.candidatePaths == null || d.candidatePaths.distinct != d.candidatePaths ||
         !d.candidatePaths.forall(RepositorySyncNativeConflictInput.relative) || d.validationPolicy == null || d.reviewInstallation == null ||
         d.closureInstallation == null || d.phaseValidationPolicy == null || d.repositoryClosure == null || d.humanDecision == null ||
         d.dependencyValidation == null || d.dependencyValidation.exists(b => !GoalPhaseDependencyValidation.bindingValid(b)) ||

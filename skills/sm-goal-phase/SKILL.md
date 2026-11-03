@@ -973,6 +973,28 @@ retain their existing owners. This source guidance does not establish a fresh
 packaged bundle, actual installed-task consumption, successful nonempty runtime
 inputs or AI validation. Those require their separate actual evidence.
 
+### Current-Step necessary-file inventory
+
+For actual runtime-issued implementation or repair with a current Step identity,
+return `decision-needed` with a complete raw `planRevision` Proposal, a fresh
+Plan revision and the actual causal reason when concrete necessary files are
+missing from that Step's inventory. Append only literal current-Step
+`ownedPaths`; preserve Component, repository, purpose, Usage, acceptance,
+checks, dependencies, permitted effects and every other Plan value. Omit derived
+`effectiveAcceptance`.
+
+Runtime evaluates this inventory under standing original-purpose authority
+without a fresh per-file Human grant, manual skill Plan adoption or host
+configuration change. File/workspace/effect permissions remain effective.
+Different ownership, requirements or effects and ongoing/UNKNOWN old work remain
+actual concerns. Preserve valid benign PROGRESSING assessment metadata with no
+requirement or contract change; never strip findings, reports or mixed concerns
+to qualify automatically. Runtime retains Session, original base, completed
+Steps, history and repair counters. It may natively supersede an existing
+unanswered question proven inventory-only, retaining the question without
+fabricating a Human answer.
+
+For a non-inventory business change, use the existing Plan route below.
 When implementation or repair discovers a genuine test, suite, requirement or
 design gap, return `decision-needed` and an optional structured `planRevision`
 Proposal: `{identity, revision, reason, plan}`. Supply the complete raw Plan with

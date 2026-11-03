@@ -15,3 +15,17 @@
   purpose-to-conflict continuation repair and is deliberately deferred.
 - Follow-up: a separate mechanical helper-naming cleanup with affected call
   sites. It grants no changes to public, persisted or serialized names.
+
+## HYG-AUTO-CML-WIRE-01 — Primitive preparation wire fields
+
+- Status: OPEN
+- Owner: sm-workflow
+- Discovered: 2026-11-03, automatic necessary-file inventory maintenance review.
+- Location: `src/main/cozy/sm-workflow.cml`, the repair-scope preparation
+  `sessionId`, `paths`, and `rationale` wire fields.
+- Category: internal wire metadata maintenance; low priority. Primitive fields
+  trigger the existing string-attribute convention warning. Actual Session,
+  literal path, rationale and candidate/File qualification remain enforced by
+  admission; no unsafe behavior has been demonstrated.
+- Boundary: no value-type or schema expansion belongs to this repair.
+- Follow-up: include these fields in a separately scoped wire-metadata cleanup.

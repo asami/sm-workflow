@@ -438,3 +438,21 @@ do not authorize replaying development, successful validation or accepted Submit
 Use the exact public description and independently admitted continuation authority;
 UNKNOWN effects remain UNKNOWN until observed. Standalone FIX keeps its own
 uncommitted completion contract.
+
+## Necessary repair-file inventory
+
+Use public `prepareRepositorySyncRepairScopeCorrection` with typed `input` or
+`inputResource` containing `{sessionId, paths, rationale}`. Supply the exact
+complete desired assignment from the actual failed candidate, including any
+necessary unchanged tracked file, and its actual causal rationale. Runtime
+admits same-Component/repository/purpose/Usage/acceptance/effect inventory under
+standing authority without a fresh per-file Human grant. Different requirements,
+ownership or effects remain actual concerns; real permissions stay effective.
+
+An old pending worker or UNKNOWN effect remains a separate actual lifecycle
+decision through the current description and target. The current v2 answer's
+`paths` must be empty: runtime inventory fixes the assignment. Retain actual v1
+history and its original meaning. Never fabricate Human direction or perform
+consumer operations to supply evidence. Ordinary issued Request, Submit and
+Advance own actual file/Git/Test effects and closure; inventory preparation
+does not replace their native contracts.

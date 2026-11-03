@@ -152,7 +152,7 @@ final class NativeRepositoryRepairScopeCorrectionCliSpec extends AnyWordSpec wit
     Live(F.reopenInstalledRepository(root, host, plan, startinglogindex), episode.session)
   }
 
-  private def _scenario(name: String): F.Scenario = {
+  private def _scenario(name: String, unchangedRegression: Boolean = false): F.Scenario = {
     val executable = TypedSbtHostPlanFixture.normalExecutable
     val scenario = F.fresh(name, sbtRepair = Some(executable), bootstrapSelectedInput = false)
     val root = scenario.root
@@ -175,6 +175,13 @@ final class NativeRepositoryRepairScopeCorrectionCliSpec extends AnyWordSpec wit
       StandardOpenOption.APPEND)
     Files.writeString(repository.resolve("src/test/scala/ProductCheck.scala"), _product("initial\n"))
     Files.writeString(repository.resolve("docs/repair.md"), "Initial repair explanation\n")
+    if (unchangedRegression) {
+      Files.write(repository.resolve("binary-fixture.dat"), Array[Byte](0, 1, 2))
+      Files.createSymbolicLink(repository.resolve("symlink-fixture"), Path.of("value.txt"))
+      Files.createDirectory(repository.resolve("fixture-directory"))
+      Files.writeString(repository.resolve("fixture-directory/entry.txt"), "ordinary baseline entry\n")
+      git(root, "-C", repository.toString, "add", "--", "binary-fixture.dat", "symlink-fixture", "fixture-directory/entry.txt")
+    }
     git(root, "-C", repository.toString, "add", "--", "project/plugins.sbt", ".scalafix.conf", "build.sbt",
       "src/test/scala/ProductCheck.scala", "docs/repair.md")
     git(root, "-C", repository.toString, "commit", "-m", "Initial ordinary repair-scope and real lint fixture inputs")
@@ -182,9 +189,9 @@ final class NativeRepositoryRepairScopeCorrectionCliSpec extends AnyWordSpec wit
     val peer = root.resolve("peer")
     git(root, "clone", "--branch", "main", "--", root.resolve("upstream.git").toString, peer.toString)
     Files.writeString(peer.resolve("value.txt"), "remote product input\n")
-    Files.writeString(peer.resolve("src/test/scala/ProductCheck.scala"), _product("remote product input\n"))
-    Files.writeString(peer.resolve("docs/repair.md"), _document)
-    Files.size(peer.resolve("docs/repair.md")) should be >= 2170000L
+    if (!unchangedRegression) Files.writeString(peer.resolve("src/test/scala/ProductCheck.scala"), _product("remote product input\n"))
+    Files.writeString(peer.resolve("docs/repair.md"), if (unchangedRegression) "Remote repair explanation\n" else _document)
+    if (!unchangedRegression) Files.size(peer.resolve("docs/repair.md")) should be >= 2170000L
     git(root, "-C", peer.toString, "add", "--", "value.txt", "src/test/scala/ProductCheck.scala", "docs/repair.md")
     git(root, "-C", peer.toString, "commit", "-m", "Remote nonconflict check and complete document with conflicting value")
     git(root, "-C", peer.toString, "push", root.resolve("upstream.git").toString, "HEAD:refs/heads/main")
@@ -227,7 +234,7 @@ final class NativeRepositoryRepairScopeCorrectionCliSpec extends AnyWordSpec wit
     scenario
   }
 
-  private def _failed(scenario: F.Scenario): (Live, F.Result, V.RepositorySyncAdvanceResult) = {
+  private def _failed(scenario: F.Scenario, changedPaths: Vector[String] = _changed): (Live, F.Result, V.RepositorySyncAdvanceResult) = {
     val client = Live(scenario, "")
     val started = client.repositoryCall("startRepositorySync", Vector("--input",
       "{\"repositoryIdentity\":\"repair-scope-fixture\",\"syncMode\":\"FULL_STATE\"}")).business[V.RepositorySyncStartResult]
@@ -247,7 +254,7 @@ final class NativeRepositoryRepairScopeCorrectionCliSpec extends AnyWordSpec wit
     val output = live.advance()
     val repair = output.business[V.RepositorySyncAdvanceResult]
     repair.repair should not be empty
-    repair.repair.get.review.changedPaths shouldBe _changed
+    repair.repair.get.review.changedPaths shouldBe changedPaths
     repair.repair.get.validationFailure shouldBe Some("formalTest")
     val formal = _formal(live)
     formal.size shouldBe 2
@@ -256,6 +263,123 @@ final class NativeRepositoryRepairScopeCorrectionCliSpec extends AnyWordSpec wit
     receipts.find(_.identity == "formalTest").get.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Failed
     _invocations(live.root).size shouldBe 2
     (live, output, repair)
+  }
+
+  "AUTO-FILE-RS installed unchanged regression continuation" should {
+    "qualify baseline files automatically and carry the exact inventory through native issue Submit File and Git effects" in {
+      Given("a small isolated installed normal CLI repository whose unchanged baseline check fails only after the product input changes")
+      val regression = "src/test/scala/ProductCheck.scala"
+      val changed = Vector("docs/repair.md", "value.txt")
+      val (live, _, initialrepair) = _failed(_scenario("installed-automatic-unchanged-regression", unchangedRegression = true), changed)
+      val initial = _snapshot(live)
+      val original = _current(live)
+      val old = original.suspension.get.continuationIdentity.value
+      initialrepair.repair.get.files.map(_.path) shouldBe changed
+      initialrepair.repair.get.review.changedPaths should not contain regression
+      git(live.root, "-C", live.repository.toString, "diff", "HEAD", "--", regression) shouldBe ""
+      def _prepare_(paths: Vector[String], resource: Boolean = false): F.Result = {
+        val input = Json.obj("sessionId" -> live.session.asJson, "paths" -> paths.asJson,
+          "rationale" -> "The actual formalTest failed because the baseline ProductCheck expectation still describes the old product input".asJson)
+        val parameters = if (resource) Vector("--inputResource", _save(live.root, "automatic-inventory.json", input.noSpaces))
+          else Vector("--input", input.noSpaces)
+        live.repositoryCall(N.prepareOperation, parameters)
+      }
+      When("automatic preparation receives missing untracked outside-root binary symlink and tree selections")
+      Vector(Vector("missing.scala"), Vector("../outside.scala"), Vector("binary-fixture.dat"),
+        Vector("symlink-fixture"), Vector("fixture-directory")).foreach { paths =>
+        _prepare_(paths).exitCode should not be 0
+        _snapshot(live) shouldBe initial
+      }
+      val untracked = live.repository.resolve("untracked.scala")
+      Files.writeString(untracked, "untracked fixture text\n")
+      try { _prepare_(Vector("untracked.scala")).exitCode should not be 0 } finally Files.delete(untracked)
+      val prepared = _prepare_(Vector(regression), resource = true)
+      val description = prepared.business[V.RepositorySyncRepairScopeCorrectionDescriptionResult]
+      val target = take(N.targetC(description.target))
+      Then("the runtime qualifies the unchanged tracked file without any Human file grant and leaves old issue checks and Git state untouched")
+      target.correctionPolicy shouldBe N.automaticPolicy
+      target.changedPaths shouldBe changed
+      target.inventory.get.paths shouldBe Vector(regression)
+      target.inventory.get.additions.map(_.path) shouldBe Vector(regression)
+      description.choices shouldBe N.lifecycleChoices
+      _snapshot(live) shouldBe initial
+      val reference = V.WorkflowArtifactReference("fixture-prior-worker-lifecycle", "1")
+      val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("participant"), None, None)
+      val answer = V.RepositorySyncRepairScopeCorrectionAnswer(N.lifecycleChoices.head, Vector.empty,
+        "Fixture author supplies that the old worker ended and explicitly accepts its UNKNOWN proposal effects", true, true)
+      val input = V.RepositorySyncRepairScopeCorrectionAdoptionInput(live.session, description.target, answer.choice,
+        Vector.empty, answer.rationale, reference, true, true, execution)
+      def _adopt_(value: V.RepositorySyncRepairScopeCorrectionAdoptionInput): F.Result =
+        live.repositoryCall(N.adoptionOperation, Vector("--input", _json(value)))
+      When("the distinct lifecycle concern has no independent answer or is replaced by a Human path selection")
+      _adopt_(input).exitCode should not be 0
+      _adopt_(input.copy(paths = Vector(regression))).exitCode should not be 0
+      _adopt_(input.copy(priorExecutionEnded = false)).exitCode should not be 0
+      _snapshot(live) shouldBe initial
+      val preparation = V.WorkflowEvidencePreparationInput("RepositorySyncRepairScopeCorrection", "adoption",
+        prepared.invocation.stdout.toUri.toASCIIString,
+        _save(live.root, "automatic-lifecycle-answer.json", _json(answer)),
+        _save(live.root, "automatic-lifecycle-reference.json", _json(reference)),
+        _save(live.root, "automatic-lifecycle-execution.json", _json(execution)), "normal-development-host",
+        java.time.Instant.now().toString, "entity:smworkflow.cli.host_evidence", Some("participant"))
+      val evidence = live.call("NativeWorkflowPreparationService", "prepareEvidence", Vector("--input", _json(preparation)))
+      evidence.exitCode shouldBe 0
+      live.scenario.selectPreparedImport(evidence)
+      When("the fixture supplies its own actual-shaped lifecycle answer and separate ordinary Advance issues the runtime inventory")
+      _adopt_(input).business[V.RepositorySyncRepairScopeCorrectionAdoptionResult].accepted shouldBe true
+      val adopted = _current(live)
+      adopted.history.take(original.history.size) shouldBe original.history
+      val issued = live.advance().business[V.RepositorySyncAdvanceResult]
+      val current = _current(live)
+      val actual = _original_work(live, current.suspension.get.continuationIdentity.value)
+      Then("the native WorkOrder retains the admitted scope and factual diff while old receipts history and repair budget survive")
+      issued.repair.get.files.map(_.path) shouldBe Vector(regression)
+      actual.admittedInventory shouldBe target.inventory
+      actual.review.changedPaths shouldBe changed
+      current.history.flatMap(_.suspension.map(_.continuationIdentity.value)).filter(_.startsWith(live.session + ":native-repair:"))
+        .map(N.budgetIdentity).distinct shouldBe Vector(old)
+      _original_work(live, old).files.map(_.path) shouldBe changed
+      _formal(live) shouldBe initial._7
+      _invocations(live.root) shouldBe initial._6
+      _prepare_(Vector(regression)).exitCode should not be 0
+      val resultreference = V.WorkflowArtifactReference("fixture-automatic-regression-proposal", "1")
+      val resultevidence = V.WorkflowExecutionEvidence(Vector(resultreference), Some("fixture-regression-author"), None, None)
+      val result = V.RepositorySyncNativeMergeRepairResult("repaired", "Update only the assigned baseline regression expectation",
+        Vector(V.RepositorySyncNativeMergeRepairFile(regression, _product(_resolved))))
+      val metadata = Vector("--sessionId", live.session, "--resultReference", _json(resultreference), "--executionEvidence", _json(resultevidence))
+      When("native Submit receives an unassigned file before the exact qualified regression proposal")
+      live.repositoryCall("submitNativeMergeRepair", metadata ++ Vector("--result", _json(result.copy(
+        replacements = Vector(V.RepositorySyncNativeMergeRepairFile("value.txt", "unassigned proposal")))))).exitCode should not be 0
+      live.repositoryCall("submitNativeMergeRepair", metadata ++ Vector("--result", _json(result)))
+        .business[V.RepositorySyncNativeMergeRepairSubmissionResult].accepted shouldBe true
+      val reviewoutput = live.advance()
+      val review = reviewoutput.business[V.RepositorySyncAdvanceResult]
+      Then("owning Advance materializes and stages the regression with matching full-invocation ordinals and runs fresh real checks")
+      review.review should not be empty
+      _invocations(live.root).size shouldBe initial._6.size + 3
+      _formal(live).filter(initial._7.contains) shouldBe initial._7
+      Files.readString(live.repository.resolve(regression)) shouldBe _product(_resolved)
+      git(live.root, "-C", live.repository.toString, "diff", "--", regression) shouldBe ""
+      val verdict = V.RepositorySyncNativeMergeReviewResult("accept", "Fixture independent reviewer accepts this actual new candidate", Vector.empty)
+      val reviewreference = V.WorkflowArtifactReference("fixture-automatic-independent-review", "1")
+      val reviewexecution = V.WorkflowExecutionEvidence(Vector(reviewreference), Some("fixture-independent-reviewer"), None, None)
+      val reviewpreparation = V.WorkflowEvidencePreparationInput("RepositorySync", "review", reviewoutput.invocation.stdout.toUri.toASCIIString,
+        _save(live.root, "automatic-review.json", _json(verdict)), _save(live.root, "automatic-review-reference.json", _json(reviewreference)),
+        _save(live.root, "automatic-review-execution.json", _json(reviewexecution)), "normal-development-host", java.time.Instant.now().toString,
+        "entity:smworkflow.cli.host_evidence", None)
+      val reviewevidence = live.call("NativeWorkflowPreparationService", "prepareEvidence", Vector("--input", _json(reviewpreparation)))
+      reviewevidence.exitCode shouldBe 0
+      live.scenario.selectPreparedImport(reviewevidence)
+      When("separate fixture-owned independent review completes the same Session against its isolated local bare upstream")
+      live.repositoryCall("submitNativeMergeReview", Vector("--sessionId", live.session, "--result", _json(verdict),
+        "--resultReference", _json(reviewreference), "--executionEvidence", _json(reviewexecution)))
+        .business[V.RepositorySyncNativeMergeReviewSubmissionResult].accepted shouldBe true
+      val terminal = live.advance().business[V.RepositorySyncAdvanceResult]
+      Then("the original Session reaches its ordinary terminal state without rewriting old evidence")
+      terminal.kind shouldBe "Terminal"
+      _current(live).lifecycle shouldBe Lifecycle.Completed
+      _formal(live).filter(initial._7.contains) shouldBe initial._7
+    }
   }
 
   "Installed RepositorySync repair scope upgrade" should {
