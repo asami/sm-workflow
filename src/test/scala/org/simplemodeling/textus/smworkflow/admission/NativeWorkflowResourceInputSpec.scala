@@ -132,11 +132,46 @@ final class NativeWorkflowResourceInputSpec extends AnyWordSpec with Matchers wi
   }
 
   "Named repair result Resource transport" should {
+    "consume exact typed owner continuation through both inline and Resource transports without dropping unknown fields" in {
+      Given("a complete public current repair and later-owner integrated-text result with opaque JSON-shaped text")
+      val f = RepositorySyncPurposeRepairScopeFixture
+      val opaque = "{\"processPlan\":{\"snake_case\":null,\"dotted.key\":\"text\"}}"
+      val continuation = f.continuation.copy(rationale = opaque, groups = f.continuation.groups.map(group =>
+        group.copy(content = group.content.map(_.copy(text = Some(opaque))))))
+      val result = f.ownershipResult.copy(purposeContinuation = Some(continuation))
+      val value = V.RepositorySyncNativeMergeRepairResult(result.decision, result.rationale,
+        result.replacements.map(file => V.RepositorySyncNativeMergeRepairFile(file.path, file.text)),
+        Some(GoalPhaseNativeMetadata.record(continuation.asJson)))
+      val text = take(value.toRecord().toJsonStringC)
+      val inline = take(NativeWorkflowResourceInput.selectC[V.RepositorySyncNativeMergeRepairResult](
+        _request("result" -> text), "result", "resultResource"))
+      val resource = take(NativeWorkflowResourceInput.selectC[V.RepositorySyncNativeMergeRepairResult](
+        _request("resultResource" -> "file:///private/tmp/owner-continuation.json"), "result", "resultResource"))
+      var reads = 0
+      When("the ordinary public DTO readers and shared fromPublicC helper decode each complete result")
+      val a = take(NativeWorkflowResourceInput.readC(inline, _ => fail("Inline has no Resource read"), "result")
+        .flatMap(RepositorySyncNativeMergeRepair.fromPublicC))
+      val b = take(NativeWorkflowResourceInput.readC(resource, _ => { reads += 1; Consequence.success(text) }, "result")
+        .flatMap(RepositorySyncNativeMergeRepair.fromPublicC))
+      val malformed = Vector(continuation.asJson.mapObject(_.add("unexpectedOwnership", Json.True)),
+        continuation.asJson.hcursor.downField("groups").withFocus(_.mapArray(_.map(_.mapObject(
+          _.add("message", Json.fromString("unrequested metadata")))))).top.get,
+        continuation.asJson.mapObject(_.add("groups", Json.Null)))
+      val refused = malformed.map(json => RepositorySyncNativeMergeRepair.fromPublicC(value.copy(
+        purposeContinuation = Some(GoalPhaseNativeMetadata.record(json)))))
+      Then("all original text and typed ownership survive while unknown ownership fields remain hard failures")
+      a shouldBe result
+      b shouldBe result
+      reads shouldBe 1
+      refused.foreach(_.isSuccess shouldBe false)
+      RepositorySyncNativeMergeRepair.resultCodec.decode(RepositorySyncNativeMergeRepair.resultCodec.encode(a)) shouldBe Right(result)
+      take(RepositorySyncNativeMergeRepair.fromPublicC(value.copy(purposeContinuation = None))).purposeContinuation shouldBe None
+    }
     "preserve the complete ordered replacement DTO through either exclusive transport without reading inline content" in {
       Given("a complete two-file repair result whose multibyte document exceeds ordinary argument capacity")
       val value = V.RepositorySyncNativeMergeRepairResult("repaired", "Align the selected product check and documentation",
         Vector(V.RepositorySyncNativeMergeRepairFile("docs/repair.md", "界" * 800000),
-          V.RepositorySyncNativeMergeRepairFile("src/test/scala/ProductCheck.scala", "actual check\n")))
+          V.RepositorySyncNativeMergeRepairFile("src/test/scala/ProductCheck.scala", "actual check\n")), None)
       val text = take(value.toRecord().toJsonStringC)
       text.getBytes(UTF_8).length should be > 2300000
       val inline = take(NativeWorkflowResourceInput.selectC[V.RepositorySyncNativeMergeRepairResult](

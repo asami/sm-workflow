@@ -206,23 +206,44 @@ are separate facts. Historical v1-v3 pending-merge contracts remain unchanged.
 Qualification reads ordinary existing tracked candidate text through typed Git
 and compares newly added baseline text with the original worktree through the
 typed file API. It validates the fixed clean candidate workspace and original
-HEAD/branch/index and inventory content without checks or writes. A newly added
-path belonging to a later Purpose returns a conflict naming the path and group;
-it does not overwrite or borrow later intended content. Existing shared current
-paths retain their ordinary semantics. No file-count or byte-size Human gate is
-introduced.
+HEAD/branch/index and inventory content without checks or writes. The v4
+contract refuses a newly added path belonging to a later Purpose, naming the
+path and group. The separately qualified v5 ownership target and Purpose
+inventory v2 bind that overlap to the original ordered groups and captured root
+text. Existing shared current paths retain their ordinary semantics. No
+file-count or byte-size Human gate is introduced.
 
 Independent prior-worker lifecycle direction and UNKNOWN acceptance use existing
 evidence preparation and atomic native supersession. Separate ordinary Advance
-captures and issues the fixed qualified inventory. Normal repair submission and
-continuation extend only the current group's content and the request's added
-baseline files, preserving every other original field, group, source record,
-dependency, exclusion, counter lineage and receipt. The ordinary next slot uses
+captures and issues the fixed qualified inventory. Its existing nativeRepair
+assignment exposes the failed candidate text, complete later-owner intent,
+captured root and exact required owner/path pairs in `purposeWork`. A worker
+returns current candidate replacements and a separate explicit
+`purposeContinuation` containing integrated later text for every assigned pair.
+Nonoverlapping repairs may append unchanged baseline files; ownership repairs
+keep the original captured request and later plan groups exact. Separate
+progress `ownership` overlays only the assigned paths when preparing the
+effective later group. Actual installation retains `projectedWorktree` so that
+restoring later work preserves the accepted current correction as well as later
+intent. Every other original field, source record, dependency, exclusion,
+counter lineage and receipt remains retained. The ordinary next slot uses
 the failed virtual tree as its baseline and obtains fresh affected checks,
 independent review and actual local Purpose commit. Adoption alone grants no
 candidate or validation acceptance. See the
 [failed-check continuation specification](repository-sync-formal-failure-continuation.md#failed-purpose-baseline-repair-inventory)
 for compatibility rules and the separately selected old/new installed fixture.
+
+An actual semantic/text conflict returns `decision-needed` with the precise
+path and later owner, no replacements and no ownership continuation. Ordinary
+Advance returns `Wait` / `RepairDecisionRequired` with the retained rationale,
+without candidate effects, checks or commits. Repetition stays passive until
+actual semantic/Human resolution; no automatic consent or follow-up API is
+inferred. The fixture's distinct `ownership-capture` and `ownership-continue`
+modes retain actual old v4 prepare refusals, qualify new v5 ownership, and
+separately prove successful integration and an unresolved nondestructive Wait.
+They preserve all ID06 selectors and evidence. Only actual parent-owned
+installed execution establishes qualification; authored assertions do not
+constitute live independent review or consumer completion.
 
 ## Final publication before completion
 

@@ -2897,6 +2897,7 @@ OperationResult
 | decision | string | 1 |
 | rationale | string | 1 |
 | replacements | RepositorySyncNativeMergeRepairFile | * |
+| purposeContinuation | record | ? |
 
 ## RepositorySyncNativeMergeRepairSubmissionResult
 

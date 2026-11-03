@@ -78,6 +78,20 @@ private[admission] object RepositorySyncPurposeRepairScopeFixture {
   val opaqueSnapshot = snapshot.copy(progress = opaqueProgress)
   val opaqueScope = scope.copy(purpose = scope.purpose.map(_.copy(snapshot = opaqueSnapshot)))
   val opaqueTarget = target.copy(purpose = Some(opaqueSnapshot), inventory = Some(opaqueScope))
+  // Pure ID07 contract: the candidate has old baseline text while the captured
+  // root already contains the later purpose's independent edit.
+  val ownershipPaths = Vector(laterPath, "value.txt")
+  val ownershipEntries = ownershipPaths.map(path => RepositorySyncRepairInventory.Entry(path, "100644", "8" * 40))
+  val ownershipScope = scope.copy(inventoryPolicy = RepositorySyncRepairInventory.ownershipPolicy,
+    paths = ownershipPaths, additions = ownershipEntries.take(1),
+    purpose = Some(RepositorySyncRepairInventory.Purpose(snapshot, ownershipEntries, Vector.empty)))
+  val ownershipInput = input.copy(files = Vector(RepositorySyncNativeMergeRepair.File(laterPath, "old future test"),
+    RepositorySyncNativeMergeRepair.File("value.txt", "expected")), admittedInventory = Some(ownershipScope))
+  val ownershipTarget = target.copy(correctionPolicy = N.ownershipPolicy, inventory = Some(ownershipScope))
+  val continuation = P.OwnershipContinuation(Vector(P.OwnershipGroup(later.identity,
+    Vector(P.Content(laterPath, Some("corrected baseline plus future test"))))), "Integrate current correction and independent later test intent")
+  val ownershipResult = RepositorySyncNativeMergeRepair.Result("repaired", "Correct the actual baseline without swallowing later work",
+    ownershipInput.files.updated(0, RepositorySyncNativeMergeRepair.File(laterPath, "corrected baseline")), Some(continuation))
 }
 
 /** Pure supplied contracts only; these fixtures are never live Human evidence,
@@ -463,6 +477,58 @@ final class RepositorySyncRepairScopeCorrectionSpec extends AnyWordSpec with Mat
       refused.foreach(_.isLeft shouldBe true)
       unchanged shouldBe Right(f.opaqueTarget)
       Purpose.restoreRepairJson(projected) shouldBe Right(f.opaqueTarget.asJson)
+    }
+    "preserve opaque original facts and typed ownership projections through the v5 public target codec" in {
+      Given("a complete captured progress with arbitrary Journal effects, prior host direction and accepted owner/root projections")
+      val f = RepositorySyncPurposeRepairScopeFixture
+      val progress = f.opaqueProgress.copy(ownership = Some(f.continuation),
+        projectedWorktree = Some(Vector(Purpose.Content(f.laterPath, Some("future test")))))
+      val snapshot = f.snapshot.copy(progress = progress)
+      val inventory = f.ownershipScope.copy(purpose = f.ownershipScope.purpose.map(_.copy(snapshot = snapshot)))
+      val target = f.ownershipTarget.copy(purpose = Some(snapshot), inventory = Some(inventory))
+      When("the exact v5 target is exposed as a Record and restored through its canonical opaque progress paths")
+      val restored = take(N.targetC(N.targetRecord(target)))
+      Then("new projections remain typed and every original opaque fact, host plan and earlier receipt stays exact")
+      restored shouldBe target
+      restored.purpose.get.progress.ownership shouldBe Some(f.continuation)
+      restored.purpose.get.progress.projectedWorktree shouldBe progress.projectedWorktree
+      restored.purpose.get.progress.request shouldBe f.opaqueProgress.request
+      restored.purpose.get.progress.effects shouldBe f.opaqueProgress.effects
+      restored.purpose.get.progress.hostContinuation shouldBe f.opaqueProgress.hostContinuation
+      restored.purpose.get.progress.receipts shouldBe f.progress.receipts
+      N.decodeTarget(target.asJson) shouldBe Right(target)
+    }
+    "qualify exact later-owner capture with a v5 target while historical v4 rejects overlap" in {
+      Given("a failing baseline candidate whose file already has independent later-purpose edits in the original captured root")
+      val f = RepositorySyncPurposeRepairScopeFixture
+      val target = f.ownershipTarget
+      val direction = N.Direction(target, f.ownershipPaths, N.lifecycleChoices.head,
+        "Fixture prior worker ended; accept original UNKNOWN", "participant", _reference, true, true)
+      When("the qualified target traverses canonical, public Record and UNKNOWN checkpoint codecs")
+      val canonical = N.decodeTarget(target.asJson)
+      val publictarget = take(N.targetC(N.targetRecord(target)))
+      val checkpoint = N.Checkpoint(direction, "UNKNOWN")
+      Then("only the explicit overlap versions grant this exact owner/path assignment and original provenance remains intact")
+      RepositorySyncRepairInventory.valid(f.ownershipScope, f.review, Some("test")) shouldBe true
+      canonical shouldBe Right(target)
+      publictarget shouldBe target
+      N.checkpointCodec.decode(N.checkpointCodec.encode(checkpoint)) shouldBe Right(checkpoint)
+      target.purpose.get.progress.request shouldBe f.request
+      f.ownershipInput.files.head.text should not be f.request.files.find(_.path == f.laterPath).get.worktree.get
+      RepositorySyncPurposeOwnership.assigned(f.progress, f.ownershipPaths) shouldBe
+        Vector(Purpose.OwnershipGroup(f.later.identity, Vector(f.later.content.head)))
+      val oldscope = f.ownershipScope.copy(inventoryPolicy = RepositorySyncRepairInventory.purposePolicy)
+      RepositorySyncRepairInventory.valid(oldscope, f.review, Some("test")) shouldBe false
+      N.decodeTarget(target.copy(correctionPolicy = N.purposePolicy, inventory = Some(oldscope)).asJson).isLeft shouldBe true
+      N.decodeTarget(target.copy(correctionPolicy = N.purposePolicy).asJson).isLeft shouldBe true
+      N.decodeTarget(f.target.copy(correctionPolicy = N.ownershipPolicy).asJson).isLeft shouldBe true
+      val work = RepositorySyncPurposeOwnership.work(f.ownershipInput).get
+      work.hcursor.downField("candidateBaseline").focus shouldBe Some(f.ownershipInput.files.asJson)
+      work.hcursor.downField("owners").downArray.downField("originalGroup").focus shouldBe Some(f.later.asJson)
+      work.hcursor.downField("owners").downArray.downField("capturedWorktree").focus shouldBe
+        Some(Vector(Purpose.Content(f.laterPath, Some("future test"))).asJson)
+      work.hcursor.downField("requiredResultPairs").focus shouldBe Some(Json.arr(
+        Json.obj("identity" -> Json.fromString(f.later.identity), "path" -> Json.fromString(f.laterPath))))
     }
     "bind full retained progress and a virtual candidate independently of the dirty root index" in {
       Given("a failed virtual candidate, complete ordered ownership and an unchanged baseline file")

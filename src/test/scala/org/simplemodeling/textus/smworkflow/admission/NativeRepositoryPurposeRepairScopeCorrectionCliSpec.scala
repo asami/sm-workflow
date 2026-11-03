@@ -1,6 +1,6 @@
 package org.simplemodeling.textus.smworkflow.admission
 
-import io.circe.Json
+import io.circe.{Decoder, Encoder, Json}
 import io.circe.generic.auto.*
 import io.circe.parser.parse
 import io.circe.syntax.*
@@ -9,6 +9,7 @@ import java.nio.file.{Files, Path, StandardOpenOption}
 import org.goldenport.cncf.workflow.{WorkflowInstanceRecordJsonV1, WorkflowWorkOrderJsonV1}
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.WorkflowContinuation
+import org.goldenport.convert.ValueReader
 import org.scalatest.{DoNotDiscover, GivenWhenThen}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -20,7 +21,7 @@ import RepositorySyncNativeMergeRepair as M
 import SplitPhaseExplicitPartitionFixture.take
 import RepositorySyncRepairInventory.given
 
-/** Four explicitly selected installed-product phases, one test per invocation.
+/** Explicitly selected installed-product phases, one test per invocation.
   * This tiny repository is authored here; no producer checkout is copied.
   * Lifecycle answers, proposals and independent review are fixture inputs and
   * never claim real Human acceptance. Native datastore access is read only.
@@ -38,12 +39,16 @@ final class NativeRepositoryPurposeRepairScopeCorrectionCliSpec extends AnyWordS
   private val _later_old = _test("FutureSpec", "expected\n")
   private val _later_new = _later_old + "\n// Independently intended later Purpose test explanation.\n"
   private val _future_new = "Independent future document text\n"
+  private val _ownership_comment = "\n// Independently intended later Purpose baseline explanation.\n"
+  private val _ownership_old = _baseline_old + _ownership_comment
+  private val _ownership_new = _baseline_new + _ownership_comment
+  private val _ownership_conflict = _test("BaselineSpec", "future-only\n")
   private val _phase = sys.props.getOrElse("smworkflow.spec.purposeRepairPhase",
-    fail("Select -Dsmworkflow.spec.purposeRepairPhase=capture|continue|finish|completion"))
-  require(Set("capture", "continue", "finish", "completion")(_phase), "Select exactly capture, continue, finish or completion")
+    fail("Select -Dsmworkflow.spec.purposeRepairPhase=capture|continue|finish|completion|ownership-capture|ownership-continue"))
+  require(Set("capture", "continue", "finish", "completion", "ownership-capture", "ownership-continue")(_phase), "Select exactly one Purpose repair phase")
   private def _episode_path: Path = {
-    val value = Path.of(sys.props.getOrElse("smworkflow.spec.purposeRepairEpisode",
-      fail("Select -Dsmworkflow.spec.purposeRepairEpisode=<absolute episodeJSON>")))
+    val property = if (_phase.startsWith("ownership-")) "smworkflow.spec.purposeOwnershipEpisode" else "smworkflow.spec.purposeRepairEpisode"
+    val value = Path.of(sys.props.getOrElse(property, fail("Select -D" + property + "=<absolute episodeJSON>")))
     require(value.isAbsolute && value.normalize == value && Files.isDirectory(value.getParent))
     value
   }
@@ -51,6 +56,17 @@ final class NativeRepositoryPurposeRepairScopeCorrectionCliSpec extends AnyWordS
     originalRecord: String, originalWorkIdentity: String, originalRequest: M.Request, progress: P.Progress,
     snapshot: Json, formal: Vector[(String, RepositorySyncNativeMergeValidation.Receipt)],
     oldDescriptionExit: Int, oldDescriptionLogs: String, oldDescriptionStdout: String, installedCommand: String)
+  private given Encoder[Episode] = io.circe.generic.semiauto.deriveEncoder[Episode]
+  private given Decoder[Episode] = io.circe.generic.semiauto.deriveDecoder[Episode]
+  private final case class OwnershipEpisode(resolved: Episode, decision: Episode)
+  private final case class OwnershipResume(decisionSession: String, target: Json, issued: Json, snapshot: Json,
+    acceptedDecision: Option[Json] = None)
+  private given Decoder[OwnershipResume] = io.circe.generic.semiauto.deriveDecoder[OwnershipResume]
+  private def _ownership_resume: Option[OwnershipResume] = sys.props.get("smworkflow.spec.purposeOwnershipResume").map { raw =>
+    val path = Path.of(raw)
+    require(path.isAbsolute && path.normalize == path && Files.isRegularFile(path))
+    parse(Files.readString(path)).toOption.get.as[OwnershipResume].toOption.get
+  }
 
   private def _test(name: String, expected: String): String = """package fixture
     |class __NAME__ extends org.scalatest.wordspec.AnyWordSpec
@@ -232,7 +248,46 @@ final class NativeRepositoryPurposeRepairScopeCorrectionCliSpec extends AnyWordS
       }
     }
   }
-  private def _capture(focused: Boolean = false, legacy: Boolean = true): Episode = {
+  "ID07 installed same-Session Purpose ownership continuation" should {
+    if (_phase == "ownership-capture") {
+      "capture old ownership refusal for resolvable and conflicting later intents" in {
+        Given("a unique absent ID07 episode and two authored tiny repositories under the actual old installed runtime")
+        val destination = _episode_path
+        val resolvedpath = destination.resolveSibling(destination.getFileName.toString + ".resolved.json")
+        val decisionpath = destination.resolveSibling(destination.getFileName.toString + ".decision.json")
+        Vector(destination, resolvedpath, decisionpath, destination.resolveSibling(destination.getFileName.toString + ".result.json"),
+          destination.resolveSibling(destination.getFileName.toString + ".decision.result.json"),
+          destination.resolveSibling(destination.getFileName.toString + ".resolved.result.json"))
+          .foreach(path => Files.exists(path) shouldBe false)
+        When("each real failed baseline candidate is also owned by its later planned Purpose")
+        val resolved = _capture(focused = true, ownership = true, destination = resolvedpath)
+        val decision = _capture(focused = true, ownership = true, conflict = true, destination = decisionpath)
+        Then("the original Sessions and actual old prepare ownership refusals are retained once for new-product continuation")
+        resolved.session should not be decision.session
+        Files.writeString(destination, OwnershipEpisode(resolved, decision).asJson.noSpaces, UTF_8, StandardOpenOption.CREATE_NEW)
+      }
+    }
+    if (_phase == "ownership-continue") {
+      "continue exact old ownership episodes with explicit integration or truthful decision wait" in {
+        Given("the same retained ID07 repositories and Sessions after normal producer publication")
+        val episode = parse(Files.readString(_episode_path)).toOption.get.as[OwnershipEpisode].toOption.get
+        val resume = _ownership_resume
+        resume.foreach(_.decisionSession shouldBe episode.decision.session)
+        Files.exists(_episode_path.resolveSibling(_episode_path.getFileName.toString + ".result.json")) shouldBe false
+        When("the conflicting later assertion cannot express both intended expectations")
+        val decision = _ownership_result(episode.decision, "decision", resume.nonEmpty,
+          _ownership_decision(episode.decision, resume))
+        When("the separate current correction and later comment are explicitly integrated through the ordinary public repair result")
+        val resolved = _ownership_result(episode.resolved, "resolved", resume.nonEmpty,
+          _ownership_continue(episode.resolved))
+        Then("actual terminal and unresolved-wait evidence are retained without replaying any successful case")
+        Files.writeString(_episode_path.resolveSibling(_episode_path.getFileName.toString + ".result.json"),
+          Json.obj("resolved" -> resolved, "decision" -> decision).noSpaces, UTF_8, StandardOpenOption.CREATE_NEW)
+      }
+    }
+  }
+  private def _capture(focused: Boolean = false, legacy: Boolean = true, ownership: Boolean = false,
+    conflict: Boolean = false, destination: Path = _episode_path): Episode = {
     Given(if (legacy) "the old installed CLI, normal SBT Java host and a tiny repository with a stale tracked baseline test"
       else "the current installed CLI and one new tiny completion control with all fixed checks declared initially")
     installed()
@@ -260,15 +315,18 @@ final class NativeRepositoryPurposeRepairScopeCorrectionCliSpec extends AnyWordS
     configure(scenario, _parameters(focused) + ("textus.subsystem.process-execution.plan" -> _plan(scenario, focused).noSpaces))
     Files.writeString(repository.resolve("value.txt"), "expected\n")
     Files.writeString(repository.resolve(_later), _later_new)
+    val laterbaseline = if (conflict) _ownership_conflict else _ownership_old
+    if (ownership) Files.writeString(repository.resolve(_baseline), laterbaseline)
     Files.writeString(repository.resolve(_future), _future_new)
     val session = start(scenario)
     successful(advance(scenario, session)).business[V.RepositorySyncAdvanceResult].submitOperation shouldBe Some("submitRepositoryPurposeResult")
     val request = purpose_inputs(scenario).head
-    request.files.map(_.path).toSet shouldBe Set("value.txt", _later, _future)
+    request.files.map(_.path).toSet shouldBe (Set("value.txt", _later, _future) ++ Option.when(ownership)(_baseline))
     val groups = Vector(P.Group("current-purpose", "Correct actual product input", "fix: correct actual product input", Vector.empty,
       Vector(P.Content("value.txt", Some("expected\n"))), Vector.empty, "Current input change"),
       P.Group("future-purpose", "Preserve independently intended future edits", "test: retain future purpose", Vector("current-purpose"),
-        Vector(P.Content(_later, Some(_later_new)), P.Content(_future, Some(_future_new))), Vector.empty, "Future test explanation and unrelated document"))
+        Vector(P.Content(_later, Some(_later_new)), P.Content(_future, Some(_future_new))) ++
+          Option.when(ownership)(P.Content(_baseline, Some(laterbaseline))), Vector.empty, "Future test explanation and unrelated document"))
     successful(submit_purpose(scenario, session, P.Result("resolved", "Fixture-authored ordered independent purposes", groups, Vector.empty)))
       .business[V.RepositorySyncConflictSubmissionResult].accepted shouldBe true
     When("ordinary runtime validation compiles successfully and runs a genuine Test assertion failure")
@@ -290,11 +348,16 @@ final class NativeRepositoryPurposeRepairScopeCorrectionCliSpec extends AnyWordS
     val identity = old.suspension.get.continuationIdentity.value
     val snapshot = _state(scenario, session)
     When("the selected installed product describes the actual failed Purpose repair scope")
-    val refused = scenario.repositoryCall(N.describeOperation, Vector("--sessionId", session))
+    val refused = if (ownership) _prepare(scenario, session, Vector(_baseline))
+      else scenario.repositoryCall(N.describeOperation, Vector("--sessionId", session))
     if (legacy) {
       Then("the old product returns its actual 409 while the failed Session native work and original logs remain unchanged")
       refused.exitCode should not be 0
       refused.invocation.logs should include("409")
+      if (ownership) {
+        refused.invocation.logs should include(_baseline)
+        refused.invocation.logs should include("future-purpose")
+      }
     } else {
       Then("the current product requires preparation while the failed Session and original logs remain unchanged")
       refused.exitCode shouldBe 0
@@ -304,7 +367,7 @@ final class NativeRepositoryPurposeRepairScopeCorrectionCliSpec extends AnyWordS
     val episode = Episode(scenario.root.toString, ThreeWorkflowRuntimeParameters.encode(scenario.host), scenario.plan.asJson,
       session, take(WorkflowInstanceRecordJsonV1.encodeC(old)), identity, _work(scenario, identity), _failed_progress(scenario, session),
       snapshot, formal, refused.exitCode, refused.invocation.logs, refused.invocation.stdout.toString, installed().toString)
-    Files.writeString(_episode_path, episode.asJson.noSpaces, UTF_8, StandardOpenOption.CREATE_NEW)
+    Files.writeString(destination, episode.asJson.noSpaces, UTF_8, StandardOpenOption.CREATE_NEW)
     episode
   }
   private def _continue(episode: Episode, legacy: Boolean = true): Unit = {
@@ -392,7 +455,7 @@ final class NativeRepositoryPurposeRepairScopeCorrectionCliSpec extends AnyWordS
     _invocations(scenario).size shouldBe 2
     _work(scenario, episode.originalWorkIdentity) shouldBe episode.originalRequest
     val oldresult = V.RepositorySyncNativeMergeRepairResult("repaired", "Superseded original worker proposal",
-      Vector(V.RepositorySyncNativeMergeRepairFile("value.txt", "obsolete\n")))
+      Vector(V.RepositorySyncNativeMergeRepairFile("value.txt", "obsolete\n")), None)
     val reference = V.WorkflowArtifactReference("fixture-purpose-baseline-repair", "1")
     val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("fixture-repair-author"), None, None)
     def _submit_(result: V.RepositorySyncNativeMergeRepairResult): F.Result = scenario.repositoryCall("submitNativeMergeRepair",
@@ -412,7 +475,7 @@ final class NativeRepositoryPurposeRepairScopeCorrectionCliSpec extends AnyWordS
     _invocations(scenario).size shouldBe 2
     _work(scenario, episode.originalWorkIdentity) shouldBe episode.originalRequest
     val result = V.RepositorySyncNativeMergeRepairResult("repaired", "Fixture-authored real correction of the actual stale assertion; original source provenance is this tiny specification",
-      Vector(V.RepositorySyncNativeMergeRepairFile(_baseline, _baseline_new)))
+      Vector(V.RepositorySyncNativeMergeRepairFile(_baseline, _baseline_new)), None)
     When("the issued repair submits the fixture-authored baseline correction")
     val submission = successful(_submit_(result)).business[V.RepositorySyncNativeMergeRepairSubmissionResult]
     Then("the native repair is accepted without executing additional checks")
@@ -426,7 +489,254 @@ final class NativeRepositoryPurposeRepairScopeCorrectionCliSpec extends AnyWordS
     _finish(scenario, episode, Json.obj(
       "overlapConflictLogs" -> overlap.invocation.logs.asJson, "target" -> target.asJson).deepMerge(provenance))
   }
-  private def _finish(scenario: F.Scenario, episode: Episode, qualification: Json): Unit = {
+  private def _ownership_submit(scenario: F.Scenario, session: String,
+    result: V.RepositorySyncNativeMergeRepairResult): F.Result = {
+    val reference = V.WorkflowArtifactReference("fixture-purpose-ownership-repair", "1")
+    val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("fixture-ownership-author"), None, None)
+    scenario.repositoryCall("submitNativeMergeRepair", Vector("--sessionId", session, "--result", json(result),
+      "--resultReference", json(reference), "--executionEvidence", json(execution)))
+  }
+  private def _ownership_result(episode: Episode, kind: String, resume: Boolean, run: => Json): Json = {
+    val path = _episode_path.resolveSibling(_episode_path.getFileName.toString + "." + kind + ".result.json")
+    if (Files.exists(path)) {
+      require(resume, "Select an explicit purposeOwnershipResume checkpoint to reuse a completed episode")
+      val saved = parse(Files.readString(path)).toOption.get
+      saved.hcursor.get[String]("session").toOption shouldBe Some(episode.session)
+      saved.hcursor.get[String]("root").toOption shouldBe Some(episode.root)
+      val scenario = _reopen(episode)
+      val statekey = if (kind == "decision") "after" else "finalState"
+      _state(scenario, episode.session) shouldBe saved.hcursor.downField(statekey).focus.get
+      saved
+    } else {
+      val result = run
+      Files.writeString(path, result.noSpaces, UTF_8, StandardOpenOption.CREATE_NEW)
+      result
+    }
+  }
+  private def _ownership_assignment(scenario: F.Scenario, episode: Episode, target: N.Target,
+    issued: V.RepositorySyncAdvanceResult, repeatrequest: Boolean = true): Json = {
+    val session = episode.session
+    val roottext = episode.progress.request.files.find(_.path == _baseline).get.worktree.get
+    Then("candidate text, later intent and required owner path pairs are exposed separately and repetition is passive")
+    issued.submitOperation shouldBe Some("submitNativeMergeRepair")
+    issued.repair.get.files.map(_.path) shouldBe Vector(_baseline)
+    issued.repair.get.files.head.text shouldBe _baseline_old
+    val issuedjson = parse(json(issued)).toOption.get
+    val assignment = GoalPhaseNativeMetadata.normalizePublicJson(
+      parse(take(issued.purposeWork.get.toJsonStringC)).toOption.get).toOption.get
+    assignment.hcursor.get[Vector[M.File]]("candidateBaseline").toOption.get shouldBe Vector(M.File(_baseline, _baseline_old))
+    assignment.hcursor.get[Vector[Json]]("requiredResultPairs").toOption.get shouldBe
+      Vector(Json.obj("identity" -> "future-purpose".asJson, "path" -> _baseline.asJson))
+    val owners = assignment.hcursor.get[Vector[Json]]("owners").toOption.get
+    owners.size shouldBe 1
+    owners.head.hcursor.get[String]("identity").toOption shouldBe Some("future-purpose")
+    owners.head.hcursor.get[P.Group]("originalGroup").toOption.get shouldBe episode.progress.plan.get.groups(1)
+    owners.head.hcursor.get[Vector[P.Content]]("capturedWorktree").toOption.get shouldBe Vector(P.Content(_baseline, Some(roottext)))
+    _work(scenario, issued.issuedWorkContext.get.continuationId).admittedInventory shouldBe target.inventory
+    val pending = _state(scenario, session)
+    if (repeatrequest) successful(advance(scenario, session)).business[V.RepositorySyncAdvanceResult] shouldBe issued
+    _state(scenario, session) shouldBe pending
+    _invocations(scenario).size shouldBe 2
+    _work(scenario, episode.originalWorkIdentity) shouldBe episode.originalRequest
+    issuedjson
+  }
+  private def _ownership_resumed_qualification(episode: Episode, checkpoint: OwnershipResume): (F.Scenario, N.Target, Json) = {
+    Given("an explicitly selected checkpoint from the actual already issued decision Session Request")
+    installed()
+    val target = N.decodePublicTarget(checkpoint.target).toOption.get
+    checkpoint.decisionSession shouldBe episode.session
+    target.sessionId shouldBe episode.session
+    target.correctionPolicy shouldBe N.ownershipPolicy
+    target.inventory.get.inventoryPolicy shouldBe RepositorySyncRepairInventory.ownershipPolicy
+    target.inventory.get.paths shouldBe Vector(_baseline)
+    target.inventory.get.purpose.get.snapshot.progress shouldBe episode.progress
+    target.purpose.get.progress shouldBe episode.progress
+    val scenario = _reopen(episode)
+    _failed_progress(scenario, episode.session) shouldBe episode.progress
+    formalReceipts(scenario, episode.session) shouldBe episode.formal
+    _work(scenario, episode.originalWorkIdentity) shouldBe episode.originalRequest
+    val original = _current_from(episode.originalRecord)
+    current(scenario, episode.session).history.take(original.history.size) shouldBe original.history
+    val before = _state(scenario, episode.session)
+    if (!checkpoint.snapshot.isNull) before shouldBe checkpoint.snapshot
+    Vector("head", "indexTree", "status", "diff", "checks", "invocations").foreach { name =>
+      before.hcursor.downField(name).focus shouldBe episode.snapshot.hcursor.downField(name).focus
+    }
+    val savedissued = take(summon[ValueReader[V.RepositorySyncAdvanceResult]].readC(
+      take(new org.goldenport.record.io.RecordDecoder().json(checkpoint.issued.noSpaces))))
+    val identity = savedissued.issuedWorkContext.get.continuationId
+    identity should not be episode.originalWorkIdentity
+    _work(scenario, identity).admittedInventory shouldBe target.inventory
+    val issued = checkpoint.acceptedDecision match {
+      case Some(value) =>
+        When("the explicit checkpoint retains the actual already accepted decision acknowledgement")
+        val acknowledgement = take(summon[ValueReader[V.RepositorySyncNativeMergeRepairSubmissionResult]].readC(
+          take(new org.goldenport.record.io.RecordDecoder().json(value.noSpaces))))
+        Then("the acknowledged decision and actual current frontier identify the same retained completion without resubmission")
+        acknowledgement.sessionId shouldBe episode.session
+        acknowledgement.accepted shouldBe true
+        acknowledgement.outcome shouldBe "accepted"
+        acknowledgement.message shouldBe "Accepted merge repair decision-needed: " + _ownership_decision_rationale
+        val retained = current(scenario, episode.session)
+        retained.currentProgression shouldBe Some(ProgressionReference("sync.RepairDecisionRequired"))
+        retained.causation.value shouldBe "fixture-purpose-ownership-repair"
+        savedissued
+      case None =>
+        current(scenario, episode.session).suspension.get.continuationIdentity.value shouldBe identity
+        When("passive ordinary Advance collects the already issued Request without repeating qualification or adoption")
+        val actual = successful(advance(scenario, episode.session)).business[V.RepositorySyncAdvanceResult]
+        Then("the actual public Request is the exact checkpoint and has caused no new effects")
+        GoalPhaseNativeMetadata.normalizePublicJson(parse(json(actual)).toOption.get).toOption.get shouldBe
+          GoalPhaseNativeMetadata.normalizePublicJson(checkpoint.issued).toOption.get
+        actual
+    }
+    _state(scenario, episode.session) shouldBe before
+    val assignment = _ownership_assignment(scenario, episode, target, issued, repeatrequest = checkpoint.acceptedDecision.isEmpty)
+    (scenario, target, assignment)
+  }
+  private def _ownership_qualification(episode: Episode): (F.Scenario, N.Target, Json) = {
+    Given("the unchanged old ownership failure, original UNKNOWN work, complete progress and failed formal receipts")
+    installed()
+    val scenario = _reopen(episode)
+    val session = episode.session
+    val repository = _repository(scenario)
+    val roottext = episode.progress.request.files.find(_.path == _baseline).get.worktree.get
+    episode.oldDescriptionExit should not be 0
+    episode.oldDescriptionLogs should include("409")
+    episode.oldDescriptionLogs should include(_baseline)
+    episode.oldDescriptionLogs should include("future-purpose")
+    Files.isRegularFile(Path.of(episode.oldDescriptionStdout)) shouldBe true
+    _state(scenario, session) shouldBe episode.snapshot
+    _work(scenario, episode.originalWorkIdentity) shouldBe episode.originalRequest
+    _failed_progress(scenario, session) shouldBe episode.progress
+    When("invalid paths and drift are presented to the new ownership qualification")
+    Vector(Vector("../outside"), Vector("/absolute"), Vector("missing.fixture"), Vector("binary.fixture"),
+      Vector("symlink.fixture"), Vector("src"), Vector("value.txt", _baseline)).foreach { paths =>
+      _prepare(scenario, session, paths).exitCode should not be 0
+      _state(scenario, session) shouldBe episode.snapshot
+    }
+    val slotfile = scenario.root.resolve("purpose-slot-1").resolve(_baseline)
+    val slottext = Files.readString(slotfile)
+    try {
+      Files.writeString(slotfile, slottext + "\n// candidate drift\n")
+      _prepare(scenario, session, Vector(_baseline)).exitCode should not be 0
+      Files.readString(slotfile) shouldBe slottext + "\n// candidate drift\n"
+      _state(scenario, session) shouldBe episode.snapshot
+    } finally Files.writeString(slotfile, slottext)
+    try {
+      Files.writeString(repository.resolve(_baseline), roottext + "\n// root drift\n")
+      val before = _state(scenario, session)
+      _prepare(scenario, session, Vector(_baseline)).exitCode should not be 0
+      _state(scenario, session) shouldBe before
+    } finally Files.writeString(repository.resolve(_baseline), roottext)
+    When("the existing prepare operation binds the candidate baseline and exact original later owner")
+    val described = _prepare(scenario, session, Vector(_baseline))
+    val target = _target(described)
+    Then("v5 and inventory v2 qualify exact ownership without replacing any original intent or executing checks")
+    target.correctionPolicy shouldBe N.ownershipPolicy
+    target.inventory.get.inventoryPolicy shouldBe RepositorySyncRepairInventory.ownershipPolicy
+    target.inventory.get.paths shouldBe Vector(_baseline)
+    target.inventory.get.purpose.get.snapshot.progress shouldBe episode.progress
+    target.inventory.get.purpose.get.baselines shouldBe empty
+    target.purpose.get.progress shouldBe episode.progress
+    target.candidateTree shouldBe episode.progress.candidate.get.tree
+    target.indexTree shouldBe episode.progress.candidate.get.index
+    target.candidateTree should not be target.indexTree
+    _target(_prepare(scenario, session, Vector(_baseline))) shouldBe target
+    val passive = successful(scenario.repositoryCall(N.describeOperation, Vector("--sessionId", session)))
+    passive.business[V.RepositorySyncRepairScopeCorrectionDescriptionResult].outcome shouldBe "preparation-required"
+    _state(scenario, session) shouldBe episode.snapshot
+    val direction = _direction(scenario, session, described)
+    When("adoption receives incomplete worker lifecycle evidence or crossed target facts")
+    Vector(direction.copy(sessionId = session + "-foreign"), direction.copy(priorExecutionEnded = false),
+      direction.copy(acceptOriginalUncertainty = false), direction.copy(paths = Vector(_baseline)),
+      direction.copy(target = N.targetRecord(target.copy(indexTree = "f" * 40))),
+      direction.copy(target = N.targetRecord(target.copy(frontierRevision = (target.frontierRevision.toLong + 1).toString))))
+      .foreach { value =>
+        _adopt(scenario, value).exitCode should not be 0
+        _state(scenario, session) shouldBe episode.snapshot
+      }
+    When("fixture-authored lifecycle evidence adopts the exact correction once")
+    successful(_adopt(scenario, direction)).business[V.RepositorySyncRepairScopeCorrectionAdoptionResult].outcome shouldBe "adopted"
+    val adopted = current(scenario, session)
+    Then("one supersession retains the original failed history and the duplicate adoption is passive")
+    val original = _current_from(episode.originalRecord)
+    adopted.revision shouldBe original.revision.next
+    adopted.history.take(original.history.size) shouldBe original.history
+    val admitted = _state(scenario, session)
+    successful(_adopt(scenario, direction)).business[V.RepositorySyncRepairScopeCorrectionAdoptionResult].outcome shouldBe "already-adopted"
+    _state(scenario, session) shouldBe admitted
+    val oldresult = V.RepositorySyncNativeMergeRepairResult("repaired", "Superseded old fixture worker",
+      Vector(V.RepositorySyncNativeMergeRepairFile("value.txt", "obsolete\n")), None)
+    When("the obsolete original worker submits before ordinary successor issuance")
+    _ownership_submit(scenario, session, oldresult).exitCode should not be 0
+    Then("the old worker is refused without effects")
+    _state(scenario, session) shouldBe admitted
+    When("separate ordinary Advance issues the qualified nativeRepair ownership assignment")
+    val issued = successful(advance(scenario, session)).business[V.RepositorySyncAdvanceResult]
+    val issuedjson = _ownership_assignment(scenario, episode, target, issued)
+    (scenario, target, issuedjson)
+  }
+  private def _ownership_decision_rationale: String =
+    "Conflicting expectations at " + _baseline + " owned by future-purpose: current input must remain expected while later intent requires future-only; actual semantic/Human direction is required"
+  private def _ownership_decision(episode: Episode, checkpoint: Option[OwnershipResume] = None): Json = {
+    val (scenario, target, assignment) = checkpoint match {
+      case Some(value) => _ownership_resumed_qualification(episode, value)
+      case None => _ownership_qualification(episode)
+    }
+    val rationale = _ownership_decision_rationale
+    val decision = V.RepositorySyncNativeMergeRepairResult("decision-needed", rationale, Vector.empty, None)
+    val before = _state(scenario, episode.session)
+    if (!checkpoint.exists(_.acceptedDecision.nonEmpty)) {
+      When("the assigned worker returns the actual unresolved assertion conflict without replacements or continuation")
+      successful(_ownership_submit(scenario, episode.session, decision))
+        .business[V.RepositorySyncNativeMergeRepairSubmissionResult].accepted shouldBe true
+    }
+    When("ordinary Advance collects the actual retained unresolved decision")
+    val waiting = successful(advance(scenario, episode.session)).business[V.RepositorySyncAdvanceResult]
+    Then("the existing public route returns RepairDecisionRequired Wait with the actual owner and path and no candidate effects")
+    waiting.kind shouldBe "Wait"
+    waiting.condition shouldBe Some("RepairDecisionRequired")
+    waiting.message should include(_baseline)
+    waiting.message should include("future-purpose")
+    waiting.message should include(rationale)
+    current(scenario, episode.session).currentProgression shouldBe Some(ProgressionReference("sync.RepairDecisionRequired"))
+    val after = _state(scenario, episode.session)
+    Vector("head", "indexTree", "status", "diff", "checks", "invocations").foreach { name =>
+      after.hcursor.downField(name).focus shouldBe before.hcursor.downField(name).focus
+    }
+    successful(advance(scenario, episode.session)).business[V.RepositorySyncAdvanceResult].condition shouldBe Some("RepairDecisionRequired")
+    _state(scenario, episode.session) shouldBe after
+    _failed_progress(scenario, episode.session) shouldBe episode.progress
+    _work(scenario, episode.originalWorkIdentity) shouldBe episode.originalRequest
+    Json.obj("session" -> episode.session.asJson, "root" -> episode.root.asJson, "target" -> target.asJson,
+      "issued" -> assignment, "rationale" -> rationale.asJson, "wait" -> parse(json(waiting)).toOption.get,
+      "before" -> before, "after" -> after, "resolved" -> false.asJson)
+  }
+  private def _ownership_continue(episode: Episode): Json = {
+    val (scenario, target, assignment) = _ownership_qualification(episode)
+    val continuation = P.OwnershipContinuation(Vector(P.OwnershipGroup("future-purpose",
+      Vector(P.Content(_baseline, Some(_ownership_new))))),
+      "Explicit fixture integration preserves the corrected current assertion and the separately intended later baseline explanation")
+    val record = take(new org.goldenport.record.io.RecordDecoder().json(continuation.asJson.noSpaces))
+    val result = V.RepositorySyncNativeMergeRepairResult("repaired", "Correct current stale baseline; separately preserve later Purpose meaning",
+      Vector(V.RepositorySyncNativeMergeRepairFile(_baseline, _baseline_new)), Some(record))
+    val before = _state(scenario, episode.session)
+    When("the worker omits the required later-owner continuation")
+    _ownership_submit(scenario, episode.session, result.copy(purposeContinuation = None)).exitCode should not be 0
+    Then("the incomplete current-only repair is refused without swallowing later intent")
+    _state(scenario, episode.session) shouldBe before
+    When("the worker submits distinct current correction and exact integrated later ownership text")
+    successful(_ownership_submit(scenario, episode.session, result))
+      .business[V.RepositorySyncNativeMergeRepairSubmissionResult].accepted shouldBe true
+    Then("proposal admission executes no new checks")
+    _invocations(scenario).size shouldBe 2
+    _finish(scenario, episode, Json.obj("qualificationPhase" -> "ownership-continue".asJson,
+      "target" -> target.asJson, "issuedOwnership" -> assignment,
+      "ownershipContinuation" -> continuation.asJson), Some(continuation))
+  }
+  private def _finish(scenario: F.Scenario, episode: Episode, qualification: Json,
+    ownership: Option[P.OwnershipContinuation] = None): Json = {
     val repository = _repository(scenario)
     val session = episode.session
     When("ordinary Advance transitions the accepted repair back to grouped Purpose work")
@@ -437,8 +747,15 @@ final class NativeRepositoryPurposeRepairScopeCorrectionCliSpec extends AnyWordS
       .maxBy(_.next.revision.value).payload.value.purposes.get
     repaired.request.files.take(episode.progress.request.files.size) shouldBe episode.progress.request.files
     repaired.request.records shouldBe episode.progress.request.records
-    repaired.request.files.last.path shouldBe _baseline
-    repaired.request.files.last.worktree shouldBe Some(_baseline_old)
+    if (ownership.isEmpty) {
+      repaired.request.files.last.path shouldBe _baseline
+      repaired.request.files.last.worktree shouldBe Some(_baseline_old)
+    } else {
+      repaired.request shouldBe episode.progress.request
+      repaired.ownership shouldBe ownership
+      repaired.plan.get.groups(1).content should contain(P.Content(_baseline, Some(_ownership_old)))
+      repaired.plan.get.groups(1).content should contain(P.Content(_future, Some(_future_new)))
+    }
     repaired.plan.get.groups.tail shouldBe episode.progress.plan.get.groups.tail
     repaired.plan.get.groups.head.content should contain(P.Content(_baseline, Some(_baseline_new)))
     (repaired.cursor, repaired.attempt, repaired.slotCursor, repaired.baselineTree, repaired.commits, repaired.effects) shouldBe
@@ -459,7 +776,7 @@ final class NativeRepositoryPurposeRepairScopeCorrectionCliSpec extends AnyWordS
       selected.selection.get.testsRun should be > 0L
     }
     Files.readString(scenario.root.resolve("purpose-slot-2").resolve(_baseline)) shouldBe _baseline_new
-    Files.readString(repository.resolve(_baseline)) shouldBe _baseline_old
+    Files.readString(repository.resolve(_baseline)) shouldBe (if (ownership.nonEmpty) _ownership_old else _baseline_old)
     Files.readString(repository.resolve(_later)) shouldBe _later_new
     Files.readString(repository.resolve(_future)) shouldBe _future_new
     val waiting = _state(scenario, session)
@@ -481,6 +798,21 @@ final class NativeRepositoryPurposeRepairScopeCorrectionCliSpec extends AnyWordS
     git(scenario.root, "-C", repository.toString, "show", "HEAD:" + _later) shouldBe _later_old.trim
     Files.readString(repository.resolve(_later)) shouldBe _later_new
     Files.readString(repository.resolve(_future)) shouldBe _future_new
+    if (ownership.nonEmpty) {
+      Files.readString(repository.resolve(_baseline)) shouldBe _ownership_new
+      installedcurrent.projectedWorktree.toVector.flatten should contain(P.Content(_baseline, Some(_ownership_new)))
+      installedcurrent.request shouldBe episode.progress.request
+      installedcurrent.plan.get.groups.tail shouldBe episode.progress.plan.get.groups.tail
+      installedcurrent.ownership shouldBe ownership
+      Files.readString(scenario.root.resolve("purpose-slot-3").resolve(_baseline)) shouldBe _ownership_new
+      val laterchecks = formalReceipts(scenario, session).filterNot(episode.formal.contains).filterNot(fresh.contains)
+      laterchecks.size shouldBe episode.progress.selection.get.checks.size
+      laterchecks.foreach(_._2.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Succeeded)
+      val selected = laterchecks.find(_._2.identity == appendedCheck.identity).get._2.sbt.get
+      selected.selection.get.testClasses shouldBe Vector("fixture.BaselineSpec", "fixture.FutureSpec")
+      selected.selection.get.completedSuites shouldBe 2
+      selected.selection.get.testsRun should be > 0L
+    }
     When("the future Purpose receives independent review and ordinary Advance completes synchronization")
     _review(scenario, session, futurereview, "future")
     val terminal = successful(advance(scenario, session)).business[V.RepositorySyncAdvanceResult]
@@ -488,11 +820,17 @@ final class NativeRepositoryPurposeRepairScopeCorrectionCliSpec extends AnyWordS
     terminal.kind shouldBe "Terminal"
     current(scenario, session).lifecycle shouldBe Lifecycle.Completed
     git(scenario.root, "-C", repository.toString, "status", "--porcelain") shouldBe ""
-    Files.readString(repository.resolve(_baseline)) shouldBe _baseline_new
+    Files.readString(repository.resolve(_baseline)) shouldBe (if (ownership.nonEmpty) _ownership_new else _baseline_new)
     Files.readString(repository.resolve(_later)) shouldBe _later_new
     Files.readString(repository.resolve(_future)) shouldBe _future_new
     val head = git(scenario.root, "-C", repository.toString, "rev-parse", "HEAD")
     git(scenario.root, "--git-dir=" + scenario.root.resolve("upstream.git"), "rev-parse", "refs/heads/main") shouldBe head
+    if (ownership.nonEmpty) {
+      git(scenario.root, "-C", repository.toString, "rev-parse", "HEAD^") shouldBe installedcurrent.commits.last
+      git(scenario.root, "-C", repository.toString, "show", "HEAD:" + _baseline) shouldBe _ownership_new.trim
+      git(scenario.root, "-C", repository.toString, "show", "HEAD:" + _future) shouldBe _future_new.trim
+      installedcurrent.commits.last should not be head
+    }
     episode.formal.foreach(value => formalReceipts(scenario, session) should contain(value))
     _work(scenario, episode.originalWorkIdentity) shouldBe episode.originalRequest
     stored(scenario).exists(raw => parse(raw).toOption.exists(_.findAllByKey("externalEffects").contains(Json.fromString("UNKNOWN")))) shouldBe true
@@ -511,9 +849,17 @@ final class NativeRepositoryPurposeRepairScopeCorrectionCliSpec extends AnyWordS
       "originalRequest" -> M.inputCodec.encode(episode.originalRequest),
       "freshReceipts" -> formalReceipts(scenario, session).filterNot(episode.formal.contains).asJson,
       "repairedProgress" -> P.repairProgressJson(repaired), "head" -> head.asJson, "terminal" -> json(terminal).asJson,
+      "installedCurrentProgress" -> P.repairProgressJson(installedcurrent),
+      "localPurposeCommits" -> (installedcurrent.commits :+ head).asJson,
+      "finalTree" -> Json.obj(_baseline -> Files.readString(repository.resolve(_baseline)).asJson,
+        _later -> Files.readString(repository.resolve(_later)).asJson, _future -> Files.readString(repository.resolve(_future)).asJson,
+        "value.txt" -> Files.readString(repository.resolve("value.txt")).asJson),
+      "originalFailureProgress" -> P.repairProgressJson(episode.progress),
+      "originalFormalReceipts" -> episode.formal.asJson,
       "finalState" -> completed).deepMerge(provenance).deepMerge(qualification)
-    Files.writeString(_episode_path.resolveSibling(_episode_path.getFileName.toString + ".result.json"), evidence.noSpaces,
+    if (ownership.isEmpty) Files.writeString(_episode_path.resolveSibling(_episode_path.getFileName.toString + ".result.json"), evidence.noSpaces,
       UTF_8, StandardOpenOption.CREATE_NEW)
+    evidence
   }
   private def _current_from(raw: String): InstanceRecord = {
     val catalog = take(WorkflowInstanceRecordJsonV1.catalogC(Vector(take(RepositorySyncDefinitionBinding.bindC))))

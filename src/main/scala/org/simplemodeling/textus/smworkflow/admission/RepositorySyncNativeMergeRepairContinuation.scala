@@ -29,6 +29,26 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
   private[admission] final case class Source(session: F.Session, store: N.Store,
     basis: M.Basis, correction: Option[RepositorySyncRepairScopeCorrection.Saved] = None)
 
+  private[admission] def retainedPurposeOwnership(progress: RepositorySyncPurpose.Progress, paths: Vector[String]): Boolean =
+    RepositorySyncPurposeOwnership.assigned(progress, paths).exists(group =>
+      progress.ownership.toVector.flatMap(_.groups).exists(owner => owner.identity == group.identity &&
+        group.content.exists(content => owner.content.exists(_.path == content.path))))
+
+  /** The normal fresh capture and its completion authentication use this same
+    * route. The supplied qualifier owns actual failed-stage and File/Git reads;
+    * this helper never creates a scope or turns a failed qualification into work.
+    */
+  private[admission] def freshPurposeInventoryC(progress: RepositorySyncPurpose.Progress,
+    paths: Vector[String], existing: Option[RepositorySyncRepairInventory.Scope], automatic: Boolean,
+    qualify: (Vector[String], String) => Consequence[RepositorySyncRepairInventory.Scope]): Consequence[Option[RepositorySyncRepairInventory.Scope]] =
+    if (existing.nonEmpty || !retainedPurposeOwnership(progress, paths)) Consequence.success(existing)
+    else if (!automatic) N.invalid("Retained future Purpose ownership requires prepareRepositorySyncRepairScopeCorrection on the actual failed candidate before another repair can be issued")
+    else qualify(paths, "The actual failed current Purpose still carries accepted future owner/path obligations; qualify the complete selected current candidate so this new repair refreshes every retained later projection") match {
+      case Consequence.Success(scope) if scope.inventoryPolicy == RepositorySyncRepairInventory.ownershipPolicy &&
+          scope.paths == paths && scope.purpose.exists(_.snapshot.progress == progress) => Consequence.success(Some(scope))
+      case other => N.invalid("Fresh Purpose ownership qualification refused; use prepareRepositorySyncRepairScopeCorrection for the exact failed candidate. Actual qualification: " + other)
+    }
+
   final class Port private[RepositorySyncNativeMergeRepairContinuation] (
     declaration: F.Declaration, definition: DefinitionBinding, policy: I.Policy,
     validation: RepositorySyncNativeMergeValidation.Policy,
@@ -61,7 +81,7 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
             output <- RepositorySyncNativeProgression.pendingMergeC(source.store, pending, Some(validation), Some(review),
               convergence, _namespace(source), Some(this))
           } yield output else Consequence.success(NativeWorkflowOperationOutput.repositoryWait(identity,
-            "The repair requires separate actual Human handling; no proposal effects or consent are inferred.", "RepairDecisionRequired"))
+            RepositorySyncPurposeOwnership.decisionMessage(input, result.result.value.rationale), "RepairDecisionRequired"))
         } yield output
         case None => existing match {
           case Some(work) => NativeWorkflowOperationOutput.repositoryRepairRequestC(work)
@@ -135,10 +155,13 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
       else policy
 
     private def _admitted_policy_c(source: Source, input: M.Request): Consequence[I.Policy] = for {
+      expectedinventory <- if (source.basis.validated.payload.purposes.nonEmpty)
+        _purpose_inventory_c(source, input.files.map(_.path), source.correction.flatMap(_.direction.target.inventory))
+        else Consequence.success(source.correction.flatMap(_.direction.target.inventory))
       _ <- if (input.validationFailure == source.basis.validationFailure && input.review.copy(
           localDiff = source.basis.input.localDiff, remoteDiff = source.basis.input.remoteDiff,
           priorReview = source.basis.input.priorReview) == source.basis.input &&
-          input.admittedInventory == source.correction.flatMap(_.direction.target.inventory) &&
+          input.admittedInventory == expectedinventory &&
           input.admittedInventory.forall(scope => scope.sourceRevision == source.basis.next.revision.value.toString &&
             RepositorySyncRepairInventory.valid(scope, source.basis.input, source.basis.validationFailure) &&
             scope.purpose.map(_.snapshot.progress) == source.basis.validated.payload.purposes)) Consequence.unit
@@ -147,9 +170,21 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
         case Some(scope) => RepositorySyncRepairInventory.capturePurposeC(source, scope).map(_ => ())
         case None => Consequence.unit
       }
-      selectedpolicy = _current_policy(source)
+      selectedpolicy = _current_policy(source, input.admittedInventory)
       _ <- M.admitRequestC(input, selectedpolicy)
     } yield selectedpolicy
+
+    private def _purpose_inventory_c(source: Source, paths: Vector[String],
+      existing: Option[RepositorySyncRepairInventory.Scope]): Consequence[Option[RepositorySyncRepairInventory.Scope]] =
+      freshPurposeInventoryC(source.basis.validated.payload.purposes.get, paths, existing, automaticInventory,
+        (selectedpaths, rationale) => {
+          val prefix = "native-repository:" + source.store.identity + ":"
+          val failed = source.basis.validated.record
+          if (!failed.causation.value.startsWith(prefix))
+            N.invalid("Actual failed Purpose stage has no native retained reference")
+          else RepositorySyncRepairInventory.qualifyC(source, selectedpaths, rationale,
+            ContextReference(source.store.identity + ":native-" + failed.causation.value.stripPrefix(prefix), "1"))
+        })
 
     /** Deleted and binary paths are outside the existing ordinary-text repair
       * capability. Read failures remain failures; they never become permission. */
@@ -182,14 +217,18 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
       _ <- policy.validateC
       progress = source.basis.validated.payload.purposes.get
       findings = source.basis.findings
-      scope = inventory.orElse(source.correction.flatMap(_.direction.target.inventory))
+      previous = inventory.orElse(source.correction.flatMap(_.direction.target.inventory))
+      ordinarypolicy = _current_policy(source, previous)
+      paths = selected.getOrElse(if (source.basis.validationFailure.isEmpty) findings.flatMap(_.affectedPaths).distinct.sorted
+        else if (previous.isEmpty && retainedPurposeOwnership(progress, source.basis.input.changedPaths))
+          source.basis.input.changedPaths.distinct.sorted
+        else source.basis.input.changedPaths.filter(ordinarypolicy.semanticPaths).distinct.sorted)
+      scope <- _purpose_inventory_c(source, paths, previous)
       _ <- if (scope.forall(value => automaticInventory && value.purpose.exists(_.snapshot.progress == progress) &&
           value.sourceRevision == source.basis.next.revision.value.toString &&
           RepositorySyncRepairInventory.valid(value, source.basis.input, source.basis.validationFailure))) Consequence.unit
         else N.invalid("Purpose capture requires the exact qualified failed progress snapshot")
       selectedpolicy = _current_policy(source, scope)
-      paths = selected.getOrElse(if (source.basis.validationFailure.isEmpty) findings.flatMap(_.affectedPaths).distinct.sorted
-        else source.basis.input.changedPaths.filter(selectedpolicy.semanticPaths).distinct.sorted)
       _ <- M.admitRequestC(M.Request(source.basis.input, findings, paths.map(M.File(_, "")), source.basis.validationFailure, scope), selectedpolicy)
       files <- scope match {
         case Some(value) => RepositorySyncRepairInventory.capturePurposeC(source, value)
@@ -241,7 +280,10 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
       _ <- if (validation.assessment.forall(policy => used < policy.repairLimit ||
           (source.correction.nonEmpty && used <= policy.repairLimit))) Consequence.unit
         else N.invalid("selected merge repair budget is exhausted; no new repair issue or counter reset")
-      bundle = ContextBundle("Repair only the actual retained review findings or failed selected checks and assigned captured files",
+      bundle = ContextBundle("Repair only the actual retained review findings or failed selected checks and assigned captured files. " +
+        (if (RepositorySyncPurposeOwnership.work(input).nonEmpty)
+          "The issued purposeWork includes exact later-owner/path assignments, baseline candidate text, original worktree and complete later groups. Preserve later intent while integrating the current correction and return purposeContinuation for every exact pair. If both meanings cannot safely be combined, return decision-needed with precise owner/path rationale and no replacements or continuation; actual semantic/Human resolution is required."
+        else "Preserve all other purpose content and provenance."),
         Vector(ContextReference((if (source.basis.validationFailure.nonEmpty) "native-repair-check:" else "native-repair-review:") + from.identity.value, source.basis.next.revision.value.toString)),
         Vector.empty, ContextSnapshot(from.definition.workflowRevision.value,
           evidenceRevision = Some(source.basis.next.revision.value.toString)))

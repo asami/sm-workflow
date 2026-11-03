@@ -64,7 +64,7 @@ private[smworkflow] object RepositorySyncNativeProgression {
           "Actual merge conflict retained; owning semantic/Human completion is still required. No automatic conflict choice.",
           session.started.current.currentProgression.get.value.stripPrefix("sync."))))
       case None if session.started.current.currentProgression.exists(p =>
-          Set("sync.PurposeRepairRequired", "sync.ReviewRepairRequired", "sync.RepairProposalAdmitted")(p.value)) &&
+          Set("sync.PurposeRepairRequired", "sync.ReviewRepairRequired", "sync.RepairProposalAdmitted", "sync.RepairDecisionRequired")(p.value)) &&
           session.started.current.history.exists(_.currentProgression.exists(_.value.startsWith("sync.Purpose"))) =>
         repair.map(_.advanceC(identity, core)).getOrElse(Consequence.success(NativeWorkflowOperationOutput.repositoryWait(identity,
           "Actual purpose repair requires its installed native FIX policy/owner; failed checks and findings remain unresolved", "purpose-repair-unavailable")))

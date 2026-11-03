@@ -156,13 +156,11 @@ private[smworkflow] object NativeWorkflowResultInput {
             RepositorySyncNativeMergeReview.Result(value.decision, value.rationale, value.findings.map(f =>
               RepositorySyncNativeMergeReview.Finding(f.identity, f.affectedPaths, f.rationale))))),
         _work(RepositorySyncNativeMergeRepairContinuation.completionOperation, RepositorySyncNativeMergeRepair.inputCodec, request =>
-          NativeWorkflowOperationInput.valueC[V.RepositorySyncNativeMergeRepairResult](request, "result").map[Value](value =>
-            RepositorySyncNativeMergeRepair.Result(value.decision, value.rationale, value.replacements.map(file =>
-              RepositorySyncNativeMergeRepair.File(file.path, file.text)))))
+          NativeWorkflowOperationInput.valueC[V.RepositorySyncNativeMergeRepairResult](request, "result")
+            .flatMap(value => RepositorySyncNativeMergeRepair.fromPublicC(value).map[Value](identity)))
           .copy(readC = request => NativeWorkflowResourceInput.selectC[V.RepositorySyncNativeMergeRepairResult](request, "result", "resultResource")
-            .map(source => SelectedValue(reader => NativeWorkflowResourceInput.readC(source, reader, "result").map[Value](value =>
-              RepositorySyncNativeMergeRepair.Result(value.decision, value.rationale,
-                value.replacements.map(file => RepositorySyncNativeMergeRepair.File(file.path, file.text))))))),
+            .map(source => SelectedValue(reader => NativeWorkflowResourceInput.readC(source, reader, "result")
+              .flatMap(value => RepositorySyncNativeMergeRepair.fromPublicC(value).map[Value](identity))))),
         _decision(RepositorySyncHumanConflict.completionOperation, RepositorySyncHumanConflict.inputCodec, request =>
           NativeWorkflowOperationInput.valueC[V.RepositorySyncHumanConflictAnswer](request, "answer").map[Value](value =>
             RepositorySyncHumanConflict.Answer(value.choice, value.resolutions.map(_resolution), value.rationale)))))

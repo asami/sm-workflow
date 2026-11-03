@@ -8,6 +8,9 @@ import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.value.RepositorySyncStartInput
+import io.circe.Json
+import org.simplemodeling.textus.smworkflow.value as V
+import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseNativeMetadata, RepositorySyncNativeMergeRepair}
 
 /**
  * @since   Oct.  6, 2026
@@ -17,7 +20,7 @@ import org.simplemodeling.textus.smworkflow.value.RepositorySyncStartInput
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  private val operations: Vector[OperationDefinition] = Vector(
+  private val _operations: Vector[OperationDefinition] = Vector(
     SmWorkflowComponent.RepositorySyncServiceService.StartRepositorySyncOperation,
     SmWorkflowComponent.RepositorySyncServiceService.AdvanceRepositorySyncOperation,
     SmWorkflowComponent.RepositorySyncServiceService.SubmitRepositorySyncWorkResultOperation,
@@ -30,38 +33,57 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
     SmWorkflowComponent.RepositorySyncServiceService.DescribeRepositorySyncRepairScopeCorrectionOperation,
     SmWorkflowComponent.RepositorySyncServiceService.PrepareRepositorySyncRepairScopeCorrectionOperation,
     SmWorkflowComponent.RepositorySyncServiceService.AdoptRepositorySyncRepairScopeCorrectionOperation)
-  private def request(operation: OperationDefinition, properties: List[Property]): Request =
+  private def _request(operation: OperationDefinition, properties: List[Property]): Request =
     Request.of(component = SmWorkflowComponent.componentId.name, service = "RepositorySyncService",
       operation = operation.specification.name, arguments = Nil, switches = Nil,
       properties = properties)
 
   "RepositorySync generated public Operations" must afterWord("in spec:repository-sync-native-merge-repair, example:C1, rules:R5,R6") {
+    "retain the optional public ownership record in the existing native repair result ABI" in {
+      Given("a generated public result with the exact later-owner integrated text record")
+      val content = Json.obj("path" -> Json.fromString("src/test/scala/ExampleSpec.scala"),
+        "text" -> Json.fromString("both intended changes"))
+      val group = Json.obj("identity" -> Json.fromString("later-purpose"), "content" -> Json.arr(content))
+      val continuation = GoalPhaseNativeMetadata.record(Json.obj("groups" -> Json.arr(group),
+        "rationale" -> Json.fromString("Preserve current correction and later intent")))
+      val value = V.RepositorySyncNativeMergeRepairResult("repaired", "Correct the failed candidate",
+        Vector(V.RepositorySyncNativeMergeRepairFile("src/test/scala/ExampleSpec.scala", "current correction")), Some(continuation))
+      When("the generated DTO roundtrip passes the declared optional record to the native typed adapter")
+      val decoded = value.toRecord().toJsonStringC.flatMap(raw =>
+        new org.goldenport.record.io.RecordDecoder().json(raw).flatMap(V.RepositorySyncNativeMergeRepairResult.createC))
+        .flatMap(RepositorySyncNativeMergeRepair.fromPublicC)
+      Then("the existing public result type carries every owner/path text without a new Operation")
+      decoded.isSuccess shouldBe true
+      decoded.toOption.get.purposeContinuation.get.groups.head.identity shouldBe "later-purpose"
+      decoded.toOption.get.purposeContinuation.get.groups.head.content.head.text shouldBe Some("both intended changes")
+      _operations.count(_.specification.name == "submitNativeMergeRepair") shouldBe 1
+    }
     "bind named repository Start and explicit Advance session to generated actions" in {
       Given("a repository/branch/remote selection and an independent execution session")
       val start = admission.NativeWorkflowOperationInputFixture.repository(
         RepositorySyncStartInput("repository-1", "main", "origin", "main", "remote-1", "FULL_STATE"))
       val advance = admission.NativeWorkflowOperationInputFixture.advance("repository-execution-1")
       When("the generated readers construct actions from their named parameters")
-      val started = operations(0).createOperationRequest(request(operations(0), start))
-      val advanced = operations(1).createOperationRequest(request(operations(1), advance))
+      val started = _operations(0).createOperationRequest(_request(_operations(0), start))
+      val advanced = _operations(1).createOperationRequest(_request(_operations(1), advance))
       val optionaltransports = Set("prepareRepositorySyncRepairScopeCorrection", "adoptRepositorySyncRepairScopeCorrection",
         "adoptRepositorySyncValidationContinuation")
-      val absent = operations.filterNot(op => optionaltransports(op.specification.name))
-        .map(op => op.createOperationRequest(request(op, Nil)))
+      val absent = _operations.filterNot(op => optionaltransports(op.specification.name))
+        .map(op => op.createOperationRequest(_request(op, Nil)))
       Then("Start accepts its business selection and Advance requires the canonical session")
       started.isSuccess shouldBe true
       advanced.isSuccess shouldBe true
       absent.foreach(_.isSuccess shouldBe false)
       And("optional input/inputResource transports remain generated envelopes whose exclusive input admission belongs to the native operation")
-      operations.filter(op => optionaltransports(op.specification.name)).foreach { op =>
-        op.createOperationRequest(request(op, Nil)).isSuccess shouldBe true
+      _operations.filter(op => optionaltransports(op.specification.name)).foreach { op =>
+        op.createOperationRequest(_request(op, Nil)).isSuccess shouldBe true
       }
-      val validationAdoption = operations.find(_.specification.name == "adoptRepositorySyncValidationContinuation").get
-      validationAdoption.specification.request.parameters.map(_.name).toVector shouldBe Vector("input", "inputResource")
+      val validationadoption = _operations.find(_.specification.name == "adoptRepositorySyncValidationContinuation").get
+      validationadoption.specification.request.parameters.map(_.name).toVector shouldBe Vector("input", "inputResource")
       val provided = RepositorySyncWorkflowStateMachineProvidedApi3.workflow.providedOperations
-      provided.map(_.name).toSet shouldBe operations.map(_.specification.name).toSet
+      provided.map(_.name).toSet shouldBe _operations.map(_.specification.name).toSet
       And("all Provided operations declare business types without control envelopes")
-      operations.foreach(_.specification.request.parameters.map(_.name) should not contain ("arg1"))
+      _operations.foreach(_.specification.request.parameters.map(_.name) should not contain ("arg1"))
       provided.map(op => op.name -> op.inputType).toMap shouldBe Map(
         "startRepositorySync" -> Some("RepositorySyncStartInput"),
         "advanceRepositorySync" -> Some("RepositorySyncAdvanceInput"),
@@ -83,7 +105,7 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
       When("the actual Start fixture produces the public business input")
       val properties = admission.NativeWorkflowOperationInputFixture.repository(input)
       val consumed = admission.NativeWorkflowOperationInput.valueC[RepositorySyncStartInput](
-        request(operations.head, properties), "input")
+        _request(_operations.head, properties), "input")
       Then("the public named ValueReader consumes the repository selection without a control envelope")
       consumed shouldBe org.goldenport.Consequence.success(input)
     }

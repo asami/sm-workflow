@@ -19,6 +19,7 @@ import RepositorySyncNativeProgressStore as N
 private[smworkflow] object RepositorySyncRepairInventory {
   val policy = "sm-workflow.repository-sync-repair-inventory.v2"
   val purposePolicy = "sm-workflow.repository-sync-purpose-repair-inventory.v1"
+  val ownershipPolicy = "sm-workflow.repository-sync-purpose-repair-inventory.v2"
   final case class Entry(path: String, mode: String, blob: String)
   final case class Purpose(snapshot: RepositorySyncPurpose.RepairSnapshot, files: Vector[Entry],
     baselines: Vector[RepositorySyncPurpose.File])
@@ -47,10 +48,10 @@ private[smworkflow] object RepositorySyncRepairInventory {
     review.checks != null && review.selectedChecks != null &&
     failure != null && failure.contains(scope.failureIdentity) && scope.purpose != null &&
     (if (scope.inventoryPolicy == policy) scope.purpose.isEmpty
-      else scope.inventoryPolicy == purposePolicy && scope.purpose.exists(value => validPurpose(scope, value, review))) &&
+      else Set(purposePolicy, ownershipPolicy)(scope.inventoryPolicy) && scope.purpose.exists(value => validPurpose(scope, value, review))) &&
     scope.instanceIdentity == review.instanceIdentity && scope.validatedRevision == review.validatedRevision &&
     scope.sourceRevision != null && scope.sourceRevision.toLongOption.exists(revision =>
-      review.validatedRevision.toLongOption.exists(value => if (scope.inventoryPolicy == purposePolicy) value == revision else value < revision)) &&
+      review.validatedRevision.toLongOption.exists(value => if (scope.purpose.nonEmpty) value == revision else value < revision)) &&
     scope.failureReference != null && scope.failureReference.identity != null &&
     scope.failureReference.identity.startsWith(scope.instanceIdentity + ":native-") && scope.failureReference.revision == "1" &&
     scope.localTip == review.localTip && scope.remoteTip == review.remoteTip && scope.candidateTree == review.indexTree &&
@@ -80,7 +81,12 @@ private[smworkflow] object RepositorySyncRepairInventory {
       candidate.parent == review.remoteTip && candidate.tree == review.indexTree) &&
     value.snapshot.progress.receipts.drop(1) == review.checks &&
     value.snapshot.progress.selection.exists(_.checks.map(_.identity) == review.selectedChecks) &&
-    RepositorySyncPurposeRuntime.laterRepairOverlap(value.snapshot.progress, scope.paths).isEmpty
+    (if (scope.inventoryPolicy == ownershipPolicy)
+      RepositorySyncPurposeOwnership.assigned(value.snapshot.progress, scope.paths).nonEmpty &&
+        RepositorySyncPurposeOwnership.assigned(value.snapshot.progress, scope.paths).forall(group => group.content.forall(content =>
+          value.snapshot.progress.request.files.exists(file => file.path == content.path && file.unexamined.isEmpty &&
+            RepositorySyncPurposeOwnership.expected(value.snapshot.progress, file.path).exists(_.text.exists(RepositorySyncPurposeOwnership.ordinary)))))
+      else scope.inventoryPolicy == purposePolicy && RepositorySyncPurposeOwnership.assigned(value.snapshot.progress, scope.paths).isEmpty)
 
   def qualifyC(source: R.Source, paths: Vector[String], rationale: String,
     failureReference: ContextReference): Consequence[Scope] =
@@ -130,7 +136,7 @@ private[smworkflow] object RepositorySyncRepairInventory {
         !rationale.contains('\u0000') && java.nio.charset.StandardCharsets.UTF_8.newEncoder().canEncode(rationale))
       Consequence.unit else N.invalid("Purpose repair inventory requires sorted safe existing paths and the same FULL_STATE failed check")
     snapshot <- RepositorySyncPurposeRuntime.repairSnapshotC(source.store, source.basis.validated)
-    _ <- RepositorySyncPurposeRuntime.noLaterRepairOverlapC(snapshot.progress, paths)
+    overlaps = RepositorySyncPurposeOwnership.assigned(snapshot.progress, paths)
     candidate = snapshot.progress.candidate.get
     tree <- GitObjectId.parseC(candidate.tree)
     workspace <- WorkspaceId.parseC("sm-workflow-repository")
@@ -150,13 +156,15 @@ private[smworkflow] object RepositorySyncRepairInventory {
       _ <- if (source.basis.input.changedPaths.contains(name)) Consequence.unit else for {
         file <- WorkspaceFilePath.parseC(name)
         actual <- WorkflowFileExecution.readTextC(source.store.core, FileTarget(workspace), file)
-        _ <- if (actual.text.contains(text)) Consequence.unit
+        expected = if (overlaps.exists(_.content.exists(_.path == name)))
+          RepositorySyncPurposeOwnership.expected(snapshot.progress, name).flatMap(_.text) else Some(text)
+        _ <- if (expected.exists(RepositorySyncPurposeOwnership.ordinary) && actual.text == expected) Consequence.unit
           else N.invalid("Purpose repair added baseline differs from the actual original worktree: " + name)
       } yield ()
     } yield values :+ (Entry(name, entry.mode, entry.blob.value) -> text) }
     baselines = captured.filterNot(value => snapshot.progress.request.files.exists(_.path == value._1.path)).map { (entry, text) =>
       RepositorySyncPurpose.File(entry.path, " ", " ", Some(text), Some(text), Some(text), None) }
-    scope = Scope(purposePolicy, source.store.identity, source.basis.next.revision.value.toString,
+    scope = Scope(if (overlaps.nonEmpty) ownershipPolicy else purposePolicy, source.store.identity, source.basis.next.revision.value.toString,
       source.basis.input.validatedRevision, failureReference, source.basis.validationFailure.get,
       source.basis.input.localTip, source.basis.input.remoteTip, candidate.tree, paths, rationale,
       captured.map(_._1).filterNot(entry => source.basis.input.changedPaths.contains(entry.path)),

@@ -76,7 +76,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
           output <- finish(clean, observed)
         } yield output
     } yield output
-    val group = groups(progress.cursor)
+    val group = RepositorySyncPurposeOwnership.effectiveGroup(progress, groups(progress.cursor))
     val slot = store.declaration.purposePolicy.toVector.flatMap(_.slots).lift(progress.slotCursor)
     source.payload.stage match {
       case "PurposeGrouped" | "PurposeInstalled" => for {
@@ -87,9 +87,9 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
         tree <- GitObjectId.parseC(index)
         changes <- group.content.foldLeft(Consequence.success(Vector.empty[GitPurposeChange])) { (prior, content) => for {
           values <- prior; path <- GitPath.parseC(content.path)
-          expected <- progress.request.files.find(_.path == content.path).map(Consequence.success)
+          expected <- RepositorySyncPurposeOwnership.expected(progress, content.path).map(Consequence.success)
             .getOrElse(N.invalid("purpose content crosses the actual issued inventory"))
-        } yield values :+ GitPurposeChange(path, expected.worktree, content.text) }
+        } yield values :+ GitPurposeChange(path, expected.text, content.text) }
         selection <- _selection_c(group)
         baseline <- progress.baselineTree.fold(Consequence.success(Option.empty[GitObjectId]))(value => GitObjectId.parseC(value).map(Some(_)))
         intent <- _save_("prepare-intent", "PurposePreparing", source, progress)
@@ -192,8 +192,12 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
               index <- G.indexTreeC(store.core)
               _ <- if (observed.head == candidate.commit.value && index == candidate.projectedIndex.value) Consequence.unit
                 else N.uncertain("purpose commit receipt contradicts actual HEAD/index; collect effects before any continuation")
+              projected <- if (progress.ownership.nonEmpty) _installed_worktree_c(store, progress, group)
+                else Consequence.success(Vector.empty[P.Content])
               installed <- _save_("installed", "PurposeInstalled", intent, progress.copy(cursor = progress.cursor + 1, slotCursor = progress.slotCursor + 1, attempt = 0, baselineTree = None,
-                candidate = None, receipts = Vector.empty, assessment = None, selection = None, review = None, reusable = Vector.empty, commits = progress.commits :+ candidate.commit.value, effects = progress.effects :+ _effect_json(result)))
+                candidate = None, receipts = Vector.empty, assessment = None, selection = None, review = None, reusable = Vector.empty, commits = progress.commits :+ candidate.commit.value, effects = progress.effects :+ _effect_json(result),
+                projectedWorktree = if (progress.ownership.nonEmpty)
+                  Some(RepositorySyncPurposeOwnership.project(progress, projected)) else progress.projectedWorktree))
               output <- _drive_c(store, installed, policy, authority, review, finish)
             } yield output
         } yield output
@@ -284,20 +288,19 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
             p.cursor >= 0 && p.cursor < plan.groups.size && plan.groups.forall(group => group != null &&
               group.content != null && group.content.forall(content => content != null &&
                 RepositorySyncNativeConflictInput.relative(content.path) && content.text != null &&
-                p.request.files.exists(_.path == content.path)))) && p.attempt >= 0 && p.slotCursor >= 0 &&
+                RepositorySyncPurposeOwnership.expected(p, content.path).nonEmpty))) && p.attempt >= 0 && p.slotCursor >= 0 &&
           p.candidate != null && p.candidate.exists(candidate => candidate != null &&
             Vector(candidate.parent, candidate.index, candidate.commit, candidate.tree, candidate.projectedIndex).forall(_oid_) &&
-            candidate.index == value.indexTree && candidate.changes == p.plan.get.groups(p.cursor).content &&
+            candidate.index == value.indexTree && candidate.changes == RepositorySyncPurposeOwnership.effectiveGroup(p, p.plan.get.groups(p.cursor)).content &&
             candidate.expected != null && candidate.expected.map(_.path) == candidate.changes.map(_.path) &&
-            candidate.expected.forall(content => p.request.files.exists(file =>
-              file.path == content.path && file.worktree == content.text)) && value.actual.observed.head == candidate.parent) &&
+            candidate.expected.forall(content => RepositorySyncPurposeOwnership.expected(p, content.path).contains(content)) && value.actual.observed.head == candidate.parent) &&
           value.actual.observed.branch == p.request.branch && value.actual.observed.dirty != null &&
           !value.actual.observed.dirty.exists(_.unmerged) && p.receipts != null && p.selection != null &&
           p.selection.exists(selection => selection != null && selection.checks != null && p.receipts.size >= 2 &&
             p.receipts.drop(1).zip(selection.checks).forall((receipt, check) => receipt != null && receipt.identity == check.identity) &&
             p.receipts.size - 1 <= selection.checks.size && p.receipts.last.termination == "exited" &&
             p.receipts.last.exitCode.exists(_ != 0)) && p.commits != null && p.effects != null &&
-          p.reusable != null && p.hostContinuation != null
+          p.reusable != null && p.hostContinuation != null && RepositorySyncPurposeOwnership.validProgress(p)
       }
   }
 
@@ -334,11 +337,13 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
     snapshot = P.RepairSnapshot(progress, actual, index)
     _ <- if (validRepairSnapshot(snapshot)) Consequence.unit else N.invalid("Failed Purpose original HEAD branch index or candidate relationships have drifted")
     workspace <- WorkspaceId.parseC("sm-workflow-repository")
-    _ <- progress.request.files.foldLeft(Consequence.unit) { (prior, file) => for {
+    expected = (progress.request.files.map(_.path) ++ progress.projectedWorktree.toVector.flatten.map(_.path)).distinct
+      .flatMap(path => RepositorySyncPurposeOwnership.expected(progress, path))
+    _ <- expected.foldLeft(Consequence.unit) { (prior, file) => for {
       _ <- prior
       path <- WorkspaceFilePath.parseC(file.path)
       actual <- WorkflowFileExecution.readTextC(store.core, FileTarget(workspace), path)
-      _ <- if (actual.text == file.worktree) Consequence.unit
+      _ <- if (file.text == actual.text) Consequence.unit
         else N.invalid("Purpose original inventory worktree content drifted: " + file.path)
     } yield () }
     after <- G.inspectC(store.core)
@@ -357,8 +362,10 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
     candidate <- progress.candidate.map(Consequence.success).getOrElse(N.invalid("purpose repair candidate is absent"))
     _ <- if (input.admittedInventory.forall(_.purpose.exists(_.snapshot.progress == progress))) Consequence.unit
       else N.invalid("Purpose repair input crosses its retained complete progress snapshot")
-    _ <- noLaterRepairOverlapC(progress, input.files.map(_.path))
-    group = progress.plan.get.groups(progress.cursor)
+    _ <- if (RepositorySyncPurposeOwnership.assigned(progress, input.files.map(_.path)).isEmpty ||
+        input.admittedInventory.exists(_.inventoryPolicy == RepositorySyncRepairInventory.ownershipPolicy)) Consequence.unit
+      else N.invalid("Purpose repair still has future owner/path obligations; prepareRepositorySyncRepairScopeCorrection must qualify the exact ownership inventory before applying another repair")
+    group = RepositorySyncPurposeOwnership.effectiveGroup(progress, progress.plan.get.groups(progress.cursor))
     replacements = result.replacements.map(value => value.path -> value.text).toMap
     extras = result.replacements.filterNot(value => group.content.exists(_.path == value.path))
     _ <- if (extras.isEmpty || input.admittedInventory.exists(scope => extras.forall(value => scope.paths.contains(value.path))))
@@ -370,10 +377,14 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
     _ <- if (baselines.forall(file => !progress.request.files.exists(_.path == file.path)) &&
         extras.forall(value => progress.request.files.exists(_.path == value.path) || baselines.exists(_.path == value.path)))
       Consequence.unit else N.invalid("Purpose repair additions lack actual original worktree baselines")
-  } yield progress.copy(request = progress.request.copy(files = progress.request.files ++ baselines),
+    ownership = RepositorySyncPurposeOwnership.repaired(progress, group.copy(content = content), result.purposeContinuation)
+    overlap = input.admittedInventory.exists(_.inventoryPolicy == RepositorySyncRepairInventory.ownershipPolicy)
+    projected = if (overlap && baselines.nonEmpty) Some(RepositorySyncPurposeOwnership.project(progress,
+      baselines.map(file => P.Content(file.path, file.worktree)))) else progress.projectedWorktree
+  } yield progress.copy(request = if (overlap) progress.request else progress.request.copy(files = progress.request.files ++ baselines),
     plan = Some(plan), attempt = progress.attempt + 1, slotCursor = progress.slotCursor + 1,
     baselineTree = Some(candidate.tree), candidate = None, receipts = Vector.empty, selection = None,
-    assessment = None, review = None, reusable = Vector.empty)
+    assessment = None, review = None, reusable = Vector.empty, ownership = ownership, projectedWorktree = projected)
 
   def repairC(store: N.Store, basis: RepositorySyncNativeMergeRepair.Basis,
     input: RepositorySyncNativeMergeRepair.Request, result: RepositorySyncNativeMergeRepair.Result,
@@ -398,6 +409,38 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
     next <- store.saveC("purpose-" + (progress.cursor + 1) + "-repair-" + (progress.attempt + 1) + "-admitted",
       "purpose-progress", proposal, basis.validated.payload.copy(stage = "PurposeGrouped", purposes = Some(repaired)))
   } yield next
+
+  /** Native Git owns the ordinary three-way projection. Authenticate its exact
+    * post-install tree against typed root File reads before retaining expected
+    * content for the next purpose. A conflict never reaches this success path.
+    */
+  private def _installed_worktree_c(store: N.Store, progress: P.Progress, group: P.Group): Consequence[Vector[P.Content]] = for {
+    after <- progress.candidate.flatMap(_.worktreeAfter).map(Consequence.success)
+      .getOrElse(N.uncertain("installed Purpose has no actual typed worktreeAfter tree; collect the native effect"))
+    tree <- GitObjectId.parseC(after)
+    selection <- _selection_c(group)
+    rows <- E.executePurposeC(store.core, GitOperation.TreeEntries(tree, selection.identity), selection).flatMap(_.valueC)
+    _ <- if (rows.map(_.path.value) == group.content.map(_.path)) Consequence.unit
+      else N.uncertain("installed Purpose worktree projection crossed its exact selected paths")
+    workspace <- WorkspaceId.parseC("sm-workflow-repository")
+    projected <- rows.foldLeft(Consequence.success(Vector.empty[P.Content])) { (prior, row) => for {
+      values <- prior
+      text <- row.entry match {
+        case None => Consequence.success(Option.empty[String])
+        case Some(entry) if Set("100644", "100755")(entry.mode) => for {
+          blob <- E.executeGitC(store.core, GitOperation.BlobContent(entry.blob)).flatMap(_.valueC)
+          text <- blob.text.filter(value => RepositorySyncPurposeOwnership.ordinary(value) &&
+            value.getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector == blob.bytes)
+            .map(value => Consequence.success(Option(value))).getOrElse(N.uncertain("installed Purpose projection lacks ordinary UTF-8 blob text"))
+        } yield text
+        case _ => N.uncertain("installed Purpose projection requires an ordinary regular file")
+      }
+      path <- WorkspaceFilePath.parseC(row.path.value)
+      actual <- WorkflowFileExecution.readTextC(store.core, FileTarget(workspace), path)
+      _ <- if (actual.text == text) Consequence.unit
+        else N.uncertain("installed Purpose root differs from actual worktreeAfter projection: " + row.path.value)
+    } yield values :+ P.Content(row.path.value, text) }
+  } yield projected
 
   private def _selection_c(group: P.Group): Consequence[GitSelectionParameters] = for {
     id <- GitSelectionId.parseC(group.identity)

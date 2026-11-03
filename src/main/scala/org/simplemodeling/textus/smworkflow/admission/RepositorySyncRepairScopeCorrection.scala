@@ -33,6 +33,7 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
   val automaticPolicy = "sm-workflow.repository-sync-repair-scope-correction.v2"
   val uncappedPolicy = "sm-workflow.repository-sync-repair-scope-correction.v3"
   val purposePolicy = "sm-workflow.repository-sync-repair-scope-correction.v4"
+  val ownershipPolicy = "sm-workflow.repository-sync-repair-scope-correction.v5"
   val prepareOperation = "prepareRepositorySyncRepairScopeCorrection"
   val describeOperation = "describeRepositorySyncRepairScopeCorrection"
   val adoptionOperation = "adoptRepositorySyncRepairScopeCorrection"
@@ -46,7 +47,7 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
   val preparationMessage = "Prepare the exact existing file inventory and causal rationale for the retained failed check. " +
     "The runtime qualifies file eligibility before any prior-worker lifecycle direction; no Human file selection or adoption is available yet."
   private def _automatic(target: Target): Boolean = target != null &&
-    (target.correctionPolicy == automaticPolicy || Set(uncappedPolicy, purposePolicy)(target.correctionPolicy) && target.inventory != null && target.inventory.nonEmpty)
+    (target.correctionPolicy == automaticPolicy || Set(uncappedPolicy, purposePolicy, ownershipPolicy)(target.correctionPolicy) && target.inventory != null && target.inventory.nonEmpty)
   def targetChoices(target: Target): Vector[String] =
     if (_automatic(target)) lifecycleChoices
     else if (target != null && target.correctionPolicy == policy) choices else Vector.empty
@@ -208,26 +209,30 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
     t.actual.observed.dirty.forall(p => RepositorySyncNativeConflictInput.relative(p.path) &&
       p.renamedFrom != null && p.renamedFrom.forall(RepositorySyncNativeConflictInput.relative) &&
       " MADRCU?!T".contains(p.index) && " MADRCU?!T".contains(p.worktree)) &&
-    (if (t.purpose.nonEmpty) t.correctionPolicy == purposePolicy && t.purpose.exists(snapshot =>
+    (if (t.purpose.nonEmpty) Set(purposePolicy, ownershipPolicy)(t.correctionPolicy) &&
+      (if (t.correctionPolicy == ownershipPolicy) t.inventory.exists(scope =>
+        scope.inventoryPolicy == RepositorySyncRepairInventory.ownershipPolicy) else
+        t.inventory.forall(scope => scope.inventoryPolicy == RepositorySyncRepairInventory.purposePolicy)) && t.purpose.exists(snapshot =>
       RepositorySyncPurposeRuntime.validRepairSnapshot(snapshot) && snapshot.actual == t.actual && snapshot.indexTree == t.indexTree &&
       snapshot.progress.request.root == t.root && snapshot.progress.request.repository == t.context.repositoryIdentity &&
       snapshot.progress.candidate.exists(candidate => candidate.tree == t.candidateTree && candidate.parent == t.localTip &&
         candidate.parent == t.remoteTip) && snapshot.progress.receipts.last == t.failedCheck)
-      else t.correctionPolicy != purposePolicy && t.candidateTree == t.indexTree && t.actual.mergeHead.contains(t.remoteTip) &&
+      else !Set(purposePolicy, ownershipPolicy)(t.correctionPolicy) && t.candidateTree == t.indexTree && t.actual.mergeHead.contains(t.remoteTip) &&
         t.actual.observed.trackingTip.contains(t.remoteTip) && t.actual.observed.counts != null &&
         t.actual.observed.counts.exists(c => c.localAhead > 0 && c.remoteAhead > 0) &&
         t.actual.observed.mergeBase != null && t.actual.observed.mergeBase.exists(_oid)) &&
     _paths(t.changedPaths) && _paths(t.oldAssignedPaths) &&
     t.oldAssignedPaths.forall(t.changedPaths.contains) &&
     t.maximumFiles != null && t.inventory != null &&
-    (if (Set(uncappedPolicy, purposePolicy)(t.correctionPolicy)) t.maximumFiles.isEmpty && t.inventory.forall(scope => _valid_inventory(t, scope))
+    (if (Set(uncappedPolicy, purposePolicy, ownershipPolicy)(t.correctionPolicy)) t.maximumFiles.isEmpty && t.inventory.forall(scope => _valid_inventory(t, scope))
       else t.maximumFiles.exists(limit => limit > 0 && limit <= 128 && t.oldAssignedPaths.size <= limit) &&
         (if (t.correctionPolicy == policy) t.inventory.isEmpty && t.changedPaths.exists(p => !t.oldAssignedPaths.contains(p))
           else t.correctionPolicy == automaticPolicy && t.inventory.exists(scope =>
             _valid_inventory(t, scope) && t.maximumFiles.exists(scope.paths.size <= _))))
   private def _valid_inventory(t: Target, scope: RepositorySyncRepairInventory.Scope): Boolean = scope != null &&
         (if (t.purpose.isEmpty) scope.inventoryPolicy == RepositorySyncRepairInventory.policy && scope.purpose.isEmpty
-          else scope.inventoryPolicy == RepositorySyncRepairInventory.purposePolicy && scope.purpose.exists(value =>
+          else scope.inventoryPolicy == (if (t.correctionPolicy == ownershipPolicy)
+            RepositorySyncRepairInventory.ownershipPolicy else RepositorySyncRepairInventory.purposePolicy) && scope.purpose.exists(value =>
             value.snapshot == t.purpose.get && RepositorySyncRepairInventory.validPurpose(scope, value,
               RepositorySyncNativeMergeReview.Request(t.sessionId, scope.validatedRevision, t.localTip, t.remoteTip,
                 t.candidateTree, t.changedPaths, "", "", value.snapshot.progress.selection.get.depth,
@@ -436,11 +441,12 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
     observed <- _observe_c(identity, port, core)
     scope <- RepositorySyncRepairInventory.qualifyC(observed.source, paths, rationale,
       observed.target.failureReference)
-    target = observed.target.copy(inventory = Some(scope))
+    target = observed.target.copy(inventory = Some(scope), correctionPolicy =
+      if (scope.inventoryPolicy == RepositorySyncRepairInventory.ownershipPolicy) ownershipPolicy else observed.target.correctionPolicy)
     _ <- if (validTarget(target)) Consequence.unit else N.invalid("automatic inventory target is incomplete")
   } yield observed.copy(target = target)
   private def _matching_observation_c(target: Target, port: R.Port, core: ActionCall.Core): Consequence[Observation] =
-    if (Set(uncappedPolicy, purposePolicy)(target.correctionPolicy) && target.inventory.nonEmpty)
+    if (Set(uncappedPolicy, purposePolicy, ownershipPolicy)(target.correctionPolicy) && target.inventory.nonEmpty)
       _prepare_c(target.sessionId, target.inventory.get.paths, target.inventory.get.rationale, port, core)
     else if (target.correctionPolicy == automaticPolicy) for {
       observed <- _prepare_c(target.sessionId, target.inventory.get.paths, target.inventory.get.rationale, port, core)

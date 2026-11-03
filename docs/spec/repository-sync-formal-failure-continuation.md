@@ -183,11 +183,12 @@ clean validation slot and absence of merge/unmerged state are revalidated.
 Candidate or source drift refuses while preserving bytes. File count creates no
 Human eligibility gate.
 
-A newly added path owned by a later planned Purpose returns a concrete conflict
+A v4 newly added path owned by a later planned Purpose returns a concrete conflict
 naming the path and that later group before supersession or effects. Later text
 is never substituted for candidate text. Existing shared paths already belonging
 to the current group keep ordinary repair behavior. This contract selects the
-explicit conflict alternative; it adds no implicit three-way integration.
+explicit conflict alternative. Existing v4 targets retain that refusal; v5 below
+provides a separately qualified ownership assignment without implicit text merging.
 
 Prepared scope is fixed. Independent prior-worker lifecycle evidence uses the
 existing `ContinueAfterPriorWorkerEndedAcceptingUnknown` choice and both explicit
@@ -276,3 +277,84 @@ evidence from the retained old-to-new qualification.
 
 These specifications describe the required qualification; execution and actual
 results belong to the owning parent workflow.
+
+## Failed Purpose repair with later ownership
+
+The distinct `sm-workflow.repository-sync-repair-scope-correction.v5` target and
+`sm-workflow.repository-sync-purpose-repair-inventory.v2` qualify an existing
+failed candidate file also owned by a later planned Purpose. The same public
+prepare, describe and adoption operations retain their lifecycle roles. The
+target binds the exact failed progress, original request and later groups,
+candidate baseline blobs, captured original worktree, native WorkOrder and
+repository facts. Original later text can differ from the failed candidate;
+qualification checks it against the captured ownership facts, rather than
+requiring that later intent already equal the candidate. Unsafe paths,
+unexamined text, invalid ownership, candidate drift and root drift still refuse
+without changes. Nonoverlapping v4 and historical contracts retain their
+representations and behavior.
+
+Following fixture-authored or actual independent lifecycle evidence and native
+supersession, separate ordinary Advance issues the existing nativeRepair work.
+Its outer `purposeWork` records expose the candidate baseline, every affected
+later owner's complete original group, effective group, original files,
+captured worktree and exact required identity/path pairs. Current candidate
+repair text and later integrated text are separate decisions. A repaired result
+must provide the normal current `replacements` plus `purposeContinuation` with
+every assigned pair and complete integrated ordinary text, with a causal
+rationale. Missing, extra or crossed ownership cannot silently consume another
+Purpose's intent. No new repair engine, fallback, file-count gate or lifecycle
+consent is introduced.
+
+Purpose progress retains its original captured request and exact later plan
+groups. The explicit `ownership` continuation stores integrated later text
+separately. An effective later group overlays only its assigned paths; unrelated
+content, dependencies, exclusions and messages keep their original ownership.
+The repaired current group contains the current correction alone. Its ordinary
+checks, review and actual commit occur before the later Purpose's separate
+checks, review and commit. Installation records the actual `projectedWorktree`
+as the expected remaining root content. Consequently the original stale
+baseline cannot overwrite the accepted current correction when later intended
+work is restored. Original failure/UNKNOWN history, counter lineage and native
+receipts remain evidence; adoption is not candidate acceptance.
+
+If the meanings conflict, the worker returns `decision-needed` with a precise
+actual path and owner rationale, empty replacements and no continuation. The
+existing public route retains that decision and returns `Wait` with condition
+`RepairDecisionRequired`, requiring actual semantic/Human resolution. Repeated
+Advance runs no candidate, checks or commits. This contract provides no invented
+follow-up API, automatic Human answer or silent overwrite and does not claim
+that such a Session is resolved.
+
+The existing installed fixture adds two explicitly selected ID07 phases using
+the distinct absolute `smworkflow.spec.purposeOwnershipEpisode` property:
+
+- `smworkflow.spec.purposeRepairPhase=ownership-capture` runs against the actual
+  old installed product before publication. One test authors two tiny local Git
+  repositories and local bare remotes: a stale baseline later extended by a
+  distinct comment, and a stale baseline with a genuinely conflicting later
+  expected value. Every used slot initially declares Compile, Test and fixed
+  nonempty TestOnly selections. Each first candidate obtains real Compile
+  success and a genuine baseline Test assertion failure. Actual prepare 409
+  logs name the baseline path and later owner, and the unchanged full Session,
+  progress, request, formal receipts and root snapshot are saved. The wrapper,
+  `.resolved.json`, `.decision.json` and result destinations must be absent;
+  episode writes use CREATE_NEW.
+- `smworkflow.spec.purposeRepairPhase=ownership-continue` reopens those exact
+  saved Sessions using the new normally installed product after publication.
+  It proves v5 qualification, passive repetition, invalid path/drift/lifecycle
+  refusals, original worker refusal and truthful ownership work. The conflicting
+  Session submits its actual unresolved decision and proves nondestructive
+  repeated Wait. The resolvable Session submits current baseline correction
+  separately from later correction plus comment, then requires grouped progress,
+  fresh actual checks, clearly fixture-authored independent review evidence,
+  current commit and integrated root projection, later candidate checks/review
+  and commit, and clean converged Terminal. Repeated Terminal must cause no
+  extra process. Its CREATE_NEW result includes actual commits, retained
+  failure/UNKNOWN evidence, receipts, assignment, final tree and unresolved
+  decision evidence. No previous successful case is replayed.
+
+The four ID06 selectors, retained episodes and results remain separate. These
+are authored requirements; only the owning parent's normal generation,
+compilation, old capture, publication and same-Session installed continuation
+provide execution evidence. The fixture does not inspect or modify a live
+consumer Session and never writes native datastore rows.

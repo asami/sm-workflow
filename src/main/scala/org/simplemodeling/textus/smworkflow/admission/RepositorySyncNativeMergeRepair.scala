@@ -10,6 +10,8 @@ import RepositorySyncNativeConflictInput as I
 import RepositorySyncNativeMergeReview as R
 import RepositorySyncNativeMergeValidation as V
 import RepositorySyncRepairInventory.given
+import RepositorySyncPurpose as P
+import org.simplemodeling.textus.smworkflow.value as B
 
 /** Pure affected-file proposal admission. The owning native continuation must
   * obtain a genuine retained repair review and separately authorize effects.
@@ -21,7 +23,8 @@ private[smworkflow] object RepositorySyncNativeMergeRepair {
   final case class File(path: String, text: String)
   final case class Request(review: R.Request, findings: Vector[R.Finding], files: Vector[File],
     validationFailure: Option[String] = None, admittedInventory: Option[RepositorySyncRepairInventory.Scope] = None)
-  final case class Result(decision: String, rationale: String, replacements: Vector[File])
+  final case class Result(decision: String, rationale: String, replacements: Vector[File],
+    purposeContinuation: Option[P.OwnershipContinuation] = None)
   final case class Basis(validated: RepositorySyncNativeProgressStore.Stage, input: R.Request,
     findings: Vector[R.Finding], next: org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceRecord,
     validationFailure: Option[String] = None, reviewContext: Option[R.RepairContext] = None)
@@ -62,8 +65,15 @@ private[smworkflow] object RepositorySyncNativeMergeRepair {
 
   def admitC(request: Request, result: Result, policy: I.Policy): Consequence[Unit] = for {
     _ <- admitRequestC(request, policy)
-    _ <- if (result != null && result.replacements != null && _rationale(result.rationale)) Consequence.unit
+    _ <- if (result != null && result.replacements != null && result.purposeContinuation != null && _rationale(result.rationale)) Consequence.unit
       else _invalid("result replacements or meaningful rationale are missing")
+    owners = request.admittedInventory.filter(_.inventoryPolicy == RepositorySyncRepairInventory.ownershipPolicy)
+      .flatMap(_.purpose).toVector.flatMap(value => RepositorySyncPurposeOwnership.assigned(value.snapshot.progress, request.files.map(_.path)))
+    _ <- if (result.decision == "repaired" && owners.nonEmpty) {
+      if (result.purposeContinuation.exists(RepositorySyncPurposeOwnership.covers(_, owners))) Consequence.unit
+      else _invalid("Purpose repair requires complete exact ordered later-owner/path integrated text and causal rationale")
+    } else if (result.purposeContinuation.isEmpty) Consequence.unit
+      else _invalid("Purpose continuation is forbidden for unrelated repairs or decision-needed")
     _ <- result.decision match {
       case "repaired" =>
         if (result.replacements.forall(_file) &&
@@ -106,8 +116,14 @@ private[smworkflow] object RepositorySyncNativeMergeRepair {
         request.files.forall(_ != null) && RepositorySyncRepairInventory.valid(scope, request.review,
           request.validationFailure) && request.files.map(_.path) == scope.paths)) Right(request)
     else Left("Restored repair inventory must bind the actual failed candidate and exact assigned files"))
-  private given Encoder[Result] = deriveEncoder
-  private given Decoder[Result] = deriveDecoder
+  private given Encoder[Result] = deriveEncoder[Result].mapJson(_.mapObject(_.filter {
+    case ("purposeContinuation", value) => !value.isNull; case _ => true
+  }))
+  private val _result_decoder: Decoder[Result] = deriveDecoder
+  private given Decoder[Result] = Decoder.instance(cursor =>
+    if (cursor.downField("purposeContinuation").focus.exists(_.isNull))
+      Left(io.circe.DecodingFailure("Purpose continuation cannot be explicitly null", cursor.history))
+    else _result_decoder(cursor))
 
   private final class Codec[A](val typeIdentity: String, schema: String)(using Encoder[A], Decoder[A])
       extends WorkflowResultJsonV1.PayloadCodec[A] {
@@ -121,8 +137,32 @@ private[smworkflow] object RepositorySyncNativeMergeRepair {
   }
   val inputCodec: WorkflowResultJsonV1.PayloadCodec[Request] =
     new Codec[Request]("RepositorySyncNativeMergeRepairRequest", "sm-workflow.repository-native-merge-repair-request.v1")
-  val resultCodec: WorkflowResultJsonV1.PayloadCodec[Result] =
-    new Codec[Result]("RepositorySyncNativeMergeRepairResult", "sm-workflow.repository-native-merge-repair-result.v1")
+  val resultCodec: WorkflowResultJsonV1.PayloadCodec[Result] = new WorkflowResultJsonV1.PayloadCodec[Result] {
+    val typeIdentity = "RepositorySyncNativeMergeRepairResult"
+    def encode(value: Result): Json = Json.obj("schemaVersion" -> Json.fromString(
+      if (value.purposeContinuation.nonEmpty) "sm-workflow.repository-native-merge-repair-result.v2"
+      else "sm-workflow.repository-native-merge-repair-result.v1"), "payload" -> value.asJson)
+    def decode(value: Json): Either[String, Result] = for {
+      wire <- Option(value).toRight("Native merge repair is missing")
+      version <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
+      parsed <- wire.hcursor.get[Result]("payload").left.map(_.message)
+      expected = if (parsed.purposeContinuation.nonEmpty) "sm-workflow.repository-native-merge-repair-result.v2"
+        else "sm-workflow.repository-native-merge-repair-result.v1"
+      _ <- Either.cond(version == expected, (), "Native merge repair continuation requires its explicit schema")
+    } yield parsed
+  }
+
+  def fromPublicC(value: B.RepositorySyncNativeMergeRepairResult): Consequence[Result] = for {
+    continuation <- value.purposeContinuation match {
+      case None => Consequence.success(Option.empty[P.OwnershipContinuation])
+      case Some(record) => for {
+        text <- record.toJsonStringC
+        json <- io.circe.parser.parse(text).fold(error => _invalid(error.message), Consequence.success)
+        normalized <- GoalPhasePlanRevision.normalizeJsonC(json)
+        parsed <- normalized.as[P.OwnershipContinuation].fold(error => _invalid(error.message), Consequence.success)
+      } yield Some(parsed)
+    }
+  } yield Result(value.decision, value.rationale, value.replacements.map(file => File(file.path, file.text)), continuation)
 
   private def _file(value: File): Boolean =
     value != null && I.relative(value.path) && _ordinary(value.text)
