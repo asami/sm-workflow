@@ -155,7 +155,7 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       else policy.impact match {
         // The admitted supplement must execute its missing lint. It does not
         // borrow an unrelated prior check through program-impact reuse.
-        case Some(impact) if pending.payload.requiredLint.nonEmpty =>
+        case Some(impact) if pending.payload.requiredLint.nonEmpty || pending.payload.formalFailure.nonEmpty =>
           RepositorySyncProgramImpact.validateC(impact).map(_ =>
             (Some(RepositorySyncProgramImpact.select(impact, inputs.get)), Map.empty[String, Receipt]))
         case Some(impact) => RepositorySyncProgramImpact.prepareC(store, pending, inputs.get, impact)
@@ -196,7 +196,9 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
     impact: Option[RepositorySyncProgramImpact.Selection] = None, reused: Map[String, Receipt] = Map.empty): Consequence[N.Stage] = for {
     _ <- preconditionsC(store, pending)
     checks = if (store.declaration.runtimeCleanSync && merge) impact.map(_.checks).getOrElse(Vector.empty) else policy.checks
-    seed <- if (merge) RepositorySyncRequiredLintContinuation.seedC(store, pending, namespace, policy, checks)
+    seed <- if (merge && pending.payload.formalFailure.nonEmpty)
+      RepositorySyncFormalFailureContinuation.seedC(store, pending, namespace, policy, checks)
+      else if (merge) RepositorySyncRequiredLintContinuation.seedC(store, pending, namespace, policy, checks)
       else Consequence.success(pending.payload.continuation.filter(_.choice == "AuthorizeNewValidation")
         .map(_.target.successfulPrefix).getOrElse(Vector.empty))
     complete <- store.loadC(N.candidateKey(namespace, if (merge) "merge-validated" else "integration-validated"))
@@ -205,7 +207,7 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
         _ <- completedC(value, pending, policy, merge)
         _ <- if (value.payload.validation.exists(state => RepositorySyncDocumentInputs.applicable(state.inputs, inputs))) Consequence.unit
           else N.invalid("retained validation crosses its actual document/consumption inputs")
-        _ <- if (pending.payload.requiredLint.isEmpty || value.payload.validation.exists(state =>
+        _ <- if ((pending.payload.requiredLint.isEmpty && pending.payload.formalFailure.isEmpty) || value.payload.validation.exists(state =>
             state.selected == checks && state.receipts.take(seed.size) == seed)) Consequence.unit
           else N.invalid("retained supplemented validation crosses its authenticated successful prefix")
       } yield value
@@ -214,9 +216,11 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
         // approved recovery. A genuinely new candidate must select required
         // lint before its first SBT effect, even under a document-only claim.
         first <- store.loadC(N.candidateKey(namespace, "validation-intent-0"))
-        _ <- if (merge && first.isEmpty && pending.payload.requiredLint.isEmpty)
+        _ <- if (merge && first.isEmpty && pending.payload.requiredLint.isEmpty && pending.payload.formalFailure.isEmpty)
           RepositorySyncRequiredLintContinuation.preflightC(store, pending, checks) else Consequence.unit
-        _ <- if (seed.isEmpty || (if (merge) pending.payload.requiredLint.nonEmpty &&
+        _ <- if (seed.isEmpty || (if (merge && pending.payload.formalFailure.nonEmpty)
+            RepositorySyncFormalFailureContinuation.validPrefix(seed, checks, merge = true)
+          else if (merge) pending.payload.requiredLint.nonEmpty &&
             RepositorySyncRequiredLintContinuation.validPrefix(seed, checks.dropRight(1))
           else RepositorySyncValidationContinuation.validPrefix(seed, policy))) Consequence.unit
           else N.invalid("continuation seed is not a successful contiguous selected prefix")
@@ -313,7 +317,10 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
     * and uncertain terminations cannot become a known-failure repair source. */
   private[admission] def retainedFailureC(store: N.Store, pending: N.Stage, policy: Policy,
     namespace: String): Consequence[Option[N.Stage]] = for {
-    seed <- pending.payload.requiredLint match {
+    seed <- if (pending.payload.formalFailure.nonEmpty)
+      RepositorySyncFormalFailureContinuation.retainedSeedC(store, pending, namespace, policy,
+        pending.payload.formalFailure.get.target.selectedChecks)
+      else pending.payload.requiredLint match {
       case Some(direction) => RepositorySyncRequiredLintContinuation.seedC(store, pending, namespace, policy,
         direction.target.expandedChecks)
       case None => Consequence.success(Vector.empty[Receipt])

@@ -8,7 +8,8 @@ import org.simplemodeling.textus.smworkflow.admission.{RepositorySyncValidationC
   NativeExternalEvidence, ThreeWorkflowExternalEvidencePorts}
 import org.simplemodeling.textus.smworkflow.value as V
 
-/** Passive encoding of externally supplied direction and lifecycle assertions.
+/** Passive encoding of explicitly discriminated validation, formal host-failure
+  * and purpose-content direction and applicable old-worker lifecycle assertions.
   * Only the trusted host can verify termination and provision this evidence.
   * @since Oct. 26, 2026
   * @version Oct. 26, 2026

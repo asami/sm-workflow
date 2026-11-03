@@ -124,7 +124,6 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
       }
     } yield Source(session, store, saved)
 
-    private[admission] def maximumFiles: Int = policy.maximumConflicts
     private[admission] def automaticInventory: Boolean = declaration.runtimeCleanSync
 
     private def _current_policy(source: Source, inventory: Option[RepositorySyncRepairInventory.Scope] = None): I.Policy =

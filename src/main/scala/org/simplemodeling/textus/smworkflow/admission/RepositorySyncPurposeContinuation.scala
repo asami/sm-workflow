@@ -63,7 +63,7 @@ private[smworkflow] object RepositorySyncPurposeContinuation {
     private def sourceC(identity: String, core: ActionCall.Core): Consequence[Source] = for {
       session <- F.sessionC(identity, declaration, definition, core)
       store <- N.bindC(session, declaration, core, acknowledgement)
-      inventory <- store.loadC("purpose-inventory").flatMap(_.map(Consequence.success)
+      inventory <- store.currentPurposeInventoryC(session.started.current).flatMap(_.map(Consequence.success)
         .getOrElse(invalid("actual dirty inventory is absent")))
       _ <- if (inventory.payload.purposes.nonEmpty) Consequence.unit else invalid("inventory has no actual purpose input")
     } yield Source(session, store, inventory, session.started.current)
@@ -131,6 +131,9 @@ private[smworkflow] object RepositorySyncPurposeContinuation {
             }
             input <- inputC(work)
             source <- sourceC(work.handle.instanceIdentity.value, call)
+            _ <- if (input == source.inventory.payload.purposes.get.request &&
+                submitted.continuationId == continuationId(source.inventory)) Consequence.unit
+              else invalid("purpose completion differs from the exact current issued inventory")
             plan <- prepareC(source, input)
             next <- completedC(plan, submitted)
           } yield {

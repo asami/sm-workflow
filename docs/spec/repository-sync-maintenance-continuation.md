@@ -10,8 +10,35 @@ capture, proposed content, assigned conflict text, repair text, review rationale
 or retained validation output. CNCF owns configured acquisition/output budgets.
 NUL, invalid UTF-8, binary or unavailable native content, truncated output,
 inconsistent byte counts and foreign paths remain refused at their existing
-owners. File counts and operation counts retain their existing limits. Review
+owners. Conflict and repair file inventories have no duplicate application
+count ceiling; complete exact path coverage and ordinary-text checks still
+apply. Unrelated operation and GoalPhase limits retain their existing meaning. Review
 inline preview settings remain presentation settings and grant no acceptance.
+
+New repair-scope correction observations use explicit policy v3 without a
+`maximumFiles` field. An unprepared target returns `preparation-required`, no
+Human choices and `prepareRepositorySyncRepairScopeCorrection` as its next
+operation. Runtime preparation qualifies the supplied complete existing file
+inventory against the same failed candidate through typed Git/File operations.
+Only that prepared target exposes lifecycle-only adoption; the Human supplies
+actual prior-worker-ended and UNKNOWN acceptance evidence with empty answer
+paths. File selection requires no Human grant. Adoption reobserves the exact
+prepared target and preserves its Session, revisions, claim status, subject and
+candidate freshness checks. Separate ordinary Advance captures the fixed
+inventory and materializes through the same admission without splitting or
+truncating files or reacquiring diagnostic output through SBT.
+
+Historical v1/v2 targets and directions retain their actual `maximumFiles`
+integer and original count restrictions. They are not migrated or relaxed.
+Canonical v3 excludes the field, old versions require it, and explicit null,
+unknown or cross-version fields refuse. Original UNKNOWN effects, check
+receipts, history and repair accounting remain unchanged.
+
+Focused source specifications include 33-conflict admission, 251-file repair
+admission, 129-file typed File capture/application with expected-text mismatch
+refusal, and v1/v2 versus v3 canonical and preparation/adoption boundaries.
+These authored scenarios require parent-selected validation; their presence
+does not claim execution, installed delivery or live Human acceptance.
 
 The normal packaged Git repository declaration and the maintenance fixture's
 selected Git declarations omit `stdinBytes` and `stdoutBytes`. CNCF's process-plan

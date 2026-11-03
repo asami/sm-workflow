@@ -32,8 +32,26 @@ private[smworkflow] object RepositorySyncNativeProgression {
     output <- if (session.started.current.lifecycle == Lifecycle.Completed)
       _retained_terminal_c(session, declaration, core, acknowledgement)
       else session.started.current.suspension match {
+      case None if session.started.current.currentProgression.contains(
+          WorkflowInstancePersistence.ProgressionReference("sync.PurposeContentContinuationAdmitted")) => for {
+        inventory <- RepositorySyncPurposeContentContinuation.advanceC(continuationstore, session.started.current)
+        output <- RepositorySyncPurposeRuntime.advanceC(continuationstore, inventory.record, inventory.payload.before,
+          validationPolicy, convergence, review,
+          (stage, observed) => progressC(continuationstore, stage.record, observed, conflicts, validationPolicy, review, convergence, repair))
+      } yield output
+      case None if session.started.current.currentProgression.contains(
+          WorkflowInstancePersistence.ProgressionReference("sync.FormalFailureContinuationAdmitted")) => for {
+        policy <- validationPolicy.map(Consequence.success).getOrElse(invalid("formal continuation requires current fixed validation bindings"))
+        prepared <- RepositorySyncFormalFailureContinuation.advanceC(continuationstore, session.started.current, policy)
+        output <- if (prepared.payload.purposes.nonEmpty)
+          RepositorySyncPurposeRuntime.advanceC(continuationstore, prepared.record, prepared.payload.before,
+            validationPolicy, convergence, review,
+            (stage, observed) => progressC(continuationstore, stage.record, observed, conflicts, validationPolicy, review, convergence, repair))
+          else pendingMergeC(continuationstore, prepared, validationPolicy, review, convergence,
+            RepositorySyncFormalFailureContinuation.namespace(prepared.payload.formalFailure.get.target), repair)
+      } yield output
       case Some(boundary) if boundary.completion.value == "repository-purpose-completion-v1" =>
-        continuationstore.loadC("purpose-inventory").flatMap {
+        continuationstore.currentPurposeInventoryC(session.started.current).flatMap {
           case Some(inventory) => RepositorySyncPurposeRuntime.advanceC(continuationstore, session.started.current,
             inventory.payload.before, validationPolicy, convergence, review,
             (stage, observed) => progressC(continuationstore, stage.record, observed, conflicts, validationPolicy, review, convergence, repair))
@@ -51,7 +69,7 @@ private[smworkflow] object RepositorySyncNativeProgression {
         repair.map(_.advanceC(identity, core)).getOrElse(Consequence.success(NativeWorkflowOperationOutput.repositoryWait(identity,
           "Actual purpose repair requires its installed native FIX policy/owner; failed checks and findings remain unresolved", "purpose-repair-unavailable")))
       case None if RepositorySyncPurposeRuntime.selected(session.started.current) =>
-        continuationstore.loadC("purpose-inventory").flatMap {
+        continuationstore.currentPurposeInventoryC(session.started.current).flatMap {
           case Some(inventory) => RepositorySyncPurposeRuntime.advanceC(continuationstore, session.started.current,
             inventory.payload.before, validationPolicy, convergence, review,
             (stage, observed) => progressC(continuationstore, stage.record, observed, conflicts, validationPolicy, review, convergence, repair))

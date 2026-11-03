@@ -19,9 +19,9 @@ private[smworkflow] object RepositorySyncConflictSemantic {
   final case class Result(decision: String, resolutions: Vector[Resolution], rationale: String)
 
   def admitC(request: I.Request, result: Result, policy: I.Policy): Consequence[Unit] = for {
-    _ <- policy.validateC
+    _ <- if (policy != null) policy.validateC else invalid("selected text policy is absent")
     _ <- if (request != null && result != null && request.conflicts != null && result.resolutions != null &&
-        request.conflicts.nonEmpty && request.conflicts.size <= policy.maximumConflicts &&
+        request.conflicts.nonEmpty &&
         request.conflicts.forall(c => c != null && policy.semanticPaths(c.path) && c.base != null &&
           (c.base.toVector ++ Vector(c.local, c.remote)).forall(b => b != null && b.identity != null &&
             b.text != null && !b.text.contains('\u0000') && UTF_8.newEncoder().canEncode(b.text))) &&

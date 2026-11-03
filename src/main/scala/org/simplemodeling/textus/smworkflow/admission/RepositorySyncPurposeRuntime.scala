@@ -36,7 +36,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
     } yield inventory else if (current.currentProgression.contains(ProgressionReference("sync.PurposeInventory")) ||
         (current.currentProgression.contains(ProgressionReference("sync.PurposeGrouped")) &&
           !current.causation.value.startsWith("native-repository:")))
-      store.loadC("purpose-inventory").flatMap(_.map(Consequence.success).getOrElse(N.invalid("purpose inventory is absent")))
+      store.currentPurposeInventoryC(current).flatMap(_.map(Consequence.success).getOrElse(N.invalid("purpose inventory is absent")))
       else {
         val prefix = "native-repository:" + store.identity + ":"
         if (!current.causation.value.startsWith(prefix)) store.currentPurposeC(current).flatMap(
@@ -59,7 +59,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
     authority: Option[RepositorySyncNativeConvergence.AuthorityPort], review: Option[RepositorySyncNativeMergeReviewContinuation.Port], finish: Finish): Consequence[V.RepositorySyncAdvanceResult] = {
     val progress = source.payload.purposes.get
     val groups = progress.plan.get.groups
-    val prefix = "purpose-" + (progress.cursor + 1) + (if (progress.attempt == 0) "" else "-repair-" + progress.attempt)
+    val prefix = attemptPrefix(progress)
     def _save_(key: String, stage: String, from: N.Stage, value: P.Progress): Consequence[N.Stage] =
       store.saveC(prefix + "-" + key, "purpose-progress", from.record,
         from.payload.copy(stage = stage, purposes = Some(value)))
@@ -206,7 +206,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
     val progress = source.payload.purposes.get
     val selected = progress.selection.get.checks
     val done = progress.receipts.size - 1
-    val prefix = "purpose-" + (progress.cursor + 1) + (if (progress.attempt == 0) "" else "-repair-" + progress.attempt)
+    val prefix = attemptPrefix(progress)
     def _save_(key: String, stage: String, from: N.Stage, value: P.Progress) = store.saveC(prefix + "-" + key,
       "purpose-progress", from.record, from.payload.copy(stage = stage, purposes = Some(value)))
     if (progress.receipts.drop(1).zip(selected).exists((receipt, check) => !C.productSuccessful(receipt, check.kind)))
@@ -215,6 +215,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
     if (done < selected.size) {
       val check = selected(done)
       for {
+        _ <- RepositorySyncFormalFailureContinuation.authenticatePurposeAttemptC(store, source, policy)
         _ <- candidateWorkspaceC(store, slot, progress.candidate.get)
         _ <- slot.checkWorkspaces.get(check.identity).fold(Consequence.unit)(workspace => for {
           actual <- E.executeGitC(store.core, GitOperation.Root, workspace).flatMap(_.valueC)
@@ -237,6 +238,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
           else _checks_c(store, checked, slot, reused, policy, authority, review, finish)
       } yield output
     } else for {
+      _ <- RepositorySyncFormalFailureContinuation.authenticatePurposeAttemptC(store, source, policy)
       _ <- candidateWorkspaceC(store, slot, progress.candidate.get)
       _ <- if (selected.zip(progress.receipts.drop(1)).forall((check, receipt) => C.productSuccessful(receipt, check.kind))) Consequence.unit
         else N.invalid("retained failed/unknown purpose check cannot become success")
@@ -259,6 +261,12 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
     _ <- if (head.value == candidate.commit && index.value == candidate.tree && dirty.isEmpty) Consequence.unit
       else N.invalid("purpose validation workspace no longer contains the exact clean candidate; no check/evidence reuse or commit")
   } yield ()
+
+  private[admission] def attemptPrefix(progress: P.Progress): String =
+    "purpose-" + (progress.cursor + 1) + (if (progress.attempt == 0) "" else "-repair-" + progress.attempt) +
+      progress.hostContinuation.filter(d => d.target.purpose.exists(p => p.cursor == progress.cursor &&
+        p.attempt == progress.attempt && p.slotCursor == progress.slotCursor))
+        .map(d => "-host-" + d.target.frontierRevision).getOrElse("")
 
   def repairC(store: N.Store, basis: RepositorySyncNativeMergeRepair.Basis,
     input: RepositorySyncNativeMergeRepair.Request, result: RepositorySyncNativeMergeRepair.Result,

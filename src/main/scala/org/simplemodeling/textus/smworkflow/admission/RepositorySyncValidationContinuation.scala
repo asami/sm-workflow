@@ -198,6 +198,14 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     def sessionId: String = value.sessionId
     def choices: Vector[String] = RepositorySyncReviewInputContinuation.availableChoices(value)
   }
+  final case class FormalFailureTarget(value: RepositorySyncFormalFailureContinuation.Target) extends AnyTarget {
+    def sessionId: String = value.sessionId
+    def choices: Vector[String] = RepositorySyncFormalFailureContinuation.choices
+  }
+  final case class PurposeContentTarget(value: RepositorySyncPurposeContentContinuation.Target) extends AnyTarget {
+    def sessionId: String = value.sessionId
+    def choices: Vector[String] = RepositorySyncPurposeContentContinuation.choices
+  }
   /** Dispatch on the explicit discriminator, never on a failed decoder. */
   def decodeAnyTarget(value: Json): Either[String, AnyTarget] = for {
     wire <- Option(value).toRight("Continuation target is absent")
@@ -206,6 +214,8 @@ private[smworkflow] object RepositorySyncValidationContinuation {
       case `policy` => decodeTarget(wire).map(OriginalTarget(_))
       case RepositorySyncRequiredLintContinuation.policy => RepositorySyncRequiredLintContinuation.decodeTarget(wire).map(RequiredLintTarget(_))
       case RepositorySyncReviewInputContinuation.policy => RepositorySyncReviewInputContinuation.decodeTarget(wire).map(ReviewInputsTarget(_))
+      case RepositorySyncFormalFailureContinuation.policy => RepositorySyncFormalFailureContinuation.decodeTarget(wire).map(FormalFailureTarget(_))
+      case RepositorySyncPurposeContentContinuation.policy => RepositorySyncPurposeContentContinuation.decodeTarget(wire).map(PurposeContentTarget(_))
       case _ => Left("Unrecognized repository validation continuation policy")
     }
   } yield target
@@ -215,6 +225,11 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     case OriginalTarget(_) => decodeAnswer(value)
     case RequiredLintTarget(_) => RepositorySyncRequiredLintContinuation.decodeAnswer(value)
     case ReviewInputsTarget(_) => RepositorySyncReviewInputContinuation.decodeAnswer(value)
+    case FormalFailureTarget(target) => RepositorySyncFormalFailureContinuation.decodeAnswer(value).flatMap(answer =>
+      Either.cond(RepositorySyncFormalFailureContinuation.validAssertions(target, answer.choice,
+        answer.priorExecutionEnded, answer.acceptOriginalUncertainty), answer,
+        "Formal failure answer must attest only an actual pending old worker"))
+    case PurposeContentTarget(_) => RepositorySyncPurposeContentContinuation.decodeAnswer(value)
   }
   def decodePublicAnyAnswer(target: AnyTarget, value: Json): Either[String, Answer] =
     GoalPhaseNativeMetadata.normalizePublicJson(value).flatMap(decodeAnyAnswer(target, _))
@@ -227,6 +242,10 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     case RequiredLintTarget(value) => RepositorySyncRequiredLintContinuation.bindingC(component, value, choice,
       rationale, participant, reference, ended, accepted)
     case ReviewInputsTarget(value) => RepositorySyncReviewInputContinuation.bindingC(component, value, choice,
+      rationale, participant, reference, ended, accepted)
+    case FormalFailureTarget(value) => RepositorySyncFormalFailureContinuation.bindingC(component, value, choice,
+      rationale, participant, reference, ended, accepted)
+    case PurposeContentTarget(value) => RepositorySyncPurposeContentContinuation.bindingC(component, value, choice,
       rationale, participant, reference, ended, accepted)
   }
   def targetC(value: Record): Consequence[Target] = if (value == null) N.invalid("continuation target is absent")
@@ -408,7 +427,12 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     policy: C.Policy, acknowledge: String => Consequence[Unit],
     review: Option[RepositorySyncNativeMergeReviewContinuation.Port] = None): Consequence[V.RepositorySyncValidationContinuationDescriptionResult] =
     F.sessionC(identity, d, definition, core).flatMap { session =>
-      if (session.started.current.currentProgression.contains(ProgressionReference("sync.ReviewDecisionRequired")))
+      if (session.started.current.currentProgression.contains(ProgressionReference("sync.PurposeInventory")))
+        RepositorySyncPurposeContentContinuation.describeC(identity, d, definition, core, acknowledge)
+      else if (session.started.current.currentProgression.exists(p => Set("sync.PurposeRepairRequired",
+          "sync.ValidationChecking", "sync.ValidationRepairRequired")(p.value)))
+        RepositorySyncFormalFailureContinuation.describeC(identity, d, definition, core, policy, acknowledge)
+      else if (session.started.current.currentProgression.contains(ProgressionReference("sync.ReviewDecisionRequired")))
         review.map(port => RepositorySyncReviewInputContinuation.describeC(identity, d, definition, core, policy, acknowledge, port))
           .getOrElse(N.invalid("review-input description requires the installed independent review Port"))
       else if (session.started.current.currentProgression.contains(ProgressionReference("sync.MergeValidated")))
@@ -429,6 +453,10 @@ private[smworkflow] object RepositorySyncValidationContinuation {
       case RequiredLintTarget(_) => RepositorySyncRequiredLintContinuation.adoptC(input, d, definition, core, policy, installation, acknowledge)
       case ReviewInputsTarget(_) => review.map(port => RepositorySyncReviewInputContinuation.adoptC(input, d, definition,
         core, policy, installation, acknowledge, port)).getOrElse(N.invalid("review-input adoption requires the installed independent review Port"))
+      case FormalFailureTarget(_) => RepositorySyncFormalFailureContinuation.adoptC(input, d, definition, core,
+        policy, installation, acknowledge)
+      case PurposeContentTarget(_) => RepositorySyncPurposeContentContinuation.adoptC(input, d, definition, core,
+        installation, acknowledge)
     }
   private def _adopt_v1_c(input: V.RepositorySyncValidationContinuationAdoptionInput, d: F.Declaration,
     definition: DefinitionBinding, core: ActionCall.Core, policy: C.Policy, installation: Installation,

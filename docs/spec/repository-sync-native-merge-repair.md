@@ -19,7 +19,7 @@ file texts. Finding identities use `[A-Za-z0-9][A-Za-z0-9_.-]{0,127}`, are uniqu
 and the collection is bounded to 128 findings. Each finding has nonempty distinct
 ordinary relative affected paths in both the review's changed paths and the
 explicit `RepositorySyncNativeConflictInput.Policy.semanticPaths`. The selected
-policy's existing validation and finite file-count/text limits apply. There is
+policy validates the selected relative paths without a conflict or file-count ceiling. There is
 no permissive policy fallback. This primitive consumes affected business facts;
 it does not recertify complete review state, history, OIDs, policy markers or
 copied-body equality, and cannot authenticate the review's provenance.
@@ -33,19 +33,21 @@ An empty replacement text denotes an empty ordinary file, not file deletion.
 
 **R3 — Complete ordered affected-file coverage.** Request files cover exactly
 the distinct sorted union of all finding affected paths, without omitted,
-duplicate, reordered or foreign files, and do not exceed `maximumConflicts`.
+duplicate, reordered or foreign files. Check-origin repair instead carries the
+complete selected failed-candidate inventory, including only explicitly qualified
+unchanged additions. Neither path has an application file-count ceiling.
 Repaired replacements cover exactly the request file paths in the same order.
 Paths satisfy the existing ordinary relative-path rule; absolute paths, empty
 segments, dot/dot-dot segments, `.git` segments and NUL are refused.
 
-**R4 — Finite ordinary text and required values.** Every consumed object and
+**R4 — Complete ordinary text and required values.** Every consumed object and
 collection is present. File and replacement texts are nonnull, contain no NUL
-and fit `maximumBlobBytes` measured in UTF8 bytes; empty file text is valid.
-Finding and result rationale is nonnull, nonblank, contains no NUL and fits
-16384 UTF8 bytes. Multibyte characters consume their UTF8 byte length. Actual File capture returns typed complete text, preserving exact Unicode,
+and are valid UTF-8; empty file text is valid. Finding and result rationale is
+nonnull, nonblank, contains no NUL and is valid UTF-8. There is no duplicate
+application byte ceiling. Actual File capture returns typed complete text, preserving exact Unicode,
 newlines and literal path characters without a process JSON/stdout envelope.
-CNCF applies the current runtime byte cap during acquisition; the consumer then
-applies this narrower semantic text budget. Normal preparation and workflow
+CNCF applies its configured acquisition budgets; the consumer requires complete
+ordinary text. Normal preparation and workflow
 Operations return structured business Values; ordinary current-context reads
 use the typed File/resource contracts. All nine original product mains and
 their executable launch routes are absent from source and the current packaged
@@ -96,7 +98,7 @@ Only later explicit Advance records the materialization intent, applies the
 actual proposal through typed `RepositorySyncFileEffect.observeC/applyC` and
 stages assigned paths through the existing typed Git policy ordinals. File and
 Git share the trusted `sm-workflow-repository` workspace binding. The application
-retains exact assigned paths, semantic text budgets and expected-current values;
+retains exact assigned paths, ordinary-text validation and expected-current values;
 CNCF owns current Component authority, root/grant/cap, complete acquisition and
 per-file installation. No File `.git` directory/linked-worktree metadata lookup,
 backlink discovery or metadata lock remains. Reads need no writable file.
@@ -140,9 +142,9 @@ procedures and Operation/business parameter semantics are retained.
 For the standard FULL_STATE owner, a fresh check-origin repair captures the
 actual retained candidate's changed paths after its preconditions hold. It
 does not retain a call-entry conflict-only selection. All files must be present
-ordinary UTF-8 text and fit the configured assignment count (32 by default,
-with the existing framework guard of 128). An unsupported or oversized set
-refuses explicitly for Human handling. Restricted host policies and
+ordinary UTF-8 text. There is no default 32-conflict gate, 128-file gate or
+replacement application file-count cap. Unsupported paths or content still
+refuse explicitly. Restricted host policies and
 review-origin findings retain their existing scope.
 
 ## Automatic existing-file inventory (AUTO-FILE-RS-01)
@@ -155,23 +157,30 @@ through typed Git `TreeEntries`/`BlobContent` and managed File operations.
 Existing unchanged tracked regular UTF-8 files are eligible within the same
 FULL_STATE repository, Component, purpose, acceptance and current capabilities.
 Missing, untracked, outside-root, symlink, tree, binary, crossed or stale files
-refuse. Existing finite assignment counts and CNCF acquisition budgets remain;
-there is no arbitrary text-size threshold or full-repository scan.
+refuse. CNCF acquisition budgets remain; qualification adds no application
+file-count or text-size threshold, truncation, batch splitting or full-repository scan.
 
-The exact v2 target preserves factual `changedPaths` and stores optional typed
+New observations use correctionPolicy
+`sm-workflow.repository-sync-repair-scope-correction.v3`. The exact v3 target
+preserves factual `changedPaths` and stores optional typed
 `inventory`: the qualified assignment, causal rationale, actual source and
 failed-check reference, immutable candidate facts and mode/blob facts for
 additions outside the diff. The native repair Request carries that explicit
 `admittedInventory`. Capture, Submit, materialization and history restoration
 validate it against the owning failed candidate; no general path check is
-removed. File materialization and typed Git staging use the same full sorted
+removed. `maximumFiles` is absent in v3. Description without prepared inventory
+returns `preparation-required`, empty choices and the existing preparation
+operation as its next operation. This stage admits no direction, including
+Defer, and grants no Human file selection. Preparation attaches the verified
+inventory and returns `adoption-required` with the existing lifecycle choices.
+File materialization and typed Git staging use the same full sorted
 invocation selection and ordinals. Review-origin findings and restricted manual
 host compositions retain their original scope; manual hosts do not advertise
 automatic preparation.
 
 File eligibility is automatic and requires no Human file grant. An existing
 available unclaimed old WorkOrder nevertheless has a separate lifecycle
-concern: absence of a claim or completion cannot prove nonexecution. The v2
+concern: absence of a claim or completion cannot prove nonexecution. The prepared v3
 Human answer `ContinueAfterPriorWorkerEndedAcceptingUnknown` supplies only actual
 independent prior-worker-ended and UNKNOWN acceptance evidence. Its `paths`
 must be empty; runtime derives the exact assignment from the prepared inventory.
@@ -183,9 +192,19 @@ history and repair budget. Separate ordinary Advance captures and issues the
 qualified assignment. Ordinary new failed-check issuance already selects its
 eligible actual changed text inventory without a per-file Human grant.
 
-Old policy v1 targets and requests omit inventory metadata and retain their
-original meaning. There is no implicit conversion or historical changed-path
-rewrite. The following describes that retained v1 correction contract.
+Historical correctionPolicy v1 and v2 targets retain their actual required
+`maximumFiles` value, originally positive and no greater than 128, and their
+original per-target assignment restrictions. V1 retains its explicit bounded
+Human path subset; v2 retains its bounded prepared inventory and lifecycle-only
+answer. Their canonical encodings, signed targets, retained directions and
+UNKNOWN checkpoints are not converted to v3 or silently relaxed. V3 requires
+the field to be absent; old versions require its actual integer. Explicit null,
+unknown and cross-version fields refuse. Pending legacy adoption reconstructs
+live facts under the actual evidence-bound historical version and cap before
+exact equality. V3 adoption reconstructs the matching prepared inventory and
+checks exact target equality before capture and again before supersession.
+There is no historical changed-path rewrite. The following describes the
+retained v1 correction contract.
 
 An already issued narrow failed-check repair can be corrected through
 `describeRepositorySyncRepairScopeCorrection --sessionId` and the separate
@@ -280,7 +299,7 @@ The installed connection has separately authored executable examples:
 | C3 | R1,R6 | Old or missing independent evidence cannot accept the new review; fresh acceptance still requires separate current convergence grants. |
 | C4 | R6 | Actual ordinary SBT failure (exit 1), managed timeout (indeterminate/no exit) and NUL-refused receipt with retained intent prevent new review and check replay. |
 | F1 | R3,R4,R5,R6 | Actual typed capture/observe/apply preserves literal paths, Unicode, assigned unchanged-file coverage, complete preflight and no replay under current coarse workspace authority. |
-| F2 | R4,R6 | Typed complete capture distinguishes absent from empty and preserves exact non-ASCII text; semantic NUL/finite budgets remain enforced after CNCF bounded acquisition. |
+| F2 | R4,R6 | Typed complete capture distinguishes absent from empty and preserves exact non-ASCII text; semantic NUL/UTF-8 checks remain enforced after CNCF bounded acquisition. |
 | P1 | R5,R6 | The finite normal-command caller preserves opaque Unicode rationale/replacements and a Unicode acknowledgement only on the actual assigned child route, refuses crossed routes and leaves outer routing unchanged; its subprocess is mocked. |
 
 `RepositorySyncNativeMergeRepairContinuationSpec` owns C1–C4,

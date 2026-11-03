@@ -22,7 +22,7 @@ import RepositorySyncNativeConflictInput as I
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class RepositorySyncNativeMergeRepairSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _paths = Vector("docs/a.md", "src/b.scala")
-  private val _policy = I.Policy(_paths.toSet, maximumConflicts = 2)
+  private val _policy = I.Policy(_paths.toSet)
   private val _review = R.Request("fixture-instance", "7", "a" * 40, "b" * 40, "c" * 40,
     _paths, "Local changed meaning", "Remote changed meaning", "required", "Affected source check",
     Vector("focused"), Vector(V.Receipt("focused", "exited", Some(0), "checked", "")))
@@ -51,6 +51,43 @@ final class RepositorySyncNativeMergeRepairSpec extends AnyWordSpec with Matcher
       .mapObject(_.add("inertDiagnostic", Json.True)))
 
   "AUTO-FILE-RS admitted unchanged regression" should {
+    "admit the complete 251-file failed candidate without a conflict-count gate" in {
+      Given("251 changed ordinary files and the actual-shaped selected failed check")
+      val paths = (1 to 251).map(ordinal => f"src/File$ordinal%03d.scala").toVector
+      val review = _review.copy(changedPaths = paths,
+        checks = Vector(V.Receipt("focused", "exited", Some(1), "candidate failed", "")))
+      val files = paths.map(path => M.File(path, "original source"))
+      val request = M.Request(review, Vector.empty, files, Some("focused"))
+      val policy = I.Policy(paths.toSet)
+      val scope = RepositorySyncRepairInventory.Scope(RepositorySyncRepairInventory.policy, review.instanceIdentity,
+        "11", review.validatedRevision, org.goldenport.cncf.workflow.ContextReference("fixture-instance:native-validation-result-1", "1"),
+        "focused", review.localTip, review.remoteTip, review.indexTree, paths,
+        "Qualify the complete existing failed candidate inventory", Vector.empty)
+      val qualified = request.copy(admittedInventory = Some(scope))
+      val result = M.Result("repaired", "Repair the exact full failed candidate",
+        files.updated(250, files.last.copy(text = "repaired source")))
+      val malformed = Vector(result.copy(replacements = result.replacements.dropRight(1)),
+        result.copy(replacements = result.replacements.reverse),
+        result.copy(replacements = result.replacements.updated(250, result.replacements.head)),
+        result.copy(replacements = result.replacements.updated(250, M.File("foreign.scala", "text"))),
+        result.copy(replacements = result.replacements.updated(250, files.last.copy(text = "\u0000"))),
+        result.copy(replacements = result.replacements.updated(250, files.last.copy(text = "\ud800"))))
+      When("request restoration and ordinary repair admission consume all assigned files")
+      val restored = M.inputCodec.decode(M.inputCodec.encode(request))
+      val admitted = M.admitC(request, result, policy)
+      val admittedinventory = M.admitC(qualified, result, policy)
+      val refused = malformed.map(M.admitC(request, _, policy)) ++ Vector(
+        M.admitRequestC(request.copy(files = files :+ files.head), policy),
+        M.admitRequestC(request, policy.copy(semanticPaths = paths.dropRight(1).toSet)),
+        M.admitRequestC(request.copy(validationFailure = Some("foreign")), policy))
+      Then("all 251 files survive intact while the exact candidate assignment failed check and UTF-8 rules still refuse violations")
+      request.files.size shouldBe 251
+      restored shouldBe Right(request)
+      admitted.isSuccess shouldBe true
+      admittedinventory.isSuccess shouldBe true
+      M.inputCodec.decode(M.inputCodec.encode(qualified)) shouldBe Right(qualified)
+      refused.foreach(_.isSuccess shouldBe false)
+    }
     "admit one qualified tracked regression after 128 factual candidate paths without expanding the repair assignment" in {
       Given("a specification-owned failed candidate with 128 earlier factual paths and one qualified unchanged tracked regression")
       val changedpaths = (1 to 128).map(ordinal => f"src/main/scala/Input$ordinal%03d.scala").toVector
@@ -63,7 +100,7 @@ final class RepositorySyncNativeMergeRepairSpec extends AnyWordSpec with Matcher
         "The actual selected failed check requires this existing tracked regression only",
         Vector(RepositorySyncRepairInventory.Entry(regression, "100644", "f" * 40)))
       val request = M.Request(failed, Vector.empty, Vector(M.File(regression, "old expectation")), Some("focused"), Some(scope))
-      val policy = I.Policy((changedpaths :+ regression).toSet, maximumConflicts = 32)
+      val policy = I.Policy((changedpaths :+ regression).toSet)
       val result = M.Result("repaired", "Repair the sole assigned regression", Vector(M.File(regression, "new expectation")))
 
       When("pure admission distinguishes the full factual candidate selection from the exact one-file repair assignment")
@@ -72,15 +109,14 @@ final class RepositorySyncNativeMergeRepairSpec extends AnyWordSpec with Matcher
       val admitted = M.admitC(request, result, policy)
       val restored = M.inputCodec.decode(M.inputCodec.encode(request))
 
-      Then("ordinal 129 remains legitimate assignment data while factual paths, the finite repair count and exact result scope remain intact")
+      Then("ordinal 129 remains legitimate assignment data while factual paths and exact result scope remain intact")
       stagingordinal shouldBe 129
       admitted.isSuccess shouldBe true
       restored shouldBe Right(request)
       request.review.changedPaths shouldBe changedpaths
       request.review.changedPaths should not contain regression
       request.files.map(_.path) shouldBe Vector(regression)
-      request.files.size should be <= policy.maximumConflicts
-      policy.maximumConflicts shouldBe 32
+      request.files.size shouldBe 1
       M.admitC(request, result.copy(replacements = Vector(M.File(changedpaths.head, "unassigned output"))), policy).isSuccess shouldBe false
       M.admitRequestC(request.copy(admittedInventory = None), policy).isSuccess shouldBe false
       Vector("../outside.scala", "/outside.scala", ".git/config").foreach { path =>
@@ -100,7 +136,7 @@ final class RepositorySyncNativeMergeRepairSpec extends AnyWordSpec with Matcher
         "Update the unchanged regression required by this selected failed check",
         Vector(RepositorySyncRepairInventory.Entry(regression, "100644", "f" * 40)))
       val request = M.Request(failed, Vector.empty, Vector(M.File(regression, "old expectation")), Some("focused"), Some(scope))
-      val policy = I.Policy(_paths.toSet + regression, maximumConflicts = 2)
+      val policy = I.Policy(_paths.toSet + regression)
       val result = M.Result("repaired", "Repair the actual regression", Vector(M.File(regression, "new expectation")))
       When("admission and native request restoration consume the qualified exact assignment")
       val restored = M.inputCodec.decode(M.inputCodec.encode(request))
@@ -262,7 +298,7 @@ final class RepositorySyncNativeMergeRepairSpec extends AnyWordSpec with Matcher
       When("request admission consumes all incomplete finding and file candidates")
       val actual = badfindings.map(f => M.admitRequestC(_request.copy(findings = f), _policy)) ++
         badfiles.map(f => M.admitRequestC(_request.copy(files = f), _policy)) :+
-        M.admitRequestC(_request, _policy.copy(maximumConflicts = 1))
+        M.admitRequestC(_request, _policy.copy(semanticPaths = Set("unassigned.md")))
 
       Then("only exact bounded sorted affected-file coverage can be admitted")
       actual.foreach(_ shouldBe a[Consequence.Failure[?]])
@@ -310,7 +346,7 @@ final class RepositorySyncNativeMergeRepairSpec extends AnyWordSpec with Matcher
       When("request admission consumes each missing business value")
       val actual = candidates.map(M.admitRequestC(_, _policy)) ++ Vector(
         M.admitRequestC(_request, null), M.admitRequestC(_request, _policy.copy(semanticPaths = null)),
-        M.admitRequestC(_request, _policy.copy(maximumConflicts = 0)))
+        M.admitRequestC(_request, _policy.copy(semanticPaths = Set("../outside.md"))))
 
       Then("every absent consumed value or invalid policy fails without throwing")
       actual.foreach(_ shouldBe a[Consequence.Failure[?]])

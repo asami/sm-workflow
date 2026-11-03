@@ -1193,6 +1193,8 @@ OperationResult
 
 - input-kind :: COMMAND
 
+Formal-failure policy sm-workflow.repository-sync-formal-failure-continuation.v1 offers AuthorizeNewValidationAfterHostCorrection and Defer for an actual Purpose or pending-merge failed product check. Bind its full failed receipt, successful prefix, unchanged candidate, fixed selection and current resolved host process plan. With a pending old repair both prior-worker assertions must be true; without an issue both are false and not applicable. The check remains formally failed. Purpose-content policy sm-workflow.repository-sync-purpose-content-continuation.v1 offers AdoptCurrentPurposeContent and Defer for an unanswered available unclaimed Purpose WorkOrder whose exact paths, statuses, baseline/index contents and records remain equal but ordinary worktree text changed. Its adopting answer requires both assertions true. Both policies store direction only; separate ordinary Advance owns the new attempt or fresh inventory/issue. Claimless work may have UNKNOWN external effects.
+
 The target continuationPolicy selects the exact answer contract. V1 retains AuthorizeNewValidation, AdoptCurrentFullState and Defer; an adopting v1 answer requires priorExecutionEnded=true and acceptOriginalUncertainty=true. For sm-workflow.repository-sync-required-lint-continuation.v2 the choices are AuthorizeMissingRequiredLint and Defer, and both booleans must be false: these fields mean not applicable because the original validation actually succeeded. No UNKNOWN assertion or invocation-termination attestation is created by v2.
 
 ### ATTRIBUTE
@@ -5180,6 +5182,10 @@ subject-type = RepositorySyncHumanConflictRequest
 
 ##### ReviewInputContinuationAdmitted
 
+##### FormalFailureContinuationAdmitted
+
+##### PurposeContentContinuationAdmitted
+
 ##### IntegrationValidated
 
 ##### PendingMergePrepared
@@ -5371,6 +5377,16 @@ when = sync.RequiredLintContinuationAdmitted, conflict.Retained, nativeReview.Re
 
 state = ReviewInputContinuationAdmitted
 when = sync.ReviewInputContinuationAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### formal-failure-continuation-admitted
+
+state = FormalFailureContinuationAdmitted
+when = sync.FormalFailureContinuationAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### purpose-content-continuation-admitted
+
+state = PurposeContentContinuationAdmitted
+when = sync.PurposeContentContinuationAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### merge-conflicted
 
@@ -5929,6 +5945,11 @@ on = native-check-prepared
 
 ##### TRANSITION
 
+to = FormalFailureContinuationAdmitted
+on = native-formal-failure-continuation-admitted
+
+##### TRANSITION
+
 to = ValidationRepairRequired
 on = native-validation-repair-required
 
@@ -6123,6 +6144,11 @@ on = native-repair-decision-required
 
 ##### TRANSITION
 
+to = FormalFailureContinuationAdmitted
+on = native-formal-failure-continuation-admitted
+
+##### TRANSITION
+
 to = RepairProposalAdmitted
 on = native-repair-proposal-admitted
 
@@ -6207,6 +6233,11 @@ to = Converged
 on = native-convergence-observed
 
 #### PurposeInventory
+
+##### TRANSITION
+
+to = PurposeContentContinuationAdmitted
+on = native-purpose-content-continuation-admitted
 
 ##### TRANSITION
 
@@ -6335,6 +6366,11 @@ on = purpose-progress
 
 ##### TRANSITION
 
+to = FormalFailureContinuationAdmitted
+on = native-formal-failure-continuation-admitted
+
+##### TRANSITION
+
 to = RepairProposalAdmitted
 on = native-repair-proposal-admitted
 
@@ -6344,6 +6380,25 @@ to = RepairDecisionRequired
 on = native-repair-decision-required
 
 #### PurposeUnfinished
+
+#### FormalFailureContinuationAdmitted
+
+##### TRANSITION
+
+to = PurposeMaterialized
+on = native-formal-failure-purpose-prepared
+
+##### TRANSITION
+
+to = PendingMergePrepared
+on = native-formal-failure-merge-prepared
+
+#### PurposeContentContinuationAdmitted
+
+##### TRANSITION
+
+to = PurposeInventory
+on = purpose-content-refreshed
 
 # VALUE
 
@@ -7910,6 +7965,8 @@ RepositorySyncAdvanceResult
 #### describeRepositorySyncValidationContinuation
 
 ##### DESCRIPTION
+
+Explicit continuationPolicy dispatch also supports actual Purpose/pending-merge formal product failures and unanswered Purpose content refresh. Formal targets preserve complete diagnostics and original successful checks, authenticate native intent/result lineage, and bind the unchanged candidate and current resolved host process plan. Content refresh binds full old/current requests and refuses extra/missing paths, changed metadata/provenance, unexamined content or accepted grouping. Pending issues must be available, unclaimed and incomplete; claim absence does not prove external effects absent. Adoption supersedes only the exact old issue or stores a result-only direction, without check/stage/commit effects. Invoke description with --sessionId and adopt using --input; separate normal Advance owns subsequent work. Malformed or unsupported discriminators never fall through to historical decoders.
 
 Observe the exact active unsuspended nonmerge IntegrationValidationChecking resultless intent under equal, local-ahead or fast-forward integration. Bind current Session revision/causation, original root/branch/remote/endpoint and FULL_STATE scope, selected checks/policy, actual candidate and intent references/revisions, successful receipt prefix, HEAD/tree/tracking/index and complete dirty paths including index/worktree and rename codes. Return AuthorizeNewValidation, AdoptCurrentFullState and Defer plus the separate ordinary Advance route. Refuse merge/unmerged state, changed HEAD/tracking, known failure results, checkpoint/materialization interruption, later review/Human/mutation and completed/cancelled Session with the existing owner route. No storage mutation or continuation adoption follows description.
 

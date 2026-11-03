@@ -284,6 +284,18 @@ final class NativeRepositoryRepairScopeCorrectionCliSpec extends AnyWordSpec wit
           else Vector("--input", input.noSpaces)
         live.repositoryCall(N.prepareOperation, parameters)
       }
+      When("normal description observes the new target before its file inventory is qualified")
+      val unprepared = live.repositoryCall(N.describeOperation, Vector("--sessionId", live.session))
+        .business[V.RepositorySyncRepairScopeCorrectionDescriptionResult]
+      val unpreparedtarget = take(N.targetC(unprepared.target))
+      Then("v3 requires preparation with no Human choices adoption or count field and leaves the pending issue untouched")
+      unprepared.outcome shouldBe "preparation-required"
+      unprepared.choices shouldBe Vector.empty
+      unprepared.adoptionOperation shouldBe N.prepareOperation
+      unpreparedtarget.correctionPolicy shouldBe N.uncappedPolicy
+      unpreparedtarget.maximumFiles shouldBe None
+      unpreparedtarget.inventory shouldBe None
+      _snapshot(live) shouldBe initial
       When("automatic preparation receives missing untracked outside-root binary symlink and tree selections")
       Vector(Vector("missing.scala"), Vector("../outside.scala"), Vector("binary-fixture.dat"),
         Vector("symlink-fixture"), Vector("fixture-directory")).foreach { paths =>
@@ -297,11 +309,14 @@ final class NativeRepositoryRepairScopeCorrectionCliSpec extends AnyWordSpec wit
       val description = prepared.business[V.RepositorySyncRepairScopeCorrectionDescriptionResult]
       val target = take(N.targetC(description.target))
       Then("the runtime qualifies the unchanged tracked file without any Human file grant and leaves old issue checks and Git state untouched")
-      target.correctionPolicy shouldBe N.automaticPolicy
+      target.correctionPolicy shouldBe N.uncappedPolicy
+      target.maximumFiles shouldBe None
       target.changedPaths shouldBe changed
       target.inventory.get.paths shouldBe Vector(regression)
       target.inventory.get.additions.map(_.path) shouldBe Vector(regression)
       description.choices shouldBe N.lifecycleChoices
+      description.outcome shouldBe "adoption-required"
+      description.adoptionOperation shouldBe N.adoptionOperation
       _snapshot(live) shouldBe initial
       val reference = V.WorkflowArtifactReference("fixture-prior-worker-lifecycle", "1")
       val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("participant"), None, None)
@@ -312,6 +327,7 @@ final class NativeRepositoryRepairScopeCorrectionCliSpec extends AnyWordSpec wit
       def _adopt_(value: V.RepositorySyncRepairScopeCorrectionAdoptionInput): F.Result =
         live.repositoryCall(N.adoptionOperation, Vector("--input", _json(value)))
       When("the distinct lifecycle concern has no independent answer or is replaced by a Human path selection")
+      _adopt_(input.copy(target = unprepared.target)).exitCode should not be 0
       _adopt_(input).exitCode should not be 0
       _adopt_(input.copy(paths = Vector(regression))).exitCode should not be 0
       _adopt_(input.copy(priorExecutionEnded = false)).exitCode should not be 0
@@ -422,23 +438,43 @@ final class NativeRepositoryRepairScopeCorrectionCliSpec extends AnyWordSpec wit
       _invocations(root) shouldBe episode.invocations
       val initial = _snapshot(live)
       When("the new installed public operation describes the actual old narrow pending issue without checks or mutation")
-      val described = live.repositoryCall(N.describeOperation, Vector("--sessionId", live.session))
+      val unprepared = live.repositoryCall(N.describeOperation, Vector("--sessionId", live.session))
+        .business[V.RepositorySyncRepairScopeCorrectionDescriptionResult]
+      val unpreparedtarget = take(N.targetC(unprepared.target))
+      Then("the complete current scope includes the nonconflict check and large document and the original issue remains pending")
+      unpreparedtarget.changedPaths shouldBe _changed
+      unpreparedtarget.oldAssignedPaths shouldBe Vector("value.txt")
+      unpreparedtarget.correctionPolicy shouldBe N.uncappedPolicy
+      unpreparedtarget.maximumFiles shouldBe None
+      unpreparedtarget.inventory shouldBe None
+      unprepared.outcome shouldBe "preparation-required"
+      unprepared.choices shouldBe Vector.empty
+      unprepared.adoptionOperation shouldBe N.prepareOperation
+      _snapshot(live) shouldBe initial
+      When("runtime preparation qualifies the existing check and document inventory for that same failed candidate")
+      val preparation = Json.obj("sessionId" -> live.session.asJson, "paths" -> _chosen.asJson,
+        "rationale" -> "The retained formalTest failure requires the existing check and its complete repair explanation".asJson)
+      val described = live.repositoryCall(N.prepareOperation, Vector("--input", preparation.noSpaces))
       val description = described.business[V.RepositorySyncRepairScopeCorrectionDescriptionResult]
       val target = take(N.targetC(description.target))
-      Then("the complete current scope includes the nonconflict check and large document and the original issue remains pending")
-      target.changedPaths shouldBe _changed
-      target.oldAssignedPaths shouldBe Vector("value.txt")
+      Then("only the prepared fixed inventory offers the existing lifecycle answer without a Human path selection")
+      target shouldBe unpreparedtarget.copy(inventory = target.inventory)
+      target.inventory.get.paths shouldBe _chosen
+      description.outcome shouldBe "adoption-required"
+      description.choices shouldBe N.lifecycleChoices
+      description.adoptionOperation shouldBe N.adoptionOperation
       _snapshot(live) shouldBe initial
-      val directory = Files.createTempDirectory(root, "fixture-authored-human-scope-")
+      val directory = Files.createTempDirectory(root, "fixture-authored-worker-lifecycle-")
       val reference = V.WorkflowArtifactReference(directory.getFileName.toString, "1")
       val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("participant"), None, None)
-      val answer = V.RepositorySyncRepairScopeCorrectionAnswer(N.choices.head, _chosen,
-        "Fixture-authored Human direction: the proposal worker ended; original proposal effects remain UNKNOWN", true, true)
+      val answer = V.RepositorySyncRepairScopeCorrectionAnswer(N.lifecycleChoices.head, Vector.empty,
+        "Fixture-authored lifecycle direction: the proposal worker ended; original proposal effects remain UNKNOWN", true, true)
       val input = V.RepositorySyncRepairScopeCorrectionAdoptionInput(live.session, description.target, answer.choice,
         answer.paths, answer.rationale, reference, true, true, execution)
       def _adopt_(value: V.RepositorySyncRepairScopeCorrectionAdoptionInput): F.Result =
         live.repositoryCall(N.adoptionOperation, Vector("--input", _json(value)))
       When("absent unknown stale crossed paths participant reference evidence or lifecycle assertions are supplied")
+      _adopt_(input.copy(target = unprepared.target)).exitCode should not be 0
       val missing = parse(_json(input)).toOption.get.mapObject(_.remove("target"))
       val unknown = parse(_json(input)).toOption.get.mapObject(_.add("unknown", Json.True))
       Vector(missing, unknown).foreach { value =>
@@ -495,7 +531,7 @@ final class NativeRepositoryRepairScopeCorrectionCliSpec extends AnyWordSpec wit
       When("one separate ordinary Advance issues the corrected exact two-file assignment")
       val issued = live.advance().business[V.RepositorySyncAdvanceResult]
       val work = issued.repair.get
-      Then("only the Human-selected current files are assigned once without increasing the original repair budget")
+      Then("only the runtime-qualified current files are assigned once without increasing the original repair budget")
       work.files.map(_.path) shouldBe _chosen
       val current = _current(live)
       val identities = current.history.flatMap(_.suspension.map(_.continuationIdentity.value))

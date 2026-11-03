@@ -48,11 +48,11 @@ private[smworkflow] object RepositorySyncRepairInventory {
       entry.blob != null && entry.blob.matches("[0-9a-f]{40}|[0-9a-f]{64}")) &&
     scope.additions.map(_.path) == scope.paths.filterNot(review.changedPaths.contains)
 
-  def qualifyC(source: R.Source, paths: Vector[String], rationale: String, maximumFiles: Int,
+  def qualifyC(source: R.Source, paths: Vector[String], rationale: String,
     failureReference: ContextReference): Consequence[Scope] = for {
     _ <- if (source.session.context.syncMode == "FULL_STATE" && source.basis.validationFailure.nonEmpty &&
         source.basis.findings.isEmpty && source.basis.validated.payload.purposes.isEmpty && paths != null &&
-        paths.nonEmpty && paths == paths.distinct.sorted && paths.size <= maximumFiles &&
+        paths.nonEmpty && paths == paths.distinct.sorted &&
         paths.forall(RepositorySyncNativeConflictInput.relative) && rationale != null && rationale.trim.nonEmpty)
       Consequence.unit else N.invalid("automatic inventory requires concrete sorted existing paths, causal rationale and the same FULL_STATE failed check")
     _ <- RepositorySyncNativeMergeValidation.preconditionsC(source.store, source.basis.validated)

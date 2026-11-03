@@ -33,7 +33,7 @@ final class RepositorySyncRepairScopeCorrectionSpec extends AnyWordSpec with Mat
     ContextReference("session:native-pending-merge", "1"), "7", ContextReference("session:native-validation-result-3", "1"), "10",
     RepositorySyncNativeMergeValidation.Receipt("formalTest", "exited", Some(1), "Actual fixture check failed", ""),
     "a" * 40, "b" * 40, "c" * 40, G.Native(_observed, Some("b" * 40)), "c" * 40,
-    _paths, Vector("value.txt"), 32, N.policy)
+    _paths, Vector("value.txt"), Some(32), N.policy)
   private val _reference = ContextReference("existing-fixture-human-direction", "2")
   private def _binding(target: N.Target = _target, paths: Vector[String] = _paths.take(2),
     participant: String = "participant", ended: Boolean = true, accepted: Boolean = true,
@@ -102,7 +102,7 @@ final class RepositorySyncRepairScopeCorrectionSpec extends AnyWordSpec with Mat
       val binding = take(_binding())
       val refused = wrongpaths.map(paths => _binding(paths = paths)) ++ Vector(_binding(participant = "other"),
         _binding(ended = false), _binding(accepted = false), _binding(reference = ContextReference("", "1")),
-        _binding(target = _target.copy(maximumFiles = 1)))
+        _binding(target = _target.copy(maximumFiles = Some(1))))
       Then("only the original participant's exact finite subset can be bound while UNKNOWN remains acknowledged")
       N.selectBinding(binding) shouldBe Right(binding)
       refused.foreach(_.isSuccess shouldBe false)
@@ -210,6 +210,110 @@ final class RepositorySyncRepairScopeCorrectionSpec extends AnyWordSpec with Mat
       _binding_(Vector.empty, "Defer", false, false).isSuccess shouldBe true
       val direction = N.Direction(target, paths, N.lifecycleChoices.head, "Fixture lifecycle acceptance", "participant", _reference, true, true)
       N.checkpointCodec.decode(N.checkpointCodec.encode(N.Checkpoint(direction, "UNKNOWN"))) shouldBe Right(N.Checkpoint(direction, "UNKNOWN"))
+    }
+  }
+
+  "RS-COUNT-01 versioned inventory correction" should {
+    "roundtrip all 251 paths in v3 with no maximumFiles field and refuse cross-version null or unknown fields" in {
+      Given("a new complete 251-file candidate and its runtime-shaped qualified inventory")
+      val paths = (1 to 251).map(ordinal => f"src/File$ordinal%03d.scala").toVector
+      val scope = RepositorySyncRepairInventory.Scope(RepositorySyncRepairInventory.policy, "session", "11", "10",
+        _target.failureReference, "formalTest", _target.localTip, _target.remoteTip, _target.candidateTree,
+        paths, "Repair the complete retained failed candidate", Vector.empty)
+      val target = _target.copy(changedPaths = paths, oldAssignedPaths = paths, maximumFiles = None,
+        correctionPolicy = N.uncappedPolicy, inventory = Some(scope))
+      val unprepared = target.copy(inventory = None)
+      val wire = target.asJson
+      val malformed = Vector(wire.mapObject(_.add("maximumFiles", Json.Null)),
+        wire.mapObject(_.add("maximumFiles", Json.fromInt(32))), wire.mapObject(_.add("unknown", Json.True)),
+        wire.mapObject(_.add("inventory", Json.Null)),
+        wire.mapObject(_.add("correctionPolicy", Json.fromString(N.automaticPolicy))),
+        unprepared.asJson.mapObject(_.add("inventory", Json.Null)))
+      When("the strict target decoder reads prepared and unprepared v3 targets and malformed alternatives")
+      val decoded = N.decodeTarget(wire)
+      val readonly = N.decodeTarget(unprepared.asJson)
+      val refused = malformed.map(N.decodeTarget)
+      Then("both stages preserve every path without a count field and all noncanonical cross-version shapes refuse")
+      decoded shouldBe Right(target)
+      readonly shouldBe Right(unprepared)
+      target.oldAssignedPaths.size shouldBe 251
+      target.inventory.get.paths shouldBe paths
+      wire.hcursor.downField("maximumFiles").focus shouldBe None
+      unprepared.asJson.hcursor.downField("maximumFiles").focus shouldBe None
+      unprepared.asJson.hcursor.downField("inventory").focus shouldBe None
+      refused.foreach(_.isLeft shouldBe true)
+    }
+    "require preparation before any v3 direction and bind prepared inventory through lifecycle consent only" in {
+      Given("a new unprepared target and its later complete qualified 251-file inventory")
+      val paths = (1 to 251).map(ordinal => f"src/File$ordinal%03d.scala").toVector
+      val target = _target.copy(changedPaths = paths, oldAssignedPaths = paths, maximumFiles = None,
+        correctionPolicy = N.uncappedPolicy)
+      val scope = RepositorySyncRepairInventory.Scope(RepositorySyncRepairInventory.policy, "session", "11", "10",
+        target.failureReference, "formalTest", target.localTip, target.remoteTip, target.candidateTree,
+        paths, "The selected failed check requires all changed files", Vector.empty)
+      val prepared = target.copy(inventory = Some(scope))
+      def _binding_(selected: N.Target, choice: String, selectedpaths: Vector[String] = Vector.empty,
+        ended: Boolean = true, accepted: Boolean = true) = N.bindingC("component", selected, choice, selectedpaths,
+        "Fixture-owned actual prior worker lifecycle answer", "participant", _reference, ended, accepted)
+      val direction = N.Direction(prepared, paths, N.lifecycleChoices.head, "Fixture accepts UNKNOWN effects",
+        "participant", _reference, true, true)
+      val description = V.RepositorySyncRepairScopeCorrectionDescriptionResult("session", "preparation-required",
+        N.preparationMessage, "component", N.targetRecord(target), Vector.empty, N.prepareOperation)
+      val answer = V.RepositorySyncRepairScopeCorrectionAnswer(N.lifecycleChoices.head, Vector.empty,
+        "Fixture lifecycle answer", true, true)
+      val reference = V.WorkflowArtifactReference(_reference.identity, _reference.revision)
+      val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("participant"), None, None)
+      When("direction admission observes the actual preparation stage and lifecycle assertions")
+      val premature = (N.choices ++ N.lifecycleChoices).distinct.map(choice => _binding_(target, choice))
+      val binding = take(_binding_(prepared, N.lifecycleChoices.head))
+      val refused = Vector(_binding_(prepared, N.choices.head, paths),
+        _binding_(prepared, N.lifecycleChoices.head, paths.take(1)),
+        _binding_(prepared, N.lifecycleChoices.head, ended = false),
+        _binding_(prepared, N.lifecycleChoices.head, accepted = false))
+      val evidence = P.prepareC(description, answer, reference, execution, "participant", "fixture-issuer",
+        Instant.parse("2026-11-03T00:00:00Z"))
+      Then("unprepared targets allow no choices or adoption and only prepared lifecycle consent retains the full inventory")
+      N.targetChoices(target) shouldBe Vector.empty
+      N.targetMessage(target) shouldBe N.preparationMessage
+      premature.foreach(_.isSuccess shouldBe false)
+      evidence.isSuccess shouldBe false
+      N.targetChoices(prepared) shouldBe N.lifecycleChoices
+      N.targetMessage(prepared) shouldBe N.automaticMessage
+      N.selectBinding(binding) shouldBe Right(binding)
+      refused.foreach(_.isSuccess shouldBe false)
+      _binding_(prepared, "Defer", ended = false, accepted = false).isSuccess shouldBe true
+      val checkpoint = N.Checkpoint(direction, "UNKNOWN")
+      N.checkpointCodec.decode(N.checkpointCodec.encode(checkpoint)) shouldBe Right(checkpoint)
+      val prematurecheckpoint = checkpoint.copy(direction = direction.copy(target = target))
+      N.checkpointCodec.decode(N.checkpointCodec.encode(prematurecheckpoint)).isLeft shouldBe true
+      N.checkpointCodec.decode(N.checkpointCodec.encode(checkpoint.copy(externalEffects = "NOT_EXECUTED"))).isLeft shouldBe true
+    }
+    "retain the actual maximumFiles and original assignment and inventory restrictions of v1 and v2 histories" in {
+      Given("historical targets whose actual signed maximumFiles is two")
+      val legacy = _target.copy(maximumFiles = Some(2))
+      val scope = RepositorySyncRepairInventory.Scope(RepositorySyncRepairInventory.policy, "session", "11", "10",
+        legacy.failureReference, "formalTest", legacy.localTip, legacy.remoteTip, legacy.candidateTree,
+        _paths.take(2), "Historical qualified file inventory", Vector.empty)
+      val automatic = legacy.copy(correctionPolicy = N.automaticPolicy, inventory = Some(scope))
+      val malformed = Vector(legacy.copy(maximumFiles = None), legacy.copy(maximumFiles = Some(0)),
+        legacy.copy(maximumFiles = Some(129)), legacy.copy(oldAssignedPaths = _paths),
+        automatic.copy(maximumFiles = None), automatic.copy(maximumFiles = Some(1)),
+        automatic.copy(inventory = None), automatic.copy(inventory = Some(scope.copy(paths = _paths))))
+      When("historical target direction and checkpoint decoding retains each original contract")
+      val decoded = Vector(legacy, automatic).map(value => N.decodeTarget(value.asJson))
+      val refused = malformed.map(value => N.decodeTarget(value.asJson))
+      val direction = N.Direction(automatic, scope.paths, N.lifecycleChoices.head, "Historical lifecycle acceptance",
+        "participant", _reference, true, true)
+      Then("legacy maximumFiles remains present and neither old assignment nor old inventory gains the v3 no-cap meaning")
+      decoded shouldBe Vector(Right(legacy), Right(automatic))
+      legacy.asJson.hcursor.get[Int]("maximumFiles").toOption shouldBe Some(2)
+      automatic.asJson.hcursor.get[Int]("maximumFiles").toOption shouldBe Some(2)
+      refused.foreach(_.isLeft shouldBe true)
+      _binding(target = legacy, paths = _paths).isSuccess shouldBe false
+      N.decodeTarget(legacy.asJson.mapObject(_.add("maximumFiles", Json.Null))).isLeft shouldBe true
+      N.decodeTarget(automatic.asJson.mapObject(_.remove("maximumFiles"))).isLeft shouldBe true
+      val checkpoint = N.Checkpoint(direction, "UNKNOWN")
+      N.checkpointCodec.decode(N.checkpointCodec.encode(checkpoint)) shouldBe Right(checkpoint)
     }
   }
 

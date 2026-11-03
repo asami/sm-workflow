@@ -22,17 +22,16 @@ private[smworkflow] object RepositorySyncNativeConflictInput {
     mode: String = "100644", worktree: String = "")
   final case class Request(instanceIdentity: String, conflictRevision: String, localTip: String,
     remoteTip: String, conflicts: Vector[Conflict])
-  final case class Policy(semanticPaths: Set[String], maximumConflicts: Int = 32) {
+  final case class Policy(semanticPaths: Set[String]) {
     def validateC: Consequence[Unit] =
-      if (semanticPaths == null || semanticPaths.exists(p => !relative(p)) ||
-          maximumConflicts <= 0 || maximumConflicts > 128)
+      if (semanticPaths == null || semanticPaths.exists(p => !relative(p)))
         invalid("host conflict policy is incomplete") else Consequence.unit
   }
   val noSemanticPaths = Policy(Set.empty)
 
   def captureC(store: RepositorySyncNativeProgressStore.Store,
     source: RepositorySyncNativeProgressStore.Stage, policy: Policy): Consequence[Request] = for {
-    _ <- policy.validateC
+    _ <- if (policy != null) policy.validateC else invalid("host conflict policy is absent")
     native <- Git.inspectC(store.core)
     _ <- store.scopeC(native.observed)
     _ <- if (source.payload.stage == "MergeConflicted" && source.payload.after.contains(native.observed) &&
@@ -40,10 +39,10 @@ private[smworkflow] object RepositorySyncNativeConflictInput {
       else invalid("actual selected pending conflict differs from its original native stage")
     rows <- entriesC(store.core)
     paths = rows.map(_.path).distinct
-    _ <- if (paths.nonEmpty && paths.size <= policy.maximumConflicts &&
+    _ <- if (paths.nonEmpty &&
         paths.toSet == native.observed.dirty.filter(_.unmerged).map(_.path).toSet &&
         paths.forall(policy.semanticPaths)) Consequence.unit
-      else invalid("conflict scope requires Human handling or exceeds its admitted text policy")
+      else invalid("conflict scope requires Human handling or is outside its admitted text paths")
     conflicts <- paths.zipWithIndex.foldLeft(Consequence.success(Vector.empty[Conflict])) { case (prior, (path, index)) =>
       for {
         values <- prior

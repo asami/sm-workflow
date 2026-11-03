@@ -32,6 +32,34 @@ final class RepositorySyncNativeConflictInputSpec extends AnyWordSpec with Given
       root.resolve("upstream.git").toString))
 
   "Native conflict input and closed proposal contract" should {
+    "admit all 33 assigned conflicts while refusing partial foreign duplicate and invalid-text resolutions" in {
+      Given("33 distinct in-policy conflicts with complete ordinary native text")
+      val blob = I.Blob("b" * 40, "source\n")
+      val conflicts = (1 to 33).map(ordinal => I.Conflict("conflict-" + ordinal,
+        f"file$ordinal%03d.txt", Some(blob), blob, blob)).toVector
+      val request = I.Request("instance", "8", "c" * 40, "d" * 40, conflicts)
+      val policy = I.Policy(conflicts.map(_.path).toSet)
+      val result = S.Result("resolved", conflicts.map(value => S.Resolution(value.identity, "resolved\n")),
+        "Resolve the complete assigned conflict inventory")
+      val malformed = Vector(result.copy(resolutions = result.resolutions.dropRight(1)),
+        result.copy(resolutions = result.resolutions.reverse),
+        result.copy(resolutions = result.resolutions.updated(32, result.resolutions.head)),
+        result.copy(resolutions = result.resolutions.updated(32, S.Resolution("foreign", "text"))),
+        result.copy(resolutions = result.resolutions.updated(32, S.Resolution("conflict-33", "\u0000"))),
+        result.copy(resolutions = result.resolutions.updated(32, S.Resolution("conflict-33", "\ud800"))))
+      When("semantic admission consumes the complete inventory and malformed alternatives")
+      val admitted = S.admitC(request, result, policy)
+      val refused = malformed.map(S.admitC(request, _, policy)) ++ Vector(
+        S.admitC(request, result, null), S.admitC(request, result, I.Policy(null)),
+        S.admitC(request, result, I.Policy(Set("../outside.txt"))),
+        S.admitC(request, result, policy.copy(semanticPaths = policy.semanticPaths - conflicts.last.path)),
+        S.admitC(request.copy(conflicts = conflicts.updated(32, conflicts.head)), result, policy))
+      Then("all 33 proposals survive together and exact coverage path policy and ordinary text remain mandatory")
+      admitted.isSuccess shouldBe true
+      S.inputCodec.decode(S.inputCodec.encode(request)) shouldBe Right(request)
+      S.resultCodec.decode(S.resultCodec.encode(result)) shouldBe Right(result)
+      refused.foreach(_.isSuccess shouldBe false)
+    }
     "retain typed native stages, modes, object IDs and literal tab and newline paths" in {
       Given("owned conflicting repositories and a normal host with actual typed Git grants")
       val root = Files.createTempDirectory(Files.createDirectories(
