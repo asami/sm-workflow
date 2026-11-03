@@ -76,7 +76,7 @@ private[smworkflow] object RepositorySyncPurposeContentContinuation {
   /** Metadata and provenance cannot be silently recaptured as a new purpose. */
   def contentOnly(original: P.Request, current: P.Request): Boolean = {
     def _valid_(request: P.Request): Boolean = request != null && request.files != null && request.files.nonEmpty &&
-      request.records != null && request.files.map(_.path) == request.files.map(_.path).distinct.sorted &&
+      request.records != null && request.files.map(_.path) == request.files.map(_.path).distinct &&
       request.files.forall(file => file != null && RepositorySyncNativeConflictInput.relative(file.path) &&
         file.original != null && file.indexed != null && file.worktree != null && file.unexamined != null &&
         file.unexamined.isEmpty && Vector(file.original, file.indexed, file.worktree).forall(_.forall(text =>
