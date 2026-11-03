@@ -148,3 +148,131 @@ new description/adoption operations. After publication, select the same director
 `NativeWorkflowCliFixture.reopenInstalledRepository` to continue those actual
 roots and Sessions without rerunning successful checks or editing native rows.
 With no episode-stage property it exercises fresh normal sessions.
+
+## Failed Purpose baseline repair inventory
+
+A genuine exited nonzero selected Purpose check can require an existing baseline
+test outside the current group's changed files. The existing
+`describeRepositorySyncRepairScopeCorrection`,
+`prepareRepositorySyncRepairScopeCorrection` and
+`adoptRepositorySyncRepairScopeCorrection` operations support this case under
+`sm-workflow.repository-sync-repair-scope-correction.v4`. This is an inventory
+correction for the actual pending native repair WorkOrder. It does not authorize
+another validation attempt on an unchanged candidate through the formal-failure
+host or selection direction described above.
+
+The v4 target binds the actual failed Purpose stage, its earlier native prepared
+candidate receipt, the original available unclaimed incomplete repair issue and
+its exact frontier, and the entire retained Purpose progress. This includes the
+original request and source records, ordered plan and ownership, cursor, attempt,
+slot, candidate, receipts, effects and commits. The failed virtual candidate tree
+is distinct from the original repository index tree. Both review tips are the
+candidate parent; no pending merge or divergent tracking relation is required.
+Historical v1-v3 targets and checkpoints retain their original contracts and
+canonical representation. The new optional Purpose field is omitted when absent;
+explicit null, unknown or malformed Purpose fields refuse.
+
+Preparation qualifies sorted safe existing regular tracked ordinary UTF-8 files
+from that exact candidate using typed Git TreeEntries and BlobContent. It retains
+their actual blob identities and the complete progress and original repository
+snapshot under the distinct
+`sm-workflow.repository-sync-purpose-repair-inventory.v1` policy. Added unchanged
+baseline files must have the same real original worktree text as the candidate
+blob. The original HEAD, branch, index, captured inventory worktree texts, selected
+clean validation slot and absence of merge/unmerged state are revalidated.
+Candidate or source drift refuses while preserving bytes. File count creates no
+Human eligibility gate.
+
+A newly added path owned by a later planned Purpose returns a concrete conflict
+naming the path and that later group before supersession or effects. Later text
+is never substituted for candidate text. Existing shared paths already belonging
+to the current group keep ordinary repair behavior. This contract selects the
+explicit conflict alternative; it adds no implicit three-way integration.
+
+Prepared scope is fixed. Independent prior-worker lifecycle evidence uses the
+existing `ContinueAfterPriorWorkerEndedAcceptingUnknown` choice and both explicit
+terminal and UNKNOWN assertions. Read-only describe/prepare and adoption do not
+run checks, edit files or prepare a new candidate. Adoption uses existing atomic
+native WorkOrder supersession. An identical adoption is idempotent; stale,
+foreign, contradictory and crossed contracts refuse. Separate ordinary Advance
+captures the exact qualified candidate text into the successor request, retaining
+the old issue and receipts.
+
+Normal repair submission changes only the assigned files. Ordinary continuation
+adds corrected extra files to the current group's content and appends their
+captured original worktree baselines to the request inventory. Existing current
+paths are preserved, and original request fields, source records, other groups,
+dependencies and exclusions remain unchanged. The next repair attempt advances
+the existing attempt and slot counters and uses the failed candidate tree as its
+baseline. Candidate/check selection is cleared for ordinary candidate preparation,
+fresh affected checks, independent review and actual Purpose commit. Historical
+failures, successful receipts, commits, effects and UNKNOWN remain retained.
+
+`RepositorySyncRepairScopeCorrectionSpec` and `RepositorySyncPurposeRuntimeSpec`
+cover canonical compatibility, exact progress binding, malformed/drift refusals,
+added candidate propagation, preserved ownership and the named overlap conflict.
+`NativeRepositoryPurposeRepairScopeCorrectionCliSpec` is a `@DoNotDiscover`
+`RuntimeTestDeclaration` with exactly one registered test per selected phase:
+
+- Before producer publication, set
+  `smworkflow.spec.purposeRepairPhase=capture` and
+  `smworkflow.spec.purposeRepairEpisode=<absolute episodeJSON>`, plus the actual
+  old `smworkflow.spec.installedCommand` (or its existing environment equivalent)
+  and normal `smworkflow.spec.sbt` / `SM_WORKFLOW_SPEC_SBT`. The test
+  `capture legacy failed purpose repair` creates only a tiny fixture repository,
+  obtains successful Compile and a genuine stale-baseline Test assertion failure,
+  and retains the actual Session, repository, host, plan, original work, receipts,
+  logs and old describe 409. Invalid host configuration is not the failure.
+- After ordinary producer publication, set `purposeRepairPhase=continue` and the
+  same episode file with the new installed command. The test
+  `continue retained failed purpose repair` reopens the same physical repository
+  and datastore, proves the concrete later-owner conflict and nondestructive
+  refusals, supplies fixture-authored lifecycle evidence through normal
+  prepareEvidence, adopts once, issues corrected work through separate Advance,
+  submits the real baseline correction, obtains fresh checks and independent
+  fixture reviews, and finishes both original Purpose groups and the original
+  Session using its fixture-local bare remote. It retains machine-readable
+  `<episodeJSON>.result.json` evidence. It never copies a consumer repository,
+  edits native database rows or claims live Human/reviewer acceptance.
+- For an isolated fixture continuation after the baseline repair proposal was
+  accepted and the first grouped Advance failed, set `purposeRepairPhase=finish`
+  with the same episode file and repaired installed command. The test
+  `finish retained accepted purpose repair` requires that same Session to remain
+  exactly at `sync.RepairProposalAdmitted`, with its original work and failed
+  checks retained. It resumes only the common tail beginning with grouped
+  Advance, then obtains fresh affected checks, fixture reviews, both local
+  Purpose commits and the terminal result. It preserves the failed installed
+  qualification and successful prefix without repeating capture, qualification,
+  adoption, repair submission or prior successful checks. Its same
+  `<episodeJSON>.result.json` is created only once and identifies the resumed
+  accepted repair and retained installed failure through qualification metadata;
+  it does not claim to have rerun target or overlap qualification. This phase is
+  fixture-only and performs no direct native datastore mutation.
+- For the one separately authorized normal-completion control, set
+  `purposeRepairPhase=completion`, select a new absent
+  `smworkflow.spec.purposeRepairEpisode` destination, and supply the retained
+  original episode separately through
+  `smworkflow.spec.purposeRepairOriginalEpisode`. The test
+  `complete one isolated current-installed purpose repair control` checks that
+  the new episode and result paths are absent before creating one tiny repository
+  and Session. Its initial host declares Compile, Test and fixed nonempty
+  TestOnly checks for all three slots, selecting the authored
+  `fixture.BaselineSpec` and `fixture.FutureSpec` classes. Shared capture,
+  continuation and completion helpers obtain a genuine baseline Test failure,
+  qualify the scope, adopt once, submit the correction, obtain fresh successful
+  checks including actual selected TestOnly suites, and require both local
+  Purpose commits and Terminal in that same new control Session. Episode and
+  result evidence use CREATE_NEW; there is no automatic replacement or retry.
+  Provenance identifies a current-installed normal-completion control and its
+  initial describe preparation-required result, rather than an old-product 409.
+
+The actual retained old-to-new episode remains nonterminal: its qualification,
+scope adoption, accepted correction, grouped transition and fresh Compile/Test
+successes remain evidence, while subsequent code admission stopped because that
+fixture's initial host lacked a fixed TestOnly selection. The separately selected
+completion control does not alter or replay that episode, replace its logs, or
+claim that the old episode reached Terminal. Its execution result is separate
+evidence from the retained old-to-new qualification.
+
+These specifications describe the required qualification; execution and actual
+results belong to the owning parent workflow.

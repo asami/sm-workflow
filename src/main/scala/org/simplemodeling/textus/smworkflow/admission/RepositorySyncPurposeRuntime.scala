@@ -3,7 +3,7 @@ package org.simplemodeling.textus.smworkflow.admission
 import org.goldenport.Consequence
 import org.goldenport.cncf.processexecution.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
-import org.goldenport.cncf.workspace.WorkspaceId
+import org.goldenport.cncf.workspace.{FileTarget, WorkspaceId, WorkspaceFilePath}
 import org.simplemodeling.textus.smworkflow.value as V
 import RepositorySyncManagedGitObservation as G
 import RepositorySyncNativeProgressStore as N
@@ -23,7 +23,8 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
     value.value.startsWith("sync.Purpose") || (Set("sync.ReviewAccepted", "sync.ReviewRepairRequired", "sync.ReviewDecisionRequired",
       "sync.ReviewRejected", "sync.RepairProposalAdmitted", "sync.RepairDecisionRequired")(value.value) &&
       current.history.reverse.find(entry => entry.currentProgression.exists(p =>
-        Set("sync.PurposeChecked", "sync.PendingMergePrepared")(p.value))).exists(_.currentProgression.contains(ProgressionReference("sync.PurposeChecked"))))
+        Set("sync.PurposeChecked", "sync.PurposeRepairRequired", "sync.PendingMergePrepared")(p.value))).exists(_.currentProgression.exists(p =>
+          Set("sync.PurposeChecked", "sync.PurposeRepairRequired")(p.value))))
   }
 
   def advanceC(store: N.Store, current: InstanceRecord, observed: G.Observed,
@@ -271,22 +272,131 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
         p.attempt == progress.attempt && p.slotCursor == progress.slotCursor))
         .map(d => "-host-" + d.target.frontierRevision).getOrElse("")
 
+  private[admission] def validRepairSnapshot(value: P.RepairSnapshot): Boolean = {
+    def _oid_(value: String) = value != null && value.matches("[0-9a-f]{40}|[0-9a-f]{64}")
+    value != null && value.progress != null && value.actual != null && value.actual.observed != null &&
+      value.actual.mergeHead != null && value.actual.mergeHead.isEmpty && _oid_(value.indexTree) && {
+        val p = value.progress
+        p.request != null && p.request.files != null && p.request.records != null &&
+          p.request.files.forall(file => file != null && RepositorySyncNativeConflictInput.relative(file.path) &&
+            file.worktree != null) && p.request.files.map(_.path).distinct.size == p.request.files.size &&
+          p.plan != null && p.plan.exists(plan => plan != null && plan.decision == "resolved" && plan.groups != null &&
+            p.cursor >= 0 && p.cursor < plan.groups.size && plan.groups.forall(group => group != null &&
+              group.content != null && group.content.forall(content => content != null &&
+                RepositorySyncNativeConflictInput.relative(content.path) && content.text != null &&
+                p.request.files.exists(_.path == content.path)))) && p.attempt >= 0 && p.slotCursor >= 0 &&
+          p.candidate != null && p.candidate.exists(candidate => candidate != null &&
+            Vector(candidate.parent, candidate.index, candidate.commit, candidate.tree, candidate.projectedIndex).forall(_oid_) &&
+            candidate.index == value.indexTree && candidate.changes == p.plan.get.groups(p.cursor).content &&
+            candidate.expected != null && candidate.expected.map(_.path) == candidate.changes.map(_.path) &&
+            candidate.expected.forall(content => p.request.files.exists(file =>
+              file.path == content.path && file.worktree == content.text)) && value.actual.observed.head == candidate.parent) &&
+          value.actual.observed.branch == p.request.branch && value.actual.observed.dirty != null &&
+          !value.actual.observed.dirty.exists(_.unmerged) && p.receipts != null && p.selection != null &&
+          p.selection.exists(selection => selection != null && selection.checks != null && p.receipts.size >= 2 &&
+            p.receipts.drop(1).zip(selection.checks).forall((receipt, check) => receipt != null && receipt.identity == check.identity) &&
+            p.receipts.size - 1 <= selection.checks.size && p.receipts.last.termination == "exited" &&
+            p.receipts.last.exitCode.exists(_ != 0)) && p.commits != null && p.effects != null &&
+          p.reusable != null && p.hostContinuation != null
+      }
+  }
+
+  private[admission] def laterRepairOverlap(progress: P.Progress, paths: Vector[String]): Option[(String, String)] =
+    progress.plan.toVector.flatMap(_.groups.drop(progress.cursor + 1)).flatMap(group =>
+      group.content.filter(content => paths.contains(content.path) &&
+        !progress.plan.get.groups(progress.cursor).content.exists(_.path == content.path))
+        .map(content => content.path -> group.identity)).headOption
+  private[admission] def noLaterRepairOverlapC(progress: P.Progress, paths: Vector[String]): Consequence[Unit] =
+    laterRepairOverlap(progress, paths) match {
+      case Some((path, group)) => N.invalid("Purpose repair scope conflict: path " + path + " is owned by later planned Purpose " + group + "; original work is preserved")
+      case None => Consequence.unit
+    }
+
+  /** Read only: authenticate the actual retained failed receipt and selected
+    * slot, then compare the original repository and every captured worktree
+    * file. This branch deliberately has no pending-merge preconditions. */
+  private[admission] def repairSnapshotC(store: N.Store, failed: N.Stage): Consequence[P.RepairSnapshot] = for {
+    _ <- if (failed.payload.stage == "PurposeRepairRequired" && failed.payload.purposes.nonEmpty)
+      Consequence.unit else N.invalid("Purpose scope correction requires the actual failed Purpose stage")
+    prefix = "native-repository:" + store.identity + ":"
+    _ <- if (failed.record.causation.value.startsWith(prefix)) Consequence.unit else N.invalid("Purpose failure has no native receipt")
+    retained <- store.loadC(failed.record.causation.value.stripPrefix(prefix)).flatMap(_.map(Consequence.success)
+      .getOrElse(N.invalid("Actual failed Purpose receipt is absent")))
+    _ <- if (retained == failed) Consequence.unit else N.invalid("Purpose failure crosses the actual retained progress")
+    progress = failed.payload.purposes.get
+    candidate <- progress.candidate.map(Consequence.success).getOrElse(N.invalid("Failed Purpose candidate is absent"))
+    slot <- store.declaration.purposePolicy.toVector.flatMap(_.slots).lift(progress.slotCursor).map(Consequence.success)
+      .getOrElse(N.invalid("Failed Purpose validation slot is absent"))
+    _ <- candidateWorkspaceC(store, slot, candidate)
+    actual <- G.inspectC(store.core)
+    _ <- store.scopeC(actual.observed)
+    index <- G.indexTreeC(store.core)
+    snapshot = P.RepairSnapshot(progress, actual, index)
+    _ <- if (validRepairSnapshot(snapshot)) Consequence.unit else N.invalid("Failed Purpose original HEAD branch index or candidate relationships have drifted")
+    workspace <- WorkspaceId.parseC("sm-workflow-repository")
+    _ <- progress.request.files.foldLeft(Consequence.unit) { (prior, file) => for {
+      _ <- prior
+      path <- WorkspaceFilePath.parseC(file.path)
+      actual <- WorkflowFileExecution.readTextC(store.core, FileTarget(workspace), path)
+      _ <- if (actual.text == file.worktree) Consequence.unit
+        else N.invalid("Purpose original inventory worktree content drifted: " + file.path)
+    } yield () }
+    after <- G.inspectC(store.core)
+    afterIndex <- G.indexTreeC(store.core)
+    _ <- candidateWorkspaceC(store, slot, candidate)
+    _ <- if (after == actual && afterIndex == index) Consequence.unit else N.invalid("Purpose original repository drifted during observation")
+  } yield snapshot
+
+  /** Pure qualified transition. It preserves the original request records and
+    * all other groups; no general grouping re-admission or effects occur here. */
+  private[admission] def repairedProgressC(progress: P.Progress,
+    input: RepositorySyncNativeMergeRepair.Request, result: RepositorySyncNativeMergeRepair.Result,
+    policy: RepositorySyncNativeConflictInput.Policy): Consequence[P.Progress] = for {
+    _ <- RepositorySyncNativeMergeRepair.admitC(input, result, policy)
+    _ <- if (result.decision == "repaired") Consequence.unit else N.invalid("purpose decision-needed supplies no repair effect")
+    candidate <- progress.candidate.map(Consequence.success).getOrElse(N.invalid("purpose repair candidate is absent"))
+    _ <- if (input.admittedInventory.forall(_.purpose.exists(_.snapshot.progress == progress))) Consequence.unit
+      else N.invalid("Purpose repair input crosses its retained complete progress snapshot")
+    _ <- noLaterRepairOverlapC(progress, input.files.map(_.path))
+    group = progress.plan.get.groups(progress.cursor)
+    replacements = result.replacements.map(value => value.path -> value.text).toMap
+    extras = result.replacements.filterNot(value => group.content.exists(_.path == value.path))
+    _ <- if (extras.isEmpty || input.admittedInventory.exists(scope => extras.forall(value => scope.paths.contains(value.path))))
+      Consequence.unit else N.invalid("Purpose repair extra paths require the exact admitted inventory")
+    content = group.content.map(value => replacements.get(value.path).fold(value)(text => P.Content(value.path, Some(text)))) ++
+      extras.map(value => P.Content(value.path, Some(value.text)))
+    plan = progress.plan.get.copy(groups = progress.plan.get.groups.updated(progress.cursor, group.copy(content = content)))
+    baselines = input.admittedInventory.toVector.flatMap(_.purpose.toVector.flatMap(_.baselines))
+    _ <- if (baselines.forall(file => !progress.request.files.exists(_.path == file.path)) &&
+        extras.forall(value => progress.request.files.exists(_.path == value.path) || baselines.exists(_.path == value.path)))
+      Consequence.unit else N.invalid("Purpose repair additions lack actual original worktree baselines")
+  } yield progress.copy(request = progress.request.copy(files = progress.request.files ++ baselines),
+    plan = Some(plan), attempt = progress.attempt + 1, slotCursor = progress.slotCursor + 1,
+    baselineTree = Some(candidate.tree), candidate = None, receipts = Vector.empty, selection = None,
+    assessment = None, review = None, reusable = Vector.empty)
+
   def repairC(store: N.Store, basis: RepositorySyncNativeMergeRepair.Basis,
     input: RepositorySyncNativeMergeRepair.Request, result: RepositorySyncNativeMergeRepair.Result,
     proposal: InstanceRecord, policy: RepositorySyncNativeConflictInput.Policy): Consequence[N.Stage] = for {
-    _ <- RepositorySyncNativeMergeRepair.admitC(input, result, policy)
     progress <- basis.validated.payload.purposes.map(Consequence.success).getOrElse(N.invalid("purpose repair has no native candidate"))
-    candidate <- progress.candidate.map(Consequence.success).getOrElse(N.invalid("purpose repair candidate is absent"))
-    _ <- if (result.decision == "repaired") Consequence.unit else N.invalid("purpose decision-needed supplies no repair effect")
-    group = progress.plan.get.groups(progress.cursor)
-    replacements = result.replacements.map(value => value.path -> value.text).toMap
-    content = group.content.map(value => replacements.get(value.path).fold(value)(text => P.Content(value.path, Some(text))))
-    plan = progress.plan.get.copy(groups = progress.plan.get.groups.updated(progress.cursor, group.copy(content = content)))
+    _ <- input.admittedInventory match {
+      case None => Consequence.unit
+      case Some(scope) => for {
+        snapshot <- repairSnapshotC(store, basis.validated)
+        _ <- if (scope.purpose.exists(_.snapshot == snapshot)) Consequence.unit else N.invalid("Purpose repair snapshot drifted before retaining the next attempt")
+        workspace <- WorkspaceId.parseC("sm-workflow-repository")
+        _ <- scope.purpose.get.baselines.foldLeft(Consequence.unit) { (prior, file) => for {
+          _ <- prior
+          path <- WorkspaceFilePath.parseC(file.path)
+          actual <- WorkflowFileExecution.readTextC(store.core, FileTarget(workspace), path)
+          _ <- if (actual.text == file.worktree) Consequence.unit
+            else N.invalid("Purpose added baseline drifted before retaining repair: " + file.path)
+        } yield () }
+      } yield ()
+    }
+    repaired <- repairedProgressC(progress, input, result, policy)
     next <- store.saveC("purpose-" + (progress.cursor + 1) + "-repair-" + (progress.attempt + 1) + "-admitted",
-      "purpose-progress", proposal, basis.validated.payload.copy(stage = "PurposeGrouped", purposes = Some(progress.copy(
-        plan = Some(plan), attempt = progress.attempt + 1, slotCursor = progress.slotCursor + 1,
-        baselineTree = Some(candidate.tree), candidate = None, receipts = Vector.empty, selection = None,
-        assessment = None, review = None, reusable = Vector.empty))))
+      "purpose-progress", proposal, basis.validated.payload.copy(stage = "PurposeGrouped", purposes = Some(repaired)))
   } yield next
 
   private def _selection_c(group: P.Group): Consequence[GitSelectionParameters] = for {

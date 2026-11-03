@@ -19,6 +19,8 @@ import RepositorySyncManagedGitObservation as G
 import RepositorySyncNativeMergeRepair as M
 import RepositorySyncNativeMergeRepairContinuation as R
 import RepositorySyncNativeProgressStore as N
+import RepositorySyncPurpose as P
+import RepositorySyncRepairInventory.given
 
 /** Automatic file qualification and separate prior-worker lifecycle direction.
   * Native supersession retains the original issue and its UNKNOWN effects.
@@ -30,6 +32,7 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
   val policy = "sm-workflow.repository-sync-repair-scope-correction.v1"
   val automaticPolicy = "sm-workflow.repository-sync-repair-scope-correction.v2"
   val uncappedPolicy = "sm-workflow.repository-sync-repair-scope-correction.v3"
+  val purposePolicy = "sm-workflow.repository-sync-repair-scope-correction.v4"
   val prepareOperation = "prepareRepositorySyncRepairScopeCorrection"
   val describeOperation = "describeRepositorySyncRepairScopeCorrection"
   val adoptionOperation = "adoptRepositorySyncRepairScopeCorrection"
@@ -43,7 +46,7 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
   val preparationMessage = "Prepare the exact existing file inventory and causal rationale for the retained failed check. " +
     "The runtime qualifies file eligibility before any prior-worker lifecycle direction; no Human file selection or adoption is available yet."
   private def _automatic(target: Target): Boolean = target != null &&
-    (target.correctionPolicy == automaticPolicy || target.correctionPolicy == uncappedPolicy && target.inventory != null && target.inventory.nonEmpty)
+    (target.correctionPolicy == automaticPolicy || Set(uncappedPolicy, purposePolicy)(target.correctionPolicy) && target.inventory != null && target.inventory.nonEmpty)
   def targetChoices(target: Target): Vector[String] =
     if (_automatic(target)) lifecycleChoices
     else if (target != null && target.correctionPolicy == policy) choices else Vector.empty
@@ -64,11 +67,13 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
     failureReference: ContextReference, failureRevision: String, failedCheck: RepositorySyncNativeMergeValidation.Receipt,
     localTip: String, remoteTip: String, candidateTree: String, actual: G.Native,
     indexTree: String, changedPaths: Vector[String], oldAssignedPaths: Vector[String],
-    maximumFiles: Option[Int], correctionPolicy: String, inventory: Option[RepositorySyncRepairInventory.Scope] = None)
+    maximumFiles: Option[Int], correctionPolicy: String, inventory: Option[RepositorySyncRepairInventory.Scope] = None,
+    purpose: Option[P.RepairSnapshot] = None)
   object Target {
     private def _canonical(value: Json): Json = value.mapObject(_.filter { case (_, field) => !field.isNull }
       .mapValues(_canonical)).mapArray(_.map(_canonical))
-    given Encoder[Target] = Encoder.instance[Target](value => _canonical(Json.obj(
+    given Encoder[Target] = Encoder.instance[Target](value => {
+      val wire = _canonical(Json.obj(
       "componentInstance" -> value.componentInstance.asJson,
       "sessionId" -> value.sessionId.asJson,
       "context" -> value.context.asJson,
@@ -94,7 +99,10 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
       "oldAssignedPaths" -> value.oldAssignedPaths.asJson,
       "maximumFiles" -> value.maximumFiles.asJson,
       "correctionPolicy" -> value.correctionPolicy.asJson,
-      "inventory" -> value.inventory.asJson)))
+      "inventory" -> value.inventory.asJson))
+      val withinventory = value.inventory.fold(wire)(scope => wire.mapObject(_.add("inventory", scope.asJson)))
+      value.purpose.fold(withinventory)(snapshot => withinventory.mapObject(_.add("purpose", snapshot.asJson)))
+    })
     private val _raw: Decoder[Target] = Decoder.instance(cursor => for {
       componentinstance <- cursor.get[String]("componentInstance")
       sessionid <- cursor.get[String]("sessionId")
@@ -122,14 +130,18 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
       maximumfiles <- cursor.get[Option[Int]]("maximumFiles")
       correctionpolicy <- cursor.get[String]("correctionPolicy")
       inventory <- cursor.get[Option[RepositorySyncRepairInventory.Scope]]("inventory")
+      purpose <- cursor.get[Option[P.RepairSnapshot]]("purpose")
     } yield Target(componentinstance, sessionid, context, root, endpoint, frontierrevision,
       frontiercause, oldcontinuationid, expectedrevision, entityrevision, sourcerevision,
       candidatereference, candidaterevision, failurereference, failurerevision, failedcheck,
       localtip, remotetip, candidatetree, actual, indextree, changedpaths, oldassignedpaths,
-      maximumfiles, correctionpolicy, inventory))
-    given Decoder[Target] = Decoder.instance(cursor => _raw(cursor).flatMap(value =>
-      if (validTarget(value) && value.asJson == cursor.value) Right(value)
-      else Left(io.circe.DecodingFailure("Repair scope target requires the exact complete canonical contract", cursor.history))))
+      maximumfiles, correctionpolicy, inventory, purpose))
+    given Decoder[Target] = Decoder.instance(cursor => for {
+      restored <- P.restoreRepairJson(cursor.value).left.map(reason => io.circe.DecodingFailure(reason, cursor.history))
+      value <- _raw.decodeJson(restored)
+      result <- if (validTarget(value) && value.asJson == restored) Right(value)
+        else Left(io.circe.DecodingFailure("Repair scope target requires the exact complete canonical contract", cursor.history))
+    } yield result)
   }
   final case class Answer(choice: String, paths: Vector[String], rationale: String,
     priorExecutionEnded: Boolean, acceptOriginalUncertainty: Boolean)
@@ -181,37 +193,50 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
       t.candidateRevision, t.failureRevision).forall(_revision) && _exact(t.frontierCause) &&
     t.oldContinuationId == t.sessionId + ":native-repair:" + t.sourceRevision &&
     t.expectedRevision == t.frontierRevision && t.entityRevision == "1" &&
-    t.candidateRevision.toLong < t.failureRevision.toLong && t.failureRevision.toLong < t.sourceRevision.toLong &&
+    t.purpose != null && t.candidateRevision.toLong < t.failureRevision.toLong &&
+    (if (t.purpose.nonEmpty) t.failureRevision == t.sourceRevision else t.failureRevision.toLong < t.sourceRevision.toLong) &&
     t.sourceRevision.toLong < t.frontierRevision.toLong &&
     _reference(t.candidateReference) && t.candidateReference.identity.startsWith(t.sessionId + ":native-") &&
     t.candidateReference.revision == "1" && _reference(t.failureReference) &&
     t.failureReference.identity.startsWith(t.sessionId + ":native-") && t.failureReference.revision == "1" &&
     t.failedCheck != null && _exact(t.failedCheck.identity) && t.failedCheck.termination == "exited" &&
     t.failedCheck.exitCode.exists(_ != 0) && Vector(t.localTip, t.remoteTip, t.candidateTree, t.indexTree).forall(_oid) &&
-    t.candidateTree == t.indexTree && t.actual != null && t.actual.observed != null &&
-    _oid(t.actual.observed.head) && t.actual.observed.head == t.localTip && t.actual.mergeHead.contains(t.remoteTip) &&
+    t.actual != null && t.actual.observed != null && t.actual.mergeHead != null &&
+    _oid(t.actual.observed.head) && t.actual.observed.head == t.localTip &&
     _oid(t.actual.observed.tree) && t.actual.observed.branch == t.context.localBranch &&
     t.actual.observed.dirty != null && !t.actual.observed.dirty.exists(_.unmerged) &&
     t.actual.observed.dirty.forall(p => RepositorySyncNativeConflictInput.relative(p.path) &&
       p.renamedFrom != null && p.renamedFrom.forall(RepositorySyncNativeConflictInput.relative) &&
       " MADRCU?!T".contains(p.index) && " MADRCU?!T".contains(p.worktree)) &&
-    t.actual.observed.trackingTip.contains(t.remoteTip) && t.actual.observed.counts != null &&
-    t.actual.observed.counts.exists(c => c.localAhead > 0 && c.remoteAhead > 0) &&
-    t.actual.observed.mergeBase != null && t.actual.observed.mergeBase.exists(_oid) &&
+    (if (t.purpose.nonEmpty) t.correctionPolicy == purposePolicy && t.purpose.exists(snapshot =>
+      RepositorySyncPurposeRuntime.validRepairSnapshot(snapshot) && snapshot.actual == t.actual && snapshot.indexTree == t.indexTree &&
+      snapshot.progress.request.root == t.root && snapshot.progress.request.repository == t.context.repositoryIdentity &&
+      snapshot.progress.candidate.exists(candidate => candidate.tree == t.candidateTree && candidate.parent == t.localTip &&
+        candidate.parent == t.remoteTip) && snapshot.progress.receipts.last == t.failedCheck)
+      else t.correctionPolicy != purposePolicy && t.candidateTree == t.indexTree && t.actual.mergeHead.contains(t.remoteTip) &&
+        t.actual.observed.trackingTip.contains(t.remoteTip) && t.actual.observed.counts != null &&
+        t.actual.observed.counts.exists(c => c.localAhead > 0 && c.remoteAhead > 0) &&
+        t.actual.observed.mergeBase != null && t.actual.observed.mergeBase.exists(_oid)) &&
     _paths(t.changedPaths) && _paths(t.oldAssignedPaths) &&
     t.oldAssignedPaths.forall(t.changedPaths.contains) &&
     t.maximumFiles != null && t.inventory != null &&
-    (if (t.correctionPolicy == uncappedPolicy) t.maximumFiles.isEmpty && t.inventory.forall(scope => _valid_inventory(t, scope))
+    (if (Set(uncappedPolicy, purposePolicy)(t.correctionPolicy)) t.maximumFiles.isEmpty && t.inventory.forall(scope => _valid_inventory(t, scope))
       else t.maximumFiles.exists(limit => limit > 0 && limit <= 128 && t.oldAssignedPaths.size <= limit) &&
         (if (t.correctionPolicy == policy) t.inventory.isEmpty && t.changedPaths.exists(p => !t.oldAssignedPaths.contains(p))
           else t.correctionPolicy == automaticPolicy && t.inventory.exists(scope =>
             _valid_inventory(t, scope) && t.maximumFiles.exists(scope.paths.size <= _))))
   private def _valid_inventory(t: Target, scope: RepositorySyncRepairInventory.Scope): Boolean = scope != null &&
-        scope.inventoryPolicy == RepositorySyncRepairInventory.policy && scope.instanceIdentity == t.sessionId &&
+        (if (t.purpose.isEmpty) scope.inventoryPolicy == RepositorySyncRepairInventory.policy && scope.purpose.isEmpty
+          else scope.inventoryPolicy == RepositorySyncRepairInventory.purposePolicy && scope.purpose.exists(value =>
+            value.snapshot == t.purpose.get && RepositorySyncRepairInventory.validPurpose(scope, value,
+              RepositorySyncNativeMergeReview.Request(t.sessionId, scope.validatedRevision, t.localTip, t.remoteTip,
+                t.candidateTree, t.changedPaths, "", "", value.snapshot.progress.selection.get.depth,
+                value.snapshot.progress.selection.get.reason, value.snapshot.progress.selection.get.checks.map(_.identity),
+                value.snapshot.progress.receipts.drop(1))))) && scope.instanceIdentity == t.sessionId &&
         scope.sourceRevision == t.sourceRevision && scope.failureReference == t.failureReference &&
         scope.failureIdentity == t.failedCheck.identity && scope.localTip == t.localTip && scope.remoteTip == t.remoteTip &&
         scope.candidateTree == t.candidateTree && _revision(scope.validatedRevision) &&
-        scope.validatedRevision.toLong < t.sourceRevision.toLong && _paths(scope.paths) &&
+        (if (t.purpose.nonEmpty) scope.validatedRevision == t.failureRevision else scope.validatedRevision.toLong < t.sourceRevision.toLong) && _paths(scope.paths) &&
         scope.rationale != null && scope.rationale.trim.nonEmpty && !scope.rationale.contains('\u0000') &&
         java.nio.charset.StandardCharsets.UTF_8.newEncoder().canEncode(scope.rationale) && scope.additions != null &&
         scope.additions.forall(entry => entry != null && Set("100644", "100755")(entry.mode) && _oid(entry.blob)) &&
@@ -222,7 +247,7 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
   def targetC(value: Record): Consequence[Target] = if (value == null) N.invalid("repair scope target is absent")
     else value.toJsonStringC.flatMap(raw => io.circe.parser.parse(raw).left.map(_.message)
       .flatMap(decodePublicTarget).fold(N.invalid, Consequence.success))
-  def targetRecord(value: Target): Record = GoalPhaseNativeMetadata.record(value.asJson)
+  def targetRecord(value: Target): Record = GoalPhaseNativeMetadata.record(P.repairPublicJson(value.asJson))
   def decodeAnswer(value: Json): Either[String, Answer] = for {
     wire <- Option(value).toRight("Repair scope answer is absent")
     answer <- wire.as[Answer].left.map(_.message)
@@ -283,6 +308,7 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
         _ <- if (saved.revision == entry.revision && target.sessionId == source.store.identity &&
             target.context == source.session.context && target.sourceRevision == source.basis.next.revision.value.toString &&
             target.failureRevision == source.basis.validated.record.revision.value.toString &&
+            target.purpose.map(_.progress) == source.basis.validated.payload.purposes &&
             target.failedCheck == source.basis.input.checks.last && target.candidateTree == source.basis.input.indexTree &&
             target.localTip == source.basis.input.localTip && target.remoteTip == source.basis.input.remoteTip &&
             (if (_automatic(target)) target.changedPaths == source.basis.input.changedPaths
@@ -302,7 +328,7 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
   private def _observe_c(identity: String, port: R.Port, core: ActionCall.Core): Consequence[Observation] = for {
     source <- port.sourceC(identity, core)
     _ <- if (source.session.context.syncMode == "FULL_STATE" && source.basis.validationFailure.nonEmpty &&
-        source.basis.findings.isEmpty && source.basis.validated.payload.purposes.isEmpty &&
+        source.basis.findings.isEmpty &&
         source.session.started.current.lifecycle == Lifecycle.Active) Consequence.unit
       else N.invalid("scope correction requires an active FULL_STATE check-origin repair")
     adapter <- source.session.storage.bindWorkOrderSupersessionC(R.completionOperation, M.inputCodec, checkpointCodec)
@@ -323,9 +349,28 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
         priorReview = source.basis.input.priorReview) == source.basis.input &&
         order.request.completionOperation == R.completionOperation) Consequence.unit
       else N.invalid("original repair issue crosses the retained formal failure")
-    _ <- RepositorySyncNativeMergeValidation.preconditionsC(source.store, source.basis.validated)
-    candidate <- source.store.currentMergeCandidateC(pending.current)
-    candidatereference <- _reference(candidate.pending.record, identity)
+    snapshot <- source.basis.validated.payload.purposes match {
+      case Some(_) => RepositorySyncPurposeRuntime.repairSnapshotC(source.store, source.basis.validated).map(Some(_))
+      case None => RepositorySyncNativeMergeValidation.preconditionsC(source.store, source.basis.validated).map(_ => None)
+    }
+    candidate <- snapshot match {
+      case None => source.store.currentMergeCandidateC(pending.current).map(_.pending)
+      case Some(value) => for {
+        entry <- pending.current.history.reverse.find(entry => entry.revision.value < source.basis.validated.record.revision.value &&
+          entry.currentProgression.contains(ProgressionReference("sync.PurposePrepared")) &&
+          entry.causation.value.startsWith("native-repository:" + identity + ":")).map(Consequence.success)
+          .getOrElse(N.invalid("Actual earlier native Purpose candidate history is absent"))
+        retained <- source.store.loadC(entry.causation.value.stripPrefix("native-repository:" + identity + ":"))
+          .flatMap(_.map(Consequence.success).getOrElse(N.invalid("Actual earlier native Purpose candidate receipt is absent")))
+        _ <- if (retained.record.revision == entry.revision && retained.payload.stage == "PurposePrepared" &&
+            retained.payload.purposes.exists(progress => progress.candidate == value.progress.candidate &&
+              progress.request == value.progress.request && progress.plan == value.progress.plan &&
+              progress.cursor == value.progress.cursor && progress.attempt == value.progress.attempt &&
+              progress.slotCursor == value.progress.slotCursor)) Consequence.unit
+          else N.invalid("Earlier Purpose candidate receipt crosses the actual failed candidate")
+      } yield retained
+    }
+    candidatereference <- _reference(candidate.record, identity)
     failurereference <- _reference(source.basis.validated.record, identity)
     actual <- G.inspectC(core)
     tree <- G.indexTreeC(core)
@@ -334,12 +379,17 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
       source.basis.validated.payload.root, source.store.declaration.target.endpoint,
       pending.current.revision.value.toString, pending.current.causation.value, old,
       order.request.expectedRevision.value, pending.entityRevision.value.toString,
-      source.basis.next.revision.value.toString, candidatereference, candidate.pending.record.revision.value.toString,
+      source.basis.next.revision.value.toString, candidatereference, candidate.record.revision.value.toString,
       failurereference, source.basis.validated.record.revision.value.toString, source.basis.input.checks.last,
       source.basis.input.localTip, source.basis.input.remoteTip, source.basis.input.indexTree,
-      actual, tree, permitted, input.files.map(_.path), None, uncappedPolicy)
+      actual, tree, permitted, input.files.map(_.path), None, if (snapshot.nonEmpty) purposePolicy else uncappedPolicy,
+      purpose = snapshot)
     _ <- if (validTarget(target)) Consequence.unit else N.invalid("repair issue does not bind the current integration candidate")
-    _ <- RepositorySyncNativeMergeValidation.preconditionsC(source.store, source.basis.validated)
+    _ <- snapshot match {
+      case Some(value) => RepositorySyncPurposeRuntime.repairSnapshotC(source.store, source.basis.validated).flatMap(actual =>
+        if (actual == value) Consequence.unit else N.invalid("Purpose scope source drifted during observation"))
+      case None => RepositorySyncNativeMergeValidation.preconditionsC(source.store, source.basis.validated)
+    }
   } yield Observation(source, target, pending.current, pending.entityRevision)
 
   def operations(port: R.Port, installation: Installation): Vector[spec.OperationDefinition] =
@@ -390,7 +440,7 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
     _ <- if (validTarget(target)) Consequence.unit else N.invalid("automatic inventory target is incomplete")
   } yield observed.copy(target = target)
   private def _matching_observation_c(target: Target, port: R.Port, core: ActionCall.Core): Consequence[Observation] =
-    if (target.correctionPolicy == uncappedPolicy && target.inventory.nonEmpty)
+    if (Set(uncappedPolicy, purposePolicy)(target.correctionPolicy) && target.inventory.nonEmpty)
       _prepare_c(target.sessionId, target.inventory.get.paths, target.inventory.get.rationale, port, core)
     else if (target.correctionPolicy == automaticPolicy) for {
       observed <- _prepare_c(target.sessionId, target.inventory.get.paths, target.inventory.get.rationale, port, core)

@@ -1,6 +1,6 @@
 package org.simplemodeling.textus.smworkflow.admission
 
-import io.circe.{Decoder, Encoder, Json}
+import io.circe.{ACursor, Decoder, Encoder, Json}
 import io.circe.generic.auto.*
 import io.circe.syntax.*
 import java.nio.charset.StandardCharsets.UTF_8
@@ -56,6 +56,44 @@ private[smworkflow] object RepositorySyncPurpose {
     assessment: Option[GoalPhaseStepAssessment.Result] = None, commits: Vector[String] = Vector.empty,
     selection: Option[RepositorySyncProgramImpact.Selection] = None, review: Option[org.goldenport.cncf.workflow.ContextReference] = None, reusable: Vector[RepositorySyncNativeMergeValidation.Receipt] = Vector.empty, effects: Vector[Json] = Vector.empty,
     hostContinuation: Option[RepositorySyncFormalFailureContinuation.Direction] = None)
+
+  /** Immutable failed progress and the original repository observation. The
+    * virtual candidate tree deliberately differs from the original index. */
+  final case class RepairSnapshot(progress: Progress, actual: RepositorySyncManagedGitObservation.Native, indexTree: String)
+  object RepairSnapshot {
+    given Encoder[RepairSnapshot] = Encoder.instance(value => Json.obj(
+      "progress" -> repairProgressJson(value.progress),
+      "actual" -> RepositorySyncPurposeContentContinuation.canonical(value.actual.asJson),
+      "indexTree" -> value.indexTree.asJson))
+    private def _raw: Decoder[RepairSnapshot] = io.circe.generic.semiauto.deriveDecoder
+    given Decoder[RepairSnapshot] = Decoder.instance(c => _raw(c).flatMap(value =>
+      if (value.asJson == c.value) Right(value)
+      else Left(io.circe.DecodingFailure("Purpose repair snapshot requires exact canonical progress and repository facts", c.history))))
+  }
+  private[admission] def repairProgressJson(value: Progress): Json = {
+    val wire = RepositorySyncPurposeContentContinuation.canonical(value.asJson).mapObject(
+      _.add("request", RepositorySyncPurposeContentContinuation.requestJson(value.request)).add("effects", value.effects.asJson))
+    value.hostContinuation.fold(wire)(direction => wire.mapObject(_.add("hostContinuation", direction.asJson)))
+  }
+  // Only these root Target paths carry repair progress. Keep the complete
+  // progress opaque across public Record naming conversion, including payloads,
+  // effects and prior host continuations.
+  private val _repair_progress_paths = Vector(Vector("purpose", "progress"),
+    Vector("inventory", "purpose", "snapshot", "progress"))
+  private[admission] def repairPublicJson(value: Json): Json =
+    _repair_progress_paths.foldLeft(value) { (current, path) =>
+      val cursor = path.foldLeft(current.hcursor: ACursor)((nested, field) => nested.downField(field))
+      cursor.focus.filter(_.isObject).fold(current)(progress =>
+        cursor.withFocus(_ => Json.fromString(progress.noSpaces)).top.getOrElse(current))
+    }
+  private[admission] def restoreRepairJson(value: Json): Either[String, Json] =
+    _repair_progress_paths.foldLeft[Either[String, Json]](Right(value)) { (prior, path) => prior.flatMap { current =>
+      val cursor = path.foldLeft(current.hcursor: ACursor)((nested, field) => nested.downField(field))
+      cursor.focus.flatMap(_.asString).fold[Either[String, Json]](Right(current)) { text => for {
+        parsed <- io.circe.parser.parse(text).left.map(_.message)
+        progress <- Either.cond(parsed.isObject, parsed, "Purpose repair progress text must restore an object")
+      } yield cursor.withFocus(_ => progress).top.getOrElse(current) }
+    } }
 
   private final class Codec[A: Encoder: Decoder](val typeIdentity: String) extends WorkflowResultJsonV1.PayloadCodec[A] {
     def encode(value: A): Json = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.repository-purpose.v1"), "payload" -> value.asJson)

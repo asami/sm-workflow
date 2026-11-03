@@ -29,6 +29,19 @@ import RepositorySyncNativeProgressStore as N
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class RepositorySyncNativeMergeRepairContinuationSpec extends AnyWordSpec with GivenWhenThen
     with ThreeWorkflowManagedRepositoryFixture {
+  // Fixture-only explicit selection retains successful cases in qualification.
+  override def run(testName: Option[String], args: org.scalatest.Args): org.scalatest.Status =
+    sys.props.get("smworkflow.spec.mergeRepairOnly").filter(_.nonEmpty) match {
+      case None => super.run(testName, args)
+      case Some("intent-only") =>
+        val selected = testNames.filter(_.endsWith("retain the actual intent-only new check and never replay it or issue a new review"))
+        require(selected.size == 1, "intent-only selection requires exactly one registered test")
+        require(testName.forall(selected.contains), "supplied test name must match the intent-only selection")
+        super.run(selected.headOption, args)
+      case Some(value) =>
+        throw new IllegalArgumentException("unsupported smworkflow.spec.mergeRepairOnly value: " + value)
+    }
+
   private val _replacement = "repaired shared line\n"
 
   private def _repair_mode(root: Path): String =
@@ -547,7 +560,7 @@ final class RepositorySyncNativeMergeRepairContinuationSpec extends AnyWordSpec 
           checkintent.payload.validation.get.receipts.map(_.identity) shouldBe Vector("index-local", "index-remote")
           if (mode == "intent-only") {
             actual.isSuccess shouldBe false
-            actual.toString should include("validation capture is not ordinary text")
+            actual.toString should include("typed SBT observation has invalid identity, capture or contradictory actual facts")
             result shouldBe None
             episode.stage(N.candidateKey(namespace, "validation-intent-2")) should not be empty
           } else {

@@ -6,6 +6,7 @@ import org.goldenport.cncf.workflow.ContextReference
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import SplitPhaseExplicitPartitionFixture.take
 
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -54,6 +55,57 @@ final class RepositorySyncPurposeRuntimeSpec extends AnyWordSpec with Matchers w
       historical.hcursor.downField("hostContinuation").focus shouldBe None
       historical.mapObject(_.add("hostContinuation", io.circe.Json.Null)).as[RepositorySyncPurpose.Progress].isLeft shouldBe true
       original.receipts.last shouldBe target.failed
+    }
+  }
+
+  "ID06 qualified Purpose repair transition" should {
+    "propagate exact additional candidate text and captured baseline while preserving the whole original request and other groups" in {
+      Given("the complete failed Purpose and one qualified unchanged baseline outside its current group")
+      val f = RepositorySyncPurposeRepairScopeFixture
+      val policy = RepositorySyncNativeConflictInput.Policy(f.paths.toSet)
+      val result = RepositorySyncNativeMergeRepair.Result("repaired", "Fixture corrects only the stale baseline expectation",
+        f.input.files.map(file => if (file.path == f.baselinePath) file.copy(text = "corrected actual test") else file))
+      When("the ordinary repair proposal produces the next attempt progress")
+      val next = take(RepositorySyncPurposeRuntime.repairedProgressC(f.progress, f.input, result, policy))
+      Then("the additional test enters this group and its original baseline enters only the request inventory")
+      next.plan.get.groups.head.content shouldBe f.current.content :+ RepositorySyncPurpose.Content(f.baselinePath, Some("corrected actual test"))
+      next.request.files shouldBe f.request.files :+ f.baseline
+      next.request.copy(files = f.request.files) shouldBe f.request
+      next.plan.get.groups.tail shouldBe f.progress.plan.get.groups.tail
+      next.plan.get.excludedPaths shouldBe f.progress.plan.get.excludedPaths
+      (next.cursor, next.attempt, next.slotCursor, next.baselineTree) shouldBe
+        ((f.progress.cursor, f.progress.attempt + 1, f.progress.slotCursor + 1, Some(f.candidate.tree)))
+      next.candidate shouldBe None
+      next.receipts shouldBe Vector.empty
+      next.selection shouldBe None
+      next.commits shouldBe f.progress.commits
+      next.effects shouldBe f.progress.effects
+      f.progress.receipts.last shouldBe f.failed
+      next.asJson.as[RepositorySyncPurpose.Progress] shouldBe Right(next)
+      RepositorySyncNativeMergeRepair.inputCodec.decode(RepositorySyncNativeMergeRepair.inputCodec.encode(f.input)) shouldBe Right(f.input)
+      val stale = f.progress.copy(attempt = f.progress.attempt + 1)
+      RepositorySyncPurposeRuntime.repairedProgressC(stale, f.input, result, policy).isSuccess shouldBe false
+    }
+    "name a newly added path and its later owner before any transition while preserving ordinary shared-path repairs" in {
+      Given("a later planned Purpose owns the proposed extra test and an ordinary current path may already be shared")
+      val f = RepositorySyncPurposeRepairScopeFixture
+      When("scope eligibility examines new and already owned current paths")
+      val conflict = RepositorySyncPurposeRuntime.noLaterRepairOverlapC(f.progress, Vector(f.laterPath))
+      val shared = f.progress.copy(plan = f.progress.plan.map(plan => plan.copy(groups =
+        plan.groups.updated(1, f.later.copy(content = f.later.content :+ f.current.content.head)))))
+      Then("only the newly added later-owned path conflicts and the ordinary repair retains its existing semantics")
+      conflict.isSuccess shouldBe false
+      conflict.toString should include(f.laterPath)
+      conflict.toString should include("future-purpose")
+      RepositorySyncPurposeRuntime.noLaterRepairOverlapC(shared, Vector("value.txt")).isSuccess shouldBe true
+      val ordinary = f.input.copy(files = Vector(RepositorySyncNativeMergeRepair.File("value.txt", "expected")), admittedInventory = None)
+      val replacement = RepositorySyncNativeMergeRepair.Result("repaired", "Correct the existing shared current file",
+        Vector(RepositorySyncNativeMergeRepair.File("value.txt", "ordinary repaired input")))
+      val next = take(RepositorySyncPurposeRuntime.repairedProgressC(shared, ordinary, replacement,
+        RepositorySyncNativeConflictInput.Policy(Set("value.txt"))))
+      next.plan.get.groups(1) shouldBe shared.plan.get.groups(1)
+      next.request shouldBe shared.request
+      next.plan.get.groups.head.content shouldBe Vector(RepositorySyncPurpose.Content("value.txt", Some("ordinary repaired input")))
     }
   }
 }

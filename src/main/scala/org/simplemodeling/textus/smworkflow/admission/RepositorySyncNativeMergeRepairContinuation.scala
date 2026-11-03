@@ -51,7 +51,7 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
           next <- N.completionNextC(source.session.started.current, value.completion.instanceRevision,
             result.resultReference, if (result.result.value.decision == "repaired") "RepairProposalAdmitted" else "RepairDecisionRequired")
           output <- if (result.result.value.decision == "repaired" && source.basis.validated.payload.purposes.nonEmpty) for {
-            adopted <- RepositorySyncPurposeRuntime.repairC(source.store, source.basis, input, result.result.value, next, policy)
+            adopted <- RepositorySyncPurposeRuntime.repairC(source.store, source.basis, input, result.result.value, next, selectedpolicy)
           } yield NativeWorkflowOperationOutput.repositoryWait(identity,
             "Actual native FIX proposal is admitted; the next owning Advance prepares and qualifies its new candidate in the next fixed slot",
             adopted.payload.stage)
@@ -128,7 +128,8 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
 
     private def _current_policy(source: Source, inventory: Option[RepositorySyncRepairInventory.Scope] = None): I.Policy =
       if (declaration.runtimeCleanSync && source.session.context.syncMode == "FULL_STATE" &&
-          source.basis.validationFailure.nonEmpty && source.basis.validated.payload.purposes.isEmpty)
+          source.basis.validationFailure.nonEmpty && (source.basis.validated.payload.purposes.isEmpty ||
+            inventory.orElse(source.correction.flatMap(_.direction.target.inventory)).exists(_.purpose.nonEmpty)))
         policy.copy(semanticPaths = source.basis.input.changedPaths.toSet ++
           inventory.orElse(source.correction.flatMap(_.direction.target.inventory)).toVector.flatMap(_.paths))
       else policy
@@ -139,8 +140,13 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
           priorReview = source.basis.input.priorReview) == source.basis.input &&
           input.admittedInventory == source.correction.flatMap(_.direction.target.inventory) &&
           input.admittedInventory.forall(scope => scope.sourceRevision == source.basis.next.revision.value.toString &&
-            RepositorySyncRepairInventory.valid(scope, source.basis.input, source.basis.validationFailure))) Consequence.unit
+            RepositorySyncRepairInventory.valid(scope, source.basis.input, source.basis.validationFailure) &&
+            scope.purpose.map(_.snapshot.progress) == source.basis.validated.payload.purposes)) Consequence.unit
         else N.invalid("repair input inventory differs from its actual retained automatic qualification")
+      _ <- input.admittedInventory.filter(_.purpose.nonEmpty) match {
+        case Some(scope) => RepositorySyncRepairInventory.capturePurposeC(source, scope).map(_ => ())
+        case None => Consequence.unit
+      }
       selectedpolicy = _current_policy(source)
       _ <- M.admitRequestC(input, selectedpolicy)
     } yield selectedpolicy
@@ -176,15 +182,25 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
       _ <- policy.validateC
       progress = source.basis.validated.payload.purposes.get
       findings = source.basis.findings
-      paths = if (source.basis.validationFailure.isEmpty) findings.flatMap(_.affectedPaths).distinct.sorted
-        else source.basis.input.changedPaths.filter(policy.semanticPaths).distinct.sorted
-      files <- paths.foldLeft(Consequence.success(Vector.empty[M.File]))((prior, path) => for {
-        values <- prior
-        text <- progress.candidate.get.changes.find(_.path == path).flatMap(_.text).map(Consequence.success)
-          .getOrElse(N.invalid("purpose repair requires actual selected text; deleted or unexamined content requires a semantic decision"))
-      } yield values :+ M.File(path, text))
-      input = M.Request(source.basis.input, findings, files, source.basis.validationFailure)
-      _ <- M.admitRequestC(input, policy)
+      scope = inventory.orElse(source.correction.flatMap(_.direction.target.inventory))
+      _ <- if (scope.forall(value => automaticInventory && value.purpose.exists(_.snapshot.progress == progress) &&
+          value.sourceRevision == source.basis.next.revision.value.toString &&
+          RepositorySyncRepairInventory.valid(value, source.basis.input, source.basis.validationFailure))) Consequence.unit
+        else N.invalid("Purpose capture requires the exact qualified failed progress snapshot")
+      selectedpolicy = _current_policy(source, scope)
+      paths = selected.getOrElse(if (source.basis.validationFailure.isEmpty) findings.flatMap(_.affectedPaths).distinct.sorted
+        else source.basis.input.changedPaths.filter(selectedpolicy.semanticPaths).distinct.sorted)
+      _ <- M.admitRequestC(M.Request(source.basis.input, findings, paths.map(M.File(_, "")), source.basis.validationFailure, scope), selectedpolicy)
+      files <- scope match {
+        case Some(value) => RepositorySyncRepairInventory.capturePurposeC(source, value)
+        case None => paths.foldLeft(Consequence.success(Vector.empty[M.File]))((prior, path) => for {
+          values <- prior
+          text <- progress.candidate.get.changes.find(_.path == path).flatMap(_.text).map(Consequence.success)
+            .getOrElse(N.invalid("purpose repair requires actual selected text; deleted or unexamined content requires a semantic decision"))
+        } yield values :+ M.File(path, text))
+      }
+      input = M.Request(source.basis.input, findings, files, source.basis.validationFailure, scope)
+      _ <- M.admitRequestC(input, selectedpolicy)
     } yield input else for {
       _ <- policy.validateC
       findings = source.basis.findings

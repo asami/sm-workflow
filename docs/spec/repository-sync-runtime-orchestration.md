@@ -193,6 +193,37 @@ additional AI are introduced to obtain a display/record. See the
 [S5 handoff](../notes/phase-6.9-s5-delivery-and-handoff.md) for actual observations
 and remaining qualification work.
 
+## Purpose check repair outside the current inventory
+
+The existing repair-scope correction operations also qualify necessary unchanged
+baseline files for a genuine failed selected check on a retained Purpose
+candidate. The distinct v4 correction target and Purpose inventory policy bind
+the actual native failure, earlier prepared candidate, full request and ordered
+plan, original ownership and repository state, and exact available unclaimed
+pending repair WorkOrder. The virtual candidate tree and the dirty original index
+are separate facts. Historical v1-v3 pending-merge contracts remain unchanged.
+
+Qualification reads ordinary existing tracked candidate text through typed Git
+and compares newly added baseline text with the original worktree through the
+typed file API. It validates the fixed clean candidate workspace and original
+HEAD/branch/index and inventory content without checks or writes. A newly added
+path belonging to a later Purpose returns a conflict naming the path and group;
+it does not overwrite or borrow later intended content. Existing shared current
+paths retain their ordinary semantics. No file-count or byte-size Human gate is
+introduced.
+
+Independent prior-worker lifecycle direction and UNKNOWN acceptance use existing
+evidence preparation and atomic native supersession. Separate ordinary Advance
+captures and issues the fixed qualified inventory. Normal repair submission and
+continuation extend only the current group's content and the request's added
+baseline files, preserving every other original field, group, source record,
+dependency, exclusion, counter lineage and receipt. The ordinary next slot uses
+the failed virtual tree as its baseline and obtains fresh affected checks,
+independent review and actual local Purpose commit. Adoption alone grants no
+candidate or validation acceptance. See the
+[failed-check continuation specification](repository-sync-formal-failure-continuation.md#failed-purpose-baseline-repair-inventory)
+for compatibility rules and the separately selected old/new installed fixture.
+
 ## Final publication before completion
 
 When the selected local-publication target declares `beforeSync: true`, native

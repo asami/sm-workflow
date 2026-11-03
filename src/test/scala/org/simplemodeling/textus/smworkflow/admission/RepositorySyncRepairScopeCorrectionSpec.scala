@@ -13,7 +13,72 @@ import org.simplemodeling.textus.smworkflow.preparation.NativeRepositoryRepairSc
 import org.simplemodeling.textus.smworkflow.value as V
 import RepositorySyncRepairScopeCorrection as N
 import RepositorySyncManagedGitObservation as G
+import RepositorySyncPurpose as Purpose
 import SplitPhaseExplicitPartitionFixture.take
+import RepositorySyncRepairInventory.given
+
+/** Authored contracts for pure specifications only, never retained native work
+  * or live lifecycle evidence. The installed fixture supplies those facts. */
+private[admission] object RepositorySyncPurposeRepairScopeFixture {
+  import RepositorySyncPurpose as P
+  import RepositorySyncNativeMergeValidation as C
+  val baselinePath = "src/test/scala/BaselineSpec.scala"
+  val laterPath = "src/test/scala/FutureSpec.scala"
+  val context = RepositorySyncManagedFetch.StartContext("selection", "invocation", "participant", "repository",
+    "main", "origin", "main", "owned-upstream", "FULL_STATE")
+  val checks = Vector(C.Check("compile", 1, WorkflowSbtValidation.Kind.Compile), C.Check("test", 2, WorkflowSbtValidation.Kind.Test))
+  val failed = C.Receipt("test", "exited", Some(1), "stale baseline expectation failed", "")
+  val request = P.Request("repository", "/specification/repository", "main", "a" * 40, "b" * 40,
+    Vector(P.File("value.txt", " ", "M", Some("initial"), Some("initial"), Some("expected"), None),
+      P.File(laterPath, " ", "M", Some("old future test"), Some("old future test"), Some("future test"), None),
+      P.File("docs/future.md", " ", "M", Some("old document"), Some("old document"), Some("future document"), None)),
+    Vector(P.SourceRecord(P.Source("Journal", "original-record", "1"), "observed", Json.obj("optionalFact" -> Json.Null))))
+  val current = P.Group("current-purpose", "Correct product input", "fix: correct product input", Vector.empty,
+    Vector(P.Content("value.txt", Some("expected"))), Vector.empty, "Actual current purpose")
+  val later = P.Group("future-purpose", "Preserve future edits", "test: preserve future edits", Vector("current-purpose"),
+    Vector(P.Content(laterPath, Some("future test")), P.Content("docs/future.md", Some("future document"))), Vector.empty, "Independent later work")
+  val candidate = P.Candidate("a" * 40, "b" * 40, "c" * 40, "d" * 40, "e" * 40,
+    current.content, Vector(P.Content("value.txt", Some("expected"))), current.message)
+  val progress = P.Progress(request, Some(P.Result("resolved", "Ordered actual purposes", Vector(current, later), Vector.empty)),
+    candidate = Some(candidate), receipts = Vector(C.Receipt("index-local", "exited", Some(0), "", ""),
+      C.Receipt("compile", "exited", Some(0), "compiled", ""), failed),
+    selection = Some(RepositorySyncProgramImpact.Selection("FULL", "Actual product checks", checks, Vector.empty)),
+    commits = Vector("f" * 40), effects = Vector(Json.obj("optionalEffect" -> Json.Null)))
+  val actual = G.Native(G.Observed("main", "a" * 40, "9" * 40,
+    request.files.map(file => G.DirtyPath(' ', 'M', file.path, None)), Some("a" * 40), Some(G.Counts(0, 0)), Some("a" * 40)), None)
+  val snapshot = P.RepairSnapshot(progress, actual, "b" * 40)
+  val paths = Vector(baselinePath, "value.txt")
+  val entries = paths.map(path => RepositorySyncRepairInventory.Entry(path, "100644", "8" * 40))
+  val baseline = P.File(baselinePath, " ", " ", Some("old test"), Some("old test"), Some("old test"), None)
+  val scope = RepositorySyncRepairInventory.Scope(RepositorySyncRepairInventory.purposePolicy, "session", "10", "10",
+    ContextReference("session:native-purpose-1-check-1-result", "1"), "test", candidate.parent, candidate.parent,
+    candidate.tree, paths, "The genuine failed check requires this unchanged baseline correction",
+    entries.take(1), Some(RepositorySyncRepairInventory.Purpose(snapshot, entries, Vector(baseline))))
+  val review = RepositorySyncNativeMergeReview.Request("session", "10", candidate.parent, candidate.parent, candidate.tree,
+    Vector("value.txt"), "actual diff", "actual diff", "FULL", "Actual product checks", checks.map(_.identity), progress.receipts.drop(1))
+  val input = RepositorySyncNativeMergeRepair.Request(review, Vector.empty,
+    Vector(RepositorySyncNativeMergeRepair.File(baselinePath, "old test"), RepositorySyncNativeMergeRepair.File("value.txt", "expected")),
+    Some("test"), Some(scope))
+  val target = N.Target("component", "session", context, request.root, "/specification/upstream.git",
+    "11", "native-repair-issued:session", "session:native-repair:10", "11", "1", "10",
+    ContextReference("session:native-purpose-1-prepared", "1"), "7", scope.failureReference, "10", failed,
+    candidate.parent, candidate.parent, candidate.tree, actual, snapshot.indexTree,
+    review.changedPaths, Vector("value.txt"), None, N.purposePolicy, Some(scope), Some(snapshot))
+  val opaqueProcessPlans = Vector(Json.fromString("journal prose"),
+    Json.obj("arbitrary_snake_case" -> Json.fromString("original fact"), "arbitrary.dotted.key" -> Json.Null),
+    Json.fromString("{\"snake_case\":\"still text\",\"dotted.key\":null}"), Json.Null)
+  val hostDirection = RepositorySyncFormalFailureContinuation.Direction(
+    RepositorySyncFormalFailureContinuationFixture.purpose, RepositorySyncFormalFailureContinuation.choices.head,
+    "Fixture-owned prior host correction", "participant", ContextReference("fixture-prior-host-direction", "1"), false, false)
+  val opaqueProgress = progress.copy(request = request.copy(records = request.records ++ opaqueProcessPlans.zipWithIndex.map {
+    case (value, ordinal) => P.SourceRecord(P.Source("Journal", "opaque-record-" + ordinal, "1"), "observed",
+      Json.obj("processPlan" -> value, "purpose" -> Json.obj("progress" -> Json.fromString("journal prose"))))
+  }), effects = progress.effects ++ opaqueProcessPlans.map(value => Json.obj("processPlan" -> value)),
+    hostContinuation = Some(hostDirection))
+  val opaqueSnapshot = snapshot.copy(progress = opaqueProgress)
+  val opaqueScope = scope.copy(purpose = scope.purpose.map(_.copy(snapshot = opaqueSnapshot)))
+  val opaqueTarget = target.copy(purpose = Some(opaqueSnapshot), inventory = Some(opaqueScope))
+}
 
 /** Pure supplied contracts only; these fixtures are never live Human evidence,
   * issued native work, execution observations or admission certificates.
@@ -236,6 +301,8 @@ final class RepositorySyncRepairScopeCorrectionSpec extends AnyWordSpec with Mat
       Then("both stages preserve every path without a count field and all noncanonical cross-version shapes refuse")
       decoded shouldBe Right(target)
       readonly shouldBe Right(unprepared)
+      RepositorySyncPurpose.repairPublicJson(wire) shouldBe wire
+      RepositorySyncPurpose.restoreRepairJson(wire) shouldBe Right(wire)
       target.oldAssignedPaths.size shouldBe 251
       target.inventory.get.paths shouldBe paths
       wire.hcursor.downField("maximumFiles").focus shouldBe None
@@ -306,6 +373,10 @@ final class RepositorySyncRepairScopeCorrectionSpec extends AnyWordSpec with Mat
         "participant", _reference, true, true)
       Then("legacy maximumFiles remains present and neither old assignment nor old inventory gains the v3 no-cap meaning")
       decoded shouldBe Vector(Right(legacy), Right(automatic))
+      Vector(legacy, automatic).foreach { value =>
+        RepositorySyncPurpose.repairPublicJson(value.asJson) shouldBe value.asJson
+        RepositorySyncPurpose.restoreRepairJson(value.asJson) shouldBe Right(value.asJson)
+      }
       legacy.asJson.hcursor.get[Int]("maximumFiles").toOption shouldBe Some(2)
       automatic.asJson.hcursor.get[Int]("maximumFiles").toOption shouldBe Some(2)
       refused.foreach(_.isLeft shouldBe true)
@@ -329,6 +400,113 @@ final class RepositorySyncRepairScopeCorrectionSpec extends AnyWordSpec with Mat
       identities shouldBe Vector(original, later)
       N.budgetIdentity(original + ":scope:013") shouldBe original + ":scope:013"
       N.budgetIdentity(original + ":scope:13:other") shouldBe original + ":scope:13:other"
+    }
+  }
+
+  "ID06 failed Purpose repair inventory" should {
+    "preserve arbitrary processPlan facts and prior typed host progress through the two public progress paths" in {
+      Given("a valid v4 target with opaque Journal payloads effects and a prior typed host direction containing older Purpose progress")
+      val f = RepositorySyncPurposeRepairScopeFixture
+      val target = f.opaqueTarget
+      val wire = target.asJson
+      val progress = Purpose.repairProgressJson(f.opaqueProgress)
+      When("canonical target and public Record transports encode and restore the complete repair progress")
+      val projected = Purpose.repairPublicJson(wire)
+      val restored = Purpose.restoreRepairJson(projected)
+      val decoded = N.decodeTarget(wire)
+      val publictarget = take(N.targetC(N.targetRecord(target)))
+      Then("only the two exact progress objects become opaque strings and every original fact and typed host plan survives")
+      decoded shouldBe Right(target)
+      N.decodeTarget(projected) shouldBe Right(target)
+      publictarget shouldBe target
+      wire.hcursor.downField("purpose").downField("progress").focus shouldBe Some(progress)
+      wire.hcursor.downField("inventory").downField("purpose").downField("snapshot").downField("progress").focus shouldBe Some(progress)
+      projected.hcursor.downField("purpose").get[String]("progress").toOption shouldBe Some(progress.noSpaces)
+      projected.hcursor.downField("inventory").downField("purpose").downField("snapshot").get[String]("progress").toOption shouldBe Some(progress.noSpaces)
+      projected.hcursor.downField("purpose").focus shouldBe
+        Some(f.opaqueSnapshot.asJson.mapObject(_.add("progress", Json.fromString(progress.noSpaces))))
+      projected.hcursor.downField("inventory").downField("purpose").downField("snapshot").focus shouldBe
+        Some(f.opaqueSnapshot.asJson.mapObject(_.add("progress", Json.fromString(progress.noSpaces))))
+      projected.mapObject(_.remove("purpose").remove("inventory")) shouldBe wire.mapObject(_.remove("purpose").remove("inventory"))
+      restored shouldBe Right(wire)
+      Purpose.restoreRepairJson(wire) shouldBe Right(wire)
+      val retained = publictarget.purpose.get.progress
+      retained.request.records shouldBe f.opaqueProgress.request.records
+      retained.request.records.tail.map(_.payload.hcursor.downField("processPlan").focus.get) shouldBe f.opaqueProcessPlans
+      retained.effects shouldBe f.opaqueProgress.effects
+      retained.effects.tail.map(_.hcursor.downField("processPlan").focus.get) shouldBe f.opaqueProcessPlans
+      retained.hostContinuation shouldBe Some(f.hostDirection)
+      retained.hostContinuation.get.target.processPlan shouldBe f.hostDirection.target.processPlan
+      retained.hostContinuation.get.target.purpose shouldBe f.hostDirection.target.purpose
+      publictarget.inventory.get.purpose.get.snapshot.progress shouldBe retained
+      Purpose.repairPublicJson(_target.asJson) shouldBe _target.asJson
+      Purpose.restoreRepairJson(_target.asJson) shouldBe Right(_target.asJson)
+    }
+    "refuse malformed progress text incomplete objects and nonobjects at either typed public progress path" in {
+      Given("a valid projected v4 target whose opaque payload strings must never be interpreted as host settings")
+      val f = RepositorySyncPurposeRepairScopeFixture
+      val projected = Purpose.repairPublicJson(f.opaqueTarget.asJson)
+      val badprogress = Vector(Json.fromString("journal prose"), Json.fromString("{"), Json.fromString("null"),
+        Json.fromString("[]"), Json.fromString("\"still text\""), Json.fromString("{}"), Json.obj(),
+        Json.obj("request" -> Json.Null), Json.Null, Json.arr(), Json.True, Json.fromInt(1))
+      val malformed = badprogress.flatMap(progress => Vector(
+        projected.hcursor.downField("purpose").downField("progress").withFocus(_ => progress).top.get,
+        projected.hcursor.downField("inventory").downField("purpose").downField("snapshot").downField("progress")
+          .withFocus(_ => progress).top.get)) ++ Vector(
+        projected.hcursor.downField("purpose").withFocus(_.mapObject(_.remove("progress"))).top.get,
+        projected.hcursor.downField("inventory").downField("purpose").downField("snapshot")
+          .withFocus(_.mapObject(_.remove("progress"))).top.get)
+      When("strict target decoding restores only complete typed progress objects at the two exact paths")
+      val refused = malformed.map(N.decodeTarget)
+      val unchanged = N.decodeTarget(projected)
+      Then("every malformed typed progress refuses while the same strings inside opaque original facts remain exact")
+      refused.foreach(_.isLeft shouldBe true)
+      unchanged shouldBe Right(f.opaqueTarget)
+      Purpose.restoreRepairJson(projected) shouldBe Right(f.opaqueTarget.asJson)
+    }
+    "bind full retained progress and a virtual candidate independently of the dirty root index" in {
+      Given("a failed virtual candidate, complete ordered ownership and an unchanged baseline file")
+      val f = RepositorySyncPurposeRepairScopeFixture
+      val wire = f.target.asJson
+      When("v4 target scope and UNKNOWN checkpoint are encoded and restored")
+      val direction = N.Direction(f.target, f.paths, N.lifecycleChoices.head, "Fixture-owned prior worker ended; accept UNKNOWN",
+        "participant", _reference, true, true)
+      val checkpoint = N.Checkpoint(direction, "UNKNOWN")
+      Then("all original records effects receipts and future content survive without applying merge predicates")
+      N.decodeTarget(wire) shouldBe Right(f.target)
+      f.target.candidateTree should not be f.target.indexTree
+      RepositorySyncRepairInventory.valid(f.scope, f.review, Some("test")) shouldBe true
+      take(N.targetC(N.targetRecord(f.target))) shouldBe f.target
+      N.checkpointCodec.decode(N.checkpointCodec.encode(checkpoint)) shouldBe Right(checkpoint)
+      f.target.purpose.get.progress shouldBe f.progress
+      f.target.purpose.get.progress.request.records.head.payload.hcursor.downField("optionalFact").focus shouldBe Some(Json.Null)
+      N.targetChoices(f.target) shouldBe N.lifecycleChoices
+      N.decodeTarget(_target.asJson) shouldBe Right(_target)
+      _target.asJson.hcursor.downField("purpose").focus shouldBe None
+    }
+    "refuse null unknown foreign unsafe candidate and full ownership drift without weakening historical policy" in {
+      Given("the exact Purpose target and qualified candidate blob bindings")
+      val f = RepositorySyncPurposeRepairScopeFixture
+      val wire = f.target.asJson
+      val changed = f.snapshot.copy(progress = f.progress.copy(plan = f.progress.plan.map(plan =>
+        plan.copy(groups = plan.groups.updated(1, f.later.copy(message = "foreign ownership"))))))
+      val wrong = Vector(f.target.copy(sessionId = "foreign"), f.target.copy(indexTree = "7" * 40),
+        f.target.copy(candidateTree = "7" * 40), f.target.copy(purpose = None),
+        f.target.copy(purpose = Some(changed)), f.target.copy(correctionPolicy = N.uncappedPolicy),
+        f.target.copy(actual = f.actual.copy(mergeHead = Some("a" * 40))),
+        f.target.copy(inventory = Some(f.scope.copy(paths = Vector("../outside")))),
+        f.target.copy(inventory = Some(f.scope.copy(inventoryPolicy = RepositorySyncRepairInventory.policy))),
+        f.target.copy(inventory = Some(f.scope.copy(purpose = Some(f.scope.purpose.get.copy(files = f.entries.reverse))))))
+      val malformed = Vector(wire.mapObject(_.add("purpose", Json.Null)), wire.mapObject(_.add("unknownPurpose", Json.True)),
+        wire.mapObject(_.add("purpose", f.snapshot.asJson.mapObject(_.add("unknown", Json.True)))),
+        wire.mapObject(_.add("purpose", f.snapshot.asJson.mapObject(_.remove("progress")))),
+        f.scope.asJson.mapObject(_.add("purpose", Json.Null)))
+      When("the exact target and inventory decoders inspect each crossed contract")
+      val refused = wrong.map(value => N.decodeTarget(value.asJson)) ++ malformed.take(4).map(N.decodeTarget)
+      Then("every crossed target and explicit optional null is rejected")
+      refused.foreach(_.isLeft shouldBe true)
+      malformed.last.as[RepositorySyncRepairInventory.Scope].isLeft shouldBe true
+      N.decodeTarget(_target.copy(purpose = Some(f.snapshot)).asJson).isLeft shouldBe true
     }
   }
 }

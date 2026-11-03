@@ -14,7 +14,7 @@ versions:
     channel: snapshot
     status: active
     component: org.simplemodeling.textus.SmWorkflow
-    publishedAt: 2026-11-03T23:29:58.31466+09:00
+    publishedAt: 2026-11-04T04:15:47.733608+09:00
     file: repository/car/org/simplemodeling/textus/textus-sm-workflow/0.1.0-SNAPSHOT/textus-sm-workflow-0.1.0-SNAPSHOT.car
     runtime:
       cncf:
