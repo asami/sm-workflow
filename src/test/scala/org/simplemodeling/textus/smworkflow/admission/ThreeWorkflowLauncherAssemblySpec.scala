@@ -20,7 +20,8 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /**
  * @since   Oct.  6, 2026
- * @version Oct. 28, 2026
+ *  version Oct. 28, 2026
+ * @version Nov.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -134,6 +135,25 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
       ThreeWorkflowLauncherAssembly.publishedMcpOperations.subsetOf(declared) shouldBe true
       ThreeWorkflowLauncherAssembly.publishedMcpOperations should contain("RepositorySyncService.submitNativeMergeReview")
       ThreeWorkflowLauncherAssembly.publishedMcpOperations should not contain "RepositorySyncService.submitMergeReviewResult"
+    }
+
+    "retain RepositorySync validation continuation in standard deferred declarations" in {
+      Given("the generated RepositorySync validation continuation declarations")
+      val generated = SmWorkflowComponent.RepositorySyncServiceService.operations.operations.toVector
+        .map(operation => operation.name -> operation).toMap
+      When("the normal launcher selects its standard deferred declarations")
+      val deferred = ThreeWorkflowLauncherAssembly.deferredDeclarations
+        .find(_.name == "RepositorySyncService").get.operations.operations.toVector
+        .map(operation => operation.name -> operation).toMap
+      Then("both operations retain their original sessionId and structured input specifications")
+      val describe = deferred(RepositorySyncValidationContinuation.describeOperation)
+      val adopt = deferred(RepositorySyncValidationContinuation.adoptionOperation)
+      describe.specification.request.parameters.map(_.name) shouldBe List("sessionId")
+      adopt.specification.request.parameters.map(_.name) shouldBe List("input")
+      Vector(describe, adopt).foreach { operation =>
+        operation.specification.request shouldBe generated(operation.name).specification.request
+        operation.specification.response shouldBe generated(operation.name).specification.response
+      }
     }
 
     "bind generated passive preparation signatures without adding semantic MCP publication" in {

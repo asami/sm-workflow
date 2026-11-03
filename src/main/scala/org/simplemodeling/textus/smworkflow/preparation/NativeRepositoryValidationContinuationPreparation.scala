@@ -19,15 +19,15 @@ object NativeRepositoryValidationContinuationPreparation {
     answer: V.RepositorySyncValidationContinuationAnswer, reference: V.WorkflowArtifactReference,
     execution: V.WorkflowExecutionEvidence, participant: String, issuer: String,
     occurredAt: Instant): Consequence[Prepared] = for {
-    _ <- if (description != null && description.outcome == "adoption-required" && description.choices == N.choices &&
+    _ <- if (description != null && description.outcome == "adoption-required" &&
         description.adoptionOperation == N.adoptionOperation && answer != null && reference != null &&
         execution != null && execution.workerIdentity != null && execution.workerIdentity.contains(participant) && _exact(participant) &&
         _exact(issuer) && occurredAt != null) Consequence.unit
       else Consequence.stateConflict("Repository validation continuation preparation requires the actual description, answer, existing reference, matching worker, issuer and time")
-    target <- N.targetC(description.target)
-    _ <- if (description.sessionId == target.sessionId) Consequence.unit
+    target <- N.anyTargetC(description.target)
+    _ <- if (description.sessionId == target.sessionId && description.choices == target.choices) Consequence.unit
       else Consequence.stateConflict("Repository validation continuation preparation crosses the described Session")
-    binding <- N.bindingC(description.componentInstance, target, answer.choice, answer.rationale, participant,
+    binding <- N.bindingAnyC(description.componentInstance, target, answer.choice, answer.rationale, participant,
       ContextReference(reference.identity, reference.revision), answer.priorExecutionEnded, answer.acceptOriginalUncertainty)
     purpose = NativeExternalEvidence.Purpose.RepositoryValidationContinuation
     identity = ThreeWorkflowExternalEvidencePorts.key(reference.identity, reference.revision)

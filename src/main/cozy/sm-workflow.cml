@@ -1193,6 +1193,8 @@ OperationResult
 
 - input-kind :: COMMAND
 
+The target continuationPolicy selects the exact answer contract. V1 retains AuthorizeNewValidation, AdoptCurrentFullState and Defer; an adopting v1 answer requires priorExecutionEnded=true and acceptOriginalUncertainty=true. For sm-workflow.repository-sync-required-lint-continuation.v2 the choices are AuthorizeMissingRequiredLint and Defer, and both booleans must be false: these fields mean not applicable because the original validation actually succeeded. No UNKNOWN assertion or invocation-termination attestation is created by v2.
+
 ### ATTRIBUTE
 
 | name | type | multiplicity |
@@ -5174,6 +5176,8 @@ subject-type = RepositorySyncHumanConflictRequest
 
 ##### ValidationContinuationAdmitted
 
+##### RequiredLintContinuationAdmitted
+
 ##### IntegrationValidated
 
 ##### PendingMergePrepared
@@ -5355,6 +5359,11 @@ when = sync.IntegrationValidated, conflict.Retained, nativeReview.Retained, nati
 
 state = ValidationContinuationAdmitted
 when = sync.ValidationContinuationAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### required-lint-continuation-admitted
+
+state = RequiredLintContinuationAdmitted
+when = sync.RequiredLintContinuationAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### merge-conflicted
 
@@ -5888,6 +5897,13 @@ on = native-commit-prepared
 to = NativePushPreparing
 on = native-push-prepared
 
+#### RequiredLintContinuationAdmitted
+
+##### TRANSITION
+
+to = PendingMergePrepared
+on = native-required-lint-pending-prepared
+
 #### PendingMergePrepared
 
 ##### TRANSITION
@@ -5968,6 +5984,11 @@ on = human-conflict-cancelled
 #### Converged
 
 #### MergeValidated
+
+##### TRANSITION
+
+to = RequiredLintContinuationAdmitted
+on = native-required-lint-continuation-admitted
 
 ##### TRANSITION
 
@@ -7873,6 +7894,10 @@ RepositorySyncAdvanceResult
 
 Observe the exact active unsuspended nonmerge IntegrationValidationChecking resultless intent under equal, local-ahead or fast-forward integration. Bind current Session revision/causation, original root/branch/remote/endpoint and FULL_STATE scope, selected checks/policy, actual candidate and intent references/revisions, successful receipt prefix, HEAD/tree/tracking/index and complete dirty paths including index/worktree and rename codes. Return AuthorizeNewValidation, AdoptCurrentFullState and Defer plus the separate ordinary Advance route. Refuse merge/unmerged state, changed HEAD/tracking, known failure results, checkpoint/materialization interruption, later review/Human/mutation and completed/cancelled Session with the existing owner route. No storage mutation or continuation adoption follows description.
 
+Explicit state dispatch also supports sm-workflow.repository-sync-required-lint-continuation.v2 for an active unsuspended genuine MergeValidated frontier whose original successful ordered checks omitted required lint. Return AuthorizeMissingRequiredLint and Defer. The compact strict target binds Session/Start principal, Component, repository and tracking scope, actual current pending source namespace/reference/revision (including repair-N), MergeValidated reference/revision, original selection and each actual intent/result reference/revision with terminal-success facts, immutable merge parents/index tree, current observation and actual current expanded fixed host policy. Exactly one FixCheck may be appended; the old identity/ordinal/kind/order and candidate inputs remain. Raw historical stdout/stderr stays in its original native receipts. No later review, commit, convergence or uncertain invocation is eligible. Invoke description with --sessionId; adoption uses structured --input.
+
+For a genuinely new Scala pending merge candidate, actual typed parent/index PendingPaths and current impact-selected fixed checks must establish an applicable FixCheck before the first SBT effect. Missing lint selection refuses before Compile/Test; neither document-path classification nor an unselected extra host check waives it. Existing completed old validation stays available for the explicitly adopted supplement. Current CNCF permission remains an actual typed UoW decision and is never asserted by description or adoption.
+
 ##### TYPE
 
 COMMAND
@@ -7986,6 +8011,8 @@ RepositorySyncRepairScopeCorrectionAdoptionResult
 ##### DESCRIPTION
 
 Admit only the complete exact target, typed choice/rationale and existing direction artifact/execution under dedicated independent repository-sync-validation-continuation evidence. The trusted host must externally verify original invocation terminal or not-started lifecycle before provisioning priorExecutionEnded=true and acceptOriginalUncertainty=true; passive preparation never proves termination or supplies consent. Preserve the original UNKNOWN intent and all historical results. AuthorizeNewValidation requires the unchanged clean candidate and reuses only its validated successful prefix in a fresh namespace. AdoptCurrentFullState explicitly covers all described staged and unstaged FULL_STATE paths, invalidates old check scope and allows mixed staging only there. It authorizes current selected path contents at normal staging time, not an immutable content seal or byte-identical Human review. Additional/removed paths, status/index/HEAD/tracking drift refuse. Append only one managed ValidationContinuationAdmitted transition. Defer writes nothing; stale/duplicate direction refuses without effects. Separate ordinary Advance preserves a fresh checkpoint when needed and runs unfinished checks and normal convergence under current grants. Fetch and the old checkpoint are never repeated. Every new resultless invocation requires fresh public adoption and independent terminal evidence. This bounded contract does not recover arbitrary merge, commit, push or fetch interruptions.
+
+The explicit v2 required-lint branch binds the same independent evidence purpose to the complete actual target, AuthorizeMissingRequiredLint choice, rationale, participant, existing reference and false/false not-applicable booleans. It authenticates original successful selection and receipt lineage through native readers and re-observes after evidence admission before managed CAS. Adoption appends only RequiredLintContinuationAdmitted via native-required-lint-continuation-admitted. Separate ordinary Advance creates PendingMergePrepared via native-required-lint-pending-prepared in the namespace required-lint- followed by the actual adoption target frontier revision, without Git source changes. Old successful receipts seed the verified ordered prefix without new execution rows; only appended FixCheck uses normal fixed CNCF SBT/UoW and current permission. Failure follows existing check-origin repair; a resultless or UNKNOWN new lint remains non-replayable. Later repaired candidates select their own checks without inheriting this seed. V1 codecs and historical rows remain unchanged; malformed or unknown v2 never falls back to v1. No whole-body seal, permission grant, successful-check replay or accepted-result resubmission is implied.
 
 ##### TYPE
 
@@ -10853,6 +10880,8 @@ GoalPhase kind repair-policy-adoption requires participant, the actual GoalPhase
 GoalPhase kind source-history-normalization requires participant, the actual GoalPhaseSourceHistoryNormalizationDescriptionResult and GoalPhaseSourceHistoryNormalizationAnswer, matching execution worker, actual existing policy-direction artifact reference, issuer and time. Bind the complete strict target and answer including priorExecutionEnded under the dedicated goal-phase-source-history-normalization purpose. AdoptSameAuthorityNormalization requires priorExecutionEnded=true independently attested by the trusted host from actual terminal evidence. Passive preparation verifies supplied typed data only; it does not prove termination, invent consent, answer the old Human, provision storage, adopt policy or Advance. No old source-history-recovery purpose or generic authorization fallback is admitted.
 
 RepositorySync kind validation-continuation requires participant, the actual RepositorySyncValidationContinuationDescriptionResult and strict RepositorySyncValidationContinuationAnswer, matching execution worker, existing direction artifact reference, issuer and time. Bind every target/answer field under dedicated repository-sync-validation-continuation purpose. An adopting answer requires independently host-attested priorExecutionEnded=true and acceptOriginalUncertainty=true. The trusted host must verify actual terminal or not-started lifecycle externally before provisioning; live or unknown termination refuses. Passive preparation only encodes supplied facts: it cannot observe termination, manufacture consent, issue/provision evidence, adopt or execute. The old UNKNOWN effects remain unknown.
+
+For the explicit required-lint-continuation.v2 discriminator, preparation selects the actual description choices AuthorizeMissingRequiredLint/Defer and requires false/false not-applicable booleans. It binds original native receipt references and compact successful facts without copying their logs; it never asserts a successful old invocation was UNKNOWN. All target/answer bindings use the existing repository-sync-validation-continuation purpose and Component/principal scope. Unknown or malformed discriminators refuse rather than falling back to v1.
 
 Dedicated family RepositorySyncRepairScopeCorrection and kind adoption require participant, the actual RepositorySyncRepairScopeCorrectionDescriptionResult and strict RepositorySyncRepairScopeCorrectionAnswer, matching execution worker, existing direction artifact reference, issuer and time. Policy v2 ContinueAfterPriorWorkerEndedAcceptingUnknown carries empty answer paths and only actual lifecycle assertions; runtime-qualified file inventory belongs to the prepared target and requires no Human file selection. Legacy policy v1 retains its explicit sorted selected-path answer. Bind the complete versioned target and answer under dedicated repository-sync-repair-scope-correction purpose. Adoption requires actual Human assertions priorExecutionEnded=true and acceptOriginalUncertainty=true: the original semantic worker stopped or ended while external proposal effects remain UNKNOWN. Preparation only encodes those externally supplied facts and never observes termination, manufactures consent, provisions evidence, supersedes work or executes a source/Git effect.
 

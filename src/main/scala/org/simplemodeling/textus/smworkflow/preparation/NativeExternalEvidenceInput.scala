@@ -49,7 +49,7 @@ private[smworkflow] object NativeExternalEvidenceInput {
         readText(options("request")).flatMap { text => for {
           json <- io.circe.parser.parse(text).fold(error => _invalid(error.message), Consequence.success)
           target <- json.hcursor.get[io.circe.Json]("target").fold(error => _invalid(error.message), Consequence.success)
-          _ <- org.simplemodeling.textus.smworkflow.admission.RepositorySyncValidationContinuation.decodePublicTarget(target)
+          _ <- org.simplemodeling.textus.smworkflow.admission.RepositorySyncValidationContinuation.decodePublicAnyTarget(target)
             .fold(_invalid(_), _ => Consequence.unit)
           record <- new org.goldenport.record.io.RecordDecoder().json(text)
         } yield record }
@@ -70,7 +70,11 @@ private[smworkflow] object NativeExternalEvidenceInput {
       result <- if (options("family") == "RepositorySync" && options("kind") == "validation-continuation")
         readText(options("result")).flatMap { text => for {
           json <- io.circe.parser.parse(text).fold(error => _invalid(error.message), Consequence.success)
-          _ <- org.simplemodeling.textus.smworkflow.admission.RepositorySyncValidationContinuation.decodePublicAnswer(json)
+          rawtarget <- request.toJsonStringC.flatMap(raw => io.circe.parser.parse(raw).fold(e => _invalid(e.message), Consequence.success))
+          targetjson <- rawtarget.hcursor.get[io.circe.Json]("target").fold(e => _invalid(e.message), Consequence.success)
+          target <- org.simplemodeling.textus.smworkflow.admission.RepositorySyncValidationContinuation.decodePublicAnyTarget(targetjson)
+            .fold(_invalid(_), Consequence.success)
+          _ <- org.simplemodeling.textus.smworkflow.admission.RepositorySyncValidationContinuation.decodePublicAnyAnswer(target, json)
             .fold(_invalid(_), _ => Consequence.unit)
           record <- new org.goldenport.record.io.RecordDecoder().json(text)
         } yield record }

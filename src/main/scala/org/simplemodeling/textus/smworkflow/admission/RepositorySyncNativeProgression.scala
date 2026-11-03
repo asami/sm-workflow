@@ -57,6 +57,12 @@ private[smworkflow] object RepositorySyncNativeProgression {
             (stage, observed) => progressC(continuationstore, stage.record, observed, conflicts, validationPolicy, review, convergence, repair))
           case None => invalid("retained purpose continuation has no actual inventory")
         }
+      case None if session.started.current.currentProgression.contains(
+          WorkflowInstancePersistence.ProgressionReference("sync.RequiredLintContinuationAdmitted")) => validationPolicy match {
+        case Some(policy) => RepositorySyncRequiredLintContinuation.advanceC(continuationstore, session.started.current,
+          policy, review, convergence, repair)
+        case None => invalid("adopted required-lint continuation requires its current fixed validation policy")
+      }
       case None if continuation.nonEmpty => validationPolicy match {
         case Some(policy) => RepositorySyncValidationContinuation.advanceC(continuationstore, continuation.get,
           session.started.current, policy, convergence)

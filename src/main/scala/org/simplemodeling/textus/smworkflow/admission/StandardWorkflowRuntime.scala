@@ -15,7 +15,8 @@ import org.goldenport.protocol.Request
 import org.goldenport.protocol.spec as spec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms
-import org.simplemodeling.textus.smworkflow.value.{GoalPhaseStartInput, RepositorySyncStartInput}
+import org.simplemodeling.textus.smworkflow.value.{GoalPhaseStartInput, RepositorySyncStartInput,
+  RepositorySyncValidationContinuationAdoptionInput}
 
 /** Standard composition contains policies and logical destinations, never a
   * selected Phase or Plan. Read actual Start input or the retained native run
@@ -175,7 +176,9 @@ private[smworkflow] object StandardWorkflowRuntime {
     programInputs <- RepositorySyncProgramImpact.resolveC(parameters)
     purposePolicy <- RepositorySyncPurpose.resolveC(parameters)
     validation = if (selectedInput._2) programInputs.fold(documentValidation)(p => documentValidation.copy(
-      identity = "impact-repository-sync", mode = "required", checks = p.checks, impact = Some(p))) else repositoryValidation
+      identity = "impact-repository-sync", mode = "required", reason = p.reason, checks = p.checks, impact = Some(p),
+      assessment = documentValidation.assessment.map(_.copy(
+        lintReason = p.reason)))) else repositoryValidation
     goalDefinition <- GoalPhaseRuntimeCatalog.loadC()
     evidenceStorage <- WorkflowComponentStorage.bindC(creation, SmWorkflowComponent.componentId, p.configuration,
       Vector(goalDefinition.definition), p.instances, p.continuations)
@@ -226,7 +229,7 @@ private[smworkflow] object StandardWorkflowRuntime {
         unmerged <- WorkflowManagedProcessExecution.executeGitC(selectedcore,
           org.goldenport.cncf.processexecution.GitOperation.UnmergedIndex).flatMap(_.valueC)
         selected <- if (unmerged.nonEmpty || !session.started.current.currentProgression.exists(p =>
-            Set("sync.PendingMergePrepared", "sync.ValidationChecking", "sync.ValidationRepairRequired", "sync.MergeValidated",
+            Set("sync.PendingMergePrepared", "sync.RequiredLintContinuationAdmitted", "sync.ValidationChecking", "sync.ValidationRepairRequired", "sync.MergeValidated",
               "sync.RepairProposalAdmitted", "sync.MaterializingRepair")(p.value))) Consequence.success(unmerged.map(_.path.value).toSet)
           else for {
             store <- RepositorySyncNativeProgressStore.bindC(session, declaration, selectedcore, _ => Consequence.unit)
@@ -270,6 +273,12 @@ private[smworkflow] object StandardWorkflowRuntime {
     if (Set(RepositorySyncRepairScopeCorrection.adoptionOperation,
         RepositorySyncRepairScopeCorrection.prepareOperation)(request.operation))
       RepositorySyncRepairScopeCorrection.sessionC(request, core)
+    else if (request.operation == RepositorySyncValidationContinuation.adoptionOperation)
+      NativeWorkflowOperationInput.valueC[RepositorySyncValidationContinuationAdoptionInput](request, "input").flatMap { input =>
+        if (input != null && input.sessionId != null && input.sessionId.nonEmpty &&
+            input.sessionId.trim == input.sessionId && !input.sessionId.exists(_.isControl)) Consequence.success(input.sessionId)
+        else invalid("Repository validation continuation adoption requires its exact input Session identity")
+      }
     else NativeWorkflowOperationInput.textC(request, "sessionId")
 
   private def boundedC(creation: ComponentCreate, shared: Shared, request: Request,

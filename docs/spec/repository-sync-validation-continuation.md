@@ -154,3 +154,94 @@ created, accepted and activated. Original failed attempts remain recorded in the
 [delivery journal](../journal/2026/10/2026-10-26-repository-sync-validation-continuation.md).
 This qualifies the bounded producer contract; real owner Session adoption and
 continuation remain separate. It does not qualify broader RS-C3 recovery.
+
+## Required missing lint continuation v2
+
+The preceding RS-VC1 contract retains its historical meaning. The same public
+`describeRepositorySyncValidationContinuation --sessionId` and
+`adoptRepositorySyncValidationContinuation --input` operations also recognize
+`sm-workflow.repository-sync-required-lint-continuation.v2` explicitly. An unknown
+or malformed policy refuses; a failed v2 decode never falls back to v1.
+
+This branch addresses an active, unsuspended native `MergeValidated` candidate
+whose original structural and selected product checks actually succeeded but
+omitted required Scala lint. There must be no later review, commit, convergence,
+uncertain execution or ongoing effect. The original candidate may come from an
+ordinary merge or an existing `repair-N` source. The current host must select the
+same ordered check identities, ordinals and kinds, with exactly one fixed
+`FixCheck` appended. Removing, reordering or rebinding old checks, appending new
+Compile/Test checks, or changing candidate inputs refuses.
+
+The v2 target contains the actual Start principal, repository and Component
+instance, native frontier and causation, original pending-merge source and
+retained validation references and revisions, candidate parents/tree/tracking,
+original selected check facts, and each original intent/result reference pair
+with terminal successful observations. It includes the current expanded fixed
+check selection and actual index/status observations. It does not invent a v1
+resultless-intent reference or duplicate old process output as new evidence.
+Managed native history and original receipts authenticate these facts during
+description and adoption; caller-supplied success is insufficient.
+
+The choices are `AuthorizeMissingRequiredLint` and `Defer`. The existing required
+answer fields `priorExecutionEnded` and `acceptOriginalUncertainty` must both be
+**false** for v2: the old resultless-UNKNOWN assertions are not applicable to
+these already successful original checks. This does not assert termination of
+an unknown invocation or acceptance of its uncertainty. V1 adopting answers
+continue to require **true/true**. A v2 `Defer` answer also uses false/false and
+appends no native direction.
+
+Normal passive evidence preparation uses family `RepositorySync`, kind
+`validation-continuation`, and the existing dedicated
+`repository-sync-validation-continuation` purpose. The description's explicit
+policy selects the typed answer and binding. Component, participant, reference,
+target, choice, rationale and both flags must match independent host evidence.
+Preparation encodes supplied facts; the independent host owns provisioning.
+
+Adoption re-observes the complete target and stores only a managed
+`RequiredLintContinuationAdmitted` direction. A separate ordinary Advance creates
+a genuine `PendingMergePrepared` source in
+`required-lint-<adoption target frontier revision>`. It retains the original
+candidate and repair context and seeds the original successful ordered prefix
+from authenticated native receipts. It writes no replacement execution results
+for those old checks. Only the appended missing lint runs through the ordinary
+fixed CNCF `FixCheck` / `fixCheck` SBT UoW, under current effect permission.
+
+Successful lint returns to independent review and normal local merge commit,
+push and final fetch. Failed lint enters existing check-origin repair with the
+original success prefix retained. A new timed-out or resultless lint remains
+indeterminate and ordinary repeated Advance cannot replay it. A later changed
+repair candidate does not inherit old success as applicable evidence. Repeated
+or stale adoption either returns its exact passive receipt or refuses without
+effects. Original Session, accepted work, history, repair budget and original
+check results retain their meaning throughout.
+
+For a genuinely new Scala pending-merge candidate, required-lint selection is
+checked against typed actual parent/index paths and host program-impact policy
+before the first SBT effect. Missing required lint therefore refuses before
+Compile/Test. Retained old completed validation remains available through the
+bounded v2 recovery branch after ordinary host correction.
+
+`RepositorySyncRequiredLintContinuationSpec` declares pure controlled contract
+facts and normal independent evidence ingress. The explicitly selected
+`@DoNotDiscover` `NativeRepositoryRequiredLintContinuationCliSpec` declares
+`RuntimeTestDeclaration` and uses tiny independent ordinary installed-host
+repositories, real Git/local bare upstreams, SQLite and normal SBT. It requires
+`smworkflow.spec.installedCommand`, `smworkflow.spec.sbt`, and an absolute private
+`smworkflow.spec.requiredLintEpisode` file; it has no runtime-image-root selector.
+
+Its `capture REQUIRED-LINT actual successful checks and postcheck refusal` case
+belongs before new CAR publication. It retains each of four completed old-CAR
+episodes incrementally, including real Compile/Test results and the old Scala
+applicability refusal. Cases beginning `continue REQUIRED-LINT` belong after new
+normal publication and reopen those exact Sessions. They specify real scalafix
+success followed by separate fixture-owned review/convergence, a genuine
+DisableSyntax lint failure, a genuine fixed-lint execution deadline timeout with
+passive repeats, and a fixed-lint capability denial that retains its actual
+intent without a lint process or replay of successful Compile/Test. The denied
+Session receives no restored grant or retry. The cases also specify
+stale/crossed evidence refusals and new-candidate preflight
+before any SBT invocation. They never re-Start a retained Session or repeat an
+accepted semantic result to upgrade it. All semantic, reviewer and lifecycle
+inputs in these cases are specification-owned; the cases make no live provider
+acceptance claim. This section defines the contract and selected scenarios,
+without claiming their execution results.

@@ -29,3 +29,18 @@
   admission; no unsafe behavior has been demonstrated.
 - Boundary: no value-type or schema expansion belongs to this repair.
 - Follow-up: include these fields in a separately scoped wire-metadata cleanup.
+
+## HYG-RL04-01 — Existing launcher fixture helper names
+
+- Status: OPEN
+- Owner: sm-workflow
+- Discovered: 2026-11-03, independent required-lint continuation review.
+- Location: `ThreeWorkflowLauncherAssemblySpec.scala`, existing private
+  `limitKey`, `component`, and `creation` fixtures.
+- Evidence: these names already exist in the repair base; the normal operation
+  registration change introduces no new names of this form.
+- Category: naming maintenance; low priority, no demonstrated behavioral risk.
+- Boundary: the required-lint continuation repair does not broaden into
+  fixture renaming. Review finding is retained without weakening acceptance.
+- Follow-up: include these private fixture names in the existing helper-naming
+  cleanup; preserve public and serialized identifiers.
