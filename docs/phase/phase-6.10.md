@@ -3,7 +3,7 @@
 Status: in development; retain authored M1/M2 and active M3; M2A/M4 acceptance pending.
 Date: 2026-10-27
 Owner: sm-workflow development
-Sequence: Phase 6.8 -> Phase 6.9 -> Phase 6.10 -> Phase 6.11 -> Phase 7
+Sequence: Phase 6.8 -> Phase 6.9 -> Phase 6.10 -> Phase 6.11 -> Phase 6.12 -> Phase 7
 Specification: [profiles and endpoint metrics](../spec/ai-operating-profiles.md)
 Checklist: [P610 acceptance](phase-6.10-checklist.md)
 Handoff: [English development handoff](../journal/2026/10/2026-10-27-phase-6.10-ai-operating-profiles-handoff.md)
@@ -118,6 +118,24 @@ routing/monitoring calls. Startup recovery is an independent existing task, not 
 new prerequisite requiring this feature to be implemented first.
 
 Handoff: [standard routing and launch adoption](../journal/2026/11/2026-11-01-phase-6.10-standard-routing-handoff.md).
+
+## M3 primary publication repair acceptance clarification — 2026-11-02
+
+The [primary repair contract](../spec/goal-phase-prerequisite-publication-recovery.md)
+requires ordinary covered primary Compile failure to reserve one normal repair
+and issue RepairStep on the next ordinary Advance. Retain the actual failure and
+compiler output, explicitly report that tests did not execute, and preserve
+normal counts, trends, limits and the existing ContinueRepairs route. Reuse the
+completed dependency capture and accepted artifact/UNKNOWN lineage while a new
+primary candidate receives its own publication/check/review results.
+
+Necessary same-scope publication under ordinary current authority continues
+automatically. A consumed genuine one-shot direction remains narrow; the actual
+new primary candidate exposes the missing publication authority through the
+existing describe/recover family, including an independently admitted explicit
+same-scope continuation choice. This acceptance clarification preserves the
+active M3 Session, previous assessments and evidence and adds no mandatory
+per-repair or per-candidate Human gate to ordinary covered work.
 
 ## Cost refinement follow-up — 2026-11-02
 

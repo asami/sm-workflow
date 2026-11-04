@@ -150,6 +150,53 @@ final class GoalPhasePrerequisitePublicationRecoverySpec extends AnyWordSpec wit
       key => Consequence.success(records(key)))
   }
 
+  "session-only-description" should {
+    "reach native Start admission with a declared bare Session business parameter" in {
+      Given("a normal preparation host with no actual native ordered Start for the selected Session")
+      withPreparation() { episode =>
+        import org.goldenport.protocol.{Property, Request}
+        val request = Request.of(component = episode.component.name, service = "GoalPhaseService",
+          operation = R.describeOperation, properties = List(Property("sessionId", "description-absent-session", None)))
+        When("the normal owning Operation executes the Session-only description")
+        val failure = episode.owner.executeOperationResponseInContext(request, episode.actor) match {
+          case Consequence.Failure(conclusion) => conclusion.toString
+          case _ => fail("A description without an actual native ordered Start must refuse")
+        }
+        Then("business admission refuses the absent Start without treating the Session as an authentication credential")
+        failure should include ("no actual native ordered Start")
+        failure should not include ("403")
+        failure should not include ("requires a service authentication provider")
+      }
+    }
+
+    "refuse the old input-only shape and missing or nontext Session parameters" in {
+      Given("the same normal owning host and no Session or native store data")
+      withPreparation() { episode =>
+        import org.goldenport.protocol.{Property, Request}
+        val oldinput = take(V.GoalPhasePrerequisitePublicationRecoveryDescriptionInput("description-absent-session")
+          .toRecord().toJsonStringC)
+        val cases = Vector(
+          List(Property("input", oldinput, None)),
+          List.empty[Property],
+          List(Property("sessionId", 42, None)))
+        When("each undeclared input-only, missing or nontext request reaches its normal owning Operation")
+        val failures = cases.map { properties =>
+          episode.owner.executeOperationResponseInContext(Request.of(component = episode.component.name,
+            service = "GoalPhaseService", operation = R.describeOperation, properties = properties), episode.actor) match {
+            case Consequence.Failure(conclusion) => conclusion.toString
+            case _ => fail("Only a declared text sessionId can enter Session business admission")
+          }
+        }
+        Then("every invalid shape refuses before native Start admission and none acts as a compatibility alias")
+        failures.foreach { failure =>
+          failure should not include ("no actual native ordered Start")
+          failure should not include ("403")
+          failure should not include ("requires a service authentication provider")
+        }
+      }
+    }
+  }
+
   "Primary failure continuation" should afterWord(
     "in spec:goal-phase-prerequisite-publication-recovery, example:E1,E2,E3,E4,E5, rules:R1,R2,R3, phase:M3-PRIMARY-CONTINUATION-409") {
     "E1 retain original UNKNOWN and the primary failure in a distinct exact two-target schema" in {

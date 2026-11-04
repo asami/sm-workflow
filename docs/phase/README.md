@@ -1,7 +1,17 @@
 # sm-workflow incremental-use roadmap
 
+Shared Scala lint profiles allocated 2026-11-01:
+[Phase 6.12](phase-6.12.md) follows 6.11 and precedes 7. Reuse Phase 6.5 Q3
+for baseline/team/project settings: `sm-workflow.source.style=goldenport` selects
+naming and inherited history; `sm-workflow.source.history.style` overrides history
+only. Old source-history keys are removed without compatibility aliases. Project
+`.scalafix.conf` remains optional differences only. Preserve accepted Q3 and active
+work; progress is recorded solely in the [checklist](phase-6.12-checklist.md).
+See the [specification](../spec/scala-lint-profiles.md) and
+[English handoff](../journal/2026/11/2026-11-01-shared-scala-lint-profiles-handoff.md).
+
 Directory-list RepositorySync adopted 2026-10-31:
-[Phase 6.11](phase-6.11.md) follows active 6.10 and precedes Phase 7. One normal
+[Phase 6.11](phase-6.11.md) follows active 6.10 and precedes 6.12, then Phase 7. One normal
 entry accepts existing checkout directories and sync intent, resolves settings,
 executes equal/push/fast-forward and validated automatic merge paths, and returns
 aggregate results without routine AI decisions. Dirty/conflict meaning returns
@@ -71,7 +81,7 @@ and delegated delivery; Phase 7 composes the qualified routes. See the
 
 
 Commit/recovery standardization adopted 2026-10-26:
-[Phase 6.8](phase-6.8.md) follows active Phase 6.7; Phases 6.9, 6.10 and 6.11 then precede Phase 7.
+[Phase 6.8](phase-6.8.md) follows active Phase 6.7; Phases 6.9, 6.10, 6.11 and 6.12 then precede Phase 7.
 Reuse the bounded P67-T1 repair, purpose-based authorization and completed-result
 collection; finish common authority/recovery, configurable automatic commit
 hygiene and Step/release/RepositorySync integration. Document SHA and fixed file
@@ -466,6 +476,8 @@ in Phase 6, using the corrected runtime contract.
 | [6.8: Commit recovery and delegated delivery](phase-6.8.md) | Common authority/commit recovery, mechanical hygiene and independent sm-delegate-task | Shared execution; mandatory delegate commit, required publication/return; retain test-fix/goal-task contracts and active 6.7 |
 | [6.9: Runtime-owned RepositorySync](phase-6.9.md) | Clean synchronization, impact-selected validation/review and dirty purpose-based commits | Runtime-owned main route; reuse 6.8 commit/recovery; Phase 7 composes it across repositories |
 | [6.10: AI operating profiles and lightweight metrics](phase-6.10.md) | Standard/current, cost, quality selection; start/end source counts and observed tokens per net source step | No live config switch or extra AI calls; preserve issued work; comparison stays in 9 and usage acquisition in 13 |
+| [6.11: Directory-list RepositorySync](phase-6.11.md) | Runtime-owned batch synchronization and selected validation | After 6.10; preserve active work and lower-level APIs |
+| [6.12: Shared Scala lint and Goldenport conventions](phase-6.12.md) | Common profiles and Goldenport history/naming selection with project differences | After 6.11, before 7; [checklist](phase-6.12-checklist.md); reuse accepted Q3 |
 | [7: Multi-repository synchronization and artifact overlay](phase-7.md) | Synchronize/validate the workspace and consumer artifact selections using CNCF-discovered project purpose/feature queries | Full practical GoalPhase adoption with related-project management; retain local-development/sync/artifact ownership and existing overlay acceptance |
 | [17: Task and standalone FIX extensions](phase-17.md) | Wider inputs, dirty/focused/full options, multi-unit composition and authorized investigation/related-project integration | Reuse 6.7 without rebuilding it; [checklist](phase-17-checklist.md); Phase 7/14 dependencies are scenario-specific |
 | [18: Tool-neutral validation and Flutter](phase-18.md) | Common validation results, retained SBT semantics and Flutter integration | After the 6.7 execution baseline; Flutter W4–W5 consume CNCF Phase 117; [checklist](phase-18-checklist.md); no new gate for 6.8–7 |

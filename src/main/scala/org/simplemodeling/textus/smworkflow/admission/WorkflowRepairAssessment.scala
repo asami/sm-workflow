@@ -22,12 +22,18 @@ private[smworkflow] object WorkflowRepairAssessment {
       selected.exists(_.kind == T.Kind.Compile) && selected.zip(receipts).exists((check, receipt) =>
         check.kind == T.Kind.TestOnly && receipt.sbt.flatMap(_.selection).exists(s =>
           s.completedSuites > 0 && s.testsRun > 0)))
-    val lint = scalaLint != "required" || (complete && selected.exists(_.kind == T.Kind.FixCheck))
-    if (!Set("code", "documentation")(kind) || !Set("off", "required")(scalaLint))
+    val lint = kind == "validation" || scalaLint != "required" || (complete && selected.exists(_.kind == T.Kind.FixCheck))
+    if (!Set("code", "documentation", "validation")(kind) || !Set("off", "required")(scalaLint))
       Consequence.stateConflict("Repair assessment requires its adopted code and lint policy")
     else if (!complete) Consequence.stateConflict("Repair assessment requires the exact complete successful typed check batch")
     else if (!behavior) Consequence.stateConflict("Code admission requires compilation and actually executed nonempty focused behavioral tests")
     else if (!lint) Consequence.stateConflict("Required Scala lint has no actual selected fix-check receipt")
     else Consequence.unit
   }
+
+  def standaloneSelectionC(input: StandaloneFixExecution.Input,
+    selected: Vector[GoalPhaseNativeValidation.Check]): Consequence[Unit] =
+    if (input.kind != "code" || (selected != null && selected.forall(_ != null) &&
+        selected.exists(_.kind == T.Kind.Compile) && selected.exists(_.kind == T.Kind.TestOnly))) Consequence.unit
+    else Consequence.stateConflict("New standalone code requests require selected Compile and TestOnly before execution")
 }

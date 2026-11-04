@@ -54,7 +54,10 @@ reference and participant binding remain required. Description checks the full n
 and successful decoding supplies neither observation nor qualification.
 
 Call `GoalPhaseService.describeGoalPhasePrerequisitePublicationRecovery` with
-`--input '{"sessionId":"<actual-session>"}'`. Keep the complete returned target.
+`--sessionId <actual-session>`. This Session-only description uses a bare business
+parameter, as do same-purpose Session-only descriptions. Structured target/answer
+judgments retain their declared typed `--input` or `--inputResource`; the old
+`--input`-only description wrapper is not an alias. Keep the complete returned target.
 The outcome is `direction-required`, including when historical writer lifecycle
 and source qualification are unavailable. The description reports the exact old
 request, retained status/reason and process result when present. Missing facts

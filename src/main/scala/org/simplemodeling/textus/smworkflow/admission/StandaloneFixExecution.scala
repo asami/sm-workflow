@@ -53,7 +53,8 @@ private[smworkflow] object StandaloneFixExecution {
     message: String = "Selected validation has not executed", commit: Option[Commit] = None, commitExecution: Option[CommitExecution] = None, projectionWarning: Option[String] = None,
     reviewDispositions: Option[Vector[StandaloneReviewFix.Disposition]] = None,
     delivery: Option[DelegateTask.Delivery] = None,
-    commitReconciliation: Option[CommitReconciliation] = None)
+    commitReconciliation: Option[CommitReconciliation] = None,
+    recoveredValidation: Option[StandaloneFixValidationRecovery.Direction] = None)
   final case class Work(session: String, sourceRevision: String, kind: String, state: State)
 
   private given Encoder[ContextReference] = deriveEncoder
@@ -82,7 +83,7 @@ private[smworkflow] object StandaloneFixExecution {
   given Decoder[Result] = deriveDecoder
   private given Encoder[R.Context] = deriveEncoder
   private given Decoder[R.Context] = deriveDecoder
-  given Encoder[State] = deriveEncoder[State].mapJson(_.mapObject(o => o.filter { case ("commit" | "commitExecution" | "projectionWarning" | "reviewDispositions" | "delivery" | "commitReconciliation", value) => !value.isNull; case _ => true }))
+  given Encoder[State] = deriveEncoder[State].mapJson(_.mapObject(o => o.filter { case ("commit" | "commitExecution" | "projectionWarning" | "reviewDispositions" | "delivery" | "commitReconciliation" | "recoveredValidation", value) => !value.isNull; case _ => true }))
   given Decoder[State] = deriveDecoder
   given Encoder[Work] = deriveEncoder
   given Decoder[Work] = deriveDecoder
@@ -92,10 +93,11 @@ private[smworkflow] object StandaloneFixExecution {
       paths(input.ownedPaths) && strings(input.checks, true) && input.checks.size <= 16 &&
       strings(input.conditions, true) && input.conditions.size <= 64 && input.sourceReferences != null &&
       input.sourceReferences.nonEmpty && input.sourceReferences.size <= 128 && input.sourceReferences.forall(r => r != null && text(r.identity) && text(r.revision)) &&
-      Set("code", "documentation")(input.kind) && Set("off", "required")(input.scalaLint) &&
+      Set("code", "documentation", "validation")(input.kind) && Set("off", "required")(input.scalaLint) &&
       input.repairLimit > 0 && input.repairLimit <= R.ceiling && input.task != null &&
       input.delegation != null && input.delegation.forall(c => DelegateTask.valid(c) && input.task.nonEmpty && input.reviewOrigin.isEmpty) &&
-      input.reviewOrigin != null && input.task.forall(t => t != null && Set("journal", "direct-instruction")(t.sourceKind) && strings(t.dependencies))
+      input.reviewOrigin != null && input.task.forall(t => t != null && Set("journal", "direct-instruction")(t.sourceKind) && strings(t.dependencies)) &&
+      (input.kind != "validation" || (input.task.isEmpty && input.delegation.isEmpty && input.reviewOrigin.isEmpty && !input.reviewRequired))
       catch { case scala.util.control.NonFatal(_) => false }
     if (valid) StandaloneReviewFix.inputC(input) else invalid("adopted objective, ownership, checks, conditions or repair policy is invalid")
   }
@@ -125,8 +127,8 @@ private[smworkflow] object StandaloneFixExecution {
       message = "Observed candidate differs from the exact original-finding change attribution; no successful disposition is recorded"))
     else if (state.candidate.contains(candidate) && state.receipts.size == state.selected.size &&
         WorkflowRepairAssessment.checksC(state.input.kind, state.input.scalaLint, state.selected, state.receipts).isSuccess)
-      assessC(state.copy(stage = "Assess", pendingCheck = None,
-        message = "Unchanged candidate reuses its applicable complete successful check batch"))
+      Consequence.success(state.copy(stage = "Assess", pendingCheck = None,
+        message = "Unchanged candidate retains its applicable complete successful check batch before assessment"))
     else Consequence.success(state.copy(stage = "Validate", candidate = Some(candidate), receipts = Vector.empty,
       pendingCheck = None, message = "Runtime observed the selected uncommitted candidate"))
 
@@ -163,22 +165,28 @@ private[smworkflow] object StandaloneFixExecution {
         state.input.requestIdentity + ":generation:" + state.generation + ":" + check.identity, finding)
       val reason = control.stop.orElse(Option.when(state.automaticCount >= control.effectiveLimit)(
         "The existing automatic repair limit is exhausted"))
-      Consequence.success(state.copy(stage = if (reason.nonEmpty) "Human" else "Repair", receipts = all,
+      Consequence.success(state.copy(stage = if (reason.nonEmpty || state.input.kind == "validation") "Human" else "Repair", receipts = all,
         pendingCheck = None, findings = finding, repairControl = control,
-        message = reason.getOrElse(if (diagnostic.testExecution.compilationBlocked.nonEmpty)
+        message = reason.getOrElse(if (state.input.kind == "validation")
+          "Selected qualification failed; Human direction is required and no source repair is authorized"
+          else if (diagnostic.testExecution.compilationBlocked.nonEmpty)
           "Compilation failed; affected remaining tests were not executed. Repair uses this retained failure."
           else "An actual failed selected check requires diagnosis and bounded repair")))
     } else if (all.size < state.selected.size) Consequence.success(state.copy(stage = "Validate", receipts = all,
       pendingCheck = None, message = "Actual selected check succeeded"))
-    else assessC(state.copy(stage = "Assess", receipts = all, pendingCheck = None))
+    else Consequence.success(state.copy(stage = "Assess", receipts = all, pendingCheck = None))
   } yield next
 
   def assessC(state: State): Consequence[State] = for {
     _ <- if (state != null && state.stage == "Assess" && state.candidate.nonEmpty) Consequence.unit
       else invalid("assessment has no current candidate")
-    _ <- WorkflowRepairAssessment.checksC(state.input.kind, state.input.scalaLint, state.selected, state.receipts)
+    _ <- inputC(state.input)
+    _ <- if (state.recoveredValidation.nonEmpty) StandaloneFixValidationRecovery.assessC(state)
+      else WorkflowRepairAssessment.checksC(state.input.kind, state.input.scalaLint, state.selected, state.receipts)
     _ <- StandaloneReviewFix.verifiedC(state)
-    required = StandaloneReviewFix.needsReview(state) || (state.input.task.nonEmpty && state.input.delegation.isEmpty) || state.input.reviewRequired || state.unresolvedQuestions.nonEmpty || state.priorReview.exists(_.outcome == "repair")
+    _ <- if (state.input.kind != "validation" || state.semanticReference.isEmpty) Consequence.unit
+      else invalid("Validation-only qualification cannot accept a semantic source completion")
+    required = state.input.kind != "validation" && (StandaloneReviewFix.needsReview(state) || (state.input.task.nonEmpty && state.input.delegation.isEmpty) || state.input.reviewRequired || state.unresolvedQuestions.nonEmpty || state.priorReview.exists(_.outcome == "repair"))
     // An initially passing validation is a truthful no-change outcome. A repair
     // completion must evaluate every adopted condition before it can be accepted.
     _ <- if (state.semanticReference.isEmpty || (state.conditionReport.map(_.identity) == state.input.conditions &&
@@ -188,11 +196,15 @@ private[smworkflow] object StandaloneFixExecution {
       if (state.candidate.exists(_.paths.isEmpty)) "NoChange" else "CommitReady"
     } else if (state.semanticReference.isEmpty) "NoChange" else "Accepted",
     findings = if (state.input.reviewOrigin.nonEmpty && !required) Vector.empty else state.findings,
-    message = if (required) "Independent scoped review is required by selected policy or unresolved meaning"
+    message = if (state.input.kind == "validation")
+      "Only selected checks of the retained candidate were qualified; no code repair, commit or publication was accepted; business conditions remain unassessed"
+      else if (required) "Independent scoped review is required by selected policy or unresolved meaning"
       else if (state.semanticReference.isEmpty) "Selected checks already passed; no repair was requested or implicitly committed"
       else "Selected checks and adopted conditions satisfied; independent review not required; changes remain uncommitted")
 
   def admitResultC(work: Work, result: Result): Consequence[Unit] = for {
+    _ <- if (work != null && work.state != null && work.state.input.kind != "validation") Consequence.unit
+      else invalid("Validation-only qualification cannot authorize implementation, repair or review work")
     _ <- if (work != null && work.state != null && work.kind == work.state.stage && result != null && text(result.summary) &&
       strings(result.findings) && strings(result.unresolvedQuestions) && result.conditions != null &&
       result.conditions.forall(c => c != null && text(c.identity) && text(c.detail)) &&

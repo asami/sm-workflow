@@ -14,6 +14,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Passive conversion of an independently supplied answer. Provisioning and
   * guarded recovery remain with their normal owners.
   * @since   Nov.  1, 2026
+  *  version Nov.  1, 2026
   * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */

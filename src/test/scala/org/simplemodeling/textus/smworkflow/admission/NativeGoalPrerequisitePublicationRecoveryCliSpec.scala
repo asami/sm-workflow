@@ -1081,8 +1081,7 @@ final class NativeGoalPrerequisitePublicationRecoveryCliSpec extends AnyWordSpec
     _lines(scenario.root.resolve("primary-publication-attempts.txt")) shouldBe publicationsbefore
     _no_review_()
     When("the installed public describe operation reports the exact current-source artifact target")
-    val artifactoutput = scenario.call("command", R.describeOperation, Vector("--input",
-      json(V.GoalPhasePrerequisitePublicationRecoveryDescriptionInput(session).toRecord()).noSpaces))
+    val artifactoutput = scenario.call("command", R.describeOperation, Vector("--sessionId", session))
     val artifactdescription = artifactoutput.business[V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult]
     val artifacttarget = take(A.targetC(artifactdescription.target))
     Then("the two choices bind the current candidate and capture together with the unchanged original failure and UNKNOWN")
@@ -1159,8 +1158,7 @@ final class NativeGoalPrerequisitePublicationRecoveryCliSpec extends AnyWordSpec
       Then("any current publication boundary is an actual existing target with no inferred Human authority")
       _lines(scenario.root.resolve("primary-all-sbt-invocations.txt")) shouldBe callsbefore
       _lines(scenario.root.resolve("primary-publication-attempts.txt")) shouldBe publicationsbefore
-      val describedoutput = scenario.call("command", R.describeOperation, Vector("--input",
-        json(V.GoalPhasePrerequisitePublicationRecoveryDescriptionInput(session).toRecord()).noSpaces))
+      val describedoutput = scenario.call("command", R.describeOperation, Vector("--sessionId", session))
       val described = describedoutput.business[V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult]
       val publicationtarget = take(P.targetC(described.target))
       publicationtarget.candidate shouldBe candidate
@@ -1573,8 +1571,7 @@ final class NativeGoalPrerequisitePublicationRecoveryCliSpec extends AnyWordSpec
       _lines(scenario.root.resolve("primary-all-sbt-invocations.txt")) shouldBe calls
       _lines(scenario.root.resolve("primary-publication-attempts.txt")) shouldBe publications
       Files.exists(scenario.root.resolve("primary-real-check-passed.txt")) shouldBe false
-      def _describe_(): F.Result = scenario.call("command", R.describeOperation, Vector("--input",
-        json(V.GoalPhasePrerequisitePublicationRecoveryDescriptionInput(session).toRecord()).noSpaces))
+      def _describe_(): F.Result = scenario.call("command", R.describeOperation, Vector("--sessionId", session))
       val describedoutput = _describe_()
       val described = describedoutput.business[V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult]
       val target = take(P.targetC(described.target))
@@ -1735,8 +1732,7 @@ final class NativeGoalPrerequisitePublicationRecoveryCliSpec extends AnyWordSpec
     val unknownoutput = scenario.advance(task)
     unknownoutput.business[V.GoalPhaseAdvanceResult].outcome shouldBe Some("uncertain")
     val unknownbytes = Files.readAllBytes(unknownoutput.invocation.stdout).toVector
-    def _describe_(): F.Result = scenario.call("command", R.describeOperation, Vector("--input",
-      json(V.GoalPhasePrerequisitePublicationRecoveryDescriptionInput(session).toRecord()).noSpaces))
+    def _describe_(): F.Result = scenario.call("command", R.describeOperation, Vector("--sessionId", session))
     def _resource_(operation: String, input: RecordPresentable, name: String): F.Result = {
       val bytes = json(input.toRecord()).noSpaces
       Files.writeString(scenario.root.resolve("primary-input-resource-sizes.jsonl"), Json.obj(
@@ -2185,8 +2181,7 @@ final class NativeGoalPrerequisitePublicationRecoveryCliSpec extends AnyWordSpec
     retainedunknown.request.input.requestIdentity should endWith(":prerequisite:0")
     val originalunknownbytes = Files.readAllBytes(unknownoutput.invocation.stdout).toVector
     val initialcalls = _lines(scenario.root.resolve("dependency/all-sbt-invocations.txt"))
-    def _describe_(): F.Result = scenario.call("command", R.describeOperation, Vector("--input",
-      json(V.GoalPhasePrerequisitePublicationRecoveryDescriptionInput(session).toRecord()).noSpaces))
+    def _describe_(): F.Result = scenario.call("command", R.describeOperation, Vector("--sessionId", session))
     def _recover_(input: V.GoalPhasePrerequisitePublicationRecoveryInput): F.Result =
       scenario.call("command", R.recoveryOperation, Vector("--input", json(input.toRecord()).noSpaces))
 
@@ -2425,6 +2420,65 @@ final class NativeGoalPrerequisitePublicationRecoveryCliSpec extends AnyWordSpec
     Files.readAllBytes(preserved).toVector shouldBe preservedbytes
     Files.readAllBytes(successoroutput.invocation.stdout).toVector shouldBe successorbytes
     _unknown_direction(scenario, session, qualified.frontierRevision) shouldBe retaineddirection
+  }
+
+  "Installed Session-only prerequisite description" should {
+    "E12 reach business admission with bare sessionId while retaining explicit credential rejection" in {
+      Given("an explicitly installed command, its normal component file and a fresh fixed-subject host without native Start")
+      val executable = Path.of(sys.props.getOrElse("smworkflow.spec.installedCommand",
+        cancel("Explicitly select smworkflow.spec.installedCommand for this installed-only scenario")))
+      val componentfile = Path.of(sys.props.getOrElse("smworkflow.spec.componentFile",
+        cancel("Explicitly select smworkflow.spec.componentFile for this installed-only scenario")))
+      executable.isAbsolute shouldBe true
+      componentfile.isAbsolute shouldBe true
+      Files.isRegularFile(componentfile) shouldBe true
+      sys.props.get("smworkflow.spec.installations") shouldBe None
+      val scenario = F.fresh("session-only-prerequisite-description", bootstrapSelectedInput = false)
+      val configfile = scenario.root.resolve(".textus/config.json")
+      val config = parse(Files.readString(configfile)).toOption.get
+      Files.writeString(configfile, config.mapObject(_.add("textus.component.file", componentfile.toString.asJson)).noSpaces)
+      val session = "description-absent-session"
+      def _describe_(parameters: Vector[String]): F.Result = scenario.callInstalled(executable,
+        "GoalPhaseService", R.describeOperation, parameters,
+        assemblyDescriptor = Some(scenario.root.resolve(".textus/assembly.yaml")))
+      def _response_(result: F.Result): String =
+        Files.readString(result.invocation.stdout) + "\n" + Files.readString(result.invocation.stderr)
+
+      When("the installed public description receives its declared bare Session business parameter")
+      val described = _describe_(Vector("--sessionId", session))
+      Then("the owning business admission reports the absent Start without a provider denial")
+      withClue(described.invocation.logs) {
+        described.exitCode should not be 0
+        _response_(described) should include ("no actual native ordered Start")
+        _response_(described) should not include ("403")
+        _response_(described) should not include ("requires a service authentication provider")
+      }
+
+      When("the installed description receives missing Session input or the old input-only wrapper")
+      val missing = _describe_(Vector.empty)
+      val oldinput = _describe_(Vector("--input",
+        json(V.GoalPhasePrerequisitePublicationRecoveryDescriptionInput(session).toRecord()).noSpaces))
+      Then("both invalid requests refuse before business Start admission without acting as aliases")
+      Vector(missing, oldinput).foreach { refused =>
+        withClue(refused.invocation.logs) {
+          refused.exitCode should not be 0
+          _response_(refused) should not include ("no actual native ordered Start")
+          _response_(refused) should not include ("403")
+          _response_(refused) should not include ("requires a service authentication provider")
+        }
+      }
+
+      When("an explicit authorization credential accompanies the declared Session business parameter")
+      val credential = _describe_(Vector("--sessionId", session,
+        "--authorization", "Bearer specification-owned-invalid-credential"))
+      Then("the fixed-subject provider still rejects real credential material with its existing 403")
+      withClue(credential.invocation.logs) {
+        credential.exitCode should not be 0
+        _response_(credential) should include ("403")
+        _response_(credential) should include ("Fixed user profile requires a service authentication provider")
+        _response_(credential) should not include ("no actual native ordered Start")
+      }
+    }
   }
 
   "Installed ordinary prerequisite publication recovery" should {
@@ -2815,8 +2869,7 @@ final class NativeGoalPrerequisitePublicationRecoveryCliSpec extends AnyWordSpec
 
       When("one selected source file is corrected and the public recovery target is described")
       Files.writeString(repository.resolve(_source), correction)
-      val descriptionoutput = scenario.call("command", R.describeOperation, Vector("--input",
-        json(V.GoalPhasePrerequisitePublicationRecoveryDescriptionInput(started.sessionId).toRecord()).noSpaces))
+      val descriptionoutput = scenario.call("command", R.describeOperation, Vector("--sessionId", started.sessionId))
       val description = descriptionoutput.business[V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult]
       val target = take(R.targetC(description.target))
       val old = target.failed

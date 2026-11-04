@@ -600,12 +600,22 @@ final class GoalPhaseNativeCheckRepairSpec extends AnyWordSpec with Matchers wit
         Then("the assignment cannot bypass its one valid repair source and cleared facts")
         result.isSuccess shouldBe false
       }
+      Given("a valid repair assignment with complete freeform summary or decision-needed finding content")
+      val longsummary = _result.copy(summary = "x" * 16385)
+      val longfinding = _result.copy(outcome = "decision-needed", findings = Vector("x" * 16385))
+      When("semantic admission consumes that content without an application text-size ceiling")
+      val summaryadmitted = W.admitSemanticResultC(_request(), longsummary)
+      val findingadmitted = W.admitSemanticResultC(_request(), longfinding)
+      Then("both complete 16385-character values are admitted under their existing semantic dispositions")
+      summaryadmitted.isSuccess shouldBe true
+      findingadmitted.isSuccess shouldBe true
+
       val invalidresults = Vector(_result.copy(outcome = "passed"), _result.copy(outcome = "accept"),
         _result.copy(summary = "x\u0000y"),
         _result.copy(findings = Vector("unresolved")),
         _result.copy(outcome = "decision-needed", findings = Vector.fill(129)("finding")))
       invalidresults.foreach { result =>
-        Given("a valid repair assignment with a command/review outcome or malformed semantic fields")
+        Given("a valid repair assignment with a command/review outcome, malformed content or excessive finding count")
         When("result admission consumes that reply")
         val admitted = W.admitSemanticResultC(_request(), result)
         Then("check failure context never grants check, review or malformed-result admission")

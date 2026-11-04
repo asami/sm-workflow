@@ -747,7 +747,8 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
         val sessiondescriptions = Set("describeGoalPhaseValidationRecovery", "describeGoalPhaseClosureRecovery",
           "describeGoalPhaseSourceHistoryRecovery", "describeGoalPhaseCandidateRecovery",
           "describeGoalPhaseWholePhaseCandidateRecovery", "describeGoalPhaseCandidateObservationContinuation",
-          "describeGoalPhaseSourceHistoryNormalization", "describeRepositorySyncValidationContinuation")
+          "describeGoalPhaseSourceHistoryNormalization", "describeRepositorySyncValidationContinuation",
+          "describeGoalPhasePrerequisitePublicationRecovery")
         published.foreach { (identity, operation) =>
           withClue(identity) {
             operation.specification.request.parameters.head.name shouldBe
@@ -758,7 +759,8 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
             if (Set("describeGoalPhaseValidationRepair", "adoptGoalPhaseValidationRepair",
                 "recoverGoalPhaseCandidate", "recoverGoalPhaseWholePhaseCandidate", "describeGoalPhaseReleaseRepairContinuation",
                 "recoverGoalPhaseReleaseRepairContinuation", "describeGoalPhaseDependencySourceRevision",
-                "adoptGoalPhaseDependencySourceRevision", "recoverGoalPhasePrerequisitePublication").contains(operation.name)) {
+                "adoptGoalPhaseDependencySourceRevision", "recoverGoalPhasePrerequisitePublication",
+                "adoptRepositorySyncValidationContinuation").contains(operation.name)) {
               operation.specification.request.parameters.map(_.name) shouldBe Vector("input", "inputResource")
               operation.specification.request.parameters.map(_.domain.multiplicity) shouldBe
                 Vector(Multiplicity.ZeroOne, Multiplicity.ZeroOne)

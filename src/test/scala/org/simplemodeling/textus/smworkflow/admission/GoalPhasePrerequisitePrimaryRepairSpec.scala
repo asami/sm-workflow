@@ -349,9 +349,9 @@ final class GoalPhasePrerequisitePrimaryRepairSpec extends AnyWordSpec with Matc
 
   "Publication repair with retained operating profiles" should {
     "preserve each configured profile and its concrete attribution alongside the actual failure" in {
-      Given("the issued primary repair cause and independently configured standard, cost and quality captures")
+      Given("the issued primary repair cause and independently configured standard, cost, quality and local-experiment captures")
       val concrete = GoalPhaseOperatingProfiles.Concrete("fixture-profile", "fixture-provider", "fixture-model", Map("effort" -> "fixture"))
-      Vector("standard", "cost", "quality").foreach { identity =>
+      Vector("standard", "cost", "quality", "local-experiment").foreach { identity =>
         val profile = GoalPhaseOperatingProfiles.Capture(
           GoalPhaseOperatingProfiles.Selection(identity, "1", "explicit"), Some("CodingEngineeringDeep"),
           Some("fixture-mapping"), Some("1"), Some(concrete), Some(concrete))
@@ -368,6 +368,58 @@ final class GoalPhasePrerequisitePrimaryRepairSpec extends AnyWordSpec with Matc
         W.inputCodec.encode(earlier).hcursor.get[String]("schemaVersion") shouldBe Right("sm-workflow.goal-phase-native-work-request.v5")
         request.publicationFailure.get.testsExecuted shouldBe false
       }
+    }
+  }
+
+  "Expanded retained profile admission" should {
+    "preserve unmapped standard selections without inferring concrete execution" in {
+      Given("the adopted Capture contract with default, explicit and configured standard intent")
+      for {
+        source <- Vector("default", "explicit", "config")
+        reasoning <- Vector(None, Some("CodingEngineeringMechanical"), Some("ReviewCritical"))
+      } {
+        val profile = GoalPhaseOperatingProfiles.Capture(
+          GoalPhaseOperatingProfiles.Selection("standard", "1", source), reasoning, None, None, None, None)
+        val request = F.request.copy(publicationFailure = None, operatingProfile = Some(profile))
+        When("the complete unmapped capture crosses the v5 owning codec")
+        val encoded = W.inputCodec.encode(request)
+        val decoded = W.inputCodec.decode(encoded)
+        Then("the exact selection and optional class survive while concrete observations stay absent")
+        decoded shouldBe Right(request)
+        W.inputCodec.encode(decoded.toOption.get) shouldBe encoded
+        encoded.hcursor.get[String]("schemaVersion") shouldBe Right("sm-workflow.goal-phase-native-work-request.v5")
+        decoded.toOption.get.operatingProfile.get.configured shouldBe None
+        decoded.toOption.get.operatingProfile.get.selected shouldBe None
+      }
+    }
+
+    "refuse malformed or lossy profile wires under the expanded contract" in {
+      Given("a canonical expanded profile accompanying an actual primary publication failure")
+      val profile = GoalPhaseOperatingProfiles.Capture(
+        GoalPhaseOperatingProfiles.Selection("standard", "1", "explicit"),
+        Some("CodingEngineeringMechanical"), None, None, None, None)
+      val request = F.request.copy(operatingProfile = Some(profile))
+      val wire = W.inputCodec.encode(request)
+      def changed(change: Json => Json): Json = wire.mapObject(fields => fields.add("payload",
+        fields("payload").get.mapObject(payload => payload.add("operatingProfile", change(payload("operatingProfile").get)))))
+      def selection(change: Json => Json): Json = changed(value => value.mapObject(fields =>
+        fields.add("selection", change(fields("selection").get))))
+      val malformed = Vector(
+        changed(_ => Json.Null),
+        changed(_.mapObject(_.add("extra", Json.True))),
+        changed(_.mapObject(_.add("mappingIdentity", Json.Null))),
+        changed(_.mapObject(_.add("dispatch", Json.Null))),
+        selection(_.mapObject(_.add("identity", "unknown-profile".asJson))),
+        selection(_.mapObject(_.add("revision", "2".asJson))),
+        selection(_.mapObject(_.add("source", "unknown-source".asJson))),
+        selection(_.mapObject(_.add("extra", Json.True))))
+      When("the owning reader validates selection and exact canonical reprojection")
+      val rejected = malformed.map(W.inputCodec.decode)
+      Then("expanded acceptance neither discards unknown fields nor normalizes malformed metadata")
+      rejected.foreach(_.isLeft shouldBe true)
+      W.inputCodec.decode(wire) shouldBe Right(request)
+      W.inputCodec.encode(W.inputCodec.decode(wire).toOption.get) shouldBe wire
+      request.publicationFailure shouldBe F.request.publicationFailure
     }
   }
 
@@ -452,6 +504,18 @@ final class GoalPhasePrerequisitePrimaryRepairSpec extends AnyWordSpec with Matc
   }
 
   "Ordinary primary repair accounting and retained codecs" should {
+    "identify a publication context attached to the wrong work kind without accepting that contradiction" in {
+      Given("an otherwise valid retained primary-publication repair fixture with an implementation work kind")
+      val request = F.request.copy(kind = "ImplementStep")
+      val wire = W.inputCodec.encode(request)
+      When("the owning reader checks the publication context against its enclosing request")
+      val decoded = W.inputCodec.decode(wire)
+      Then("publication provenance stays intact and its incompatible work kind remains refused")
+      decoded shouldBe Left("Invalid retained check failure context [field=publicationFailure]")
+      request.publicationFailure shouldBe F.request.publicationFailure
+      W.inputCodec.encode(request) shouldBe wire
+    }
+
     "reconstruct the same one reserved generation and actual publication context without a validation receipt" in {
       Given("one original Validation controller and its immutable primary repair fact")
       val wire = A.codec.encode(F.fact)

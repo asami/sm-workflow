@@ -162,7 +162,7 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
         operations.find(op => text(op, "service") == service && text(op, "name") == name)
           .getOrElse(fail(s"Missing Operation $service.$name"))
 
-      Then("the distribution identifies this component and exactly the authored thirteen, six and seven participant Operations")
+      Then("the distribution identifies this component and exactly the authored thirteen, six and nine participant Operations")
       text(abi, "format") shouldBe "cozy.car.abi-manifest.v2"
       abi.hcursor.downField("component").get[String]("namespace") shouldBe Right("org.simplemodeling.textus")
       abi.hcursor.downField("component").get[String]("id") shouldBe Right("SmWorkflow")
@@ -179,10 +179,12 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
         "submitHandoffScopeResult", "submitReasoningResult", "submitSplitHumanDirection")
       names("RepositorySyncService") should contain theSameElementsAs Vector(
         "startRepositorySync", "advanceRepositorySync", "submitRepositorySyncWorkResult",
-        "submitNativeMergeReview", "submitNativeMergeRepair", "submitRepositoryConflictDecision", "submitRepositoryPurposeResult")
+        "submitNativeMergeReview", "submitNativeMergeRepair", "submitRepositoryConflictDecision", "submitRepositoryPurposeResult",
+        "describeRepositorySyncPushContinuation", "adoptRepositorySyncPushContinuation")
 
       names("StandaloneFixService") should contain theSameElementsAs Vector(
-        "startStandaloneFix", "startStandaloneReviewFix", "advanceStandaloneFix", "submitStandaloneFixWorkResult", "resolveStandaloneFixDiagnosticInformation")
+        "startStandaloneFix", "startStandaloneReviewFix", "advanceStandaloneFix", "submitStandaloneFixWorkResult", "resolveStandaloneFixDiagnosticInformation",
+        "describeStandaloneFixValidationRecovery", "recoverStandaloneFixValidation")
 
       And("passive import, execution, delivery and caller-information Operations expose distinct concrete inputs and outputs")
       val preparation = Map("prepareStandaloneFixStart" -> "WorkflowStandaloneFixStartPreparationInput", "prepareGoalStart" -> "WorkflowGoalStartPreparationInput",
@@ -232,6 +234,8 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
         "adoptGoalPhaseValidationRepair" -> "GoalPhaseValidationRepairAdoptionInput",
         "advanceSplitPhase" -> "SplitPhaseAdvanceInput",
         "advanceRepositorySync" -> "RepositorySyncAdvanceInput",
+        "describeRepositorySyncPushContinuation" -> "RepositorySyncPushContinuationDescriptionInput",
+        "adoptRepositorySyncPushContinuation" -> "RepositorySyncPushContinuationAdoptionInput",
         "startGoalPhase" -> "GoalPhaseStartInput",
         "describeGoalPhaseReleaseRepairContinuation" -> "GoalPhaseReleaseRepairContinuationDescriptionInput",
         "recoverGoalPhaseReleaseRepairContinuation" -> "GoalPhaseReleaseRepairContinuationRecoveryInput",
@@ -250,15 +254,25 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
         "submitRepositoryPurposeResult" -> "RepositorySyncPurposeResult",
         "submitRepositoryConflictDecision" -> "RepositorySyncHumanConflictAnswer")
           .view.mapValues(value => Some(value)).toMap
-      And("precommit review and purpose completion retain their concrete participant output and value contracts")
+      And("precommit review, purpose completion and push continuation retain their concrete participant output and value contracts")
       Vector(
         ("GoalPhaseService", "describeGoalPhaseStepReview", "GoalPhaseStepReviewDescriptionResult"),
         ("GoalPhaseService", "requestGoalPhaseStepReview", "GoalPhaseStepReviewRequestResult"),
-        ("RepositorySyncService", "submitRepositoryPurposeResult", "RepositorySyncConflictSubmissionResult")
+        ("RepositorySyncService", "submitRepositoryPurposeResult", "RepositorySyncConflictSubmissionResult"),
+        ("RepositorySyncService", "describeRepositorySyncPushContinuation", "RepositorySyncPushContinuationDescriptionResult"),
+        ("RepositorySyncService", "adoptRepositorySyncPushContinuation", "RepositorySyncPushContinuationAdoptionResult")
       ).foreach { case (service, name, output) =>
         text(operation(service, name), "kind") shouldBe "COMMAND"
         text(operation(service, name), "output") shouldBe output
       }
+      valueFields("RepositorySyncPushContinuationDescriptionInput") shouldBe Vector("sessionId")
+      valueFields("RepositorySyncPushContinuationDescriptionResult") shouldBe
+        Vector("sessionId", "outcome", "message", "componentInstance", "target", "availableChoices", "adoptionOperation")
+      valueFields("RepositorySyncPushContinuationAnswer") shouldBe
+        Vector("choice", "rationale", "priorExecutionEnded", "acceptOriginalUncertainty")
+      valueFields("RepositorySyncPushContinuationAdoptionInput") shouldBe
+        Vector("sessionId", "target", "choice", "rationale", "directionReference", "priorExecutionEnded", "acceptOriginalUncertainty", "executionEvidence")
+      valueFields("RepositorySyncPushContinuationAdoptionResult") shouldBe Vector("sessionId", "accepted", "outcome", "message")
       valueFields("GoalPhaseStepReviewDescriptionInput") shouldBe Vector("sessionId")
       valueFields("GoalPhaseStepReviewDescriptionResult") shouldBe Vector("sessionId", "outcome", "message", "target", "requestOperation")
       valueFields("GoalPhaseStepReviewRequestInput") shouldBe Vector("sessionId", "target", "reason")

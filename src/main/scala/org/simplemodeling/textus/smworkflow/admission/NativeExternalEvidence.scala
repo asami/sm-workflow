@@ -34,6 +34,7 @@ private[smworkflow] object NativeExternalEvidence {
     case WorkflowForceClosure extends Purpose(org.simplemodeling.textus.smworkflow.admission.WorkflowForceClosure.purpose)
     case DelegateAdoption extends Purpose("delegate-task-requester-artifact-adoption")
     case StandaloneReview extends Purpose("standalone-fix-independent-review")
+    case StandaloneValidationRecovery extends Purpose("standalone-fix-validation-recovery")
     case GoalTaskMalformedIssuedWorkRecovery extends Purpose("goal-task-malformed-issued-work-recovery")
     case GoalTaskMalformedIssuedWorkNonexecution extends Purpose("goal-task-malformed-issued-work-nonexecution")
     case InventoryAuthority extends Purpose(GoalPhaseInventoryAuthority.purpose)
@@ -269,6 +270,12 @@ private[smworkflow] object NativeExternalEvidence {
     } else if (purpose == Purpose.InventoryAuthority) {
       if (selected.hcursor.downField("scope").get[String]("participant").contains(value.participant)) Consequence.unit
       else Consequence.securityPermissionDenied("Inventory authority crosses its actual original participant")
+    } else if (purpose == Purpose.StandaloneValidationRecovery) {
+      val answer = selected.hcursor.downField("standaloneValidationRecovery").downField("answer")
+      if (answer.get[String]("participant").contains(value.participant) &&
+          answer.downField("reference").get[String]("identity").contains(value.reference) &&
+          answer.downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
+      else Consequence.securityPermissionDenied("Standalone recovery Human evidence crosses its participant or reference")
     } else if (purpose == Purpose.GoalTaskMalformedIssuedWorkRecovery || purpose == Purpose.GoalTaskMalformedIssuedWorkNonexecution) {
       val answer = if (purpose == Purpose.GoalTaskMalformedIssuedWorkRecovery)
         selected.hcursor.downField("goalTaskMalformedIssuedWorkRecovery").downField("answer")
@@ -327,6 +334,7 @@ private[smworkflow] object NativeExternalEvidence {
   private def selectedC(purpose: Purpose, value: Json): Consequence[Json] = {
     val selected = purpose match {
       case Purpose.GoalTaskMalformedIssuedWorkRecovery => GoalTaskMalformedIssuedWorkRecovery.selectBinding(value)
+      case Purpose.StandaloneValidationRecovery => StandaloneFixValidationRecovery.selectBinding(value)
       case Purpose.GoalTaskMalformedIssuedWorkNonexecution => GoalTaskMalformedIssuedWorkRecovery.selectNonexecutionBinding(value)
       case Purpose.InventoryAuthority => GoalPhaseInventoryAuthority.select(value)
       case Purpose.RepositoryEffect | Purpose.StepClosure | Purpose.PhaseClosure => NativeAuthorityScope.select(purpose, value)

@@ -163,14 +163,18 @@ private[smworkflow] object GoalPhaseNativeWork {
     if (Vector("checkFailure", "issues", "repairProgress", "purposeRepair", "releaseRepairContract", "triage", "diagnosticHistory", "operatingProfile", "publicationFailure").exists(key => cursor.downField(key).focus.exists(_.isNull)))
       Left(DecodingFailure("Check failure context must be absent or a valid object", cursor.history))
     else _request_decoder.tryDecode(cursor).flatMap { request =>
-      if (_publication_request_valid(request) &&
-          request.operatingProfile != null && request.operatingProfile.forall(GoalPhaseOperatingProfiles.captureValid) &&
-          IncrementalSbtDiagnosisRepair.historyValid(request.diagnosticHistory) &&
-          request.checkFailure.forall(value => admitCheckFailureContextC(value).isSuccess) &&
-          GoalPhaseFixIssues.validateOptionC(request.issues).isSuccess &&
-          GoalPhaseRepairProgress.validateOptionC(request.repairProgress).isSuccess &&
-          GoalPhasePurposeRepair.validateRequestC(request).isSuccess && releaseRepairContractValid(request)) Right(request)
-      else Left(DecodingFailure("Invalid retained check failure context", cursor.history))
+      def _invalid_(field: String): Decoder.Result[Request] =
+        Left(DecodingFailure("Invalid retained check failure context [field=" + field + "]", cursor.history))
+      if (!_publication_request_valid(request)) _invalid_("publicationFailure")
+      else if (request.operatingProfile == null || !request.operatingProfile.forall(GoalPhaseOperatingProfiles.captureValid))
+        _invalid_("operatingProfile")
+      else if (!IncrementalSbtDiagnosisRepair.historyValid(request.diagnosticHistory)) _invalid_("diagnosticHistory")
+      else if (!request.checkFailure.forall(value => admitCheckFailureContextC(value).isSuccess)) _invalid_("checkFailure")
+      else if (!GoalPhaseFixIssues.validateOptionC(request.issues).isSuccess) _invalid_("issues")
+      else if (!GoalPhaseRepairProgress.validateOptionC(request.repairProgress).isSuccess) _invalid_("repairProgress")
+      else if (!GoalPhasePurposeRepair.validateRequestC(request).isSuccess) _invalid_("purposeRepair")
+      else if (!releaseRepairContractValid(request)) _invalid_("releaseRepairContract")
+      else Right(request)
     }
   }
 

@@ -96,6 +96,8 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
       When("the native launcher publication set is compared with the generated operations")
       val declared = SmWorkflowComponent.CompletionRecordClosureServiceService.operations.operations.toVector
         .map(o => s"${SmWorkflowComponent.CompletionRecordClosureServiceService.name}.${o.name}").toSet ++ generated.flatMap(_.providedOperations.map(o => s"${o.service}.${o.name}")).toSet ++
+        SmWorkflowComponent.StandaloneFixServiceService.operations.operations.toVector.map(o =>
+          s"${SmWorkflowComponent.StandaloneFixServiceService.name}.${o.name}") ++
         SmWorkflowComponent.WorkflowForceClosureServiceService.operations.operations.toVector.map(o => s"${SmWorkflowComponent.WorkflowForceClosureServiceService.name}.${o.name}") ++
         SmWorkflowComponent.JournalServiceService.operations.operations.toVector.map(o => s"${SmWorkflowComponent.JournalServiceService.name}.${o.name}") ++
         SmWorkflowComponent.EvidenceServiceService.operations.operations.toVector.map(o => s"${SmWorkflowComponent.EvidenceServiceService.name}.${o.name}") ++
@@ -148,11 +150,11 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
       val deferred = ThreeWorkflowLauncherAssembly.deferredDeclarations
         .find(_.name == "RepositorySyncService").get.operations.operations.toVector
         .map(operation => operation.name -> operation).toMap
-      Then("both operations retain their original sessionId and structured input specifications")
+      Then("description retains sessionId and adoption retains the structured input or Resource alternatives")
       val describe = deferred(RepositorySyncValidationContinuation.describeOperation)
       val adopt = deferred(RepositorySyncValidationContinuation.adoptionOperation)
       describe.specification.request.parameters.map(_.name) shouldBe List("sessionId")
-      adopt.specification.request.parameters.map(_.name) shouldBe List("input")
+      adopt.specification.request.parameters.map(_.name) shouldBe List("input", "inputResource")
       Vector(describe, adopt).foreach { operation =>
         operation.specification.request shouldBe generated(operation.name).specification.request
         operation.specification.response shouldBe generated(operation.name).specification.response

@@ -1013,21 +1013,10 @@ private[smworkflow] object GoalPhasePrerequisitePublicationRecovery {
     def createOperationRequest(request: Request): Consequence[OperationRequest] =
       if (request == null || !request.service.contains("GoalPhaseService") ||
           request.operation != (if (describe) describeOperation else recoveryOperation)) F.invalid("Prerequisite recovery Operation identity differs")
-      else if (describe) _input_c[V.GoalPhasePrerequisitePublicationRecoveryDescriptionInput](request, Set("sessionId"))
-        .map(value => Action(request, value.sessionId, true, None, port))
+      else if (describe) NativeWorkflowOperationInput.textC(request, "sessionId")
+        .map(identity => Action(request, identity, true, None, port))
       else resourceInputC(request).map(source => Action(request, "", false, Some(source), port))
   }
-  private def _input_c[A: ValueReader](request: Request, keys: Set[String]): Consequence[A] = for {
-    record <- NativeWorkflowOperationInput.recordC(request, "input")
-    _ <- if (DevelopmentOperationalView.uniqueFields(record)) Consequence.unit
-      else F.invalid("Prerequisite recovery input contains duplicate fields")
-    text <- record.toJsonStringC
-    json <- io.circe.parser.parse(text).left.map(_.message).flatMap(GoalPhaseNativeMetadata.normalizePublicJson)
-      .fold(F.invalid, Consequence.success)
-    _ <- if (json.asObject.exists(fields => fields.keys.toSet == keys && fields.values.forall(value => !value.isNull)))
-      Consequence.unit else F.invalid("Prerequisite recovery input requires exactly its non-null business fields")
-    value <- summon[ValueReader[A]].readC(record)
-  } yield value
   private final case class Action(request: Request, sessionId: String, describe: Boolean,
     recovery: Option[NativeWorkflowResourceInput.Source[Record]], port: GoalPhaseNativeWorkContinuation.Port) extends CommandAction {
     override def commandExecutionMode = CommandExecutionMode.Sync
