@@ -26,3 +26,10 @@ Contract: [directory-list synchronization](../spec/repository-sync-directory-lis
 - [ ] P611-16 (B2/B4/B5): Truly missing validation settings return a bounded setup request rather than test failure; supported same-Session supplementation resumes unfinished validation with retained candidate/evidence/counters, without successful-effect replay or direct Git/SBT fallback.
 
 - [ ] P611-17 (B3/B4): Dirty entry commits each coherent change purpose before merge/fast-forward/push; reuse recorded reasons and acceptance without redundant AI or FULL, handle multi-purpose/shared-file and inseparable changes, and preserve completed commits/excluded remainders after interruption or sync failure.
+
+## Workflow artifact acquisition budget — 2026-11-04
+
+- [ ] P611-18 (B1/B4): `workflow.artifact.max-bytes` defaults to 67,108,864 bytes (64 MiB) when absent; normal home/project and Component precedence supports explicit overrides; invalid or CNCF-unsupported values fail configuration rather than silently falling back.
+- [ ] P611-19 (B1/B4): The selected artifact budget reaches CNCF's ExecutionContext-aware acquisition while retaining authorization, roots, UTF-8 decoding and observability; generic Resource reads and independent Git/capture/receipt budgets remain unchanged; no application-owned reader or post-acquisition content ceiling is added.
+- [ ] P611-20 (B4): Evidence preparation, recovery adoption, `inputResource`/`resultResource` submission and retained artifact rereading consistently use the artifact budget for the complete serialized UTF-8 input; inclusive exact-limit, over-limit, multibyte and escaped-JSON cases preserve complete input or return a concrete failure without truncation or false success.
+- [ ] P611-21 (B5): Installed qualification uses an approximately 37.5 MB recovery target with the 64 MiB artifact default and unchanged generic read policy, reaches continuation in the same isolated Session and demonstrates configuration-corrected over-limit recovery while preserving accepted results, UNKNOWN/failure history, counters and successful effects without re-Start or accepted Submit replay.

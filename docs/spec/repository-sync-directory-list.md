@@ -170,6 +170,46 @@ or atomic remote transaction: completed repositories remain completed if another
 fails. A new synchronization intent against later repository changes is distinct
 from collecting a previous terminal result.
 
+## Workflow artifact acquisition budget — 2026-11-04
+
+Public recovery targets and semantic/evidence artifacts may exceed ordinary
+Resource defaults. sm-workflow selects a declared Workflow artifact acquisition
+budget through `workflow.artifact.max-bytes`; CNCF owns bounded acquisition and
+its enforcement. An absent property selects **67,108,864 bytes (64 MiB)**.
+Explicit values use normal home/project and Component configuration resolution;
+malformed or CNCF-unsupported values fail configuration without silent fallback.
+The default is configurable rather than an immutable 64 MiB ceiling.
+
+Bind the resolved immutable budget through the normal ExecutionContext-aware
+Resource read contract. Extend that CNCF contract minimally where its current
+read API cannot accept a purpose-specific budget. Retain provider selection,
+authorization, permitted roots, strict UTF-8 decoding and ordinary observability.
+Do not construct an application-owned file reader or reject an already acquired
+complete artifact through a second application byte/character gate. This follows
+the [application content admission](application-content-admission.md) boundary.
+
+Apply the selected budget consistently to declared Workflow artifact reads:
+public recovery targets, `inputResource`/`resultResource` payloads, referenced
+evidence and retained artifact rereads. Classify the use at the owning operation;
+artifact data cannot select its own limit or broaden read authority. Generic
+Resource reads keep their ordinary policy. Git capture, SBT output and mechanical
+receipt capacities retain their own settings and meanings.
+
+Count the complete serialized UTF-8 artifact, including JSON framing and escaping,
+with an inclusive byte boundary. An artifact within the selected budget must not
+fail at an intermediate entry that silently uses the generic smaller budget.
+An over-budget read returns a concrete acquisition failure, never truncated
+semantic input or success. Preserve the Session, accepted results, prior
+UNKNOWN/failures and repair counts; use the supported public continuation after
+normal configuration correction, without replaying completed effects.
+
+Qualify a recovery target of approximately 37.5 MB through preparation, adoption
+and same-Session continuation with the 64 MiB artifact default and unchanged
+generic reads. Also cover explicit home/project overrides, invalid settings,
+exact/over-limit multibyte and escaped-JSON boundaries, and retained artifact
+rereading. B1 supplies configuration binding, B4 owns continuation and B5 records
+installed evidence. P611-18–21 remain pending until that evidence exists.
+
 ## Keep lower-level operations available
 
 Retain the existing individually callable push-only, fast-forward-only and other

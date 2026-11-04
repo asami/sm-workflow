@@ -94,3 +94,32 @@ actual child mode is recorded. No AI-written per-repository launcher or silent
 fixture substitution for required live demo/production evidence. Preserve
 current Phase/session history and integrate this as a bounded binding refinement,
 not a restart or a repeated four-mode full validation.
+
+## Workflow artifact acquisition budget — 2026-11-04
+
+Add an artifact-specific acquisition policy under B4, with normal configuration
+binding available in B1 and installed qualification in B5. The reported public
+recovery target was approximately 37.5 MB and exceeded its host's 16 MiB generic
+Resource read budget. This is planned work; raising that host's generic budget
+temporarily does not qualify the artifact-specific route.
+
+Declare `workflow.artifact.max-bytes` with an absence default of **67,108,864
+bytes (64 MiB)**. Resolve explicit values through ordinary home/project and
+Component configuration precedence. This is a configurable acquisition budget,
+not a fixed application content ceiling. Validate the selected value against
+CNCF's supported finite range and reject invalid configuration explicitly.
+
+sm-workflow selects the budget for declared Workflow artifacts; CNCF enforces
+it while acquiring the complete serialized UTF-8 input. Connect the budget to
+the ExecutionContext-aware Resource API, including a minimal CNCF extension if
+necessary. Preserve normal authorization, file roots, decoding and observability.
+Keep generic Resource, Git capture and mechanical-receipt settings independent.
+Use the same artifact policy for evidence preparation, adoption/submission and
+artifact rereading, without a smaller intermediate read budget.
+
+Qualify the reported large-target case and same-Session continuation, exact and
+over-limit byte boundaries, home/project overrides and unchanged generic reads.
+Retain accepted work, UNKNOWN/failure history and repair counts. This plan adds
+no new Phase 6.10 completion gate or operation on a live Session. See
+[artifact acquisition contract](../spec/repository-sync-directory-list.md#workflow-artifact-acquisition-budget--2026-11-04)
+and pending P611-18–21.
