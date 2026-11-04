@@ -412,3 +412,36 @@ overwritten. A new unknown effect is retained without automatic replay. The
 namespace and direction do not authorize another repair attempt or subsequent
 Purpose; normal candidate verification, validation, independent review, commit
 and terminal handling remain authoritative.
+
+## ID09: retained baseline provenance across ownership repairs
+
+A qualified inventory's baseline file records ordinary unchanged text from the
+failed candidate. On a later repair that text may already contain an accepted
+current correction, while the original repository still has its captured root
+text. Root authentication therefore uses the saved progress's exact
+`projectedWorktree` expectation first, then its original request file, and uses a
+qualified baseline's text only for a newly qualified path with no captured
+expectation. An explicitly captured `None` remains deletion. Candidate baseline,
+captured root and accepted integrated later-owner projection remain distinct.
+
+Retaining the next ownership repair derives those root expectations from the
+unchanged saved progress before updating the current group. It keeps the original
+request and later plan groups exact, retaining earlier root expectations and
+adding newly qualified ones. Qualified candidate text and actual later-owner
+continuations keep their existing meanings. No persisted field, policy version
+or compatibility alias is added; legacy absent projections retain their meaning.
+
+For an already qualified originally clean addition, identified by its retained
+root expectation and absence from the original request, the current effective
+group's admitted content is also the explicit root-after projection when no later
+owner exists. This includes an admitted deletion. The root-before guard still
+uses the captured expectation. Original request paths receive no such override;
+later-owned paths continue to require their existing explicit resolution, and
+conflicting later text still refuses.
+
+After an accepted repair encounters the known pre-effect 409, continuation uses
+separate ordinary Advance in the same Session. The accepted Submit is never
+replayed. Full history, failures, UNKNOWN effects, accepted results and cumulative
+counters remain retained. The existing candidate, snapshot, HEAD, branch, index,
+scope, typed root-read and later-owner guards still apply; actual root drift or
+malformed or duplicated baselines refuse before retaining the next attempt.

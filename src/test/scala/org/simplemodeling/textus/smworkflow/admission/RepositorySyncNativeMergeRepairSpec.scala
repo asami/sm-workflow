@@ -70,8 +70,7 @@ final class RepositorySyncNativeMergeRepairSpec extends AnyWordSpec with Matcher
         Some(continuation.copy(groups = Vector(first.copy(content = first.content :+ first.content.head), continuation.groups(1)))),
         Some(continuation.copy(groups = Vector(first.copy(content = Vector(first.content.head.copy(path = "docs/future.md"))), continuation.groups(1)))),
         Some(continuation.copy(groups = Vector(first.copy(content = Vector(first.content.head.copy(path = "../outside.scala"))), continuation.groups(1)))),
-        Some(continuation.copy(rationale = " ")),
-        Some(continuation.copy(groups = Vector(first.copy(content = Vector(first.content.head.copy(text = None))), continuation.groups(1))))) ++
+        Some(continuation.copy(rationale = " "))) ++
         Vector("\u0000", "\ud800").map(text => Some(continuation.copy(groups = Vector(
           first.copy(content = Vector(first.content.head.copy(text = Some(text)))), continuation.groups(1)))))
       When("ordinary repair admission compares exact current files and all derived later-owner/path pairs")
@@ -80,6 +79,8 @@ final class RepositorySyncNativeMergeRepairSpec extends AnyWordSpec with Matcher
       Then("only complete typed per-owner integrated text is accepted while original plan content remains unchanged")
       admitted.isSuccess shouldBe true
       refused.foreach(_.isSuccess shouldBe false)
+      M.admitC(request, result.copy(purposeContinuation = Some(continuation.copy(groups = Vector(
+        first.copy(content = Vector(first.content.head.copy(text = None))), continuation.groups(1))))), policy).isSuccess shouldBe true
       M.admitC(f.input, f.ownershipResult, I.Policy(f.paths.toSet)).isSuccess shouldBe false
       M.admitC(_request, _result.copy(purposeContinuation = Some(continuation)), _policy).isSuccess shouldBe false
       M.admitC(request, M.Result("decision-needed", "Both owner meanings conflict on the same assertion", Vector.empty), policy).isSuccess shouldBe true

@@ -380,13 +380,14 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
       extras.map(value => P.Content(value.path, Some(value.text)))
     plan = progress.plan.get.copy(groups = progress.plan.get.groups.updated(progress.cursor, group.copy(content = content)))
     baselines = input.admittedInventory.toVector.flatMap(_.purpose.toVector.flatMap(_.baselines))
+    baselineexpectations <- RepositorySyncPurposeOwnership.baselineRootExpectationsC(progress, baselines)
     _ <- if (baselines.forall(file => !progress.request.files.exists(_.path == file.path)) &&
         extras.forall(value => progress.request.files.exists(_.path == value.path) || baselines.exists(_.path == value.path)))
       Consequence.unit else N.invalid("Purpose repair additions lack actual original worktree baselines")
     ownership = RepositorySyncPurposeOwnership.repaired(progress, group.copy(content = content), result.purposeContinuation)
     overlap = input.admittedInventory.exists(_.inventoryPolicy == RepositorySyncRepairInventory.ownershipPolicy)
     projected = if (overlap && baselines.nonEmpty) Some(RepositorySyncPurposeOwnership.project(progress,
-      baselines.map(file => P.Content(file.path, file.worktree)))) else progress.projectedWorktree
+      baselineexpectations)) else progress.projectedWorktree
   } yield progress.copy(preparationNamespace = None, request = if (overlap) progress.request else progress.request.copy(files = progress.request.files ++ baselines),
     plan = Some(plan), attempt = progress.attempt + 1, slotCursor = progress.slotCursor + 1,
     baselineTree = Some(candidate.tree), candidate = None, receipts = Vector.empty, selection = None,
@@ -401,12 +402,13 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
       case Some(scope) => for {
         snapshot <- repairSnapshotC(store, basis.validated)
         _ <- if (scope.purpose.exists(_.snapshot == snapshot)) Consequence.unit else N.invalid("Purpose repair snapshot drifted before retaining the next attempt")
+        baselineexpectations <- RepositorySyncPurposeOwnership.baselineRootExpectationsC(progress, scope.purpose.get.baselines)
         workspace <- WorkspaceId.parseC("sm-workflow-repository")
-        _ <- scope.purpose.get.baselines.foldLeft(Consequence.unit) { (prior, file) => for {
+        _ <- baselineexpectations.foldLeft(Consequence.unit) { (prior, file) => for {
           _ <- prior
           path <- WorkspaceFilePath.parseC(file.path)
           actual <- WorkflowFileExecution.readTextC(store.core, FileTarget(workspace), path)
-          _ <- if (actual.text == file.worktree) Consequence.unit
+          _ <- if (actual.text == file.text) Consequence.unit
             else N.invalid("Purpose added baseline drifted before retaining repair: " + file.path)
         } yield () }
       } yield ()

@@ -24,12 +24,24 @@ private[smworkflow] object RepositorySyncPurposeOwnership {
     progress.projectedWorktree.toVector.flatten.find(_.path == path)
       .orElse(progress.request.files.find(_.path == path).map(file => P.Content(path, file.worktree)))
 
+  /** Qualified baselines describe candidate text. Retained root expectations,
+    * including explicit deletion, take precedence over a newly captured file. */
+  def baselineRootExpectationsC(progress: P.Progress, baselines: Vector[P.File]): Consequence[Vector[P.Content]] =
+    if (!validProgress(progress) || baselines == null || !baselines.forall(file => file != null &&
+        RepositorySyncNativeConflictInput.relative(file.path) && file.indexCode == " " && file.worktreeCode == " " &&
+        file.unexamined != null && file.unexamined.isEmpty && file.original != null && file.original.exists(ordinary) &&
+        file.original == file.indexed && file.indexed == file.worktree) ||
+        baselines.map(_.path).distinct.size != baselines.size)
+      RepositorySyncNativeProgressStore.invalid("purpose baselines require unique safe ordinary unchanged candidate files and valid retained ownership")
+    else Consequence.success(baselines.map(file => expected(progress, file.path).getOrElse(P.Content(file.path, file.worktree))))
+
   def effectiveGroup(progress: P.Progress, group: P.Group): P.Group = {
     val projections = progress.ownership.toVector.flatMap(_.groups).filter(_.identity == group.identity).flatMap(_.content)
     group.copy(content = group.content.map(content => projections.find(_.path == content.path).getOrElse(content)))
   }
 
-  /** Explicitly admitted later text is distinct from the current commit. */
+  /** Later-owner text stays distinct from the current commit. Qualified clean
+    * additions with no later owner project their admitted current content. */
   def worktreeProjectionC(progress: P.Progress, group: P.Group): Consequence[Vector[P.Content]] =
     if (!validProgress(progress)) RepositorySyncNativeProgressStore.invalid("purpose ownership is malformed")
     else if (progress.baselineTree.isEmpty) Consequence.success(Vector.empty)
@@ -41,7 +53,10 @@ private[smworkflow] object RepositorySyncPurposeOwnership {
       texts = supplied.map(_.text).distinct
       _ <- if (texts.size <= 1) Consequence.unit else RepositorySyncNativeProgressStore.invalid(
         "Actual semantic/Human resolution is required for conflicting later owners of " + content.path)
-    } yield values ++ texts.headOption.map(text => P.Content(content.path, text)) }
+      projection = texts.headOption.map(text => P.Content(content.path, text)).orElse(Option.when(
+        later.isEmpty && progress.projectedWorktree.toVector.flatten.exists(_.path == content.path) &&
+          !progress.request.files.exists(_.path == content.path))(content))
+    } yield values ++ projection }
 
   def ordinary(text: String): Boolean = text != null && !text.contains('\u0000') && UTF_8.newEncoder().canEncode(text)
   def valid(value: P.OwnershipContinuation): Boolean = value != null && value.groups != null && value.groups.nonEmpty &&

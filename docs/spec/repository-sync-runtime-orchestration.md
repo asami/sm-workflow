@@ -289,3 +289,32 @@ It preserves the already accepted repair and immutable original failure, records
 one explicit Human direction, then leaves the new namespaced preparation to the
 ordinary typed Git/UoW progression. It neither grants authority to later Purpose
 failures nor changes existing validation, review, commit or terminal acceptance.
+
+## ID09: root expectations for retained qualified baselines
+
+Successive ownership repairs keep three facts separate: the qualified failed
+candidate's baseline text, the authenticated root expectation in saved progress,
+and the explicitly integrated later-owner text. For every qualified baseline,
+typed root reads compare against `projectedWorktree` first or the original request
+expectation next, including an explicit deletion. Only a newly qualified path
+without a captured expectation takes its baseline text as the root expectation.
+The next ownership projection uses these expectations from the original saved
+progress; candidate replacements never overwrite retained root provenance.
+Nonoverlapping baseline append behavior and legacy absent projections retain
+their existing contracts, without new persisted fields or inventory policy.
+
+An already qualified clean addition present in retained `projectedWorktree` but
+absent from the original request uses the current effective group's admitted
+content as its explicit root-after projection only when it has no later owner.
+Explicit deletion remains deletion. This avoids an unnecessary three-way merge
+against an earlier failed candidate while preserving the captured root-before
+guard. Original request paths receive no override from this rule. Supplied later
+resolution takes precedence; missing or conflicting later resolution keeps its
+existing behavior.
+
+The existing snapshot equality, actual candidate inventory, clean ordinary file
+shape, safe unique paths, HEAD, branch, index, scope and later-owner checks remain
+required. Root drift refuses. After accepted repair and a known pre-effect 409,
+the same Session continues through ordinary Advance without replaying the accepted
+Submit or resetting history, accepted results, failures, UNKNOWN effects or
+counters. See the [formal continuation contract](repository-sync-formal-failure-continuation.md#id09-retained-baseline-provenance-across-ownership-repairs).
