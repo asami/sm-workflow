@@ -123,3 +123,29 @@ Retain accepted work, UNKNOWN/failure history and repair counts. This plan adds
 no new Phase 6.10 completion gate or operation on a live Session. See
 [artifact acquisition contract](../spec/repository-sync-directory-list.md#workflow-artifact-acquisition-budget--2026-11-04)
 and pending P611-18–21.
+
+## Reference-based responses across workflows — 2026-11-04
+
+Extend B1/B4/B5 with the [common response reference contract](../spec/workflow-response-artifact-references.md).
+Apply it to affected responses across all six workflow families and shared
+preparation/evidence services, not only the reported RepositorySync recovery.
+Return outcomes, control/decision summaries and typed identity/revision references;
+retrieve full material only when an actual consumer needs it. Existing Evidence
+archives and native Workflow snapshot/receipt stores keep their own ownership.
+Verify actual storage and reuse the saved reference without duplicate archival,
+recursive historical targets or repeated source/log payloads in control responses.
+
+Connect reference inputs through preparation, semantic work and adoption so the
+caller does not reassemble the full envelope. Preserve exact revision/owner and
+current-state admission, genuine Human/review evidence, normal read authority,
+availability outcomes and retention. Qualify retained full-body compatibility and
+same-Session fresh-process continuation with no history rewrite or accepted replay.
+The 64 MiB artifact policy remains for needed full reads. P611-22–29 cover response
+inventory, reference resolution, availability/compatibility and measured transfer
+reduction, including the approximately 37.5 MB incident. B5 explicitly includes
+ordinary installed CLI stdout in both text and `--json` modes: return summaries
+and references without expanding full bodies. Retain raw execution output through
+the existing owners and keep progress/diagnostics compact, including stderr.
+Explicit authorized detail retrieval remains available under the artifact budget.
+Qualify actual stdout/stderr byte sizes, exit semantics and existing-consumer
+compatibility without caller redirection/truncation as a substitute. All are pending.

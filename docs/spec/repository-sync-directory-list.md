@@ -210,6 +210,27 @@ exact/over-limit multibyte and escaped-JSON boundaries, and retained artifact
 rereading. B1 supplies configuration binding, B4 owns continuation and B5 records
 installed evidence. P611-18–21 remain pending until that evidence exists.
 
+### Reference-based public results
+
+Use the [common Workflow response reference contract](workflow-response-artifact-references.md)
+for normal RepositorySync results, issued work and recovery targets. Return concise
+actual outcomes and references to retained Evidence, snapshots and receipts through
+their existing owners. The same retained revision is shared rather than embedded
+at multiple target locations or recursively inside prior continuation targets.
+Preparation/adoption consumes references through its managed public owner; the
+caller does not expand the historical target and send it back as full JSON.
+
+Qualify both compact new responses and the retained approximately 37.5 MB legacy
+input. Explicit selected-content reads still use the artifact acquisition budget.
+Preserve exact revision/owner/current-frontier admission, genuine independent
+evidence, availability and retention, and existing Session/results/history/counters.
+Inventory other Workflow response producers under the same B1/B4/B5 delivery;
+P611-22–29 are common acceptance rather than a one-Operation optimization.
+The installed CLI's ordinary text and `--json` stdout uses the same summary and
+reference contract without expanding retained payloads. Keep progress and stderr
+diagnostics compact while raw execution captures remain retained; qualify actual
+emitted byte sizes, exit semantics and explicit authorized detail retrieval.
+
 ## Keep lower-level operations available
 
 Retain the existing individually callable push-only, fast-forward-only and other
