@@ -4,6 +4,8 @@ import io.circe.Json
 import io.circe.generic.auto.*
 import io.circe.syntax.*
 import org.goldenport.cncf.workflow.ContextReference
+import org.goldenport.protocol.{Argument, Request}
+import org.simplemodeling.textus.smworkflow.value as V
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -38,6 +40,10 @@ private[admission] object RepositorySyncFormalFailureContinuationFixture {
     failureKey = "purpose-1-check-1-result", failureReference = ContextReference("session:native-purpose-1-check-1-result", "1"),
     intentKey = "purpose-1-check-1-intent", intentReference = ContextReference("session:native-purpose-1-check-1-intent", "1"),
     successfulPrefix = prefix.take(1) ++ prefix.drop(2), mergeState = None, purpose = Some(progress), purposeSlot = Some(slot))
+  val selectedTest = C.Check("selected-real-test", 3, WorkflowSbtValidation.Kind.TestOnly)
+  val corrected = purpose.copy(validationPolicy = policy.copy(checks = checks :+ selectedTest),
+    purposeSlot = Some(slot.copy(checks = checks :+ selectedTest)), continuationPolicy = N.selectionPolicy,
+    proposedChecks = Some(checks :+ selectedTest))
 }
 
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -45,6 +51,110 @@ private[admission] object RepositorySyncFormalFailureContinuationFixture {
 final class RepositorySyncFormalFailureContinuationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import RepositorySyncFormalFailureContinuationFixture.*
   "RS-FORMAL-02 explicit new attempt" should {
+    "decode inline and Resource adoption through the same strict complete business contract" in {
+      Given("the existing public adoption DTO and one deferred local Resource")
+      val reference = V.WorkflowArtifactReference("selection-contract-direction", "1")
+      val input = V.RepositorySyncValidationContinuationAdoptionInput("session", N.publicRecord(corrected),
+        N.selectionChoices.head, "Keep the exact fixed original checks and append selected tests", reference, false, false,
+        V.WorkflowExecutionEvidence(Vector(reference), Some("participant"), None, None))
+      val raw = input.toRecord().toJsonStringC.toOption.get
+      def request(fields: (String, Any)*) = Request.of(component = "sm-workflow", service = "RepositorySyncService",
+        operation = RepositorySyncValidationContinuation.adoptionOperation,
+        arguments = fields.toList.map((name, value) => Argument(name, value)), properties = Nil, switches = Nil)
+      val inline = RepositorySyncValidationContinuation.adoptionSourceC(request("input" -> raw)).toOption.get
+      val resource = RepositorySyncValidationContinuation.adoptionSourceC(request("inputResource" -> "file:///private/tmp/selection-contract.json")).toOption.get
+      var reads = 0
+      When("each exclusive transport reaches the same strict decoder")
+      val a = RepositorySyncValidationContinuation.readAdoptionInputC(inline, _ => fail("Inline cannot read a Resource"))
+      val b = RepositorySyncValidationContinuation.readAdoptionInputC(resource, _ => {
+        reads += 1
+        org.goldenport.Consequence.success(raw)
+      })
+      Then("the exact complete typed input survives and Resource is read once")
+      a.toOption shouldBe Some(input)
+      b.toOption shouldBe Some(input)
+      reads shouldBe 1
+      Vector(request(), request("input" -> raw, "inputResource" -> "file:///private/tmp/a"),
+        request("input" -> "{"), request("inputResource" -> "https://example.invalid/a"))
+        .foreach(value => RepositorySyncValidationContinuation.adoptionSourceC(value).isSuccess shouldBe false)
+      val wire = io.circe.parser.parse(raw).toOption.get
+      val invalid = Vector("{", "null", "[]", raw.dropRight(1) + ",\"sessionId\":\"duplicate\"}",
+        wire.mapObject(_.add("unexpected", Json.True)).noSpaces,
+        wire.mapObject(_.add("reference", Json.Null)).noSpaces,
+        wire.mapObject(fields => fields.add("executionEvidence", fields("executionEvidence")
+          .orElse(fields("execution_evidence")).getOrElse(Json.obj()).mapObject(_.add("unexpected", Json.True)))).noSpaces)
+      invalid.foreach { text =>
+        RepositorySyncValidationContinuation.adoptionSourceC(request("input" -> text)).isSuccess shouldBe false
+        RepositorySyncValidationContinuation.readAdoptionInputC(resource, _ => org.goldenport.Consequence.success(text)).isSuccess shouldBe false
+      }
+      RepositorySyncValidationContinuation.readAdoptionInputC(resource, _ => org.goldenport.Consequence.resourceInvalid(
+        "Normal finite Resource read refused")).isSuccess shouldBe false
+    }
+    "retain canonical v1 and bind v2 to an exact fixed TestOnly append" in {
+      Given("an original failed selection and one applicable registered TestOnly check")
+      When("both explicit policy versions use the existing target and evidence protocol")
+      N.decodeTarget(target.asJson) shouldBe Right(target)
+      target.asJson.hcursor.downField("proposedChecks").focus shouldBe None
+      N.decodeTarget(corrected.asJson) shouldBe Right(corrected)
+      RepositorySyncValidationContinuation.decodeAnyTarget(corrected.asJson) shouldBe
+        Right(RepositorySyncValidationContinuation.FormalFailureTarget(corrected))
+      val reference = ContextReference("selection-correction", "1")
+      val rationale = "Append the actual fixed TestOnly coverage on the unchanged candidate"
+      val binding = N.bindingC("component", corrected, N.selectionChoices.head, rationale, "participant", reference, false, false)
+      Then("the whole proposal is bound and each policy accepts only its own adopting choice")
+      binding.isSuccess shouldBe true
+      RepositorySyncValidationContinuation.selectBinding(binding.toOption.get) shouldBe Right(binding.toOption.get)
+      N.bindingC("component", corrected, N.choices.head, rationale, "participant", reference, false, false).isSuccess shouldBe false
+      N.bindingC("component", purpose, N.selectionChoices.head, rationale, "participant", reference, false, false).isSuccess shouldBe false
+      val answer = RepositorySyncValidationContinuation.Answer(N.selectionChoices.head, rationale, false, false)
+      N.decodeAnswer(corrected, answer.asJson) shouldBe Right(answer)
+      N.decodeAnswer(purpose, answer.asJson).isLeft shouldBe true
+      val description = V.RepositorySyncValidationContinuationDescriptionResult("session", "adoption-required", N.message,
+        "component", N.publicRecord(corrected), N.selectionChoices, RepositorySyncValidationContinuation.adoptionOperation)
+      val publicReference = V.WorkflowArtifactReference(reference.identity, reference.revision)
+      val execution = V.WorkflowExecutionEvidence(Vector(publicReference), Some("participant"), None, None)
+      val publicAnswer = V.RepositorySyncValidationContinuationAnswer(answer.choice, answer.rationale, false, false)
+      val now = java.time.Instant.parse("2026-11-03T00:00:00Z")
+      org.simplemodeling.textus.smworkflow.preparation.NativeRepositoryValidationContinuationPreparation.prepareC(
+        description, publicAnswer, publicReference, execution, "participant", "normal-development-host", now).isSuccess shouldBe true
+      org.simplemodeling.textus.smworkflow.preparation.NativeRepositoryValidationContinuationPreparation.prepareC(
+        description.copy(choices = N.choices), publicAnswer, publicReference, execution, "participant", "normal-development-host", now).isSuccess shouldBe false
+      org.simplemodeling.textus.smworkflow.preparation.NativeRepositoryValidationContinuationPreparation.prepareC(
+        description, publicAnswer.copy(choice = N.choices.head), publicReference, execution, "participant", "normal-development-host", now).isSuccess shouldBe false
+      N.proposedChecks(checks, policy, Some(slot)) shouldBe None
+      N.proposedChecks(checks :+ selectedTest, corrected.validationPolicy, corrected.purposeSlot) shouldBe None
+      val proposed = corrected.proposedChecks.get
+      val invalid = Vector(corrected.copy(proposedChecks = None), corrected.copy(proposedChecks = Some(checks)),
+        corrected.copy(proposedChecks = Some(proposed.tail)), corrected.copy(proposedChecks = Some(proposed.reverse)),
+        corrected.copy(proposedChecks = Some(proposed.updated(0, checks.head.copy(ordinal = 4)))),
+        corrected.copy(proposedChecks = Some(proposed :+ selectedTest)),
+        corrected.copy(proposedChecks = Some(checks :+ selectedTest.copy(kind = WorkflowSbtValidation.Kind.Test))),
+        corrected.copy(proposedChecks = Some(checks :+ selectedTest.copy(identity = "arbitrary-test"))),
+        corrected.copy(purposeSlot = Some(slot)), corrected.copy(continuationPolicy = N.policy),
+        target.copy(continuationPolicy = N.selectionPolicy, proposedChecks = Some(proposed)))
+      invalid.foreach(value => N.decodeTarget(value.asJson).isLeft shouldBe true)
+      Vector(corrected.asJson.mapObject(_.add("proposedChecks", Json.Null)),
+        corrected.asJson.mapObject(_.add("unexpected", Json.True)),
+        purpose.asJson.mapObject(_.add("proposedChecks", proposed.asJson))).foreach(value => N.decodeTarget(value).isLeft shouldBe true)
+    }
+    "authenticate corrected progress solely against its actual exact stored direction" in {
+      Given("a selection direction that retains the original failed batch and original successful prefix")
+      val direction = N.Direction(corrected, N.selectionChoices.head, "Require actual selected TestOnly coverage",
+        "participant", ContextReference("selection-correction", "1"), false, false)
+      val original = corrected.purpose.get
+      When("the new progress changes only selection receipts and host direction")
+      val next = original.copy(selection = N.attemptSelection(corrected), receipts = corrected.successfulPrefix,
+        assessment = None, review = None, hostContinuation = Some(direction))
+      Then("the original selection failure candidate and repair accounting stay immutable")
+      N.validPurposeAttempt(next, direction) shouldBe true
+      next.selection.get.checks shouldBe corrected.proposedChecks.get
+      original.selection.get.checks shouldBe corrected.selectedChecks
+      original.receipts.last shouldBe corrected.failed
+      Vector(next.copy(selection = original.selection), next.copy(candidate = original.candidate.map(_.copy(tree = "f" * 40))),
+        next.copy(attempt = original.attempt + 1), next.copy(commits = Vector("f" * 40)),
+        next.copy(receipts = Vector.empty)).foreach(value => N.validPurposeAttempt(value, direction) shouldBe false)
+      next.asJson.as[P.Progress] shouldBe Right(next)
+    }
     "preserve opaque host-map keys nulls and nested prior directions through the real public Record roundtrip" in {
       Given("merge and Purpose targets containing a declaration-shaped host plan and a fixture-owned prior direction")
       val hostplan = Json.obj(

@@ -8,7 +8,7 @@ import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
 import org.goldenport.Consequence
 import org.goldenport.cncf.processexecution.{GitExecutionOutcome, GitIndexCheck, GitObjectId, GitOperation,
-  ProcessExecutionResult, ProcessExecutionTermination, SbtExecutionResult}
+  ProcessExecutionResult, ProcessExecutionTermination, SbtExecutionAttempt, SbtExecutionResult}
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
@@ -20,7 +20,8 @@ import WorkflowManagedProcessExecution as E
   * accepts a caller's success claim or runs an unrecorded retained intent again.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  3, 2026
+  *  version Nov.  3, 2026
+  * @version Nov.  4, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeValidation {
@@ -134,6 +135,7 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
     }
     detail = stage.payload.stage match {
       case "MergeValidated" => "Actual selected merge checks passed. Independent semantic review, commit, push and convergence remain incomplete."
+      case "ValidationPreparationRejected" => RepositorySyncMergeCheckContinuation.preparationMessage
       case "ValidationChecking" if stage.payload.validation.exists(s => !successful(s.receipts, selected = s.selected)) =>
         "Actual failed or indeterminate validation is retained. Repair or Human direction is required; checks are not replayed."
       case "ValidationChecking" => "A retained check intent has no recorded result. Validation is indeterminate; no automatic replay."
@@ -155,7 +157,8 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       else policy.impact match {
         // The admitted supplement must execute its missing lint. It does not
         // borrow an unrelated prior check through program-impact reuse.
-        case Some(impact) if pending.payload.requiredLint.nonEmpty || pending.payload.formalFailure.nonEmpty =>
+        case Some(impact) if pending.payload.requiredLint.nonEmpty || pending.payload.formalFailure.nonEmpty ||
+            pending.payload.mergeCheckContinuation.nonEmpty =>
           RepositorySyncProgramImpact.validateC(impact).map(_ =>
             (Some(RepositorySyncProgramImpact.select(impact, inputs.get)), Map.empty[String, Receipt]))
         case Some(impact) => RepositorySyncProgramImpact.prepareC(store, pending, inputs.get, impact)
@@ -163,7 +166,7 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
         case None => N.invalid("program/unknown consumed inputs require impact-selected validation; consumed=" +
           inputs.get.consumedPaths.mkString(",") + "; unknown=" + inputs.get.unknownPaths.mkString(","))
       }
-    selected <- selectedC(store, pending, policy, merge = true, namespace = namespace, inputs = inputs,
+    selected <- _selected_c(store, pending, policy, merge = true, namespace = namespace, inputs = inputs,
       impact = prepared._1, reused = prepared._2)
   } yield selected
 
@@ -174,7 +177,7 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
   def advanceIntegratedC(store: N.Store, integrated: N.Stage, policy: Policy): Consequence[N.Stage] = for {
     _ <- policy.validateC
     source <- integrationSourceC(integrated)
-    selected <- selectedC(store, source, policy, merge = false, namespace = "")
+    selected <- _selected_c(store, source, policy, merge = false, namespace = "")
   } yield selected
 
   private[admission] def integrationSourceC(integrated: N.Stage): Consequence[N.Stage] =
@@ -191,12 +194,14 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       Consequence.unit else N.invalid("required executed checks are missing or did not pass")
   } yield ()
 
-  private def selectedC(store: N.Store, pending: N.Stage, policy: Policy, merge: Boolean,
+  private def _selected_c(store: N.Store, pending: N.Stage, policy: Policy, merge: Boolean,
     namespace: String, inputs: Option[RepositorySyncDocumentInputs.Assessment] = None,
     impact: Option[RepositorySyncProgramImpact.Selection] = None, reused: Map[String, Receipt] = Map.empty): Consequence[N.Stage] = for {
     _ <- preconditionsC(store, pending)
     checks = if (store.declaration.runtimeCleanSync && merge) impact.map(_.checks).getOrElse(Vector.empty) else policy.checks
-    seed <- if (merge && pending.payload.formalFailure.nonEmpty)
+    mergecheck = merge && pending.payload.mergeCheckContinuation.exists(direction => namespace == RepositorySyncMergeCheckContinuation.namespace(direction.target))
+    seed <- if (mergecheck) RepositorySyncMergeCheckContinuation.seedC(store, pending, namespace, policy, checks)
+      else if (merge && pending.payload.formalFailure.nonEmpty)
       RepositorySyncFormalFailureContinuation.seedC(store, pending, namespace, policy, checks)
       else if (merge) RepositorySyncRequiredLintContinuation.seedC(store, pending, namespace, policy, checks)
       else Consequence.success(pending.payload.continuation.filter(_.choice == "AuthorizeNewValidation")
@@ -207,7 +212,7 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
         _ <- completedC(value, pending, policy, merge)
         _ <- if (value.payload.validation.exists(state => RepositorySyncDocumentInputs.applicable(state.inputs, inputs))) Consequence.unit
           else N.invalid("retained validation crosses its actual document/consumption inputs")
-        _ <- if ((pending.payload.requiredLint.isEmpty && pending.payload.formalFailure.isEmpty) || value.payload.validation.exists(state =>
+        _ <- if ((pending.payload.requiredLint.isEmpty && pending.payload.formalFailure.isEmpty && !mergecheck) || value.payload.validation.exists(state =>
             state.selected == checks && state.receipts.take(seed.size) == seed)) Consequence.unit
           else N.invalid("retained supplemented validation crosses its authenticated successful prefix")
       } yield value
@@ -216,15 +221,16 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
         // approved recovery. A genuinely new candidate must select required
         // lint before its first SBT effect, even under a document-only claim.
         first <- store.loadC(N.candidateKey(namespace, "validation-intent-0"))
-        _ <- if (merge && first.isEmpty && pending.payload.requiredLint.isEmpty && pending.payload.formalFailure.isEmpty)
+        _ <- if (merge && first.isEmpty && pending.payload.requiredLint.isEmpty && pending.payload.formalFailure.isEmpty && !mergecheck)
           RepositorySyncRequiredLintContinuation.preflightC(store, pending, checks) else Consequence.unit
-        _ <- if (seed.isEmpty || (if (merge && pending.payload.formalFailure.nonEmpty)
+        _ <- if (seed.isEmpty || (if (mergecheck) RepositorySyncMergeCheckContinuation.validPrefix(seed, checks)
+          else if (merge && pending.payload.formalFailure.nonEmpty)
             RepositorySyncFormalFailureContinuation.validPrefix(seed, checks, merge = true)
           else if (merge) pending.payload.requiredLint.nonEmpty &&
             RepositorySyncRequiredLintContinuation.validPrefix(seed, checks.dropRight(1))
           else RepositorySyncValidationContinuation.validPrefix(seed, policy))) Consequence.unit
           else N.invalid("continuation seed is not a successful contiguous selected prefix")
-        selected <- checksC(store, pending, policy,
+        selected <- _checks_c(store, pending, policy,
           State(policy.mode, impact.map(_.reason).getOrElse(policy.reason),
             checks,
             pending.record.revision.value.toString, seed, inputs, impact), merge, namespace, reused)
@@ -232,7 +238,7 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
     }
   } yield selected
 
-  private def checksC(store: N.Store, pending: N.Stage, policy: Policy, selection: State, merge: Boolean,
+  private def _checks_c(store: N.Store, pending: N.Stage, policy: Policy, selection: State, merge: Boolean,
     namespace: String, reused: Map[String, Receipt] = Map.empty): Consequence[N.Stage] = {
     val structural = if (merge) 2 else 1
     val checks = Vector(Check("index-local", 0)) ++ (if (merge) Vector(Check("index-remote", 0)) else Vector.empty) ++ selection.selected
@@ -240,17 +246,31 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
     val seeded = if (selection.receipts.nonEmpty) pending.copy(payload = pending.payload.copy(validation = Some(selection))) else pending
     checks.zipWithIndex.foldLeft(Consequence.success(seeded)) { case (prior, (check, index)) => prior.flatMap { current =>
       if (index < selection.receipts.size) Consequence.success(current)
-      else if (current.payload.validation.exists(s => s.receipts.size < index || !successful(s.receipts, merge, s.selected))) Consequence.success(current)
+      else if (!mayRunCheck(current.payload, index, merge)) Consequence.success(current)
       else for {
         retained <- store.loadC(N.candidateKey(namespace, "validation-result-" + index))
-        selected <- retained match {
-          case Some(value) =>
+        rejected <- if (merge) store.loadC(N.candidateKey(namespace, "validation-preparation-rejected-" + index))
+          else Consequence.success(Option.empty[N.Stage])
+        selected <- (retained, rejected) match {
+          case (Some(_), Some(_)) => N.invalid("selected check cannot have both an execution result and preparation refusal")
+          case (None, Some(value)) => for {
+            intent <- store.loadC(N.candidateKey(namespace, "validation-intent-" + index)).flatMap(
+              _.map(Consequence.success).getOrElse(N.invalid("typed preparation refusal lacks its original intent")))
+            _ <- if (value.record.revision == intent.record.revision.next && value.record.history.dropRight(1) == intent.record.history &&
+                value.payload.validationPreparation.exists(r => RepositorySyncMergeCheckContinuation.validPreparation(r) &&
+                  r.workspaceId == "sm-workflow-repository-validation-" + check.ordinal && r.kind == check.kind) &&
+                intent.payload.validation.exists(state => state.sourceRevision == selection.sourceRevision &&
+                  state.selected == selection.selected && state.receipts.size == index) &&
+                value.payload == intent.payload.copy(stage = "ValidationPreparationRejected", validationPreparation = value.payload.validationPreparation))
+              Consequence.unit else N.invalid("retained typed refusal crosses its exact intent, candidate or check")
+          } yield value
+          case (Some(value), None) =>
             if (value.payload.validation.exists(state => state.sourceRevision == selection.sourceRevision &&
                 state.receipts.size == index + 1 && applies(state, policy) &&
                 state.receipts.last.identity == check.identity && (index < structural ||
                   _receipt_kind(state.receipts.last, check.kind)))) Consequence.success(value)
             else N.invalid("retained check result crosses the selected candidate/check")
-          case None => for {
+          case (None, None) => for {
             intent <- store.loadC(N.candidateKey(namespace, "validation-intent-" + index))
             saved <- intent match {
               case Some(value) => Consequence.success(value)
@@ -261,7 +281,7 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
                 prepared <- store.saveC(N.candidateKey(namespace, "validation-intent-" + index), "native-check-prepared", current.record,
                   pending.payload.copy(stage = checking, validation = Some(state)))
                 _ <- store.acknowledgeC("merge-check-prepared:" + check.identity)
-                receipt <- if (index < structural) for {
+                observed <- if (index < structural) for {
                   parent <- GitObjectId.parseC(if (index == 0) pending.payload.after.get.head else pending.payload.mergeHead.get)
                   checked <- E.executeGitC(store.core, GitOperation.CheckPendingIndex(parent))
                   // Successful facts pass the typed value gate. Negative actual
@@ -271,16 +291,25 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
                     case _ => Consequence.success(checked.processResult)
                   }
                   receipt <- receiptC(check.identity, raw)
-                } yield receipt
+                } yield prepared.payload.copy(validation = Some(state.copy(receipts = receipts :+ receipt)))
                   else reused.get(check.identity) match {
-                    case Some(actual) => Consequence.success(actual)
+                    case Some(actual) => Consequence.success(prepared.payload.copy(validation = Some(state.copy(receipts = receipts :+ actual))))
+                    case None if merge => E.repositoryValidationAttemptC(store.core, check.ordinal, check.kind)
+                      .flatMap(productAttemptPayloadC(prepared.payload, check, _))
                     case None => E.repositoryValidationC(store.core, check.ordinal, check.kind)
-                    .flatMap(sbtReceiptC(check.identity, check.kind, _))
+                      .flatMap(sbtReceiptC(check.identity, check.kind, _))
+                      .map(receipt => prepared.payload.copy(validation = Some(state.copy(receipts = receipts :+ receipt))))
                   }
-                _ <- store.acknowledgeC((if (reused.contains(check.identity)) "merge-check-reused:" else "merge-check-executed:") + check.identity)
-                recorded <- store.saveC(N.candidateKey(namespace, "validation-result-" + index), "native-check-recorded", prepared.record,
-                  pending.payload.copy(stage = checking, validation = Some(state.copy(receipts = receipts :+ receipt))))
-                _ <- store.acknowledgeC("merge-check-recorded:" + check.identity)
+                recorded <- observed.validationPreparation match {
+                  case Some(_) => store.saveC(N.candidateKey(namespace, "validation-preparation-rejected-" + index),
+                    "native-check-preparation-rejected", prepared.record, observed)
+                  case None => for {
+                    _ <- store.acknowledgeC((if (reused.contains(check.identity)) "merge-check-reused:" else "merge-check-executed:") + check.identity)
+                    value <- store.saveC(N.candidateKey(namespace, "validation-result-" + index), "native-check-recorded", prepared.record,
+                      observed)
+                    _ <- store.acknowledgeC("merge-check-recorded:" + check.identity)
+                  } yield value
+                }
               } yield recorded
             }
           } yield saved
@@ -298,6 +327,37 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       }
     }
   }
+
+  /** The real loop applies this gate before looking up or executing a later check. */
+  private[admission] def mayRunCheck(payload: N.Payload, index: Int, merge: Boolean): Boolean =
+    payload.validationPreparation.isEmpty && !payload.validation.exists(state =>
+      state.receipts.size < index || !successful(state.receipts, merge, state.selected))
+
+  /** The owning UoW has returned this typed attempt. No diagnostic prose can
+    * become a process receipt, and uncertainty leaves the original intent alone.
+    */
+  private[admission] def productAttemptPayloadC(prepared: N.Payload, check: Check,
+    actual: SbtExecutionAttempt): Consequence[N.Payload] = for {
+    state <- prepared.validation.map(Consequence.success).getOrElse(N.invalid("product attempt has no selected intent state"))
+    _ <- if (prepared.stage == "ValidationChecking" && prepared.validationPreparation.isEmpty &&
+        state.selected.lift(state.receipts.size - 2).contains(check) &&
+        RepositorySyncMergeCheckContinuation.validPrefix(state.receipts, state.selected)) Consequence.unit
+      else N.invalid("product attempt differs from its exact successful prefix and selected check")
+    result <- actual match {
+      case SbtExecutionAttempt.Observed(result) => for {
+        _ <- if (result != null && result.target != null && result.target.workspaceId != null.asInstanceOf[org.goldenport.cncf.workspace.WorkspaceId] &&
+            result.target.workspaceId.value == "sm-workflow-repository-validation-" + check.ordinal &&
+            result.target.scenario.isEmpty && result.target.validationEstimate.isEmpty) Consequence.unit
+          else N.invalid("product attempt result crosses its fixed selected workspace")
+        receipt <- sbtReceiptC(check.identity, check.kind, result)
+      } yield prepared.copy(validation = Some(state.copy(receipts = state.receipts :+ receipt)))
+      case rejection: SbtExecutionAttempt.AdmissionRejected => RepositorySyncMergeCheckContinuation.preparationRefusalC(check, rejection)
+        .map(refusal => prepared.copy(stage = "ValidationPreparationRejected", validationPreparation = Some(refusal)))
+      case SbtExecutionAttempt.Uncertain(_, _, conclusion) if conclusion != null =>
+        N.uncertain("actual typed check attempt remains UNKNOWN: " + conclusion.show)
+      case _ => N.uncertain("typed check attempt has no attributable outcome; original intent remains UNKNOWN")
+    }
+  } yield result
 
   private[admission] def applies(state: State, policy: Policy): Boolean =
     state.mode == policy.mode && state.selected.forall(check => policy.checks.exists(_ == check))
@@ -317,7 +377,10 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
     * and uncertain terminations cannot become a known-failure repair source. */
   private[admission] def retainedFailureC(store: N.Store, pending: N.Stage, policy: Policy,
     namespace: String): Consequence[Option[N.Stage]] = for {
-    seed <- if (pending.payload.formalFailure.nonEmpty)
+    seed <- if (pending.payload.mergeCheckContinuation.exists(direction => namespace == RepositorySyncMergeCheckContinuation.namespace(direction.target)))
+      RepositorySyncMergeCheckContinuation.retainedSeedC(store, pending, namespace, policy,
+        pending.payload.mergeCheckContinuation.get.target.selectedChecks)
+      else if (pending.payload.formalFailure.nonEmpty)
       RepositorySyncFormalFailureContinuation.retainedSeedC(store, pending, namespace, policy,
         pending.payload.formalFailure.get.target.selectedChecks)
       else pending.payload.requiredLint match {

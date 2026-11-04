@@ -286,8 +286,11 @@ actual terminated nonzero result. A missing request, successful publication,
 admission refusal, not-started execution, timeout or UNKNOWN is ineligible.
 Whole-Phase and dependency source-direction recovery retain their own owners.
 
-`GoalPhaseService.describeGoalPhasePrerequisitePublicationRecovery` accepts only
-`sessionId`. It returns the finite target and choices
+`GoalPhaseService.describeGoalPhasePrerequisitePublicationRecovery` accepts the
+bare `--sessionId <actual-session>` business parameter. Same-purpose Session-only
+descriptions use this flat Session parameter; structured target/answer judgments
+use their declared typed `--input` or `--inputResource`. The old `--input`-only
+description wrapper is not accepted. It returns the finite target and choices
 `AdoptCorrectedSourceAndPublishOnce` and `Defer`. The target binds the actual
 component, participant, Session, full reconstructed controller, Plan, original
 base, accepted Steps, generation and repair progress; the complete old primary
@@ -315,7 +318,8 @@ Design approval, an AI answer, authentication and an old Human question are not
 this independent evidence.
 
 `GoalPhaseService.recoverGoalPhasePrerequisitePublication` accepts exactly
-`sessionId`, `target`, `choice`, `rationale` and `reference`. It re-observes the
+`sessionId`, `target`, `choice`, `rationale` and `reference` in its typed
+`--input` or `--inputResource`. It re-observes the
 actual current target and admits the exact independent target/answer binding.
 `Defer` admits evidence and appends nothing. Adoption appends one mechanical
 direction through the normal Advance operation with causation
@@ -376,7 +380,10 @@ introduced.
 
 `GoalPhasePrerequisitePublicationRecoverySpec` supplies focused pure codec,
 binding, process classification, started-check, adjacent native stage/observation
-fact reconstruction and immutable prerequisite-retention evidence. Interrupted
+fact reconstruction and immutable prerequisite-retention evidence. Its separate
+`session-only-description` group exercises the normal owning Operation: bare
+`sessionId` reaches business admission for an absent native Start, while the old
+wrapper and missing or nontext Session parameters refuse. Interrupted
 intent chains refuse dispatch; failed and UNKNOWN successor publications retain
 the same request under repeated ordinary prerequisite selection. The separate `@DoNotDiscover`
 `NativeGoalPrerequisitePublicationRecoveryCliSpec` requires an explicitly
@@ -390,4 +397,8 @@ ordinary Advance captures its incremental diff against the first native closure,
 publishes real compiled output and recollects without replay. It does not read or seed an actual consumer store,
 copy the sm-workflow source tree or perform recursive publication. Parent-owned
 generation, compilation, focused validation, installed qualification and
-independent review establish acceptance.
+independent review establish acceptance. The separate lightweight installed E12
+uses a fresh normal fixture without native Start or nested SBT: bare
+`--sessionId` reaches the absent-Start business refusal, missing and old
+`--input`-only shapes refuse, and an explicit authorization credential retains
+the fixed-profile provider's 403. It preserves the earlier heavy E11 evidence.

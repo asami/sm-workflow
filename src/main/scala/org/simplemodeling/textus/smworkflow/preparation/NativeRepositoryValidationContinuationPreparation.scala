@@ -8,7 +8,7 @@ import org.simplemodeling.textus.smworkflow.admission.{RepositorySyncValidationC
   NativeExternalEvidence, ThreeWorkflowExternalEvidencePorts}
 import org.simplemodeling.textus.smworkflow.value as V
 
-/** Passive encoding of explicitly discriminated validation, formal host-failure
+/** Passive encoding of explicitly discriminated validation, formal host/selection-failure
   * and purpose-content direction and applicable old-worker lifecycle assertions.
   * Only the trusted host can verify termination and provision this evidence.
   * @since Oct. 26, 2026
@@ -26,7 +26,8 @@ object NativeRepositoryValidationContinuationPreparation {
         _exact(issuer) && occurredAt != null) Consequence.unit
       else Consequence.stateConflict("Repository validation continuation preparation requires the actual description, answer, existing reference, matching worker, issuer and time")
     target <- N.anyTargetC(description.target)
-    _ <- if (description.sessionId == target.sessionId && description.choices == target.choices) Consequence.unit
+    _ <- if (description.sessionId == target.sessionId && description.choices == target.choices &&
+        target.choices.contains(answer.choice)) Consequence.unit
       else Consequence.stateConflict("Repository validation continuation preparation crosses the described Session")
     binding <- N.bindingAnyC(description.componentInstance, target, answer.choice, answer.rationale, participant,
       ContextReference(reference.identity, reference.revision), answer.priorExecutionEnded, answer.acceptOriginalUncertainty)

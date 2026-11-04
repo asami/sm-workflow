@@ -58,7 +58,8 @@ final class StandaloneReviewFixSpec extends AnyWordSpec with GivenWhenThen with 
     Some(T.Facts(check.kind, if (success) T.Outcome.Succeeded else T.Outcome.Failed,
       if (success && check.kind == T.Kind.TestOnly) Some(T.Selection(Vector("fixture.BehaviorSpec"), 1, 2)) else None, None)))
   private def observe(state: S.State, check: GoalPhaseNativeValidation.Check) = take(S.observedC(take(S.intentC(state)), receipt(check)))
-  private def validated(result: S.Result = completed) = checks.foldLeft(take(S.candidateC(repaired(result), candidate)))(observe)
+  private def validated(result: S.Result = completed) =
+    take(S.assessC(checks.foldLeft(take(S.candidateC(repaired(result), candidate)))(observe)))
 
   override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json =
     TypedGitHostPlanFixture.plan(Programs.Target(root.resolve("repository"), "main", "origin", "main",
@@ -132,7 +133,7 @@ final class StandaloneReviewFixSpec extends AnyWordSpec with GivenWhenThen with 
         conditions = Vector(S.Condition("behavior", false, "Affected meaning requires repair")))
       val repair = take(S.completedC(S.Work("review-fix-fixture", "20", "Review", selected), finding, ContextReference("affected-review", "1")))
       val fixed = repaired(completed, repair)
-      val reused = take(S.candidateC(fixed, candidate))
+      val reused = take(S.assessC(take(S.candidateC(fixed, candidate))))
       reused.stage shouldBe "Review"
       reused.receipts shouldBe selected.receipts
       reused.priorReview shouldBe Some(finding)
@@ -162,7 +163,7 @@ final class StandaloneReviewFixSpec extends AnyWordSpec with GivenWhenThen with 
     "admit a no-change not-applicable disposition without silently converting a review repair into a passing-test no-change" in {
       val nochange = completed.copy(reviewDispositions = Some(dispositions.map(_.copy(outcome = "not-applicable",
         changedPaths = Vector.empty, checks = Vector.empty, rationale = "Original condition is mechanically excluded by the adopted scope"))))
-      val assessed = checks.foldLeft(take(S.candidateC(repaired(nochange), initial)))(observe)
+      val assessed = take(S.assessC(checks.foldLeft(take(S.candidateC(repaired(nochange), initial)))(observe)))
       assessed.stage shouldBe "Accepted"
       assessed.semanticReference shouldBe Some(ContextReference("semantic-repair", "1"))
       assessed.reviewDispositions.get.map(_.outcome) shouldBe Vector("not-applicable", "not-applicable")

@@ -168,7 +168,9 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     * Resolve classes without manufacturing an issued WorkOrder or execution observation.
     */
   private[admission] def preflightExecutionC(input: S.Input, profiles: Option[WorkflowExecutionProfileMapping],
-    origin: Option[GoalPhaseNativeExecution.Origin]): Consequence[Unit] = for {
+    origin: Option[GoalPhaseNativeExecution.Origin]): Consequence[Unit] = if (input.kind == "validation")
+    S.inputC(input).flatMap(_ => GoalPhaseNativeExecution.validatePairC(profiles, origin))
+    else for {
     _ <- GoalPhaseNativeExecution.validatePairC(profiles, origin)
     mapping <- profiles.map(Consequence.success).getOrElse(invalid("New Start requires execution profiles and origin"))
     current <- origin.map(Consequence.success).getOrElse(invalid("New Start requires execution profiles and origin"))
@@ -195,6 +197,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     _ <- if (input.repositoryIdentity == h.repository && input.ownedPaths.forall(p => h.paths.contains(p))) Consequence.unit
       else invalid("Requested repository/paths exceed the configured host bindings")
     selected <- if (delegation) DelegateTask.selectChecksC(input, h.checks) else Consequence.success(input.checks.flatMap(id => h.checks.find(_.identity == id)))
+    _ <- if (task) Consequence.unit else WorkflowRepairAssessment.standaloneSelectionC(input, selected)
     initialstate <- S.startC(input, participant, selected)
     state = if (input.delegation.exists(_.role == "requester")) initialstate.copy(stage = "DispatchReady", delivery = Some(DelegateTask.Delivery()),
       message = "One authorized existing-chat dispatch is ready for the caller; no transport or destination work is implied") else initialstate
@@ -356,6 +359,12 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
         saved <- saveC(h, store, record, payload.copy(state = next), core)
         response <- progressC(h, definition, store, saved, payload.copy(state = next), core, depth + 1)
       } yield response
+      case "Assess" => for {
+        _ <- if (s.recoveredValidation.isEmpty) freshC(payload, core) else Consequence.unit
+        next <- S.assessC(s)
+        saved <- saveC(h, store, record, payload.copy(state = next), core)
+        result <- progressC(h, definition, store, saved, payload.copy(state = next), core, depth + 1)
+      } yield result
       case "Repair" | "Review" | "Implement" => issueC(h, store, record, payload, core)
       case "RecordsReady" if task => recordsC(h, store, record, payload, core)
       case "NoChange" if task && recordPaths(h, payload).nonEmpty && payload.records.isEmpty => commitC(h, store, record, payload, core)

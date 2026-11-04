@@ -18,7 +18,8 @@ import WorkflowManagedProcessExecution as E
   * recorded as normal progression. Re-entry collects retained effect intents and
   * actual repository facts. Push remains non-forcing; convergence is observed.
   * @since   Oct.  6, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  4, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeConvergence {
@@ -40,7 +41,12 @@ private[smworkflow] object RepositorySyncNativeConvergence {
   }
 
   def advanceC(store: N.Store, accepted: N.Stage, authority: AuthorityPort,
-    validation: Option[RepositorySyncNativeMergeValidation.Policy] = None): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
+    validation: Option[RepositorySyncNativeMergeValidation.Policy] = None): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] =
+    RepositorySyncPushContinuation.convergenceStoreC(store, accepted).flatMap(actual =>
+      _advance_scoped_c(actual, accepted, authority, validation))
+
+  private def _advance_scoped_c(store: N.Store, accepted: N.Stage, authority: AuthorityPort,
+    validation: Option[RepositorySyncNativeMergeValidation.Policy]): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
     _ <- if (authority != null && (accepted.payload.stage == "ReviewAccepted" ||
         accepted.payload.stage == "MergeAdmitted" ||
         (accepted.payload.stage == "IntegrationValidated" && accepted.payload.mergeHead.isEmpty &&
@@ -48,11 +54,11 @@ private[smworkflow] object RepositorySyncNativeConvergence {
       else N.invalid("convergence requires actual paired merge acceptance or clean integration validation and host authority")
     _ <- if (accepted.payload.stage != "MergeAdmitted") Consequence.unit else for {
       policy <- validation.map(Consequence.success).getOrElse(N.invalid("merge admission requires selected validation bindings"))
-      candidate <- store.currentMergeCandidateC(accepted.record)
-      checked <- store.loadC(N.candidateKey(candidate.namespace, "merge-validated")).flatMap(
+      candidate <- store.scoped("").currentMergeCandidateC(accepted.record)
+      checked <- store.scoped("").loadC(N.candidateKey(candidate.namespace, "merge-validated")).flatMap(
         _.map(Consequence.success).getOrElse(N.invalid("merge admission has no saved native validation")))
       _ <- RepositorySyncNativeMergeValidation.completedC(checked, candidate.pending, policy, merge = true)
-      saved <- RepositorySyncMergeAssessment.admitC(store, checked, policy, candidate.namespace)
+      saved <- RepositorySyncMergeAssessment.admitC(store.scoped(""), checked, policy, candidate.namespace)
       _ <- if (saved == accepted) Consequence.unit else N.invalid("convergence crosses its actual saved merge admission")
     } yield ()
     publicationBase <- RepositorySyncPublication.retainedBaseC(store)
@@ -75,18 +81,22 @@ private[smworkflow] object RepositorySyncNativeConvergence {
     observedOnly <- Consequence.success(store.declaration.runtimeCleanSync && accepted.payload.mergeHead.isEmpty &&
       accepted.payload.method.exists(Set("equal", "fast-forward")) &&
       committed.payload.finalTip.contains(acceptedHead(accepted)))
-    pushed <- if (observedOnly) Consequence.success(committed) else pushC(store, accepted, committed, authority)
-    fetched <- if (observedOnly) Consequence.success(pushed) else finalFetchC(store, accepted, pushed, authority)
-    actual <- convergedC(store, fetched)
-    finalStage <- store.saveC("converged", "native-convergence-observed", fetched.record,
-      fetched.payload.copy(stage = "Converged", after = Some(actual)))
-    _ <- store.acknowledgeC("convergence-observed")
-    completed <- store.closeC(finalStage)
-    _ <- store.acknowledgeC("converged")
-    result = Result(store.identity, finalStage.payload.root, store.declaration.target.localBranch,
-      store.declaration.target.remote, store.declaration.target.remoteBranch,
-      finalStage.payload.finalTip.get, finalStage.payload.indexTree.get)
-  } yield NativeWorkflowOperationOutput.repositoryComplete(completed.identity.value, result)
+    pushed <- pushC(store, accepted, committed, authority)
+    result <- if (pushed.payload.stage == "NativePushRefreshRequired")
+      RepositorySyncPushContinuation.waitC(store, pushed.payload.stage)
+      else for {
+        fetched <- if (observedOnly) Consequence.success(pushed) else finalFetchC(store, accepted, pushed, authority)
+        actual <- convergedC(store, fetched)
+        finalstage <- store.saveC("converged", "native-convergence-observed", fetched.record,
+          fetched.payload.copy(stage = "Converged", after = Some(actual)))
+        _ <- store.acknowledgeC("convergence-observed")
+        completed <- store.closeC(finalstage)
+        _ <- store.acknowledgeC("converged")
+        value = Result(store.identity, finalstage.payload.root, store.declaration.target.localBranch,
+          store.declaration.target.remote, store.declaration.target.remoteBranch,
+          finalstage.payload.finalTip.get, finalstage.payload.indexTree.get)
+      } yield NativeWorkflowOperationOutput.repositoryComplete(completed.identity.value, value)
+  } yield result
 
   private def recordsC(store: N.Store, accepted: N.Stage, authority: AuthorityPort): Consequence[N.Stage] = for {
     retained <- store.loadC("completion-records-applied")
@@ -183,8 +193,13 @@ private[smworkflow] object RepositorySyncNativeConvergence {
   private def pushC(store: N.Store, accepted: N.Stage, committed: N.Stage, authority: AuthorityPort): Consequence[N.Stage] = for {
     retained <- store.loadC("push-observed")
     pending <- store.loadC("push-intent")
+    outcome <- store.loadC("push-result")
+    refresh <- store.loadC("push-refresh-required")
     result <- retained match {
       case Some(value) => localC(store, value).map(_ => value)
+      case None if refresh.nonEmpty => Consequence.success(refresh.get)
+      case None if outcome.exists(_.payload.stage != "NativePushObserved") =>
+        N.uncertain("actual push outcome remains retained; use " + RepositorySyncPushContinuation.describeOperation + " for an independent finite direction")
       case None if pending.nonEmpty => for {
         remote <- G.remoteTipC(store.core, store.declaration.target.remoteBranch)
         _ <- if (committed.payload.finalTip.contains(remote)) Consequence.unit else N.uncertain("Push intent remains unresolved; observe without replay")
@@ -192,15 +207,31 @@ private[smworkflow] object RepositorySyncNativeConvergence {
           committed.payload.copy(stage = "NativePushObserved"))
       } yield saved
       case None => for {
-    _ <- localC(store, committed)
-    _ <- authorizeC(store, authority, Effect.Push)
-    intent <- store.saveC("push-intent", "native-push-prepared", committed.record,
-      committed.payload.copy(stage = "NativePushPreparing"))
-    tip <- GitObjectId.parseC(committed.payload.finalTip.get)
-    branch <- GitBranchName.parseC(store.declaration.target.remoteBranch)
-    _ <- E.executeGitC(store.core, GitOperation.Push(tip, branch)).flatMap(_.valueC)
-    saved <- store.saveC("push-observed", "native-push-observed", intent.record,
-      committed.payload.copy(stage = "NativePushObserved"))
+        actual <- localC(store, committed)
+        remote <- G.remoteTipC(store.core, store.declaration.target.remoteBranch)
+        saved <- if (committed.payload.finalTip.contains(remote))
+          store.saveC("push-observed", "native-push-already-present", committed.record,
+            committed.payload.copy(stage = "NativePushObserved"))
+          else if (!accepted.payload.after.flatMap(_.trackingTip).orElse(accepted.payload.before.trackingTip).contains(remote))
+            store.saveC("push-refresh-required", "native-push-refresh-required", committed.record,
+              committed.payload.copy(stage = "NativePushRefreshRequired", after = Some(actual)))
+          else for {
+            _ <- authorizeC(store, authority, Effect.Push)
+            intent <- store.saveC("push-intent", "native-push-prepared", committed.record,
+              committed.payload.copy(stage = "NativePushPreparing"))
+            tip <- GitObjectId.parseC(committed.payload.finalTip.get)
+            branch <- GitBranchName.parseC(store.declaration.target.remoteBranch)
+            executed <- E.executeGitC(store.core, GitOperation.Push(tip, branch))
+            observed <- RepositorySyncPushContinuation.observationC(executed)
+            stage = if (RepositorySyncPushContinuation.successful(observed)) "NativePushObserved"
+              else if (RepositorySyncPushContinuation.failed(observed)) "NativePushFailed" else "NativePushUncertain"
+            event = if (stage == "NativePushObserved") "native-push-observed"
+              else if (stage == "NativePushFailed") "native-push-failed" else "native-push-uncertain"
+            // Persist the actual returned outcome and capture before valueC can fail.
+            result <- store.saveC(if (stage == "NativePushObserved") "push-observed" else "push-result", event, intent.record,
+              committed.payload.copy(stage = stage, pushObservation = Some(observed)))
+            _ <- executed.valueC
+          } yield result
       } yield saved
     }
   } yield result

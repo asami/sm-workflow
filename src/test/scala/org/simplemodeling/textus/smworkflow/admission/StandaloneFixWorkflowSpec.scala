@@ -38,7 +38,10 @@ final class StandaloneFixWorkflowSpec extends AnyWordSpec with Matchers with Giv
     V.Receipt(check.identity, "exited", Some(if (passed) 0 else 1), output, "", Some(T.Facts(check.kind,
       if (passed) T.Outcome.Succeeded else T.Outcome.Failed,
       if (passed && check.kind == T.Kind.TestOnly) Some(T.Selection(Vector("example.BehaviorSpec"), 1, 3L)) else None, None)))
-  private def observe(s: S.State, r: V.Receipt) = take(S.observedC(take(S.intentC(s)), r))
+  private def observe(s: S.State, r: V.Receipt) = {
+    val observed = take(S.observedC(take(S.intentC(s)), r))
+    if (observed.stage == "Assess") take(S.assessC(observed)) else observed
+  }
   private def repaired = {
     val failed = observe(selected, receipt(checks.head, false, "[error] retained failure"))
     val work = S.Work("fixture-session", "12", "Repair", failed)
@@ -49,6 +52,68 @@ final class StandaloneFixWorkflowSpec extends AnyWordSpec with Matchers with Giv
   private def passed(s: S.State) = checks.foldLeft(s)((state, check) => observe(state, receipt(check)))
 
   "Standalone repair admission" should {
+    "retain the final successful observation before a missing-Compile code assessment can refuse" in {
+      Given("a readable historical standalone code intent selecting only an actually nonempty focused test")
+      val check = checks.last
+      val legacyinput = input.copy(checks = Vector(check.identity), scalaLint = "off")
+      val legacy = take(S.startC(legacyinput, "human", Vector(check)))
+      val intent = take(S.intentC(take(S.candidateC(legacy, candidate))))
+      val successful = receipt(check)
+      When("the final actual receipt is observed without running the separate assessment")
+      val observed = take(S.observedC(intent, successful))
+      val restored = observed.asJson.as[S.State].fold(error => fail(error.message), identity)
+      Then("the Assess checkpoint retains the receipt even though ordinary code acceptance still refuses")
+      observed.stage shouldBe "Assess"
+      restored.receipts shouldBe Vector(successful)
+      restored.pendingCheck shouldBe None
+      S.assessC(restored).isSuccess shouldBe false
+      restored.input shouldBe legacyinput
+      restored.automaticCount shouldBe 0
+    }
+
+    "reject a new incomplete standalone code selection while keeping its historical input readable" in {
+      Given("the standalone code selection gate and an existing legacy TestOnly request")
+      val incomplete = input.copy(checks = Vector(checks.last.identity), scalaLint = "off")
+      When("the pre-effect gate checks incomplete code, complete code and validation-only selections")
+      val results = Vector(WorkflowRepairAssessment.standaloneSelectionC(incomplete, Vector(checks.last)).isSuccess,
+        WorkflowRepairAssessment.standaloneSelectionC(input, checks).isSuccess,
+        WorkflowRepairAssessment.standaloneSelectionC(incomplete.copy(kind = "validation"), Vector(checks.last)).isSuccess)
+      Then("only new incomplete code is rejected; historical decoding and ordinary code requirements remain")
+      results shouldBe Vector(false, true, true)
+      S.inputC(incomplete).isSuccess shouldBe true
+      incomplete.asJson.as[S.Input] shouldBe Right(incomplete)
+      WorkflowRepairAssessment.checksC("code", "off", Vector(checks.last), Vector(receipt(checks.last))).isSuccess shouldBe false
+      WorkflowRepairAssessment.checksC("code", "off", Vector(checks.head), Vector(receipt(checks.head))).isSuccess shouldBe false
+    }
+
+    "finish a successful validation-only batch as NoChange and pause its failure without issuing repairs" in {
+      Given("an explicitly selected standalone validation-only qualification")
+      val check = checks.last
+      val validation = input.copy(kind = "validation", checks = Vector(check.identity))
+      val captured = take(S.candidateC(take(S.startC(validation, "human", Vector(check))), candidate))
+      val intent = take(S.intentC(captured))
+      When("the normal final observations record either the actual passing result or actual failed result")
+      val observed = take(S.observedC(intent, receipt(check)))
+      val passed = take(S.assessC(observed))
+      val failed = take(S.observedC(intent, receipt(check, false, "[error] actual qualification failed")))
+      Then("successful qualification accepts no repair or commit and failure requests Human direction")
+      observed.stage shouldBe "Assess"
+      passed.stage shouldBe "NoChange"
+      passed.message should include("no code repair, commit or publication")
+      passed.conditionReport shouldBe empty
+      passed.semanticReference shouldBe None
+      failed.stage shouldBe "Human"
+      failed.receipts should have size 1
+      failed.automaticCount shouldBe 0
+      failed.ordinaryCount shouldBe 0
+      S.inputC(validation.copy(reviewRequired = true)).isSuccess shouldBe false
+      S.inputC(validation.copy(task = Some(S.Task("direct-instruction", Vector.empty)))).isSuccess shouldBe false
+      StandaloneFixNativeRun.executionRequirementC(validation, "Repair").isSuccess shouldBe false
+      val work = S.Work("fixture", "12", "Repair", failed.copy(stage = "Repair"))
+      S.admitResultC(work, S.Result("completed", "Must not become repair work", Vector.empty,
+        Vector(S.Condition("behavior", true, "Unsupported repair")), Vector.empty)).isSuccess shouldBe false
+    }
+
     "connect retained failure, semantic repair and a fresh nonempty typed check batch without Phase completion or commit" in {
       Given("fixture-owned failed compilation and one admitted standalone semantic repair")
       val next = repaired
@@ -151,10 +216,15 @@ final class StandaloneFixWorkflowSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "reuse applicable successful validation for an unchanged reviewed candidate without a second check intent" in {
+      Given("the unchanged candidate with its previously retained complete successful batch")
       val reviewed = passed(take(S.candidateC(repaired.copy(unresolvedQuestions = Vector("Unsettled meaning")), candidate)))
       val inspection = reviewed.copy(stage = "Inspect", unresolvedQuestions = Vector.empty)
+      When("candidate reuse returns an assessment checkpoint before ordinary assessment")
       val retained = take(S.candidateC(inspection, candidate))
-      retained.stage shouldBe "Accepted"
+      val accepted = take(S.assessC(retained))
+      Then("the existing receipt batch is retained and assessment issues no second check intent")
+      retained.stage shouldBe "Assess"
+      accepted.stage shouldBe "Accepted"
       retained.receipts shouldBe reviewed.receipts
       S.intentC(retained) shouldBe a[Consequence.Failure[?]]
     }

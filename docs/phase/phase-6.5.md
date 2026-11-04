@@ -12,6 +12,11 @@ Adoption and development instructions: [handoff journal](../journal/2026/10/2026
 
 ## Goal and preservation boundary
 
+Follow-up planned 2026-11-01: [Phase 6.12 shared Scala lint profiles](phase-6.12.md)
+extends the Q3 lint route with baseline/team/project configuration and convention
+rules. Its Phase 6.12 SLP checklist preserves existing Q3 acceptance and does not
+add a completion gate to this Phase. See the [target contract](../spec/scala-lint-profiles.md).
+
 Reduce AI cost and review-induced scope growth by making deterministic checks
 the normal Step admission route. Keep semantic judgment available as a planned
 conditional Action and concentrate integrated business/meaning review at Release.

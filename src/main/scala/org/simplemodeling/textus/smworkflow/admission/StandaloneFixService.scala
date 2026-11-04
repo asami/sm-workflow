@@ -34,9 +34,14 @@ private[smworkflow] object StandaloneFixService {
     completion <- completionC(h, definition, storage, None, None)
     wrapped = CallScopedOperationBinding.wrapResult(completion, (core, submitted) =>
       N.storageC(h, definition, core).flatMap(storage => completionC(h, definition, storage, Some(core), Some(submitted))))
+    recovery = StandaloneFixValidationRecovery.operations(h, definition, new StandaloneFixValidationRecovery.EvidencePort {
+      def admitC(core: ActionCall.Core, reference: ContextReference, binding: io.circe.Json): Consequence[Unit] =
+        NativeExternalEvidence.bindBoundedC(creation.configuration, h).flatMap(reader =>
+          new ThreeWorkflowExternalEvidencePorts(reader).standaloneValidationRecovery.admitC(core, reference, binding))
+    })
     service = NativeWorkflowDescriptionMetadata.service(SmWorkflowComponent.StandaloneFixServiceService,
       spec.OperationDefinitionGroup(NonEmptyVector.of(new Operation(true, h, definition, selections),
-        new Operation(false, h, definition, selections), new ReviewOriginStart(h, definition, selections), new InformationOperation(h, definition), wrapped)))
+        new Operation(false, h, definition, selections), new ReviewOriginStart(h, definition, selections), new InformationOperation(h, definition), wrapped).concat(recovery)))
   } yield NativeWorkflowResultInput.standalone(service, creation, h, definition)
 
   private final class Operation(start: Boolean, h: N.Host, definition: DefinitionBinding,

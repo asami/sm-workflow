@@ -50,7 +50,8 @@ final class GoalTaskWorkflowSpec extends AnyWordSpec with GivenWhenThen with Thr
     Some(T.Facts(check.kind, if (success) T.Outcome.Succeeded else T.Outcome.Failed,
       if (success && check.kind == T.Kind.TestOnly) Some(T.Selection(Vector("fixture.BehaviorSpec"), 1, 2)) else None, None)))
   private def observe(state: S.State, check: GoalPhaseNativeValidation.Check) = take(S.observedC(take(S.intentC(state)), receipt(check)))
-  private def validated(c: S.Candidate = candidate) = checks.foldLeft(take(S.candidateC(implementation, c)))(observe)
+  private def validated(c: S.Candidate = candidate) =
+    take(S.assessC(checks.foldLeft(take(S.candidateC(implementation, c)))(observe)))
   private def reviewed(state: S.State) = take(S.completedC(S.Work("task-fixture", "15", "Review", state),
     completed.copy(outcome = "accept", summary = "Integrated Task objective and conditions accepted"), ContextReference("independent-review", "1")))
 
@@ -146,7 +147,7 @@ final class GoalTaskWorkflowSpec extends AnyWordSpec with GivenWhenThen with Thr
       val fixed = take(S.completedC(S.Work("task-fixture", "18", "Repair", repair), completed, ContextReference("affected-fix", "1")))
       fixed.automaticCount shouldBe 1
       fixed.ordinaryCount shouldBe 1
-      val reused = take(S.candidateC(fixed, candidate))
+      val reused = take(S.assessC(take(S.candidateC(fixed, candidate))))
       reused.stage shouldBe "Review"
       reused.receipts shouldBe state.receipts
       reused.priorReviewCandidate shouldBe Some(candidate)
@@ -179,7 +180,7 @@ final class GoalTaskWorkflowSpec extends AnyWordSpec with GivenWhenThen with Thr
       unchanged.commit shouldBe None
       val standalone = take(S.startC(input().copy(task = None), "participant", checks))
       standalone.stage shouldBe "Inspect"
-      val passed = checks.foldLeft(take(S.candidateC(standalone, candidate)))(observe)
+      val passed = take(S.assessC(checks.foldLeft(take(S.candidateC(standalone, candidate)))(observe)))
       passed.stage shouldBe "NoChange"
       passed.reviewReference shouldBe None
       passed.commit shouldBe None

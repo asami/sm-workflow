@@ -69,12 +69,16 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
     SmWorkflowComponent.RepositorySyncServiceService -> Vector(
       "startRepositorySync", "advanceRepositorySync", "submitRepositoryPurposeResult", "submitRepositorySyncWorkResult",
       "describeRepositorySyncValidationContinuation", "adoptRepositorySyncValidationContinuation",
+      "describeRepositorySyncRepairBudgetContinuation", "adoptRepositorySyncRepairBudgetContinuation",
+      "describeRepositorySyncPurposePreparationContinuation", "adoptRepositorySyncPurposePreparationContinuation",
+      "describeRepositorySyncPushContinuation", "adoptRepositorySyncPushContinuation",
       "describeRepositorySyncRepairScopeCorrection", "prepareRepositorySyncRepairScopeCorrection",
       "adoptRepositorySyncRepairScopeCorrection",
       "submitNativeMergeReview", "submitNativeMergeRepair", "submitRepositoryConflictDecision"
     ),
     SmWorkflowComponent.StandaloneFixServiceService -> Vector("startStandaloneFix", "startStandaloneReviewFix", "advanceStandaloneFix",
-      "submitStandaloneFixWorkResult", "resolveStandaloneFixDiagnosticInformation"),
+      "submitStandaloneFixWorkResult", "resolveStandaloneFixDiagnosticInformation",
+      "describeStandaloneFixValidationRecovery", "recoverStandaloneFixValidation"),
     SmWorkflowComponent.StandaloneFixRepairServiceService -> Vector("repairStandaloneFix"),
     SmWorkflowComponent.StandaloneFixReviewServiceService -> Vector("reviewStandaloneFix"),
     SmWorkflowComponent.StandaloneFixSemanticAdmissionServiceService -> Vector("admitStandaloneFixReview"),
@@ -124,6 +128,10 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
   private val _host_service_names = Vector("meta", "system")
 
   private val _limits = Vector(
+    ("RepositorySyncService", "adoptRepositorySyncValidationContinuation", Vector(
+      "exactly one of input or inputResource", "finite UTF-8", "AuthorizeNewValidationAfterSelectionCorrection",
+      "actual appended TestOnly", "separate Advance"
+    )),
     ("GoalPhaseService", "describeGoalPhaseClosureRecovery", Vector(
       "CompletePartialCommit", "succeeded/Exited(0)", "exact remainder paths/blobs/modes"
     )),
@@ -209,7 +217,7 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
 
     "the declared component catalog" which {
       "retain the complete declared operation catalog alongside the canonical host services" in {
-        Given("the complete public declaration catalog, independently of production handler installation")
+        Given("the complete public declaration catalog including repair budget, Purpose preparation and push continuations, independently of production handler installation")
         val names = _declarations.map(_._1.name).sorted
 
         When("the generated component declaration is assembled and its canonical Help selector is interpreted")

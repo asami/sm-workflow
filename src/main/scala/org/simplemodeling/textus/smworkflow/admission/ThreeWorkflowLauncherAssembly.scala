@@ -48,6 +48,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     "StandaloneFixService.startStandaloneReviewFix",
     "StandaloneFixService.startStandaloneFix", "StandaloneFixService.advanceStandaloneFix",
     "StandaloneFixService.submitStandaloneFixWorkResult", "StandaloneFixService.resolveStandaloneFixDiagnosticInformation",
+    "StandaloneFixService.describeStandaloneFixValidationRecovery", "StandaloneFixService.recoverStandaloneFixValidation",
     "LocalPublicationService.ensureLocalPublication", "LocalPublicationService.collectLocalPublication",
     "LocalPublicationService.collectLatestLocalPublication",
     "DevelopmentObservationService.readDevelopmentState", "DevelopmentObservationService.readDevelopmentHistory",
@@ -74,6 +75,12 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitNativeMergeRepair")
 
   private val _standard_operations = publishedMcpOperations ++ Set(
+    "RepositorySyncService." + RepositorySyncPushContinuation.describeOperation,
+    "RepositorySyncService." + RepositorySyncPushContinuation.adoptionOperation,
+    "RepositorySyncService." + RepositorySyncPurposePreparationContinuation.describeOperation,
+    "RepositorySyncService." + RepositorySyncPurposePreparationContinuation.adoptionOperation,
+    "RepositorySyncService." + RepositorySyncRepairBudgetContinuation.describeOperation,
+    "RepositorySyncService." + RepositorySyncRepairBudgetContinuation.adoptionOperation,
     "RepositorySyncService." + RepositorySyncRepairScopeCorrection.prepareOperation,
     "RepositorySyncService." + RepositorySyncRepairScopeCorrection.describeOperation,
     "RepositorySyncService." + RepositorySyncRepairScopeCorrection.adoptionOperation,

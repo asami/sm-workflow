@@ -3,12 +3,14 @@ package org.simplemodeling.textus.smworkflow.preparation
 import java.time.Instant
 import scala.util.control.NonFatal
 import org.goldenport.Consequence
+import org.goldenport.cncf.workflow.ContextReference
 import org.goldenport.convert.ValueReader
 import org.goldenport.record.Record
 import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseDependencySourceRevision as R,
   GoalPhasePrerequisitePublicationUnknownRecovery as U, GoalPhaseNativeMetadata as M}
 import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseNativeWork, NativeExternalEvidence,
-  RepositorySyncNativeMergeReview, SplitPhaseNativeHumanDirection, SplitPhaseReasoningHumanDirection}
+  RepositorySyncNativeMergeReview, SplitPhaseNativeHumanDirection, SplitPhaseReasoningHumanDirection,
+  StandaloneFixValidationRecovery, ThreeWorkflowExternalEvidencePorts}
 import org.simplemodeling.textus.smworkflow.value as V
 
 /** Finite conversion of explicit issued output and supplied external facts to
@@ -24,6 +26,12 @@ private[smworkflow] object NativeExternalEvidenceInput {
   def prepareC(supplied: Map[String, String], readText: String => Consequence[String]): Consequence[Record] = try {
     if (supplied.get("family").contains("RepositorySyncRepairScopeCorrection"))
       _repair_scope_c(supplied, readText)
+    else if (supplied.get("family").contains("RepositorySync") && supplied.get("kind").contains("purpose-preparation-continuation"))
+      _purpose_preparation_c(supplied, readText)
+    else if (supplied.get("family").contains("RepositorySync") && supplied.get("kind").contains("repair-budget-continuation"))
+      _repair_budget_c(supplied, readText)
+    else if (supplied.get("family").contains("RepositorySync") && supplied.get("kind").contains("push-continuation"))
+      _push_continuation_c(supplied, readText)
     else if (supplied.get("kind").contains("force-closure"))
       NativeWorkflowForceClosurePreparation.prepareSuppliedC(supplied, readText)
     else if (supplied.get("kind").contains("goal-phase-prerequisite-publication-recovery"))
@@ -34,15 +42,16 @@ private[smworkflow] object NativeExternalEvidenceInput {
     for {
       options <- NativePreparationInput.optionsC(supplied, _required, readText, Set("participant"))
       _ <- if (Set("DelegateTask", "GoalTask", "StandaloneFix", "GoalPhase", "RepositorySync", "SplitPhase")(options("family")) &&
-          Set("completion-record-closure", "adoption", "malformed-issued-work-recovery", "review", "human", "validation-continuation", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "source-history-normalization", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "dependency-source-revision", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption")(options("kind")) &&
+          Set("completion-record-closure", "adoption", "malformed-issued-work-recovery", "review", "human", "validation-continuation", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "source-history-normalization", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "dependency-source-revision", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption", "standalone-fix-validation-recovery")(options("kind")) &&
           (options("family") != "DelegateTask" || Set("review", "adoption", "completion-record-closure")(options("kind"))) &&
           (options("kind") != "adoption" || options("family") == "DelegateTask") &&
           (options("family") != "GoalTask" || Set("review", "malformed-issued-work-recovery", "completion-record-closure")(options("kind"))) &&
           (options("kind") != "malformed-issued-work-recovery" || options("family") == "GoalTask") &&
+          (options("kind") != "standalone-fix-validation-recovery" || options("family") == "StandaloneFix") &&
           (options("kind") != "validation-continuation" || options("family") == "RepositorySync") &&
           !(options("family") == "SplitPhase" && options("kind") == "review") &&
           (!Set("release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "source-history-normalization", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "dependency-source-revision", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption")(options("kind")) || options("family") == "GoalPhase") &&
-          (if (Set("completion-record-closure", "malformed-issued-work-recovery", "human", "validation-continuation", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "source-history-normalization", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "dependency-source-revision", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption")(options("kind"))) options.contains("participant")
+          (if (Set("completion-record-closure", "malformed-issued-work-recovery", "human", "validation-continuation", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "source-history-normalization", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "dependency-source-revision", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption", "standalone-fix-validation-recovery")(options("kind"))) options.contains("participant")
             else !options.contains("participant"))) Consequence.unit
         else _invalid("unsupported family/kind or missing Human participant")
       occurred <- NativePreparationInput.instantC(options("occurred-at"))
@@ -123,6 +132,92 @@ private[smworkflow] object NativeExternalEvidenceInput {
     reference <- NativePreparationInput.readC(options("reference"), readtext).flatMap(summon[ValueReader[V.WorkflowArtifactReference]].readC)
     execution <- NativePreparationInput.readC(options("execution-evidence"), readtext).flatMap(summon[ValueReader[V.WorkflowExecutionEvidence]].readC)
     prepared <- NativeRepositoryRepairScopeCorrectionPreparation.prepareC(description, answer, reference, execution,
+      options("participant"), options("issuer"), occurred)
+    payload <- prepared.record.getString(NativeExternalEvidence.storageField).map(Consequence.success)
+      .getOrElse(_invalid("prepared repair scope row has no typed payload"))
+    row = Record.data("id" -> prepared.recordIdentity, NativeExternalEvidence.storageField -> payload)
+  } yield Record.data("datastore" -> Vector(Record.data("collection" -> options("collection"), "records" -> Vector(row))))
+
+  private def _repair_budget_c(supplied: Map[String, String], readtext: String => Consequence[String]): Consequence[Record] = for {
+    options <- NativePreparationInput.optionsC(supplied, _required, readtext, Set("participant"))
+    _ <- if (options("family") == "RepositorySync" && options("kind") == "repair-budget-continuation" &&
+        options.contains("participant")) Consequence.unit
+      else _invalid("repair budget continuation requires RepositorySync and its actual Human participant")
+    occurred <- NativePreparationInput.instantC(options("occurred-at"))
+    _ <- NativePreparationInput.collectionC(options("collection"))
+    requesttext <- readtext(options("request"))
+    requestjson <- io.circe.parser.parse(requesttext).fold(error => _invalid(error.message), Consequence.success)
+    rawtarget <- requestjson.hcursor.get[io.circe.Json]("target").fold(error => _invalid(error.message), Consequence.success)
+    _ <- org.simplemodeling.textus.smworkflow.admission.RepositorySyncRepairBudgetContinuation.decodePublicTarget(rawtarget)
+      .fold(_invalid(_), _ => Consequence.unit)
+    request <- new org.goldenport.record.io.RecordDecoder().json(requesttext)
+    resulttext <- readtext(options("result"))
+    resultjson <- io.circe.parser.parse(resulttext).fold(error => _invalid(error.message), Consequence.success)
+    _ <- org.simplemodeling.textus.smworkflow.admission.RepositorySyncRepairBudgetContinuation.decodePublicAnswer(resultjson)
+      .fold(_invalid(_), _ => Consequence.unit)
+    result <- new org.goldenport.record.io.RecordDecoder().json(resulttext)
+    description <- summon[ValueReader[V.RepositorySyncRepairBudgetContinuationDescriptionResult]].readC(request)
+    answer <- summon[ValueReader[V.RepositorySyncRepairBudgetContinuationAnswer]].readC(result)
+    reference <- NativePreparationInput.readC(options("reference"), readtext).flatMap(summon[ValueReader[V.WorkflowArtifactReference]].readC)
+    execution <- NativePreparationInput.readC(options("execution-evidence"), readtext).flatMap(summon[ValueReader[V.WorkflowExecutionEvidence]].readC)
+    prepared <- NativeRepositoryRepairBudgetContinuationPreparation.prepareC(description, answer, reference, execution,
+      options("participant"), options("issuer"), occurred)
+    payload <- prepared.record.getString(NativeExternalEvidence.storageField).map(Consequence.success)
+      .getOrElse(_invalid("prepared repair budget row has no typed payload"))
+    row = Record.data("id" -> prepared.recordIdentity, NativeExternalEvidence.storageField -> payload)
+  } yield Record.data("datastore" -> Vector(Record.data("collection" -> options("collection"), "records" -> Vector(row))))
+
+  private def _push_continuation_c(supplied: Map[String, String], readtext: String => Consequence[String]): Consequence[Record] = for {
+    options <- NativePreparationInput.optionsC(supplied, _required, readtext, Set("participant"))
+    _ <- if (options("family") == "RepositorySync" && options("kind") == "push-continuation" &&
+        options.contains("participant")) Consequence.unit
+      else _invalid("push continuation requires RepositorySync and its actual Human participant")
+    occurred <- NativePreparationInput.instantC(options("occurred-at"))
+    _ <- NativePreparationInput.collectionC(options("collection"))
+    requesttext <- readtext(options("request"))
+    requestjson <- io.circe.parser.parse(requesttext).fold(error => _invalid(error.message), Consequence.success)
+    rawtarget <- requestjson.hcursor.get[io.circe.Json]("target").fold(error => _invalid(error.message), Consequence.success)
+    _ <- org.simplemodeling.textus.smworkflow.admission.RepositorySyncPushContinuation.decodePublicTarget(rawtarget)
+      .fold(_invalid(_), _ => Consequence.unit)
+    request <- new org.goldenport.record.io.RecordDecoder().json(requesttext)
+    resulttext <- readtext(options("result"))
+    resultjson <- io.circe.parser.parse(resulttext).fold(error => _invalid(error.message), Consequence.success)
+    _ <- org.simplemodeling.textus.smworkflow.admission.RepositorySyncPushContinuation.decodePublicAnswer(resultjson)
+      .fold(_invalid(_), _ => Consequence.unit)
+    result <- new org.goldenport.record.io.RecordDecoder().json(resulttext)
+    description <- summon[ValueReader[V.RepositorySyncPushContinuationDescriptionResult]].readC(request)
+    answer <- summon[ValueReader[V.RepositorySyncPushContinuationAnswer]].readC(result)
+    reference <- NativePreparationInput.readC(options("reference"), readtext).flatMap(summon[ValueReader[V.WorkflowArtifactReference]].readC)
+    execution <- NativePreparationInput.readC(options("execution-evidence"), readtext).flatMap(summon[ValueReader[V.WorkflowExecutionEvidence]].readC)
+    prepared <- NativeRepositoryPushContinuationPreparation.prepareC(description, answer, reference, execution,
+      options("participant"), options("issuer"), occurred)
+    payload <- prepared.record.getString(NativeExternalEvidence.storageField).map(Consequence.success)
+      .getOrElse(_invalid("prepared push continuation row has no typed payload"))
+    row = Record.data("id" -> prepared.recordIdentity, NativeExternalEvidence.storageField -> payload)
+  } yield Record.data("datastore" -> Vector(Record.data("collection" -> options("collection"), "records" -> Vector(row))))
+
+  private def _purpose_preparation_c(supplied: Map[String, String], readtext: String => Consequence[String]): Consequence[Record] = for {
+    options <- NativePreparationInput.optionsC(supplied, _required, readtext, Set("participant"))
+    _ <- if (options("family") == "RepositorySync" && options("kind") == "purpose-preparation-continuation" &&
+        options.contains("participant")) Consequence.unit else _invalid("preparation continuation requires its dedicated RepositorySync kind and actual Human participant")
+    occurred <- NativePreparationInput.instantC(options("occurred-at"))
+    _ <- NativePreparationInput.collectionC(options("collection"))
+    requesttext <- readtext(options("request"))
+    requestjson <- io.circe.parser.parse(requesttext).fold(error => _invalid(error.message), Consequence.success)
+    rawtarget <- requestjson.hcursor.get[io.circe.Json]("target").fold(error => _invalid(error.message), Consequence.success)
+    _ <- org.simplemodeling.textus.smworkflow.admission.RepositorySyncPurposePreparationContinuation.decodePublicTarget(rawtarget)
+      .fold(_invalid(_), _ => Consequence.unit)
+    request <- new org.goldenport.record.io.RecordDecoder().json(requesttext)
+    resulttext <- readtext(options("result"))
+    resultjson <- io.circe.parser.parse(resulttext).fold(error => _invalid(error.message), Consequence.success)
+    _ <- org.simplemodeling.textus.smworkflow.admission.RepositorySyncPurposePreparationContinuation.decodePublicAnswer(resultjson)
+      .fold(_invalid(_), _ => Consequence.unit)
+    result <- new org.goldenport.record.io.RecordDecoder().json(resulttext)
+    description <- summon[ValueReader[V.RepositorySyncPurposePreparationContinuationDescriptionResult]].readC(request)
+    answer <- summon[ValueReader[V.RepositorySyncPurposePreparationContinuationAnswer]].readC(result)
+    reference <- NativePreparationInput.readC(options("reference"), readtext).flatMap(summon[ValueReader[V.WorkflowArtifactReference]].readC)
+    execution <- NativePreparationInput.readC(options("execution-evidence"), readtext).flatMap(summon[ValueReader[V.WorkflowExecutionEvidence]].readC)
+    prepared <- NativeRepositoryPurposePreparationContinuationPreparation.prepareC(description, answer, reference, execution,
       options("participant"), options("issuer"), occurred)
     payload <- prepared.record.getString(NativeExternalEvidence.storageField).map(Consequence.success)
       .getOrElse(_invalid("prepared repair scope row has no typed payload"))
@@ -257,6 +352,26 @@ private[smworkflow] object NativeExternalEvidenceInput {
         prepared <- NativeRetainedWorkRecoveryPreparation.prepareC(description, answer, reference, execution,
           participant, issuer, occurred)
       } yield (prepared.recordIdentity, prepared.record)
+      case "StandaloneFix" if options("kind") == "standalone-fix-validation-recovery" => for {
+        description <- summon[ValueReader[V.StandaloneFixValidationRecoveryDescriptionResult]].readC(request)
+        answer <- summon[ValueReader[V.StandaloneFixValidationRecoveryInput]].readC(result)
+        _ <- if (description != null && answer != null && reference != null && execution != null &&
+          description.status == "decision-required" && description.choices == StandaloneFixValidationRecovery.choices &&
+          answer.reference == reference && execution.workerIdentity.contains(participant) &&
+          NativePreparationInput.exact(issuer) && occurred != null) Consequence.unit
+          else _invalid("standalone validation recovery requires its actual description, Human reference, worker, issuer and time")
+        target <- StandaloneFixValidationRecovery.targetC(description.target)
+        supplied <- StandaloneFixValidationRecovery.targetC(answer.target)
+        _ <- if (target == supplied && description.sessionId == target.sessionId && answer.sessionId == target.sessionId &&
+          participant == target.participant) Consequence.unit
+          else _invalid("standalone validation recovery crosses the exact described target or Human participant")
+        binding <- StandaloneFixValidationRecovery.bindingC(target.componentInstance, target, answer.choice,
+          answer.rationale, participant, ContextReference(reference.identity, reference.revision))
+        purpose = NativeExternalEvidence.Purpose.StandaloneValidationRecovery
+        identity = ThreeWorkflowExternalEvidencePorts.key(reference.identity, reference.revision)
+        encoded <- NativeExternalEvidence.encodeStorageC(NativeExternalEvidence.Evidence(NativeExternalEvidence.schema,
+          purpose.identity, identity, reference.identity, reference.revision, issuer, participant, binding, occurred.toString))
+      } yield (NativeExternalEvidence.recordIdentity(purpose, identity), Record.data(NativeExternalEvidence.storageField -> encoded))
       case "StandaloneFix" if options("kind") == "review" => for {
         output <- summon[ValueReader[V.StandaloneFixView]].readC(request)
         _ <- _kind_c(output.kind, false)

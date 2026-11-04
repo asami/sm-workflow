@@ -23,7 +23,8 @@ import RepositorySyncNativeMergeValidation as C
 /** Explicit append-only direction for an ended invocation with no check result.
   * Description observes Git; adoption only appends a native mechanical record.
   * @since Oct. 26, 2026
-  * @version Nov.  3, 2026
+  *  version Nov.  3, 2026
+  * @version Nov.  4, 2026
   */
 private[smworkflow] object RepositorySyncValidationContinuation {
   val purpose = "repository-sync-validation-continuation"
@@ -200,7 +201,11 @@ private[smworkflow] object RepositorySyncValidationContinuation {
   }
   final case class FormalFailureTarget(value: RepositorySyncFormalFailureContinuation.Target) extends AnyTarget {
     def sessionId: String = value.sessionId
-    def choices: Vector[String] = RepositorySyncFormalFailureContinuation.choices
+    def choices: Vector[String] = RepositorySyncFormalFailureContinuation.availableChoices(value)
+  }
+  final case class MergeCheckTarget(value: RepositorySyncMergeCheckContinuation.Target) extends AnyTarget {
+    def sessionId: String = value.sessionId
+    def choices: Vector[String] = RepositorySyncMergeCheckContinuation.choices
   }
   final case class PurposeContentTarget(value: RepositorySyncPurposeContentContinuation.Target) extends AnyTarget {
     def sessionId: String = value.sessionId
@@ -215,6 +220,8 @@ private[smworkflow] object RepositorySyncValidationContinuation {
       case RepositorySyncRequiredLintContinuation.policy => RepositorySyncRequiredLintContinuation.decodeTarget(wire).map(RequiredLintTarget(_))
       case RepositorySyncReviewInputContinuation.policy => RepositorySyncReviewInputContinuation.decodeTarget(wire).map(ReviewInputsTarget(_))
       case RepositorySyncFormalFailureContinuation.policy => RepositorySyncFormalFailureContinuation.decodeTarget(wire).map(FormalFailureTarget(_))
+      case RepositorySyncFormalFailureContinuation.selectionPolicy => RepositorySyncFormalFailureContinuation.decodeTarget(wire).map(FormalFailureTarget(_))
+      case RepositorySyncMergeCheckContinuation.policy => RepositorySyncMergeCheckContinuation.decodeTarget(wire).map(MergeCheckTarget(_))
       case RepositorySyncPurposeContentContinuation.policy => RepositorySyncPurposeContentContinuation.decodeTarget(wire).map(PurposeContentTarget(_))
       case _ => Left("Unrecognized repository validation continuation policy")
     }
@@ -225,11 +232,12 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     case OriginalTarget(_) => decodeAnswer(value)
     case RequiredLintTarget(_) => RepositorySyncRequiredLintContinuation.decodeAnswer(value)
     case ReviewInputsTarget(_) => RepositorySyncReviewInputContinuation.decodeAnswer(value)
-    case FormalFailureTarget(target) => RepositorySyncFormalFailureContinuation.decodeAnswer(value).flatMap(answer =>
+    case FormalFailureTarget(target) => RepositorySyncFormalFailureContinuation.decodeAnswer(target, value).flatMap(answer =>
       Either.cond(RepositorySyncFormalFailureContinuation.validAssertions(target, answer.choice,
         answer.priorExecutionEnded, answer.acceptOriginalUncertainty), answer,
         "Formal failure answer must attest only an actual pending old worker"))
     case PurposeContentTarget(_) => RepositorySyncPurposeContentContinuation.decodeAnswer(value)
+    case MergeCheckTarget(_) => RepositorySyncMergeCheckContinuation.decodeAnswer(value)
   }
   def decodePublicAnyAnswer(target: AnyTarget, value: Json): Either[String, Answer] =
     GoalPhaseNativeMetadata.normalizePublicJson(value).flatMap(decodeAnyAnswer(target, _))
@@ -246,6 +254,8 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     case FormalFailureTarget(value) => RepositorySyncFormalFailureContinuation.bindingC(component, value, choice,
       rationale, participant, reference, ended, accepted)
     case PurposeContentTarget(value) => RepositorySyncPurposeContentContinuation.bindingC(component, value, choice,
+      rationale, participant, reference, ended, accepted)
+    case MergeCheckTarget(value) => RepositorySyncMergeCheckContinuation.bindingC(component, value, choice,
       rationale, participant, reference, ended, accepted)
   }
   def targetC(value: Record): Consequence[Target] = if (value == null) N.invalid("continuation target is absent")
@@ -429,8 +439,16 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     F.sessionC(identity, d, definition, core).flatMap { session =>
       if (session.started.current.currentProgression.contains(ProgressionReference("sync.PurposeInventory")))
         RepositorySyncPurposeContentContinuation.describeC(identity, d, definition, core, acknowledge)
+      else if (session.started.current.currentProgression.exists(p =>
+          Set("sync.ValidationChecking", "sync.ValidationPreparationRejected")(p.value))) for {
+        store <- N.bindC(session, d, core, acknowledge)
+        candidate <- store.currentMergeCandidateC(session.started.current)
+        failed <- C.retainedFailureC(store, candidate.pending, policy, candidate.namespace)
+        result <- if (failed.nonEmpty) RepositorySyncFormalFailureContinuation.describeC(identity, d, definition, core, policy, acknowledge)
+          else RepositorySyncMergeCheckContinuation.describeC(identity, d, definition, core, policy, acknowledge)
+      } yield result
       else if (session.started.current.currentProgression.exists(p => Set("sync.PurposeRepairRequired",
-          "sync.ValidationChecking", "sync.ValidationRepairRequired")(p.value)))
+          "sync.ValidationRepairRequired")(p.value)))
         RepositorySyncFormalFailureContinuation.describeC(identity, d, definition, core, policy, acknowledge)
       else if (session.started.current.currentProgression.contains(ProgressionReference("sync.ReviewDecisionRequired")))
         review.map(port => RepositorySyncReviewInputContinuation.describeC(identity, d, definition, core, policy, acknowledge, port))
@@ -457,6 +475,8 @@ private[smworkflow] object RepositorySyncValidationContinuation {
         policy, installation, acknowledge)
       case PurposeContentTarget(_) => RepositorySyncPurposeContentContinuation.adoptC(input, d, definition, core,
         installation, acknowledge)
+      case MergeCheckTarget(_) => RepositorySyncMergeCheckContinuation.adoptC(input, d, definition, core,
+        policy, installation, acknowledge)
     }
   private def _adopt_v1_c(input: V.RepositorySyncValidationContinuationAdoptionInput, d: F.Declaration,
     definition: DefinitionBinding, core: ActionCall.Core, policy: C.Policy, installation: Installation,
@@ -533,6 +553,55 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     review: Option[RepositorySyncNativeMergeReviewContinuation.Port] = None): Vector[spec.OperationDefinition] =
     Vector(new Operation(true, d, definition, policy, installation, acknowledge, review),
       new Operation(false, d, definition, policy, installation, acknowledge, review))
+  private[admission] def adoptionSourceC(request: Request): Consequence[NativeWorkflowResourceInput.Source[Record]] = for {
+    source <- GoalPhasePrerequisitePublicationRecovery.resourceInputC(request)
+    _ <- source match {
+      case NativeWorkflowResourceInput.Inline(record) => adoptionInputC(record).map(_ => ())
+      case _: NativeWorkflowResourceInput.Resource => Consequence.unit
+    }
+  } yield source
+  private[admission] def readAdoptionInputC(source: NativeWorkflowResourceInput.Source[Record],
+    read: org.goldenport.cncf.resource.ResourceReference => Consequence[String]): Consequence[V.RepositorySyncValidationContinuationAdoptionInput] =
+    NativeWorkflowResourceInput.readC(source, reference => read(reference)
+      .flatMap(GoalPhasePrerequisitePublicationRecovery.validateBusinessTextC)).flatMap(adoptionInputC)
+  /** Installed composition resolves routing inside the actual executing call,
+    * with the same Resource owner and strict decoder as the native Operation. */
+  def sessionC(suppliedRequest: Request, call: ActionCall.Core): Consequence[String] = {
+    final class Reader extends ProcedureActionCall {
+      val core = call
+      def readSessionC: Consequence[String] = adoptionSourceC(suppliedRequest).flatMap(source =>
+        readAdoptionInputC(source, reference => read_resource_text(reference,
+          Some(java.nio.charset.StandardCharsets.UTF_8))).map(_.sessionId))
+      def execute(): Consequence[OperationResponse] = N.invalid("validation continuation reader is not an Operation")
+    }
+    new Reader().readSessionC
+  }
+  private[admission] def adoptionInputC(record: Record): Consequence[V.RepositorySyncValidationContinuationAdoptionInput] = for {
+    _ <- if (record != null && DevelopmentOperationalView.uniqueFields(record)) Consequence.unit
+      else N.invalid("continuation input is absent or contains duplicate fields")
+    raw <- record.toJsonStringC
+    _ <- GoalPhasePrerequisitePublicationRecovery.validateBusinessTextC(raw)
+    json <- io.circe.parser.parse(raw).left.map(_.message)
+      .flatMap(GoalPhaseNativeMetadata.normalizePublicJson).fold(N.invalid, Consequence.success)
+    _ <- if (json.asObject.exists(_.keys.toSet == Set("sessionId", "target", "choice", "rationale", "reference",
+        "priorExecutionEnded", "acceptOriginalUncertainty", "executionEvidence"))) Consequence.unit
+      else N.invalid("continuation adoption requires the complete exact input fields")
+    _ <- if (json.hcursor.downField("reference").focus.flatMap(_.asObject).exists(_.keys.toSet == Set("identity", "revision")))
+      Consequence.unit else N.invalid("continuation artifact reference requires exact identity and revision fields")
+    targetjson <- json.hcursor.get[Json]("target").fold(e => N.invalid(e.message), Consequence.success)
+    target <- decodeAnyTarget(targetjson).fold(N.invalid, Consequence.success)
+    _ <- decodeAnyAnswer(target, Json.obj(Vector("choice", "rationale", "priorExecutionEnded", "acceptOriginalUncertainty")
+      .map(key => key -> json.hcursor.downField(key).focus.getOrElse(Json.Null))*))
+      .fold(N.invalid, _ => Consequence.unit)
+    value <- NativeWorkflowOperationInput.decodeValueC[V.RepositorySyncValidationContinuationAdoptionInput](record, "input")
+    _ <- if (value != null && _exact(value.sessionId) && value.reference != null && value.executionEvidence != null)
+      Consequence.unit else N.invalid("continuation requires its complete typed answer, existing reference and execution evidence")
+    restored <- value.toRecord().toJsonStringC.flatMap(text => io.circe.parser.parse(text).left.map(_.message)
+      .flatMap(GoalPhaseNativeMetadata.normalizePublicJson).fold(N.invalid, Consequence.success))
+    _ <- if (restored == json) Consequence.unit
+      else N.invalid("continuation adoption requires the complete canonical DTO without discarded or coerced fields")
+    _ <- anyTargetC(value.target)
+  } yield value
   private final class Operation(describe: Boolean, d: F.Declaration, definition: DefinitionBinding,
     policy: C.Policy, installation: Installation, acknowledge: String => Consequence[Unit],
     review: Option[RepositorySyncNativeMergeReviewContinuation.Port]) extends spec.OperationDefinition {
@@ -542,38 +611,24 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     def createOperationRequest(request: Request): Consequence[OperationRequest] =
       if (request == null || !request.service.contains("RepositorySyncService") ||
           request.operation != (if (describe) describeOperation else adoptionOperation)) N.invalid("continuation Operation identity differs")
-      else if (describe) NativeWorkflowOperationInput.textC(request, "sessionId").map(id => Action(request, id, None))
-      else for {
-        record <- NativeWorkflowOperationInput.recordC(request, "input")
-        json <- record.toJsonStringC.flatMap(text => io.circe.parser.parse(text).left.map(_.message)
-          .flatMap(GoalPhaseNativeMetadata.normalizePublicJson).fold(N.invalid, Consequence.success))
-        _ <- if (json.asObject.exists(_.keys.toSet == Set("sessionId", "target", "choice", "rationale", "reference",
-            "priorExecutionEnded", "acceptOriginalUncertainty", "executionEvidence"))) Consequence.unit
-          else N.invalid("continuation adoption requires the complete exact input fields")
-        _ <- if (json.hcursor.downField("reference").focus.flatMap(_.asObject).exists(_.keys.toSet == Set("identity", "revision")))
-          Consequence.unit else N.invalid("continuation artifact reference requires exact identity and revision fields")
-        targetjson <- json.hcursor.get[Json]("target").fold(e => N.invalid(e.message), Consequence.success)
-        target <- decodeAnyTarget(targetjson).fold(N.invalid, Consequence.success)
-        _ <- decodeAnyAnswer(target, Json.obj(Vector("choice", "rationale", "priorExecutionEnded", "acceptOriginalUncertainty")
-          .map(key => key -> json.hcursor.downField(key).focus.getOrElse(Json.Null))*))
-          .fold(N.invalid, _ => Consequence.unit)
-        value <- NativeWorkflowOperationInput.valueC[V.RepositorySyncValidationContinuationAdoptionInput](request, "input")
-        action <- {
-        if (value == null || !_exact(value.sessionId) || value.reference == null || value.executionEvidence == null)
-          N.invalid("continuation requires its complete typed answer, existing reference and execution evidence")
-        else anyTargetC(value.target).map(_ => Action(request, value.sessionId, Some(value)))
-        }
-      } yield action
-    private final case class Action(request: Request, identity: String,
-      input: Option[V.RepositorySyncValidationContinuationAdoptionInput]) extends CommandAction {
+      else if (describe) NativeWorkflowOperationInput.textC(request, "sessionId").map(id => Action(request, Some(id), None))
+      else adoptionSourceC(request).map(source => Action(request, None, Some(source)))
+    private final case class Action(request: Request, identity: Option[String],
+      input: Option[NativeWorkflowResourceInput.Source[Record]]) extends CommandAction {
       override def commandExecutionMode = CommandExecutionMode.Sync
       def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
         val core = c
         def execute(): Consequence[OperationResponse] = for {
-          context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(identity))
+          value <- input match {
+            case None => Consequence.success(Option.empty[V.RepositorySyncValidationContinuationAdoptionInput])
+            case Some(source) => readAdoptionInputC(source, reference => read_resource_text(reference,
+              Some(java.nio.charset.StandardCharsets.UTF_8))).map(Some(_))
+          }
+          session = value.map(_.sessionId).orElse(identity).get
+          context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(session))
           selected = core.copy(executionContext = context)
-          result <- input match {
-            case None => describeC(identity, d, definition, selected, policy, acknowledge, review).map(NativeWorkflowOperationOutput.response(_))
+          result <- value match {
+            case None => describeC(session, d, definition, selected, policy, acknowledge, review).map(NativeWorkflowOperationOutput.response(_))
             case Some(value) => adoptC(value, d, definition, selected, policy, installation, acknowledge, review).map(NativeWorkflowOperationOutput.response(_))
           }
         } yield result

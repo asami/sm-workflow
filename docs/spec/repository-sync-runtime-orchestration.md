@@ -193,6 +193,58 @@ additional AI are introduced to obtain a display/record. See the
 [S5 handoff](../notes/phase-6.9-s5-delivery-and-handoff.md) for actual observations
 and remaining qualification work.
 
+## Purpose check repair outside the current inventory
+
+The existing repair-scope correction operations also qualify necessary unchanged
+baseline files for a genuine failed selected check on a retained Purpose
+candidate. The distinct v4 correction target and Purpose inventory policy bind
+the actual native failure, earlier prepared candidate, full request and ordered
+plan, original ownership and repository state, and exact available unclaimed
+pending repair WorkOrder. The virtual candidate tree and the dirty original index
+are separate facts. Historical v1-v3 pending-merge contracts remain unchanged.
+
+Qualification reads ordinary existing tracked candidate text through typed Git
+and compares newly added baseline text with the original worktree through the
+typed file API. It validates the fixed clean candidate workspace and original
+HEAD/branch/index and inventory content without checks or writes. The v4
+contract refuses a newly added path belonging to a later Purpose, naming the
+path and group. The separately qualified v5 ownership target and Purpose
+inventory v2 bind that overlap to the original ordered groups and captured root
+text. Existing shared current paths retain their ordinary semantics. No
+file-count or byte-size Human gate is introduced.
+
+Independent prior-worker lifecycle direction and UNKNOWN acceptance use existing
+evidence preparation and atomic native supersession. Separate ordinary Advance
+captures and issues the fixed qualified inventory. Its existing nativeRepair
+assignment exposes the failed candidate text, complete later-owner intent,
+captured root and exact required owner/path pairs in `purposeWork`. A worker
+returns current candidate replacements and a separate explicit
+`purposeContinuation` containing integrated later text for every assigned pair.
+Nonoverlapping repairs may append unchanged baseline files; ownership repairs
+keep the original captured request and later plan groups exact. Separate
+progress `ownership` overlays only the assigned paths when preparing the
+effective later group. Actual installation retains `projectedWorktree` so that
+restoring later work preserves the accepted current correction as well as later
+intent. Every other original field, source record, dependency, exclusion,
+counter lineage and receipt remains retained. The ordinary next slot uses
+the failed virtual tree as its baseline and obtains fresh affected checks,
+independent review and actual local Purpose commit. Adoption alone grants no
+candidate or validation acceptance. See the
+[failed-check continuation specification](repository-sync-formal-failure-continuation.md#failed-purpose-baseline-repair-inventory)
+for compatibility rules and the separately selected old/new installed fixture.
+
+An actual semantic/text conflict returns `decision-needed` with the precise
+path and later owner, no replacements and no ownership continuation. Ordinary
+Advance returns `Wait` / `RepairDecisionRequired` with the retained rationale,
+without candidate effects, checks or commits. Repetition stays passive until
+actual semantic/Human resolution; no automatic consent or follow-up API is
+inferred. The fixture's distinct `ownership-capture` and `ownership-continue`
+modes retain actual old v4 prepare refusals, qualify new v5 ownership, and
+separately prove successful integration and an unresolved nondestructive Wait.
+They preserve all ID06 selectors and evidence. Only actual parent-owned
+installed execution establishes qualification; authored assertions do not
+constitute live independent review or consumer completion.
+
 ## Final publication before completion
 
 When the selected local-publication target declares `beforeSync: true`, native
@@ -204,3 +256,138 @@ clean convergence observation. Re-entry collects retained publication/stage/comm
 facts; missing or uncertain effects are not retried. Unrelated output or dirty
 work prevents completion and is preserved. A publication-generated change is not
 an exemption from the clean-tree completion condition.
+
+## ID08: distinct current commit and accepted root projection
+
+A repaired Purpose may commit a current baseline correction while a later
+original Purpose retains a different integrated final worktree text for the same
+path. These are separate typed Git inputs. The current group's corrected content
+remains `GitPurposeChange.content`, and the captured actual root remains
+`expectedWorktree`. When a baseline tree exists and an accepted later original
+owner covers that path, its complete integrated text is supplied separately as
+`GitPurposeWorktreeProjection`. This affects CNCF's root-after projection only;
+index projection, staged remainder and source precondition checks stay owned by
+CNCF and are unchanged.
+
+Every accepted later original owner of the same path must agree on the exact
+optional integrated content. Different values require actual semantic/Human
+resolution before any preparation effect; first-owner or last-owner selection is
+forbidden. Explicit `None` content means deletion and is distinct from absence of
+an explicit projection. Without a baseline tree or accepted later ownership, no
+projection is invented.
+
+The optional `Candidate.worktreeProjection` retains unique selected-path content
+and is reconstructed into the full same CNCF request for both Materialize and
+Commit. Duplicate paths, paths outside the current selected changes and explicit
+projection without a baseline refuse. Legacy candidates with the field absent
+retain their original meaning. No old accepted result is replayed and no legacy
+candidate is silently upgraded.
+
+The public failed-preparation continuation is specified in
+[formal failure continuation](repository-sync-formal-failure-continuation.md).
+It preserves the already accepted repair and immutable original failure, records
+one explicit Human direction, then leaves the new namespaced preparation to the
+ordinary typed Git/UoW progression. It neither grants authority to later Purpose
+failures nor changes existing validation, review, commit or terminal acceptance.
+
+## ID09: root expectations for retained qualified baselines
+
+Successive ownership repairs keep three facts separate: the qualified failed
+candidate's baseline text, the authenticated root expectation in saved progress,
+and the explicitly integrated later-owner text. For every qualified baseline,
+typed root reads compare against `projectedWorktree` first or the original request
+expectation next, including an explicit deletion. Only a newly qualified path
+without a captured expectation takes its baseline text as the root expectation.
+The next ownership projection uses these expectations from the original saved
+progress; candidate replacements never overwrite retained root provenance.
+Nonoverlapping baseline append behavior and legacy absent projections retain
+their existing contracts, without new persisted fields or inventory policy.
+
+An already qualified clean addition present in retained `projectedWorktree` but
+absent from the original request uses the current effective group's admitted
+content as its explicit root-after projection only when it has no later owner.
+Explicit deletion remains deletion. This avoids an unnecessary three-way merge
+against an earlier failed candidate while preserving the captured root-before
+guard. Original request paths receive no override from this rule. Supplied later
+resolution takes precedence; missing or conflicting later resolution keeps its
+existing behavior.
+
+The existing snapshot equality, actual candidate inventory, clean ordinary file
+shape, safe unique paths, HEAD, branch, index, scope and later-owner checks remain
+required. Root drift refuses. After accepted repair and a known pre-effect 409,
+the same Session continues through ordinary Advance without replaying the accepted
+Submit or resetting history, accepted results, failures, UNKNOWN effects or
+counters. See the [formal continuation contract](repository-sync-formal-failure-continuation.md#id09-retained-baseline-provenance-across-ownership-repairs).
+
+## ID11: retained push and later remote movement
+
+A fresh convergence attempt reads the advertised remote tip before creating a
+push intent. If the remote already advertises the accepted final tip, native
+progression records an actual present observation without claiming that a push
+process ran. If the advertised tip differs from the tracking relation used to
+admit the candidate, progression retains `NativePushRefreshRequired` and returns
+`Wait`. It performs no push against unassessed remote inputs. This check applies
+again to a genuinely new push after integration or repair.
+
+After typed `GitOperation.Push` returns, native progression saves its exact
+operation, outcome, value-presence and `ProcessExecutionResult` before calling
+`valueC` or returning failure. `NativePushFailed` retains an actual exited
+failure; `NativePushUncertain` retains incomplete or invalid returned facts.
+Process captures use the existing capture/termination encoding and retain native
+artifact metadata without another application byte or count limit. These are
+Git observations and carry no invented SBT facts. An older resultless push intent
+remains UNKNOWN. A CLI exit, external comparison or absent worker does not prove
+that original execution ended and cannot supply its missing process body.
+
+`describeRepositorySyncPushContinuation --sessionId` observes the current clean
+native root and advertised remote. Its exact canonical target binds the
+Component instance, original Start context and principal, Session, root, branch,
+endpoint, native frontier cause and revision, source namespace, retained intent
+when present, saved committed native source and final tip/tree, original fixed
+validation policy and check selection, actual Git observation when present, and
+one fixed finite continuation plan. Optional absent facts are omitted. Explicit
+null, malformed or unknown fields refuse. No opaque Purpose snapshot is needed.
+
+`adoptRepositorySyncPushContinuation --input` or `--inputResource` consumes the
+typed fields `sessionId`, `target`, `choice`, `rationale`, `directionReference`,
+`priorExecutionEnded`, `acceptOriginalUncertainty` and `executionEvidence`.
+`RefreshRemoteAndContinue` requires independently admitted Human evidence for
+this exact description and answer, including `priorExecutionEnded=true` and
+`acceptOriginalUncertainty=true`. The rationale is retained in full. `Defer`
+writes no direction or effect. A stale, crossed or contradictory answer refuses;
+the exact already saved answer is idempotent. Human evidence preparation and
+adoption neither accept a candidate nor execute Git or checks.
+
+Separate ordinary `advanceRepositorySync` selects the actual latest native
+adoption and authenticates its adjacent immutable history prefix. The new
+namespace is `push-continuation-<frontierRevision>`; its adoption key is
+`<namespace>-adopted`. Original keys and every earlier Purpose commit, check,
+review, failed result and UNKNOWN intent remain unchanged. Historical proof is
+compared with its exact old prefix, including when later revisions are present.
+
+The finite direction permits one real typed Fetch under the existing host
+authority, ordinary necessary preservation/integration, applicable selected
+checks and independent review, at most one new non-force push, then final
+convergence observation. Native progression records `refresh-fetch-intent`,
+then the actual returned capture in `refresh-fetch-result` before further Git
+reads, and then the actual relation in `refresh-fetch-observed`. Missing returned
+facts produce an uncertain result without repeating Fetch. New failure or
+remote movement retains a new describable frontier and requires another exact
+independent direction. A post-adoption remote change before Fetch returns a
+refresh-required frontier without executing Fetch.
+
+Fresh integration uses the existing preservation, relationship, conflict/Human,
+validation, review and repair owners. A new merge candidate has genuine current
+check/review provenance; old candidate receipts are cleared rather than renamed
+as new executions. Equal, fast-forward and local-ahead relations retain their
+ordinary proportional policy. Repair retains its original cumulative budget.
+Publication continues through the existing applicability and necessity owner;
+another namespace alone does not require repeating successful publication.
+
+Active push continuation dispatch precedes old Purpose and original fetch/merge
+caches. Native merge/conflict candidates authenticate the actual saved fresh
+Fetch, relation and active direction. Convergence commit, push, final fetch and
+converged keys use that authenticated scope, including after repair. Completed
+result collection selects the same scope and remains read-only. It never
+replays an accepted Submit, resets original keys, infers a prior failure from
+diagnostic byte counts, force-pushes, or manufactures terminal convergence.

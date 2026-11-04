@@ -50,6 +50,72 @@ final class RepositorySyncNativeMergeRepairSpec extends AnyWordSpec with Matcher
     obj => Json.fromFields(obj.toVector.map { case (key, nested) => key -> _annotate(nested) })
       .mapObject(_.add("inertDiagnostic", Json.True)))
 
+  "ID07 exact owner continuation admission" should {
+    "require every derived owner and path once with safe complete text and no foreign metadata" in {
+      Given("an explicit overlap inventory and two later owners of its selected baseline")
+      val f = RepositorySyncPurposeRepairScopeFixture
+      val second = f.later.copy(identity = "second-owner", dependencies = Vector(f.later.identity))
+      val progress = f.progress.copy(plan = f.progress.plan.map(plan => plan.copy(groups = plan.groups :+ second)))
+      val inventory = f.ownershipScope.copy(purpose = f.ownershipScope.purpose.map(value =>
+        value.copy(snapshot = value.snapshot.copy(progress = progress))))
+      val request = f.ownershipInput.copy(admittedInventory = Some(inventory))
+      val first = f.continuation.groups.head
+      val continuation = f.continuation.copy(groups = Vector(first, first.copy(identity = second.identity)))
+      val result = f.ownershipResult.copy(purposeContinuation = Some(continuation))
+      val policy = I.Policy(f.ownershipPaths.toSet)
+      val malformed = Vector(None, Some(continuation.copy(groups = continuation.groups.take(1))),
+        Some(continuation.copy(groups = continuation.groups.reverse)),
+        Some(continuation.copy(groups = continuation.groups :+ first)),
+        Some(continuation.copy(groups = Vector(first.copy(identity = "foreign-owner"), continuation.groups(1)))),
+        Some(continuation.copy(groups = Vector(first.copy(content = first.content :+ first.content.head), continuation.groups(1)))),
+        Some(continuation.copy(groups = Vector(first.copy(content = Vector(first.content.head.copy(path = "docs/future.md"))), continuation.groups(1)))),
+        Some(continuation.copy(groups = Vector(first.copy(content = Vector(first.content.head.copy(path = "../outside.scala"))), continuation.groups(1)))),
+        Some(continuation.copy(rationale = " "))) ++
+        Vector("\u0000", "\ud800").map(text => Some(continuation.copy(groups = Vector(
+          first.copy(content = Vector(first.content.head.copy(text = Some(text)))), continuation.groups(1)))))
+      When("ordinary repair admission compares exact current files and all derived later-owner/path pairs")
+      val admitted = M.admitC(request, result, policy)
+      val refused = malformed.map(value => M.admitC(request, result.copy(purposeContinuation = value), policy))
+      Then("only complete typed per-owner integrated text is accepted while original plan content remains unchanged")
+      admitted.isSuccess shouldBe true
+      refused.foreach(_.isSuccess shouldBe false)
+      M.admitC(request, result.copy(purposeContinuation = Some(continuation.copy(groups = Vector(
+        first.copy(content = Vector(first.content.head.copy(text = None))), continuation.groups(1))))), policy).isSuccess shouldBe true
+      M.admitC(f.input, f.ownershipResult, I.Policy(f.paths.toSet)).isSuccess shouldBe false
+      M.admitC(_request, _result.copy(purposeContinuation = Some(continuation)), _policy).isSuccess shouldBe false
+      M.admitC(request, M.Result("decision-needed", "Both owner meanings conflict on the same assertion", Vector.empty), policy).isSuccess shouldBe true
+      M.admitC(request, result.copy(decision = "decision-needed", replacements = Vector.empty), policy).isSuccess shouldBe false
+      progress.plan.get.groups.take(2) shouldBe f.progress.plan.get.groups
+    }
+
+    "encode populated ownership only as explicit v2 and keep absent legacy results byte stable" in {
+      Given("a complete typed ownership result whose text and rationale include opaque JSON-shaped strings")
+      val f = RepositorySyncPurposeRepairScopeFixture
+      val opaque = "{\"processPlan\":{\"snake_case\":null,\"dotted.key\":\"opaque\"}}"
+      val continuation = f.continuation.copy(rationale = opaque, groups = f.continuation.groups.map(group =>
+        group.copy(content = group.content.map(_.copy(text = Some(opaque))))))
+      val result = f.ownershipResult.copy(purposeContinuation = Some(continuation))
+      When("new and historical payload codecs encode and restore their respective explicit schema branches")
+      val wire = M.resultCodec.encode(result)
+      val legacy = M.resultCodec.encode(_result)
+      val unknown = wire.hcursor.downField("payload").downField("purposeContinuation").withFocus(
+        _.mapObject(_.add("groupsMetadata", Json.True))).top.get
+      val nestedunknown = wire.hcursor.downField("payload").downField("purposeContinuation").downField("groups")
+        .withFocus(_.mapArray(_.map(_.mapObject(_.add("message", Json.fromString("foreign mutation")))))).top.get
+      Then("opaque text remains exact, unknown ownership fields fail and schema downgrade or empty v2 cannot silently fall back")
+      wire.hcursor.get[String]("schemaVersion").toOption shouldBe Some("sm-workflow.repository-native-merge-repair-result.v2")
+      M.resultCodec.decode(wire) shouldBe Right(result)
+      legacy.hcursor.downField("payload").downField("purposeContinuation").focus shouldBe None
+      legacy.hcursor.get[String]("schemaVersion").toOption shouldBe Some("sm-workflow.repository-native-merge-repair-result.v1")
+      M.resultCodec.decode(legacy) shouldBe Right(_result)
+      M.resultCodec.decode(unknown).isLeft shouldBe true
+      M.resultCodec.decode(nestedunknown).isLeft shouldBe true
+      M.resultCodec.decode(wire.mapObject(_.add("schemaVersion", Json.fromString("sm-workflow.repository-native-merge-repair-result.v1")))).isLeft shouldBe true
+      M.resultCodec.decode(legacy.mapObject(_.add("schemaVersion", Json.fromString("sm-workflow.repository-native-merge-repair-result.v2")))).isLeft shouldBe true
+      M.resultCodec.decode(legacy.hcursor.downField("payload").withFocus(_.mapObject(_.add("purposeContinuation", Json.Null))).top.get).isLeft shouldBe true
+    }
+  }
+
   "AUTO-FILE-RS admitted unchanged regression" should {
     "admit the complete 251-file failed candidate without a conflict-count gate" in {
       Given("251 changed ordinary files and the actual-shaped selected failed check")

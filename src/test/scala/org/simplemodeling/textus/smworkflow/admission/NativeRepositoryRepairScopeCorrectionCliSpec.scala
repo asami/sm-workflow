@@ -361,7 +361,7 @@ final class NativeRepositoryRepairScopeCorrectionCliSpec extends AnyWordSpec wit
       val resultreference = V.WorkflowArtifactReference("fixture-automatic-regression-proposal", "1")
       val resultevidence = V.WorkflowExecutionEvidence(Vector(resultreference), Some("fixture-regression-author"), None, None)
       val result = V.RepositorySyncNativeMergeRepairResult("repaired", "Update only the assigned baseline regression expectation",
-        Vector(V.RepositorySyncNativeMergeRepairFile(regression, _product(_resolved))))
+        Vector(V.RepositorySyncNativeMergeRepairFile(regression, _product(_resolved))), None)
       val metadata = Vector("--sessionId", live.session, "--resultReference", _json(resultreference), "--executionEvidence", _json(resultevidence))
       When("native Submit receives an unassigned file before the exact qualified regression proposal")
       live.repositoryCall("submitNativeMergeRepair", metadata ++ Vector("--result", _json(result.copy(
@@ -543,7 +543,7 @@ final class NativeRepositoryRepairScopeCorrectionCliSpec extends AnyWordSpec wit
 
       val result = V.RepositorySyncNativeMergeRepairResult("repaired", "Fixture repairs only the issued ProductCheck expectation and genuine document explanation",
         Vector(V.RepositorySyncNativeMergeRepairFile(_chosen.head, _document + "\n修復後の実際の入力と検証を記録する\n"),
-          V.RepositorySyncNativeMergeRepairFile(_chosen(1), _product(_resolved))))
+          V.RepositorySyncNativeMergeRepairFile(_chosen(1), _product(_resolved))), None)
       val resource = Path.of(java.net.URI.create(_save(root, "complete-repair-result.json", _json(result))))
       Files.size(resource) should be > 2170000L
       val resultreference = V.WorkflowArtifactReference("fixture-complete-repair-proposal", "1")
@@ -552,7 +552,7 @@ final class NativeRepositoryRepairScopeCorrectionCliSpec extends AnyWordSpec wit
       val assigned = _snapshot(live)
       When("a proposal for the original narrow issue is submitted to the corrected continuation")
       val oldproposal = V.RepositorySyncNativeMergeRepairResult("repaired", "Fixture-authored proposal for the superseded issue",
-        Vector(V.RepositorySyncNativeMergeRepairFile("value.txt", _resolved + "old proposal\n")))
+        Vector(V.RepositorySyncNativeMergeRepairFile("value.txt", _resolved + "old proposal\n")), None)
       live.repositoryCall("submitNativeMergeRepair", metadata ++ Vector("--result", _json(oldproposal))).exitCode should not be 0
       Then("the old assignment cannot satisfy the new exact two-file result contract")
       _snapshot(live) shouldBe assigned
@@ -591,8 +591,9 @@ final class NativeRepositoryRepairScopeCorrectionCliSpec extends AnyWordSpec wit
       _formal(live) shouldBe episode.formalReceipts
       _invocations(live.root) shouldBe episode.invocations
       _original_work(live, episode.originalWorkIdentity).files.map(_.path) shouldBe Vector("value.txt")
-      val result = parse(Files.readString(live.root.resolve("complete-repair-result.json"))).toOption.get
-        .as[V.RepositorySyncNativeMergeRepairResult].toOption.get
+      val result = take(new org.goldenport.record.io.RecordDecoder()
+        .json(Files.readString(live.root.resolve("complete-repair-result.json")))
+        .flatMap(summon[org.goldenport.convert.ValueReader[V.RepositorySyncNativeMergeRepairResult]].readC))
       result.replacements.map(_.path) shouldBe _chosen
       When("ordinary continuation resumes the actual admitted proposal without repeating Start adoption or submission")
       _finish_admitted(live, episode, result)

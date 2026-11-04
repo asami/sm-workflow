@@ -33,6 +33,16 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
     intent: WorkflowInstanceAtomicTransitionV1.SuspensionIntent, next: InstanceRecord,
     work: WorkflowInteraction[I.Request, Nothing])
 
+  private[admission] def requireSourceOperationC(request: ProtocolRequest): Consequence[Unit] =
+    if (request != null && request.service.contains(completionOperation.service) &&
+        Set(F.advanceOperation.operation, completionOperation.operation,
+          RepositorySyncNativeMergeRepairContinuation.completionOperation.operation,
+          RepositorySyncValidationContinuation.describeOperation,
+          RepositorySyncValidationContinuation.adoptionOperation,
+          RepositorySyncRepairBudgetContinuation.describeOperation,
+          RepositorySyncRepairBudgetContinuation.adoptionOperation)(request.operation)) Consequence.unit
+    else invalid("review continuation requires its actual owning Operation")
+
   final class Port private[RepositorySyncNativeMergeReviewContinuation] (
     declaration: F.Declaration, definition: DefinitionBinding, policy: I.Policy,
     acknowledgement: String => Consequence[Unit], evidence: S.EvidencePort,
@@ -170,12 +180,7 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
 
     private def _source_from_loaded_c(session: F.Session, store: N.Store, validated: N.Stage,
       core: ActionCall.Core): Consequence[Source] = for {
-      _ <- if (core != null && core.action != null && core.action.request != null &&
-          core.action.request.service.contains(completionOperation.service) &&
-          Set(F.advanceOperation.operation, completionOperation.operation,
-            RepositorySyncNativeMergeRepairContinuation.completionOperation.operation,
-            RepositorySyncValidationContinuation.describeOperation,
-            RepositorySyncValidationContinuation.adoptionOperation)(core.action.request.operation)) Consequence.unit
+      _ <- if (core != null && core.action != null) requireSourceOperationC(core.action.request)
         else invalid("review continuation requires its actual owning Operation")
       _ <- if (Set("MergeValidated", "PurposeChecked")(validated.payload.stage)) Consequence.unit
         else invalid("semantic review selection has no genuine native review")

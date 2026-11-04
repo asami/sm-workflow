@@ -32,6 +32,10 @@ private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: Nativ
       def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
         _admit_evidence_c(core, Purpose.PrerequisitePublicationRecovery, key(reference.identity, reference.revision), binding)
     }
+  val standaloneValidationRecovery: StandaloneFixValidationRecovery.EvidencePort = new StandaloneFixValidationRecovery.EvidencePort {
+    def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
+      _admit_evidence_c(core, Purpose.StandaloneValidationRecovery, key(reference.identity, reference.revision), binding)
+  }
   val goalTaskMalformedIssuedWorkRecovery: GoalTaskMalformedIssuedWorkRecovery.EvidencePort =
     new GoalTaskMalformedIssuedWorkRecovery.EvidencePort {
       def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
@@ -108,6 +112,19 @@ private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: Nativ
   val repositoryValidationContinuation: RepositorySyncValidationContinuation.EvidencePort = new RepositorySyncValidationContinuation.EvidencePort {
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
       _admit_evidence_c(core, Purpose.RepositoryValidationContinuation, key(reference.identity, reference.revision), binding)
+  }
+  val repositoryPurposePreparationContinuation: RepositorySyncPurposePreparationContinuation.EvidencePort = new RepositorySyncPurposePreparationContinuation.EvidencePort {
+    def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json): Consequence[Unit] =
+      _admit_evidence_c(core, Purpose.RepositoryPurposePreparationContinuation, key(reference.identity, reference.revision), binding)
+  }
+
+  val repositoryRepairBudgetContinuation: RepositorySyncRepairBudgetContinuation.EvidencePort = new RepositorySyncRepairBudgetContinuation.EvidencePort {
+    def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
+      _admit_evidence_c(core, Purpose.RepositoryRepairBudgetContinuation, key(reference.identity, reference.revision), binding)
+  }
+  val repositoryPushContinuation: RepositorySyncPushContinuation.EvidencePort = new RepositorySyncPushContinuation.EvidencePort {
+    def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json): Consequence[Unit] =
+      _admit_evidence_c(core, Purpose.RepositoryPushContinuation, key(reference.identity, reference.revision), binding)
   }
   val repositoryRepairScopeCorrection: RepositorySyncRepairScopeCorrection.EvidencePort = new RepositorySyncRepairScopeCorrection.EvidencePort {
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =

@@ -99,7 +99,8 @@ private[smworkflow] object NativeWorkflowOperationInputFixture {
         V.RepositorySyncNativeMergeReviewFinding(f.identity, f.affectedPaths, f.rationale))))
     case result: RepositorySyncNativeMergeRepair.Result => Consequence.success("result" ->
       V.RepositorySyncNativeMergeRepairResult(result.decision, result.rationale,
-        result.replacements.map(file => V.RepositorySyncNativeMergeRepairFile(file.path, file.text))))
+        result.replacements.map(file => V.RepositorySyncNativeMergeRepairFile(file.path, file.text)),
+        result.purposeContinuation.map(value => GoalPhaseNativeMetadata.record(value.asJson))))
     case answer: RepositorySyncHumanConflict.Answer => Consequence.success("answer" ->
       V.RepositorySyncHumanConflictAnswer(answer.choice, answer.resolutions.map(_resolution), answer.rationale))
   }

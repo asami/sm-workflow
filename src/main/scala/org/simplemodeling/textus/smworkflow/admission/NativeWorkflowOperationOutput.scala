@@ -241,10 +241,12 @@ private[smworkflow] object NativeWorkflowOperationOutput {
       value.findings.map(f => V.RepositorySyncNativeMergeReviewFinding(f.identity, f.affectedPaths, f.rationale)),
       value.files.map(f => V.RepositorySyncNativeMergeRepairFile(f.path, f.text)), value.validationFailure)
   } yield V.RepositorySyncAdvanceResult(work.handle.instanceIdentity.value, "Request",
-    if (value.validationFailure.nonEmpty) "Repair only the actual failed selected merge check within the assigned files."
+    if (RepositorySyncPurposeOwnership.work(value).nonEmpty) "Repair the failed current candidate and return exact later-owner integrated text through purposeContinuation; preserve each later intent or return precise decision-needed for actual semantic/Human resolution."
+      else if (value.validationFailure.nonEmpty) "Repair only the actual failed selected merge check within the assigned files."
       else "Repair only the assigned native merge findings.",
     Some(RepositorySyncNativeMergeRepairContinuation.completionOperation.operation), Some(work.handle.instanceIdentity.value),
-    Some("RepositorySyncNativeMergeRepairResult"), None, None, None, None, None, None, Some(issuedContext), Some(input), None, None)
+    Some("RepositorySyncNativeMergeRepairResult"), None, None, None, None, None, None, Some(issuedContext), Some(input), None,
+    RepositorySyncPurposeOwnership.work(value).map(GoalPhaseNativeMetadata.record))
 
   def repositoryHumanC(question: WorkflowInteraction[RepositorySyncHumanConflict.Input, Nothing], core: ActionCall.Core):
     Consequence[V.RepositorySyncAdvanceResult] = for {
