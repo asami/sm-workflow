@@ -216,7 +216,7 @@ final class GoalPhasePriorReviewContextSpec extends AnyWordSpec with Matchers wi
       val invalid = Vector(null, prior.copy(kind = "ImplementStep"), prior.copy(step = None), prior.copy(step = Some("")),
         prior.copy(step = Some("bad\nstep")), prior.copy(step = null), prior.copy(kind = "ReviewPhase"),
         prior.copy(generation = 0), prior.copy(candidate = null), prior.copy(candidate = _first.copy(tree = "invalid")),
-        prior.copy(checksReceipt = ""), prior.copy(checksReceipt = "x" * 16385),
+        prior.copy(checksReceipt = ""),
         prior.copy(resultIdentity = ""), prior.copy(resultIdentity = "bad\nreference"),
         prior.copy(resultRevision = "0"), prior.copy(resultRevision = "01"), prior.copy(resultRevision = "+1"),
         prior.copy(resultRevision = "9223372036854775808"), prior.copy(result = null),
@@ -241,7 +241,7 @@ final class GoalPhasePriorReviewContextSpec extends AnyWordSpec with Matchers wi
         Then("invalid history refuses before appending any report")
         refused.isSuccess shouldBe false
       }
-      val references = Vector(ContextReference("", "8"), ContextReference("r" * 16385, "8"),
+      val references = Vector(ContextReference("", "8"),
         ContextReference("review-reference", "0"), ContextReference("review-reference", "01"),
         ContextReference("review-reference", "invalid"),
         ContextReference("review-reference", "p64-e1-proposal-2026-10-20-1"), null)
@@ -252,6 +252,17 @@ final class GoalPhasePriorReviewContextSpec extends AnyWordSpec with Matchers wi
         Then("no normalized or synthetic reference is substituted")
         refused.isSuccess shouldBe false
       }
+
+      Given("ordinary complete checks and result references beyond the removed application byte ceiling")
+      val fullrequest = request.copy(checksReceipt = Some("c" * 16385))
+      val fullreference = ContextReference("r" * 16385, "8")
+      When("the retention owner consumes the exact original request and completion reference")
+      val retained = take(R.retainPriorC(Vector.empty, fullrequest, submitted.copy(resultReference = fullreference)))
+      Then("both complete references survive retention and saved JSON without normalization or truncation")
+      retained.head.checksReceipt shouldBe fullrequest.checksReceipt.get
+      retained.head.resultIdentity shouldBe fullreference.identity
+      retained.head.resultRevision shouldBe fullreference.revision
+      retained.head.asJson.as[R.Prior] shouldBe Right(retained.head)
 
       val requests = Vector(null, request.copy(kind = "UnassignedReview"), request.copy(candidate = None),
         request.copy(candidate = null), request.copy(checksReceipt = None), request.copy(checksReceipt = null),

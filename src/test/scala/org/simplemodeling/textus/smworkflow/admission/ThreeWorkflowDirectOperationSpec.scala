@@ -706,7 +706,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
           prepare(call => call.currentC(identity).map(value => { state = Some(value); () }))
           state.get
         }
-        Then("exactly the fifty-three installed Operations expose named business input and explicit execution parameters")
+        Then("exactly the fifty-five installed Operations expose named business input and explicit execution parameters")
         val expected = Set(
           "GoalPhaseService.startGoalPhase", "GoalPhaseService.advanceGoalPhase", "GoalPhaseService.submitGoalPhaseWorkResult",
           "GoalPhaseService.submitGoalPhaseOrderedDecision",
@@ -722,6 +722,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
           "GoalPhaseService.describeGoalPhaseCandidateObservationContinuation", "GoalPhaseService.continueGoalPhaseCandidateObservation",
           "GoalPhaseService.describeGoalPhaseRemainingPlan", "GoalPhaseService.adoptGoalPhaseRemainingPlan",
           "GoalPhaseService.describeGoalPhaseDependencySourceRevision", "GoalPhaseService.adoptGoalPhaseDependencySourceRevision",
+          "GoalPhaseService.describeGoalPhasePrerequisitePublicationRecovery", "GoalPhaseService.recoverGoalPhasePrerequisitePublication",
           "GoalPhaseService.describeGoalPhaseReleaseRepairContinuation", "GoalPhaseService.recoverGoalPhaseReleaseRepairContinuation",
           "GoalPhaseService.describeGoalPhaseReviewPurposeRepair", "GoalPhaseService.admitGoalPhaseReviewPurposeRepair",
           "GoalPhaseService.describeGoalPhaseClosureRecovery", "GoalPhaseService.recoverGoalPhaseClosure",
@@ -739,8 +740,8 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
           "RepositorySyncService.describeRepositorySyncValidationContinuation", "RepositorySyncService.adoptRepositorySyncValidationContinuation",
           "RepositorySyncService.submitRepositorySyncWorkResult", "RepositorySyncService.submitRepositoryPurposeResult", "RepositorySyncService.submitNativeMergeReview",
           "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitNativeMergeRepair")
-        published should have size 53
-        published.map(_._1).distinct should have size 53
+        published should have size 55
+        published.map(_._1).distinct should have size 55
         published.map(_._1).toSet shouldBe expected
         val sessiondescriptions = Set("describeGoalPhaseValidationRecovery", "describeGoalPhaseClosureRecovery",
           "describeGoalPhaseSourceHistoryRecovery", "describeGoalPhaseCandidateRecovery",
@@ -755,7 +756,8 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
                 else "sessionId")
             if (Set("describeGoalPhaseValidationRepair", "adoptGoalPhaseValidationRepair",
                 "recoverGoalPhaseCandidate", "recoverGoalPhaseWholePhaseCandidate", "describeGoalPhaseReleaseRepairContinuation",
-                "recoverGoalPhaseReleaseRepairContinuation").contains(operation.name)) {
+                "recoverGoalPhaseReleaseRepairContinuation", "describeGoalPhaseDependencySourceRevision",
+                "adoptGoalPhaseDependencySourceRevision", "recoverGoalPhasePrerequisitePublication").contains(operation.name)) {
               operation.specification.request.parameters.map(_.name) shouldBe Vector("input", "inputResource")
               operation.specification.request.parameters.map(_.domain.multiplicity) shouldBe
                 Vector(Multiplicity.ZeroOne, Multiplicity.ZeroOne)

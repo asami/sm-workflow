@@ -17,7 +17,9 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  5, 2026
- * @version Oct. 28, 2026
+ *  version Oct. 28, 2026
+ *  version Nov.  2, 2026
+ * @version Nov.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -51,6 +53,7 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
       "describeGoalPhaseCandidateObservationContinuation", "continueGoalPhaseCandidateObservation",
       "describeGoalPhaseRemainingPlan", "adoptGoalPhaseRemainingPlan",
       "describeGoalPhaseDependencySourceRevision", "adoptGoalPhaseDependencySourceRevision",
+      "describeGoalPhasePrerequisitePublicationRecovery", "recoverGoalPhasePrerequisitePublication",
       "describeGoalPhaseReleaseRepairContinuation", "recoverGoalPhaseReleaseRepairContinuation",
       "describeGoalPhaseReviewPurposeRepair", "admitGoalPhaseReviewPurposeRepair",
       "describeGoalPhaseCompletionPolicy", "adoptGoalPhaseCompletionPolicy",
@@ -89,7 +92,7 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
     SmWorkflowComponent.GoalTaskReviewServiceService -> Vector("reviewGoalTask"),
     SmWorkflowComponent.GoalTaskSemanticAdmissionServiceService -> Vector("admitGoalTaskReview"),
     SmWorkflowComponent.DevelopmentObservationServiceService -> Vector("readDevelopmentState", "readDevelopmentHistory"),
-    SmWorkflowComponent.LocalPublicationServiceService -> Vector("ensureLocalPublication", "collectLocalPublication"),
+    SmWorkflowComponent.LocalPublicationServiceService -> Vector("ensureLocalPublication", "collectLocalPublication", "collectLatestLocalPublication"),
     SmWorkflowComponent.JournalServiceService -> Vector("readJournalEntry", "findJournalEntries"),
     SmWorkflowComponent.EvidenceServiceService -> Vector("readEvidence", "readEvidenceRange", "recordEvidenceJournal",
       "archiveEvidenceBatch", "describeEvidence", "manageEvidenceRetention", "findDueEvidence"),
