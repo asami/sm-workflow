@@ -2,6 +2,10 @@
 
 Date: 2026-10-26. Contract: RS-VC1.
 
+The original RS-VC1 behavior below retains its historical meaning. The explicit
+merge-check policy described below adds a same-candidate continuation for
+resultless pending-merge checks and actual typed preparation refusals.
+
 `describeRepositorySyncValidationContinuation(sessionId)` describes an active,
 unsuspended `IntegrationValidationChecking` intent with no result under an equal,
 local-ahead or fast-forward integration. The target includes the exact native
@@ -245,6 +249,82 @@ accepted semantic result to upgrade it. All semantic, reviewer and lifecycle
 inputs in these cases are specification-owned; the cases make no live provider
 acceptance claim. This section defines the contract and selected scenarios,
 without claiming their execution results.
+
+## Pending-merge check continuation
+
+Policy `sm-workflow.repository-sync-merge-check-continuation.v1` uses the existing
+`describeRepositorySyncValidationContinuation`,
+`adoptRepositorySyncValidationContinuation` and passive family `RepositorySync`,
+kind `validation-continuation` evidence preparation. It adds no public Operation
+or ABI DTO. Its choices are `AuthorizeNewMergeValidation` and `Defer`.
+
+This branch requires the actual active unsuspended pending-merge lineage and
+either its current resultless `ValidationChecking` intent or an adjacent saved
+`ValidationPreparationRejected` from the actual typed SBT UoW. A generic CLI or
+Consequence error is not evidence that an old process never started. Historical
+missing results remain UNKNOWN. A genuine returned nonzero process receipt
+continues through the existing formal-failure and repair routes.
+
+The complete canonical target binds Component, original Start participant and
+context, Session, repository root and endpoint, current native frontier revision
+and causation, actual historical source namespace, complete candidate and intent
+payloads and native references/revisions, selected check identity/kind/ordinal,
+contiguous successful receipt prefix, current parents/HEAD/tracking/index/worktree,
+current fixed resolved host process plan and original push direction. Optional
+typed refusal facts preserve the exact workspace, kind and full actual diagnostic
+without a process, exit code or receipt. Public Record transport encodes the
+opaque `candidatePayload`, `intentPayload` and `processPlan` objects as complete
+JSON text; decoding restores their exact objects, including historical nulls and
+host-map keys. Missing, explicit-null, unknown or contradictory target fields
+refuse; policy dispatch never falls back to another decoder.
+
+The genuine independent Human must supply the exact target, choice, rationale,
+artifact reference and execution evidence containing that exact reference and
+the original worker identity. Authorization requires `priorExecutionEnded=true`
+and `acceptOriginalUncertainty=true`. The trusted host owns actual Human
+provenance and lifecycle observation; passive preparation only encodes supplied
+facts. Typed admission rejection remains an admission rejection, and accepting
+uncertainty never changes an older resultless intent into a not-started result.
+
+Adoption appends only `MergeCheckContinuationAdmitted`, event
+`native-merge-check-continuation-admitted`. `Defer` writes nothing. Identical
+adoption replay is idempotent even after normal progression; crossed, stale or
+contradictory directions refuse. A separate ordinary Advance prepares
+`PendingMergePrepared`, event `native-merge-check-source-prepared`, in
+`merge-check-continuation-<frontierRevision>`. This source copies the exact
+original candidate payload with validation cleared and direction attached. It
+does not merge, materialize, stage or submit the original semantic result again.
+
+Validation authenticates the original candidate through its original namespace,
+including the original push continuation when present, and authenticates every
+original prefix intent/result pair in native history. The fresh State uses the
+new source revision and carries only that successful prefix. It creates no new
+result rows for seeded checks and reuses no unrelated check. The first unfinished
+check and later checks use the normal typed owning UoW. Normal independent
+review, merge commit, non-force push and final convergence remain required.
+The original push direction and convergence namespace retain the same finite
+allowance; this validation direction grants no new push episode or allowance.
+
+For new pending-merge product-check attempts, `repositoryValidationAttemptC`
+provides the actual typed outcome. `Observed` produces the ordinary real check
+receipt. `AdmissionRejected` appends `ValidationPreparationRejected`, event
+`native-check-preparation-rejected`, and optional native `validationPreparation`
+facts. The receipt prefix stays unchanged, no later check runs, and repeated
+Advance observes the refusal without replay. Correcting fixed host registration
+then requires a new exact description and genuine Human authorization. `Uncertain`
+keeps the retained intent UNKNOWN without a fabricated preparation proof or
+process receipt. This change is limited to pending-merge checks; nonmerge
+integration retains its existing route. Absent optional provenance is omitted
+from native v3 payloads and explicit null cannot erase it.
+
+`RepositorySyncMergeCheckContinuationSpec` specifies strict internal/public
+codecs, passive Human bindings, original push scope, contiguous kind-sensitive
+prefixes and actual typed preparation-refusal payload behavior. The separately
+selected installed `NativeRepositoryMergeCheckContinuationCliSpec` qualifies
+the historical resultless episode and same-Session continuation with an actual
+conflict-forced detailed review. Its standard installed FULL_STATE policy is
+conditional; conflict resolution makes detailed review mandatory. These are
+authored scenarios, not claims of validation or independent review execution.
 
 ## Retained review input classification continuation v3
 

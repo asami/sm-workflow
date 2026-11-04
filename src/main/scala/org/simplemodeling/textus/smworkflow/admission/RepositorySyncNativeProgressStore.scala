@@ -41,7 +41,9 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     purposePreparation: Option[RepositorySyncPurposePreparationContinuation.Direction] = None,
     repairBudget: Option[RepositorySyncRepairBudgetContinuation.Direction] = None,
     pushContinuation: Option[RepositorySyncPushContinuation.Direction] = None,
-    pushObservation: Option[RepositorySyncPushContinuation.GitObservation] = None)
+    pushObservation: Option[RepositorySyncPushContinuation.GitObservation] = None,
+    mergeCheckContinuation: Option[RepositorySyncMergeCheckContinuation.Direction] = None,
+    validationPreparation: Option[RepositorySyncMergeCheckContinuation.PreparationRefusal] = None)
   final case class Stage(record: InstanceRecord, payload: Payload)
   final case class Candidate(namespace: String, pending: Stage)
   def candidateKey(namespace: String, key: String): String =
@@ -52,7 +54,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
   private given publicationEncoder: Encoder[RepositorySyncPublication.State] = RepositorySyncPublication.stateEncoder
   private given publicationDecoder: Decoder[RepositorySyncPublication.State] = RepositorySyncPublication.stateDecoder
   private given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
-    case ("assessment" | "repairContext" | "continuation" | "hygiene" | "records" | "purposes" | "requiredLint" | "reviewInputs" | "publication" | "formalFailure" | "purposeContent" | "purposePreparation" | "repairBudget" | "pushContinuation" | "pushObservation", value) => !value.isNull
+    case ("assessment" | "repairContext" | "continuation" | "hygiene" | "records" | "purposes" | "requiredLint" | "reviewInputs" | "publication" | "formalFailure" | "purposeContent" | "purposePreparation" | "repairBudget" | "pushContinuation" | "pushObservation" | "mergeCheckContinuation" | "validationPreparation", value) => !value.isNull
     case _ => true
   }))
   private given Decoder[Payload] = deriveDecoder
@@ -64,7 +66,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
       version <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
       _ <- Either.cond(version == schema, (), "Native progress schema differs")
       payload <- wire.hcursor.get[Payload]("payload").left.map(_.message)
-      _ <- Either.cond(Vector("formalFailure", "purposeContent", "purposePreparation", "repairBudget", "pushContinuation", "pushObservation").forall(name =>
+      _ <- Either.cond(Vector("formalFailure", "purposeContent", "purposePreparation", "repairBudget", "pushContinuation", "pushObservation", "mergeCheckContinuation", "validationPreparation").forall(name =>
         !wire.hcursor.downField("payload").downField(name).focus.exists(_.isNull)), (), "Continuation provenance cannot be explicitly null")
       _ <- Either.cond(!wire.hcursor.downField("payload").downField("hygiene").focus.exists(_.isNull) &&
         payload.hygiene != null && payload.hygiene.forall(CommitHygiene.valid), (), "Invalid commit hygiene receipt")
@@ -141,7 +143,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
         case None => invalid("actual pending merge history source is absent")
         case Some(entry) =>
           val pattern = (java.util.regex.Pattern.quote("native-repository:" + identity + ":") +
-            "((?:repair-|required-lint-|formal-failure-|push-continuation-)[1-9][0-9]*)-pending-merge").r
+            "((?:repair-|required-lint-|formal-failure-|push-continuation-|merge-check-continuation-)[1-9][0-9]*)-pending-merge").r
           entry.causation.value match {
             case cause if cause == "native-repository:" + identity + ":pending-merge" => scoped("").loadC("pending-merge").flatMap {
               case Some(value) if value.payload.stage == "PendingMergePrepared" && value.record.revision == entry.revision &&
@@ -150,11 +152,14 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
             }
             case pattern(namespace) => scoped("").loadC(candidateKey(namespace, "pending-merge")).flatMap {
               case Some(value) if value.payload.stage == "PendingMergePrepared" && value.record.revision == entry.revision =>
-                if (namespace.startsWith("push-continuation-") || value.payload.pushContinuation.nonEmpty)
-                  RepositorySyncPushContinuation.authenticateCandidateC(scoped(""), current, value, namespace)
+                if (namespace.startsWith("merge-check-continuation-"))
+                  RepositorySyncMergeCheckContinuation.authenticateCandidateC(scoped(""), current, value, namespace)
                     .map(_ => Candidate(namespace, value))
                 else if (namespace.startsWith("formal-failure-"))
-                  RepositorySyncFormalFailureContinuation.authenticateCandidateC(this, current, value, namespace)
+                  RepositorySyncFormalFailureContinuation.authenticateCandidateC(scoped(""), current, value, namespace)
+                    .map(_ => Candidate(namespace, value))
+                else if (namespace.startsWith("push-continuation-") || value.payload.pushContinuation.nonEmpty)
+                  RepositorySyncPushContinuation.authenticateCandidateC(scoped(""), current, value, namespace)
                     .map(_ => Candidate(namespace, value))
                 else if (namespace.startsWith("required-lint-"))
                   RepositorySyncRequiredLintContinuation.authenticateCandidateC(this, current, value, namespace)
@@ -193,7 +198,8 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
       // in its original rows and is never a seed for that changed candidate.
       selectedpayload = if (this.key(key).startsWith("repair-") &&
           Set("MaterializingRepair", "PendingMergePrepared")(payload.stage))
-          payload.copy(requiredLint = None, reviewInputs = None, formalFailure = None) else payload
+          payload.copy(requiredLint = None, reviewInputs = None, formalFailure = None,
+            mergeCheckContinuation = None, validationPreparation = None) else payload
       saved <- adapter.executeC(WorkflowMechanicalTransition.Intent(declaration.configuration, reference(key),
         from, from.revision, entry, TypedValue(codec.typeIdentity, selectedpayload.copy(
           continuation = continuation.orElse(selectedpayload.continuation),

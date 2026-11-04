@@ -517,7 +517,8 @@ private[smworkflow] object RepositorySyncPushContinuation {
         pending.payload.mergeHead == fetched.payload.after.get.trackingTip && pending.payload.validation.isEmpty &&
         pending.payload.after.exists(a => a.head == fetched.payload.after.get.head && a.trackingTip == fetched.payload.after.get.trackingTip) &&
         pending.payload.continuation.isEmpty && pending.payload.requiredLint.isEmpty &&
-        pending.payload.reviewInputs.isEmpty && pending.payload.formalFailure.isEmpty)
+        pending.payload.reviewInputs.isEmpty && pending.payload.formalFailure.isEmpty &&
+        pending.payload.mergeCheckContinuation.isEmpty && pending.payload.validationPreparation.isEmpty)
       Consequence.unit else N.invalid("push candidate crosses actual history, active direction or new candidate receipt boundary")
   } yield ()
   private def _candidate_before_c(base: N.Store, current: InstanceRecord, pending: N.Stage,

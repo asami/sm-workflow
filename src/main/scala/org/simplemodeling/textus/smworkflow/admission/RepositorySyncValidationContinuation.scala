@@ -23,7 +23,8 @@ import RepositorySyncNativeMergeValidation as C
 /** Explicit append-only direction for an ended invocation with no check result.
   * Description observes Git; adoption only appends a native mechanical record.
   * @since Oct. 26, 2026
-  * @version Nov.  3, 2026
+  *  version Nov.  3, 2026
+  * @version Nov.  4, 2026
   */
 private[smworkflow] object RepositorySyncValidationContinuation {
   val purpose = "repository-sync-validation-continuation"
@@ -202,6 +203,10 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     def sessionId: String = value.sessionId
     def choices: Vector[String] = RepositorySyncFormalFailureContinuation.availableChoices(value)
   }
+  final case class MergeCheckTarget(value: RepositorySyncMergeCheckContinuation.Target) extends AnyTarget {
+    def sessionId: String = value.sessionId
+    def choices: Vector[String] = RepositorySyncMergeCheckContinuation.choices
+  }
   final case class PurposeContentTarget(value: RepositorySyncPurposeContentContinuation.Target) extends AnyTarget {
     def sessionId: String = value.sessionId
     def choices: Vector[String] = RepositorySyncPurposeContentContinuation.choices
@@ -216,6 +221,7 @@ private[smworkflow] object RepositorySyncValidationContinuation {
       case RepositorySyncReviewInputContinuation.policy => RepositorySyncReviewInputContinuation.decodeTarget(wire).map(ReviewInputsTarget(_))
       case RepositorySyncFormalFailureContinuation.policy => RepositorySyncFormalFailureContinuation.decodeTarget(wire).map(FormalFailureTarget(_))
       case RepositorySyncFormalFailureContinuation.selectionPolicy => RepositorySyncFormalFailureContinuation.decodeTarget(wire).map(FormalFailureTarget(_))
+      case RepositorySyncMergeCheckContinuation.policy => RepositorySyncMergeCheckContinuation.decodeTarget(wire).map(MergeCheckTarget(_))
       case RepositorySyncPurposeContentContinuation.policy => RepositorySyncPurposeContentContinuation.decodeTarget(wire).map(PurposeContentTarget(_))
       case _ => Left("Unrecognized repository validation continuation policy")
     }
@@ -231,6 +237,7 @@ private[smworkflow] object RepositorySyncValidationContinuation {
         answer.priorExecutionEnded, answer.acceptOriginalUncertainty), answer,
         "Formal failure answer must attest only an actual pending old worker"))
     case PurposeContentTarget(_) => RepositorySyncPurposeContentContinuation.decodeAnswer(value)
+    case MergeCheckTarget(_) => RepositorySyncMergeCheckContinuation.decodeAnswer(value)
   }
   def decodePublicAnyAnswer(target: AnyTarget, value: Json): Either[String, Answer] =
     GoalPhaseNativeMetadata.normalizePublicJson(value).flatMap(decodeAnyAnswer(target, _))
@@ -247,6 +254,8 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     case FormalFailureTarget(value) => RepositorySyncFormalFailureContinuation.bindingC(component, value, choice,
       rationale, participant, reference, ended, accepted)
     case PurposeContentTarget(value) => RepositorySyncPurposeContentContinuation.bindingC(component, value, choice,
+      rationale, participant, reference, ended, accepted)
+    case MergeCheckTarget(value) => RepositorySyncMergeCheckContinuation.bindingC(component, value, choice,
       rationale, participant, reference, ended, accepted)
   }
   def targetC(value: Record): Consequence[Target] = if (value == null) N.invalid("continuation target is absent")
@@ -430,8 +439,16 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     F.sessionC(identity, d, definition, core).flatMap { session =>
       if (session.started.current.currentProgression.contains(ProgressionReference("sync.PurposeInventory")))
         RepositorySyncPurposeContentContinuation.describeC(identity, d, definition, core, acknowledge)
+      else if (session.started.current.currentProgression.exists(p =>
+          Set("sync.ValidationChecking", "sync.ValidationPreparationRejected")(p.value))) for {
+        store <- N.bindC(session, d, core, acknowledge)
+        candidate <- store.currentMergeCandidateC(session.started.current)
+        failed <- C.retainedFailureC(store, candidate.pending, policy, candidate.namespace)
+        result <- if (failed.nonEmpty) RepositorySyncFormalFailureContinuation.describeC(identity, d, definition, core, policy, acknowledge)
+          else RepositorySyncMergeCheckContinuation.describeC(identity, d, definition, core, policy, acknowledge)
+      } yield result
       else if (session.started.current.currentProgression.exists(p => Set("sync.PurposeRepairRequired",
-          "sync.ValidationChecking", "sync.ValidationRepairRequired")(p.value)))
+          "sync.ValidationRepairRequired")(p.value)))
         RepositorySyncFormalFailureContinuation.describeC(identity, d, definition, core, policy, acknowledge)
       else if (session.started.current.currentProgression.contains(ProgressionReference("sync.ReviewDecisionRequired")))
         review.map(port => RepositorySyncReviewInputContinuation.describeC(identity, d, definition, core, policy, acknowledge, port))
@@ -458,6 +475,8 @@ private[smworkflow] object RepositorySyncValidationContinuation {
         policy, installation, acknowledge)
       case PurposeContentTarget(_) => RepositorySyncPurposeContentContinuation.adoptC(input, d, definition, core,
         installation, acknowledge)
+      case MergeCheckTarget(_) => RepositorySyncMergeCheckContinuation.adoptC(input, d, definition, core,
+        policy, installation, acknowledge)
     }
   private def _adopt_v1_c(input: V.RepositorySyncValidationContinuationAdoptionInput, d: F.Declaration,
     definition: DefinitionBinding, core: ActionCall.Core, policy: C.Policy, installation: Installation,

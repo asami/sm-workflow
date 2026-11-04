@@ -23,7 +23,8 @@ import RepositorySyncPurposeContentContinuation.{canonical, exact, ordinary, rev
 /** A genuine new validation attempt after explicit host-correction direction.
   * Formal failure and unknown old-worker effects retain separate provenance.
   * @since Nov. 3, 2026
-  * @version Nov. 3, 2026
+  *  version Nov. 3, 2026
+  * @version Nov. 4, 2026
   */
 private[smworkflow] object RepositorySyncFormalFailureContinuation {
   val policy = "sm-workflow.repository-sync-formal-failure-continuation.v1"
@@ -214,7 +215,7 @@ private[smworkflow] object RepositorySyncFormalFailureContinuation {
     Vector(t.frontierRevision, t.candidateRevision, t.failureRevision, t.intentRevision).forall(revision) &&
     t.failureRevision.toLong == t.intentRevision.toLong + 1 && t.candidateRevision.toLong < t.intentRevision.toLong &&
     t.failureRevision.toLong <= t.frontierRevision.toLong && t.sourceNamespace != null &&
-    (t.sourceNamespace.isEmpty || t.sourceNamespace.matches("(?:repair-|required-lint-|formal-failure-)[1-9][0-9]*")) &&
+    (t.sourceNamespace.isEmpty || t.sourceNamespace.matches("(?:repair-|required-lint-|formal-failure-|push-continuation-|merge-check-continuation-)[1-9][0-9]*")) &&
     Vector(t.candidateKey, t.failureKey, t.intentKey).forall(exact) &&
     t.candidateReference == _reference(t.sessionId, t.candidateKey) && t.failureReference == _reference(t.sessionId, t.failureKey) &&
     t.intentReference == _reference(t.sessionId, t.intentKey) && t.selectedChecks != null && t.checkIndex >= 0 &&
@@ -346,7 +347,11 @@ private[smworkflow] object RepositorySyncFormalFailureContinuation {
       .map(_.target.successfulPrefix)
       .orElse(source.candidate.payload.formalFailure.map(_.target.successfulPrefix))
     for {
-      seed <- inherited.map(Consequence.success).getOrElse(source.candidate.payload.requiredLint match {
+      seed <- if (purpose.isEmpty && source.candidate.payload.mergeCheckContinuation.exists(direction =>
+          source.namespace == RepositorySyncMergeCheckContinuation.namespace(direction.target)))
+        RepositorySyncMergeCheckContinuation.retainedSeedC(store, source.candidate, source.namespace,
+          source.candidate.payload.mergeCheckContinuation.get.target.validationPolicy, source.checks)
+        else inherited.map(Consequence.success).getOrElse(source.candidate.payload.requiredLint match {
         case Some(direction) => RepositorySyncRequiredLintContinuation.seedC(store, source.candidate,
           source.namespace, direction.target.validationPolicy, source.checks)
         case None => Consequence.success(Vector.empty[C.Receipt])

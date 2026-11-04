@@ -34,6 +34,20 @@ private[smworkflow] object RepositorySyncNativeProgression {
     output <- if (session.started.current.lifecycle == Lifecycle.Completed)
       _retained_terminal_c(session, declaration, core, acknowledgement)
       else session.started.current.suspension match {
+      case None if session.started.current.currentProgression.contains(
+          WorkflowInstancePersistence.ProgressionReference("sync.MergeCheckContinuationAdmitted")) => for {
+        policy <- validationPolicy.map(Consequence.success).getOrElse(invalid("merge check continuation requires current fixed validation bindings"))
+        prepared <- RepositorySyncMergeCheckContinuation.advanceC(continuationstore, session.started.current, policy)
+        output <- pendingMergeC(continuationstore, prepared, validationPolicy, review, convergence,
+          RepositorySyncMergeCheckContinuation.namespace(prepared.payload.mergeCheckContinuation.get.target), repair)
+      } yield output
+      case None if session.started.current.currentProgression.contains(
+          WorkflowInstancePersistence.ProgressionReference("sync.FormalFailureContinuationAdmitted")) && pushcontinuation.nonEmpty => for {
+        policy <- validationPolicy.map(Consequence.success).getOrElse(invalid("formal continuation requires current fixed validation bindings"))
+        prepared <- RepositorySyncFormalFailureContinuation.advanceC(continuationstore, session.started.current, policy)
+        output <- pendingMergeC(continuationstore, prepared, validationPolicy, review, convergence,
+          RepositorySyncFormalFailureContinuation.namespace(prepared.payload.formalFailure.get.target), repair)
+      } yield output
       case None if pushcontinuation.nonEmpty => RepositorySyncPushContinuation.advanceC(continuationstore,
         pushcontinuation.get, session.started.current, conflicts, validationPolicy, review, convergence, repair)
       case None if session.started.current.currentProgression.exists(p =>
@@ -315,6 +329,7 @@ private[smworkflow] object RepositorySyncNativeProgression {
         else Consequence.success(NativeWorkflowOperationOutput.repositoryWait(store.identity,
           if (assessed.payload.stage == "MergeAdmitted") "Actual merge admitted; current host convergence authority is required."
           else if (assessed.payload.stage == "MergeValidated") "Actual merge uncertainty or selected required review needs the installed independent semantic route."
+          else if (assessed.payload.stage == "ValidationPreparationRejected") RepositorySyncMergeCheckContinuation.preparationMessage
           else "Failed, missing or indeterminate selected checks remain retained; no check replay or merge admission.",
           assessed.payload.stage))
     } yield wire

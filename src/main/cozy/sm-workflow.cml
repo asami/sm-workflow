@@ -1336,6 +1336,8 @@ OperationResult
 
 - input-kind :: COMMAND
 
+Merge-check policy sm-workflow.repository-sync-merge-check-continuation.v1 offers AuthorizeNewMergeValidation and Defer for an actual pending-merge resultless check intent or typed admission refusal. Bind the complete original candidate and intent payloads, original namespace and references, contiguous successful selected prefix, current native Git snapshot, fixed resolved process plan and original push direction. An adopting answer requires priorExecutionEnded=true and acceptOriginalUncertainty=true. Historical missing results remain UNKNOWN; typed admission rejection has no process receipt. Adoption is passive and separate ordinary Advance performs unfinished validation and normal review/convergence without renewing the push allowance.
+
 Formal-failure policy sm-workflow.repository-sync-formal-failure-continuation.v1 offers AuthorizeNewValidationAfterHostCorrection and Defer for an actual Purpose or pending-merge failed product check. Bind its full failed receipt, successful prefix, unchanged candidate, fixed selection and current resolved host process plan. With a pending old repair both prior-worker assertions must be true; without an issue both are false and not applicable. The check remains formally failed. Purpose-content policy sm-workflow.repository-sync-purpose-content-continuation.v1 offers AdoptCurrentPurposeContent and Defer for an unanswered available unclaimed Purpose WorkOrder whose exact paths, statuses, baseline/index contents and records remain equal but ordinary worktree text changed. Its adopting answer requires both assertions true. Both policies store direction only; separate ordinary Advance owns the new attempt or fresh inventory/issue. Claimless work may have UNKNOWN external effects.
 
 The target continuationPolicy selects the exact answer contract. V1 retains AuthorizeNewValidation, AdoptCurrentFullState and Defer; an adopting v1 answer requires priorExecutionEnded=true and acceptOriginalUncertainty=true. For sm-workflow.repository-sync-required-lint-continuation.v2 the choices are AuthorizeMissingRequiredLint and Defer, and both booleans must be false: these fields mean not applicable because the original validation actually succeeded. No UNKNOWN assertion or invocation-termination attestation is created by v2.
@@ -5401,6 +5403,10 @@ subject-type = RepositorySyncHumanConflictRequest
 
 ##### FormalFailureContinuationAdmitted
 
+##### MergeCheckContinuationAdmitted
+
+##### ValidationPreparationRejected
+
 ##### PurposeContentContinuationAdmitted
 
 ##### IntegrationValidated
@@ -5630,6 +5636,16 @@ when = sync.ReviewInputContinuationAdmitted, conflict.Retained, nativeReview.Ret
 
 state = FormalFailureContinuationAdmitted
 when = sync.FormalFailureContinuationAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### merge-check-continuation-admitted
+
+state = MergeCheckContinuationAdmitted
+when = sync.MergeCheckContinuationAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### validation-preparation-rejected
+
+state = ValidationPreparationRejected
+when = sync.ValidationPreparationRejected, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### purpose-content-continuation-admitted
 
@@ -6308,6 +6324,16 @@ on = native-check-prepared
 
 ##### TRANSITION
 
+to = MergeCheckContinuationAdmitted
+on = native-merge-check-continuation-admitted
+
+##### TRANSITION
+
+to = ValidationPreparationRejected
+on = native-check-preparation-rejected
+
+##### TRANSITION
+
 to = FormalFailureContinuationAdmitted
 on = native-formal-failure-continuation-admitted
 
@@ -6330,6 +6356,20 @@ on = native-check-recorded
 
 to = MergeValidated
 on = native-validation-admitted
+
+#### ValidationPreparationRejected
+
+##### TRANSITION
+
+to = MergeCheckContinuationAdmitted
+on = native-merge-check-continuation-admitted
+
+#### MergeCheckContinuationAdmitted
+
+##### TRANSITION
+
+to = PendingMergePrepared
+on = native-merge-check-source-prepared
 
 #### MergeConflicted
 
@@ -8589,6 +8629,8 @@ Explicit continuationPolicy dispatch also supports actual Purpose/pending-merge 
 
 Observe the exact active unsuspended nonmerge IntegrationValidationChecking resultless intent under equal, local-ahead or fast-forward integration. Bind current Session revision/causation, original root/branch/remote/endpoint and FULL_STATE scope, selected checks/policy, actual candidate and intent references/revisions, successful receipt prefix, HEAD/tree/tracking/index and complete dirty paths including index/worktree and rename codes. Return AuthorizeNewValidation, AdoptCurrentFullState and Defer plus the separate ordinary Advance route. Refuse merge/unmerged state, changed HEAD/tracking, known failure results, checkpoint/materialization interruption, later review/Human/mutation and completed/cancelled Session with the existing owner route. No storage mutation or continuation adoption follows description.
 
+For the explicit merge-check policy sm-workflow.repository-sync-merge-check-continuation.v1, describe an actual resolved PendingMergePrepared candidate whose current selected check has a retained intent without result, or an adjacent actual typed ValidationPreparationRejected refusal. Return AuthorizeNewMergeValidation and Defer. Bind complete exact candidate/intent payloads and native references, original source namespace, successful selected prefix, current parents/HEAD/tracking/index/worktree, fixed resolved host process plan and original push direction. Never derive nonexecution from a historical CLI error. Actual formal check failures keep their existing formal-failure route.
+
 Explicit state dispatch also supports sm-workflow.repository-sync-required-lint-continuation.v2 for an active unsuspended genuine MergeValidated frontier whose original successful ordered checks omitted required lint. Return AuthorizeMissingRequiredLint and Defer. The compact strict target binds Session/Start principal, Component, repository and tracking scope, actual current pending source namespace/reference/revision (including repair-N), MergeValidated reference/revision, original selection and each actual intent/result reference/revision with terminal-success facts, immutable merge parents/index tree, current observation and actual current expanded fixed host policy. Exactly one FixCheck may be appended; the old identity/ordinal/kind/order and candidate inputs remain. Raw historical stdout/stderr stays in its original native receipts. No later review, commit, convergence or uncertain invocation is eligible. Invoke description with --sessionId; adoption uses structured --input.
 
 Explicit policy sm-workflow.repository-sync-review-input-continuation.v3 describes only the active unsuspended ReviewDecisionRequired frontier with its actual paired detailed decision-needed result. The corrected normal host document-inputs declaration is a new proposal, never an edit of old validation or review. Bind the Component and Session, pending namespace, original validated and review references/revisions, unchanged parents/tree/index/current observation, old assessment, proposed mapping and complete freshly captured assessment, current fixed selected checks and explicit applicability issues. Return AdoptInputClassificationAndContinueReview and Defer only when old unknown paths are now fully classified with unchanged check applicability. Ineligible descriptions offer Defer only. Previously known consumed/document classifications cannot be demoted or changed. Program-inputs coverage takes consumed precedence even for scripts or skills ending in .md. Binary, unavailable/new unknown, uncovered consumed inputs and real selected execution/input drift remain issues. No successful check or semantic result is invented or replayed. Unknown or malformed v3 refuses without older-decoder fallback.
@@ -8883,6 +8925,8 @@ Supply exactly one of input or inputResource. inputResource is an absolute local
 Formal failed Purpose policy sm-workflow.repository-sync-formal-failure-continuation.v2 offers AuthorizeNewValidationAfterSelectionCorrection and Defer only when the original selection lacks TestOnly and the current fixed policy and Purpose slot supply an applicable nonempty TestOnly addition. proposedChecks appends those exact registered checks in policy order and binds the complete host plan, original batch and receipts. V1 AuthorizeNewValidationAfterHostCorrection retains the original selection exactly. Adoption stores direction only; separate Advance runs the unfinished original checks and actual appended TestOnly through normal typed SBT, followed by normal independent review. Old failed receipts, worker UNKNOWN effects, candidate, grouping and counters remain retained.
 
 Admit only the complete exact target, typed choice/rationale and existing direction artifact/execution under dedicated independent repository-sync-validation-continuation evidence. The trusted host must externally verify original invocation terminal or not-started lifecycle before provisioning priorExecutionEnded=true and acceptOriginalUncertainty=true; passive preparation never proves termination or supplies consent. Preserve the original UNKNOWN intent and all historical results. AuthorizeNewValidation requires the unchanged clean candidate and reuses only its validated successful prefix in a fresh namespace. AdoptCurrentFullState explicitly covers all described staged and unstaged FULL_STATE paths, invalidates old check scope and allows mixed staging only there. It authorizes current selected path contents at normal staging time, not an immutable content seal or byte-identical Human review. Additional/removed paths, status/index/HEAD/tracking drift refuse. Append only one managed ValidationContinuationAdmitted transition. Defer writes nothing; stale/duplicate direction refuses without effects. Separate ordinary Advance preserves a fresh checkpoint when needed and runs unfinished checks and normal convergence under current grants. Fetch and the old checkpoint are never repeated. Every new resultless invocation requires fresh public adoption and independent terminal evidence. This bounded contract does not recover arbitrary merge, commit, push or fetch interruptions.
+
+For merge-check policy, genuine Human evidence must bind the complete described target, exact reference membership, original worker and true/true assertions. Append only MergeCheckContinuationAdmitted; Defer writes nothing and identical adoption replay is idempotent even after progression. Separate ordinary Advance copies the exact original PendingMergePrepared payload with validation cleared and the direction attached into merge-check-continuation-FRONTIER via native-merge-check-source-prepared. It performs no new merge/materialization and seeds only authenticated original successful checks. New product-check typed AdmissionRejected records ValidationPreparationRejected and its full actual diagnostic without any process result or exit code. Uncertain attempts retain UNKNOWN. Actual returned failures use ordinary repair. The original push direction, namespace, finite allowance, original intents and receipts remain attributable.
 
 The explicit v2 required-lint branch binds the same independent evidence purpose to the complete actual target, AuthorizeMissingRequiredLint choice, rationale, participant, existing reference and false/false not-applicable booleans. It authenticates original successful selection and receipt lineage through native readers and re-observes after evidence admission before managed CAS. Adoption appends only RequiredLintContinuationAdmitted via native-required-lint-continuation-admitted. Separate ordinary Advance creates PendingMergePrepared via native-required-lint-pending-prepared in the namespace required-lint- followed by the actual adoption target frontier revision, without Git source changes. Old successful receipts seed the verified ordered prefix without new execution rows; only appended FixCheck uses normal fixed CNCF SBT/UoW and current permission. Failure follows existing check-origin repair; a resultless or UNKNOWN new lint remains non-replayable. Later repaired candidates select their own checks without inheriting this seed. V1 codecs and historical rows remain unchanged; malformed or unknown v2 never falls back to v1. No whole-body seal, permission grant, successful-check replay or accepted-result resubmission is implied.
 
