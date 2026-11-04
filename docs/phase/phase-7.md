@@ -15,7 +15,7 @@ This clarifies ownership without declaring any pending Phase 7 condition accepte
 
 The planned rollout is Phase 6.7 -> [Phase 6.8](phase-6.8.md) ->
 [Phase 6.9](phase-6.9.md) -> [Phase 6.10](phase-6.10.md) ->
-[Phase 6.11](phase-6.11.md) -> Phase 7.
+[Phase 6.11](phase-6.11.md) -> [Phase 6.12](phase-6.12.md) -> Phase 7.
 Consume 6.10's optional operating-profile selection and endpoint metrics without
 changing issued work or requiring model comparison/complete usage measurement.
 Consume 6.9's clean/dirty single-repository orchestration and impact-selected
