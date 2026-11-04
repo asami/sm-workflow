@@ -445,3 +445,76 @@ replayed. Full history, failures, UNKNOWN effects, accepted results and cumulati
 counters remain retained. The existing candidate, snapshot, HEAD, branch, index,
 scope, typed root-read and later-owner guards still apply; actual root drift or
 malformed or duplicated baselines refuse before retaining the next attempt.
+
+## ID12: resultless Purpose materialization
+
+The distinct policy
+`sm-workflow.repository-sync-purpose-materialization-continuation.v1` uses the
+existing `describeRepositorySyncValidationContinuation` and
+`adoptRepositorySyncValidationContinuation` operations. It does not change the
+known exited preparation-failure policy above or infer nonexecution from a CLI
+error. The original resultless materialization remains UNKNOWN.
+
+- **PM-R1 (exact source):** eligibility requires the actual active unsuspended
+  `PurposeMaterializing` frontier, no actual materialization result, and its
+  immediately preceding native `PurposePrepared` receipt with the same complete
+  progress and prepared candidate. Authenticate the actual successful preparation
+  and completed Purpose commit prefix from immutable native history. Bind the
+  Component, original participant, Session, Start context, root, endpoint,
+  native revisions/causations/keys, complete progress, candidate, accepted plan,
+  ownership, projection, cursor, attempt, slot, effects and commits. Current
+  source HEAD, branch, index and every expected root text must still apply.
+- **PM-R2 (explicit direction):** choices are `AuthorizeNewMaterialization` and
+  passive `Defer`. Authorization requires `priorExecutionEnded=true` and
+  `acceptOriginalUncertainty=true`, and genuine independently attributable
+  `repository-sync-validation-continuation` evidence containing the exact
+  artifact reference and original worker. Passive evidence preparation encodes
+  supplied facts under family `RepositorySync`, kind `validation-continuation`;
+  it proves neither termination nor Human consent. Unknown policies and malformed,
+  missing, null, extra, crossed or stale fields refuse without fallback.
+- **PM-R3 (append-only adoption):** adoption appends one
+  `native-purpose-materialization-continuation-admitted` event to
+  `PurposePrepared`, preserving the literal `P.Progress` and candidate. Optional
+  native-v3 `purposeMaterialization` provenance is omitted when absent and rejects
+  explicit null; historical payloads retain their encoding. Complete identical
+  adopted input collects that actual receipt even after Terminal. Conflicting
+  directions refuse. No preparation, grouping, accepted Submit, stage, check,
+  commit or push is performed by adoption.
+- **PM-R4 (separate execution):** ordinary Advance reauthenticates the original
+  resultless intent, prepared receipt, actual adoption and unchanged current
+  target immediately before materializing the same candidate. Only the fresh
+  materialize intent/result pair gets a
+  `materialization-continuation-<frontierRevision>` namespace. Later genuinely
+  unexecuted structural/check/review/commit effects retain the normal attempt
+  keys, selection and authority. The direction clears on installed cursor
+  advance and genuinely new repair/preparation. Preparation and host continuation
+  namespaces remain compatible; no counter, slot or push allowance is reset.
+- **PM-R5 (preflight):** every `PurposePrepared`, including ordinary first
+  materialization, reads the complete current resolved process plan through the
+  owning `ProcedureActionCall.component_configuration` required JSON key. Select
+  the exact current fixed slot, reject duplicate or ambiguous mappings and require
+  an ordinary absolute root disjoint from the actual source. The owning typed
+  `file_read_snapshot` UoW selects `Vector(".")` with `maxDepth=0`,
+  `maxVisitedDirectories=1`, `maxEntries=0`, `maxEntryBytes=0`, `maxTotalBytes=0`.
+  These zero limits express EMPTY: any child file or directory refuses before
+  content is opened. Normal typed Git admission independently validates the
+  selected materialization grant. A typed refusal yields passive Wait condition
+  `purpose-materialization-preflight` with the real diagnostic and leaves
+  `PurposePrepared` without a materialize intent or invented process receipt.
+  Repeated collection performs no materialization. Correct the fixed mapping to
+  an empty destination and run separate normal Advance. Adoption and execution
+  recheck the destination; a later race may still leave UNKNOWN and requires a
+  new exact direction. Old workspace contents are never removed or overwritten.
+- **PM-R6 (opaque fidelity):** complete native payload and process-plan objects
+  cross public Record conversion as JSON text; complete progress and native Git
+  observations are opaque text too. Preserve arbitrary keys, arrays and historical
+  explicit nulls. Strict canonical restoration rejects altered meaning without
+  blanket nested-null removal, hashes or unchanged-data proof artifacts.
+
+`RepositorySyncPurposeMaterializationContinuationSpec` authors pure examples
+for strict public and retained codecs, explicit dispatch, exact Human assertions
+and artifact membership, fixed workspace selection, preserved progress and
+distinct materialization keys. The separately selected installed CLI fixture
+owns actual before/after upgrade Sessions, original UNKNOWN and prepared receipt
+retention, normal checks/review/commit and fresh occupied-destination preflight.
+Authored requirements are distinct from the parent workflow's execution evidence.

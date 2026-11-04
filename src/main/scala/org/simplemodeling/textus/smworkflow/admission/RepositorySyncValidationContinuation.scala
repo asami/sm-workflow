@@ -211,6 +211,10 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     def sessionId: String = value.sessionId
     def choices: Vector[String] = RepositorySyncPurposeContentContinuation.choices
   }
+  final case class PurposeMaterializationTarget(value: RepositorySyncPurposeMaterializationContinuation.Target) extends AnyTarget {
+    def sessionId: String = value.sessionId
+    def choices: Vector[String] = RepositorySyncPurposeMaterializationContinuation.choices
+  }
   /** Dispatch on the explicit discriminator, never on a failed decoder. */
   def decodeAnyTarget(value: Json): Either[String, AnyTarget] = for {
     wire <- Option(value).toRight("Continuation target is absent")
@@ -223,6 +227,7 @@ private[smworkflow] object RepositorySyncValidationContinuation {
       case RepositorySyncFormalFailureContinuation.selectionPolicy => RepositorySyncFormalFailureContinuation.decodeTarget(wire).map(FormalFailureTarget(_))
       case RepositorySyncMergeCheckContinuation.policy => RepositorySyncMergeCheckContinuation.decodeTarget(wire).map(MergeCheckTarget(_))
       case RepositorySyncPurposeContentContinuation.policy => RepositorySyncPurposeContentContinuation.decodeTarget(wire).map(PurposeContentTarget(_))
+      case RepositorySyncPurposeMaterializationContinuation.policy => RepositorySyncPurposeMaterializationContinuation.decodeTarget(wire).map(PurposeMaterializationTarget(_))
       case _ => Left("Unrecognized repository validation continuation policy")
     }
   } yield target
@@ -237,6 +242,7 @@ private[smworkflow] object RepositorySyncValidationContinuation {
         answer.priorExecutionEnded, answer.acceptOriginalUncertainty), answer,
         "Formal failure answer must attest only an actual pending old worker"))
     case PurposeContentTarget(_) => RepositorySyncPurposeContentContinuation.decodeAnswer(value)
+    case PurposeMaterializationTarget(_) => RepositorySyncPurposeMaterializationContinuation.decodeAnswer(value)
     case MergeCheckTarget(_) => RepositorySyncMergeCheckContinuation.decodeAnswer(value)
   }
   def decodePublicAnyAnswer(target: AnyTarget, value: Json): Either[String, Answer] =
@@ -254,6 +260,8 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     case FormalFailureTarget(value) => RepositorySyncFormalFailureContinuation.bindingC(component, value, choice,
       rationale, participant, reference, ended, accepted)
     case PurposeContentTarget(value) => RepositorySyncPurposeContentContinuation.bindingC(component, value, choice,
+      rationale, participant, reference, ended, accepted)
+    case PurposeMaterializationTarget(value) => RepositorySyncPurposeMaterializationContinuation.bindingC(component, value, choice,
       rationale, participant, reference, ended, accepted)
     case MergeCheckTarget(value) => RepositorySyncMergeCheckContinuation.bindingC(component, value, choice,
       rationale, participant, reference, ended, accepted)
@@ -439,6 +447,8 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     F.sessionC(identity, d, definition, core).flatMap { session =>
       if (session.started.current.currentProgression.contains(ProgressionReference("sync.PurposeInventory")))
         RepositorySyncPurposeContentContinuation.describeC(identity, d, definition, core, acknowledge)
+      else if (session.started.current.currentProgression.contains(ProgressionReference("sync.PurposeMaterializing")))
+        RepositorySyncPurposeMaterializationContinuation.describeC(identity, d, definition, core, acknowledge)
       else if (session.started.current.currentProgression.exists(p =>
           Set("sync.ValidationChecking", "sync.ValidationPreparationRejected")(p.value))) for {
         store <- N.bindC(session, d, core, acknowledge)
@@ -474,6 +484,8 @@ private[smworkflow] object RepositorySyncValidationContinuation {
       case FormalFailureTarget(_) => RepositorySyncFormalFailureContinuation.adoptC(input, d, definition, core,
         policy, installation, acknowledge)
       case PurposeContentTarget(_) => RepositorySyncPurposeContentContinuation.adoptC(input, d, definition, core,
+        installation, acknowledge)
+      case PurposeMaterializationTarget(_) => RepositorySyncPurposeMaterializationContinuation.adoptC(input, d, definition, core,
         installation, acknowledge)
       case MergeCheckTarget(_) => RepositorySyncMergeCheckContinuation.adoptC(input, d, definition, core,
         policy, installation, acknowledge)

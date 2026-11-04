@@ -64,7 +64,11 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
     def _save_(key: String, stage: String, from: N.Stage, value: P.Progress): Consequence[N.Stage] =
       store.saveC(prefix + "-" + key, "purpose-progress", from.record,
         from.payload.copy(stage = stage, purposes = Some(value),
-          purposePreparation = if (value.preparationNamespace.nonEmpty) from.payload.purposePreparation else None))
+          purposePreparation = if (value.preparationNamespace.nonEmpty) from.payload.purposePreparation else None,
+          purposeMaterialization = if (stage == "PurposePreparing") None else from.payload.purposeMaterialization.filter(direction =>
+            RepositorySyncPurposeMaterializationContinuation.progress(direction.target).exists(original =>
+              original.cursor == value.cursor && original.attempt == value.attempt && original.slotCursor == value.slotCursor &&
+                original.candidate == value.candidate))))
     def _wait_(reason: String, condition: String = "purpose-unfinished"): Consequence[V.RepositorySyncAdvanceResult] =
       Consequence.success(NativeWorkflowOperationOutput.repositoryWait(store.identity, reason, condition))
     if (progress.cursor >= groups.size) return for {
@@ -114,20 +118,30 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
         }
       } yield output
       case "PurposePrepared" => slot match {
-        case None => _wait_("Missing fixed validation workspace slot for purpose " + group.identity + "; source work and prepared native candidate are preserved", "purpose-slot-unavailable")
-        case Some(selected) => for {
+        case None => _wait_("Missing fixed validation workspace slot for purpose " + group.identity + "; source work and prepared native candidate are preserved", "purpose-materialization-preflight")
+        case Some(selected) => (for {
+          _ <- RepositorySyncPurposeMaterializationContinuation.authenticateC(store, source)
+          host <- RepositorySyncPurposeMaterializationContinuation.preflightC(store, progress)
+        } yield host) match {
+          case Consequence.Failure(conclusion) => _wait_("Purpose materialization preflight refused before an effect intent: " +
+            conclusion.show, "purpose-materialization-preflight")
+          case Consequence.Success(_) => for {
           candidate <- P.producerC(progress.candidate.get)
           selection <- _selection_c(group)
           workspace <- WorkspaceId.parseC(selected.workspace)
-          intent <- _save_("materialize-intent", "PurposeMaterializing", source, progress)
+          materializationprefix = RepositorySyncPurposeMaterializationContinuation.materializationPrefix(progress, source.payload.purposeMaterialization)
+          intent <- store.saveC(materializationprefix + "-materialize-intent", "purpose-progress", source.record,
+            source.payload.copy(stage = "PurposeMaterializing"))
           result <- E.executePurposeC(store.core, GitOperation.MaterializePurposeCandidate(selection.identity, candidate, workspace), selection)
           output <- if (result.outcome != GitExecutionOutcome.Succeeded)
-            _failed_c(store, intent, prefix + "-materialize-result", result, "Purpose candidate materialization did not succeed; occupied or uncertain workspace is preserved")
+            _failed_c(store, intent, materializationprefix + "-materialize-result", result, "Purpose candidate materialization did not succeed; occupied or uncertain workspace is preserved")
             else for {
-              materialized <- _save_("materialized", "PurposeMaterialized", intent, progress.copy(effects = progress.effects :+ _effect_json(result)))
+              materialized <- store.saveC(materializationprefix + "-materialized", "purpose-progress", intent.record,
+                intent.payload.copy(stage = "PurposeMaterialized", purposes = Some(progress.copy(effects = progress.effects :+ _effect_json(result)))))
               output <- _drive_c(store, materialized, policy, authority, review, finish)
             } yield output
-        } yield output
+          } yield output
+        }
       }
       case "PurposeMaterialized" if progress.selection.nonEmpty && progress.receipts.nonEmpty =>
         slot.map(selected => _checks_c(store, source, selected, progress.reusable.map(value => value.identity -> value).toMap,
@@ -426,7 +440,8 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
     }
     repaired <- repairedProgressC(progress, input, result, policy)
     next <- store.saveC("purpose-" + (progress.cursor + 1) + "-repair-" + (progress.attempt + 1) + "-admitted",
-      "purpose-progress", proposal, basis.validated.payload.copy(stage = "PurposeGrouped", purposes = Some(repaired), purposePreparation = None))
+      "purpose-progress", proposal, basis.validated.payload.copy(stage = "PurposeGrouped", purposes = Some(repaired),
+        purposePreparation = None, purposeMaterialization = None))
   } yield next
 
   /** Native Git owns the ordinary three-way projection. Authenticate its exact
