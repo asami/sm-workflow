@@ -29,17 +29,32 @@ import GoalPhaseReleaseDependencyValidation as R
 import GoalPhasePrerequisitePublicationUnknownRecovery as W
 import GoalPhasePrerequisitePublicationRecovery as B
 import GoalPhasePrerequisitePrimaryRepair as A
+import GoalPhaseCurrentSourceArtifactAdoption as Z
 
 /** Ordered implementation, repair and review work and their provided result are installed
   * together. Canonical atomic suspension/completion owns all writes. No result
   * runs Git/SBT or turns implementation completion into Step/Phase acceptance.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Oct. 31, 2026
+  *  version Oct. 31, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWorkContinuation {
   val closingType = StateMachineResultTypeReference("GoalPhaseWorkSubmissionResult")
+  /** The direction is authenticated by native cursor walking. A retained
+    * failure supplies repair context only, never validation of its successor. */
+  private[admission] def sourceCheckFailureMatches(direction: GoalPhaseDependencySourceRevision.Direction,
+    failure: S.CheckFailureContext): Boolean =
+    S.admitCheckFailureContextC(failure).isSuccess && failure.validation.step == direction.target.step &&
+      (failure.validation.dependency.exists(capture => capture.admission == direction.target.predecessor &&
+        capture.session == direction.target.sessionId && capture.plan == ContextReference(direction.target.plan.identity,
+          direction.target.plan.revision) && capture.primaryBase == direction.target.primaryBase) ||
+        failure.validation.dependencySource.exists(capture => GoalPhaseDependencySourceRevision.captureValid(capture) &&
+          capture.direction == direction && capture.sessionId == direction.target.sessionId &&
+          capture.plan == ContextReference(direction.target.plan.identity, direction.target.plan.revision) &&
+          capture.primaryBase == direction.target.primaryBase && capture.step == direction.target.step))
+
   /** Constructed only while walking genuine accepted native closures. Decoding
     * an Admission never creates this ephemeral authority. */
   final case class AcceptedDependency private[GoalPhaseNativeWorkContinuation](
@@ -213,7 +228,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     prerequisiteWaitSource: Option[W.SourceProgress] = None,
     primaryPublicationDirections: Vector[B.PrimarySaved] = Vector.empty,
     primaryRepair: Option[A.Saved] = None,
-    primaryPublicationAuthority: Vector[A.Directed] = Vector.empty)
+    primaryPublicationAuthority: Vector[A.Directed] = Vector.empty,
+    currentArtifactDirections: Vector[Z.Saved] = Vector.empty)
   private sealed trait Located
   private final case class Frontier(cursor: Cursor) extends Located
   private final case class Work(prepared: Prepared) extends Located
@@ -955,7 +971,11 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     def describePrerequisitePublicationRecoveryC(identity: String, core: ActionCall.Core):
       Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhasePrerequisitePublicationRecoveryDescriptionResult] =
       _prerequisite_cursor_c(identity, core).flatMap { (source, cursor) => for {
-        repair <- if (_active_primary_repair(cursor).nonEmpty) _primary_repair_target_c(source, cursor, core).map(t => Some(A.description(t)))
+        repair <- if (_current_artifact_needed(cursor)) for {
+            native <- _prerequisite_recovery_source(source, cursor)
+            target <- Z.targetC(native, _active_primary_repair(cursor).get, d, core)
+          } yield Some(Z.description(target))
+          else if (_active_primary_repair(cursor).nonEmpty) _primary_repair_target_c(source, cursor, core).map(t => Some(A.description(t)))
           else _current_primary_failure_c(source, cursor, core).map[Option[LocalPublication.Result]](Some(_)).recover(_ => None).flatMap {
               case None => Consequence.success(Option.empty[org.simplemodeling.textus.smworkflow.value.GoalPhasePrerequisitePublicationRecoveryDescriptionResult])
               case Some(failed) => _primary_repair_source_c(source, cursor).flatMap(native => A.eligibleC(native, d, core, failed).flatMap {
@@ -976,7 +996,12 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
 
     def recoverPrerequisitePublicationC(input: org.simplemodeling.textus.smworkflow.value.GoalPhasePrerequisitePublicationRecoveryInput,
       core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhasePrerequisitePublicationRecoveryResult] =
-      A.isTargetC(input.target).flatMap { repair => if (repair) _prerequisite_cursor_c(input.sessionId, core).flatMap { (source, cursor) => for {
+      Z.isTargetC(input.target).flatMap { artifact => if (artifact) _prerequisite_cursor_c(input.sessionId, core).flatMap { (source, cursor) => for {
+        _ <- if (_current_artifact_needed(cursor)) Consequence.unit
+          else F.invalid("Current artifact decision is no longer pending at this actual candidate")
+        native <- _prerequisite_recovery_source(source, cursor)
+        result <- Z.recoverC(native, _active_primary_repair(cursor).get, d, core, input)
+      } yield result } else A.isTargetC(input.target).flatMap { repair => if (repair) _prerequisite_cursor_c(input.sessionId, core).flatMap { (source, cursor) => for {
         native <- _prerequisite_recovery_source(source, cursor)
         target <- _primary_repair_target_c(source, cursor, core)
         result <- A.recoverC(native, target, d, core, input)
@@ -986,7 +1011,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         if (unknown) _prerequisite_cursor_c(input.sessionId, core).flatMap((source, cursor) =>
           _unknown_prerequisite_source_c(source, cursor).flatMap(W.recoverC(_, d, core, input)))
         else _prerequisite_recovery_source_c(input.sessionId, core).flatMap(GoalPhasePrerequisitePublicationRecovery.recoverC(_, d, core, input))
-      }}}
+      }}}}
 
     private def _unknown_prerequisite_source_c(source: F.Session, cursor: Cursor): Consequence[W.Source] = for {
       native <- _prerequisite_recovery_source(source, cursor)
@@ -1000,6 +1025,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         cursor.from == source.current && cursor.candidate.exists(candidate => candidate.record == cursor.from ||
           _active_primary_repair(cursor).exists(saved => candidate.payload.primaryPublicationRepair.contains(saved.reuse)) ||
           cursor.primaryPublicationAuthority.lastOption.exists(_.record == cursor.from) ||
+          cursor.currentArtifactDirections.lastOption.exists(_.record == cursor.from) ||
           cursor.prerequisiteUnknownDirection.exists(original =>
             cursor.prerequisiteWaitSource.filter(_.direction.direction.target.primaryFailureOrigin.nonEmpty)
               .exists(_.saved.contains(candidate)) || original.direction.target.candidate == candidate.payload &&
@@ -1013,13 +1039,22 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       cursor.prerequisiteWaitSource.filter(_.direction.direction.target.primaryFailureOrigin.nonEmpty), cursor.primaryPublicationDirections)
 
     private def _active_primary_repair(cursor: Cursor): Option[A.Saved] = cursor.primaryRepair.filter(A.reusableAt(_, cursor.controller))
+    private def _current_artifact_needed(cursor: Cursor): Boolean =
+      _active_primary_repair(cursor).exists(repair => cursor.candidate.exists(candidate =>
+        Z.needed(repair, candidate, cursor.currentArtifactDirections)))
+    private def _current_artifact_direction(cursor: Cursor): Option[Z.Saved] = for {
+      repair <- _active_primary_repair(cursor)
+      candidate <- cursor.candidate
+      direction <- cursor.currentArtifactDirections.findLast(d => Z.applicable(d.direction, repair, candidate))
+    } yield direction
     private def _current_primary_repair_cause(cursor: Cursor): Option[A.Saved] =
       _active_primary_repair(cursor).filter(saved => A.currentCauseAt(saved.fact, cursor.controller))
     private def _primary_repair_source_c(source: F.Session, cursor: Cursor): Consequence[A.Source] = for {
       native <- _prerequisite_recovery_source(source, cursor)
       reference <- cursor.lastresult.map(_._2.resultReference).map(Consequence.success)
         .getOrElse(F.invalid("Primary repair lost its actual accepted semantic result"))
-      adoption = _active_primary_repair(cursor).flatMap(_.fact.failure.artifactAdoption).orElse(
+      adoption = _current_artifact_direction(cursor).map(_.adoption)
+        .orElse(_active_primary_repair(cursor).flatMap(_.fact.failure.artifactAdoption)).orElse(
         cursor.primaryPublicationDirections.find(_.fact.choice == "AcceptExistingArtifactsWithUnknownEffects").map(B.primaryArtifact))
         .orElse(cursor.prerequisiteUnknownDirection.flatMap(W.existingArtifactAdoption))
       exclusions = _active_primary_repair(cursor).map(_.fact.failure.excludedDirty).orElse(
@@ -1029,7 +1064,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           .map(_.direction.target.failure.excludedDirty))
       directions = if (cursor.primaryPublicationDirections.nonEmpty) cursor.primaryPublicationDirections.map(_.fact)
         else _active_primary_repair(cursor).map(_.fact.failure.primaryDirections).getOrElse(Vector.empty)
-    } yield A.Source(native, reference, adoption, directions, exclusions)
+      currentdirections = if (_current_artifact_direction(cursor).nonEmpty)
+        directions.filter(_.target.sourceCapture == native.candidate.payload.dependencySourceCapture) else directions
+    } yield A.Source(native, reference, adoption, currentdirections, exclusions)
 
     private def _current_primary_failure_c(source: F.Session, cursor: Cursor, core: ActionCall.Core): Consequence[LocalPublication.Result] = for {
       policy <- d.localPublication.map(Consequence.success).getOrElse(F.invalid("Primary publication policy is absent"))
@@ -1407,6 +1444,17 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         retained <- A.retainedDirectionC(selected, _active_primary_repair(cursor), d, core)
         result <- _walk_c(source, cursor.copy(from = retained.record,
           primaryPublicationAuthority = cursor.primaryPublicationAuthority :+ retained),
+          soughtwork, soughthuman, soughtrecording, core, historyonly)
+      } yield result
+      case O.Stage.Validation if entry.causation.value.startsWith(Z.causationPrefix) => for {
+        selected <- _prerequisite_recovery_source(source, cursor)
+        repair <- _active_primary_repair(cursor).map(Consequence.success)
+          .getOrElse(F.invalid("Current artifact history has no authenticated active primary repair"))
+        _ <- if (_current_artifact_needed(cursor)) Consequence.unit
+          else F.invalid("Current artifact history duplicates or crosses the selected current candidate")
+        retained <- Z.retainedC(selected, repair, d, core)
+        result <- _walk_c(source, cursor.copy(from = retained.record,
+          currentArtifactDirections = cursor.currentArtifactDirections :+ retained),
           soughtwork, soughthuman, soughtrecording, core, historyonly)
       } yield result
       case O.Stage.Validation if entry.causation.value.startsWith(B.primaryCausationPrefix) => for {
@@ -2012,10 +2060,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         input.selectedPlan == direction.target.plan && input.originalBase == direction.target.primaryBase &&
         input.stepIdentity.contains(direction.target.step)
       failure <- input.checkFailure
-      if S.admitCheckFailureContextC(failure).isSuccess && failure.validation.step == direction.target.step &&
-        failure.validation.dependency.exists(capture => capture.admission == direction.target.predecessor &&
-          capture.session == direction.target.sessionId && capture.plan == ContextReference(direction.target.plan.identity,
-            direction.target.plan.revision) && capture.primaryBase == direction.target.primaryBase)
+      if sourceCheckFailureMatches(direction, failure)
     } yield failure
 
     private def _initial_phase_provenance(cursor: Cursor): Option[J.Saved] =
@@ -2138,17 +2183,24 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             "The approved dependency correction is retained; ordinary validation owns its prerequisite publication."))
           .flatMap(_after_native_c(source, cursor, _, core))
       case O.Stage.Validation if _active_primary_repair(cursor).nonEmpty && cursor.candidate.exists(_.payload.primaryPublicationRepair.nonEmpty) =>
-        if (d.validationPolicy.isEmpty) _wait_cursor_c(cursor, "Selected native check policy is unavailable for the repaired primary candidate.")
+        if (_current_artifact_needed(cursor)) for {
+          native <- _prerequisite_recovery_source(source, cursor)
+          target <- Z.targetC(native, _active_primary_repair(cursor).get, d, core)
+          result <- _wait_cursor_c(cursor, Z.description(target).message)
+        } yield result
+        else if (d.validationPolicy.isEmpty) _wait_cursor_c(cursor, "Selected native check policy is unavailable for the repaired primary candidate.")
         else for {
           native <- _prerequisite_recovery_source(source, cursor)
           saved = _active_primary_repair(cursor).get
+          adoption = _current_artifact_direction(cursor)
+          _ <- adoption.fold(Consequence.unit)(direction => Z.currentC(direction.direction.target, core, d))
           permit <- A.permitC(saved, native, cursor.primaryPublicationAuthority, d, core)
           result <- permit.route match {
             case A.PublicationRoute.MissingAuthority => A.publicationTargetC(native, saved.fact.failure, Some(saved), d, core)
               .flatMap(target => _wait_cursor_c(cursor, A.description(target).message))
             case A.PublicationRoute.FirstFailureSuccessor | A.PublicationRoute.OrdinaryPrerequisite => GoalPhaseNativeValidation.advanceC(source, d, core, cursor.candidate.get,
               cursor.controller, acknowledgement, Some(cursor.from), cursor.documentpolicy, N.managementPaths(cursor.findings),
-              dependencyChain = Some(cursor.dependencyChain), existingArtifactAdoption = saved.fact.failure.artifactAdoption,
+              dependencyChain = Some(cursor.dependencyChain), existingArtifactAdoption = adoption.map(_.adoption).orElse(saved.fact.failure.artifactAdoption),
               primaryRepairPublication = permit.successor).flatMap(_after_validation_c(source, cursor, _, core))
           }
         } yield result

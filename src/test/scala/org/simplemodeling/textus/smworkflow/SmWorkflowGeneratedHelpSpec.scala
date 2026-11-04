@@ -72,7 +72,8 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
       "submitNativeMergeReview", "submitNativeMergeRepair", "submitRepositoryConflictDecision"
     ),
     SmWorkflowComponent.StandaloneFixServiceService -> Vector("startStandaloneFix", "startStandaloneReviewFix", "advanceStandaloneFix",
-      "submitStandaloneFixWorkResult", "resolveStandaloneFixDiagnosticInformation"),
+      "submitStandaloneFixWorkResult", "resolveStandaloneFixDiagnosticInformation",
+      "describeStandaloneFixValidationRecovery", "recoverStandaloneFixValidation"),
     SmWorkflowComponent.StandaloneFixRepairServiceService -> Vector("repairStandaloneFix"),
     SmWorkflowComponent.StandaloneFixReviewServiceService -> Vector("reviewStandaloneFix"),
     SmWorkflowComponent.StandaloneFixSemanticAdmissionServiceService -> Vector("admitStandaloneFixReview"),

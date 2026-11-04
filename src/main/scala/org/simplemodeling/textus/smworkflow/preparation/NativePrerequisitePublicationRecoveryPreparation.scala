@@ -5,6 +5,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.ContextReference
 import org.goldenport.record.Record
 import org.simplemodeling.textus.smworkflow.admission.{GoalPhasePrerequisitePublicationRecovery as R,
+  GoalPhaseCurrentSourceArtifactAdoption as A,
   GoalPhasePrerequisitePrimaryRepair as P,
   GoalPhasePrerequisitePublicationUnknownRecovery as U, NativeExternalEvidence,
   ThreeWorkflowExternalEvidencePorts}
@@ -13,7 +14,8 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Passive conversion of an independently supplied answer. Provisioning and
   * guarded recovery remain with their normal owners.
   * @since   Nov.  1, 2026
-  * @version Nov.  1, 2026
+  *  version Nov.  1, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 object NativePrerequisitePublicationRecoveryPreparation {
@@ -31,7 +33,18 @@ object NativePrerequisitePublicationRecoveryPreparation {
     unknown <- U.isUnknownTargetC(description.target)
     primary <- R.isPrimaryTargetC(description.target)
     repair <- P.isTargetC(description.target)
-    binding <- if (repair) for {
+    artifact <- A.isTargetC(description.target)
+    binding <- if (artifact) for {
+      target <- A.targetC(description.target)
+      supplied <- A.targetC(input.target)
+      _ <- if (target == supplied && description.choices == A.choices && target.sessionId == input.sessionId &&
+          target.participant == participant && target.componentInstance == description.componentInstance &&
+          description.outcome == "direction-required" && execution.references != null &&
+          execution.references.contains(reference)) Consequence.unit
+        else Consequence.stateConflict("Current artifact preparation crosses its exact described source, choices or participant")
+      binding <- A.bindingC(description.componentInstance, target, input.choice, input.rationale, participant,
+        ContextReference(reference.identity, reference.revision))
+    } yield binding else if (repair) for {
       target <- P.targetC(description.target)
       supplied <- P.targetC(input.target)
       _ <- if (target == supplied && description.choices == P.choices(target) && target.sessionId == input.sessionId &&

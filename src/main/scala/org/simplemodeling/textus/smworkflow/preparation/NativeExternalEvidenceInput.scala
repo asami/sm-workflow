@@ -7,7 +7,8 @@ import org.goldenport.convert.ValueReader
 import org.goldenport.cncf.workflow.ContextReference
 import org.goldenport.record.Record
 import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseNativeWork, NativeExternalEvidence,
-  RepositorySyncNativeMergeReview, SplitPhaseNativeHumanDirection, SplitPhaseReasoningHumanDirection}
+  RepositorySyncNativeMergeReview, SplitPhaseNativeHumanDirection, SplitPhaseReasoningHumanDirection,
+  StandaloneFixValidationRecovery, ThreeWorkflowExternalEvidencePorts}
 import org.simplemodeling.textus.smworkflow.value as V
 import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseDependencySourceRevision as R,
   GoalPhasePrerequisitePublicationUnknownRecovery as U, GoalPhaseNativeMetadata as M}
@@ -32,15 +33,16 @@ private[smworkflow] object NativeExternalEvidenceInput {
     for {
       options <- NativePreparationInput.optionsC(supplied, _required, readText, Set("participant"))
       _ <- if (Set("DelegateTask", "GoalTask", "StandaloneFix", "GoalPhase", "RepositorySync", "SplitPhase")(options("family")) &&
-          Set("completion-record-closure", "adoption", "malformed-issued-work-recovery", "review", "human", "validation-continuation", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "source-history-normalization", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "dependency-source-revision", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption")(options("kind")) &&
+          Set("completion-record-closure", "adoption", "malformed-issued-work-recovery", "review", "human", "validation-continuation", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "source-history-normalization", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "dependency-source-revision", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption", "standalone-fix-validation-recovery")(options("kind")) &&
           (options("family") != "DelegateTask" || Set("review", "adoption", "completion-record-closure")(options("kind"))) &&
           (options("kind") != "adoption" || options("family") == "DelegateTask") &&
           (options("family") != "GoalTask" || Set("review", "malformed-issued-work-recovery", "completion-record-closure")(options("kind"))) &&
           (options("kind") != "malformed-issued-work-recovery" || options("family") == "GoalTask") &&
+          (options("kind") != "standalone-fix-validation-recovery" || options("family") == "StandaloneFix") &&
           (options("kind") != "validation-continuation" || options("family") == "RepositorySync") &&
           !(options("family") == "SplitPhase" && options("kind") == "review") &&
           (!Set("release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "source-history-normalization", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "dependency-source-revision", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption")(options("kind")) || options("family") == "GoalPhase") &&
-          (if (Set("completion-record-closure", "malformed-issued-work-recovery", "human", "validation-continuation", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "source-history-normalization", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "dependency-source-revision", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption")(options("kind"))) options.contains("participant")
+          (if (Set("completion-record-closure", "malformed-issued-work-recovery", "human", "validation-continuation", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "source-history-normalization", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "dependency-source-revision", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption", "standalone-fix-validation-recovery")(options("kind"))) options.contains("participant")
             else !options.contains("participant"))) Consequence.unit
         else _invalid("unsupported family/kind or missing Human participant")
       occurred <- NativePreparationInput.instantC(options("occurred-at"))
@@ -223,6 +225,26 @@ private[smworkflow] object NativeExternalEvidenceInput {
         prepared <- NativeRetainedWorkRecoveryPreparation.prepareC(description, answer, reference, execution,
           participant, issuer, occurred)
       } yield (prepared.recordIdentity, prepared.record)
+      case "StandaloneFix" if options("kind") == "standalone-fix-validation-recovery" => for {
+        description <- summon[ValueReader[V.StandaloneFixValidationRecoveryDescriptionResult]].readC(request)
+        answer <- summon[ValueReader[V.StandaloneFixValidationRecoveryInput]].readC(result)
+        _ <- if (description != null && answer != null && reference != null && execution != null &&
+          description.status == "decision-required" && description.choices == StandaloneFixValidationRecovery.choices &&
+          answer.reference == reference && execution.workerIdentity.contains(participant) &&
+          NativePreparationInput.exact(issuer) && occurred != null) Consequence.unit
+          else _invalid("standalone validation recovery requires its actual description, Human reference, worker, issuer and time")
+        target <- StandaloneFixValidationRecovery.targetC(description.target)
+        supplied <- StandaloneFixValidationRecovery.targetC(answer.target)
+        _ <- if (target == supplied && description.sessionId == target.sessionId && answer.sessionId == target.sessionId &&
+          participant == target.participant) Consequence.unit
+          else _invalid("standalone validation recovery crosses the exact described target or Human participant")
+        binding <- StandaloneFixValidationRecovery.bindingC(target.componentInstance, target, answer.choice,
+          answer.rationale, participant, ContextReference(reference.identity, reference.revision))
+        purpose = NativeExternalEvidence.Purpose.StandaloneValidationRecovery
+        identity = ThreeWorkflowExternalEvidencePorts.key(reference.identity, reference.revision)
+        encoded <- NativeExternalEvidence.encodeStorageC(NativeExternalEvidence.Evidence(NativeExternalEvidence.schema,
+          purpose.identity, identity, reference.identity, reference.revision, issuer, participant, binding, occurred.toString))
+      } yield (NativeExternalEvidence.recordIdentity(purpose, identity), Record.data(NativeExternalEvidence.storageField -> encoded))
       case "StandaloneFix" if options("kind") == "review" => for {
         output <- summon[ValueReader[V.StandaloneFixView]].readC(request)
         _ <- _kind_c(output.kind, false)

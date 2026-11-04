@@ -854,6 +854,20 @@
           "kind": "COMMAND",
           "input": "ForceCloseWorkflowInput",
           "output": "WorkflowForceClosureView"
+        },
+        {
+          "service": "StandaloneFixService",
+          "name": "describeStandaloneFixValidationRecovery",
+          "kind": "COMMAND",
+          "input": "StandaloneFixValidationRecoveryDescriptionInput",
+          "output": "StandaloneFixValidationRecoveryDescriptionResult"
+        },
+        {
+          "service": "StandaloneFixService",
+          "name": "recoverStandaloneFixValidation",
+          "kind": "COMMAND",
+          "input": "StandaloneFixValidationRecoveryInput",
+          "output": "StandaloneFixView"
         }
       ],
       "types": [
@@ -7788,6 +7802,96 @@
             {
               "name": "message",
               "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "StandaloneFixValidationRecoveryDescriptionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "observation",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "StandaloneFixValidationRecoveryDescriptionResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "status",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choices",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "StandaloneFixValidationRecoveryInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choice",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reference",
+              "type": "WorkflowArtifactReference",
               "multiplicity": "1",
               "required": true
             }

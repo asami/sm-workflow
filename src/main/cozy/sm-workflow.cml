@@ -6855,6 +6855,8 @@ GoalPhaseSourceHistoryRecoveryResult
 
 ##### DESCRIPTION
 
+Supply the bare sessionId business parameter for this Session-only description. Structured recovery judgments use their declared typed input or inputResource.
+
 Passively describe only the latest unsuspended ordinary Step Validation candidate with its legacy dependency admission and complete capture, an actual latest-target prerequisite publishLocal Exited(nonzero), and no native check or selection intent. Bind the exact component, participant, Session, full controller, original candidate and stages, dependency binding and actual accepted native ancestry, fixed publication policy and failed immutable result, current managed File/Git correction guard and opaque resolved process policy. Require the same workspace/root/branch/original base, unchanged captured index and at least one correction within the existing selected paths. Return AdoptCorrectedSourceAndPublishOnce and Defer. UNKNOWN, timeout, admission refusal, not-started, missing or successful publication, newer target attempts, revised-source and whole-Phase frontiers refuse. Description performs bounded typed observations only; it starts no stage, check, publication or workflow transition.
 
 The distinct sm-workflow.goal-phase-prerequisite-publication-unknown-recovery.v1 branch describes an actual latest UNKNOWN prerequisite at that same unstarted ordinary Validation frontier, including a completed prior correction or v6 Wait-source capture. Its choices are exactly AuthorizeQualifiedSuccessorPublication and Defer. It binds the actual old request, native candidate and accepted semantic reference, Plan/base/prefix/generation/accounting, retained and current source guards and declared process/publication policy. Missing independently installed writer lifecycle or source qualification returns observation-required and grants no effect; Defer remains available. No caller exit, partial typedSBT log or Human approval proves writer completion.
@@ -6873,7 +6875,7 @@ GoalPhasePrerequisitePublicationRecoveryDescriptionInput
 
 | name | type | multiplicity |
 |------+------|--------------|
-| input | GoalPhasePrerequisitePublicationRecoveryDescriptionInput | 1 |
+| sessionId | string | 1 |
 
 ##### OUTPUT
 
@@ -11006,6 +11008,43 @@ WorkflowCallerInformationResult
 | diagnostics | record | * |
 | reviewContext | WorkflowReviewContext | ? |
 
+## StandaloneFixValidationRecoveryDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| observation | string | 1 |
+
+## StandaloneFixValidationRecoveryDescriptionResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| status | string | 1 |
+| message | string | 1 |
+| target | string | 1 |
+| choices | string | * |
+
+## StandaloneFixValidationRecoveryInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | string | 1 |
+| choice | string | 1 |
+| rationale | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+
 # WORKFLOW
 
 ## StandaloneFixWorkflow
@@ -11158,6 +11197,62 @@ on = standalone-accepted
 Standalone bounded repair. Native WorkOrder, managed checks, diagnosis and repair policy own execution. Acceptance leaves changes uncommitted; this service has no commit or push operation.
 
 ### OPERATION
+
+#### describeStandaloneFixValidationRecovery
+
+##### DESCRIPTION
+
+Passively describe the exact retained standalone validation intent and externally retained successful evidence. No execution, staging or direction is recorded.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+StandaloneFixValidationRecoveryDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | StandaloneFixValidationRecoveryDescriptionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+StandaloneFixValidationRecoveryDescriptionResult
+
+#### recoverStandaloneFixValidation
+
+##### DESCRIPTION
+
+Collect separately attributed retained external validation only after exact independent Human evidence admission. Append an Assess checkpoint in the same Session; ordinary Advance performs qualification without execution replay or code-repair acceptance.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+StandaloneFixValidationRecoveryInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | StandaloneFixValidationRecoveryInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+StandaloneFixView
 
 #### resolveStandaloneFixDiagnosticInformation
 

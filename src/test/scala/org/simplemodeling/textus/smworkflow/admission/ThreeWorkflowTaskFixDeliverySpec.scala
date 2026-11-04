@@ -46,7 +46,8 @@ final class ThreeWorkflowTaskFixDeliverySpec extends AnyWordSpec with Matchers w
   private def receipt(check: GoalPhaseNativeValidation.Check) = B.Receipt(check.identity, "exited", Some(0), "", "",
     Some(T.Facts(check.kind, T.Outcome.Succeeded,
       if (check.kind == T.Kind.TestOnly) Some(T.Selection(Vector("fixture.BehaviorSpec"), 1, 2)) else None, None)))
-  private def validated(task: Boolean = false): S.State = {
+  private def validated(task: Boolean = false): S.State = take(S.assessC(checked(task)))
+  private def checked(task: Boolean = false): S.State = {
     val adopted = input.copy(task = Option.when(task)(S.Task("direct-instruction", Vector.empty)))
     val started = take(S.startC(adopted, "destination-participant", selected))
     val implemented = if (task) take(S.completedC(S.Work("destination-session", "1", "Implement", started),
@@ -180,8 +181,8 @@ final class ThreeWorkflowTaskFixDeliverySpec extends AnyWordSpec with Matchers w
       withPreparation() { e =>
         val finding = StandaloneReviewFix.Finding("original-1", "Original selected defect", candidate.paths, Vector.empty)
         val origin = StandaloneReviewFix.Origin(ContextReference("original-review", "3"), "Retained original meaning", Vector(finding))
-        val state = validated().copy(input = input.copy(reviewOrigin = Some(origin)), reviewDispositions = Some(Vector(
-          StandaloneReviewFix.Disposition("original-1", "fixed", "mechanical", "Fixture verified selected regression", candidate.paths, Vector("focused")))))
+        val state = take(S.assessC(checked().copy(input = input.copy(reviewOrigin = Some(origin)), reviewDispositions = Some(Vector(
+          StandaloneReviewFix.Disposition("original-1", "fixed", "mechanical", "Fixture verified selected regression", candidate.paths, Vector("focused")))))))
         val packet = prepare(e, preparation(e, state, "sm-review-fix"))
         packet.disposition shouldBe "accepted-uncommitted"
         packet.observation shouldBe response(state).toRecord()
@@ -221,8 +222,8 @@ final class ThreeWorkflowTaskFixDeliverySpec extends AnyWordSpec with Matchers w
     "return no-change without creating a commit or adding a check/review executor" in {
       withPreparation() { e =>
         val started = take(S.startC(input, "destination-participant", selected))
-        val noChange = selected.foldLeft(take(S.candidateC(started, candidate.copy(paths = Vector.empty, diff = ""))))((state, check) =>
-          take(S.observedC(take(S.intentC(state)), receipt(check))))
+        val noChange = take(S.assessC(selected.foldLeft(take(S.candidateC(started, candidate.copy(paths = Vector.empty, diff = ""))))((state, check) =>
+          take(S.observedC(take(S.intentC(state)), receipt(check))))))
         noChange.stage shouldBe "NoChange"
         val packet = prepare(e, preparation(e, noChange))
         packet.disposition shouldBe "no-change"

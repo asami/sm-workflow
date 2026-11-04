@@ -6,7 +6,7 @@ import io.circe.generic.auto.*
 import io.circe.syntax.*
 import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.ActionCall
-import org.goldenport.cncf.processexecution.GitPath
+import org.goldenport.cncf.processexecution.{GitOperationKind, GitPath}
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
@@ -297,11 +297,8 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
 
   /** The native walker supplies Saved only after authenticating the original
     * candidate and adjacent repair fact. All dependency data remains identical. */
-  def reusedCandidateC(saved: Saved, candidate: C.Payload, controller: O.State,
-    from: InstanceRecord): Consequence[Unit] = {
-    val failure = saved.fact.failure
-    val previous = failure.candidate
-    val samecapture = candidate.dependencyAdmission == previous.dependencyAdmission &&
+  private[admission] def sameDependencyCapture(candidate: C.Payload, previous: C.Payload): Boolean =
+    candidate.dependencyAdmission == previous.dependencyAdmission &&
       candidate.dependencyStaged == previous.dependencyStaged && candidate.dependency == previous.dependency &&
       candidate.dependencyOrigin == previous.dependencyOrigin &&
       candidate.dependencySourceDirection == previous.dependencySourceDirection &&
@@ -309,7 +306,76 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
       candidate.dependencySourceStages == previous.dependencySourceStages &&
       candidate.dependencySourceCapture == previous.dependencySourceCapture &&
       candidate.dependencySourceScope == previous.dependencySourceScope
-    if (factValid(saved.fact) && candidate.primaryPublicationRepair.contains(saved.reuse) && samecapture &&
+
+  /** The saved failure remains provenance. Only the separately adopted source
+    * lineage permits a fresh observation instead of exact historical reuse. */
+  private[admission] def sourceSuccessorValid(previous: R.Capture, direction: Option[R.Direction],
+    scope: Option[R.ScopeSuccessor]): Boolean = R.captureValid(previous) &&
+    direction.contains(previous.direction) && scope.exists { current =>
+      R.scopeValid(previous.direction, current) &&
+        current.approvals.startsWith(previous.scope.toVector.flatMap(_.approvals)) &&
+        current.consumptionDirection.exists { next =>
+          val effective = previous.scope.flatMap(_.consumptionDirection).getOrElse(previous.direction)
+          next.directive != effective.directive && next.target.sourceSuccession.nonEmpty &&
+            R.successorValid(previous.direction, next, current.approvals) &&
+            R.sourcePreviousValid(previous.direction, next.target, Some(effective)) &&
+            BigInt(next.target.sourceRevision) > BigInt(previous.sourceRevision)
+        }
+    }
+
+  private[admission] def currentSourceSuccessorValid(previous: C.Payload, candidate: C.Payload): Boolean =
+    previous.dependencySourceCapture.exists(sourceSuccessorValid(_, candidate.dependencySourceDirection,
+      candidate.dependencySourceScope)) && R.candidateValid(candidate) &&
+      candidate.dependencySourceScope.flatMap(_.consumptionDirection).exists(next =>
+        candidate.sourceRevision.toLongOption.exists(n => n.toString == candidate.sourceRevision &&
+          n > next.target.pendingRevision.toLong))
+
+  /** Only a separately authenticated committed source inventory may change.
+    * The complete publication/check execution policy otherwise stays exact. */
+  private[admission] def processPolicyMatches(previous: C.Payload, candidate: C.Payload,
+    previousPolicy: String, currentPolicy: String): Boolean = previousPolicy == currentPolicy ||
+    currentSourceSuccessorValid(previous, candidate) && (for {
+      before <- previous.dependencySourceCapture.filter(R.captureValid)
+      after <- candidate.dependencySourceCapture.filter(R.captureValid)
+      oldbinding = R.bindingOf(before)
+      newbinding = R.bindingOf(after)
+      if R.modeOf(before) == "committed" && R.modeOf(after) == "committed" &&
+        oldbinding.root == newbinding.root && oldbinding.branch == newbinding.branch &&
+        oldbinding.dependency.workspace == newbinding.dependency.workspace &&
+        newbinding.paths != oldbinding.paths && newbinding.paths.startsWith(oldbinding.paths)
+      oldpolicy <- io.circe.parser.parse(previousPolicy).toOption.filter(_.asObject.nonEmpty)
+      newpolicy <- io.circe.parser.parse(currentPolicy).toOption.filter(_.asObject.nonEmpty)
+      oldplan <- oldpolicy.hcursor.get[Json]("processPlan").toOption.filter(_.asObject.nonEmpty)
+      newplan <- newpolicy.hcursor.get[Json]("processPlan").toOption.filter(_.asObject.nonEmpty)
+      oldprograms <- oldplan.hcursor.get[Vector[Json]]("gitPrograms").toOption.filter(_.forall(_.asObject.nonEmpty))
+      newprograms <- newplan.hcursor.get[Vector[Json]]("gitPrograms").toOption.filter(_.forall(_.asObject.nonEmpty))
+      oldindex <- _inventory_index(oldprograms, oldbinding.dependency.workspace)
+      newindex <- _inventory_index(newprograms, newbinding.dependency.workspace)
+      if oldindex == newindex && oldprograms(oldindex).hcursor.get[Vector[String]]("selectedPaths").contains(oldbinding.paths) &&
+        newprograms(newindex).hcursor.get[Vector[String]]("selectedPaths").contains(newbinding.paths)
+      restored = newprograms.updated(newindex, newprograms(newindex).mapObject(_.add("selectedPaths", oldbinding.paths.asJson)))
+      normalized = newpolicy.mapObject(_.add("processPlan", newplan.mapObject(_.add("gitPrograms", restored.asJson))))
+    } yield normalized == oldpolicy).contains(true)
+
+  private def _inventory_index(programs: Vector[Json], workspace: String): Option[Int] =
+    programs.zipWithIndex.collect {
+      case (program, index) if program.hcursor.get[String]("target").contains(workspace) &&
+          program.hcursor.get[String]("operation").contains(GitOperationKind.TreeEntries.wireName) &&
+          program.hcursor.get[String]("selectionId").contains(R.committedInventorySelection) => index
+    } match {
+      case Vector(index) => Some(index)
+      case _ => None
+    }
+
+  def reusedCandidateC(saved: Saved, candidate: C.Payload, controller: O.State,
+    from: InstanceRecord): Consequence[Unit] = {
+    val failure = saved.fact.failure
+    val previous = failure.candidate
+    val dependencies = sameDependencyCapture(candidate, previous) ||
+      currentSourceSuccessorValid(previous, candidate) &&
+        candidate.dependencySourceScope.flatMap(_.consumptionDirection).exists(_.target.generation < controller.generation) &&
+        candidate.dependencySourceCapture.forall(_.generation == controller.generation)
+    if (factValid(saved.fact) && candidate.primaryPublicationRepair.contains(saved.reuse) && dependencies &&
         controller.plan == failure.plan && controller.base == failure.base && controller.completed == failure.completed &&
         controller.generation > failure.generation && controller.plan.steps.lift(controller.cursor).exists(_.identity == candidate.step) &&
         from.identity.value == failure.sessionId && from.revision.value > saved.record.revision.value &&
@@ -535,7 +601,8 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
     core: ActionCall.Core, observe: Boolean = true): Consequence[Target] = for {
     policy <- d.localPublication.map(Consequence.success).getOrElse(F.invalid("Primary publication policy is absent"))
     process <- if (observe) B.processPolicyC(d, core) else Consequence.success(failure.processPolicy)
-    _ <- if (failureValid(failure) && B.publicationPolicy(policy) == failure.publicationPolicy && process == failure.processPolicy &&
+    _ <- if (failureValid(failure) && B.publicationPolicy(policy) == failure.publicationPolicy &&
+        processPolicyMatches(failure.candidate, native.candidate.payload, failure.processPolicy, process) &&
         native.controller.plan == failure.plan && native.controller.base == failure.base &&
         native.controller.completed == failure.completed && native.controller.stage == O.Stage.Validation &&
         native.candidate.payload.step == failure.candidate.step && repair.forall(reusableAt(_, native.controller))) Consequence.unit

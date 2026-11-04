@@ -182,7 +182,8 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
         "submitNativeMergeReview", "submitNativeMergeRepair", "submitRepositoryConflictDecision", "submitRepositoryPurposeResult")
 
       names("StandaloneFixService") should contain theSameElementsAs Vector(
-        "startStandaloneFix", "startStandaloneReviewFix", "advanceStandaloneFix", "submitStandaloneFixWorkResult", "resolveStandaloneFixDiagnosticInformation")
+        "startStandaloneFix", "startStandaloneReviewFix", "advanceStandaloneFix", "submitStandaloneFixWorkResult", "resolveStandaloneFixDiagnosticInformation",
+        "describeStandaloneFixValidationRecovery", "recoverStandaloneFixValidation")
 
       And("passive import, execution, delivery and caller-information Operations expose distinct concrete inputs and outputs")
       val preparation = Map("prepareStandaloneFixStart" -> "WorkflowStandaloneFixStartPreparationInput", "prepareGoalStart" -> "WorkflowGoalStartPreparationInput",

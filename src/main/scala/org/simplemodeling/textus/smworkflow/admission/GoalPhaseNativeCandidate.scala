@@ -106,7 +106,9 @@ private[smworkflow] object GoalPhaseNativeCandidate {
       case None => GoalPhaseDependencySourceRevision.candidateValid(value)
       case Some(reuse) => GoalPhasePrerequisitePrimaryRepair.reuseValid(reuse) &&
         value.sourceRevision.toLongOption.exists(_ > reuse.repair.revision.toLong) &&
-        GoalPhaseDependencySourceRevision.candidateValid(_historical_source_view(value, reuse))
+        (value.dependencySourceScope.exists(_.consumptionDirection.exists(_.target.sourceSuccession.nonEmpty)) &&
+          GoalPhaseDependencySourceRevision.candidateValid(value) ||
+          GoalPhaseDependencySourceRevision.candidateValid(_historical_source_view(value, reuse)))
     })
 
   private[admission] def primaryRepairSelectionC(candidatePaths: Vector[String], path: String):
@@ -354,7 +356,15 @@ private[smworkflow] object GoalPhaseNativeCandidate {
   } yield wire
 
   private def _inspect_c(store: Store): Consequence[Saved] = for {
-    _ <- if (store.primaryRepair.nonEmpty) store.primaryRepair.get.fact.failure.candidate.dependencySourceCapture
+    historical <- store.primaryRepair.fold(Consequence.success(false)) { saved =>
+      val previous = saved.fact.failure.candidate
+      if (store.dependencySourceDirection == previous.dependencySourceDirection &&
+          store.dependencySourceScope == previous.dependencySourceScope) Consequence.success(true)
+      else if (previous.dependencySourceCapture.exists(GoalPhasePrerequisitePrimaryRepair.sourceSuccessorValid(_,
+          store.dependencySourceDirection, store.dependencySourceScope))) Consequence.success(false)
+      else F.invalid("Primary repair source selection has no authenticated historical or successor relation")
+    }
+    _ <- if (historical) store.primaryRepair.get.fact.failure.candidate.dependencySourceCapture
       .fold(Consequence.unit)(GoalPhaseDependencySourceRevision.freshnessC(store.core, _))
       else store.dependencySourceScope.fold(Consequence.unit) { scope =>
       store.dependencySourceDirection.filter(GoalPhaseDependencySourceRevision.scopeValid(_, scope))
@@ -385,7 +395,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
       dependencySourceScope = store.dependencySourceScope)
     initial = store.primaryRepair.fold(fresh) { saved =>
       val previous = saved.fact.failure.candidate
-      fresh.copy(dependencyAdmission = previous.dependencyAdmission, dependencyStaged = previous.dependencyStaged,
+      if (!historical) fresh.copy(primaryPublicationRepair = Some(saved.reuse))
+      else fresh.copy(dependencyAdmission = previous.dependencyAdmission, dependencyStaged = previous.dependencyStaged,
         dependency = previous.dependency, dependencyOrigin = previous.dependencyOrigin,
         dependencySourceDirection = previous.dependencySourceDirection, dependencySourceGuard = previous.dependencySourceGuard,
         dependencySourceStages = previous.dependencySourceStages, dependencySourceCapture = previous.dependencySourceCapture,
@@ -425,7 +436,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     legacyDependency <- if (store.primaryRepair.nonEmpty) Consequence.success(staged)
       else GoalPhaseNativeDependencyValidation.captureC(store.core, store.controller, staged,
         store.loadC, store.saveC, store.acknowledgeC, store.dependencyChain)
-    dependency <- if (store.primaryRepair.nonEmpty) Consequence.success(legacyDependency)
+    dependency <- if (historical) Consequence.success(legacyDependency)
       else GoalPhaseDependencySourceRevision.captureC(store.core, store.controller, legacyDependency,
         store.loadC, store.saveC, store.acknowledgeC)
     prepared <- if (store.whole && store.controller.releaseRepairActive) _release_hygiene_c(store, dependency, parent)
@@ -827,7 +838,12 @@ private[smworkflow] object GoalPhaseNativeCandidate {
       if (value.record.currentProgression.contains(ProgressionReference("phase." + validationStage)) &&
           value.payload.candidate.exists(snapshot => B.parentC(base, value.payload.continuation).toOption.exists(_.head == snapshot.head)) && value.payload.diff.nonEmpty &&
           value.payload.stagedPaths == value.payload.selectedPaths && pathsOwned(value.payload.changedPaths))
-        (if (value.payload.primaryPublicationRepair.nonEmpty) reusedCaptureC(value.payload)
+        (if (value.payload.primaryPublicationRepair.nonEmpty) reusedCaptureC(value.payload).flatMap { _ =>
+          if (primaryRepair.exists(saved => GoalPhasePrerequisitePrimaryRepair.currentSourceSuccessorValid(
+              saved.fact.failure.candidate, value.payload)))
+            GoalPhaseDependencySourceRevision.retainedCaptureC(value, loadC)
+          else Consequence.unit
+        }
           else GoalPhaseNativeDependencyValidation.retainedC(value, loadC, Some(loadSourceC)).flatMap(_ =>
             GoalPhaseDependencySourceRevision.retainedCaptureC(value, loadC))).flatMap(_ =>
           observedStateC(controller, value.payload, documentPolicy, recordingPaths)).map(_ => value)

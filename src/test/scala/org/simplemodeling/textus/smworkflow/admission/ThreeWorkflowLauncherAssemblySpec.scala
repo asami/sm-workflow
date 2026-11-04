@@ -95,6 +95,8 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
       When("the native launcher publication set is compared with the generated operations")
       val declared = SmWorkflowComponent.CompletionRecordClosureServiceService.operations.operations.toVector
         .map(o => s"${SmWorkflowComponent.CompletionRecordClosureServiceService.name}.${o.name}").toSet ++ generated.flatMap(_.providedOperations.map(o => s"${o.service}.${o.name}")).toSet ++
+        SmWorkflowComponent.StandaloneFixServiceService.operations.operations.toVector.map(o =>
+          s"${SmWorkflowComponent.StandaloneFixServiceService.name}.${o.name}") ++
         SmWorkflowComponent.WorkflowForceClosureServiceService.operations.operations.toVector.map(o => s"${SmWorkflowComponent.WorkflowForceClosureServiceService.name}.${o.name}") ++
         SmWorkflowComponent.JournalServiceService.operations.operations.toVector.map(o => s"${SmWorkflowComponent.JournalServiceService.name}.${o.name}") ++
         SmWorkflowComponent.EvidenceServiceService.operations.operations.toVector.map(o => s"${SmWorkflowComponent.EvidenceServiceService.name}.${o.name}") ++

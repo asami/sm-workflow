@@ -7,6 +7,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.processexecution.*
 import org.goldenport.cncf.workspace.WorkspaceId
 import org.goldenport.cncf.workflow.ContextReference
+import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -130,6 +131,97 @@ private[admission] object PrimaryPublicationRepairSpecificationFixture {
     GoalPhaseNativeValidation.Payload("44", narrowCandidate.step, narrowCandidate.candidate.get, Vector(check), Vector(receipt),
       Some(if (passed) "passed" else "repair-required"))
   }
+  def sourceCheckFailure(capture: GoalPhaseDependencySourceRevision.Capture): W.CheckFailureContext = {
+    val validation = primaryValidation(false)
+    val receipt = validation.receipts.head
+    val consumption = GoalPhaseDependencySourceRevision.consumptionOf(capture)
+    val program = consumption.programs.find(_.check == receipt.identity).get.program
+    val observed = WorkflowSbtCapture.decode(process(text = receipt.stdout, identity = program))
+      .fold(error => throw new IllegalArgumentException("Invalid specification process: " + error), identity)
+    val binding = GoalPhaseDependencySourceRevision.bindingOf(capture)
+    take(W.checkFailureContextC(Vector("screen.scala"), "SPECIFICATION-OWNED retained failed primary diff",
+      validation.copy(selected = validation.selected ++ binding.checks.map(_.copy(dependency = Some(binding.identity))),
+        receipts = Vector(receipt.copy(processObservation = Some(observed))), dependencySource = Some(capture),
+        sourceConsumption = Some(consumption))))
+  }
+  def nativeRecord(revision: Long): InstanceRecord = {
+    val initial = take(InstanceRecord(InstanceIdentity("same-session"), take(GoalPhaseRuntimeCatalog.loadC()).definition,
+      initialRevision, Lifecycle.NotStarted, None, CorrelationReference("primary-successor-specification"),
+      CausationReference("primary-successor-start"), None, None, None, Vector.empty).validateC)
+    (initial.revision.value until revision).foldLeft(initial)((previous, index) =>
+      take(previous.appendC(previous.revision, GoalPhaseNativeRun.history(previous, "phase.InspectCandidate",
+        "specification-successor-" + index))))
+  }
+  def sourceSuccessor(): (GoalPhaseDependencySourceRevision.Direction, GoalPhaseDependencySourceRevision.ScopeSuccessor,
+    GoalPhaseDependencySourceRevision.Capture, C.Payload) = {
+    import GoalPhaseDependencySourceRevision as R
+    val original = P.sourceDirection
+    val path = "docs/current-integration.md"
+    val approval = D.approvals.head.copy(proposal = D.approvals.head.proposal.copy(
+      identity = "current-integration-proposal", discovery = "REPAIR", paths = Vector(path),
+      acceptance = Vector("Qualify the committed integration document")), decision = ContextReference("current-scope-human", "1"))
+    val binding = original.target.binding.copy(revision = 3, paths = original.target.binding.paths :+ path,
+      base = O.Snapshot("6" * 40, "7" * 40))
+    val consumption = P.consumption.copy(expectedModes = P.consumption.expectedModes :+ R.ExpectedMode(path, "100644"))
+    val coverage = original.target.proposal.coverage :+ R.Coverage(approval.decision, approval.proposal.acceptance,
+      binding.checks.map(_.identity))
+    val guard = P.postGuard.copy(head = binding.base.head, committedTree = binding.base.tree, indexTree = binding.base.tree,
+      dirty = Vector.empty, selectedFiles = P.postGuard.selectedFiles :+
+        R.fileIdentity(path, Some("SPECIFICATION-OWNED current integration\n".getBytes.toVector)),
+      selectedEntries = binding.paths.map(p => R.Entry(p, "100644", "8" * 40)))
+    val changes = Vector(R.StageChange("100644", "100644", Some("1" * 40), Some("8" * 40), "M", binding.paths.head),
+      R.StageChange("000000", "100644", None, Some("8" * 40), "A", path))
+    val committed = R.CommittedBaseSuccession(R.committedBaseSuccessionSchema, original.directive,
+      original.target.binding.base, binding.base, changes, changes.map(_.path), Vector.empty, Vector.empty,
+      Vector.empty, "committed", binding.paths.map(p => R.CommittedEntry(p, Some(R.CommittedObject("100644", "8" * 40)))))
+    val target = original.target.copy(schemaVersion = R.sourceSchema, questionIdentity = "current-source-question",
+      sourceRevision = "50", pendingRevision = "51", generation = 2, binding = binding, preStageGuard = guard,
+      proposal = original.target.proposal.copy(binding = ContextReference(binding.identity, "3"), mode = "committed",
+        consumption = consumption, coverage = coverage), primaryFailureOrigin = None,
+      sourceSuccession = Some(R.SourceSuccession(original.directive, Vector(approval), original.directive)),
+      committedBaseSuccession = Some(committed))
+    val next = R.Direction(target, ContextReference("current-source-human", "1"), "participant", "SPECIFICATION-OWNED current source")
+    val scope = R.ScopeSuccessor(R.sourceScopeSchema, original.directive, binding, Vector(approval), consumption, coverage, Some(next))
+    val capture = P.capture.copy(sourceRevision = "60", generation = 3, stagedPaths = Vector.empty,
+      preStageGuard = guard, postStageGuard = guard, scope = Some(scope))
+    val candidate = narrowCandidate.copy(sourceRevision = "60", dependencySourceScope = Some(scope),
+      dependencySourceGuard = Some(guard), dependencySourceStages = Vector.empty, dependencySourceCapture = Some(capture))
+    (next, scope, capture, candidate)
+  }
+  def policySourceSuccessor(): (C.Payload, C.Payload) = {
+    import GoalPhaseDependencySourceRevision as R
+    import DependencySourceRevisionSpecificationFixture as S
+    val path = "docs/approved-current.md"
+    val approval = D.approvals.head.copy(proposal = D.approvals.head.proposal.copy(identity = "policy-current-scope",
+      discovery = "REPAIR", paths = Vector(path), acceptance = Vector("Qualify the approved current document")),
+      decision = ContextReference("policy-scope-human", "1"))
+    val binding = S.binding.copy(revision = S.binding.revision + 1, paths = S.binding.paths :+ path,
+      base = O.Snapshot("6" * 40, "7" * 40))
+    val consumption = R.Consumption(S.proposal.consumption.primaryWorkspace, S.binding.root, S.proposal.excludedPaths,
+      S.proposal.consumption.expectedModes :+ R.ExpectedMode(path, "100644"), S.proposal.consumption.programs)
+    val coverage = S.proposal.coverage :+ R.Coverage(approval.decision, approval.proposal.acceptance, binding.checks.map(_.identity))
+    val guard = S.before.copy(head = binding.base.head, committedTree = binding.base.tree, indexTree = binding.base.tree,
+      selectedFiles = S.before.selectedFiles :+ R.fileIdentity(path, Some("Approved current document\n".getBytes.toVector)),
+      selectedEntries = binding.paths.map(p => R.Entry(p, "100644", "8" * 40)))
+    val changes = Vector(R.StageChange("000000", "100644", None, Some("8" * 40), "A", path))
+    val committed = R.CommittedBaseSuccession(R.committedBaseSuccessionSchema, S.direction.directive, S.binding.base,
+      binding.base, changes, Vector(path), Vector.empty, Vector.empty, Vector.empty, "committed",
+      binding.paths.map(p => R.CommittedEntry(p, Some(R.CommittedObject("100644", "8" * 40)))))
+    val target = S.target.copy(schemaVersion = R.sourceSchema, questionIdentity = "policy-source-question", sourceRevision = "50",
+      pendingRevision = "51", generation = 2, binding = binding, preStageGuard = guard,
+      proposal = S.proposal.copy(schemaVersion = R.sourceSchema, binding = ContextReference(binding.identity, binding.revision.toString),
+        consumption = consumption, coverage = coverage),
+      sourceSuccession = Some(R.SourceSuccession(S.direction.directive, Vector(approval), S.direction.directive)),
+      committedBaseSuccession = Some(committed))
+    val next = R.Direction(target, ContextReference("policy-source-human", "1"), "participant", "SPECIFICATION-OWNED source succession")
+    val scope = R.ScopeSuccessor(R.sourceScopeSchema, S.direction.directive, binding, Vector(approval), consumption, coverage, Some(next))
+    val capture = S.capture.copy(schemaVersion = R.sourceCaptureSchema, sourceRevision = "60", generation = 3,
+      preStageGuard = guard, postStageGuard = guard, scope = Some(scope))
+    val previous = C.Payload(S.capture.sourceRevision, S.capture.step, Vector.empty, Vector.empty, None, Vector.empty, None,
+      dependencySourceDirection = Some(S.direction), dependencySourceGuard = Some(S.before), dependencySourceCapture = Some(S.capture))
+    (previous, previous.copy(sourceRevision = "60", dependencySourceScope = Some(scope),
+      dependencySourceGuard = Some(guard), dependencySourceCapture = Some(capture)))
+  }
   final class PublicationMemory extends LocalPublication.Port {
     private val _rows = scala.collection.mutable.Map.empty[String, Json]
     private var _identities = 0
@@ -173,6 +265,87 @@ private[admission] object PrimaryPublicationRepairSpecificationFixture {
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhasePrerequisitePrimaryRepairSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import PrimaryPublicationRepairSpecificationFixture as F
+
+  "Retained failed checks after dependency source adoption" should {
+    "recognize the admitted v7 source failure without inventing independent review or successor success" in {
+      Given("pure v7 source-capture data and a terminated failed selected primary check, with no review receipt")
+      import PrimaryPublicationContinuationSpecificationFixture as P
+      val failure = F.sourceCheckFailure(P.capture)
+      val before = failure.asJson
+      When("the repair provenance predicate matches the authenticated original source direction")
+      val matched = GoalPhaseNativeWorkContinuation.sourceCheckFailureMatches(P.sourceDirection, failure)
+      Then("the exact admitted failure is usable as context and all original failed facts remain intact")
+      W.admitCheckFailureContextC(failure).isSuccess shouldBe true
+      matched shouldBe true
+      failure.validation.dependency shouldBe None
+      failure.validation.dependencySource shouldBe Some(P.capture)
+      failure.validation.outcome shouldBe Some("repair-required")
+      failure.asJson shouldBe before
+
+      Given("crossed direction, Session, Plan, primary base, Step, malformed capture and passed-result claims")
+      val crossedcaptures = Vector(P.capture.copy(sessionId = "other-session"),
+        P.capture.copy(plan = ContextReference("other-plan", "1")),
+        P.capture.copy(primaryBase = P.capture.primaryBase.copy(tree = "a" * 40)),
+        P.capture.copy(step = "other-step"), P.capture.copy(schemaVersion = "invalid-capture"))
+      val crossed = crossedcaptures.map(capture => failure.copy(validation = failure.validation.copy(dependencySource = Some(capture)))) ++
+        Vector(failure.copy(validation = failure.validation.copy(step = "other-step")),
+          failure.copy(validation = failure.validation.copy(outcome = Some("passed"))))
+      val otherdirection = P.sourceDirection.copy(directive = ContextReference("other-source-human", "1"))
+      When("each claim is matched against the same authenticated direction and genuine-failure gate")
+      val rejected = crossed.map(GoalPhaseNativeWorkContinuation.sourceCheckFailureMatches(P.sourceDirection, _))
+      val wrongdirection = GoalPhaseNativeWorkContinuation.sourceCheckFailureMatches(otherdirection, failure)
+      Then("none can supply a repair context for that source direction")
+      rejected shouldBe Vector.fill(crossed.size)(false)
+      wrongdirection shouldBe false
+    }
+
+    "preserve the legacy admitted dependency capture and its exact predecessor match" in {
+      Given("the preexisting legacy capture with its exact Session, Plan, primary base and admitted failed check")
+      import PrimaryPublicationContinuationSpecificationFixture as P
+      import DependencyValidationSpecificationFixture as D
+      val validation = F.primaryValidation(false)
+      val failure = take(W.checkFailureContextC(Vector("screen.scala"), "SPECIFICATION-OWNED legacy failed diff",
+        validation.copy(selected = validation.selected ++ D.binding.checks.map(_.copy(dependency = Some(D.binding.identity))),
+          dependency = Some(D.capture))))
+      val crossed = P.sourceDirection.copy(target = P.sourceTarget.copy(predecessor = D.admission.copy(approvals = Vector.empty)))
+      When("the unchanged legacy branch compares its exact admission with the authenticated direction")
+      val matched = GoalPhaseNativeWorkContinuation.sourceCheckFailureMatches(P.sourceDirection, failure)
+      val refused = GoalPhaseNativeWorkContinuation.sourceCheckFailureMatches(crossed, failure)
+      Then("only the original predecessor matches and no source capture is fabricated")
+      matched shouldBe true
+      refused shouldBe false
+      failure.validation.dependencySource shouldBe None
+      failure.validation.dependency shouldBe Some(D.capture)
+    }
+
+    "retain a later approved source-scope capture under its original direction" in {
+      Given("pure original source data and an approved additional path in a later scope capture")
+      import GoalPhaseDependencySourceRevision as R
+      import DependencySourceRevisionSpecificationFixture as D
+      import DependencyValidationSpecificationFixture as V
+      val path = "src/main/scala/Additional.scala"
+      val approval = V.approvals.head.copy(proposal = V.approvals.head.proposal.copy(identity = "additional-source-proposal",
+        paths = Vector(path), acceptance = Vector("Qualify the additional source through the existing checks")),
+        decision = ContextReference("additional-actual-decision-fixture", "1"))
+      val binding = D.binding.copy(revision = D.binding.revision + 1, paths = D.binding.paths :+ path)
+      val consumption = D.proposal.consumption.asInstanceOf[R.LegacyConsumption].copy(
+        expectedModes = D.proposal.consumption.expectedModes :+ R.ExpectedMode(path, "100644"))
+      val scope = R.ScopeSuccessor(R.scopeSchema, D.direction.directive, binding, Vector(approval), consumption,
+        D.proposal.coverage :+ R.Coverage(approval.decision, approval.proposal.acceptance, binding.checks.map(_.identity)))
+      val guard = D.before.copy(selectedFiles = D.before.selectedFiles :+
+        R.fileIdentity(path, Some("object Additional\n".getBytes.toVector)))
+      val capture = D.capture.copy(schemaVersion = R.scopeCaptureSchema, generation = 3, sourceRevision = "30",
+        preStageGuard = guard, postStageGuard = guard, scope = Some(scope))
+      val failure = F.sourceCheckFailure(capture)
+      When("the failed-check predicate checks the later capture against its retained original direction")
+      val matched = GoalPhaseNativeWorkContinuation.sourceCheckFailureMatches(D.direction, failure)
+      Then("the approved scope stays intact without granting validation to a replacement source")
+      R.captureValid(capture) shouldBe true
+      matched shouldBe true
+      failure.validation.dependencySource.get.scope shouldBe Some(scope)
+      failure.validation.outcome shouldBe Some("repair-required")
+    }
+  }
 
   "Primary publication Compile classification" should {
     "accept complete terminated Compile output at the exact primary target source participant and program" in {
@@ -255,6 +428,18 @@ final class GoalPhasePrerequisitePrimaryRepairSpec extends AnyWordSpec with Matc
   }
 
   "Ordinary primary repair accounting and retained codecs" should {
+    "identify a publication context attached to the wrong work kind without accepting that contradiction" in {
+      Given("an otherwise valid retained primary-publication repair fixture with an implementation work kind")
+      val request = F.request.copy(kind = "ImplementStep")
+      val wire = W.inputCodec.encode(request)
+      When("the owning reader checks the publication context against its enclosing request")
+      val decoded = W.inputCodec.decode(wire)
+      Then("publication provenance stays intact and its incompatible work kind remains refused")
+      decoded shouldBe Left("Invalid retained check failure context [field=publicationFailure]")
+      request.publicationFailure shouldBe F.request.publicationFailure
+      W.inputCodec.encode(request) shouldBe wire
+    }
+
     "reconstruct the same one reserved generation and actual publication context without a validation receipt" in {
       Given("one original Validation controller and its immutable primary repair fact")
       val wire = A.codec.encode(F.fact)
@@ -398,6 +583,210 @@ final class GoalPhasePrerequisitePrimaryRepairSpec extends AnyWordSpec with Matc
   }
 
   "Primary capture reuse and publication authority" should {
+    "preserve the complete process policy except one exactly approved committed read inventory" in {
+      Given("valid old and successor committed source captures plus one exact read-only inventory registration")
+      import GoalPhaseDependencySourceRevision as R
+      val (previous, candidate) = F.policySourceSuccessor()
+      val oldbinding = R.bindingOf(previous.dependencySourceCapture.get)
+      val binding = R.bindingOf(candidate.dependencySourceCapture.get)
+      val inventory = Json.obj("identity" -> "fixed-inventory-program".asJson, "target" -> binding.dependency.workspace.asJson,
+        "operation" -> GitOperationKind.TreeEntries.wireName.asJson, "selectionId" -> R.committedInventorySelection.asJson,
+        "selectedPaths" -> oldbinding.paths.asJson, "capability" -> "fixed-read-inventory".asJson)
+      val policy = Json.obj("processPlan" -> Json.obj("gitPrograms" -> Vector(inventory).asJson,
+        "sbtPrograms" -> Json.arr(Json.obj("identity" -> "fixed-publication".asJson, "operation" -> "publish-local".asJson,
+          "environment" -> Json.obj("FIXED_SOURCE" -> binding.root.asJson))),
+        "workspaces" -> Json.arr(Json.obj("identity" -> binding.dependency.workspace.asJson, "root" -> binding.root.asJson)),
+        "grants" -> Json.arr(Json.obj("capabilities" -> Json.arr("fixed-read-inventory".asJson)))),
+        "maximumDiffBytes" -> 8192.asJson, "validation" -> Json.obj("checks" -> Json.arr("primary-test".asJson)))
+      val current = policy.mapObject(_.add("processPlan", policy.hcursor.get[Json]("processPlan").toOption.get.mapObject(
+        _.add("gitPrograms", Vector(inventory.mapObject(_.add("selectedPaths", binding.paths.asJson))).asJson))))
+      When("the pure comparison authenticates the current source and restores only the previous finite selectedPaths")
+      val exact = A.processPolicyMatches(previous, previous, policy.noSpaces, policy.noSpaces)
+      val accepted = A.processPolicyMatches(previous, candidate, policy.noSpaces, current.noSpaces)
+      Then("unchanged policies and precisely approved read succession retain fixed publication authority")
+      exact shouldBe true
+      A.processPolicyMatches(previous, candidate, policy.noSpaces, policy.noSpaces) shouldBe true
+      accepted shouldBe true
+      A.currentSourceSuccessorValid(previous, candidate) shouldBe true
+      R.modeOf(previous.dependencySourceCapture.get) shouldBe "committed"
+      R.modeOf(candidate.dependencySourceCapture.get) shouldBe "committed"
+
+      Given("the same complete policies with unrelated execution changes or missing and duplicate inventories")
+      val plan = current.hcursor.get[Json]("processPlan").toOption.get
+      val selected = plan.hcursor.get[Vector[Json]]("gitPrograms").toOption.get.head
+      val sbt = plan.hcursor.get[Vector[Json]]("sbtPrograms").toOption.get.head
+      def _program_(value: Json): Json = current.mapObject(_.add("processPlan", plan.mapObject(_.add("gitPrograms", Vector(value).asJson))))
+      def _plan_(key: String, value: Json): Json = current.mapObject(_.add("processPlan", plan.mapObject(_.add(key, value))))
+      val changed = Vector(_program_(selected.mapObject(_.remove("selectedPaths"))),
+        _program_(selected.mapObject(_.add("selectedPaths", (binding.paths :+ "docs/unapproved.md").asJson))),
+        _program_(selected.mapObject(_.add("selectedPaths", Json.arr(1.asJson)))),
+        _program_(selected.mapObject(_.add("operation", "stage-full-state".asJson))),
+        _program_(selected.mapObject(_.add("capability", "other-capability".asJson))),
+        _program_(selected.mapObject(_.add("target", "other-workspace".asJson))),
+        _program_(selected.mapObject(_.add("identity", "other-program".asJson))),
+        _plan_("gitPrograms", Json.arr()), _plan_("gitPrograms", Vector(selected, selected).asJson),
+        _plan_("sbtPrograms", Vector(sbt.mapObject(_.add("identity", "other-publication".asJson))).asJson),
+        _plan_("sbtPrograms", Vector(sbt.mapObject(_.add("operation", "test".asJson))).asJson),
+        _plan_("sbtPrograms", Vector(sbt.mapObject(_.add("environment", Json.obj("FIXED_SOURCE" -> "/other/root".asJson)))).asJson),
+        _plan_("workspaces", Json.arr()), _plan_("grants", Json.arr()),
+        current.mapObject(_.add("validation", Json.obj("checks" -> Json.arr()))),
+        current.mapObject(_.add("maximumDiffBytes", 8193.asJson)), current.mapObject(_.add("extra", Json.True)))
+      val oldplan = policy.hcursor.get[Json]("processPlan").toOption.get
+      val oldinvalid = Vector(policy.mapObject(_.add("processPlan", oldplan.mapObject(_.add("gitPrograms", Json.arr())))),
+        policy.mapObject(_.add("processPlan", oldplan.mapObject(_.add("gitPrograms", Vector(inventory, inventory).asJson)))))
+      When("every extra policy delta and unauthenticated source relation is compared")
+      val rejected = changed.map(value => A.processPolicyMatches(previous, candidate, policy.noSpaces, value.noSpaces))
+      val invalidold = oldinvalid.map(value => A.processPolicyMatches(previous, candidate, value.noSpaces, current.noSpaces))
+      Then("no execution, grant, validation, destination or arbitrary inventory change is treated as source read succession")
+      rejected shouldBe Vector.fill(changed.size)(false)
+      invalidold shouldBe Vector(false, false)
+      A.processPolicyMatches(previous, previous, policy.noSpaces, current.noSpaces) shouldBe false
+      A.processPolicyMatches(previous, candidate.copy(dependencySourceScope = None), policy.noSpaces, current.noSpaces) shouldBe false
+      A.processPolicyMatches(previous, candidate.copy(sourceRevision = "51"), policy.noSpaces, current.noSpaces) shouldBe false
+      A.processPolicyMatches(previous, candidate, "{", current.noSpaces) shouldBe false
+      val wrong = candidate.dependencySourceScope.get
+      A.processPolicyMatches(previous, candidate.copy(dependencySourceDirection = Some(candidate.dependencySourceDirection.get.copy(
+        directive = ContextReference("crossed-source", "1")))), policy.noSpaces, current.noSpaces) shouldBe false
+      A.processPolicyMatches(previous, candidate.copy(dependencySourceScope = Some(wrong.copy(binding = wrong.binding.copy(root = "/other/root")))),
+        policy.noSpaces, current.noSpaces) shouldBe false
+    }
+
+    "capture an authenticated committed source successor while retaining primary failure provenance" in {
+      Given("the exact saved primary failure and an independently adopted committed source with approved additional scope")
+      import GoalPhaseDependencySourceRevision as R
+      val (_, scope, capture, candidate) = F.sourceSuccessor()
+      val saved = A.Saved(F.nativeRecord(37), F.narrowFact)
+      val from = F.nativeRecord(60)
+      val progress = candidate.copy(candidate = None, changedPaths = Vector.empty, diff = None,
+        dependencySourceGuard = None, dependencySourceCapture = None)
+      When("candidate admission distinguishes current observation progress from historical capture reuse")
+      val admitted = Vector(progress, progress.copy(dependencySourceGuard = Some(capture.preStageGuard)), candidate).map(value =>
+        A.reusedCandidateC(saved, value, F.narrowRepair, from).isSuccess)
+      val decoded = C.codec.decode(C.codec.encode(candidate))
+      Then("v4 retains the saved failure reference and current generation without copying the old staging facts")
+      admitted shouldBe Vector(true, true, true)
+      decoded shouldBe Right(candidate)
+      C.codec.encode(candidate).hcursor.get[String]("schemaVersion") shouldBe Right("sm-workflow.goal-phase-native-candidate.v4")
+      C.codec.decode(C.codec.encode(progress)) shouldBe Right(progress)
+      R.captureValid(capture) shouldBe true
+      R.modeOf(capture) shouldBe "committed"
+      candidate.primaryPublicationRepair shouldBe Some(F.narrowReuse)
+      candidate.dependencySourceCapture.get.sourceRevision shouldBe candidate.sourceRevision
+      candidate.dependencySourceCapture.get.generation shouldBe F.narrowRepair.generation
+      candidate.dependencySourceStages shouldBe empty
+      R.captureBaseValid(capture.direction, capture.generation, capture.preStageGuard, capture.scope) shouldBe true
+      R.captureBaseValid(capture.direction, capture.generation, capture.preStageGuard.copy(selectedFiles =
+        capture.preStageGuard.selectedFiles.updated(0, R.fileIdentity(capture.preStageGuard.selectedFiles.head.path,
+          Some("drifted current source\n".getBytes.toVector)))), capture.scope) shouldBe false
+      candidate.dependencyAdmission shouldBe None
+      candidate.dependency shouldBe None
+      scope.binding.paths shouldBe (F.narrowFailure.candidate.dependencySourceCapture.get.direction.target.binding.paths :+
+        "docs/current-integration.md")
+      A.sameDependencyCapture(candidate, F.narrowFailure.candidate) shouldBe false
+      A.sameDependencyCapture(F.narrowCandidate, F.narrowFailure.candidate) shouldBe true
+      A.reusedCandidateC(saved, F.narrowCandidate, F.narrowRepair, F.nativeRecord(40)).isSuccess shouldBe true
+    }
+
+    "refuse crossed stale or unapproved source successor provenance without historical fallback" in {
+      Given("a valid source successor and the saved failure's actual previous capture")
+      import GoalPhaseDependencySourceRevision as R
+      val (next, scope, _, _) = F.sourceSuccessor()
+      val previous = F.narrowFailure.candidate.dependencySourceCapture.get
+      val target = next.target
+      val crossed = Vector(next.copy(directive = previous.direction.directive),
+        next.copy(target = target.copy(sessionId = "crossed-session")),
+        next.copy(target = target.copy(plan = target.plan.copy(identity = "crossed-plan"))),
+        next.copy(target = target.copy(primaryBase = target.primaryBase.copy(tree = "f" * 40))),
+        next.copy(target = target.copy(step = "crossed-step")),
+        next.copy(target = target.copy(sourceSuccession = Some(target.sourceSuccession.get.copy(previousDirection = ContextReference("foreign", "1"))))),
+        next.copy(target = target.copy(sourceRevision = previous.sourceRevision)),
+        next.copy(target = target.copy(sourceSuccession = None)))
+      When("the pure relation checks each actual direction and exact approval inventory")
+      val rejected = crossed.map(value => A.sourceSuccessorValid(previous, Some(previous.direction),
+        Some(scope.copy(consumptionDirection = Some(value)))))
+      val scopes = Vector(scope.copy(approvals = Vector.empty), scope.copy(binding = scope.binding.copy(paths = scope.binding.paths.reverse)),
+        scope.copy(consumptionDirection = None), scope.copy(predecessor = ContextReference("foreign", "1")))
+      Then("all substitutions refuse while the unchanged original direction remains required")
+      rejected shouldBe Vector.fill(crossed.size)(false)
+      scopes.map(value => A.sourceSuccessorValid(previous, Some(previous.direction), Some(value))) shouldBe Vector.fill(scopes.size)(false)
+      A.sourceSuccessorValid(previous, Some(next), Some(scope)) shouldBe false
+      A.sourceSuccessorValid(previous, Some(previous.direction.copy(directive = ContextReference("foreign", "1"))), Some(scope)) shouldBe false
+      A.sourceSuccessorValid(previous, Some(previous.direction), None) shouldBe false
+    }
+
+    "require the saved native repair prefix and reject old and new capture mixing" in {
+      Given("a current-source candidate and the exact saved primary repair fact")
+      val (_, _, capture, candidate) = F.sourceSuccessor()
+      val saved = A.Saved(F.nativeRecord(37), F.narrowFact)
+      val from = F.nativeRecord(60)
+      val previous = F.narrowFailure.candidate
+      val mixed = Vector(candidate.copy(dependencySourceCapture = previous.dependencySourceCapture),
+        candidate.copy(dependencySourceStages = previous.dependencySourceStages),
+        candidate.copy(dependencySourceGuard = previous.dependencySourceGuard),
+        candidate.copy(dependencySourceCapture = Some(capture.copy(generation = capture.generation + 1))),
+        candidate.copy(primaryPublicationRepair = Some(F.narrowReuse.copy(repair = ContextReference("other-session", "37")))),
+        candidate.copy(primaryPublicationRepair = Some(F.narrowReuse.copy(sourceRevision = "28"))),
+        candidate.copy(sourceRevision = "61"))
+      When("the retained admission checks actual history, reuse reference, generation and source revision")
+      val rejected = mixed.map(A.reusedCandidateC(saved, _, F.narrowRepair, from).isSuccess)
+      val missing = A.reusedCandidateC(saved, candidate, F.narrowRepair, from.copy(history = from.history.drop(1)))
+      Then("no stale capture or unauthenticated repair lineage is accepted")
+      rejected shouldBe Vector.fill(mixed.size)(false)
+      missing.isSuccess shouldBe false
+      A.reusedCandidateC(saved, candidate, F.narrowRepair,
+        from.copy(identity = InstanceIdentity("crossed-session"))).isSuccess shouldBe false
+      A.reusedCandidateC(saved, candidate, F.repair, from).isSuccess shouldBe false
+    }
+
+    "require the actual effective previous direction for a later source successor" in {
+      Given("a previously captured source successor and another direction retaining its approved inventory prefix")
+      import GoalPhaseDependencySourceRevision as R
+      val (previous, scope, capture, _) = F.sourceSuccessor()
+      val binding = scope.binding.copy(revision = 4)
+      val target = previous.target.copy(sourceRevision = "70", pendingRevision = "71", generation = 3, binding = binding,
+        proposal = previous.target.proposal.copy(binding = ContextReference(binding.identity, "4")),
+        sourceSuccession = Some(previous.target.sourceSuccession.get.copy(previousDirection = previous.directive)))
+      val next = previous.copy(target = target, directive = ContextReference("later-current-source-human", "1"))
+      val current = scope.copy(binding = binding, consumptionDirection = Some(next))
+      val wrongprevious = current.copy(consumptionDirection = Some(next.copy(target = target.copy(sourceSuccession =
+        Some(target.sourceSuccession.get.copy(previousDirection = capture.direction.directive))))))
+      val stale = current.copy(consumptionDirection = Some(next.copy(target = target.copy(sourceRevision = "59"))))
+      When("the relation authenticates the retained effective source before admitting the next observation")
+      val admitted = A.sourceSuccessorValid(capture, Some(capture.direction), Some(current))
+      val rejected = Vector(wrongprevious, stale).map(value => A.sourceSuccessorValid(capture, Some(capture.direction), Some(value)))
+      Then("only the actual effective predecessor can advance and the source frontier must follow its capture")
+      admitted shouldBe true
+      rejected shouldBe Vector(false, false)
+      R.sourcePreviousValid(capture.direction, next.target, Some(previous)) shouldBe true
+      A.sourceSuccessorValid(capture, Some(capture.direction), Some(current.copy(approvals = Vector.empty))) shouldBe false
+    }
+
+    "authenticate contiguous current observation records independently of primary failure provenance" in {
+      Given("fresh committed-source inspection, observation intent and result records in one current candidate generation")
+      import GoalPhaseDependencySourceRevision as R
+      val (_, _, capture, candidate) = F.sourceSuccessor()
+      val progress = candidate.copy(candidate = None, changedPaths = Vector.empty, diff = None, dependencySourceCapture = None)
+      def _append_(from: InstanceRecord, key: String): InstanceRecord = take(from.appendC(from.revision,
+        GoalPhaseNativeRun.history(from, "phase.InspectCandidate", "ordered-candidate:" + key)))
+      val inspected = C.Saved(_append_(F.nativeRecord(60), "dependency-source-inspection"), progress)
+      val intent = C.Saved(_append_(inspected.record, "dependency-source-observation-intent"), progress)
+      val result = C.Saved(_append_(intent.record, "dependency-source-observation-result"), progress.copy(dependencySourceCapture = Some(capture)))
+      val complete = C.Saved(_append_(result.record, "candidate"), candidate)
+      val facts = Map("dependency-source-inspection" -> inspected, "dependency-source-observation-intent" -> intent,
+        "dependency-source-observation-result" -> result)
+      When("retained source authentication reads actual adjacent records and refuses missing or rewritten lineage")
+      val admitted = R.retainedCaptureC(complete, key => Consequence.success(facts.get(key)))
+      val absent = R.retainedCaptureC(complete, key => Consequence.success((facts - "dependency-source-observation-intent").get(key)))
+      val crossed = R.retainedCaptureC(complete, key => Consequence.success(facts.updated("dependency-source-observation-result",
+        result.copy(record = result.record.copy(history = result.record.history.drop(1)))).get(key)))
+      Then("only the actual current receipt chain completes the candidate")
+      admitted.isSuccess shouldBe true
+      absent.isSuccess shouldBe false
+      crossed.isSuccess shouldBe false
+      candidate.primaryPublicationRepair shouldBe Some(F.narrowReuse)
+      F.narrowFailure.candidate.dependencySourceCapture shouldBe Some(PrimaryPublicationContinuationSpecificationFixture.capture)
+    }
+
     "retain a complete dependency capture at its original generation and source revision" in {
       Given("an authenticated completed legacy source capture and a later primary repair reference")
       import PrimaryPublicationContinuationSpecificationFixture as P

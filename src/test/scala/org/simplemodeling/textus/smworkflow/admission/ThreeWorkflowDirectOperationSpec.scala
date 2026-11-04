@@ -746,7 +746,8 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
         val sessiondescriptions = Set("describeGoalPhaseValidationRecovery", "describeGoalPhaseClosureRecovery",
           "describeGoalPhaseSourceHistoryRecovery", "describeGoalPhaseCandidateRecovery",
           "describeGoalPhaseWholePhaseCandidateRecovery", "describeGoalPhaseCandidateObservationContinuation",
-          "describeGoalPhaseSourceHistoryNormalization", "describeRepositorySyncValidationContinuation")
+          "describeGoalPhaseSourceHistoryNormalization", "describeRepositorySyncValidationContinuation",
+          "describeGoalPhasePrerequisitePublicationRecovery")
         published.foreach { (identity, operation) =>
           withClue(identity) {
             operation.specification.request.parameters.head.name shouldBe
