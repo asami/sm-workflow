@@ -36,7 +36,7 @@ private[admission] object NativeExternalEvidenceToolFixture {
     Map("family" -> family, "kind" -> kind, "request" -> "request.json", "result" -> "result.json",
       "reference" -> "reference.json", "execution-evidence" -> "execution.json", "issuer" -> issuer,
       "occurred-at" -> now.minusSeconds(60).toString, "collection" -> collection) ++
-      (if (Set("human", "candidate-recovery", "candidate-observation-continuation", "repair-budget-continuation")(kind))
+      (if (Set("human", "candidate-recovery", "candidate-observation-continuation", "repair-budget-continuation", "push-continuation")(kind))
         Map("participant" -> participantIdentity) else Map.empty[String, String])
   def files(request: RecordPresentable, answer: RecordPresentable, resultReference: V.WorkflowArtifactReference = reference,
     executionEvidence: V.WorkflowExecutionEvidence = execution): Map[String, String] = Map(
@@ -160,6 +160,78 @@ final class NativeExternalEvidenceInputSpec extends AnyWordSpec with Matchers wi
         Main.prepareC(options, path => Consequence.success(changed(path)))
       }
       Then("every crossed or malformed input fails without a host import row")
+      failures.foreach(_.isSuccess shouldBe false)
+    }
+  }
+
+  "ID11 push continuation evidence" should {
+    "encode the exact supplied lifecycle direction and passive Defer without manufacturing authority" in {
+      Given("an authored eligible push target and independently supplied fixture Human facts")
+      val target = RepositorySyncPushContinuationFixture.target
+      val owner = target.context.participantIdentity
+      val worker = execution.copy(workerIdentity = Some(owner))
+      val description = V.RepositorySyncPushContinuationDescriptionResult(target.sessionId, "adoption-required",
+        "Authored fixture push target", target.componentInstance, RepositorySyncPushContinuation.targetRecord(target),
+        RepositorySyncPushContinuation.choices, RepositorySyncPushContinuation.adoptionOperation)
+      val answers = Vector(V.RepositorySyncPushContinuationAnswer("RefreshRemoteAndContinue", "Fixture finite direction", true, true),
+        V.RepositorySyncPushContinuationAnswer("RefreshRemoteAndContinue", "Actual supplied context. " * 1024, true, true),
+        V.RepositorySyncPushContinuationAnswer("Defer", "Fixture passive deferral", false, false))
+      When("the passive normal evidence preparation reads the exact description and each supplied answer")
+      val prepared = answers.map(answer => take(_tool.prepareNormalCommand("RepositorySync", "push-continuation",
+        description, answer, owner, reference, worker)))
+      Then("each import row preserves every target, answer, participant and reference field under its dedicated purpose")
+      prepared.zip(answers).foreach { (seed, answer) =>
+        val expected = take(RepositorySyncPushContinuation.bindingC(target.componentInstance, target,
+          answer.choice, answer.rationale, owner, org.goldenport.cncf.workflow.ContextReference(reference.identity, reference.revision),
+          answer.priorExecutionEnded, answer.acceptOriginalUncertainty))
+        val evidence = _tool.evidence(seed)
+        evidence.purpose shouldBe Purpose.RepositoryPushContinuation.identity
+        evidence.participant shouldBe owner
+        evidence.reference shouldBe reference.identity
+        evidence.revision shouldBe reference.revision
+        evidence.binding shouldBe expected
+        take(NativeExternalEvidence.observeC(evidence, declaration, Purpose.RepositoryPushContinuation,
+          evidenceKey, expected, now)).evidence.binding shouldBe expected
+        NativeExternalEvidence.observeC(evidence.copy(participant = "foreign-participant"), declaration,
+          Purpose.RepositoryPushContinuation, evidenceKey, expected, now).isSuccess shouldBe false
+        NativeExternalEvidence.observeC(evidence.copy(reference = "foreign-reference"), declaration,
+          Purpose.RepositoryPushContinuation, evidenceKey, expected, now).isSuccess shouldBe false
+      }
+    }
+
+    "refuse crossed metadata, missing lifecycle assertions and noncanonical public push answers" in {
+      Given("an authored complete push description and matching fixture Human worker")
+      val target = RepositorySyncPushContinuationFixture.target
+      val owner = target.context.participantIdentity
+      val worker = execution.copy(workerIdentity = Some(owner))
+      val description = V.RepositorySyncPushContinuationDescriptionResult(target.sessionId, "adoption-required",
+        "Authored fixture push target", target.componentInstance, RepositorySyncPushContinuation.targetRecord(target),
+        RepositorySyncPushContinuation.choices, RepositorySyncPushContinuation.adoptionOperation)
+      val answer = V.RepositorySyncPushContinuationAnswer("RefreshRemoteAndContinue", "Fixture finite direction", true, true)
+      val descriptions = Vector(description.copy(sessionId = "foreign-session"),
+        description.copy(componentInstance = "foreign-component"), description.copy(availableChoices = Vector("Defer")),
+        description.copy(adoptionOperation = "foreign-operation"), description.copy(outcome = "unavailable"))
+      val answers = Vector(answer.copy(priorExecutionEnded = false), answer.copy(acceptOriginalUncertainty = false),
+        answer.copy(choice = "Unknown"))
+      val files = _tool.files(description, answer, reference, worker)
+      val options = _tool.arguments("RepositorySync", "push-continuation", owner)
+      val malformed = Vector(
+        "{\"choice\":\"RefreshRemoteAndContinue\",\"rationale\":\"fixture\",\"priorExecutionEnded\":null,\"acceptOriginalUncertainty\":true}",
+        "{\"choice\":\"RefreshRemoteAndContinue\",\"rationale\":\"fixture\",\"priorExecutionEnded\":true,\"acceptOriginalUncertainty\":true,\"unknown\":true}",
+        "{\"choice\":\"RefreshRemoteAndContinue\",\"rationale\":\"fixture\",\"priorExecutionEnded\":true}")
+      When("preparation receives crossed description metadata, absent Human facts or strict-answer violations")
+      val failures = descriptions.map(_tool.prepareRecord("RepositorySync", "push-continuation", _, answer,
+        owner, reference, worker)) ++ answers.map(_tool.prepareRecord("RepositorySync", "push-continuation",
+        description, _, owner, reference, worker)) ++ Vector(
+        _tool.prepareRecord("RepositorySync", "push-continuation", description, answer, "foreign-participant", reference, worker),
+        _tool.prepareRecord("RepositorySync", "push-continuation", description, answer, owner, reference,
+          worker.copy(workerIdentity = None)),
+        Main.prepareC(options - "participant", path => Consequence.success(files(path))),
+        Main.prepareC(options.updated("family", "GoalPhase"), path => Consequence.success(files(path)))) ++ malformed.map { raw =>
+        val changed = files.updated("result.json", raw)
+        Main.prepareC(options, path => Consequence.success(changed(path)))
+      }
+      Then("every input refuses before any external host import row is produced")
       failures.foreach(_.isSuccess shouldBe false)
     }
   }

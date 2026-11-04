@@ -118,6 +118,10 @@ private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: Nativ
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
       _admit_evidence_c(core, Purpose.RepositoryRepairBudgetContinuation, key(reference.identity, reference.revision), binding)
   }
+  val repositoryPushContinuation: RepositorySyncPushContinuation.EvidencePort = new RepositorySyncPushContinuation.EvidencePort {
+    def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json): Consequence[Unit] =
+      _admit_evidence_c(core, Purpose.RepositoryPushContinuation, key(reference.identity, reference.revision), binding)
+  }
   val repositoryRepairScopeCorrection: RepositorySyncRepairScopeCorrection.EvidencePort = new RepositorySyncRepairScopeCorrection.EvidencePort {
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
       _admit_evidence_c(core, Purpose.RepositoryRepairScopeCorrection, key(reference.identity, reference.revision), binding)

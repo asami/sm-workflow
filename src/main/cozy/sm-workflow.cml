@@ -2753,6 +2753,79 @@ OperationResult
 | outcome | string | 1 |
 | message | string | 1 |
 
+## RepositorySyncPushContinuationDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+## RepositorySyncPushContinuationDescriptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| componentInstance | string | 1 |
+| target | record | 1 |
+| availableChoices | string | * |
+| adoptionOperation | string | 1 |
+
+## RepositorySyncPushContinuationAnswer
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| choice | string | 1 |
+| rationale | string | 1 |
+| priorExecutionEnded | boolean | 1 |
+| acceptOriginalUncertainty | boolean | 1 |
+
+## RepositorySyncPushContinuationAdoptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | record | 1 |
+| choice | string | 1 |
+| rationale | string | 1 |
+| directionReference | WorkflowArtifactReference | 1 |
+| priorExecutionEnded | boolean | 1 |
+| acceptOriginalUncertainty | boolean | 1 |
+| executionEvidence | WorkflowExecutionEvidence | 1 |
+
+## RepositorySyncPushContinuationAdoptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+
 ## RepositorySyncStartInput
 
 - input-kind :: COMMAND
@@ -5388,6 +5461,23 @@ subject-type = RepositorySyncHumanConflictRequest
 
 ##### NativePushPreparing
 
+##### NativePushRefreshRequired
+
+##### NativePushFailed
+
+##### NativePushUncertain
+
+##### PushContinuationAdmitted
+
+##### PushRefreshFetchPreparing
+
+##### PushRefreshFetched
+
+##### PushRefreshFetchFailed
+
+##### PushRefreshFetchUncertain
+
+
 ##### NativePushObserved
 
 ##### NativeFinalFetching
@@ -5691,8 +5781,48 @@ when = sync.NativePushPreparing, conflict.Retained, nativeReview.Retained, nativ
 state = NativePushObserved
 when = sync.NativePushObserved, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
-##### native-final-fetching
+##### native-push-refresh-required
 
+state = NativePushRefreshRequired
+when = sync.NativePushRefreshRequired, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### native-push-failed
+
+state = NativePushFailed
+when = sync.NativePushFailed, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### native-push-uncertain
+
+state = NativePushUncertain
+when = sync.NativePushUncertain, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### native-push-continuation-admitted
+
+state = PushContinuationAdmitted
+when = sync.PushContinuationAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### native-push-refresh-fetch-prepared
+
+state = PushRefreshFetchPreparing
+when = sync.PushRefreshFetchPreparing, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### native-push-refresh-fetch-observed
+
+state = PushRefreshFetched
+when = sync.PushRefreshFetched, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### native-push-refresh-fetch-failed
+
+state = PushRefreshFetchFailed
+when = sync.PushRefreshFetchFailed, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### native-push-refresh-fetch-uncertain
+
+state = PushRefreshFetchUncertain
+when = sync.PushRefreshFetchUncertain, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+
+##### native-final-fetching
 state = NativeFinalFetching
 when = sync.NativeFinalFetching, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
@@ -5866,6 +5996,14 @@ operation = RepositorySyncService.startRepositorySync
 #### advanceRepositorySync
 
 operation = RepositorySyncService.advanceRepositorySync
+
+#### describeRepositorySyncPushContinuation
+
+operation = RepositorySyncService.describeRepositorySyncPushContinuation
+
+#### adoptRepositorySyncPushContinuation
+
+operation = RepositorySyncService.adoptRepositorySyncPushContinuation
 
 #### describeRepositorySyncRepairBudgetContinuation
 
@@ -6133,6 +6271,17 @@ on = native-commit-prepared
 
 to = NativePushPreparing
 on = native-push-prepared
+
+
+##### TRANSITION
+
+to = NativePushRefreshRequired
+on = native-push-refresh-required
+
+##### TRANSITION
+
+to = NativePushObserved
+on = native-push-already-present
 
 #### RequiredLintContinuationAdmitted
 
@@ -6462,12 +6611,125 @@ on = native-publication-prepared
 to = NativePushPreparing
 on = native-push-prepared
 
+
+##### TRANSITION
+
+to = NativePushRefreshRequired
+on = native-push-refresh-required
+
+##### TRANSITION
+
+to = NativePushObserved
+on = native-push-already-present
+
 #### NativePushPreparing
 
 ##### TRANSITION
 
 to = NativePushObserved
 on = native-push-observed
+
+##### TRANSITION
+
+to = NativePushFailed
+on = native-push-failed
+
+##### TRANSITION
+
+to = NativePushUncertain
+on = native-push-uncertain
+
+##### TRANSITION
+
+to = PushContinuationAdmitted
+on = native-push-continuation-admitted
+
+#### NativePushRefreshRequired
+
+##### TRANSITION
+
+to = PushContinuationAdmitted
+on = native-push-continuation-admitted
+
+#### NativePushFailed
+
+##### TRANSITION
+
+to = PushContinuationAdmitted
+on = native-push-continuation-admitted
+
+#### NativePushUncertain
+
+##### TRANSITION
+
+to = PushContinuationAdmitted
+on = native-push-continuation-admitted
+
+#### PushContinuationAdmitted
+
+##### TRANSITION
+
+to = PushRefreshFetchPreparing
+on = native-push-refresh-fetch-prepared
+
+##### TRANSITION
+
+to = NativePushRefreshRequired
+on = native-push-refresh-required
+
+#### PushRefreshFetchPreparing
+
+##### TRANSITION
+
+to = PushRefreshFetched
+on = native-push-refresh-fetch-observed
+
+##### TRANSITION
+
+to = PushRefreshFetchFailed
+on = native-push-refresh-fetch-failed
+
+##### TRANSITION
+
+to = PushRefreshFetchUncertain
+on = native-push-refresh-fetch-uncertain
+
+#### PushRefreshFetched
+
+##### TRANSITION
+
+to = LocalStatePreserved
+on = local-state-preserved
+
+##### TRANSITION
+
+to = PushRefreshFetched
+on = native-push-refresh-fetch-observed
+
+##### TRANSITION
+
+to = PushRefreshFetchUncertain
+on = native-push-refresh-fetch-uncertain
+
+##### TRANSITION
+
+to = PushContinuationAdmitted
+on = native-push-continuation-admitted
+
+#### PushRefreshFetchFailed
+
+##### TRANSITION
+
+to = PushContinuationAdmitted
+on = native-push-continuation-admitted
+
+#### PushRefreshFetchUncertain
+
+##### TRANSITION
+
+to = PushContinuationAdmitted
+on = native-push-continuation-admitted
+
 
 #### NativePushObserved
 
@@ -6476,12 +6738,29 @@ on = native-push-observed
 to = NativeFinalFetching
 on = native-final-fetch-prepared
 
+##### TRANSITION
+
+to = Converged
+on = native-convergence-observed
+
+
+##### TRANSITION
+
+to = PushContinuationAdmitted
+on = native-push-continuation-admitted
+
 #### NativeFinalFetching
 
 ##### TRANSITION
 
 to = Converged
 on = native-convergence-observed
+
+
+##### TRANSITION
+
+to = PushContinuationAdmitted
+on = native-push-continuation-admitted
 
 #### PurposeInventory
 
@@ -6680,6 +6959,17 @@ on = native-publication-stage-prepared
 to = NativePushPreparing
 on = native-push-prepared
 
+
+##### TRANSITION
+
+to = NativePushRefreshRequired
+on = native-push-refresh-required
+
+##### TRANSITION
+
+to = NativePushObserved
+on = native-push-already-present
+
 ##### TRANSITION
 
 to = Converged
@@ -6712,6 +7002,17 @@ on = native-publication-commit-observed
 
 to = NativePushPreparing
 on = native-push-prepared
+
+
+##### TRANSITION
+
+to = NativePushRefreshRequired
+on = native-push-refresh-required
+
+##### TRANSITION
+
+to = NativePushObserved
+on = native-push-already-present
 
 ##### TRANSITION
 
@@ -8315,6 +8616,63 @@ RepositorySyncValidationContinuationDescriptionInput
 ###### TYPE
 
 RepositorySyncValidationContinuationDescriptionResult
+
+#### describeRepositorySyncPushContinuation
+
+##### DESCRIPTION
+
+Describe the exact retained push frontier, committed native source, fixed original checks and policy, clean current repository and advertised remote tip. Bind any actual native typed Git diagnostics while preserving old resultless UNKNOWN history. Return RefreshRemoteAndContinue and Defer for one finite continuation. Description reads current facts without changing native state or granting authority.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+RepositorySyncPushContinuationDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+RepositorySyncPushContinuationDescriptionResult
+
+#### adoptRepositorySyncPushContinuation
+
+##### DESCRIPTION
+
+Read exactly one typed input or inputResource. Admit the exact described target, actual independent Human answer, existing directionReference and matching executionEvidence under dedicated repository-sync-push-continuation evidence. RefreshRemoteAndContinue requires priorExecutionEnded=true and acceptOriginalUncertainty=true, preserving the old UNKNOWN and every accepted commit and receipt. Append one managed push continuation direction only. Separate ordinary Advance owns one fresh Fetch, necessary normal integration, fresh selected checks and independent review, at most one new nonforce push and final observation. New movement or failure needs its own exact target and direction. Defer writes nothing; identical direction recollects passively; stale, crossed, contradictory, null and unknown fields refuse. Rationale has no invented size cap.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+RepositorySyncPushContinuationAdoptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | RepositorySyncPushContinuationAdoptionInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+RepositorySyncPushContinuationAdoptionResult
 
 #### describeRepositorySyncRepairBudgetContinuation
 
@@ -11405,6 +11763,8 @@ Dedicated family RepositorySyncRepairScopeCorrection and kind adoption require p
 RepositorySync evidence kind `purpose-preparation-continuation` passively encodes the exact public preparation description and the supplied choice/rationale Answer. The actual matching participant, execution worker, artifact reference, issuer and time are supplied externally. It neither proves Human approval nor executes preparation; actual provider termination is read from the native immutable receipt, never asserted by a priorWorkerEnded flag.
 
 RepositorySync evidence kind `repair-budget-continuation` passively encodes the actual RepositorySyncRepairBudgetContinuationDescriptionResult and strict RepositorySyncRepairBudgetContinuationAnswer. Require the described Component, Session and exact choices, actual matching participant and execution worker, existing direction artifact reference, issuer and time. Bind the complete target and finite choice/additionalRepairs/rationale under dedicated repository-sync-repair-budget-continuation evidence. Preparation invokes no AI or workflow operation and neither provisions evidence nor asserts approval or process termination.
+
+RepositorySync evidence kind `push-continuation` passively encodes the exact RepositorySyncPushContinuationDescriptionResult and strict RepositorySyncPushContinuationAnswer. Require the described Component, Session, availableChoices and principal, matching independent execution worker, existing direction reference, issuer and time. Bind the complete target and supplied choice/rationale/priorExecutionEnded/acceptOriginalUncertainty under dedicated repository-sync-push-continuation evidence. The trusted independent host owns actual Human provenance and prior-worker terminal observation; preparation never proves termination, manufactures consent, provisions evidence, advances the Workflow or changes files.
 
 Passively prepare the explicitly selected Evidence input. Read only the declared absolute local file: URI references in the executing call. GoalPhase kind candidate-recovery requires participant, the actual GoalPhaseCandidateRecoveryDescriptionResult as request and GoalPhaseCandidateRecoveryAnswer as result, with matching execution worker and actual reference, for a separately bound new remaining candidate observation that retains the old UNKNOWN termination-unconfirmed status. GoalPhase kind source-history-recovery requires participant, the actual GoalPhaseSourceHistoryRecoveryDescriptionResult as request and GoalPhaseSourceHistoryRecoveryAnswer as result, with matching execution worker and actual reference, for a separately bound new normalization attempt. GoalPhase kind validation-recovery requires participant, the actual generated recovery description as request and a supplied GoalPhaseValidationRecoveryAnswer as result, with matching execution worker and actual reference. Decode the actual target and require its complete ordered description choices: AuthorizeNewAttempt and Defer for unknown/known-failed, or AuthorizeNewAttempt, LimitedRepair, Defer only for confirmed timeout. Reject LimitedRepair for non-timeout and any broadened, omitted or reordered supplied choices. Encode the exact independently observed Human target/answer/participant/reference binding; LimitedRepair only prepares bounded investigation authorization and grants no retry or Plan adoption. Preserve strict canonical timeout fields and independent issuer/time/provenance admission. GoalPhase kind remaining-plan-adoption requires participant, the actual GoalPhaseRemainingPlanDescriptionResult as request and GoalPhaseRemainingPlanAdoptionInput as result, with matching directive reference and execution worker. It encodes a separately observed new directive, never an answer to the old question. The trusted host remains responsible for real Human provenance and independent provisioning. Return existing structured datastore rows without provisioning or workflow transition. Supplied metadata grants no authority, and preparation alone grants no adoption, recovery or execution.
 

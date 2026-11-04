@@ -74,6 +74,8 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitNativeMergeRepair")
 
   private val _standard_operations = publishedMcpOperations ++ Set(
+    "RepositorySyncService." + RepositorySyncPushContinuation.describeOperation,
+    "RepositorySyncService." + RepositorySyncPushContinuation.adoptionOperation,
     "RepositorySyncService." + RepositorySyncPurposePreparationContinuation.describeOperation,
     "RepositorySyncService." + RepositorySyncPurposePreparationContinuation.adoptionOperation,
     "RepositorySyncService." + RepositorySyncRepairBudgetContinuation.describeOperation,

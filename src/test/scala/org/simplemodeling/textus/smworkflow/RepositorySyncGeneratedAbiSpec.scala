@@ -36,7 +36,9 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
     SmWorkflowComponent.RepositorySyncServiceService.DescribeRepositorySyncPurposePreparationContinuationOperation,
     SmWorkflowComponent.RepositorySyncServiceService.AdoptRepositorySyncPurposePreparationContinuationOperation,
     SmWorkflowComponent.RepositorySyncServiceService.DescribeRepositorySyncRepairBudgetContinuationOperation,
-    SmWorkflowComponent.RepositorySyncServiceService.AdoptRepositorySyncRepairBudgetContinuationOperation)
+    SmWorkflowComponent.RepositorySyncServiceService.AdoptRepositorySyncRepairBudgetContinuationOperation,
+    SmWorkflowComponent.RepositorySyncServiceService.DescribeRepositorySyncPushContinuationOperation,
+    SmWorkflowComponent.RepositorySyncServiceService.AdoptRepositorySyncPushContinuationOperation)
   private def _request(operation: OperationDefinition, properties: List[Property]): Request =
     Request.of(component = SmWorkflowComponent.componentId.name, service = "RepositorySyncService",
       operation = operation.specification.name, arguments = Nil, switches = Nil,
@@ -72,7 +74,7 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
       val advanced = _operations(1).createOperationRequest(_request(_operations(1), advance))
       val optionaltransports = Set("prepareRepositorySyncRepairScopeCorrection", "adoptRepositorySyncRepairScopeCorrection",
         "adoptRepositorySyncValidationContinuation", "adoptRepositorySyncPurposePreparationContinuation",
-        "adoptRepositorySyncRepairBudgetContinuation")
+        "adoptRepositorySyncRepairBudgetContinuation", "adoptRepositorySyncPushContinuation")
       val absent = _operations.filterNot(op => optionaltransports(op.specification.name))
         .map(op => op.createOperationRequest(_request(op, Nil)))
       Then("Start accepts its business selection and Advance requires the canonical session")
@@ -105,7 +107,9 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
         "describeRepositorySyncPurposePreparationContinuation" -> Some("RepositorySyncPurposePreparationContinuationDescriptionInput"),
         "adoptRepositorySyncPurposePreparationContinuation" -> Some("RepositorySyncPurposePreparationContinuationAdoptionInput"),
         "describeRepositorySyncRepairBudgetContinuation" -> Some("RepositorySyncRepairBudgetContinuationDescriptionInput"),
-        "adoptRepositorySyncRepairBudgetContinuation" -> Some("RepositorySyncRepairBudgetContinuationAdoptionInput"))
+        "adoptRepositorySyncRepairBudgetContinuation" -> Some("RepositorySyncRepairBudgetContinuationAdoptionInput"),
+        "describeRepositorySyncPushContinuation" -> Some("RepositorySyncPushContinuationDescriptionInput"),
+        "adoptRepositorySyncPushContinuation" -> Some("RepositorySyncPushContinuationAdoptionInput"))
     }
 
     "expose only the session description and typed adoption transports for finite repair budget direction" in {
@@ -129,6 +133,67 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
       provided(describe.specification.name).resultType shouldBe Some("RepositorySyncRepairBudgetContinuationDescriptionResult")
       provided(adopt.specification.name).inputType shouldBe Some("RepositorySyncRepairBudgetContinuationAdoptionInput")
       provided(adopt.specification.name).resultType shouldBe Some("RepositorySyncRepairBudgetContinuationAdoptionResult")
+    }
+
+    "expose session-only push description and typed push adoption with complete lifecycle assertions" in {
+      Given("the generated push continuation Operations and externally supplied typed answer and evidence")
+      val describe = SmWorkflowComponent.RepositorySyncServiceService.DescribeRepositorySyncPushContinuationOperation
+      val adopt = SmWorkflowComponent.RepositorySyncServiceService.AdoptRepositorySyncPushContinuationOperation
+      val provided = RepositorySyncWorkflowStateMachineProvidedApi3.workflow.providedOperations.map(op => op.name -> op).toMap
+      val answer = V.RepositorySyncPushContinuationAnswer("RefreshRemoteAndContinue", "Actual supplied direction", true, true)
+      When("the generated readers consume the explicit description session and optional resource adoption transport")
+      val described = describe.createOperationRequest(_request(describe,
+        admission.NativeWorkflowOperationInputFixture.advance("repository-execution-1")))
+      val absent = describe.createOperationRequest(_request(describe, Nil))
+      val resource = adopt.createOperationRequest(_request(adopt,
+        List(Property("inputResource", "fixture-push-direction.json", None))))
+      val decoded = answer.toRecord().toJsonStringC.flatMap(raw =>
+        new org.goldenport.record.io.RecordDecoder().json(raw).flatMap(V.RepositorySyncPushContinuationAnswer.createC))
+      Then("the description requires exactly sessionId and adoption declares exactly the two exclusive native transports")
+      describe.specification.request.parameters.map(_.name).toVector shouldBe Vector("sessionId")
+      adopt.specification.request.parameters.map(_.name).toVector shouldBe Vector("input", "inputResource")
+      described.isSuccess shouldBe true
+      absent.isSuccess shouldBe false
+      resource.isSuccess shouldBe true
+      decoded.toOption shouldBe Some(answer)
+      answer.toRecord().fields.map(_.key).toSet shouldBe
+        Set("choice", "rationale", "priorExecutionEnded", "acceptOriginalUncertainty")
+      provided(describe.specification.name).inputType shouldBe Some("RepositorySyncPushContinuationDescriptionInput")
+      provided(describe.specification.name).resultType shouldBe Some("RepositorySyncPushContinuationDescriptionResult")
+      provided(adopt.specification.name).inputType shouldBe Some("RepositorySyncPushContinuationAdoptionInput")
+      provided(adopt.specification.name).resultType shouldBe Some("RepositorySyncPushContinuationAdoptionResult")
+    }
+
+    "retain distinct push failure and uncertainty frontiers and require direction before one fresh fetch" in {
+      Given("the generated native lifecycle and public Workflow state descriptors")
+      val lifecycle = domain.statemachine.RepositorySyncBoundaryLifecycle
+      val states = Set("NativePushRefreshRequired", "NativePushFailed", "NativePushUncertain", "PushContinuationAdmitted",
+        "PushRefreshFetchPreparing", "PushRefreshFetched", "PushRefreshFetchFailed", "PushRefreshFetchUncertain")
+      When("their actual generated transition triples are selected")
+      val edges = lifecycle.transitions.map(edge => (edge.from, edge.event, edge.to)).toSet
+      Then("every retained push or refresh frontier permits only a separately admitted continuation")
+      lifecycle.states.map(_.name).toSet should contain allElementsOf states
+      RepositorySyncWorkflowStateMachineWorkflow3.workflow.states.map(_.name).toSet should contain allElementsOf states
+      val adoptable = Set("NativePushPreparing", "NativePushRefreshRequired", "NativePushFailed", "NativePushUncertain",
+        "NativePushObserved", "NativeFinalFetching", "PushRefreshFetched", "PushRefreshFetchFailed", "PushRefreshFetchUncertain")
+      adoptable.foreach { source =>
+        edges should contain ((source, Some("native-push-continuation-admitted"), "PushContinuationAdmitted"))
+      }
+      Set("IntegrationValidated", "NativeCommitObserved", "PublicationObserved", "PublicationCommitObserved").foreach { source =>
+        edges should contain ((source, Some("native-push-refresh-required"), "NativePushRefreshRequired"))
+        edges should contain ((source, Some("native-push-already-present"), "NativePushObserved"))
+      }
+      edges should contain (("NativePushPreparing", Some("native-push-failed"), "NativePushFailed"))
+      edges should contain (("NativePushPreparing", Some("native-push-uncertain"), "NativePushUncertain"))
+      edges should contain (("NativePushObserved", Some("native-convergence-observed"), "Converged"))
+      edges should contain (("PushContinuationAdmitted", Some("native-push-refresh-fetch-prepared"), "PushRefreshFetchPreparing"))
+      edges should contain (("PushContinuationAdmitted", Some("native-push-refresh-required"), "NativePushRefreshRequired"))
+      edges should contain (("PushRefreshFetchPreparing", Some("native-push-refresh-fetch-observed"), "PushRefreshFetched"))
+      edges should contain (("PushRefreshFetchPreparing", Some("native-push-refresh-fetch-failed"), "PushRefreshFetchFailed"))
+      edges should contain (("PushRefreshFetchPreparing", Some("native-push-refresh-fetch-uncertain"), "PushRefreshFetchUncertain"))
+      edges should contain (("PushRefreshFetched", Some("local-state-preserved"), "LocalStatePreserved"))
+      edges should contain (("PushRefreshFetched", Some("native-push-refresh-fetch-observed"), "PushRefreshFetched"))
+      edges should contain (("PushRefreshFetched", Some("native-push-refresh-fetch-uncertain"), "PushRefreshFetchUncertain"))
     }
 
     "consume the repository business selection without an unused policy version" in {

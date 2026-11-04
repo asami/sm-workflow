@@ -318,3 +318,76 @@ required. Root drift refuses. After accepted repair and a known pre-effect 409,
 the same Session continues through ordinary Advance without replaying the accepted
 Submit or resetting history, accepted results, failures, UNKNOWN effects or
 counters. See the [formal continuation contract](repository-sync-formal-failure-continuation.md#id09-retained-baseline-provenance-across-ownership-repairs).
+
+## ID11: retained push and later remote movement
+
+A fresh convergence attempt reads the advertised remote tip before creating a
+push intent. If the remote already advertises the accepted final tip, native
+progression records an actual present observation without claiming that a push
+process ran. If the advertised tip differs from the tracking relation used to
+admit the candidate, progression retains `NativePushRefreshRequired` and returns
+`Wait`. It performs no push against unassessed remote inputs. This check applies
+again to a genuinely new push after integration or repair.
+
+After typed `GitOperation.Push` returns, native progression saves its exact
+operation, outcome, value-presence and `ProcessExecutionResult` before calling
+`valueC` or returning failure. `NativePushFailed` retains an actual exited
+failure; `NativePushUncertain` retains incomplete or invalid returned facts.
+Process captures use the existing capture/termination encoding and retain native
+artifact metadata without another application byte or count limit. These are
+Git observations and carry no invented SBT facts. An older resultless push intent
+remains UNKNOWN. A CLI exit, external comparison or absent worker does not prove
+that original execution ended and cannot supply its missing process body.
+
+`describeRepositorySyncPushContinuation --sessionId` observes the current clean
+native root and advertised remote. Its exact canonical target binds the
+Component instance, original Start context and principal, Session, root, branch,
+endpoint, native frontier cause and revision, source namespace, retained intent
+when present, saved committed native source and final tip/tree, original fixed
+validation policy and check selection, actual Git observation when present, and
+one fixed finite continuation plan. Optional absent facts are omitted. Explicit
+null, malformed or unknown fields refuse. No opaque Purpose snapshot is needed.
+
+`adoptRepositorySyncPushContinuation --input` or `--inputResource` consumes the
+typed fields `sessionId`, `target`, `choice`, `rationale`, `directionReference`,
+`priorExecutionEnded`, `acceptOriginalUncertainty` and `executionEvidence`.
+`RefreshRemoteAndContinue` requires independently admitted Human evidence for
+this exact description and answer, including `priorExecutionEnded=true` and
+`acceptOriginalUncertainty=true`. The rationale is retained in full. `Defer`
+writes no direction or effect. A stale, crossed or contradictory answer refuses;
+the exact already saved answer is idempotent. Human evidence preparation and
+adoption neither accept a candidate nor execute Git or checks.
+
+Separate ordinary `advanceRepositorySync` selects the actual latest native
+adoption and authenticates its adjacent immutable history prefix. The new
+namespace is `push-continuation-<frontierRevision>`; its adoption key is
+`<namespace>-adopted`. Original keys and every earlier Purpose commit, check,
+review, failed result and UNKNOWN intent remain unchanged. Historical proof is
+compared with its exact old prefix, including when later revisions are present.
+
+The finite direction permits one real typed Fetch under the existing host
+authority, ordinary necessary preservation/integration, applicable selected
+checks and independent review, at most one new non-force push, then final
+convergence observation. Native progression records `refresh-fetch-intent`,
+then the actual returned capture in `refresh-fetch-result` before further Git
+reads, and then the actual relation in `refresh-fetch-observed`. Missing returned
+facts produce an uncertain result without repeating Fetch. New failure or
+remote movement retains a new describable frontier and requires another exact
+independent direction. A post-adoption remote change before Fetch returns a
+refresh-required frontier without executing Fetch.
+
+Fresh integration uses the existing preservation, relationship, conflict/Human,
+validation, review and repair owners. A new merge candidate has genuine current
+check/review provenance; old candidate receipts are cleared rather than renamed
+as new executions. Equal, fast-forward and local-ahead relations retain their
+ordinary proportional policy. Repair retains its original cumulative budget.
+Publication continues through the existing applicability and necessity owner;
+another namespace alone does not require repeating successful publication.
+
+Active push continuation dispatch precedes old Purpose and original fetch/merge
+caches. Native merge/conflict candidates authenticate the actual saved fresh
+Fetch, relation and active direction. Convergence commit, push, final fetch and
+converged keys use that authenticated scope, including after repair. Completed
+result collection selects the same scope and remains read-only. It never
+replays an accepted Submit, resets original keys, infers a prior failure from
+diagnostic byte counts, force-pushes, or manufactures terminal convergence.

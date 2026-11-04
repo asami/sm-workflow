@@ -199,7 +199,8 @@ private[smworkflow] object StandardWorkflowRuntime {
       repositoryContinuation = Some(RepositorySyncValidationContinuation.Installation(shared.ports.repositoryValidationContinuation)),
       repositoryRepairScopeCorrection = Some(RepositorySyncRepairScopeCorrection.Installation(shared.ports.repositoryRepairScopeCorrection)),
       repairBudgetContinuation = Some(RepositorySyncRepairBudgetContinuation.Installation(shared.ports.repositoryRepairBudgetContinuation)),
-      purposePreparation = Some(RepositorySyncPurposePreparationContinuation.Installation(shared.ports.repositoryPurposePreparationContinuation)))
+      purposePreparation = Some(RepositorySyncPurposePreparationContinuation.Installation(shared.ports.repositoryPurposePreparationContinuation)),
+      pushContinuation = Some(RepositorySyncPushContinuation.Installation(shared.ports.repositoryPushContinuation)))
     selected <- RuntimeGitSelections.repositoryC(NativeWorkflowSessionInput.repository(
       NativeWorkflowResultInput.repository(service, creation, declaration, definition), creation, declaration, definition, runtimeIntent = true), paths)
   } yield StandardRepositorySyncIntent.bindInput(selected, input)
@@ -210,15 +211,9 @@ private[smworkflow] object StandardWorkflowRuntime {
     context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(identity))
     selectedcore = core.copy(executionContext = context)
     session <- RepositorySyncManagedFetch.sessionC(identity, declaration, definition, selectedcore)
-    boundary = session.started.current.history.reverseIterator.flatMap(_.suspension).find { value =>
-      val name = value.continuationIdentity.value
-      val prefix = Vector(identity + ":native-review:", identity + ":native-triage:").find(name.startsWith)
-      val revision = prefix.map(name.stripPrefix).filter(_.matches("[1-9][0-9]*")).flatMap(_.toLongOption)
-      session.started.current.identity.value == identity && revision.exists(source =>
-        session.started.current.history.exists(entry => entry.revision.value == source &&
-          entry.currentProgression.exists(_.value == "sync.MergeValidated")))
-    }
     purposestore <- RepositorySyncNativeProgressStore.bindC(session, declaration, selectedcore, _ => Consequence.unit)
+    push <- RepositorySyncPushContinuation.selectedC(purposestore, session.started.current)
+    boundary = repositoryReviewBoundary(session.started.current, push.map(_.stage.record.revision.value))
     purpose <- purposestore.currentPurposeC(session.started.current)
     paths <- if (purpose.nonEmpty) Consequence.success(purpose.get.payload.purposes.get.candidate.toVector.flatMap(_.changes.map(_.path)).toSet)
       else boundary match {
@@ -277,6 +272,21 @@ private[smworkflow] object StandardWorkflowRuntime {
       _repair_budget_paths_c(purposestore, session) else Consequence.success(normalpaths)
   } yield composed
 
+  /** An authenticated push adoption starts a fresh integration lineage. Earlier
+    * reviews retain their evidence but cannot supply the new conflict paths. */
+  private[admission] def repositoryReviewBoundary(current: InstanceRecord,
+    afterRevision: Option[Long]): Option[SuspensionBoundary] = {
+    val identity = current.identity.value
+    current.history.reverseIterator.filter(entry => afterRevision.forall(entry.revision.value > _))
+      .flatMap(_.suspension).find { value =>
+        val name = value.continuationIdentity.value
+        val prefix = Vector(identity + ":native-review:", identity + ":native-triage:").find(name.startsWith)
+        val revision = prefix.map(name.stripPrefix).filter(_.matches("[1-9][0-9]*")).flatMap(_.toLongOption)
+        revision.exists(source => afterRevision.forall(source > _) && current.history.exists(entry =>
+          entry.revision.value == source && entry.currentProgression.exists(_.value == "sync.MergeValidated")))
+      }
+  }
+
   /** Retained budget paths compose only the passive budget Operations after
     * normal scope is empty. The budget handler still authenticates the full
     * direction, evidence and adjacent grant history before recollection. */
@@ -322,6 +332,8 @@ private[smworkflow] object StandardWorkflowRuntime {
       RepositorySyncRepairBudgetContinuation.sessionC(request, core)
     else if (request.operation == RepositorySyncValidationContinuation.adoptionOperation)
       RepositorySyncValidationContinuation.sessionC(request, core)
+    else if (request.operation == RepositorySyncPushContinuation.adoptionOperation)
+      RepositorySyncPushContinuation.sessionC(request, core)
     else NativeWorkflowOperationInput.textC(request, "sessionId")
 
   private def boundedC(creation: ComponentCreate, shared: Shared, request: Request,

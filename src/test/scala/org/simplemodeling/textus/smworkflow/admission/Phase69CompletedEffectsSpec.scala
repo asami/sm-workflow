@@ -91,7 +91,7 @@ private[smworkflow] trait Phase69CompletedEffectsBehavior extends AnyWordSpec wi
       }
     }
 
-    "retain the local result when the remote moves after fetch and reject push replay" in new Phase69ConfiguredRepositoryFixture {
+    "retain the local result and wait before push when the remote moves after fetch" in new Phase69ConfiguredRepositoryFixture {
       val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/phase69-completed-effects").toAbsolutePath), "remote-")
       _with_runtime_(root, "LocalAhead") { (owner, component, actor, prepare) =>
         prepare(_.setupC(_setup_commands_(root, "LocalAhead").size))
@@ -122,17 +122,26 @@ private[smworkflow] trait Phase69CompletedEffectsBehavior extends AnyWordSpec wi
         take(_run_setup_command_(Vector("-C", peer.toString, "-c", "user.name=Fixture", "-c",
           "user.email=fixture@example.invalid", "commit", "-m", "test: later controlled remote purpose")))
         take(_run_setup_command_(Vector("-C", peer.toString, "push", root.resolve("upstream.git").toString, "HEAD:refs/heads/main")))
-        When("the original public continuation reaches a real non-force push rejection")
-        call("advanceRepositorySync", NativeWorkflowOperationInputFixture.advance(session)).isSuccess shouldBe false
+        When("the original public continuation observes the advanced remote before creating a push intent")
+        val first = read_value[V.RepositorySyncAdvanceResult](take(call("advanceRepositorySync",
+          NativeWorkflowOperationInputFixture.advance(session))))
+        Then("the native freshness guard returns a supported refresh-required Wait before any push")
+        first.kind shouldBe "Wait"
+        first.message should include("describeRepositorySyncPushContinuation")
         var original = Option.empty[org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceRecord]
         prepare(_.currentC(InstanceIdentity(session)).map(value => { original = Some(value); () }))
-        Then("repeated continuation observes the unresolved intent without another push or losing local work")
-        call("advanceRepositorySync", NativeWorkflowOperationInputFixture.advance(session)).isSuccess shouldBe false
+        When("the same public continuation repeats without adopting a new remote direction")
+        val repeated = read_value[V.RepositorySyncAdvanceResult](take(call("advanceRepositorySync",
+          NativeWorkflowOperationInputFixture.advance(session))))
+        Then("it returns the same supported Wait and preserves native history and local work without a push")
+        repeated.kind shouldBe "Wait"
+        repeated.message should include("describeRepositorySyncPushContinuation")
         prepare { setup => for {
           current <- setup.currentC(InstanceIdentity(session))
           observed <- setup.observeC()
           remote <- RepositorySyncManagedGitObservation.remoteTipC(setup.core, "main")
           pending <- setup.nativeStageC(input, InstanceIdentity(session), root, "push-intent")
+          refresh <- setup.nativeStageC(input, InstanceIdentity(session), root, "push-refresh-required")
           pushed <- setup.nativeStageC(input, InstanceIdentity(session), root, "push-observed")
           committed <- setup.nativeStageC(input, InstanceIdentity(session), root, "commit-intent")
         } yield {
@@ -140,7 +149,10 @@ private[smworkflow] trait Phase69CompletedEffectsBehavior extends AnyWordSpec wi
           observed.head shouldBe local
           observed.dirty shouldBe empty
           remote should not be local
-          pending should not be empty
+          pending shouldBe None
+          refresh.map(_.payload.stage) shouldBe Some("NativePushRefreshRequired")
+          current.currentProgression.map(_.value) shouldBe Some("sync.NativePushRefreshRequired")
+          _assert_same_instance_(refresh.get.record, current)
           pushed shouldBe None
           committed shouldBe None
           ()

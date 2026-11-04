@@ -20,7 +20,8 @@ import RepositorySyncNativeProgressStore as N
   * file writes, validation acceptance or commit/push authority. No pool,
   * provider, execution-context lease or semantic routing is retained by host.
   * @since   Oct.  6, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 25, 2026
+  * @version Nov.  4, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeConflictContinuation {
@@ -70,7 +71,8 @@ private[smworkflow] object RepositorySyncNativeConflictContinuation {
           wire <- if (value.completion.result.result.value.decision == "resolved") for {
             pending <- RepositorySyncConflictMaterialization.advanceC(source.store, plan.input,
               value.completion.result.result.value, source.current, next, policy)
-            wire <- RepositorySyncNativeProgression.pendingMergeC(source.store, pending, validationPolicy, review, convergence, "", repair)
+            wire <- RepositorySyncNativeProgression.pendingMergeC(source.store.scoped(""), pending, validationPolicy, review,
+              convergence, source.store.namespace, repair)
           } yield wire else humanPort match {
             case Some(port) => port.advanceC(RepositorySyncHumanConflict.Source(source.session, source.store, plan.input,
               value.completion.result.resultReference, value.completion.result.result.value.rationale, next, source.current))
@@ -87,7 +89,8 @@ private[smworkflow] object RepositorySyncNativeConflictContinuation {
             RepositorySyncHumanConflict.completionOperation.operation)(core.action.request.operation)) Consequence.unit
         else invalid("conflict continuation requires its actual owning Operation")
       session <- F.sessionC(identity, declaration, definition, core)
-      store <- N.bindC(session, declaration, core, acknowledgement)
+      base <- N.bindC(session, declaration, core, acknowledgement)
+      store <- RepositorySyncPushContinuation.activeStoreC(base, session.started.current)
       conflicted <- store.loadC("merge-conflicted").flatMap {
         case Some(value) if value.payload.stage == "MergeConflicted" => Consequence.success(value)
         case _ => invalid("semantic conflict selection has no genuine native conflict")

@@ -854,6 +854,20 @@
           "kind": "COMMAND",
           "input": "ForceCloseWorkflowInput",
           "output": "WorkflowForceClosureView"
+        },
+        {
+          "service": "RepositorySyncService",
+          "name": "describeRepositorySyncPushContinuation",
+          "kind": "COMMAND",
+          "input": "RepositorySyncPushContinuationDescriptionInput",
+          "output": "RepositorySyncPushContinuationDescriptionResult"
+        },
+        {
+          "service": "RepositorySyncService",
+          "name": "adoptRepositorySyncPushContinuation",
+          "kind": "COMMAND",
+          "input": "RepositorySyncPushContinuationAdoptionInput",
+          "output": "RepositorySyncPushContinuationAdoptionResult"
         }
       ],
       "types": [
@@ -7802,6 +7816,180 @@
               "type": "string",
               "multiplicity": "?",
               "required": false
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncPushContinuationDescriptionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncPushContinuationDescriptionResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "componentInstance",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "record",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "availableChoices",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "adoptionOperation",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncPushContinuationAnswer",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "choice",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "priorExecutionEnded",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "acceptOriginalUncertainty",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncPushContinuationAdoptionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "record",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choice",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "directionReference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "priorExecutionEnded",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "acceptOriginalUncertainty",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "executionEvidence",
+              "type": "WorkflowExecutionEvidence",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositorySyncPushContinuationAdoptionResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "accepted",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
             },
             {
               "name": "message",

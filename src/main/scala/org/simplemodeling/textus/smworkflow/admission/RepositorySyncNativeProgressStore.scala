@@ -18,7 +18,8 @@ import RepositorySyncManagedGitObservation as Git
   * storage; Git effects are not captured in the DB completion transaction.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  3, 2026
+  *  version Nov.  3, 2026
+  * @version Nov.  4, 2026
   */
 private[smworkflow] object RepositorySyncNativeProgressStore {
   val schema = "sm-workflow.repository-sync-native-progress.v3"
@@ -38,7 +39,9 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     formalFailure: Option[RepositorySyncFormalFailureContinuation.Direction] = None,
     purposeContent: Option[RepositorySyncPurposeContentContinuation.Direction] = None,
     purposePreparation: Option[RepositorySyncPurposePreparationContinuation.Direction] = None,
-    repairBudget: Option[RepositorySyncRepairBudgetContinuation.Direction] = None)
+    repairBudget: Option[RepositorySyncRepairBudgetContinuation.Direction] = None,
+    pushContinuation: Option[RepositorySyncPushContinuation.Direction] = None,
+    pushObservation: Option[RepositorySyncPushContinuation.GitObservation] = None)
   final case class Stage(record: InstanceRecord, payload: Payload)
   final case class Candidate(namespace: String, pending: Stage)
   def candidateKey(namespace: String, key: String): String =
@@ -49,7 +52,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
   private given publicationEncoder: Encoder[RepositorySyncPublication.State] = RepositorySyncPublication.stateEncoder
   private given publicationDecoder: Decoder[RepositorySyncPublication.State] = RepositorySyncPublication.stateDecoder
   private given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
-    case ("assessment" | "repairContext" | "continuation" | "hygiene" | "records" | "purposes" | "requiredLint" | "reviewInputs" | "publication" | "formalFailure" | "purposeContent" | "purposePreparation" | "repairBudget", value) => !value.isNull
+    case ("assessment" | "repairContext" | "continuation" | "hygiene" | "records" | "purposes" | "requiredLint" | "reviewInputs" | "publication" | "formalFailure" | "purposeContent" | "purposePreparation" | "repairBudget" | "pushContinuation" | "pushObservation", value) => !value.isNull
     case _ => true
   }))
   private given Decoder[Payload] = deriveDecoder
@@ -61,7 +64,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
       version <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
       _ <- Either.cond(version == schema, (), "Native progress schema differs")
       payload <- wire.hcursor.get[Payload]("payload").left.map(_.message)
-      _ <- Either.cond(Vector("formalFailure", "purposeContent", "purposePreparation", "repairBudget").forall(name =>
+      _ <- Either.cond(Vector("formalFailure", "purposeContent", "purposePreparation", "repairBudget", "pushContinuation", "pushObservation").forall(name =>
         !wire.hcursor.downField("payload").downField(name).focus.exists(_.isNull)), (), "Continuation provenance cannot be explicitly null")
       _ <- Either.cond(!wire.hcursor.downField("payload").downField("hygiene").focus.exists(_.isNull) &&
         payload.hygiene != null && payload.hygiene.forall(CommitHygiene.valid), (), "Invalid commit hygiene receipt")
@@ -75,9 +78,11 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     adapter: WorkflowManagedMechanicalTransition[Payload], val storage: WorkflowComponentStorage,
     acknowledgement: String => Consequence[Unit],
     val namespace: String = "",
-    val continuation: Option[RepositorySyncValidationContinuation.Direction] = None) {
-    def scoped(namespace: String, direction: Option[RepositorySyncValidationContinuation.Direction] = None): Store =
-      new Store(declaration, core, original, context, identity, adapter, storage, acknowledgement, namespace, direction)
+    val continuation: Option[RepositorySyncValidationContinuation.Direction] = None,
+    val pushContinuation: Option[RepositorySyncPushContinuation.Direction] = None) {
+    def scoped(namespace: String, direction: Option[RepositorySyncValidationContinuation.Direction] = None,
+      pushDirection: Option[RepositorySyncPushContinuation.Direction] = None): Store =
+      new Store(declaration, core, original, context, identity, adapter, storage, acknowledgement, namespace, direction, pushDirection)
     def key(key: String): String = candidateKey(namespace, key)
     def reference(key: String): WorkflowMechanicalTransition.Reference =
       WorkflowMechanicalTransition.Reference(identity + ":native-" + this.key(key), "1")
@@ -114,6 +119,11 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
       */
     def currentPurposeC(current: InstanceRecord): Consequence[Option[Stage]] = {
       if (current.identity.value != identity) return invalid("current purpose history crosses its instance")
+      if (current.history.exists(_.currentProgression.contains(ProgressionReference("sync.PushContinuationAdmitted"))))
+        return RepositorySyncPushContinuation.selectedC(scoped(""), current).flatMap {
+          case Some(_) => Consequence.success(None)
+          case None => invalid("push continuation history has no authenticated native direction")
+        }
       if (!RepositorySyncPurposeRuntime.selected(current)) return Consequence.success(None)
       val prefix = "native-repository:" + identity + ":"
       current.history.reverse.find(entry => entry.currentProgression.exists(p => Set("sync.PurposeChecked", "sync.PurposeRepairRequired", "sync.PendingMergePrepared")(p.value)) &&
@@ -131,16 +141,19 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
         case None => invalid("actual pending merge history source is absent")
         case Some(entry) =>
           val pattern = (java.util.regex.Pattern.quote("native-repository:" + identity + ":") +
-            "((?:repair-|required-lint-|formal-failure-)[1-9][0-9]*)-pending-merge").r
+            "((?:repair-|required-lint-|formal-failure-|push-continuation-)[1-9][0-9]*)-pending-merge").r
           entry.causation.value match {
-            case cause if cause == "native-repository:" + identity + ":pending-merge" => loadC("pending-merge").flatMap {
+            case cause if cause == "native-repository:" + identity + ":pending-merge" => scoped("").loadC("pending-merge").flatMap {
               case Some(value) if value.payload.stage == "PendingMergePrepared" && value.record.revision == entry.revision &&
                   value.payload.requiredLint.isEmpty => Consequence.success(Candidate("", value))
               case _ => invalid("original pending merge receipt is absent or crossed")
             }
-            case pattern(namespace) => loadC(candidateKey(namespace, "pending-merge")).flatMap {
+            case pattern(namespace) => scoped("").loadC(candidateKey(namespace, "pending-merge")).flatMap {
               case Some(value) if value.payload.stage == "PendingMergePrepared" && value.record.revision == entry.revision =>
-                if (namespace.startsWith("formal-failure-"))
+                if (namespace.startsWith("push-continuation-") || value.payload.pushContinuation.nonEmpty)
+                  RepositorySyncPushContinuation.authenticateCandidateC(scoped(""), current, value, namespace)
+                    .map(_ => Candidate(namespace, value))
+                else if (namespace.startsWith("formal-failure-"))
                   RepositorySyncFormalFailureContinuation.authenticateCandidateC(this, current, value, namespace)
                     .map(_ => Candidate(namespace, value))
                 else if (namespace.startsWith("required-lint-"))
@@ -160,7 +173,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
         case Some(value) =>
           val p = value.receipt.payload.value
           if (p.root == original.repositoryRoot &&
-              (namespace.isEmpty || p.continuation == continuation) &&
+              (namespace.isEmpty || (p.continuation == continuation && p.pushContinuation == pushContinuation)) &&
               value.receipt.next.identity.value == identity &&
               value.receipt.next.currentProgression.exists(_.value == "sync." + p.stage))
             Consequence.success(Some(Stage(value.receipt.next, p)))
@@ -182,7 +195,9 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
           Set("MaterializingRepair", "PendingMergePrepared")(payload.stage))
           payload.copy(requiredLint = None, reviewInputs = None, formalFailure = None) else payload
       saved <- adapter.executeC(WorkflowMechanicalTransition.Intent(declaration.configuration, reference(key),
-        from, from.revision, entry, TypedValue(codec.typeIdentity, selectedpayload.copy(continuation = continuation.orElse(selectedpayload.continuation)))),
+        from, from.revision, entry, TypedValue(codec.typeIdentity, selectedpayload.copy(
+          continuation = continuation.orElse(selectedpayload.continuation),
+          pushContinuation = pushContinuation.orElse(selectedpayload.pushContinuation)))),
         ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](()))(using core.executionContext)
     } yield Stage(saved.receipt.next, saved.receipt.payload.value)
 
@@ -202,7 +217,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     } yield completed
 
     def payload(stage: String, before: Git.Observed): Payload =
-      Payload(stage, original.repositoryRoot, before, continuation = continuation)
+      Payload(stage, original.repositoryRoot, before, continuation = continuation, pushContinuation = pushContinuation)
     def scopeC(actual: Git.Observed): Consequence[Unit] = Git.rootC(core).flatMap(root =>
       if (root == original.repositoryRoot && actual.branch == context.localBranch) Consequence.unit
       else invalid("actual root/branch crosses the original host mapping"))
