@@ -176,7 +176,7 @@ private[smworkflow] object RepositorySyncPurposePreparationContinuation {
 
   /** Later-Purpose source facts come only from this Session's last completed
     * installation and its immediately preceding retained commit intent. */
-  private def _completed_index_c(store: N.Store, current: InstanceRecord, p: P.Progress): Consequence[String] =
+  private[admission] def completedIndexC(store: N.Store, current: InstanceRecord, p: P.Progress): Consequence[String] =
     if (p.cursor == 0) Consequence.success(p.request.indexTree)
     else for {
       entry <- current.history.reverse.find(entry => entry.suspension.isEmpty &&
@@ -257,7 +257,7 @@ private[smworkflow] object RepositorySyncPurposePreparationContinuation {
     actual <- G.inspectC(core)
     root <- G.rootC(core)
     index <- G.indexTreeC(core)
-    expectedindex <- _completed_index_c(store, current, p)
+    expectedindex <- completedIndexC(store, current, p)
     matches <- _root_matches_c(store, p)
     reason = if (root != failed.payload.root || d.target.root.toString != failed.payload.root ||
         d.input.repositoryIdentity != session.context.repositoryIdentity ||
@@ -315,7 +315,7 @@ private[smworkflow] object RepositorySyncPurposePreparationContinuation {
           else N.invalid("preparation direction or accepted repair progress changed")
         actual <- G.inspectC(store.core)
         index <- G.indexTreeC(store.core)
-        expectedindex <- _completed_index_c(store, source.record, p)
+        expectedindex <- completedIndexC(store, source.record, p)
         matches <- _root_matches_c(store, p)
         _ <- store.scopeC(actual.observed)
         _ <- if (store.declaration.target.endpoint == direction.target.endpoint && store.context == direction.target.context &&

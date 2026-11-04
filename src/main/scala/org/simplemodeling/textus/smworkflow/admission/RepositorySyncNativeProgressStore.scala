@@ -39,6 +39,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     formalFailure: Option[RepositorySyncFormalFailureContinuation.Direction] = None,
     purposeContent: Option[RepositorySyncPurposeContentContinuation.Direction] = None,
     purposePreparation: Option[RepositorySyncPurposePreparationContinuation.Direction] = None,
+    purposeMaterialization: Option[RepositorySyncPurposeMaterializationContinuation.Direction] = None,
     repairBudget: Option[RepositorySyncRepairBudgetContinuation.Direction] = None,
     pushContinuation: Option[RepositorySyncPushContinuation.Direction] = None,
     pushObservation: Option[RepositorySyncPushContinuation.GitObservation] = None,
@@ -54,7 +55,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
   private given publicationEncoder: Encoder[RepositorySyncPublication.State] = RepositorySyncPublication.stateEncoder
   private given publicationDecoder: Decoder[RepositorySyncPublication.State] = RepositorySyncPublication.stateDecoder
   private given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
-    case ("assessment" | "repairContext" | "continuation" | "hygiene" | "records" | "purposes" | "requiredLint" | "reviewInputs" | "publication" | "formalFailure" | "purposeContent" | "purposePreparation" | "repairBudget" | "pushContinuation" | "pushObservation" | "mergeCheckContinuation" | "validationPreparation", value) => !value.isNull
+    case ("assessment" | "repairContext" | "continuation" | "hygiene" | "records" | "purposes" | "requiredLint" | "reviewInputs" | "publication" | "formalFailure" | "purposeContent" | "purposePreparation" | "purposeMaterialization" | "repairBudget" | "pushContinuation" | "pushObservation" | "mergeCheckContinuation" | "validationPreparation", value) => !value.isNull
     case _ => true
   }))
   private given Decoder[Payload] = deriveDecoder
@@ -66,7 +67,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
       version <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
       _ <- Either.cond(version == schema, (), "Native progress schema differs")
       payload <- wire.hcursor.get[Payload]("payload").left.map(_.message)
-      _ <- Either.cond(Vector("formalFailure", "purposeContent", "purposePreparation", "repairBudget", "pushContinuation", "pushObservation", "mergeCheckContinuation", "validationPreparation").forall(name =>
+      _ <- Either.cond(Vector("formalFailure", "purposeContent", "purposePreparation", "purposeMaterialization", "repairBudget", "pushContinuation", "pushObservation", "mergeCheckContinuation", "validationPreparation").forall(name =>
         !wire.hcursor.downField("payload").downField(name).focus.exists(_.isNull)), (), "Continuation provenance cannot be explicitly null")
       _ <- Either.cond(!wire.hcursor.downField("payload").downField("hygiene").focus.exists(_.isNull) &&
         payload.hygiene != null && payload.hygiene.forall(CommitHygiene.valid), (), "Invalid commit hygiene receipt")
