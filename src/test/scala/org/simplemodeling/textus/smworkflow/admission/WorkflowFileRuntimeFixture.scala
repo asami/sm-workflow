@@ -4,6 +4,7 @@ import cats.data.NonEmptyVector
 import io.circe.Json
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
+import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall}
 import org.goldenport.cncf.bootstrap.BootstrapConfig
@@ -42,7 +43,8 @@ private[admission] object WorkflowFileRuntimeFixture {
   def withCore[A](root: Path, workspace: String = documentsWorkspace, access: Option[String] = Some("manage"),
     cap: Int = 1048576, mapping: Map[String, Json] = Map(
       WorkflowSelectedDocumentFiles.repositoryKey -> Json.fromString("repo"),
-      WorkflowSelectedDocumentFiles.workspaceKey -> Json.fromString(documentsWorkspace)))
+      WorkflowSelectedDocumentFiles.workspaceKey -> Json.fromString(documentsWorkspace)),
+    instant: Instant = Instant.parse("2026-10-15T00:00:00Z"))
     (task: ActionCall.Core => A): A = {
     val directory = Files.createDirectories(root.resolve(".textus"))
     val values = mapping ++ Map(
@@ -66,13 +68,13 @@ private[admission] object WorkflowFileRuntimeFixture {
         |  textus.subsystem.user-mode: standalone
         |""".stripMargin, StandardCharsets.UTF_8)
     Files.writeString(directory.resolve("test.yaml"),
-      """kind: test-descriptor
+      s"""kind: test-descriptor
         |execution:
         |  profile: controlled
         |  key: typed-file-spec
         |  time:
         |    mode: manual
-        |    start-at: '2026-10-15T00:00:00Z'
+        |    start-at: '$instant'
         |  random:
         |    mode: seeded
         |    seed: typed-file-spec

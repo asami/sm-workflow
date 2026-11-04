@@ -17,7 +17,8 @@ import GoalPhaseOrderedProgression as O
 /** Candidate-owned history intent and actual File result, before Git staging.
   * Partial history is retained by the existing candidate continuation without replay.
   * @since   Oct. 17, 2026
-  * @version Oct. 23, 2026
+  *  version Oct. 23, 2026
+  * @version Nov.  5, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeSourceHistory {
@@ -55,7 +56,7 @@ private[smworkflow] object GoalPhaseNativeSourceHistory {
               _ <- if (_path(path)) Consequence.unit else F.invalid("source history path exceeds its native boundary")
             } yield if (selected) values :+ path else values }
             prepared <- if (included.isEmpty) Consequence.success(Option.empty[Prepared]) else for {
-              day <- Consequence(LocalDate.now(core.executionContext.clock))
+              day <- Consequence(LocalDate.now(core.executionContext.clock.withZone(core.executionContext.timezone)))
             } yield Some(Prepared(rule, included.distinct.map(path =>
               WorkflowSourceHistory.Source(path, day, None, None, true))))
           } yield prepared

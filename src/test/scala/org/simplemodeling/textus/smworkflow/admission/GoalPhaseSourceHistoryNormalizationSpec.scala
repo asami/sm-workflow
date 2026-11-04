@@ -3,7 +3,7 @@ package org.simplemodeling.textus.smworkflow.admission
 import io.circe.Json
 import io.circe.syntax.*
 import java.nio.file.Files
-import java.time.{Instant, LocalDate}
+import java.time.{Instant, LocalDate, ZoneId}
 import org.goldenport.cncf.context.RuntimeContext
 import org.goldenport.cncf.workflow.ContextReference
 import org.goldenport.cncf.workspace.{FileTarget, WorkspaceId}
@@ -55,6 +55,59 @@ final class GoalPhaseSourceHistoryNormalizationSpec extends AnyWordSpec with Nat
     Files.writeString(file, text)
     WorkflowFileRuntimeFixture.withCore(root, workspace = "sm-workflow-repository", access = access,
       mapping = enabledSettings) { core => task(file, core, FileTarget(take(WorkspaceId.parseC("sm-workflow-repository")))) }
+  }
+
+  "Fresh source history dates" should {
+    "use the execution timezone at the same UTC clock instant and normalize the selected source" in {
+      Given("a controlled UTC clock at the date boundary and a selected Scala history rule")
+      val instant = Instant.parse("2026-10-30T15:43:30Z")
+      val original = "/**\n * @since Oct.  1, 2026\n * @version Oct. 10, 2026\n */\n" + changedText
+      Vector("UTC" -> LocalDate.of(2026, 10, 30), "Asia/Tokyo" -> LocalDate.of(2026, 10, 31)).foreach { (zone, expected) =>
+        val root = WorkflowFileRuntimeFixture.fresh()
+        val file = root.resolve(sourcePath)
+        Files.createDirectories(file.getParent)
+        Files.writeString(file, original)
+        WorkflowFileRuntimeFixture.withCore(root, workspace = "sm-workflow-repository",
+          mapping = enabledSettings.updated("textus.execution.timezone", Json.fromString(zone)), instant = instant) { core =>
+          When("the actual owning call prepares its selected source and applies its managed history driver")
+          val prepared = take(GoalPhaseNativeSourceHistory.prepareC(core, Vector(sourcePath))).get
+          val workspace = FileTarget(take(WorkspaceId.parseC("sm-workflow-repository")))
+          val result = take(GoldenportSourceHistoryDriver.normalizeC(core, workspace, prepared.rule, prepared.sources.head))
+          Then("the clock remains UTC while the selected zone determines the date and same-month history")
+          core.executionContext.clock.instant() shouldBe instant
+          core.executionContext.clock.getZone.normalized() shouldBe ZoneId.of("UTC").normalized()
+          core.executionContext.timezone shouldBe ZoneId.of(zone)
+          prepared.sources.head.updatedOn shouldBe expected
+          result.outcome shouldBe "updated-current"
+          Files.readString(file) shouldBe ("/**\n * @since   Oct.  1, 2026\n * @version Oct. " +
+            expected.getDayOfMonth + ", 2026\n */\n" + changedText)
+        }
+      }
+    }
+
+    "reuse a completed prefix with its saved date in a later Tokyo context" in {
+      Given("a completed receipt and a file normalized using its saved date")
+      val selected = target(1).recovery
+      val entry = selected.completedPrefix.head
+      val root = WorkflowFileRuntimeFixture.fresh()
+      val file = root.resolve(entry.result.path)
+      Files.createDirectories(file.getParent)
+      val current = take(WorkflowSourceHistoryRule.applyC(rule, WorkflowSourceHistoryRule.Input(entry.result.path,
+        changedText, day, None, None, true))).text
+      Files.writeString(file, current)
+      val saved = GoalPhaseNativeSourceHistory.codec.encode(entry.result)
+      WorkflowFileRuntimeFixture.withCore(root, workspace = "sm-workflow-repository",
+        mapping = enabledSettings.updated("textus.execution.timezone", Json.fromString("Asia/Tokyo")),
+        instant = Instant.parse("2026-10-30T15:43:30Z")) { core =>
+        When("the actual completed-prefix admission reads the saved receipt under the later context")
+        val paths = take(GoalPhaseNativeSourceHistory.verifyCompletedPrefixC(core, selected))
+        Then("the original date and receipt remain readable and the file stays unchanged")
+        paths shouldBe Vector(entry.result.path)
+        entry.result.updatedOn shouldBe "2026-10-21"
+        GoalPhaseNativeSourceHistory.codec.encode(entry.result) shouldBe saved
+        Files.readString(file) shouldBe current
+      }
+    }
   }
 
   "Same-authority normalization through managed File" should {
