@@ -21,7 +21,7 @@ import RepositorySyncPurpose as P
 /** Real repositories and public standard Operations consume genuine issued
   * purpose contexts. Authored fixtures are distinct from installed evidence.
   * @since   Oct. 28, 2026
-  * @version Oct. 28, 2026
+  * @version Nov.  3, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -110,6 +110,32 @@ final class Phase69DirtyPurposeSpec extends AnyWordSpec with Matchers with Given
   }
 
   "Phase 6.9 dirty purpose public Operations" should {
+    "admit the first completion of an intact legacy oversized-text inventory without rewriting its diagnostic" in {
+      Given("an immutable legacy issued inventory retaining complete ordinary original indexed and worktree content")
+      val text = "保持する本文\n" * 20000
+      val diagnostic = Some("binary or oversized worktree text remains unexamined")
+      val file = P.File("docs/large.md", "M", "M", Some(text), Some(text), Some(text), diagnostic)
+      val request = P.Request("sm-workflow", "/selected/repository", "main", "a" * 40, "b" * 40,
+        Vector(file), Vector.empty)
+      val result = P.Result("resolved", "First authored completion of the retained request",
+        Vector(P.Group("large-document", "Retain complete document", "docs: retain complete document", Vector.empty,
+          Vector(P.Content(file.path, Some(text))), Vector.empty, "The complete ordinary text is available")), Vector.empty)
+      When("the existing admission consumes that first result against the retained input")
+      val restored = P.inputCodec.decode(P.inputCodec.encode(request)).toOption.get
+      val admitted = P.admitC(restored, result)
+      Then("only the exact legacy size diagnostic is compatible and the original request stays unchanged")
+      admitted.isSuccess shouldBe true
+      restored shouldBe request
+      restored.files.head.unexamined shouldBe diagnostic
+      Vector(file.copy(worktree = None), file.copy(worktree = Some("\u0000")),
+        file.copy(original = Some("\ud800")), file.copy(indexed = Some("\u0000")),
+        file.copy(unexamined = Some("binary or unavailable native blob remains unexamined")),
+        file.copy(unexamined = Some("nonordinary worktree text remains unexamined")),
+        file.copy(unexamined = Some("unknown diagnostic"))).foreach { invalid =>
+        P.admitC(request.copy(files = Vector(invalid)), result).isSuccess shouldBe false
+      }
+    }
+
     for (scenario <- Vector("independent-shared", "excluded-partial", "excluded-shared", "inseparable", "review-required", "invalid-dependency", "check-failed", "check-unknown")) {
       s"consume actual issued grouping for $scenario and preserve native content/staging facts" in {
         Given("a controlled equal repository with staged A and independently unstaged B in one shared file")

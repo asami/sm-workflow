@@ -296,7 +296,8 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
     else F.invalid("Primary repair controller differs from its exact failed publication frontier")
 
   /** The native walker supplies Saved only after authenticating the original
-    * candidate and adjacent repair fact. All dependency data remains identical. */
+    * candidate and adjacent repair fact. Historical reuse preserves exact data;
+    * a separately authenticated source successor receives current observation. */
   private[admission] def sameDependencyCapture(candidate: C.Payload, previous: C.Payload): Boolean =
     candidate.dependencyAdmission == previous.dependencyAdmission &&
       candidate.dependencyStaged == previous.dependencyStaged && candidate.dependency == previous.dependency &&

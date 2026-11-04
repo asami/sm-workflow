@@ -11,7 +11,7 @@ import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
   * @since   Oct.  8, 2026
   *  version Oct. 11, 2026
   *  version Oct. 16, 2026
-  * @version Oct. 31, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseWorkClassification {
@@ -20,9 +20,11 @@ private[smworkflow] object GoalPhaseWorkClassification {
   enum Domain { case PROGRAMMING, ENGINEERING }
   enum Footprint { case SMALL, MEDIUM, LARGE }
 
-  final case class Classification(kind: Kind, complexity: Complexity, domain: Domain, footprint: Footprint) {
+  final case class Classification(kind: Kind, complexity: Complexity, domain: Domain, footprint: Footprint, nature: Option[String] = None) {
     def validateC: Consequence[Classification] =
-      if (kind == null || complexity == null || domain == null || footprint == null)
+      if (kind == null || complexity == null || domain == null || footprint == null || nature == null ||
+          nature.exists(n => !Set("mechanical", "parent-inline", "deterministic", "hardest")(n)) ||
+          (nature.contains("mechanical") && kind != Kind.CODING))
         Consequence.stateConflict("WorkClassification is incomplete")
       else Consequence.success(this)
 
@@ -54,7 +56,8 @@ private[smworkflow] object GoalPhaseWorkClassification {
         domainname = if (kind == Kind.CODING) domain.toString.toLowerCase.capitalize else ""
         intensity = level.value.toLowerCase.capitalize
       } yield admitted.copy(reasoning = level,
-        reasoningClass = Some(ReasoningClassReference(workname + domainname + intensity)))
+        reasoningClass = Some(ReasoningClassReference(workname + domainname +
+          (if (nature.contains("mechanical")) "Mechanical" else intensity))))
   }
 
   /** Planning explicitly supplies all three Step frontiers, not a Skill's
@@ -94,7 +97,8 @@ private[smworkflow] object GoalPhaseWorkClassification {
 
   given Encoder[Classification] = Encoder.instance(value => Json.obj(
     "kind" -> Json.fromString(value.kind.toString), "complexity" -> Json.fromString(value.complexity.toString),
-    "domain" -> Json.fromString(value.domain.toString), "footprint" -> Json.fromString(value.footprint.toString)))
+    "domain" -> Json.fromString(value.domain.toString), "footprint" -> Json.fromString(value.footprint.toString)).mapObject(fields =>
+      value.nature.fold(fields)(n => fields.add("nature", Json.fromString(n)))))
   given Decoder[Classification] = Decoder.instance { cursor =>
     def enumeration[A](key: String, values: Array[A]): Decoder.Result[A] =
       cursor.get[String](key).flatMap(value => values.find(_.toString == value).toRight(
@@ -104,7 +108,10 @@ private[smworkflow] object GoalPhaseWorkClassification {
       complexity <- enumeration("complexity", Complexity.values)
       domain <- enumeration("domain", Domain.values)
       footprint <- enumeration("footprint", Footprint.values)
-    } yield Classification(kind, complexity, domain, footprint)
+      nature <- cursor.get[Option[String]]("nature")
+      value = Classification(kind, complexity, domain, footprint, nature)
+      _ <- Either.cond(value.validateC.isSuccess, (), io.circe.DecodingFailure("Invalid work nature", cursor.history))
+    } yield value
   }
   given Encoder[Assignment] = deriveEncoder
   given Decoder[Assignment] = deriveDecoder

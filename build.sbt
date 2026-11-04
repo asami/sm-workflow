@@ -160,7 +160,10 @@ lazy val root = project
         "docs/spec/runtime-caller-format-migration.md",
         "scripts/native-goal-command.py",
         "scripts/native-goal-authority.py",
-        "scripts/migrate-runtime-caller-format.py"
+        "scripts/migrate-runtime-caller-format.py",
+        "scripts/goal-phase-dispatch.py",
+        "skills/sm-goal-phase/dispatch-mappings.json",
+        "skills/sm-goal-phase/cost-role-mapping.json"
       ).map { relativepath =>
         val source = baseDirectory.value / relativepath
         if (!source.isFile) sys.error("Missing component-owned skill contract source: " + source)
@@ -181,9 +184,21 @@ lazy val root = project
       val copies = skillSourceFiles.value.map { case (source, relativePath) =>
         source -> (destinationRoot / relativePath)
       }
+      // This private namespace contains only the declared source distribution.
+      // Remove stale payloads and interpreter caches before rebuilding it.
+      IO.delete(destinationRoot)
       IO.copy(copies)
       copies.map(_._2)
     }.taskValue,
+    Compile / packageBin / mappings := {
+      val prefix = "META-INF/sm-workflow/"
+      val declared = skillSourceFiles.value.map(_._2).toSet
+      // Copying managed resources does not remove old files from classDirectory.
+      // Only declared distribution entries belong in this private JAR namespace.
+      (Compile / packageBin / mappings).value.filter { case (_, path) =>
+        !path.startsWith(prefix) || declared(path.stripPrefix(prefix))
+      }
+    },
     skillBundle := {
       val sources = skillSourceFiles.value
       val archive = target.value / ("sm-workflow-skills-" + version.value + ".zip")

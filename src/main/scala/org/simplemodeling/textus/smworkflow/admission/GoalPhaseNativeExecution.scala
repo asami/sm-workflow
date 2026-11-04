@@ -10,11 +10,22 @@ import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 /** Trusted operational input for fresh native Goal issuance. Configuration is
   * neither an executor observation nor permission to execute or close work.
   * @since   Oct. 14, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 25, 2026
+  * @version Nov.  2, 2026
   */
 private[smworkflow] object GoalPhaseNativeExecution {
   final case class Origin(current: WorkflowExecutorDescriptor, preference: WorkflowExecutionPreference)
   val schemaVersion = "sm-workflow.execution-origin.v1"
+  /** Logical placement needs an actual context identity, never a fabricated
+    * concrete parent model merely to supply that identity.
+    */
+  val logicalOrigin: ComponentParameterKey[String] = ComponentParameterKey.optional(
+    "sm-workflow.goal-phase.origin-context", ComponentParameterDecoder {
+      case ConfigurationValue.StringValue(value) if contextValid(value) => Consequence.success(value)
+      case _ => invalid("logical origin requires the actual nonblank caller context identity")
+    })
+  def contextValid(value: String): Boolean = value != null && value.trim == value && value.nonEmpty &&
+    value.length <= 1024 && !value.exists(_.isControl)
   val declaration: ComponentParameterKey[Origin] = ComponentParameterKey.optional(
     "sm-workflow.execution.origin", ComponentParameterDecoder {
       case value: ConfigurationValue.ObjectValue => decodeC(_json(value))

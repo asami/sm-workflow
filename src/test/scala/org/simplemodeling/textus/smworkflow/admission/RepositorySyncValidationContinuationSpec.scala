@@ -36,7 +36,8 @@ private[admission] object RepositorySyncValidationContinuationFixture {
 /** Pure contracts plus independent normal managed evidence ingress.
   * Native history/effect cases are qualified by the separate public CLI suite.
   * @since   Oct. 26, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  3, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -48,6 +49,20 @@ private[smworkflow] trait RepositorySyncValidationContinuationBehavior extends A
   import RepositorySyncValidationContinuationFixture.*
 
   "RS-VC1 strict persisted and public contracts" should {
+    "retain historical missing formal and content directions and refuse explicit null provenance" in {
+      Given("a historical native progress receipt without either new continuation field")
+      val store = RepositorySyncNativeProgressStore
+      val original = store.Payload("Integrated", target.root, observed)
+      val wire = store.codec.encode(original)
+      When("the same receipt is restored or either new optional field is explicitly null")
+      val nulls = Vector("formalFailure", "purposeContent").map(name => wire.mapObject(fields => fields.add("payload",
+        fields("payload").get.mapObject(_.add(name, Json.Null)))))
+      Then("historical absence stays absent and null cannot erase direction provenance")
+      store.codec.decode(wire) shouldBe Right(original)
+      wire.hcursor.downField("payload").downField("formalFailure").focus shouldBe None
+      wire.hcursor.downField("payload").downField("purposeContent").focus shouldBe None
+      nulls.foreach(value => store.codec.decode(value).isLeft shouldBe true)
+    }
     "retain a complete large Human rationale in the exact answer direction and evidence binding" in {
       Given("a valid unchanged candidate target and an explicit Human explanation exceeding 64 KiB")
       val rationale = "継続を判断した理由" * 10000

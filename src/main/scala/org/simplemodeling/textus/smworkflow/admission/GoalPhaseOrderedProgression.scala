@@ -12,7 +12,8 @@ import GoalPhaseRuntimeRepairControl as R
   * review before submitting events. These values are NOT permission tokens.
   * Semantic replies carry no stage, cursor, command or closure receipt.
   * @since   Oct.  6, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseOrderedProgression {
@@ -291,7 +292,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
             newpolicypending = false, reason = None, clear = true))
       else invalid("repair policy has no eligible unreserved pending batch")
     private def phaseWide = cursor == plan.steps.size
-    private def step = plan.steps(cursor)
+    private[admission] def step = plan.steps(cursor)
     private def tip = tipSnapshot.head
     def tipSnapshot: Snapshot = releaseCommit.map(c => Snapshot(c.identity, c.tree))
       .orElse(completed.lastOption.map(s => Snapshot(s.commit.identity, s.commit.tree))).getOrElse(base)
@@ -439,16 +440,16 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       stepAdmission = None, releaseCommit = releaseCommit, repairControl = repairControl, repairObservations = repairObservations,
       stepReviewRequired = stepReviewRequired)
 
-    /** Direction only: the native owner separately binds the actual Component,
-      * finite host registration and independently admitted original-purpose
-      * authority or Human directive.
+    /** Direction only: the native owner authenticates the actual original-purpose
+      * execution and complete semantic inventory-only result, or the retained
+      * manual authority/Human contract. This method performs no file effects.
       */
     private[admission] def adoptCurrentInventoryRevisionC(proposed: Plan, evidence: String): Consequence[State] = for {
       _ <- if (text(evidence) && !evidence.exists(_.isControl) && stage == Stage.Decision &&
           !documentDecision && pendingRepair.isEmpty && closureIntent.isEmpty && phaseReviewedCandidate.isEmpty &&
           cursor == completed.size && cursor < plan.steps.size && generation < Long.MaxValue &&
           decisionSource.exists(Set(Stage.Implementation, Stage.Repair))) Consequence.unit
-        else invalid("Current inventory adoption requires admitted authority and its unanswered current implementation or repair Decision")
+        else invalid("Current inventory adoption requires its actual current implementation or repair Decision")
       _ <- currentInventoryPathsC(plan, proposed, step.identity)
     } yield new State(proposed, Stage.Implementation, cursor, generation + 1, repairs, base, completed,
       None, None, None, None, None, repositoryReceipt, None, None,
@@ -1020,7 +1021,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     if (!identities(ids)) return invalid("selected Step identities are empty or duplicated")
     plan.steps.zipWithIndex.foldLeft(GoalPhaseAcceptanceBoundary.validatePlanC(plan)) { case (prior, (s, index)) => prior.flatMap { _ =>
       if (s == null || !text(s.purpose) || s.ownedPaths == null || s.ownedPaths.isEmpty ||
-          s.ownedPaths.size > 256 || s.ownedPaths.distinct != s.ownedPaths || !s.ownedPaths.forall(path) ||
+          s.ownedPaths.distinct != s.ownedPaths || !s.ownedPaths.forall(path) ||
           !identities(s.dependencies) || !s.dependencies.forall(ids.take(index).contains) ||
           !identities(s.checks) || s.checks.isEmpty || s.workClassification == null || s.actionPolicy == null ||
           s.workClassification.exists(value => value == null || value.validateC.toOption.isEmpty))

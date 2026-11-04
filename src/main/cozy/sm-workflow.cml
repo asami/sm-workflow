@@ -1074,6 +1074,93 @@ OperationResult
 | message | string | 1 |
 | evidenceRecording | EvidenceRecordingState | * |
 
+## RepositorySyncRepairScopeCorrectionPreparationInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| paths | string | * |
+| rationale | string | 1 |
+
+## RepositorySyncRepairScopeCorrectionDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+## RepositorySyncRepairScopeCorrectionDescriptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| componentInstance | string | 1 |
+| target | record | 1 |
+| choices | string | * |
+| adoptionOperation | string | 1 |
+
+## RepositorySyncRepairScopeCorrectionAnswer
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| choice | string | 1 |
+| paths | string | * |
+| rationale | string | 1 |
+| priorExecutionEnded | boolean | 1 |
+| acceptOriginalUncertainty | boolean | 1 |
+
+## RepositorySyncRepairScopeCorrectionAdoptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | record | 1 |
+| choice | string | 1 |
+| paths | string | * |
+| rationale | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+| priorExecutionEnded | boolean | 1 |
+| acceptOriginalUncertainty | boolean | 1 |
+| executionEvidence | WorkflowExecutionEvidence | 1 |
+
+## RepositorySyncRepairScopeCorrectionAdoptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+
 ## RepositorySyncValidationContinuationDescriptionInput
 
 - input-kind :: COMMAND
@@ -1105,6 +1192,10 @@ OperationResult
 ## RepositorySyncValidationContinuationAnswer
 
 - input-kind :: COMMAND
+
+Formal-failure policy sm-workflow.repository-sync-formal-failure-continuation.v1 offers AuthorizeNewValidationAfterHostCorrection and Defer for an actual Purpose or pending-merge failed product check. Bind its full failed receipt, successful prefix, unchanged candidate, fixed selection and current resolved host process plan. With a pending old repair both prior-worker assertions must be true; without an issue both are false and not applicable. The check remains formally failed. Purpose-content policy sm-workflow.repository-sync-purpose-content-continuation.v1 offers AdoptCurrentPurposeContent and Defer for an unanswered available unclaimed Purpose WorkOrder whose exact paths, statuses, baseline/index contents and records remain equal but ordinary worktree text changed. Its adopting answer requires both assertions true. Both policies store direction only; separate ordinary Advance owns the new attempt or fresh inventory/issue. Claimless work may have UNKNOWN external effects.
+
+The target continuationPolicy selects the exact answer contract. V1 retains AuthorizeNewValidation, AdoptCurrentFullState and Defer; an adopting v1 answer requires priorExecutionEnded=true and acceptOriginalUncertainty=true. For sm-workflow.repository-sync-required-lint-continuation.v2 the choices are AuthorizeMissingRequiredLint and Defer, and both booleans must be false: these fields mean not applicable because the original validation actually succeeded. No UNKNOWN assertion or invocation-termination attestation is created by v2.
 
 ### ATTRIBUTE
 
@@ -1567,6 +1658,7 @@ OperationResult
 | purposeRepair | org.goldenport.record.Record | ? |
 | releaseRepairContract | string | ? |
 | triage | org.goldenport.record.Record | ? |
+| operatingProfile | org.goldenport.record.Record | ? |
 | publicationFailure | org.goldenport.record.Record | ? |
 
 ## GoalPhaseOrderedDecisionContext
@@ -2620,7 +2712,7 @@ OperationResult
 |------+------|--------------|
 | identity | string | 1 |
 | path | string | 1 |
-| base | RepositorySyncConflictBlob | 1 |
+| base | RepositorySyncConflictBlob | ? |
 | local | RepositorySyncConflictBlob | 1 |
 | remote | RepositorySyncConflictBlob | 1 |
 | mode | string | 1 |
@@ -3772,6 +3864,11 @@ on = dependency-inventory-continued-Repair
 
 to = Repair
 on = phase-repair-inventory-continued
+
+##### TRANSITION
+
+to = Implementation
+on = current-inventory-continued
 
 ##### TRANSITION
 
@@ -5081,6 +5178,14 @@ subject-type = RepositorySyncHumanConflictRequest
 
 ##### ValidationContinuationAdmitted
 
+##### RequiredLintContinuationAdmitted
+
+##### ReviewInputContinuationAdmitted
+
+##### FormalFailureContinuationAdmitted
+
+##### PurposeContentContinuationAdmitted
+
 ##### IntegrationValidated
 
 ##### PendingMergePrepared
@@ -5274,6 +5379,26 @@ when = sync.IntegrationValidated, conflict.Retained, nativeReview.Retained, nati
 
 state = ValidationContinuationAdmitted
 when = sync.ValidationContinuationAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### required-lint-continuation-admitted
+
+state = RequiredLintContinuationAdmitted
+when = sync.RequiredLintContinuationAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### review-input-continuation-admitted
+
+state = ReviewInputContinuationAdmitted
+when = sync.ReviewInputContinuationAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### formal-failure-continuation-admitted
+
+state = FormalFailureContinuationAdmitted
+when = sync.FormalFailureContinuationAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### purpose-content-continuation-admitted
+
+state = PurposeContentContinuationAdmitted
+when = sync.PurposeContentContinuationAdmitted, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### merge-conflicted
 
@@ -5595,6 +5720,18 @@ operation = RepositorySyncService.advanceRepositorySync
 
 operation = RepositorySyncService.describeRepositorySyncValidationContinuation
 
+#### describeRepositorySyncRepairScopeCorrection
+
+operation = RepositorySyncService.describeRepositorySyncRepairScopeCorrection
+
+#### prepareRepositorySyncRepairScopeCorrection
+
+operation = RepositorySyncService.prepareRepositorySyncRepairScopeCorrection
+
+#### adoptRepositorySyncRepairScopeCorrection
+
+operation = RepositorySyncService.adoptRepositorySyncRepairScopeCorrection
+
 #### adoptRepositorySyncValidationContinuation
 
 operation = RepositorySyncService.adoptRepositorySyncValidationContinuation
@@ -5830,6 +5967,20 @@ on = native-commit-prepared
 to = NativePushPreparing
 on = native-push-prepared
 
+#### RequiredLintContinuationAdmitted
+
+##### TRANSITION
+
+to = PendingMergePrepared
+on = native-required-lint-pending-prepared
+
+#### ReviewInputContinuationAdmitted
+
+##### TRANSITION
+
+to = MergeValidated
+on = native-review-inputs-validation-retained
+
 #### PendingMergePrepared
 
 ##### TRANSITION
@@ -5838,6 +5989,11 @@ to = ValidationChecking
 on = native-check-prepared
 
 #### ValidationChecking
+
+##### TRANSITION
+
+to = FormalFailureContinuationAdmitted
+on = native-formal-failure-continuation-admitted
 
 ##### TRANSITION
 
@@ -5910,6 +6066,11 @@ on = human-conflict-cancelled
 #### Converged
 
 #### MergeValidated
+
+##### TRANSITION
+
+to = RequiredLintContinuationAdmitted
+on = native-required-lint-continuation-admitted
 
 ##### TRANSITION
 
@@ -6040,6 +6201,11 @@ on = native-repair-decision-required
 
 ##### TRANSITION
 
+to = FormalFailureContinuationAdmitted
+on = native-formal-failure-continuation-admitted
+
+##### TRANSITION
+
 to = RepairProposalAdmitted
 on = native-repair-proposal-admitted
 
@@ -6080,6 +6246,11 @@ on = native-repair-candidate-observed
 #### RepairDecisionRequired
 
 #### ReviewDecisionRequired
+
+##### TRANSITION
+
+to = ReviewInputContinuationAdmitted
+on = native-review-input-continuation-admitted
 
 #### ReviewRejected
 
@@ -6124,6 +6295,11 @@ to = Converged
 on = native-convergence-observed
 
 #### PurposeInventory
+
+##### TRANSITION
+
+to = PurposeContentContinuationAdmitted
+on = native-purpose-content-continuation-admitted
 
 ##### TRANSITION
 
@@ -6252,6 +6428,11 @@ on = purpose-progress
 
 ##### TRANSITION
 
+to = FormalFailureContinuationAdmitted
+on = native-formal-failure-continuation-admitted
+
+##### TRANSITION
+
 to = RepairProposalAdmitted
 on = native-repair-proposal-admitted
 
@@ -6261,6 +6442,25 @@ to = RepairDecisionRequired
 on = native-repair-decision-required
 
 #### PurposeUnfinished
+
+#### FormalFailureContinuationAdmitted
+
+##### TRANSITION
+
+to = PurposeMaterialized
+on = native-formal-failure-purpose-prepared
+
+##### TRANSITION
+
+to = PendingMergePrepared
+on = native-formal-failure-merge-prepared
+
+#### PurposeContentContinuationAdmitted
+
+##### TRANSITION
+
+to = PurposeInventory
+on = purpose-content-refreshed
 
 #### PublicationPreparing
 
@@ -6425,7 +6625,7 @@ GoalPhaseDiagnosticInformationResult
 
 ##### DESCRIPTION
 
-Advance the single execution identified by sessionId. Read native state/pending work directly and absorb managed mechanical progression. Return a typed Request, Human question, Wait or Terminal; work specifies submitOperation, submitSessionId and resultType. Internal RepositorySync work uses its own child session. The caller chooses no stage/Step/transition; only actual whole-Phase/repository completion is Terminal.
+Advance the single execution identified by sessionId. Optional profile (standard/cost/quality/local-experiment) applies only at new work issuance; retained pending work keeps its saved selection. Explicit current parameter takes precedence over saved explicit Start intent, current configuration and standard. Missing opt-in host mappings fail as unavailable without fallback. Read native state/pending work directly and absorb managed mechanical progression. Return a typed Request, Human question, Wait or Terminal; work specifies submitOperation, submitSessionId and resultType. Internal RepositorySync work uses its own child session. The caller chooses no stage/Step/transition; only actual whole-Phase/repository completion is Terminal.
 
 Optional sm-workflow.source-history.style selects none (the default, with no history rule or source work) or goldenport for changed owned Scala sources before staging and checks. sm-workflow.source-history.rule supplies the external goldenport rule as a JSON object string; common configuration also accepts an object. CNCF resolves common configuration and these same-key operation properties for the current call, with operation values taking precedence. Invalid style or a missing/invalid selected rule fails before candidate inspection is recorded. These properties change no host grants, stores or business input binding.
 
@@ -6444,6 +6644,7 @@ GoalPhaseAdvanceInput
 | name | type | multiplicity |
 |------+------|--------------|
 | sessionId | string | 1 |
+| profile | string | ? |
 | sm-workflow.source-history.style | string | ? |
 | sm-workflow.source-history.rule | string | ? |
 
@@ -6857,9 +7058,11 @@ GoalPhaseSourceHistoryRecoveryResult
 
 Supply the bare sessionId business parameter for this Session-only description. Structured recovery judgments use their declared typed input or inputResource.
 
-Passively describe only the latest unsuspended ordinary Step Validation candidate with its legacy dependency admission and complete capture, an actual latest-target prerequisite publishLocal Exited(nonzero), and no native check or selection intent. Bind the exact component, participant, Session, full controller, original candidate and stages, dependency binding and actual accepted native ancestry, fixed publication policy and failed immutable result, current managed File/Git correction guard and opaque resolved process policy. Require the same workspace/root/branch/original base, unchanged captured index and at least one correction within the existing selected paths. Return AdoptCorrectedSourceAndPublishOnce and Defer. UNKNOWN, timeout, admission refusal, not-started, missing or successful publication, newer target attempts, revised-source and whole-Phase frontiers refuse. Description performs bounded typed observations only; it starts no stage, check, publication or workflow transition.
+A genuine primary beforeChecks Compile failure reserves ordinary same-Step repair through Advance and retains complete compiler output with testsExecuted=false. The following Advance issues RepairStep or the existing repair-limit Decision. Covered source correction needs no additional Human answer. The v3 target exposes only genuinely uncovered publication authority; existing ordinary same-scope coverage remains applicable. A consumed historical one-shot is never silently renewed.
 
-The distinct sm-workflow.goal-phase-prerequisite-publication-unknown-recovery.v1 branch describes an actual latest UNKNOWN prerequisite at that same unstarted ordinary Validation frontier, including a completed prior correction or v6 Wait-source capture. Its choices are exactly AuthorizeQualifiedSuccessorPublication and Defer. It binds the actual old request, native candidate and accepted semantic reference, Plan/base/prefix/generation/accounting, retained and current source guards and declared process/publication policy. Missing independently installed writer lifecycle or source qualification returns observation-required and grants no effect; Defer remains available. No caller exit, partial typedSBT log or Human approval proves writer completion.
+The separate legacy failed-dependency branch passively describes only the latest unsuspended ordinary Step Validation candidate with its legacy dependency admission and complete capture, an actual latest-target prerequisite publishLocal Exited(nonzero), and no native check or selection intent. Bind the exact component, participant, Session, full controller, original candidate and stages, dependency binding and actual accepted native ancestry, fixed publication policy and failed immutable result, current managed File/Git correction guard and opaque resolved process policy. Require the same workspace/root/branch/original base, unchanged captured index and at least one correction within the existing selected paths. Return AdoptCorrectedSourceAndPublishOnce and Defer. UNKNOWN, timeout, admission refusal, not-started, missing or successful publication, newer target attempts, revised-source and whole-Phase frontiers refuse. Description performs bounded typed observations only; it starts no stage, check, publication or workflow transition.
+
+The distinct sm-workflow.goal-phase-prerequisite-publication-unknown-recovery.v1 branch describes an actual latest UNKNOWN prerequisite at that same unstarted ordinary Validation frontier, including a completed prior correction or v6 Wait-source capture. Its target-dependent choices include AcceptExistingArtifactsWithUnknownEffects, AuthorizeNewPublicationWithUnknownEffects and Defer. Independently retained writer lifecycle and source qualification additionally enable AuthorizeQualifiedSuccessorPublication. It binds the actual old request, native candidate and accepted semantic reference, Plan/base/prefix/generation/accounting, retained and current source guards and declared process/publication policy. Missing independently installed writer lifecycle or source qualification remains disclosed as unknown and prevents the observed qualified-successor choice; explicit independently admitted unknown-effects choices remain available. No caller exit, partial typedSBT log or Human approval proves writer completion.
 
 ##### TYPE
 
@@ -6928,7 +7131,7 @@ Supply exactly one of input or inputResource. The latter is an absolute local fi
 
 Describe the exact current unanswered implementation or repair Human Decision, its retained dependency predecessor and proposed source selection. Observe selected and excluded regular-file bytes with managed File Identity reads and native Git index/status guards. Preserve original primary base, accepted prefix, approvals and repair history. Return only an exact target and the choices AdoptDependencySourceRevision and Defer. Typed observation can run IndexTree; no staging, source normalization, check, commit, Submit, Advance or adoption runs here.
 
-The bounded installed-runtime successor may append an exact independently declared non-input exclusion scope in a closed version-3 target. Retain the original Direction and ordered exclusions; require nonempty disjoint additions, actual later scope approvals and the current immutable installed distribution. The independent host owns semantic non-input qualification for every declared build/check program. Document suffixes and caller assertions supply no qualification. Version-1 and version-2 targets keep their fixed-exclusion meaning; there is no exclusion-only route or repeated upgrade chain.
+Historical version-2 to version-4 installed-runtime successors retain their original recorded meaning; they grant no fresh image-based execution. Active new proposals and explicit legacy migration use closed version-5 source-only Consumption, with native predecessor history and separately decoded LegacyConsumption. The historical bounded installed-runtime successor may append an exact independently declared non-input exclusion scope in a closed version-3 target. Retain the original Direction and ordered exclusions; require nonempty disjoint additions, actual later scope approvals and the current immutable installed distribution. The independent host owns semantic non-input qualification for every declared build/check program. Document suffixes and caller assertions supply no qualification. Version-1 and version-2 targets keep their fixed-exclusion meaning; there is no exclusion-only route or repeated upgrade chain.
 
 An explicit version-4 committed-base successor binds the original Direction, exact old/new native commit/tree pairs, complete native tree changes and four disjoint ordered path partitions. Observe every effective selected path through the explicitly selected TreeEntries operation, including absence and regular mode/blob, and compare actual BlobContent bytes with managed File bytes. Background baseline paths grant no edit or staging ownership. Require the same single installed-runtime successor and actual later approvals; old versions retain their original meaning.
 
@@ -7555,7 +7758,7 @@ GoalPhaseOrderedDecisionSubmissionResult
 
 ##### DESCRIPTION
 
-Start the declared Phase/repository business input. Workflow loads its admitted host business entry directly, assigns a new sessionId when none is proposed and returns that canonical ID with the actual start acknowledgement. A host chat ID is not reused implicitly. Call advanceGoalPhase for next work; Start grants no effect or release authority.
+Start the declared Phase/repository business input. Optional profile selects a registered logical operating profile: explicit parameter, configured sm-workflow.goal-phase.profile, then standard. Standard preserves the existing execution mapping, origin and acceptance; registered cost/quality/local-experiment require explicit execution mappings. local-experiment is an opt-in experimental local-model mapping and adds no Phase 6.10 completion requirement. Workflow loads its admitted host business entry directly, assigns a new sessionId when none is proposed and returns that canonical ID with the actual start acknowledgement. A host chat ID is not reused implicitly. Call advanceGoalPhase for next work; Start grants no effect or release authority.
 
 ##### TYPE
 
@@ -7573,6 +7776,7 @@ GoalPhaseStartInput
 |------+------|--------------|
 | input | GoalPhaseStartInput | 1 |
 | sessionId | string | ? |
+| profile | string | ? |
 
 ##### OUTPUT
 
@@ -7883,7 +8087,15 @@ RepositorySyncAdvanceResult
 
 ##### DESCRIPTION
 
+Explicit continuationPolicy dispatch also supports actual Purpose/pending-merge formal product failures and unanswered Purpose content refresh. Formal targets preserve complete diagnostics and original successful checks, authenticate native intent/result lineage, and bind the unchanged candidate and current resolved host process plan. Content refresh binds full old/current requests and refuses extra/missing paths, changed metadata/provenance, unexamined content or accepted grouping. Pending issues must be available, unclaimed and incomplete; claim absence does not prove external effects absent. Adoption supersedes only the exact old issue or stores a result-only direction, without check/stage/commit effects. Invoke description with --sessionId and adopt using --input; separate normal Advance owns subsequent work. Malformed or unsupported discriminators never fall through to historical decoders.
+
 Observe the exact active unsuspended nonmerge IntegrationValidationChecking resultless intent under equal, local-ahead or fast-forward integration. Bind current Session revision/causation, original root/branch/remote/endpoint and FULL_STATE scope, selected checks/policy, actual candidate and intent references/revisions, successful receipt prefix, HEAD/tree/tracking/index and complete dirty paths including index/worktree and rename codes. Return AuthorizeNewValidation, AdoptCurrentFullState and Defer plus the separate ordinary Advance route. Refuse merge/unmerged state, changed HEAD/tracking, known failure results, checkpoint/materialization interruption, later review/Human/mutation and completed/cancelled Session with the existing owner route. No storage mutation or continuation adoption follows description.
+
+Explicit state dispatch also supports sm-workflow.repository-sync-required-lint-continuation.v2 for an active unsuspended genuine MergeValidated frontier whose original successful ordered checks omitted required lint. Return AuthorizeMissingRequiredLint and Defer. The compact strict target binds Session/Start principal, Component, repository and tracking scope, actual current pending source namespace/reference/revision (including repair-N), MergeValidated reference/revision, original selection and each actual intent/result reference/revision with terminal-success facts, immutable merge parents/index tree, current observation and actual current expanded fixed host policy. Exactly one FixCheck may be appended; the old identity/ordinal/kind/order and candidate inputs remain. Raw historical stdout/stderr stays in its original native receipts. No later review, commit, convergence or uncertain invocation is eligible. Invoke description with --sessionId; adoption uses structured --input.
+
+Explicit policy sm-workflow.repository-sync-review-input-continuation.v3 describes only the active unsuspended ReviewDecisionRequired frontier with its actual paired detailed decision-needed result. The corrected normal host document-inputs declaration is a new proposal, never an edit of old validation or review. Bind the Component and Session, pending namespace, original validated and review references/revisions, unchanged parents/tree/index/current observation, old assessment, proposed mapping and complete freshly captured assessment, current fixed selected checks and explicit applicability issues. Return AdoptInputClassificationAndContinueReview and Defer only when old unknown paths are now fully classified with unchanged check applicability. Ineligible descriptions offer Defer only. Previously known consumed/document classifications cannot be demoted or changed. Program-inputs coverage takes consumed precedence even for scripts or skills ending in .md. Binary, unavailable/new unknown, uncovered consumed inputs and real selected execution/input drift remain issues. No successful check or semantic result is invented or replayed. Unknown or malformed v3 refuses without older-decoder fallback.
+
+For a genuinely new Scala pending merge candidate, actual typed parent/index PendingPaths and current impact-selected fixed checks must establish an applicable FixCheck before the first SBT effect. Missing lint selection refuses before Compile/Test; neither document-path classification nor an unselected extra host check waives it. Existing completed old validation stays available for the explicitly adopted supplement. Current CNCF permission remains an actual typed UoW decision and is never asserted by description or adoption.
 
 ##### TYPE
 
@@ -7907,11 +8119,101 @@ RepositorySyncValidationContinuationDescriptionInput
 
 RepositorySyncValidationContinuationDescriptionResult
 
+#### describeRepositorySyncRepairScopeCorrection
+
+##### DESCRIPTION
+
+Observe one actual available unclaimed incomplete FULL_STATE failed-check repair whose assigned paths omit permissible current integration text paths. Bind the component, retained Start participant and context, root, endpoint, current frontier and original WorkOrder identity/revisions, actual failed check receipt, candidate references/revisions, HEAD/tracking/MERGE_HEAD/index and complete permitted changed-path set. No native claim or completion found does not prove nonexecution. The actual Human must attest that the original semantic worker stopped or ended and accept its UNKNOWN external proposal effects. Description never mutates, validates, submits or advances.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+RepositorySyncRepairScopeCorrectionDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+RepositorySyncRepairScopeCorrectionDescriptionResult
+
+#### prepareRepositorySyncRepairScopeCorrection
+
+##### DESCRIPTION
+
+Passively qualify the exact complete sorted paths and causal rationale supplied through input or inputResource for the same retained FULL_STATE failed-check repair. Read only those paths using typed candidate TreeEntries, BlobContent and managed File. Existing unchanged tracked regular UTF-8 files are eligible automatically within the existing finite assignment and capability budgets. Missing, untracked, outside-root, symlink, tree, binary and changed-candidate files refuse. Preserve factual changedPaths and encode exact qualified paths, rationale and candidate facts in explicit policy v2 inventory. No Human file permission is needed. An existing available old issue retains the distinct lifecycle concern: ContinueAfterPriorWorkerEndedAcceptingUnknown requires actual independent evidence that the original worker ended and its UNKNOWN effects are accepted. The paths are runtime-determined inventory, never Human permission selection. Preparation mutates no source, issue, history or receipts. Review-origin and restricted legacy hosts keep their existing scope.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+RepositorySyncRepairScopeCorrectionPreparationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | RepositorySyncRepairScopeCorrectionPreparationInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+RepositorySyncRepairScopeCorrectionDescriptionResult
+
+#### adoptRepositorySyncRepairScopeCorrection
+
+##### DESCRIPTION
+
+Select exactly input or inputResource through the owning Resource reader. Policy v2 ContinueAfterPriorWorkerEndedAcceptingUnknown accepts ONLY the distinct actual prior-worker lifecycle concern; its answer paths must be empty, because the runtime derives the assignment from the already automatically qualified inventory. No per-file Human permission is requested. Legacy policy v1 AdoptCurrentIntegrationRepairScope retains its historical changed-path subset meaning, without implicit conversion. Both require complete exact target, actual matching participant execution, existing reference and independently provisioned lifecycle evidence. priorExecutionEnded=true and acceptOriginalUncertainty=true acknowledge that the original semantic worker stopped or ended while its effects remain UNKNOWN. Native atomic WorkOrder supersession stores typed direction and retains the original issue, failed checks, receipts and history. Defer with empty paths writes nothing. Repeated identical direction is passive; contradictory, stale, cross-Session, claimed, completed, review-origin, changed candidate or foreign reference input refuses. Separate ordinary Advance captures and issues one exact assignment without resetting or increasing the original repair attempt. Adoption performs no source/Git effect, check, result acceptance, commit or push.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+RepositorySyncRepairScopeCorrectionAdoptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | RepositorySyncRepairScopeCorrectionAdoptionInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+RepositorySyncRepairScopeCorrectionAdoptionResult
+
 #### adoptRepositorySyncValidationContinuation
 
 ##### DESCRIPTION
 
 Admit only the complete exact target, typed choice/rationale and existing direction artifact/execution under dedicated independent repository-sync-validation-continuation evidence. The trusted host must externally verify original invocation terminal or not-started lifecycle before provisioning priorExecutionEnded=true and acceptOriginalUncertainty=true; passive preparation never proves termination or supplies consent. Preserve the original UNKNOWN intent and all historical results. AuthorizeNewValidation requires the unchanged clean candidate and reuses only its validated successful prefix in a fresh namespace. AdoptCurrentFullState explicitly covers all described staged and unstaged FULL_STATE paths, invalidates old check scope and allows mixed staging only there. It authorizes current selected path contents at normal staging time, not an immutable content seal or byte-identical Human review. Additional/removed paths, status/index/HEAD/tracking drift refuse. Append only one managed ValidationContinuationAdmitted transition. Defer writes nothing; stale/duplicate direction refuses without effects. Separate ordinary Advance preserves a fresh checkpoint when needed and runs unfinished checks and normal convergence under current grants. Fetch and the old checkpoint are never repeated. Every new resultless invocation requires fresh public adoption and independent terminal evidence. This bounded contract does not recover arbitrary merge, commit, push or fetch interruptions.
+
+The explicit v2 required-lint branch binds the same independent evidence purpose to the complete actual target, AuthorizeMissingRequiredLint choice, rationale, participant, existing reference and false/false not-applicable booleans. It authenticates original successful selection and receipt lineage through native readers and re-observes after evidence admission before managed CAS. Adoption appends only RequiredLintContinuationAdmitted via native-required-lint-continuation-admitted. Separate ordinary Advance creates PendingMergePrepared via native-required-lint-pending-prepared in the namespace required-lint- followed by the actual adoption target frontier revision, without Git source changes. Old successful receipts seed the verified ordered prefix without new execution rows; only appended FixCheck uses normal fixed CNCF SBT/UoW and current permission. Failure follows existing check-origin repair; a resultless or UNKNOWN new lint remains non-replayable. Later repaired candidates select their own checks without inheriting this seed. V1 codecs and historical rows remain unchanged; malformed or unknown v2 never falls back to v1. No whole-body seal, permission grant, successful-check replay or accepted-result resubmission is implied.
+
+The explicit v3 review-input branch uses AdoptInputClassificationAndContinueReview or passive Defer, with priorExecutionEnded=false and acceptOriginalUncertainty=false (not applicable). Independent repository-sync-validation-continuation evidence binds the complete current v3 target, choice, rationale, participant, existing reference and Component. After evidence admission reobserve the full target before managed CAS. Adoption stores only ReviewInputContinuationAdmitted through native-review-input-continuation-admitted at review-inputs-REVISION-adopted. Separate normal Advance authenticates the direction and native lineage, reobserves the unchanged candidate/current mapping, and saves a NEW MergeValidated source through native-review-inputs-validation-retained at review-inputs-REVISION-validated. Copy the genuine original validation receipt objects and candidate/checkpoint/required-lint provenance, adding only corrected input and impact assessment. Never reenter check execution. Normal independent detailed review uses the new source revision and continuation identity, retaining the old accepted decision-needed issue/result and its rationale/limitations as context. Keep full original candidate diffs and changed paths; old decision-needed prose supplies no typed accepted path coverage. Request fresh judgment of unresolved coverage without check replay or inferred semantic PASS. An interruption resumes from that revised source. Later real repair creates its own candidate without inheriting the old classification direction. Existing review acceptance, repair, Human decision and authorized convergence remain the owners of later effects; adoption performs none of them.
 
 ##### TYPE
 
@@ -7939,7 +8241,7 @@ RepositorySyncValidationContinuationAdoptionResult
 
 ##### DESCRIPTION
 
-Return only the issued dirty purpose/dependency grouping and intended content projections. This saves a semantic proposal, never check/review acceptance or commit authority. Existing native progression owns candidate preparation, actual selected validation, acceptance and installation.
+Return only the issued dirty purpose/dependency grouping and intended content projections. Supply exactly one of result or resultResource; resultResource is an absolute local authorized file URI containing the complete RepositorySyncPurposeResult JSON, read as UTF-8 through the owning Resource/UoW boundary. This saves a semantic proposal, never check/review acceptance or commit authority. Existing native progression owns candidate preparation, actual selected validation, acceptance and installation.
 
 ##### TYPE
 
@@ -7956,7 +8258,8 @@ RepositorySyncPurposeResult
 | name | type | multiplicity |
 |------+------|--------------|
 | sessionId | string | 1 |
-| result | RepositorySyncPurposeResult | 1 |
+| result | RepositorySyncPurposeResult | ? |
+| resultResource | string | ? |
 | resultReference | WorkflowArtifactReference | 1 |
 | completionFacts | WorkflowArtifactReference | * |
 | executionEvidence | WorkflowExecutionEvidence | ? |
@@ -7971,7 +8274,7 @@ RepositorySyncConflictSubmissionResult
 
 ##### DESCRIPTION
 
-Consume the pending conflict decision, resolution texts, rationale and genuinely consumed result/evidence reference. The issued work owns coverage and interpretation. Return committed acceptance and useful chat text. A proposal is not write/command/commit/push authority or convergence; only explicit Advance applies authorized following progression.
+Consume the pending conflict decision, resolution texts, rationale and genuinely consumed result/evidence reference. Supply exactly one of result or resultResource; resultResource is an absolute local file URI containing the complete RepositorySyncConflictResult JSON, read as UTF-8 through the normal authorized Resource boundary. The issued work owns coverage and interpretation. Return committed acceptance and useful chat text. A proposal is not write/command/commit/push authority or convergence; only explicit Advance applies authorized following progression.
 
 ##### TYPE
 
@@ -7988,7 +8291,8 @@ RepositorySyncConflictResult
 | name | type | multiplicity |
 |------+------|--------------|
 | sessionId | string | 1 |
-| result | RepositorySyncConflictResult | 1 |
+| result | RepositorySyncConflictResult | ? |
+| resultResource | string | ? |
 | resultReference | WorkflowArtifactReference | 1 |
 | completionFacts | WorkflowArtifactReference | * |
 | executionEvidence | WorkflowExecutionEvidence | ? |
@@ -8035,7 +8339,7 @@ RepositorySyncNativeMergeReviewSubmissionResult
 
 ##### DESCRIPTION
 
-Consume only the current assigned native repair result, actual reference and completion evidence. A repaired proposal grants no file, command, validation or convergence authority; Submit never calls Advance. Decision-needed stays nonterminal for separate actual Human handling. Return committed accepted/outcome/message under the owning session.
+Consume only the current assigned native repair result, actual reference and completion evidence. Supply exactly one of result or resultResource; resultResource is an absolute local authorized file URI containing the complete RepositorySyncNativeMergeRepairResult JSON, read as UTF-8 through the owning Resource/UoW boundary. A repaired proposal grants no file, command, validation or convergence authority; Submit never calls Advance. Decision-needed stays nonterminal for separate actual Human handling. Return committed accepted/outcome/message under the owning session.
 
 ##### TYPE
 
@@ -8052,7 +8356,8 @@ RepositorySyncNativeMergeRepairResult
 | name | type | multiplicity |
 |------+------|--------------|
 | sessionId | string | 1 |
-| result | RepositorySyncNativeMergeRepairResult | 1 |
+| result | RepositorySyncNativeMergeRepairResult | ? |
+| resultResource | string | ? |
 | resultReference | WorkflowArtifactReference | 1 |
 | completionFacts | WorkflowArtifactReference | * |
 | executionEvidence | WorkflowExecutionEvidence | ? |
@@ -9489,6 +9794,7 @@ GoalPhaseWorkSubmissionResult
 | releaseRepairContract | string | ? |
 | triage | org.goldenport.record.Record | ? |
 | diagnosticHistory | org.goldenport.record.Record | * |
+| operatingProfile | org.goldenport.record.Record | ? |
 | publicationFailure | org.goldenport.record.Record | ? |
 
 ## GoalPhaseHumanQuestion
@@ -9517,6 +9823,7 @@ GoalPhaseWorkSubmissionResult
 | reviewedCandidate | GoalPhaseNativeSnapshot | 1 |
 | repository | RepositorySyncNativeConvergenceResult | ? |
 | synchronization | GoalPhaseSynchronizationResult | 1 |
+| metrics | org.goldenport.record.Record | ? |
 
 ## GoalPhaseSynchronizationResult
 
@@ -10774,6 +11081,10 @@ GoalPhase kind repair-policy-adoption requires participant, the actual GoalPhase
 GoalPhase kind source-history-normalization requires participant, the actual GoalPhaseSourceHistoryNormalizationDescriptionResult and GoalPhaseSourceHistoryNormalizationAnswer, matching execution worker, actual existing policy-direction artifact reference, issuer and time. Bind the complete strict target and answer including priorExecutionEnded under the dedicated goal-phase-source-history-normalization purpose. AdoptSameAuthorityNormalization requires priorExecutionEnded=true independently attested by the trusted host from actual terminal evidence. Passive preparation verifies supplied typed data only; it does not prove termination, invent consent, answer the old Human, provision storage, adopt policy or Advance. No old source-history-recovery purpose or generic authorization fallback is admitted.
 
 RepositorySync kind validation-continuation requires participant, the actual RepositorySyncValidationContinuationDescriptionResult and strict RepositorySyncValidationContinuationAnswer, matching execution worker, existing direction artifact reference, issuer and time. Bind every target/answer field under dedicated repository-sync-validation-continuation purpose. An adopting answer requires independently host-attested priorExecutionEnded=true and acceptOriginalUncertainty=true. The trusted host must verify actual terminal or not-started lifecycle externally before provisioning; live or unknown termination refuses. Passive preparation only encodes supplied facts: it cannot observe termination, manufacture consent, issue/provision evidence, adopt or execute. The old UNKNOWN effects remain unknown.
+
+For the explicit required-lint-continuation.v2 discriminator, preparation selects the actual description choices AuthorizeMissingRequiredLint/Defer and requires false/false not-applicable booleans. It binds original native receipt references and compact successful facts without copying their logs; it never asserts a successful old invocation was UNKNOWN. All target/answer bindings use the existing repository-sync-validation-continuation purpose and Component/principal scope. Unknown or malformed discriminators refuse rather than falling back to v1.
+
+Dedicated family RepositorySyncRepairScopeCorrection and kind adoption require participant, the actual RepositorySyncRepairScopeCorrectionDescriptionResult and strict RepositorySyncRepairScopeCorrectionAnswer, matching execution worker, existing direction artifact reference, issuer and time. Policy v2 ContinueAfterPriorWorkerEndedAcceptingUnknown carries empty answer paths and only actual lifecycle assertions; runtime-qualified file inventory belongs to the prepared target and requires no Human file selection. Legacy policy v1 retains its explicit sorted selected-path answer. Bind the complete versioned target and answer under dedicated repository-sync-repair-scope-correction purpose. Adoption requires actual Human assertions priorExecutionEnded=true and acceptOriginalUncertainty=true: the original semantic worker stopped or ended while external proposal effects remain UNKNOWN. Preparation only encodes those externally supplied facts and never observes termination, manufactures consent, provisions evidence, supersedes work or executes a source/Git effect.
 
 Passively prepare the explicitly selected Evidence input. Read only the declared absolute local file: URI references in the executing call. GoalPhase kind candidate-recovery requires participant, the actual GoalPhaseCandidateRecoveryDescriptionResult as request and GoalPhaseCandidateRecoveryAnswer as result, with matching execution worker and actual reference, for a separately bound new remaining candidate observation that retains the old UNKNOWN termination-unconfirmed status. GoalPhase kind source-history-recovery requires participant, the actual GoalPhaseSourceHistoryRecoveryDescriptionResult as request and GoalPhaseSourceHistoryRecoveryAnswer as result, with matching execution worker and actual reference, for a separately bound new normalization attempt. GoalPhase kind validation-recovery requires participant, the actual generated recovery description as request and a supplied GoalPhaseValidationRecoveryAnswer as result, with matching execution worker and actual reference. Decode the actual target and require its complete ordered description choices: AuthorizeNewAttempt and Defer for unknown/known-failed, or AuthorizeNewAttempt, LimitedRepair, Defer only for confirmed timeout. Reject LimitedRepair for non-timeout and any broadened, omitted or reordered supplied choices. Encode the exact independently observed Human target/answer/participant/reference binding; LimitedRepair only prepares bounded investigation authorization and grants no retry or Plan adoption. Preserve strict canonical timeout fields and independent issuer/time/provenance admission. GoalPhase kind remaining-plan-adoption requires participant, the actual GoalPhaseRemainingPlanDescriptionResult as request and GoalPhaseRemainingPlanAdoptionInput as result, with matching directive reference and execution worker. It encodes a separately observed new directive, never an answer to the old question. The trusted host remains responsible for real Human provenance and independent provisioning. Return existing structured datastore rows without provisioning or workflow transition. Supplied metadata grants no authority, and preparation alone grants no adoption, recovery or execution.
 

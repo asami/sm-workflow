@@ -500,6 +500,43 @@ replay. Do not infer state or recover a route through status/history/storage.
 Workflow retains mechanical effects. Source edits and mechanical fixtures prove
 no installed route acceptance, genuine task provenance or Phase completion.
 
+## Logical operating profile
+
+For a new Phase Start, pass optional `--profile standard|cost|quality` to the
+installed `startGoalPhase` Operation alongside its unchanged `--input`. The
+bundled caller forwards `--profile` for `--action start` and `--action advance`.
+Advance applies its explicit parameter only to newly issued work in that call;
+existing pending work is recollected unchanged. With no current explicit input,
+a saved explicit Start choice applies, then current typed
+`sm-workflow.goal-phase.profile` configuration, then `standard`.
+
+Standard borrows the existing execution mapping and origin. Cost and quality
+are registered opt-in names whose concrete class bindings must be explicitly
+installed through `sm-workflow.goal-phase.profiles.cost` and
+`sm-workflow.goal-phase.profiles.quality`, using the existing CNCF execution
+mapping schema. Missing mappings/classes/origin are unavailable and never imply
+fallback to standard or another model. Keep model/effort overrides out of skill
+input. Host mappings express supported candidates; they do not grant execution,
+change parent settings or bypass acceptance, checks, independent review or limits.
+No live Terra activation, availability-fetch call or model evaluation follows.
+
+New work includes `work.operatingProfile` and the same saved capture in
+`issuedWorkContext.context.operatingProfile` (wire aliases may use underscores).
+Use the existing caller `prepareExecution`/`recordExecution` mechanism: it consumes
+the captured concrete route, rather than resolving a later supplied mapping.
+The capture records logical identity/revision/source, configured model/controls
+(including effort when configured), selected descriptor and mapping revision.
+Those values are planned/configured selection, not observed model execution.
+Actual model/effort remains unknown unless genuine execution evidence supplies it.
+Historical work without this capture retains its original execution facts.
+
+Cost/quality execution reports unavailable without alternate substitution when
+its chosen executor is unavailable. Standard retains its existing explicitly
+configured finite fallback mechanism, including the unavailable/declined receipt;
+no silent fallback is introduced. Runtime result admission checks the saved
+selected profile against actual execution evidence. Never substitute packaged
+agent TOML settings for an observed executor or acquire new usage for attribution.
+
 ## Journal results and purpose-driven lookup
 
 Consume optional `journalRecording`, automatic `findingRecording.journaled`,
@@ -944,6 +981,28 @@ retain their existing owners. This source guidance does not establish a fresh
 packaged bundle, actual installed-task consumption, successful nonempty runtime
 inputs or AI validation. Those require their separate actual evidence.
 
+### Current-Step necessary-file inventory
+
+For actual runtime-issued implementation or repair with a current Step identity,
+return `decision-needed` with a complete raw `planRevision` Proposal, a fresh
+Plan revision and the actual causal reason when concrete necessary files are
+missing from that Step's inventory. Append only literal current-Step
+`ownedPaths`; preserve Component, repository, purpose, Usage, acceptance,
+checks, dependencies, permitted effects and every other Plan value. Omit derived
+`effectiveAcceptance`.
+
+Runtime evaluates this inventory under standing original-purpose authority
+without a fresh per-file Human grant, manual skill Plan adoption or host
+configuration change. File/workspace/effect permissions remain effective.
+Different ownership, requirements or effects and ongoing/UNKNOWN old work remain
+actual concerns. Preserve valid benign PROGRESSING assessment metadata with no
+requirement or contract change; never strip findings, reports or mixed concerns
+to qualify automatically. Runtime retains Session, original base, completed
+Steps, history and repair counters. It may natively supersede an existing
+unanswered question proven inventory-only, retaining the question without
+fabricating a Human answer.
+
+For a non-inventory business change, use the existing Plan route below.
 When implementation or repair discovers a genuine test, suite, requirement or
 design gap, return `decision-needed` and an optional structured `planRevision`
 Proposal: `{identity, revision, reason, plan}`. Supply the complete raw Plan with
@@ -1100,3 +1159,155 @@ do not authorize replaying development, successful validation or accepted Submit
 Use the exact public description and independently admitted continuation authority;
 UNKNOWN effects remain UNKNOWN until observed. Standalone FIX keeps its own
 uncommitted completion contract.
+
+## Forward standard dispatch and ordinary-work comparison (2026-11-02)
+
+For newly issued work only, the explicit Component setting
+`sm-workflow.goal-phase.dispatch-policy=standard-2026-11-01` captures the new
+logical route. Retain historical absence, old concrete captures and their one
+alternate unchanged. The default setting is absent until normal authorized
+adoption. Do not reinterpret a pending legacy Request as a new-policy dispatch.
+
+The runtime records classification, optional explicit work `nature`, disposition,
+policy revision and finite logical candidates. Nature may be `mechanical`,
+`parent-inline`, `deterministic` or `hardest`; absent nature preserves historical
+classification JSON. Mechanical must be explicit, never inferred from every
+Routine class or a file/line count. SIMPLE coding uses the small role; ordinary
+work uses ordinary; Deep/integrated work uses difficult; explicit hardest uses
+hardest; integrated/Critical work uses difficult. Deterministic work remains an existing native operation, not an AI Task.
+Eligible parent INLINE requires no independent-context obligation. Issued
+DELEGATED and required review remain effective regardless of model similarity.
+
+Use the product-owned `scripts/goal-phase-dispatch.py` adapter and the exact
+captured revision of `skills/sm-goal-phase/dispatch-mappings.json`. Concrete
+assignments live only in this caller mapping. They do not describe available
+models in this installation. `prepare` consumes the unchanged actual Request,
+that mapping, and actual caller-exposed capability rows (`model`, `effort`,
+`availability`, `source`, optional `reason`). Each candidate requires an explicit
+available/unavailable fact; a missing fact returns CAPABILITY_UNKNOWN. Do not
+probe a model with another AI task or infer absence from a role name.
+
+Run this adapter with the existing caller's stable managed CPython >=3.12:
+`uv run --no-cache --managed-python --no-python-downloads --script scripts/goal-phase-dispatch.py <operation> <input.json>`.
+Its script metadata and executable entry select that same environment; importing
+it in-process requires an already selected supported interpreter. An unavailable
+managed interpreter is an environment precondition failure. Do not download an
+interpreter, fall back to system Python or treat that failure as model absence.
+
+`prepare` emits `launch`, the exact supported `collaboration.spawn_agent`
+arguments. Invoke that ordinary tool once and feed those exact arguments and
+its actual `task_name` return (or an exposed `agent_id` alias) to `launched`. The adapter copies the matching native
+role's execution instructions into a fresh context (`agent_type=default`,
+`fork_turns=none`), preserving selected `model` and `reasoning_effort` instead of
+using a fixed Sol Medium role. This grants no new effects. Retain the whole
+adapter state as ordinary caller evidence. `complete` binds the actual agent ID
+and its genuine semantic payload, optional provider observations and retained
+resources. Launch configuration is never provider-observed evidence. Omitted
+observed model/effort stay unknown. `restore` requires the exact original Request
+and returns the retained resolution without reading changed mappings/capabilities.
+The caller forwards the semantic payload through ordinary Submit and retains the
+launch/result artifact under the existing evidence owner; no new workflow loop.
+
+The adapter's `rejected` operation permits another captured candidate only for
+`kind=model-effort-unavailable`, `executionStarted=false` and a genuine typed
+rejection `source`. Policy/permission/config refusal, transport uncertainty,
+timeout, started failure and semantic DECLINED stop. Every candidate is considered
+once. Exhaustion returns UNAVAILABLE. The standard chain is mechanical Luna
+medium -> small Terra medium -> Sol medium -> difficult Sol high -> hardest Sol
+xhigh; ordinary Terra high -> difficult Sol high. Cost/quality retain explicit
+existing mappings; they never inherit this chain. Do not lower effort or change
+generations to manufacture an available candidate. Parent INLINE emits no launch.
+
+Phase-close metrics retain comparable Step cohorts from normal native records.
+Historical missing time, resources and first-pass evidence remain unavailable.
+Caller-retained Task/Step facts may use `NativeCallerPhaseMetrics.compare` with
+an explicit unit/class/window and per-attempt execution references; deduplication
+reuses the existing Phase usage rules. Failed/exhausted/cancelled/deferred and
+abandoned units share the terminal denominator; pending is separate. Mixed
+profiles remain mixed. Missing facts never become zero, completed or a model win.
+
+Select an existing tracked owned Markdown completion destination through
+`sm-workflow.completion.records` and the normal phase-release commit owner. The
+native recording owner retains the end endpoint once before clerical recording,
+appends a compact English source/profile/cohort/limitations summary, and hands
+that same metrics value to close. Reopen reuses the retained plan and endpoints;
+no second sample, close, metrics-only AI call or commit loop is introduced.
+The record states accepted source and pending local closure; it does not invent
+later synchronization. Destination/staging/phase-release authority must already
+be installed. Without it, report the exact host configuration dependency; do not
+write a summary through a private path or claim disposable evidence is durable.
+
+`cost-role-mapping.json` is an explicit existing CNCF mapping example for the
+opt-in cost profile, with no implicit fallback: explicit mechanical coding maps
+to Luna medium, ordinary coding/local review to Terra medium, difficult/integrated
+work to Sol high. Explicit mechanical nature retains the Routine reasoning level
+but carries `CodingEngineeringMechanical` or `CodingProgrammingMechanical`, so
+ordinary Routine coding is not silently assigned Luna. Supply this mapping using
+the existing cost configuration route and its ordinary caller origin. Cost Low
+refinements and new availability machinery remain separate nonblocking work.
+
+For the new standard adapter, `prepare` also requires `repository`, the caller's
+admitted working checkout path; `root` is the product bundle location used to read
+role instructions. `execution_evidence` emits existing WorkflowExecutionEvidence
+fields only after a real bound return, using genuine retained artifact references.
+It does not authenticate or import them. Normal host evidence preparation remains
+required. `inline_complete` binds the actual issued parent context without an
+agent launch.
+
+The dispatch-policy setting also accepts the explicit logical policy object
+`{revision, edges}` (or its JSON string). String `standard-2026-11-01` selects the
+stated default edges. Logical edges must be a finite, acyclic subset of the documented standard edges;
+parent/runtime cannot be availability alternatives. The runtime
+captures those edges with the exact candidate path. The caller mapping's edges
+must contain each captured edge with the same target. Resolve availability only along the captured subset; omitted edges never reappear from the full mapping. A crossed edge is invalid configuration, never absence.
+Concrete model/effort assignments remain caller-owned. Later config changes do
+not revise an already issued policy or a prepared concrete resolution.
+
+For Phase completion records, register each exact literal destination in the
+candidate/staging inventory. Grant its bounded `TreeEntries` read under that same
+`goal-path-N` identity. Keep the existing phase-release `goal-step-N` commit scope;
+do not give its identity a conflicting narrowed read scope. A containing directory
+alone cannot select the record or authorize its read.
+
+New-adapter resources already present in retained caller state can be supplied as
+`NativeCallerPhaseMetrics.DispatchExecution`, bound to the original issued context
+and actual launch ID. `project`/`compare` accept these beside legacy retained
+harness sessions. Comparable work links that execution as
+`continuationId:launch:actualLaunchId`. Missing usage stays unknown; observedModel
+is never filled from configured/launch arguments. These conversions are passive
+caller-library APIs and do not acquire or import usage themselves.
+
+For fresh logical dispatch, configure the genuine caller context identity with
+`sm-workflow.goal-phase.origin-context` alongside the dispatch-policy selection.
+This is a nonblank trimmed string of at most 1,024 characters without controls,
+not a model or provider declaration. No concrete profiles/origin pair is required
+for this logical-only route. If the legacy concrete origin is also supplied, its
+context must agree. An issued legacy Request remains unchanged; these properties
+apply only when the normal owner issues fresh work.
+
+For large public Requests pass `request_artifact` to `prepare`/`dispatch`: the
+caller-supplied absolute path of the exact retained public Request JSON file.
+The adapter compares its decoded value with the original Request before emitting
+launch arguments. Requests above 131,072 serialized characters require this
+reference; smaller Requests may use it too. The bounded launch message points to
+that exact file and instructs the semantic worker to read needed fields. The
+whole unchanged Request remains in adapter state for binding/restoration. The
+reference grants no private workflow-store access and must stay available to the
+worker. Never guess a path, rewrite the WorkOrder or paste full logs into a tool
+message to replace the verified reference.
+
+`launched` preserves the raw tool return and accepts its canonical `task_name`
+or legacy `agent_id`; if both occur, they must agree. Use that actual identity in
+`complete`. Requested model/effort and logical context alone never establish
+provider observations or token usage.
+
+To include genuine already-retained facts in the normal durable Phase record,
+use `sm-workflow.goal-phase.retained-observations` before its first normal
+recording. Its exact closed schema, caps and binding rules are documented in
+`docs/spec/ai-operating-profiles.md`, under “Passive retained observations”. The
+normal owner captures the value once and reuses it after reopening; changed
+configuration cannot revise a recorded completion. Supply source references and
+actual native Session/continuation/Step identities and accepted commit IDs.
+Missing historical time, tokens, provider identity and complete attempt history
+remain unknown. This passive projection permits no extra acquisition, AI call,
+replay, acceptance or process effect.

@@ -13,7 +13,8 @@ import RepositorySyncNativeProgressStore.*
 /** Public owning advance's deterministic connection. Configuration, not the
   * caller, selects this installed route. A nonterminal result is not convergence.
   * @since   Oct.  6, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  3, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeProgression {
@@ -31,8 +32,26 @@ private[smworkflow] object RepositorySyncNativeProgression {
     output <- if (session.started.current.lifecycle == Lifecycle.Completed)
       _retained_terminal_c(session, declaration, core, acknowledgement)
       else session.started.current.suspension match {
+      case None if session.started.current.currentProgression.contains(
+          WorkflowInstancePersistence.ProgressionReference("sync.PurposeContentContinuationAdmitted")) => for {
+        inventory <- RepositorySyncPurposeContentContinuation.advanceC(continuationstore, session.started.current)
+        output <- RepositorySyncPurposeRuntime.advanceC(continuationstore, inventory.record, inventory.payload.before,
+          validationPolicy, convergence, review,
+          (stage, observed) => progressC(continuationstore, stage.record, observed, conflicts, validationPolicy, review, convergence, repair))
+      } yield output
+      case None if session.started.current.currentProgression.contains(
+          WorkflowInstancePersistence.ProgressionReference("sync.FormalFailureContinuationAdmitted")) => for {
+        policy <- validationPolicy.map(Consequence.success).getOrElse(invalid("formal continuation requires current fixed validation bindings"))
+        prepared <- RepositorySyncFormalFailureContinuation.advanceC(continuationstore, session.started.current, policy)
+        output <- if (prepared.payload.purposes.nonEmpty)
+          RepositorySyncPurposeRuntime.advanceC(continuationstore, prepared.record, prepared.payload.before,
+            validationPolicy, convergence, review,
+            (stage, observed) => progressC(continuationstore, stage.record, observed, conflicts, validationPolicy, review, convergence, repair))
+          else pendingMergeC(continuationstore, prepared, validationPolicy, review, convergence,
+            RepositorySyncFormalFailureContinuation.namespace(prepared.payload.formalFailure.get.target), repair)
+      } yield output
       case Some(boundary) if boundary.completion.value == "repository-purpose-completion-v1" =>
-        continuationstore.loadC("purpose-inventory").flatMap {
+        continuationstore.currentPurposeInventoryC(session.started.current).flatMap {
           case Some(inventory) => RepositorySyncPurposeRuntime.advanceC(continuationstore, session.started.current,
             inventory.payload.before, validationPolicy, convergence, review,
             (stage, observed) => progressC(continuationstore, stage.record, observed, conflicts, validationPolicy, review, convergence, repair))
@@ -40,17 +59,33 @@ private[smworkflow] object RepositorySyncNativeProgression {
         }
       case Some(boundary) => _pending_c(session, boundary, core)
       case None if session.started.current.currentProgression.exists(p =>
+          Set("sync.MergeConflicted", "sync.MergeResolutionAdmitted", "sync.ConflictDecisionRequired")(p.value)) =>
+        conflicts.map(_.advanceC(identity, core)).getOrElse(Consequence.success(NativeWorkflowOperationOutput.repositoryWait(identity,
+          "Actual merge conflict retained; owning semantic/Human completion is still required. No automatic conflict choice.",
+          session.started.current.currentProgression.get.value.stripPrefix("sync."))))
+      case None if session.started.current.currentProgression.exists(p =>
           Set("sync.PurposeRepairRequired", "sync.ReviewRepairRequired", "sync.RepairProposalAdmitted")(p.value)) &&
           session.started.current.history.exists(_.currentProgression.exists(_.value.startsWith("sync.Purpose"))) =>
         repair.map(_.advanceC(identity, core)).getOrElse(Consequence.success(NativeWorkflowOperationOutput.repositoryWait(identity,
           "Actual purpose repair requires its installed native FIX policy/owner; failed checks and findings remain unresolved", "purpose-repair-unavailable")))
       case None if RepositorySyncPurposeRuntime.selected(session.started.current) =>
-        continuationstore.loadC("purpose-inventory").flatMap {
+        continuationstore.currentPurposeInventoryC(session.started.current).flatMap {
           case Some(inventory) => RepositorySyncPurposeRuntime.advanceC(continuationstore, session.started.current,
             inventory.payload.before, validationPolicy, convergence, review,
             (stage, observed) => progressC(continuationstore, stage.record, observed, conflicts, validationPolicy, review, convergence, repair))
           case None => invalid("retained purpose continuation has no actual inventory")
         }
+      case None if session.started.current.currentProgression.contains(
+          WorkflowInstancePersistence.ProgressionReference("sync.ReviewInputContinuationAdmitted")) => validationPolicy match {
+        case Some(policy) => RepositorySyncReviewInputContinuation.advanceC(continuationstore, session.started.current, policy, review)
+        case None => invalid("adopted review-input continuation requires its current fixed validation policy")
+      }
+      case None if session.started.current.currentProgression.contains(
+          WorkflowInstancePersistence.ProgressionReference("sync.RequiredLintContinuationAdmitted")) => validationPolicy match {
+        case Some(policy) => RepositorySyncRequiredLintContinuation.advanceC(continuationstore, session.started.current,
+          policy, review, convergence, repair)
+        case None => invalid("adopted required-lint continuation requires its current fixed validation policy")
+      }
       case None if continuation.nonEmpty => validationPolicy match {
         case Some(policy) => RepositorySyncValidationContinuation.advanceC(continuationstore, continuation.get,
           session.started.current, policy, convergence)
@@ -67,12 +102,21 @@ private[smworkflow] object RepositorySyncNativeProgression {
           WorkflowInstancePersistence.ProgressionReference("sync.PendingMergePrepared"))) => for {
         store <- bindC(session, declaration, core, acknowledgement)
         candidate <- store.currentMergeCandidateC(session.started.current)
+        revised <- RepositorySyncReviewInputContinuation.latestValidatedC(store, session.started.current, candidate)
+        _ <- revised match {
+          case Some(source) if session.started.current.currentProgression.exists(p =>
+              Set("sync.MergeValidated", "sync.ReviewDecisionRequired", "sync.ReviewAccepted")(p.value)) =>
+            validationPolicy.map(policy => RepositorySyncReviewInputContinuation.qualifyCurrentC(
+            store, session.started.current, source, policy)).getOrElse(invalid("revised validation requires current selected validation bindings"))
+          case _ => Consequence.unit
+        }
         accepted <- review.fold(Consequence.success(Option.empty[Stage]))(_.acceptedC(identity, core))
         output <- (accepted, convergence) match {
           case (Some(value), Some(authority)) => for {
             journal <- DevelopmentJournalMergeAssessment.recordC(store, value.payload, value.record)
             result <- RepositorySyncNativeConvergence.advanceC(store, value, authority, validationPolicy)
           } yield result.copy(journalRecording = journal)
+          case _ if revised.nonEmpty => review.map(_.advanceC(identity, core)).getOrElse(invalid("revised validation requires installed independent review"))
           case _ => pendingMergeC(store, candidate.pending, validationPolicy, review, convergence, candidate.namespace, repair)
         }
       } yield output
@@ -206,7 +250,10 @@ private[smworkflow] object RepositorySyncNativeProgression {
       else if (integrated.payload.stage == "PendingMergePrepared")
         "Actual uncommitted merge retained; validation and required review must precede merge commit and final convergence."
       else "Actual local integration retained; selected validation and non-force final convergence are not complete. No semantic merge review is needed."
-    wire <- if (conflicts.nonEmpty && integrated.payload.stage == "MergeConflicted")
+    wire <- if (integrated.payload.stage == "MergeConflicted" && fetched.history.exists(
+        _.currentProgression.exists(_.value == "sync.PurposeInstalled")))
+      Consequence.success(NativeWorkflowOperationOutput.repositoryWait(integrated.record.identity.value, detail, integrated.payload.stage))
+      else if (conflicts.nonEmpty && integrated.payload.stage == "MergeConflicted")
       conflicts.get.advanceC(store.identity, store.core)
       else if (integrated.payload.stage == "PendingMergePrepared")
         pendingMergeC(store, integrated, validationPolicy, review, convergence, "", repair)

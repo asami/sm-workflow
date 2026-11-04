@@ -15,7 +15,8 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** The public caller selects a declared target and returns bounded semantics.
   * Process selection, effect admission, completion and recollection are runtime work.
   * @since   Oct. 26, 2026
-  * @version Oct. 27, 2026
+  *  version Oct. 27, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object LocalPublicationService {

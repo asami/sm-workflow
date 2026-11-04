@@ -16,7 +16,8 @@ import NativeExternalEvidence.Purpose
   * effect scope is distinct from review/Human semantic attestation. No factory
   * actor, dummy verifier, success default or reply-decoded authority is used.
   * @since   Oct.  7, 2026
-  * @version Oct. 27, 2026
+  *  version Oct. 27, 2026
+  * @version Nov.  3, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: NativeExternalEvidence.Reader) {
@@ -111,6 +112,10 @@ private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: Nativ
   val repositoryValidationContinuation: RepositorySyncValidationContinuation.EvidencePort = new RepositorySyncValidationContinuation.EvidencePort {
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
       _admit_evidence_c(core, Purpose.RepositoryValidationContinuation, key(reference.identity, reference.revision), binding)
+  }
+  val repositoryRepairScopeCorrection: RepositorySyncRepairScopeCorrection.EvidencePort = new RepositorySyncRepairScopeCorrection.EvidencePort {
+    def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
+      _admit_evidence_c(core, Purpose.RepositoryRepairScopeCorrection, key(reference.identity, reference.revision), binding)
   }
   val wholePhaseCandidateRecovery: GoalPhaseWholePhaseCandidateRecovery.EvidencePort = new GoalPhaseWholePhaseCandidateRecovery.EvidencePort {
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json): Consequence[Unit] =
@@ -228,15 +233,17 @@ private[smworkflow] object ThreeWorkflowExternalEvidencePorts {
           decision.request.input != null && decision.request.input.exists(v => v != null && v.value != null && v.value.conflict != null) =>
         val input = decision.request.input.get.value
         val c = input.conflict
-        if (c.conflicts == null || c.conflicts.exists(e => e == null || e.base == null || e.local == null || e.remote == null ||
-              Vector(e.identity, e.path, e.base.identity, e.local.identity, e.remote.identity, e.mode).exists(_ == null)) ||
+        if (c.conflicts == null || c.conflicts.exists(e => e == null || e.base == null ||
+              (e.base.toVector ++ Vector(e.local, e.remote)).exists(b => b == null || b.identity == null) ||
+              Vector(e.identity, e.path, e.mode).exists(_ == null)) ||
             Vector(input.requestingResultIdentity, input.requestingResultRevision, c.instanceIdentity, c.conflictRevision, c.localTip, c.remoteTip).exists(_ == null)) {
           Consequence.stateConflict("Repository Human selected conflict is absent")
         } else Consequence.success(Json.obj("requestingResult" -> Json.obj("identity" -> Json.fromString(input.requestingResultIdentity),
           "revision" -> Json.fromString(input.requestingResultRevision)), "conflict" -> Json.obj(
           "instanceIdentity" -> Json.fromString(c.instanceIdentity), "conflictRevision" -> Json.fromString(c.conflictRevision),
           "localTip" -> Json.fromString(c.localTip), "remoteTip" -> Json.fromString(c.remoteTip), "conflicts" -> Json.fromValues(c.conflicts.map(e =>
-            Json.obj("identity" -> Json.fromString(e.identity), "path" -> Json.fromString(e.path), "base" -> Json.fromString(e.base.identity),
+            Json.obj("identity" -> Json.fromString(e.identity), "path" -> Json.fromString(e.path),
+              "base" -> e.base.map(b => Json.fromString(b.identity)).getOrElse(Json.Null),
               "local" -> Json.fromString(e.local.identity), "remote" -> Json.fromString(e.remote.identity), "mode" -> Json.fromString(e.mode)))))))
       case _ => Consequence.stateConflict("Repository Human evidence has no actual conflict question")
     }

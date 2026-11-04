@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 import re
 import stat
@@ -27,11 +28,12 @@ DOCS = ('native-host-execution', 'runtime-owned-local-publication', 'goal-phase-
         'goal-task-runtime', 'task-fix-delivery', 'standalone-fix-runtime',
         'standalone-fix-acceptance', 'standalone-review-fix-runtime',
         'delegate-task', 'native-delegate-task-caller', 'commit-completion-and-recovery')
-SCRIPTS = ('native-goal-command.py', 'native-goal-authority.py', 'migrate-runtime-caller-format.py')
+SCRIPTS = ('native-goal-command.py', 'native-goal-authority.py', 'migrate-runtime-caller-format.py', 'goal-phase-dispatch.py')
 PAYLOAD_PATHS = (tuple('skills/' + name + '/SKILL.md' for name in SKILLS)
                  + tuple('docs/spec/' + name + '.md' for name in DOCS)
                  + tuple('scripts/' + name for name in SCRIPTS)
-                 + tuple('agents/' + name + '.toml' for name in AGENTS))
+                 + tuple('agents/' + name + '.toml' for name in AGENTS)
+                 + ('skills/sm-goal-phase/dispatch-mappings.json', 'skills/sm-goal-phase/cost-role-mapping.json'))
 INSTALLER = 'install-sm-workflow.py'
 
 
@@ -52,11 +54,15 @@ def validate_payload(payload):
         if not body or len(body) > 2 * 1024 * 1024:
             raise ValueError('empty or oversized bundle member: ' + name)
         text = body.decode('utf-8')
-        if name.startswith('skills/'):
+        if name.startswith('skills/') and name.endswith('/SKILL.md'):
             expected = name.split('/')[1]
             front = re.match(r'\A---\n(.*?)\n---(?:\n|$)', text, re.S)
             if not front or not re.search(r'^name: ' + re.escape(expected) + r'$', front[1], re.M):
                 raise ValueError('invalid skill identity/frontmatter: ' + name)
+        if name.startswith('skills/') and name.endswith('.json'):
+            mapping = json.loads(text)
+            if not isinstance(mapping, dict) or not isinstance(mapping.get('revision'), str):
+                raise ValueError('invalid versioned caller mapping: ' + name)
         if name.startswith('agents/'):
             agent = tomllib.loads(text)
             allowed = {'name', 'description', 'model', 'model_reasoning_effort',

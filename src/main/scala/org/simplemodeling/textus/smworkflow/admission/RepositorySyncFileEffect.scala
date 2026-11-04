@@ -10,7 +10,7 @@ import RepositorySyncNativeConflictInput as I
 /** Assigned semantic text effects in the existing repository workspace.
   * CNCF owns acquisition and installation; saved workflow intent owns no replay.
   * @since   Oct. 15, 2026
-  * @version Oct. 15, 2026
+  * @version Nov.  3, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncFileEffect {
@@ -66,7 +66,7 @@ private[smworkflow] object RepositorySyncFileEffect {
     _ <- if (policy != null) policy.validateC else invalid("semantic policy is absent")
     _ <- if (request != null && Vector(request.instance, request.revision)
         .forall(s => s != null && s.nonEmpty && s.trim == s) && request.files != null &&
-        request.files.nonEmpty && request.files.size <= 128 &&
+        request.files.nonEmpty &&
         request.files.forall(file => file != null && I.relative(file.path) && policy.semanticPaths(file.path) &&
           valid(file.replacement) && file.expected != null &&
           file.expected.isEmpty == capture && file.expected.forall(valid)) &&

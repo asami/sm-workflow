@@ -11,9 +11,10 @@ import io.circe.syntax.*
 import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.ContextReference
 
-/** An explicit projection of an independently retained original-purpose grant.
-  * Neither Start selection, a path prefix nor host candidate registration creates
-  * this grant. It lives in the existing external authority input, not a new ledger.
+/** Legacy explicit direction projection, retained for existing manual receipts.
+  * Automatic same-purpose inventory uses the actual native selected execution
+  * and semantic result through GoalPhaseCurrentInventoryContinuation; it never
+  * manufactures this external grant or records a Human answer.
   */
 private[smworkflow] object GoalPhaseInventoryAuthority {
   val purpose = "goal-phase-inventory-authority"

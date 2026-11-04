@@ -18,7 +18,7 @@ import WorkflowManagedProcessExecution as E
 /** Purpose proposals consume genuine work records and native content facts.
   * Neither grouping nor an old record establishes candidate acceptance.
   * @since   Oct. 28, 2026
-  * @version Oct. 28, 2026
+  * @version Nov.  3, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncPurpose {
@@ -36,6 +36,14 @@ private[smworkflow] object RepositorySyncPurpose {
     original: Option[String], indexed: Option[String], worktree: Option[String], unexamined: Option[String])
   final case class Request(repository: String, root: String, branch: String, parent: String, indexTree: String,
     files: Vector[File], records: Vector[SourceRecord])
+  given source_encoder: Encoder[Source] = io.circe.generic.semiauto.deriveEncoder[Source]
+  given source_decoder: Decoder[Source] = io.circe.generic.semiauto.deriveDecoder[Source]
+  given source_record_encoder: Encoder[SourceRecord] = io.circe.generic.semiauto.deriveEncoder[SourceRecord]
+  given source_record_decoder: Decoder[SourceRecord] = io.circe.generic.semiauto.deriveDecoder[SourceRecord]
+  given file_encoder: Encoder[File] = io.circe.generic.semiauto.deriveEncoder[File]
+  given file_decoder: Decoder[File] = io.circe.generic.semiauto.deriveDecoder[File]
+  given request_encoder: Encoder[Request] = io.circe.generic.semiauto.deriveEncoder[Request]
+  given request_decoder: Decoder[Request] = io.circe.generic.semiauto.deriveDecoder[Request]
   final case class Content(path: String, text: Option[String])
   final case class Group(identity: String, purpose: String, message: String, dependencies: Vector[String],
     content: Vector[Content], inseparable: Vector[String], rationale: String)
@@ -46,7 +54,8 @@ private[smworkflow] object RepositorySyncPurpose {
   final case class Progress(request: Request, plan: Option[Result] = None, cursor: Int = 0, attempt: Int = 0, slotCursor: Int = 0, baselineTree: Option[String] = None,
     candidate: Option[Candidate] = None, receipts: Vector[RepositorySyncNativeMergeValidation.Receipt] = Vector.empty,
     assessment: Option[GoalPhaseStepAssessment.Result] = None, commits: Vector[String] = Vector.empty,
-    selection: Option[RepositorySyncProgramImpact.Selection] = None, review: Option[org.goldenport.cncf.workflow.ContextReference] = None, reusable: Vector[RepositorySyncNativeMergeValidation.Receipt] = Vector.empty, effects: Vector[Json] = Vector.empty)
+    selection: Option[RepositorySyncProgramImpact.Selection] = None, review: Option[org.goldenport.cncf.workflow.ContextReference] = None, reusable: Vector[RepositorySyncNativeMergeValidation.Receipt] = Vector.empty, effects: Vector[Json] = Vector.empty,
+    hostContinuation: Option[RepositorySyncFormalFailureContinuation.Direction] = None)
 
   private final class Codec[A: Encoder: Decoder](val typeIdentity: String) extends WorkflowResultJsonV1.PayloadCodec[A] {
     def encode(value: A): Json = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.repository-purpose.v1"), "payload" -> value.asJson)
@@ -58,8 +67,15 @@ private[smworkflow] object RepositorySyncPurpose {
   }
   val inputCodec: WorkflowResultJsonV1.PayloadCodec[Request] = new Codec("RepositorySyncPurposeRequest")
   val resultCodec: WorkflowResultJsonV1.PayloadCodec[Result] = new Codec("RepositorySyncPurposeResult")
-  given Encoder[Progress] = io.circe.generic.semiauto.deriveEncoder
-  given Decoder[Progress] = io.circe.generic.semiauto.deriveDecoder
+  given Encoder[Progress] = io.circe.generic.semiauto.deriveEncoder[Progress].mapJson(_.mapObject(_.filter {
+    case ("hostContinuation", value) => !value.isNull
+    case _ => true
+  }))
+  private val _progress_decoder: Decoder[Progress] = io.circe.generic.semiauto.deriveDecoder
+  given Decoder[Progress] = Decoder.instance(cursor =>
+    if (cursor.downField("hostContinuation").focus.exists(_.isNull))
+      Left(io.circe.DecodingFailure("Purpose host continuation cannot be explicitly null", cursor.history))
+    else _progress_decoder(cursor))
 
   val declaration: ComponentParameterKey[Policy] = ComponentParameterKey.optional("sm-workflow.repository-sync.dirty-purposes",
     ComponentParameterDecoder {
@@ -133,7 +149,11 @@ private[smworkflow] object RepositorySyncPurpose {
           group.content.map(_.path).distinct == group.content.map(_.path) && group.content.forall(content => content != null &&
             files(content.path) && content.text != null &&
             content.text.forall(text => text != null && !text.contains('\u0000') && UTF_8.newEncoder().canEncode(text)) &&
-            request.files.find(_.path == content.path).exists(_.unexamined.isEmpty)) &&
+            request.files.find(_.path == content.path).exists(file => file.unexamined.isEmpty ||
+              (file.unexamined.contains("binary or oversized worktree text remains unexamined") &&
+                file.worktree.exists(text => text != null && !text.contains('\u0000') && UTF_8.newEncoder().canEncode(text)) &&
+                Vector(file.original, file.indexed).forall(_.forall(text =>
+                  text != null && !text.contains('\u0000') && UTF_8.newEncoder().canEncode(text)))))) &&
           group.inseparable != null && group.inseparable.distinct == group.inseparable &&
           (group.inseparable.isEmpty || (group.inseparable.size >= 2 && group.rationale.trim.nonEmpty))) &&
         result.groups.zipWithIndex.forall { case (group, index) => group.dependencies.forall(id =>

@@ -15,13 +15,15 @@ import org.goldenport.protocol.Request
 import org.goldenport.protocol.spec as spec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms
-import org.simplemodeling.textus.smworkflow.value.{GoalPhaseStartInput, RepositorySyncStartInput}
+import org.simplemodeling.textus.smworkflow.value.{GoalPhaseStartInput, RepositorySyncStartInput,
+  RepositorySyncValidationContinuationAdoptionInput}
 
 /** Standard composition contains policies and logical destinations, never a
   * selected Phase or Plan. Read actual Start input or the retained native run
   * only when its Operation executes, within that call's ordinary storage/UoW.
   * @since   Oct. 27, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  3, 2026
   */
 private[smworkflow] object StandardWorkflowRuntime {
   private final case class Shared(persistence: GoalPhaseRuntimeParameters.Persistence,
@@ -158,7 +160,7 @@ private[smworkflow] object StandardWorkflowRuntime {
     target <- targetC(creation)
     selectedInput <- if (request.operation == "startRepositorySync") StandardRepositorySyncIntent.inputC(request, target).map(_ -> true)
       else for {
-        session <- NativeWorkflowOperationInput.textC(request, "sessionId")
+        session <- _repository_session_c(request, core)
         context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(session))
         storage <- WorkflowComponentStorage.bindC(creation, SmWorkflowComponent.componentId, p.configuration,
           Vector(definition), p.instances, p.continuations)
@@ -175,7 +177,9 @@ private[smworkflow] object StandardWorkflowRuntime {
     purposePolicy <- RepositorySyncPurpose.resolveC(parameters)
     publication <- parameters.resolve(LocalPublicationRuntime.declaration).map(_.value)
     validation = if (selectedInput._2) programInputs.fold(documentValidation)(p => documentValidation.copy(
-      identity = "impact-repository-sync", mode = "required", checks = p.checks, impact = Some(p))) else repositoryValidation
+      identity = "impact-repository-sync", mode = "required", reason = p.reason, checks = p.checks, impact = Some(p),
+      assessment = documentValidation.assessment.map(_.copy(
+        lintReason = p.reason)))) else repositoryValidation
     goalDefinition <- GoalPhaseRuntimeCatalog.loadC()
     evidenceStorage <- WorkflowComponentStorage.bindC(creation, SmWorkflowComponent.componentId, p.configuration,
       Vector(goalDefinition.definition), p.instances, p.continuations)
@@ -192,20 +196,25 @@ private[smworkflow] object StandardWorkflowRuntime {
       nativeReview = Some(RepositorySyncNativeMergeReview.Installation(repositoryReview, shared.ports.repositoryReview)),
       convergence = Some(if (selectedInput._2) StandardRepositorySyncIntent.authority else shared.ports.convergence),
       humanConflict = if (paths.isEmpty) None else Some(RepositorySyncHumanConflict.Installation(shared.ports.repositoryHuman)),
-      repositoryContinuation = Some(RepositorySyncValidationContinuation.Installation(shared.ports.repositoryValidationContinuation)))
+      repositoryContinuation = Some(RepositorySyncValidationContinuation.Installation(shared.ports.repositoryValidationContinuation)),
+      repositoryRepairScopeCorrection = Some(RepositorySyncRepairScopeCorrection.Installation(shared.ports.repositoryRepairScopeCorrection)))
     selected <- RuntimeGitSelections.repositoryC(NativeWorkflowSessionInput.repository(
       NativeWorkflowResultInput.repository(service, creation, declaration, definition), creation, declaration, definition, runtimeIntent = true), paths)
   } yield StandardRepositorySyncIntent.bindInput(selected, input)
 
   private def repositoryPathsC(declaration: RepositorySyncManagedFetch.Declaration,
     definition: DefinitionBinding, request: Request, core: ActionCall.Core): Consequence[Set[String]] = for {
-    identity <- NativeWorkflowOperationInput.textC(request, "sessionId")
+    identity <- _repository_session_c(request, core)
     context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(identity))
     selectedcore = core.copy(executionContext = context)
     session <- RepositorySyncManagedFetch.sessionC(identity, declaration, definition, selectedcore)
     boundary = session.started.current.history.reverseIterator.flatMap(_.suspension).find { value =>
       val name = value.continuationIdentity.value
-      name.startsWith(identity + ":native-review:") || name.startsWith(identity + ":native-triage:")
+      val prefix = Vector(identity + ":native-review:", identity + ":native-triage:").find(name.startsWith)
+      val revision = prefix.map(name.stripPrefix).filter(_.matches("[1-9][0-9]*")).flatMap(_.toLongOption)
+      session.started.current.identity.value == identity && revision.exists(source =>
+        session.started.current.history.exists(entry => entry.revision.value == source &&
+          entry.currentProgression.exists(_.value == "sync.MergeValidated")))
     }
     purposestore <- RepositorySyncNativeProgressStore.bindC(session, declaration, selectedcore, _ => Consequence.unit)
     purpose <- purposestore.currentPurposeC(session.started.current)
@@ -222,7 +231,8 @@ private[smworkflow] object StandardWorkflowRuntime {
         unmerged <- WorkflowManagedProcessExecution.executeGitC(selectedcore,
           org.goldenport.cncf.processexecution.GitOperation.UnmergedIndex).flatMap(_.valueC)
         selected <- if (unmerged.nonEmpty || !session.started.current.currentProgression.exists(p =>
-            Set("sync.PendingMergePrepared", "sync.ValidationChecking", "sync.ValidationRepairRequired", "sync.MergeValidated")(p.value))) Consequence.success(unmerged.map(_.path.value).toSet)
+            Set("sync.PendingMergePrepared", "sync.RequiredLintContinuationAdmitted", "sync.ReviewInputContinuationAdmitted", "sync.ValidationChecking", "sync.ValidationRepairRequired", "sync.MergeValidated",
+              "sync.RepairProposalAdmitted", "sync.MaterializingRepair")(p.value))) Consequence.success(unmerged.map(_.path.value).toSet)
           else for {
             store <- RepositorySyncNativeProgressStore.bindC(session, declaration, selectedcore, _ => Consequence.unit)
             candidate <- store.currentMergeCandidateC(session.started.current)
@@ -236,7 +246,42 @@ private[smworkflow] object StandardWorkflowRuntime {
           } yield (localPaths ++ remotePaths).map(_.value).toSet
       } yield selected
     }
-  } yield paths
+    supplied <- if (Set(RepositorySyncRepairScopeCorrection.prepareOperation,
+        RepositorySyncRepairScopeCorrection.adoptionOperation)(request.operation))
+      RepositorySyncRepairScopeCorrection.requestedInventoryPathsC(request, core) else Consequence.success(Vector.empty[String])
+    correction = session.started.current.history.reverseIterator.find(_.causation.value.startsWith(
+      RepositorySyncRepairScopeCorrection.resumeCause))
+    inventory <- correction match {
+      case None => Consequence.success(Vector.empty[String])
+      case Some(entry) => for {
+        adapter <- session.storage.bindWorkOrderSupersessionC(RepositorySyncNativeMergeRepairContinuation.completionOperation,
+          RepositorySyncNativeMergeRepair.inputCodec, RepositorySyncRepairScopeCorrection.checkpointCodec)
+        old = entry.causation.value.stripPrefix(RepositorySyncRepairScopeCorrection.resumeCause)
+        retained <- adapter.loadRetainedC(org.goldenport.cncf.workflow.ContinuationIdentity(old),
+          session.started.current.identity)(using context)
+          .flatMap(_.map(Consequence.success).getOrElse(invalid("Automatic inventory has no actual native supersession")))
+        target = retained.receipt.payload.direction.target
+        _ <- if (target.sessionId == identity && target.context == session.context &&
+            retained.receipt.nextRevision == entry.revision && RepositorySyncRepairScopeCorrection.validTarget(target))
+          Consequence.unit else invalid("Automatic inventory crosses the current Session or retained history")
+        latest = session.started.current.history.reverseIterator.flatMap(_.suspension).find(
+          _.continuationIdentity.value.startsWith(identity + ":native-repair:"))
+      } yield if (latest.exists(value => RepositorySyncRepairScopeCorrection.budgetIdentity(
+        value.continuationIdentity.value) == old)) target.inventory.toVector.flatMap(_.paths) else Vector.empty[String]
+    }
+  } yield paths ++ (if (declaration.runtimeCleanSync) supplied ++ inventory else Vector.empty[String])
+
+  private def _repository_session_c(request: Request, core: ActionCall.Core): Consequence[String] =
+    if (Set(RepositorySyncRepairScopeCorrection.adoptionOperation,
+        RepositorySyncRepairScopeCorrection.prepareOperation)(request.operation))
+      RepositorySyncRepairScopeCorrection.sessionC(request, core)
+    else if (request.operation == RepositorySyncValidationContinuation.adoptionOperation)
+      NativeWorkflowOperationInput.valueC[RepositorySyncValidationContinuationAdoptionInput](request, "input").flatMap { input =>
+        if (input != null && input.sessionId != null && input.sessionId.nonEmpty &&
+            input.sessionId.trim == input.sessionId && !input.sessionId.exists(_.isControl)) Consequence.success(input.sessionId)
+        else invalid("Repository validation continuation adoption requires its exact input Session identity")
+      }
+    else NativeWorkflowOperationInput.textC(request, "sessionId")
 
   private def boundedC(creation: ComponentCreate, shared: Shared, request: Request,
     core: ActionCall.Core): Consequence[spec.ServiceDefinition] = for {

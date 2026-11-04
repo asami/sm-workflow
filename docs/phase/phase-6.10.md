@@ -165,3 +165,62 @@ resubmission, success replay, additional AI decision or mandatory Terra trial is
 part of this plan update. Runtime Git/SBT/publication ownership is unchanged.
 
 Handoff: [cost refinement development handoff](../journal/2026/11/2026-11-02-phase-6.10-cost-profile-refinement-handoff.md).
+
+## Optional local-experiment configuration alongside M2A — 2026-11-02
+
+Track this as optional planned work, not a Phase 6.10 completion condition.
+Reuse M2A's classification, versioned mapping and caller dispatch connection.
+The [selection specification](../spec/ai-operating-profiles.md#local-experiment-selection--2026-11-02)
+defines the registered name `local-experiment` and configuration key
+`sm-workflow.goal-phase.profiles.local-experiment`.
+
+Deliver the actual executable mapping configuration, not only the descriptive
+[candidate JSON](../../examples/ai-profiles/local-experimental-candidate.json).
+Start from the cost assignment configuration and replace only otherwise-Luna
+work as follows; preserve every Terra/Sol assignment and the existing parent:
+
+| Otherwise-Luna work | Local candidate | Effort |
+| --- | --- | --- |
+| Bounded classification, extraction or summary | qwen3.5:4b | none |
+| Exact prescribed mechanical code edits with settled semantics | gpt-oss:20b | low |
+| Bounded rule-guided hygiene | gpt-oss:20b | medium |
+
+1. Retain the already-authored logical registration/configuration wiring; it is
+   source work, not a tested or installed runtime claim.
+2. Supply a loadable versioned mapping through the existing configuration/caller
+   mechanism, using M2A's actual typed classifications. Materialize cost-derived
+   assignments in that configuration; no new runtime inheritance mechanism is
+   required. Do not replace a collapsed Routine class containing non-Luna work.
+3. Document the mapping location and explicit selection procedure so that, once
+   the ordinary M2A connection is delivered and the local models are available,
+   the user can select the profile without another mapping-design task. Record
+   any still-missing adapter/classification capability accurately; a placeholder
+   configuration is not delivery of the executable mapping.
+
+Tests, compilation, model trials, benchmarks, publication/activation solely for
+this optional addition are outside this request. Existing mandatory development
+obligations remain unchanged; do not add local-model qualification to M4 or the
+Phase acceptance checklist. Leave the profile unselected and live defaults
+unchanged. No implicit cloud fallback or automatic retry of failed/unknown work.
+
+Schedule this configuration work at a suitable unissued boundary alongside M2A;
+do not stop active work or make it wait for the optional mapping. Preserve existing
+Goal/Session/Plan, issued assignments, accepted results, history, repair counts
+and successful verification. No restart, accepted-result resubmission, counter
+reset or successful-check replay is needed for this planning addition.
+
+## Forward implementation source connection — 2026-11-02
+
+The adopted remaining M4 carrier now has source for the ordered M2A logical
+policy/caller adapter, ordinary-work comparison and integrated completion record.
+The explicit future-only dispatch revision, versioned caller mappings and exact
+launch/return linkage are documented in the sm-goal-phase skill. Existing issued
+captures and accepted M1/M2/M3 remain historical facts; this source change does
+not select live configuration or qualify a provider.
+
+`Phase610InstalledProfilesSpec` is the selected affected-route specification. It
+covers native fresh capture, caller tool arguments/returns, finite absence edges,
+cohort denominators, actual native close/reopen and the existing durable Phase
+record/release-commit route. These specifications are authored here; runtime
+validation, installed qualification, independent review and Phase acceptance are
+still owed. No checklist item is marked accepted by implementation.

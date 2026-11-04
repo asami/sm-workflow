@@ -38,7 +38,7 @@ private[admission] object DependencySourceRevisionSpecificationFixture {
 /** Fresh pure source-selection fixtures do not claim actual Human evidence.
   * @since   Oct. 26, 2026
   *  version Oct. 27, 2026
-  * @version Nov.  1, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

@@ -32,7 +32,7 @@ import GoalPhasePrerequisitePublicationUnknownRecovery as W
   * publication. Direction appends no Git or SBT effect; Advance owns the bounded
   * effect chain and the ordinary prerequisite owner owns publication.
   * @since   Nov.  1, 2026
-  * @version Nov.  1, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhasePrerequisitePublicationRecovery {

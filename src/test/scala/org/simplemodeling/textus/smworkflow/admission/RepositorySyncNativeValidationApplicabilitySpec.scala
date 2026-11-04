@@ -17,7 +17,8 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Actual selected facts, not policy metadata or re-encoded body certificates.
   * @since   Oct.  8, 2026
-  * @version Oct. 24, 2026
+  *  version Oct. 24, 2026
+  * @version Nov.  3, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

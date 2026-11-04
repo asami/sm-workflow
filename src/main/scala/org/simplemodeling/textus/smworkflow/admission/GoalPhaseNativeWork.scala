@@ -16,36 +16,11 @@ import IncrementalSbtDiagnosisRepair.given
   * decoded from an AI reply. Other work kinds will be selected by owning advance
   * only after their actual native predecessor has been connected.
   * @since   Oct.  6, 2026
+  *  version Oct. 29, 2026
   * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWork {
-  /** Retained v5 metadata only; this finite reader does not select execution. */
-  final case class RetainedOperatingSelection(identity: String, revision: String, source: String)
-  object RetainedOperatingSelection {
-    given Encoder[RetainedOperatingSelection] = deriveEncoder
-    private val _decoder: Decoder[RetainedOperatingSelection] = deriveDecoder
-    given Decoder[RetainedOperatingSelection] = Decoder.instance { cursor =>
-      _decoder(cursor).flatMap(value =>
-        if (valid(value) && value.asJson == cursor.value) Right(value)
-        else Left(DecodingFailure("Unsupported retained operating selection", cursor.history)))
-    }
-    def valid(value: RetainedOperatingSelection): Boolean = value != null &&
-      value.identity == "standard" && value.revision == "1" && value.source == "default"
-  }
-  final case class RetainedOperatingProfile(selection: RetainedOperatingSelection, reasoningClass: String)
-  object RetainedOperatingProfile {
-    given Encoder[RetainedOperatingProfile] = deriveEncoder
-    private val _decoder: Decoder[RetainedOperatingProfile] = deriveDecoder
-    given Decoder[RetainedOperatingProfile] = Decoder.instance { cursor =>
-      _decoder(cursor).flatMap(value =>
-        if (valid(value) && value.asJson == cursor.value) Right(value)
-        else Left(DecodingFailure("Unsupported retained operating profile", cursor.history)))
-    }
-    def valid(value: RetainedOperatingProfile): Boolean = value != null &&
-      RetainedOperatingSelection.valid(value.selection) &&
-      (value.reasoningClass == "CodingEngineeringDeep" || value.reasoningClass == "ReviewCritical")
-  }
   final case class CheckFailureContext(changedPaths: Vector[String], diff: String,
     validation: GoalPhaseNativeValidation.Payload, initialPhaseRepair: Option[ContextReference] = None,
     stepTestReportRepair: Option[ContextReference] = None)
@@ -76,7 +51,7 @@ private[smworkflow] object GoalPhaseNativeWork {
     releaseRepairContract: Option[String] = None,
     triage: Option[GoalPhaseStepTriage.Context] = None,
     diagnosticHistory: Option[Vector[IncrementalSbtDiagnosisRepair.Prior]] = None,
-    operatingProfile: Option[RetainedOperatingProfile] = None,
+    operatingProfile: Option[GoalPhaseOperatingProfiles.Capture] = None,
     publicationFailure: Option[PublicationFailureContext] = None)
   final case class Result(outcome: String, summary: String, findings: Vector[String],
     acceptance: Option[GoalPhaseAcceptanceBoundary.Report] = None,
@@ -191,7 +166,7 @@ private[smworkflow] object GoalPhaseNativeWork {
       def _invalid_(field: String): Decoder.Result[Request] =
         Left(DecodingFailure("Invalid retained check failure context [field=" + field + "]", cursor.history))
       if (!_publication_request_valid(request)) _invalid_("publicationFailure")
-      else if (request.operatingProfile == null || !request.operatingProfile.forall(RetainedOperatingProfile.valid))
+      else if (request.operatingProfile == null || !request.operatingProfile.forall(GoalPhaseOperatingProfiles.captureValid))
         _invalid_("operatingProfile")
       else if (!IncrementalSbtDiagnosisRepair.historyValid(request.diagnosticHistory)) _invalid_("diagnosticHistory")
       else if (!request.checkFailure.forall(value => admitCheckFailureContextC(value).isSuccess)) _invalid_("checkFailure")

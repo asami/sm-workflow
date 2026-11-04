@@ -11,7 +11,8 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Actual typed File composition and semantic assigned-text policy.
   * Filesystem algorithms, encoding and root defenses remain producer contracts.
   * @since   Oct. 15, 2026
-  * @version Oct. 24, 2026
+  *  version Oct. 24, 2026
+  * @version Nov.  3, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -32,6 +33,38 @@ final class RepositorySyncFileEffectSpec extends AnyWordSpec with Matchers with 
   private def _contents(root: Path): Vector[String] = request.files.map(f => Files.readString(root.resolve(f.path), UTF_8))
 
   "Assigned conflict text through the normal typed File UoW" should {
+    "capture and apply all 129 assigned files while refusing a changed final expected value" in {
+      Given("129 present ordinary files under the actual typed File UoW")
+      val root = WorkflowFileRuntimeFixture.fresh()
+      val names = (1 to 129).map(ordinal => f"file$ordinal%03d.txt").toVector
+      val originals = names.map(name => "original " + name + "\n")
+      names.zip(originals).foreach((name, text) => Files.writeString(root.resolve(name), text, UTF_8))
+      val policy = RepositorySyncNativeConflictInput.Policy(names.toSet)
+      val assigned = F.Request("instance", "revision", names.map(name => F.File(name, None, "resolved " + name + "\n")))
+      WorkflowFileRuntimeFixture.withCore(root, workspace = _workspace) { core =>
+        When("capture retains the complete inventory and the last current file changes before application")
+        val captured = take(F.captureC(core, policy, assigned))
+        val selected = assigned.copy(files = captured.files)
+        Files.writeString(root.resolve(names.last), "user text\n", UTF_8)
+        val refused = take(F.applyC(core, policy, selected))
+        Then("the final expected-text mismatch refuses the entire write set before its first write")
+        captured.files.map(_.path) shouldBe names
+        captured.files.map(_.expected) shouldBe originals.map(Some.apply)
+        refused.status shouldBe "conflict"
+        names.init.map(name => Files.readString(root.resolve(name), UTF_8)) shouldBe originals.init
+        Files.readString(root.resolve(names.last), UTF_8) shouldBe "user text\n"
+        Given("the complete 129-file expected-current inventory is restored")
+        Files.writeString(root.resolve(names.last), originals.last, UTF_8)
+        When("the owning UoW applies the same complete assigned intent")
+        val applied = take(F.applyC(core, policy, selected))
+        val observed = take(F.observeC(core, policy, selected))
+        Then("every assigned replacement is installed and reported without a fixed file-count ceiling")
+        applied.status shouldBe "applied"
+        applied.files shouldBe selected.files
+        observed.status shouldBe "applied"
+        names.map(name => Files.readString(root.resolve(name), UTF_8)) shouldBe assigned.files.map(_.replacement)
+      }
+    }
     "capture observe and apply exact Unicode and literal filenames without Git metadata or a read lock" in {
       Given("an actual workspace with literal LF tab backslash colon and Unicode filenames and texts")
       val root = WorkflowFileRuntimeFixture.fresh()
@@ -154,10 +187,12 @@ final class RepositorySyncFileEffectSpec extends AnyWordSpec with Matchers with 
       WorkflowFileRuntimeFixture.withCore(root, workspace = _workspace) { core =>
         When("the owning call receives malformed assigned intents or an invalid selected policy")
         val refused = invalid.map(F.applyC(core, policy, _).isFaillure)
-        val invalidpolicy = F.applyC(core, policy.copy(maximumConflicts = 0), request)
+        val invalidpolicies = Vector(null, policy.copy(semanticPaths = null),
+          policy.copy(semanticPaths = Set("../outside.txt")), policy.copy(semanticPaths = Set("foreign.txt")))
+          .map(F.applyC(core, _, request))
         Then("semantic admission fails before any write and preserves both actual originals")
         refused shouldBe Vector.fill(invalid.size)(true)
-        invalidpolicy.isFaillure shouldBe true
+        invalidpolicies.foreach(_.isFaillure shouldBe true)
         _contents(root) shouldBe before
       }
       for (actual <- Vector("binary\u0000text")) {

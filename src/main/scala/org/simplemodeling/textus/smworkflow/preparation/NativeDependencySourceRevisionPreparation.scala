@@ -9,7 +9,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 
 /** Passive conversion of independently supplied direction; no Workflow mutation.
   * @since   Oct. 26, 2026
-  * @version Oct. 26, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 object NativeDependencySourceRevisionPreparation {

@@ -154,3 +154,167 @@ created, accepted and activated. Original failed attempts remain recorded in the
 [delivery journal](../journal/2026/10/2026-10-26-repository-sync-validation-continuation.md).
 This qualifies the bounded producer contract; real owner Session adoption and
 continuation remain separate. It does not qualify broader RS-C3 recovery.
+
+## Required missing lint continuation v2
+
+The preceding RS-VC1 contract retains its historical meaning. The same public
+`describeRepositorySyncValidationContinuation --sessionId` and
+`adoptRepositorySyncValidationContinuation --input` operations also recognize
+`sm-workflow.repository-sync-required-lint-continuation.v2` explicitly. An unknown
+or malformed policy refuses; a failed v2 decode never falls back to v1.
+
+This branch addresses an active, unsuspended native `MergeValidated` candidate
+whose original structural and selected product checks actually succeeded but
+omitted required Scala lint. There must be no later review, commit, convergence,
+uncertain execution or ongoing effect. The original candidate may come from an
+ordinary merge or an existing `repair-N` source. The current host must select the
+same ordered check identities, ordinals and kinds, with exactly one fixed
+`FixCheck` appended. Removing, reordering or rebinding old checks, appending new
+Compile/Test checks, or changing candidate inputs refuses.
+
+The v2 target contains the actual Start principal, repository and Component
+instance, native frontier and causation, original pending-merge source and
+retained validation references and revisions, candidate parents/tree/tracking,
+original selected check facts, and each original intent/result reference pair
+with terminal successful observations. It includes the current expanded fixed
+check selection and actual index/status observations. It does not invent a v1
+resultless-intent reference or duplicate old process output as new evidence.
+Managed native history and original receipts authenticate these facts during
+description and adoption; caller-supplied success is insufficient.
+
+The choices are `AuthorizeMissingRequiredLint` and `Defer`. The existing required
+answer fields `priorExecutionEnded` and `acceptOriginalUncertainty` must both be
+**false** for v2: the old resultless-UNKNOWN assertions are not applicable to
+these already successful original checks. This does not assert termination of
+an unknown invocation or acceptance of its uncertainty. V1 adopting answers
+continue to require **true/true**. A v2 `Defer` answer also uses false/false and
+appends no native direction.
+
+Normal passive evidence preparation uses family `RepositorySync`, kind
+`validation-continuation`, and the existing dedicated
+`repository-sync-validation-continuation` purpose. The description's explicit
+policy selects the typed answer and binding. Component, participant, reference,
+target, choice, rationale and both flags must match independent host evidence.
+Preparation encodes supplied facts; the independent host owns provisioning.
+
+Adoption re-observes the complete target and stores only a managed
+`RequiredLintContinuationAdmitted` direction. A separate ordinary Advance creates
+a genuine `PendingMergePrepared` source in
+`required-lint-<adoption target frontier revision>`. It retains the original
+candidate and repair context and seeds the original successful ordered prefix
+from authenticated native receipts. It writes no replacement execution results
+for those old checks. Only the appended missing lint runs through the ordinary
+fixed CNCF `FixCheck` / `fixCheck` SBT UoW, under current effect permission.
+
+Successful lint returns to independent review and normal local merge commit,
+push and final fetch. Failed lint enters existing check-origin repair with the
+original success prefix retained. A new timed-out or resultless lint remains
+indeterminate and ordinary repeated Advance cannot replay it. A later changed
+repair candidate does not inherit old success as applicable evidence. Repeated
+or stale adoption either returns its exact passive receipt or refuses without
+effects. Original Session, accepted work, history, repair budget and original
+check results retain their meaning throughout.
+
+For a genuinely new Scala pending-merge candidate, required-lint selection is
+checked against typed actual parent/index paths and host program-impact policy
+before the first SBT effect. Missing required lint therefore refuses before
+Compile/Test. Retained old completed validation remains available through the
+bounded v2 recovery branch after ordinary host correction.
+
+`RepositorySyncRequiredLintContinuationSpec` declares pure controlled contract
+facts and normal independent evidence ingress. The explicitly selected
+`@DoNotDiscover` `NativeRepositoryRequiredLintContinuationCliSpec` declares
+`RuntimeTestDeclaration` and uses tiny independent ordinary installed-host
+repositories, real Git/local bare upstreams, SQLite and normal SBT. It requires
+`smworkflow.spec.installedCommand`, `smworkflow.spec.sbt`, and an absolute private
+`smworkflow.spec.requiredLintEpisode` file; it has no runtime-image-root selector.
+
+Its `capture REQUIRED-LINT actual successful checks and postcheck refusal` case
+belongs before new CAR publication. It retains each of four completed old-CAR
+episodes incrementally, including real Compile/Test results and the old Scala
+applicability refusal. Cases beginning `continue REQUIRED-LINT` belong after new
+normal publication and reopen those exact Sessions. They specify real scalafix
+success followed by separate fixture-owned review/convergence, a genuine
+DisableSyntax lint failure, a genuine fixed-lint execution deadline timeout with
+passive repeats, and a fixed-lint capability denial that retains its actual
+intent without a lint process or replay of successful Compile/Test. The denied
+Session receives no restored grant or retry. The cases also specify
+stale/crossed evidence refusals and new-candidate preflight
+before any SBT invocation. They never re-Start a retained Session or repeat an
+accepted semantic result to upgrade it. All semantic, reviewer and lifecycle
+inputs in these cases are specification-owned; the cases make no live provider
+acceptance claim. This section defines the contract and selected scenarios,
+without claiming their execution results.
+
+## Retained review input classification continuation v3
+
+The same describe/adopt operations explicitly dispatch
+`sm-workflow.repository-sync-review-input-continuation.v3`. Failed or unknown
+decoders never fall back to an older contract. The choices are
+`AdoptInputClassificationAndContinueReview` and `Defer`. Both existing lifecycle
+assertion fields must be **false/false**, because this direction concerns completed
+successful checks and a saved decision-needed review. No UNKNOWN execution or
+termination assertion is made. V1 and v2 keep their original wire meaning.
+
+This branch requires the active, unsuspended `ReviewDecisionRequired` frontier,
+the actual paired detailed-review issue and decision-needed result, and the
+actual pending merge and complete successful validation in native history.
+Purpose candidates, later effects, already adopted directions and completed or
+suspended Sessions do not qualify. The public target binds the Component,
+Session, original host context, native source references and revisions, actual
+parents and candidate tree, old input assessment, proposed current mapping and
+fresh assessment, selected fixed checks, current index/status and applicability
+issues. It contains no copied check output or duplicated review body.
+
+The owner corrects the normal CNCF host `document-inputs` declaration as a **new
+proposal**. That configuration does not rewrite the old assessment or review.
+Description captures complete typed Git blob/mode/path observations against
+the same immutable candidate tree. Previously known consumed inputs cannot be
+demoted, and previously known document classifications cannot change. Only old
+unknown paths may acquire classifications. For these newly classified paths,
+consumed scope takes precedence: scripts and skills covered by selected
+`program-inputs` consumption scopes must be consumed even when their filenames
+end in `.md`. Previously known documents retain their classification even under
+broader unchanged program coverage. There is no generic filename-based
+classification rule.
+
+Binary or unavailable text, remaining/new unknown paths, changed actual scope,
+missing program policy, missing consumed input coverage, or changed ordered
+check applicability appear as explicit issues. Such targets offer only `Defer`;
+non-Defer adoption refuses. The proposed program-impact selection must exactly
+match the genuine old selected checks, whose identities, kinds and ordinals
+must still be fixed by the current policy. The original structural and program
+receipt objects retain their original native namespace and success provenance.
+
+The owner describes the current frontier, independently provisions the existing
+dedicated `repository-sync-validation-continuation` evidence for its v3 target,
+choice, rationale, participant, reference and false/false flags, then calls
+adopt. Passive preparation carries the supplied binding; it does not establish
+classification correctness or semantic acceptance. Adoption re-observes the
+full target after independent evidence admission and appends only
+`ReviewInputContinuationAdmitted`, event
+`native-review-input-continuation-admitted`, at key
+`review-inputs-REVISION-adopted`. `Defer` stores nothing. Stale and duplicate
+targets refuse.
+
+Separate ordinary Advance authenticates the adjacent adoption and actual native
+lineage, current mapped policy, candidate and Git observation. It appends a new
+`MergeValidated` source via `native-review-inputs-validation-retained` at key
+`review-inputs-REVISION-validated`. It preserves candidate, checkpoint, repair
+and required-lint provenance and original validation receipts, adding only the
+new input/impact assessment and direction. It never enters check selection or
+execution again. Interruption after this save resumes from the same revised
+source. The original pending candidate pointer and all old rows stay intact.
+
+Normal independent detailed review uses the revised source revision to issue a
+new continuation exactly once. Its full original candidate diffs and changed
+paths remain available. Existing request context retains the old result and
+continuation references, decision-needed rationale, honest original limitations,
+corrected unknown paths and preserved check applicability. The old result has
+no typed accepted subcoverage: its prose is not projected into accepted paths.
+The fresh reviewer assesses unresolved semantic coverage and supplies a fresh
+result. Adoption never accepts review or invents a PASS. Existing review
+accept/repair/decision-needed and convergence routes retain ownership. A later
+real repair creates its own candidate and drops the old classification
+direction. This section defines source behavior; validation and installed
+qualification results are recorded separately.

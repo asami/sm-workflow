@@ -4,6 +4,7 @@ import io.circe.{Decoder, Encoder, Json}
 import io.circe.generic.auto.*
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
+import GoalPhasePhaseMetrics.given
 import scala.util.control.NonFatal
 import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.ActionCall
@@ -23,7 +24,8 @@ import RepositorySyncManagedGitObservation as G
   * Only the fresh successful caller may attempt its reserved child Start. Reopen
   * projects completion first and passively observes the child's own persistence.
   * @since   Oct. 23, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 29, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhasePostCompletionSync {
@@ -34,7 +36,8 @@ private[smworkflow] object GoalPhasePostCompletionSync {
     advanceOperation: Option[String] = None)
   final case class Payload(input: R.Input, policy: String,
     direction: Option[GoalPhaseCompletionPolicyAdoption.Direction], synchronization: Synchronization,
-    startReserved: Boolean, findings: N.State, developmentOccurredAt: Option[String] = None)
+    startReserved: Boolean, findings: N.State, developmentOccurredAt: Option[String] = None,
+    metrics: Option[GoalPhasePhaseMetrics.Summary] = None)
   private given Encoder[N.Pending] = deriveEncoder
   private given Decoder[N.Pending] = deriveDecoder
   private given Encoder[N.Completed] = deriveEncoder
@@ -44,7 +47,10 @@ private[smworkflow] object GoalPhasePostCompletionSync {
   private given Encoder[N.State] = deriveEncoder
   private given Decoder[N.State] = deriveDecoder
   private given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(fields =>
-    if (fields("developmentOccurredAt").exists(_.isNull)) fields.remove("developmentOccurredAt") else fields))
+    {
+      val occurred = if (fields("developmentOccurredAt").exists(_.isNull)) fields.remove("developmentOccurredAt") else fields
+      if (fields("metrics").exists(_.isNull)) occurred.remove("metrics") else occurred
+    }))
   private given Decoder[Payload] = deriveDecoder
   val codec: WorkflowResultJsonV1.PayloadCodec[Payload] = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "GoalPhaseLocalCompletionRecord"
@@ -83,7 +89,10 @@ private[smworkflow] object GoalPhasePostCompletionSync {
   def advanceC(session: F.Session, d: F.Declaration, core: ActionCall.Core, from: InstanceRecord,
     controller: O.State, direction: Option[GoalPhaseCompletionPolicyAdoption.Direction],
     legacy: Option[R.Payload], findings: N.State,
-    acknowledge: String => Consequence[Unit]): Consequence[V.GoalPhaseAdvanceResult] = for {
+    acknowledge: String => Consequence[Unit],
+    profiles: Vector[GoalPhaseOperatingProfiles.Capture] = Vector.empty,
+    requests: Vector[GoalPhaseWorkComparison.NativeWork] = Vector.empty,
+    retainedMetrics: Option[GoalPhasePhaseMetrics.Summary] = None): Consequence[V.GoalPhaseAdvanceResult] = for {
     _ <- if (usesLocalPolicy(session, direction) && from == session.current &&
         from.lifecycle == Lifecycle.Active && from.suspension.isEmpty) Consequence.unit
       else F.invalid("Local completion requires its actual adopted or newly captured policy and current frontier")
@@ -101,11 +110,15 @@ private[smworkflow] object GoalPhasePostCompletionSync {
       _ <- if (closed.stage == O.Stage.Closed && domain.statemachine.GoalPhaseRunLifecycle.permits(
           "PhaseClosing", "phase-locally-completed", "Closed")) Consequence.unit
         else F.invalid("Local completion differs from its CML/controller")
+      metrics = Some(legacy.map(value => value.metrics.getOrElse(
+        GoalPhasePhaseMetrics.absentCompletion(session, d, core, selected.candidate, profiles))).getOrElse(
+        retainedMetrics.getOrElse(GoalPhasePhaseMetrics.withComparison(
+          GoalPhasePhaseMetrics.completed(session, d, core, selected.candidate, profiles), selected.plan, selected.completed, requests))))
       synchronization <- legacy.map(value => Consequence.success((Synchronization("unknown",
         "The existing child retains its own effects and continuation; it is never started again.", Some(value.childSessionId),
         Some("advanceRepositorySync")), false))).getOrElse(_select_c(session, d, core, selected))
       payload = Payload(selected, localPolicy, direction, synchronization._1, synchronization._2, findings,
-        d.developmentObservation.map(_ => core.executionContext.clock.instant().toString))
+        d.developmentObservation.map(_ => core.executionContext.clock.instant().toString), metrics)
       adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
       saved <- adapter.executeC(WorkflowMechanicalTransition.Intent(d.configuration, reference(from.identity.value), from,
         from.revision, F.history(from, "phase.Closed", "ordered-local-completion:" + from.identity.value),
@@ -242,9 +255,9 @@ private[smworkflow] object GoalPhasePostCompletionSync {
         declaration.input.phaseIdentity, completed, core.executionContext.clock)
       catch { case NonFatal(_) => Consequence.stateConflict("Evidence completion observation interrupted") }
     }
-    val result = NativeWorkflowOperationOutput.withFindingRecording(NativeWorkflowOperationOutput.goalLocallyComplete(completed.identity.value,
+    val result = GoalPhasePhaseMetrics.withMetrics(NativeWorkflowOperationOutput.withFindingRecording(NativeWorkflowOperationOutput.goalLocallyComplete(completed.identity.value,
       payload.input.plan, payload.input.base, payload.input.completed,
-      payload.input.reviewedCandidate.getOrElse(payload.input.candidate), synchronization, repository), payload.findings)
+      payload.input.reviewedCandidate.getOrElse(payload.input.candidate), synchronization, repository), payload.findings), payload.metrics)
     if (observation.exists(!_.isSuccess)) result.copy(message = result.message +
       " Evidence completion/lifecycle observation is unavailable; completed work remains closed.") else result
   }

@@ -11,7 +11,8 @@ import RepositorySyncNativeMergeValidation as V
 /** Selected merge policy over actual managed validation and pending paths.
   * An admission is neither a semantic review verdict nor Git effect authority.
   * @since   Oct. 24, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  3, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncMergeAssessment {
@@ -67,8 +68,7 @@ private[smworkflow] object RepositorySyncMergeAssessment {
     _ <- V.preconditionsC(store, source)
     overlap = (localPaths.map(_.value).toSet intersect remotePaths.map(_.value).toSet).toVector.sorted
     changed = (localPaths ++ remotePaths).map(_.value).distinct.sorted
-    _ <- if (!changed.exists(_.endsWith(".scala")) || policy.scalaLint == "required" ||
-        state.inputs.exists(_.documentOnly) || state.selected.exists(_.kind == WorkflowSbtValidation.Kind.FixCheck)) Consequence.unit
+    _ <- if (!changed.exists(_.endsWith(".scala")) || state.selected.exists(_.kind == WorkflowSbtValidation.Kind.FixCheck)) Consequence.unit
       else N.invalid("actual Scala merge paths cannot claim lint non-applicability")
     contracts = changed.filter(path => policy.contractPaths.exists(prefix => path == prefix || path.startsWith(prefix + "/")))
     resolved = source.record.history.exists(_.currentProgression.exists(p =>

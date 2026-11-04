@@ -1,6 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
+import io.circe.syntax.*
 import io.circe.parser.parse
 import scala.util.control.NonFatal
 import org.goldenport.Consequence
@@ -13,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Selected public context of the actual owning WorkOrder. Canonical CNCF
   * encoding owns the generic contracts; this view grants no execution authority.
   * @since   Oct. 14, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 29, 2026
   */
 private[smworkflow] object NativeWorkflowIssuedWorkContext {
   enum Mode(val value: String) {
@@ -59,11 +60,20 @@ private[smworkflow] object NativeWorkflowIssuedWorkContext {
             completionOperation <- _record_c(request, "completionOperation")
             requirement <- _record_c(root, "requirement")
           } yield V.WorkflowIssuedWorkContext(mode.value, version, handle, run, continuation, revision,
-            required, operation, input, result, context, completion, evidence, completionOperation, requirement)
+            required, operation, input, result, _profile_context(context, order), completion, evidence, completionOperation, requirement)
         case _ => Consequence.stateConflict("Issued work context requires WORK_ORDER")
       }
     } catch {
       case NonFatal(_) => Consequence.stateConflict("Issued work context cannot consume the owning WorkOrder encoding")
+    }
+
+  // Context is an extensible public Record. Generic CNCF fields remain the
+  // canonical projection; this application metadata comes only from saved input.
+  private def _profile_context(context: Record, order: WorkflowContinuation.WorkOrder[?]): Record =
+    order.request.input.map(_.value) match {
+      case Some(input: GoalPhaseNativeWork.Request) => input.operatingProfile.fold(context)(value =>
+        context ++ Record.data("operatingProfile" -> GoalPhaseNativeMetadata.record(value.asJson)))
+      case _ => context
     }
 
   private def _object_c(parent: Json, name: String): Consequence[Json] =

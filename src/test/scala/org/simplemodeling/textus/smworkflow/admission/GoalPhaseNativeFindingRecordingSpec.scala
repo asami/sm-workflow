@@ -98,11 +98,11 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       Option.when(program.step == "step-2" && goal.candidatePaths.contains(_inventory_path))(_inventory_path) ++
       Option.when(goal.candidatePaths.contains("model.cml"))("model.cml"))
     val normalgit = TypedGitHostPlanFixture.plan(target, goalPaths = goal.candidatePaths, goalMessages = messages,
-      goalSelections = selections)
+      goalSelections = selections, completionReadPaths = Vector(_candidates))
     val denied = if (denygit) normalgit.hcursor.get[Vector[Json]]("gitPrograms").toOption.get
       .map(_.hcursor.get[String]("capability").toOption.get).toSet else Set.empty[String]
     val git = if (!denygit) normalgit else TypedGitHostPlanFixture.plan(target,
-      goalPaths = goal.candidatePaths, goalMessages = messages, denied = denied, goalSelections = selections)
+      goalPaths = goal.candidatePaths, goalMessages = messages, denied = denied, goalSelections = selections, completionReadPaths = Vector(_candidates))
     val combined = TypedSbtHostPlanFixture.plan(directory, TypedSbtHostPlanFixture.normalExecutable, Vector(1), Some(git))
     if (!denygit) combined else {
       val gitcapabilities = git.hcursor.get[Vector[Json]]("grants").toOption.get
@@ -128,7 +128,8 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
     journal: Option[NativeWorkflowCliFixture.JournalHost] = None,
     journalInterruption: Option[String] = None, evidence: Boolean = false, inventory: Boolean = false,
     hygiene: Boolean = false, hygieneMode: Option[String] = None, completionRecords: Option[CompletionRecords.Policy] = None, releaseRecords: Boolean = false,
-    completionPolicy: Option[String] = None, documentHygiene: Boolean = false)(task: Episode => Unit): Unit = {
+    completionPolicy: Option[String] = None, documentHygiene: Boolean = false,
+    retainedObservations: Option[GoalPhaseRetainedObservations.Retained] = None)(task: Episode => Unit): Unit = {
     val acknowledge: String => Consequence[Unit] = point =>
       if (interrupt && point.startsWith("goal-recording-candidate-prepared:") || journalInterruption.contains(point))
         Consequence.stateConflict("SPECIFICATION-OWNED interruption before actual staging") else Consequence.unit
@@ -136,7 +137,8 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       "textus.subsystem.process-execution.plan" -> _process_plan(directory, _host(directory).goal, denygit = true).noSpaces)) ++
       (if (evidence) _evidence_values(directory) else Map.empty) ++ hygieneMode.map(CommitHygiene.declaration.name -> _) ++
       completionRecords.map(p => CompletionRecords.declaration.name -> summon[io.circe.Encoder[CompletionRecords.Policy]].apply(p).noSpaces) ++
-      completionPolicy.map(ThreeWorkflowRuntimeParameters.completionPolicy.name -> _)
+      completionPolicy.map(ThreeWorkflowRuntimeParameters.completionPolicy.name -> _) ++
+      retainedObservations.map(p => GoalPhaseRetainedObservations.declaration.name -> p.asJson.noSpaces)
     val basehost = _host(directory)
     val initialhost = if (releaseRecords) basehost.copy(goal = basehost.goal.copy(closure = basehost.goal.closure.copy(
       programs = basehost.goal.closure.programs :+ GoalPhaseNativeClosure.StepProgram(GoalPhaseNativeReleaseClosure.programIdentity, 3)))) else basehost
@@ -253,12 +255,33 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
   private[admission] def qualifyPhaseCompletionRecords(narrator: GivenWhenThen): Unit = {
     val directory = _root()
     val policy = CompletionRecords.Policy(Vector(CompletionRecords.Target("phase", _input.phaseIdentity, Vector(_candidates))))
+    var retained = Option.empty[GoalPhaseRetainedObservations.Retained]
+    var issued = Option.empty[(String, O.Snapshot)]
+    var closedMetrics = Option.empty[V.GoalPhaseCompletionResult]
     narrator.Given("completed Step commits and an independently accepted Phase source with a required Phase record")
     _episode(directory, initialize = true, selectedPolicy = None, completionRecords = Some(policy), releaseRecords = true,
       completionPolicy = Some(GoalPhasePostCompletionSync.localPolicy)) { e =>
-      val (id, display, review) = _phase_review(e)
+      val attempts = Vector.newBuilder[GoalPhaseRetainedObservations.Attempt]
+      val (id, display, review) = _phase_review(e, (work, start, end) => {
+        val request = _request(work)
+        val input = _business(work)
+        val execution = request.continuationId.value + ":fixture-launch"
+        val usage = GoalPhasePhaseMetrics.UsageObservation(execution, 1, input.instanceIdentity, execution,
+          "codex", input.kind, None, start, end, Some(10L), Some(20L), inclusion = "self-only", coverage = "partial", status = "completed")
+        attempts += GoalPhaseRetainedObservations.Attempt(request.continuationId.value, input.stepIdentity, input.kind,
+          execution, "completed", Some(start), Some(end), "specification-owned actual episode observation", Vector(usage))
+      })
       val source = _business(review).candidate.get
+      val completed = _business(review).completed.head
+      retained = Some(GoalPhaseRetainedObservations.Retained(GoalPhaseRetainedObservations.schema, id,
+        "specification-owned retained caller facts", attempts.result(), Vector(GoalPhaseRetainedObservations.Closure(
+          completed.step, completed.commit.identity, e.now, "actual specification Step commit observed")), Vector(completed.step)))
+      issued = Some(id -> source)
       e.submit(review, Some(display), "accept")
+    }
+    _episode(directory, selectedPolicy = None, completionRecords = Some(policy), releaseRecords = true,
+      completionPolicy = Some(GoalPhasePostCompletionSync.localPolicy), retainedObservations = retained) { e =>
+      val (id, source) = issued.get
       val waiting = e.advance(id)
       val checks = _checks(directory)
       e.authority(id, waiting)
@@ -277,11 +300,33 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       e.commit(e.observe().head).parents shouldBe Vector(source.head)
       Files.readString(directory.resolve("repository").resolve(_candidates)) should include(
         "<!-- sm-workflow completion " + id + " phase " + _input.phaseIdentity + " -->")
+      val durable = Files.readString(directory.resolve("repository").resolve(_candidates))
+      durable should include("Phase source accepted; normal local record/commit closure follows")
+      durable should include("Cohort ")
+      durable should include("unknown first-pass=")
+      durable should include("codex tokens=60")
+      durable should include("first-pass=1/1")
+      durable should include("specification-owned retained caller facts")
+      durable should not include("completion-ms=unavailable")
+      val originalMetrics = result.completion.get.metrics
+      closedMetrics = result.completion
       _checks(directory) shouldBe checks
       e.current(id).lifecycle shouldBe Lifecycle.Completed
       val head = e.observe().head
-      e.advance(id).kind shouldBe "Terminal"
+      val recollected = e.advance(id)
+      recollected.kind shouldBe "Terminal"
+      recollected.completion.get.metrics shouldBe originalMetrics
+      Files.readString(directory.resolve("repository").resolve(_candidates)) shouldBe durable
       e.observe().head shouldBe head
+    }
+    narrator.When("a later process supplies changed caller metadata after the original record was committed")
+    _episode(directory, selectedPolicy = None, completionRecords = Some(policy), releaseRecords = true,
+      completionPolicy = Some(GoalPhasePostCompletionSync.localPolicy), retainedObservations = retained.map(_.copy(attempts = Vector.empty))) { e =>
+      val before = e.observe().head
+      val recalled = e.advance(issued.get._1)
+      narrator.Then("the original endpoint, resource/time projection and durable record are reused without another close")
+      recalled.completion.get.metrics shouldBe closedMetrics.get.metrics
+      e.observe().head shouldBe before
     }
   }
 
@@ -846,6 +891,7 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
   }
   private final class Episode(val directory: Path, owner: Subsystem, component: Component, actor: ExecutionContext,
     prepare: (Setup => Consequence[Unit]) => Unit) {
+    def now: String = actor.clock.instant().toString
     def call(operation: String, properties: List[Property]) = owner.executeOperationResponseInContext(
       Request.of(component = component.name, service = "GoalPhaseService", operation = operation, properties = properties), actor)
     def invoke[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A = read_value[A](take(call(operation, properties)))
@@ -1020,13 +1066,21 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
       value.get
     }
   }
-  private def _phase_review(e: Episode): (String, V.GoalPhaseAdvanceResult, WorkflowInteraction[S.Request, Nothing]) = {
+  private def _phase_review(e: Episode,
+    observe: (WorkflowInteraction[S.Request, Nothing], String, String) => Unit = (_, _, _) => ()):
+      (String, V.GoalPhaseAdvanceResult, WorkflowInteraction[S.Request, Nothing]) = {
     val id = e.start()
     e.advance(id)
     Files.writeString(e.directory.resolve("repository/step-1.txt"), "Assigned required implementation.\n")
-    e.submit(e.work(id))
+    val implementation = e.work(id)
+    val implementationStart = e.now
+    e.submit(implementation)
+    observe(implementation, implementationStart, e.now)
     val display = e.advance(id)
-    e.submit(e.work(id), Some(display), "accept")
+    val review = e.work(id)
+    val reviewStart = e.now
+    e.submit(review, Some(display), "accept")
+    observe(review, reviewStart, e.now)
     val wait = e.advance(id)
     e.authority(id, wait)
     val phase = e.advance(id)

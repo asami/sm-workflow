@@ -37,7 +37,7 @@ import SplitPhaseTypedStartFixture as F
 
 /** Shared actual public-operation fixture; no semantic/provider or Human authority.
   * @since   Oct. 24, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 29, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] trait ThreeWorkflowDirectOperationFixture extends Matchers with GivenWhenThen {
@@ -67,7 +67,12 @@ private[admission] trait ThreeWorkflowDirectOperationFixture extends Matchers wi
     view.operation.getString("operation") shouldBe Some(request.operation.operation)
     view.completionOperation.getString("service") shouldBe Some(request.completionOperation.service)
     view.completionOperation.getString("operation") shouldBe Some(request.completionOperation.operation)
-    view.context shouldBe native.getRecord("context").get
+    view.context.removeKeys(Set("operatingProfile")) shouldBe native.getRecord("context").get
+    order.request.input.map(_.value) match {
+      case Some(input: GoalPhaseNativeWork.Request) =>
+        view.context.getRecord("operatingProfile").nonEmpty shouldBe input.operatingProfile.nonEmpty
+      case _ => view.context.getRecord("operatingProfile") shouldBe None
+    }
     view.completion shouldBe native.getRecord("completion").get
     view.evidence shouldBe native.getRecord("evidence").get
     view.executionRequirement shouldBe canonical.getRecord("requirement").get

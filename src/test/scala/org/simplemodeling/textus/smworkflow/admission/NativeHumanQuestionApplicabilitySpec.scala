@@ -13,7 +13,8 @@ import RepositorySyncNativeConflictInput as Conflict
 
 /** Original Human meaning is consumed; reference resolution is not a body seal.
   * @since   Oct.  8, 2026
-  * @version Oct. 24, 2026
+  *  version Oct. 24, 2026
+  * @version Nov.  3, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -26,7 +27,7 @@ final class NativeHumanQuestionApplicabilitySpec extends AnyWordSpec with Matche
   private val goalInput = Goal.Input(work, ContextReference("requesting-result", "1"),
     Work.Result("decision-needed", "Original result explanation", Vector.empty), "Original question reason")
   private val conflict = Conflict.Request("instance", "3", "a" * 40, "b" * 40, Vector(
-    Conflict.Conflict("conflict", "one.scala", Conflict.Blob("c" * 40, "base\n"), Conflict.Blob("d" * 40, "local\n"),
+    Conflict.Conflict("conflict", "one.scala", Some(Conflict.Blob("c" * 40, "base\n")), Conflict.Blob("d" * 40, "local\n"),
       Conflict.Blob("e" * 40, "remote\n"), worktree = "Original conflict contents\n")))
   private val repositoryInput = Repository.Input(conflict, "requesting-result", "1", "Original conflict rationale")
 

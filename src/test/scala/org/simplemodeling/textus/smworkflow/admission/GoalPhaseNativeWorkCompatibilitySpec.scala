@@ -13,6 +13,7 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import GoalPhaseNativeWork as W
+import GoalPhaseOperatingProfiles as P
 import GoalPhaseOrderedProgression as O
 import IncrementalSbtDiagnosisRepair as D
 import SplitPhaseExplicitPartitionFixture.take
@@ -27,9 +28,18 @@ import SplitPhaseExplicitPartitionFixture.take
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseNativeWorkCompatibilitySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _prefix = "sm-workflow.goal-phase-native-work-request."
-  private val _profile = W.RetainedOperatingProfile(W.RetainedOperatingSelection("standard", "1", "default"),
-    "CodingEngineeringDeep")
-  private val _review_profile = _profile.copy(reasoningClass = "ReviewCritical")
+  private val _profile = P.Capture(P.Selection("standard", "1", "default"),
+    Some("CodingEngineeringDeep"), None, None, None, None)
+  private val _review_profile = _profile.copy(reasoningClass = Some("ReviewCritical"))
+  private val _concrete = P.Concrete("fixture-profile", "fixture-provider", "fixture-model", Map("effort" -> "fixture"))
+  private val _fallback = _concrete.copy(identity = "fixture-fallback", model = "fixture-fallback-model")
+  private val _mapped_profile = _profile.copy(selection = P.Selection("quality", "1", "config"),
+    mappingIdentity = Some("fixture-mapping"), mappingRevision = Some("1"),
+    configured = Some(_concrete), selected = Some(_concrete))
+  private val _logical_profile = _profile.copy(reasoningClass = None,
+    mappingIdentity = Some("caller-standard"), mappingRevision = Some(GoalPhaseDispatchPolicy.revision),
+    dispatch = Some(GoalPhaseDispatchPolicy.Capture(GoalPhaseDispatchPolicy.revision, "ordinary",
+      GoalPhaseDispatchPolicy.chain("ordinary"), "DELEGATED", None, GoalPhaseDispatchPolicy.defaultEdges)))
   private val _review = GoalPhasePurposeRepairFixture.request.copy(
     repairProgress = Some(GoalPhaseRepairProgress.snapshot(GoalPhasePurposeRepairFixture.controller)))
   private val _implementation = _review.copy(kind = "ImplementStep", review = None, issues = None,
@@ -75,7 +85,7 @@ final class GoalPhaseNativeWorkCompatibilitySpec extends AnyWordSpec with Matche
       MinimalPresentation("Retained repair", "Return the selected semantic result")))
   }
 
-  "Retained GoalPhase v5 work" should {
+  "Retained GoalPhase operating profile compatibility" should {
     "losslessly preserve implementation review and repair payloads with their original history decisions and counters" in {
       Given("small semantic fixtures with a committed prefix, retained progress and an explicit finite v5 profile")
       val requests = Vector(_implementation.copy(operatingProfile = Some(_profile)),
@@ -108,6 +118,42 @@ final class GoalPhaseNativeWorkCompatibilitySpec extends AnyWordSpec with Matche
       wires.last.hcursor.downField("payload").downField("decisionContext").focus should not be empty
     }
 
+    "canonically retain expanded captures and selection provenance in v5 and v6 without inventing execution observations" in {
+      Given("the adopted Capture contract with optional reasoning, configured concrete routes and logical dispatch")
+      val standard = Vector("explicit", "config", "default").map(source =>
+        _profile.copy(selection = _profile.selection.copy(source = source)))
+      val mapped = Vector("cost", "quality", "local-experiment").flatMap(identity =>
+        Vector("explicit", "config", "default").map(source =>
+          _mapped_profile.copy(selection = P.Selection(identity, "1", source))))
+      val profiles = standard ++ mapped ++ Vector(_profile.copy(reasoningClass = None),
+        _profile.copy(reasoningClass = Some("UnknownClass")), _mapped_profile,
+        _mapped_profile.copy(selection = _profile.selection, fallback = Some(_fallback)), _logical_profile)
+      // The existing fixture is a synthetic typed failure, never a native execution observation.
+      val failure = W.PublicationFailureContext(ContextReference(_repair.instanceIdentity, "1"),
+        Vector("current.scala"), "Retained primary publication failure", PrimaryPublicationContinuationSpecificationFixture.failed,
+        testsExecuted = false)
+      profiles.foreach { profile =>
+        val ordinary = _repair.copy(operatingProfile = Some(profile))
+        val publication = ordinary.copy(candidate = None, checksReceipt = None, publicationFailure = Some(failure))
+        Vector("v5" -> ordinary, "v6" -> publication).foreach { case (version, request) =>
+          When("the exact canonical retained request is decoded and saved again")
+          val wire = W.inputCodec.encode(request)
+          val decoded = W.inputCodec.decode(wire)
+          Then("all capture fields and original selection provenance survive without normalization")
+          P.captureValid(profile) shouldBe true
+          wire.hcursor.get[String]("schemaVersion") shouldBe Right(_prefix + version)
+          decoded shouldBe Right(request)
+          W.inputCodec.encode(decoded.toOption.get) shouldBe wire
+          decoded.toOption.get.operatingProfile shouldBe Some(profile)
+          W.inputCodec.decode(wire.mapObject(_.add("extra", Json.True))).isLeft shouldBe true
+          W.inputCodec.decode(_payload(wire)(_.mapObject(_.add("extra", Json.True)))).isLeft shouldBe true
+          W.inputCodec.decode(_profile_wire(wire)(_.mapObject(_.add("extra", Json.True)))).isLeft shouldBe true
+          W.inputCodec.decode(_selection_wire(wire)(_.mapObject(_.add("extra", Json.True)))).isLeft shouldBe true
+          W.inputCodec.decode(_version(wire, if (version == "v5") "v6" else "v5")).isLeft shouldBe true
+        }
+      }
+    }
+
     "keep new unmarked requests and legacy v2 v3 v4 version and normalization boundaries unchanged" in {
       Given("ordinary constructors without a retained profile and existing purpose/history markers")
       val legacy = Vector(_implementation, _review, _repair)
@@ -131,30 +177,52 @@ final class GoalPhaseNativeWorkCompatibilitySpec extends AnyWordSpec with Matche
       W.inputCodec.decode(_version(wires.head, "v5")).isLeft shouldBe true
     }
 
-    "reject unknown incomplete null or extended operating profile objects and profile markers on every old schema" in {
-      Given("one exact v5 payload within the finite standard default profile boundary")
+    "reject malformed null unknown or contradictory capture metadata and profile markers on every old schema" in {
+      Given("one canonical standard capture and the adopted expanded metadata validation boundary")
       val wire = W.inputCodec.encode(_repair.copy(operatingProfile = Some(_profile)))
       val profile = wire.hcursor.downField("payload").downField("operatingProfile").focus.get
       val malformedselection = Vector(
         _selection_wire(wire)(_.mapObject(_.add("identity", "other".asJson))),
         _selection_wire(wire)(_.mapObject(_.add("revision", "2".asJson))),
-        _selection_wire(wire)(_.mapObject(_.add("source", "explicit".asJson))),
+        _selection_wire(wire)(_.mapObject(_.add("source", "other".asJson))),
         _selection_wire(wire)(_.mapObject(_.add("extra", Json.True)))) ++
         Vector("identity", "revision", "source").flatMap(key => Vector(
           _selection_wire(wire)(_.mapObject(_.remove(key))),
           _selection_wire(wire)(_.mapObject(_.add(key, Json.Null)))))
       val malformedprofile = Vector(
-        _profile_wire(wire)(_.mapObject(_.add("reasoningClass", "UnknownClass".asJson))),
+        _profile_wire(wire)(_.mapObject(_.add("reasoningClass", "".asJson))),
+        _profile_wire(wire)(_.mapObject(_.add("reasoningClass", " CodingEngineeringDeep".asJson))),
         _profile_wire(wire)(_.mapObject(_.add("extra", Json.True))),
         _profile_wire(wire)(_ => Json.Null), _profile_wire(wire)(_ => Json.arr())) ++
-        Vector("selection", "reasoningClass").flatMap(key => Vector(
-          _profile_wire(wire)(_.mapObject(_.remove(key))),
-          _profile_wire(wire)(_.mapObject(_.add(key, Json.Null)))))
+        Vector(_profile_wire(wire)(_.mapObject(_.remove("selection")))) ++
+        Vector("selection", "reasoningClass", "mappingIdentity", "mappingRevision", "configured", "selected", "fallback", "dispatch").map(key =>
+          _profile_wire(wire)(_.mapObject(_.add(key, Json.Null))))
+      val contradictory = Vector(
+        _profile.copy(mappingIdentity = Some("fixture-mapping")),
+        _profile.copy(mappingRevision = Some("1")),
+        _profile.copy(configured = Some(_concrete)),
+        _profile.copy(selected = Some(_concrete)),
+        _profile.copy(fallback = Some(_fallback)),
+        _mapped_profile.copy(reasoningClass = None),
+        _mapped_profile.copy(mappingRevision = None),
+        _mapped_profile.copy(configured = None),
+        _mapped_profile.copy(selected = None),
+        _mapped_profile.copy(fallback = Some(_fallback)),
+        _logical_profile.copy(selection = _mapped_profile.selection),
+        _logical_profile.copy(fallback = Some(_fallback))).map(profile =>
+          W.inputCodec.encode(_repair.copy(operatingProfile = Some(profile))))
+      val mappedwire = W.inputCodec.encode(_repair.copy(operatingProfile = Some(_mapped_profile)))
+      val malformedconcrete = Vector("configured", "selected").map(key =>
+        _profile_wire(mappedwire)(value => value.mapObject(fields => fields.add(key,
+          fields(key).get.mapObject(_.add("extra", Json.True))))))
+      val malformeddispatch = _profile_wire(W.inputCodec.encode(_repair.copy(operatingProfile = Some(_logical_profile))))(
+        value => value.mapObject(fields => fields.add("dispatch", fields("dispatch").get.mapObject(_.add("extra", Json.True)))))
       val oldwithprofile = Vector(_implementation, _review, _repair).map(W.inputCodec.encode).flatMap(value => Vector(
         _payload(value)(_.mapObject(_.add("operatingProfile", profile))),
         _payload(value)(_.mapObject(_.add("operatingProfile", Json.Null)))))
       When("the finite nested readers and schema-specific presence rules inspect each incompatible value")
-      val results = (malformedselection ++ malformedprofile ++ oldwithprofile).map(W.inputCodec.decode)
+      val results = (malformedselection ++ malformedprofile ++ contradictory ++ malformedconcrete ++ Vector(malformeddispatch) ++ oldwithprofile)
+        .map(W.inputCodec.decode)
       Then("unsupported metadata and schema hybrids refuse without fallback or version downgrade")
       results.foreach(_.isLeft shouldBe true)
       W.inputCodec.decode(_payload(wire)(_.mapObject(_.remove("operatingProfile")))).isLeft shouldBe true
@@ -182,10 +250,11 @@ final class GoalPhaseNativeWorkCompatibilitySpec extends AnyWordSpec with Matche
       W.inputCodec.decode(null).isLeft shouldBe true
     }
 
-    "preserve both retained metadata classes through the retained-review-description-path shared wire reader and passive replay" in {
+    "preserve expanded captures through the retained-review-description-path shared wire reader and passive replay" in {
       Given("isolated synthetic ReviewCritical review and CodingEngineeringDeep repair and historical review WorkOrders")
       val requests = Vector(_review.copy(operatingProfile = Some(_review_profile)),
-        _repair.copy(operatingProfile = Some(_profile)), _review.copy(operatingProfile = Some(_profile)))
+        _repair.copy(operatingProfile = Some(_profile)), _review.copy(operatingProfile = Some(_profile)),
+        _repair.copy(operatingProfile = Some(_mapped_profile)), _review.copy(operatingProfile = Some(_logical_profile)))
       def _saved_bytes_(root: Path): Map[Path, Vector[Byte]] = {
         val paths = Files.list(root)
         try paths.iterator().asScala.map(path => path -> Files.readAllBytes(path).toVector).toMap
@@ -264,10 +333,10 @@ final class GoalPhaseNativeWorkCompatibilitySpec extends AnyWordSpec with Matche
       }
     }
 
-    "retain semantic result admission independently of either historical metadata class" in {
+    "retain semantic result admission independently of expanded capture metadata" in {
       Given("an unsupported semantic result and each finite retained profile")
       val unsupported = W.Result("accept", "Metadata does not accept semantic work", Vector.empty)
-      val profiles = Vector(_profile, _review_profile)
+      val profiles = Vector(_profile, _review_profile, _mapped_profile, _logical_profile)
       When("existing semantic and initial-result admission sees requests with and without retained metadata")
       val semantic = profiles.map(profile => W.admitSemanticResultC(_repair.copy(operatingProfile = Some(profile)), unsupported))
       val initial = profiles.map(profile => W.admitInitialResultC(_implementation.copy(operatingProfile = Some(profile)), unsupported))

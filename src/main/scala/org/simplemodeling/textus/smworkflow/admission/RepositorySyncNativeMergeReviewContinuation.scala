@@ -48,7 +48,8 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
         case None => for {
           captured <- I.captureC(source.store, source.validated, policy)
           signals <- _uncertainties_c(source)
-          input = captured.copy(judgmentMode = mode, uncertainties = (captured.uncertainties ++ signals).distinct)
+          followup <- RepositorySyncReviewInputContinuation.followUpC(source.store, source.validated)
+          input = captured.copy(judgmentMode = mode, uncertainties = (captured.uncertainties ++ signals ++ followup).distinct)
           projected <- prepareC(source, input)
           selectedWork <- RepositorySyncNativeExecution.bindIssuedC(projected.work, RepositorySyncNativeExecution.Work.Review,
             declaration.executionClassifications, declaration.executionProfiles, declaration.executionOrigin)
@@ -91,7 +92,11 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
       validated <- purpose match {
         case Some(value) => Consequence.success(Some(value))
         case None => if (session.started.current.history.exists(_.currentProgression.contains(ProgressionReference("sync.PendingMergePrepared"))))
-          store.currentMergeCandidateC(session.started.current).flatMap(value => store.loadC(N.candidateKey(value.namespace, "merge-validated")))
+          store.currentMergeCandidateC(session.started.current).flatMap(candidate =>
+            RepositorySyncReviewInputContinuation.latestValidatedC(store, session.started.current, candidate).flatMap {
+              case Some(value) => Consequence.success(Some(value))
+              case None => store.loadC(N.candidateKey(candidate.namespace, "merge-validated"))
+            })
           else Consequence.success(None)
       }
       saved <- validated match {
@@ -107,23 +112,11 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
       }
     } yield saved
 
-    private def _saved_c(source: Source, mode: String): Consequence[Option[SavedReview]] = for {
-      issued <- source.session.storage.bindIssuedC(completionOperation, S.inputCodec)
-      work <- issued.loadC(continuationId(source.validated, mode))(using source.store.core.executionContext)
-      completion <- nativeCompletionC(source.session.storage)
-      retained <- completion.loadRetainedC(continuationId(source.validated, mode))(using source.store.core.executionContext)
-      result <- retained match {
-        case Some(value) => for {
-          actual <- work.map(Consequence.success).getOrElse(invalid("completed judgment has no actual paired issue"))
-          input <- inputC(actual)
-          _ <- if (input.judgmentMode == mode) Consequence.unit else invalid("retained judgment mode crosses its issue")
-          next <- _retained_next_c(source.current, value.completion)
-        } yield Some(SavedReview(source.validated, actual, input, value.completion.result, next, source.current))
-        case None => Consequence.success(None)
-      }
-    } yield result
+    private def _saved_c(source: Source, mode: String): Consequence[Option[SavedReview]] =
+      savedOriginalC(source.store, source.current, source.validated, mode)
 
-    private def _mode_c(source: Source): Consequence[String] = (if (source.validated.payload.purposes.nonEmpty) None else assessment) match {
+    private def _mode_c(source: Source): Consequence[String] = (if (source.validated.payload.purposes.nonEmpty ||
+        source.validated.payload.reviewInputs.nonEmpty) None else assessment) match {
       case None => Consequence.success("detailed-review")
       case Some(policy) => for {
         selected <- RepositorySyncMergeAssessment.captureC(source.store, source.validated, policy)
@@ -164,7 +157,10 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
       validated <- purpose match {
         case Some(value) => Consequence.success(value)
         case None => store.currentMergeCandidateC(session.started.current).flatMap(candidate =>
-          store.loadC(N.candidateKey(candidate.namespace, "merge-validated"))).flatMap {
+          RepositorySyncReviewInputContinuation.latestValidatedC(store, session.started.current, candidate).flatMap {
+            case Some(value) => Consequence.success(Some(value))
+            case None => store.loadC(N.candidateKey(candidate.namespace, "merge-validated"))
+          }).flatMap {
             case Some(value) => Consequence.success(value)
             case _ => invalid("semantic review selection has no genuine native review")
           }
@@ -177,7 +173,9 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
       _ <- if (core != null && core.action != null && core.action.request != null &&
           core.action.request.service.contains(completionOperation.service) &&
           Set(F.advanceOperation.operation, completionOperation.operation,
-            RepositorySyncNativeMergeRepairContinuation.completionOperation.operation)(core.action.request.operation)) Consequence.unit
+            RepositorySyncNativeMergeRepairContinuation.completionOperation.operation,
+            RepositorySyncValidationContinuation.describeOperation,
+            RepositorySyncValidationContinuation.adoptionOperation)(core.action.request.operation)) Consequence.unit
         else invalid("review continuation requires its actual owning Operation")
       _ <- if (Set("MergeValidated", "PurposeChecked")(validated.payload.stage)) Consequence.unit
         else invalid("semantic review selection has no genuine native review")
@@ -258,6 +256,10 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
             }
             input <- inputC(work)
             source <- sourceC(work.handle.instanceIdentity.value, call)
+            _ <- if (input.instanceIdentity == source.store.identity &&
+                input.validatedRevision == source.validated.record.revision.value.toString &&
+                submitted.continuationId == continuationId(source.validated, input.judgmentMode)) Consequence.unit
+              else invalid("review closing crosses its actual selected native source or issued continuation")
             projected <- prepareC(source, input)
             plan = projected.copy(work = work)
             _ <- evidence.admitC(call, input, submitted)
@@ -276,6 +278,34 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
         descriptiveAttributes = SmWorkflowComponent.RepositorySyncServiceService.SubmitNativeMergeReviewOperation.specification.content.descriptiveAttributes)
     }
   }
+
+  /** Read an exact original issue/completion from the same managed storage.
+    * This reader never selects a later source or changes the old result. */
+  def savedOriginalC(store: N.Store, current: InstanceRecord, validated: N.Stage,
+    mode: String = "detailed-review"): Consequence[Option[SavedReview]] = for {
+    issued <- store.storage.bindIssuedC(completionOperation, S.inputCodec)
+    work <- issued.loadC(continuationId(validated, mode))(using store.core.executionContext)
+    completion <- nativeCompletionC(store.storage)
+    retained <- completion.loadRetainedC(continuationId(validated, mode))(using store.core.executionContext)
+    result <- retained match {
+      case Some(value) => for {
+        actual <- work.map(Consequence.success).getOrElse(invalid("completed judgment has no actual paired issue"))
+        input <- inputC(actual)
+        _ <- if (input.judgmentMode == mode && input.instanceIdentity == store.identity &&
+            input.validatedRevision == validated.record.revision.value.toString &&
+            value.completion.result.continuationId == continuationId(validated, mode)) Consequence.unit
+          else invalid("retained judgment crosses its actual issue or native source")
+        _ <- if (validated.payload.purposes.nonEmpty || validated.payload.validation.exists(state =>
+            input.localTip == validated.payload.before.head && validated.payload.mergeHead.contains(input.remoteTip) &&
+            validated.payload.indexTree.contains(input.indexTree) && input.selectedChecks == state.selected.map(_.identity) &&
+            input.checks == state.receipts && input.validationMode == state.mode && input.validationReason == state.reason &&
+            state.inputs.forall(_.changedPaths == input.changedPaths))) Consequence.unit
+          else invalid("retained review input crosses its actual candidate or validation receipt objects")
+        next <- _retained_next_c(current, value.completion)
+      } yield Some(SavedReview(validated, actual, input, value.completion.result, next, current))
+      case None => Consequence.success(None)
+    }
+  } yield result
 
   def bindC(declaration: F.Declaration, definition: DefinitionBinding, installation: S.Installation,
     acknowledgement: String => Consequence[Unit] = _ => Consequence.unit,

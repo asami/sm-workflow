@@ -12,7 +12,7 @@ import org.goldenport.record.io.RecordDecoder
   * semantic answer; the runtime owns necessity, admission, execution and results.
   * @since   Oct. 26, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  1, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object LocalPublication {

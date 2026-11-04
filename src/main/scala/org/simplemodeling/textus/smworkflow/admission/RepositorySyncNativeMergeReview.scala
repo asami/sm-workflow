@@ -15,7 +15,8 @@ import WorkflowManagedProcessExecution as E
 /** Actual full pending-merge semantic input. No legacy digest receipt or AI
   * command/authority selection participates in this native route.
   * @since   Oct.  6, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  3, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeReview {

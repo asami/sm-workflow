@@ -1295,7 +1295,66 @@ nonblank child submitSessionId must differ. Split refuses Repository pairs.
 Require Request kind and agreeing consumed declaration/snake aliases. Each action
 still requires exactly request/submission files. Forward supplied object result
 and required object resultReference, with only optional array completionFacts
-and object executionEvidence. Require the fixed target's actual acknowledgement
+and object executionEvidence. Only `submit-repository-conflict` also accepts
+`resultResource`: supply exactly one object `result` or nonblank string
+`resultResource`, together with the same required object `resultReference` and
+optional metadata. The helper forwards the URI unmodified as one
+`--resultResource` argument; it does not open, copy or split the complete result
+file, infer a size threshold or retry using another transport. Other semantic
+actions retain their existing inline metadata contract.
+
+For example, the conflict helper's `--submission` file may contain:
+
+```json
+{
+  "resultResource": "file:///absolute/authorized/complete-conflict-result.json",
+  "resultReference": {"identity": "actual-conflict-result", "revision": "1"}
+}
+```
+
+The referenced UTF-8 file contains the complete `RepositorySyncConflictResult`
+JSON object (decision, resolutions and rationale), without wrapper metadata.
+The equivalent public native command is:
+
+```text
+sm-workflow org.simplemodeling.textus.SmWorkflow.RepositorySyncService.submitRepositorySyncWorkResult --sessionId <actual-issued-session> --resultResource file:///absolute/authorized/complete-conflict-result.json --resultReference '{"identity":"actual-conflict-result","revision":"1"}' --json
+```
+
+Exactly one of `--result` and `--resultResource` is required. Resource selection
+does no I/O; the owning executing call reads after loading the actual Session
+and current assignment. Only absolute local file URIs without authority, query
+or fragment are accepted. The normal Resource boundary enforces configured
+roots, finite byte budgets and UTF-8 decoding; a URI grants no read permission.
+Configure `textus.resource.url.file.roots` and `cncf.resource.read.max-bytes`
+for the authorized host before boot. There is no application-specific byte cap
+or implicit inline fallback. Current context, revision, result-reference,
+participant and conflict-coverage admission still apply to the complete DTO.
+
+The helper has no Purpose submission action. For an actual issued
+`submitRepositoryPurposeResult`, use the normal installed Operation directly:
+
+```text
+sm-workflow org.simplemodeling.textus.SmWorkflow.RepositorySyncService.submitRepositoryPurposeResult --sessionId <actual-issued-session> --resultResource file:///absolute/authorized/complete-purpose-result.json --resultReference '{"identity":"actual-purpose-result","revision":"1"}' --json
+```
+
+The referenced UTF-8 file contains the complete public
+`RepositorySyncPurposeResult` object: decision, rationale, every group including
+each intended `content.text`, and excludedPaths. It contains no submission
+wrapper, source hashes or partial replacement for the issued result. Supply
+exactly one of inline `--result` and `--resultResource`; the same required
+`--sessionId`, `--resultReference` and optional facts/evidence apply. The owning
+ProcedureActionCall reads the Resource after loading the actual Session and
+current assignment, using normal Resource/UoW authorization and UTF-8 decoding.
+Configure the actual authorized file root and a finite
+`cncf.resource.read.max-bytes` budget before host boot; the common default
+remains 1 MiB. A URI supplies no permission. There is no helper file reading,
+size-based transport fallback, split result or omitted content. Existing
+current-context, revision, result-reference, participant and Purpose coverage
+admission remain authoritative. Accepted Submit saves the proposal; separate
+normal Advance owns candidate checks, acceptance, installation and synchronization.
+The conflict transport and its retained qualification remain applicable.
+
+Require the fixed target's actual acknowledgement
 ID, Boolean accepted=true, outcome=accepted and nonblank message. Bodies remain
 opaque; Submit supplies no effects, retry, authority or automatic Advance.
 
@@ -1428,3 +1487,97 @@ restores the retained original Session, and retains the compatible presentation
 completion observer. Missing/crossed observations refuse before progression;
 Submit and next Advance remain separate. No execution success or installed
 provider/all-family/two-chat acceptance is claimed by authoring these examples.
+
+### Forward GoalPhase logical dispatch
+
+An explicit `sm-workflow.goal-phase.dispatch-policy=standard-2026-11-01`
+selection affects only new missing-issued-row GoalPhase work. The retained
+`operatingProfile.dispatch` carries logical role, disposition and finite candidate
+identities; the versioned product caller adapter supplies concrete model/effort
+assignments. The legacy caller harness refuses these captures rather than
+resolving them through changed current mappings. Old absent/single-alternate
+captures retain the existing harness contract.
+
+The packaged `goal-phase-dispatch.py` adapter requires the actual Request, matching
+mapping revision, admitted repository path, and caller capability evidence. Its
+`launch` object is the exact generic collaboration start arguments, including
+native semantic role instructions and a fresh independent context when delegated.
+`launched` binds those arguments to the real canonical `task_name` (or exposed
+`agent_id` alias); contradictory aliases are refused and the raw return is retained. `complete` binds
+that same agent's actual result; `inline_complete` instead binds the issued parent
+context without a launch. `execution_evidence` projects the existing public
+WorkflowExecutionEvidence fields using actual retained artifact references.
+It omits modelIdentity unless separately observed, and uses the retained logical
+candidate as profileIdentity. Existing independent host evidence preparation,
+Submit and later Advance retain their own authority. The whole dispatch state
+retains requested/resolved model and effort, policy/mapping revisions, pre-start
+fallback reasons, exact launch arguments/identity, provider observations or unknown
+and resources. Keep that caller artifact beside the actual semantic return.
+
+This is an adapter contract, not a new scheduler, provider-availability service,
+CNCF agent policy, permission to start extra trial work or assertion of installed
+qualification. A capability gap returns unknown/unavailable. A typed confirmed
+unstarted model/effort rejection may follow only the captured next edge. Started,
+uncertain, policy/refusal and semantic outcomes never enter that fallback.
+
+For this forward logical route, the host registers
+`sm-workflow.goal-phase.origin-context` with its genuine current caller context
+identity and selects the dispatch-policy. The logical identity does not require
+an observed model/provider, concrete mapping or fabricated legacy descriptor.
+It must agree with an existing concrete origin if both are configured. Missing
+logical context is an explicit preparation gap. Legacy already-issued work keeps
+its captured contract. A context registration is not an execution observation.
+
+A caller may supply `request_artifact` to adapter preparation: the exact absolute
+local path of its retained public Request JSON. Preparation checks equality with
+the original Request and retains both that reference and the unchanged Request.
+For Requests exceeding 131,072 serialized characters this reference is required;
+the launch message references it instead of duplicating unbounded logs/base64.
+Keep the public file available to the semantic worker. There is no private store
+access or shortened replacement WorkOrder. Restore checks the captured executor
+against the raw launch return and never re-resolves current configuration.
+Captured fallback subsets are validated against versioned edges, then followed
+exactly; full mapping edges cannot extend the captured chain.
+
+Passive caller observations use the existing normal Phase completion-recording
+owner, with the closed property contract in ai-operating-profiles.md. They are
+bound to actual retained native work and accepted commits, persisted once in the
+completion metrics and reused by recollection. They do not authorize an effect,
+change native outcomes or replace independent evidence preparation. Missing or
+crossed attribution stays unavailable; metrics never trigger workflow repair.
+
+## Repository repair scope and complete result transport
+
+The standard FULL_STATE owner derives a fresh failed-check repair assignment
+from the actual current integration candidate. It refuses unsupported text or
+assignment counts rather than silently issuing only the earlier conflict paths.
+The configured assignment limit remains 32 by default, with the existing 128
+framework guard.
+
+For an already issued narrow check-origin repair, describe through
+`RepositorySyncService.describeRepositorySyncRepairScopeCorrection --sessionId`.
+The returned exact target binds its native issue, failed-check receipt, current
+candidate, Git frontier and permissible changed text paths. Submit actual Human
+direction through `adoptRepositorySyncRepairScopeCorrection`, choosing exactly
+`input` or `inputResource`. `AdoptCurrentIntegrationRepairScope` needs explicit
+sorted selected paths, the original retained participant's execution, an
+existing reference and dedicated independent Human evidence, including
+`priorExecutionEnded=true` and `acceptOriginalUncertainty=true`. Available and
+unclaimed does not establish nonexecution; original external effects remain
+UNKNOWN. `Defer` writes nothing.
+
+Passive preparation uses `prepareEvidence` family
+`RepositorySyncRepairScopeCorrection`, kind `adoption`, the actual public
+description and supplied answer/reference/execution/participant/issuer/time.
+It supplies no termination observation or consent. Native atomic supersession
+retains the original issue, failed checks, receipts and history. A separate
+ordinary Advance captures and issues the selected subset without changing the
+original repair attempt count. Adoption performs no check or source/Git effect.
+
+`submitNativeMergeRepair` also accepts exactly one of `result` and
+`resultResource`. A Resource is an absolute local authorized file URI containing
+the complete repair result DTO. The owning Resource/UoW reader handles finite
+acquisition and UTF-8 decoding before unchanged semantic/current-assignment
+admission. The `submit-repository-repair` caller forwards the URI unread with
+unchanged result reference, facts and execution evidence, as conflict Submit
+already does. No other helper action gains Resource result transport.

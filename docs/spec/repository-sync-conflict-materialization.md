@@ -1,5 +1,72 @@
 # RepositorySync conflict materialization
 
+## Complete conflict result transport
+
+`RepositorySyncService.submitRepositorySyncWorkResult` accepts exactly one of
+inline `--result` or `--resultResource file:///absolute/authorized/result.json`,
+with the existing `--sessionId` and `--resultReference` metadata. The Resource
+file contains the complete `RepositorySyncConflictResult` JSON object, including
+every resolution text; it contains no submission wrapper. It is read as UTF-8
+by the owning ProcedureActionCall after the actual Session and current issued
+assignment are loaded. Selection performs no file I/O. Missing, ambiguous,
+malformed, unauthorized and over-budget inputs refuse before semantic completion.
+
+```text
+sm-workflow org.simplemodeling.textus.SmWorkflow.RepositorySyncService.submitRepositorySyncWorkResult --sessionId <actual-issued-session> --resultResource file:///absolute/authorized/result.json --resultReference '{"identity":"actual-conflict-result","revision":"1"}' --json
+```
+
+Use an absolute local file URI without authority, query or fragment. Normal
+Resource roots (`textus.resource.url.file.roots`), finite read budgets
+(`cncf.resource.read.max-bytes`) and UTF-8 decoding remain authoritative. No
+helper-side result file read, arbitrary application byte cap, automatic
+transport substitution or split submission is supported. The thin caller's
+`submit-repository-conflict` submission metadata uses
+`{"resultResource":"file:///absolute/authorized/result.json","resultReference":{"identity":"actual-conflict-result","revision":"1"}}`;
+its other actions retain their existing metadata contracts. See the
+[native host contract](native-host-execution.md) for exact helper usage.
+
+The Resource transport retains the same DTO, context, revision, result reference,
+participant and coverage rules as inline completion. Accepted Submit only saves
+the result; it never calls Advance and grants no write, command, commit or push
+authority. Existing native progression owns subsequent materialization and review.
+
+## Complete Purpose result transport
+
+The same deferred Resource boundary also applies to the actual issued
+`RepositorySyncService.submitRepositoryPurposeResult`. The thin caller has no
+Purpose submission action; invoke the normal installed Operation directly:
+
+```text
+sm-workflow org.simplemodeling.textus.SmWorkflow.RepositorySyncService.submitRepositoryPurposeResult --sessionId <actual-issued-session> --resultResource file:///absolute/authorized/complete-purpose-result.json --resultReference '{"identity":"actual-purpose-result","revision":"1"}' --json
+```
+
+Supply exactly one of inline `--result` and `--resultResource`, with unchanged
+Session, result reference and optional completion facts/execution evidence.
+The local absolute authorized file URI names the complete
+`RepositorySyncPurposeResult` JSON object, including decision, rationale, every
+group's full intended content text and excludedPaths, without a submission
+wrapper. The owning ProcedureActionCall loads the actual Session and current
+assignment before its Resource/UoW reads UTF-8. Configure the real allowed root
+and finite Resource read budget for that host; the common default stays 1 MiB.
+No URI grants authorization, and no helper reads the file, substitutes a
+transport, splits the result or omits intended contents. Existing context,
+revision, reference, participant and Purpose coverage admission remain intact.
+
+Accepted Submit retains only the Purpose proposal. A separate normal Advance
+owns candidate preparation, selected validation/review, acceptance, the Purpose
+commit and subsequent push/fetch convergence. The isolated installed
+`large purpose Resource` specification uses one complete 2,170,000-byte document
+and a finite 16 MiB read budget, 8 MiB write/Git I/O/artifact budgets and a 32 MiB
+work area. Its existing independent-document applicability rule permits no
+product checks or mandatory detailed review; this does not represent a passed
+validation. It specifies seven refusal cases with unchanged native revision and
+history, HEAD, index and worktree; one accepted Submit followed by one Purpose
+installation/commit; exact local and pushed blob contents; and a passive terminal
+Advance without repeated effects. Qualification results belong to the actual
+parent-owned run. Existing conflict transport proof remains applicable.
+
+## Retained materialization evidence
+
 Date: 2026-10-06
 Status: connected boundary validated by999; practical delivery not accepted
 

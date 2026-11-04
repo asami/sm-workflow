@@ -24,6 +24,7 @@ import GoalPhaseDependencyValidation.given
   * the CML candidate-observed edge. Git staging cannot roll back with storage.
   * An intent without its actual recorded result is retained, never replayed.
   * @since   Oct.  6, 2026
+  *  version Oct. 28, 2026
   * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */

@@ -5,6 +5,7 @@ import io.circe.generic.auto.*
 import io.circe.{Decoder, Encoder}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
+import GoalPhasePhaseMetrics.given
 import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.{ActionCall, CommandAction}
 import org.goldenport.cncf.component.ComponentCreate
@@ -29,7 +30,8 @@ import RepositorySyncManagedGitObservation as G
   * Semantic work and Human questions keep the child's own completion routing.
   * Neither a pasted Terminal nor Phase review acceptance grants remote effects.
   * @since   Oct.  6, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 29, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeRepositoryClosure {
@@ -76,12 +78,14 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
         repositoryContinuation = repositoryContinuation)
   }
   final case class Payload(input: Input, childSessionId: String,
-    result: Option[V.RepositorySyncNativeConvergenceResult], developmentOccurredAt: Option[String] = None)
+    result: Option[V.RepositorySyncNativeConvergenceResult], developmentOccurredAt: Option[String] = None,
+    metrics: Option[GoalPhasePhaseMetrics.Summary] = None)
   private[admission] val codec = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "GoalPhaseRepositoryClosureRecord"
     def encode(value: Payload): Json = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-repository-closure.v3"),
       "payload" -> value.asJson.mapObject(fields => if (value.developmentOccurredAt.isEmpty)
-        fields.remove("developmentOccurredAt") else fields))
+        fields.remove("developmentOccurredAt") else fields).mapObject(fields =>
+        if (value.metrics.isEmpty) fields.remove("metrics") else fields))
     def decode(value: Json): Either[String, Payload] = for {
       wire <- Option(value).toRight("Phase repository closure is missing")
       schema <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
@@ -104,7 +108,10 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
   def advanceC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     from: InstanceRecord, controller: O.State, acknowledge: String => Consequence[Unit],
     documentPolicy: Option[GoalPhaseDocumentProgress.Policy] = None,
-    recordingPaths: Vector[String] = Vector.empty): Consequence[V.GoalPhaseAdvanceResult] = for {
+    recordingPaths: Vector[String] = Vector.empty,
+    profiles: Vector[GoalPhaseOperatingProfiles.Capture] = Vector.empty,
+    requests: Vector[GoalPhaseWorkComparison.NativeWork] = Vector.empty,
+    retainedMetrics: Option[GoalPhasePhaseMetrics.Summary] = None): Consequence[V.GoalPhaseAdvanceResult] = for {
     installation <- d.repositoryClosure.map(Consequence.success).getOrElse(F.invalid("repository closure host is absent"))
     _ <- installation.validateC(d)
     input <- inputC(from, controller)
@@ -140,7 +147,9 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
                   "PhaseClosing", "phase-closure-intent-saved", "PhaseClosing")) Consequence.unit
                   else F.invalid("repository closure intent is absent from CML")
                 identity = core.executionContext.idGeneration.opaqueId("sm-workflow-session")
-                intent <- store.saveC("intent", from, Payload(input, identity, None), closed = false)
+                metrics = retainedMetrics.getOrElse(GoalPhasePhaseMetrics.withComparison(
+                  GoalPhasePhaseMetrics.completed(session, d, core, input.candidate, profiles), input.plan, input.completed, requests))
+                intent <- store.saveC("intent", from, Payload(input, identity, None, metrics = Some(metrics)), closed = false)
                 _ <- store.ackC("goal-repository-prepared")
               } yield Some((intent._1, intent._2, true))
             }
@@ -285,8 +294,8 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
           d.input.phaseIdentity, completed, core.executionContext.clock)
         catch { case scala.util.control.NonFatal(_) => Consequence.stateConflict("Evidence completion observation interrupted") }
       }
-      result = NativeWorkflowOperationOutput.goalComplete(completed.identity.value, selected.plan, selected.base,
-        selected.completed, selected.reviewedCandidate.getOrElse(selected.candidate), saved._2.result.get)
+      result = GoalPhasePhaseMetrics.withMetrics(NativeWorkflowOperationOutput.goalComplete(completed.identity.value, selected.plan, selected.base,
+        selected.completed, selected.reviewedCandidate.getOrElse(selected.candidate), saved._2.result.get), saved._2.metrics)
     } yield if (observation.exists(!_.isSuccess)) result.copy(message = result.message +
       " Evidence completion/lifecycle observation is unavailable; completed work remains closed.") else result
     def ackC(point: String): Consequence[Unit] = acknowledge(point) match {

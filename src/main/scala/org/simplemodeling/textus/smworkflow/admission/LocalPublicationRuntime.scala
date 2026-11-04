@@ -18,7 +18,8 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Host configuration and component-managed facts for the one publication path.
   * There is no shell, external AI execution runner or caller-selected argv here.
   * @since   Oct. 26, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object LocalPublicationRuntime {

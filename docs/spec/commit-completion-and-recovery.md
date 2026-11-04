@@ -302,3 +302,22 @@ format must not be silently reconstructed or treated as qualified.
 
 These are source contracts. Installed generation, focused managed execution,
 independent review, artifact selection and activation remain separate evidence.
+
+Phase 6.10's optional compact metrics summary uses this same Phase recording
+plan and release-commit owner. A selected tracked Markdown destination receives
+an English source/profile/cohort/coverage projection after actual whole-source
+acceptance. The retained record describes local closure as pending; later
+synchronization is separate. The end source endpoint is captured once before
+clerical recording and passed unchanged into native close. Recollection reuses
+both the exact text plan and endpoints. Historical missing observations stay
+unavailable; summary length is bounded and missing metrics introduce no extra
+check, AI task, approval or second close/commit loop. Existing unselected records
+and legacy plans without a summary keep their original representation.
+
+Phase completion-record preparation reads each literal tracked destination with
+`TreeEntries` on that destination's existing `goal-path-N` staging identity. The
+normal host must grant that exact bounded read in addition to staging; a containing
+directory registration alone is insufficient. The phase-release `goal-step-N`
+commit selection remains unchanged. Other record families retain their existing
+selection contract. This avoids conflicting different read/commit scopes under
+a single Git selection identity and requires no base-read widening.

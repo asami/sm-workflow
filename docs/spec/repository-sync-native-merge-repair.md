@@ -19,7 +19,7 @@ file texts. Finding identities use `[A-Za-z0-9][A-Za-z0-9_.-]{0,127}`, are uniqu
 and the collection is bounded to 128 findings. Each finding has nonempty distinct
 ordinary relative affected paths in both the review's changed paths and the
 explicit `RepositorySyncNativeConflictInput.Policy.semanticPaths`. The selected
-policy's existing validation and finite file-count limits apply. There is
+policy validates the selected relative paths without a conflict or file-count ceiling. There is
 no permissive policy fallback. This primitive consumes affected business facts;
 it does not recertify complete review state, history, OIDs, policy markers or
 copied-body equality, and cannot authenticate the review's provenance.
@@ -33,19 +33,21 @@ An empty replacement text denotes an empty ordinary file, not file deletion.
 
 **R3 — Complete ordered affected-file coverage.** Request files cover exactly
 the distinct sorted union of all finding affected paths, without omitted,
-duplicate, reordered or foreign files, and do not exceed `maximumConflicts`.
+duplicate, reordered or foreign files. Check-origin repair instead carries the
+complete selected failed-candidate inventory, including only explicitly qualified
+unchanged additions. Neither path has an application file-count ceiling.
 Repaired replacements cover exactly the request file paths in the same order.
 Paths satisfy the existing ordinary relative-path rule; absolute paths, empty
 segments, dot/dot-dot segments, `.git` segments and NUL are refused.
 
 **R4 — Complete ordinary text and required values.** Every consumed object and
-collection is present. File and replacement texts are nonnull, valid UTF8 and
-contain no NUL; empty file text is valid. Finding and result rationale is
-nonnull, nonblank, valid UTF8 and contains no NUL. Actual File capture returns
-typed complete text, preserving exact Unicode,
+collection is present. File and replacement texts are nonnull, contain no NUL
+and are valid UTF-8; empty file text is valid. Finding and result rationale is
+nonnull, nonblank, contains no NUL and is valid UTF-8. There is no duplicate
+application byte ceiling. Actual File capture returns typed complete text, preserving exact Unicode,
 newlines and literal path characters without a process JSON/stdout envelope.
-CNCF applies the current runtime byte cap during acquisition; the consumer
-does not impose another content-size ceiling. Normal preparation and workflow
+CNCF applies its configured acquisition budgets; the consumer requires complete
+ordinary text. Normal preparation and workflow
 Operations return structured business Values; ordinary current-context reads
 use the typed File/resource contracts. All nine original product mains and
 their executable launch routes are absent from source and the current packaged
@@ -96,7 +98,7 @@ Only later explicit Advance records the materialization intent, applies the
 actual proposal through typed `RepositorySyncFileEffect.observeC/applyC` and
 stages assigned paths through the existing typed Git policy ordinals. File and
 Git share the trusted `sm-workflow-repository` workspace binding. The application
-retains exact assigned paths, ordinary-text requirements and expected-current values;
+retains exact assigned paths, ordinary-text validation and expected-current values;
 CNCF owns current Component authority, root/grant/cap, complete acquisition and
 per-file installation. No File `.git` directory/linked-worktree metadata lookup,
 backlink discovery or metadata lock remains. Reads need no writable file.
@@ -135,6 +137,144 @@ validation. The adopted operational route uses existing commands, with one
 lightweight normal FQN client Start connection qualification. Existing skill
 procedures and Operation/business parameter semantics are retained.
 
+## Failed-check assignment scope and explicit correction
+
+For the standard FULL_STATE owner, a fresh check-origin repair captures the
+actual retained candidate's changed paths after its preconditions hold. It
+does not retain a call-entry conflict-only selection. All files must be present
+ordinary UTF-8 text. There is no default 32-conflict gate, 128-file gate or
+replacement application file-count cap. Unsupported paths or content still
+refuse explicitly. Restricted host policies and
+review-origin findings retain their existing scope.
+
+## Automatic existing-file inventory (AUTO-FILE-RS-01)
+
+`prepareRepositorySyncRepairScopeCorrection` accepts exactly `input` or
+`inputResource` with `{sessionId, paths, rationale}`. The caller supplies the
+complete sorted desired assignment and its causal connection to the actual
+retained failed check. Runtime qualification reads only these concrete paths
+through typed Git `TreeEntries`/`BlobContent` and managed File operations.
+Existing unchanged tracked regular UTF-8 files are eligible within the same
+FULL_STATE repository, Component, purpose, acceptance and current capabilities.
+Missing, untracked, outside-root, symlink, tree, binary, crossed or stale files
+refuse. CNCF acquisition budgets remain; qualification adds no application
+file-count or text-size threshold, truncation, batch splitting or full-repository scan.
+
+New observations use correctionPolicy
+`sm-workflow.repository-sync-repair-scope-correction.v3`. The exact v3 target
+preserves factual `changedPaths` and stores optional typed
+`inventory`: the qualified assignment, causal rationale, actual source and
+failed-check reference, immutable candidate facts and mode/blob facts for
+additions outside the diff. The native repair Request carries that explicit
+`admittedInventory`. Capture, Submit, materialization and history restoration
+validate it against the owning failed candidate; no general path check is
+removed. `maximumFiles` is absent in v3. Description without prepared inventory
+returns `preparation-required`, empty choices and the existing preparation
+operation as its next operation. This stage admits no direction, including
+Defer, and grants no Human file selection. Preparation attaches the verified
+inventory and returns `adoption-required` with the existing lifecycle choices.
+File materialization and typed Git staging use the same full sorted
+invocation selection and ordinals. Review-origin findings and restricted manual
+host compositions retain their original scope; manual hosts do not advertise
+automatic preparation.
+
+File eligibility is automatic and requires no Human file grant. An existing
+available unclaimed old WorkOrder nevertheless has a separate lifecycle
+concern: absence of a claim or completion cannot prove nonexecution. The prepared v3
+Human answer `ContinueAfterPriorWorkerEndedAcceptingUnknown` supplies only actual
+independent prior-worker-ended and UNKNOWN acceptance evidence. Its `paths`
+must be empty; runtime derives the exact assignment from the prepared inventory.
+The target binds that evidence to the same Session, source and candidate rather
+than asking the Human to select files. `Defer` remains passive. Preparation
+does not manufacture the answer or issue, supersede, validate or mutate files.
+The existing atomic supersession retains the original UNKNOWN issue, receipts,
+history and repair budget. Separate ordinary Advance captures and issues the
+qualified assignment. Ordinary new failed-check issuance already selects its
+eligible actual changed text inventory without a per-file Human grant.
+
+Historical correctionPolicy v1 and v2 targets retain their actual required
+`maximumFiles` value, originally positive and no greater than 128, and their
+original per-target assignment restrictions. V1 retains its explicit bounded
+Human path subset; v2 retains its bounded prepared inventory and lifecycle-only
+answer. Their canonical encodings, signed targets, retained directions and
+UNKNOWN checkpoints are not converted to v3 or silently relaxed. V3 requires
+the field to be absent; old versions require its actual integer. Explicit null,
+unknown and cross-version fields refuse. Pending legacy adoption reconstructs
+live facts under the actual evidence-bound historical version and cap before
+exact equality. V3 adoption reconstructs the matching prepared inventory and
+checks exact target equality before capture and again before supersession.
+There is no historical changed-path rewrite. The following describes the
+retained v1 correction contract.
+
+An already issued narrow failed-check repair can be corrected through
+`describeRepositorySyncRepairScopeCorrection --sessionId` and the separate
+`adoptRepositorySyncRepairScopeCorrection`. Description binds the component,
+retained Start context/participant, FULL_STATE root/endpoint, actual current
+revision, original WorkOrder identity/expected revision/entity revision,
+formal failure receipt, candidate references/revisions, HEAD/tracking,
+MERGE_HEAD/index and the complete permissible changed text path set. Deleted
+or binary paths are outside the ordinary text capability. The target contains
+no complete file contents. Only an active available unclaimed incomplete
+check-origin issue with omitted permissible paths is eligible.
+
+Adoption accepts exactly `input` or `inputResource`. The exact structured input
+contains `sessionId`, `target`, `choice`, `paths`, `rationale`, `reference`,
+`priorExecutionEnded`, `acceptOriginalUncertainty` and `executionEvidence`.
+`AdoptCurrentIntegrationRepairScope` selects an explicit nonempty sorted
+distinct subset within the target and the existing assignment count. `Defer`
+uses empty paths and writes nothing. The retained participant must match the
+execution worker. Independent actual Human evidence must cover the exact
+target, paths, choice, rationale, reference and both true lifecycle assertions.
+No native claim/completion found is not proof of nonexecution: the Human must
+attest that the original semantic worker stopped or ended and accept its
+UNKNOWN external proposal effects. Development approval cannot supply this
+Session-specific consent.
+
+Passive `NativeWorkflowPreparationService.prepareEvidence` uses dedicated
+family `RepositorySyncRepairScopeCorrection` and kind `adoption` with the actual
+description, supplied answer, reference, execution, participant, issuer and
+time. It only encodes supplied facts in the existing evidence format. It
+neither verifies termination nor manufactures Human consent or provisions it.
+
+The existing native atomic WorkOrder supersession stores one typed direction
+and retains the original issue, failed checks, receipts and history. Adoption
+executes no source/Git effect, check, result acceptance, commit or push.
+Repeated identical direction is passive; contradiction, stale or crossed
+scope, known execution and completion refuse. A separate ordinary Advance
+captures the chosen files and issues one corrected continuation. Its
+`:scope:<adoption-revision>` suffix normalizes to the original repair attempt
+for budget accounting. A later failed candidate has a different source and
+cannot reuse the correction. The result still covers exactly its actual issued
+files, in order, with at least one text change. Materialization stages using
+the full invocation's Git selection ordering. A genuinely new candidate must
+pass its own checks and independent review; old successful Compile and failed
+Test receipts remain historical.
+
+The focused `AUTO-FILE-RS` executable specifications cover generated deferred
+registration, unchanged regression admission, exact v1 history, v2 lifecycle
+separation and an isolated installed normal CLI same-Session continuation. The
+CLI case starts with a baseline unchanged regression, retains a real native
+Compile success and Test failure caused by changed product input, automatically
+qualifies the regression, receives fixture-authored lifecycle evidence, and
+uses actual native issue/Submit/Advance/File/Git operations before fresh checks
+and separately supplied independent review. These isolated supplied answers
+are specification facts and make no claim about any real consumer worker.
+
+## Complete repair result Resource transport
+
+`submitNativeMergeRepair` accepts exactly `result` or `resultResource`. The
+Resource selector is one absolute local authorized file URI containing the
+complete `RepositorySyncNativeMergeRepairResult` JSON. The executing owner
+acquires and decodes it through normal bounded Resource/UoW access. Reference,
+completion facts, execution evidence, current assignment and semantic admission
+retain their existing meaning. No split payload, size fallback or transport
+threshold is introduced.
+
+The finite `submit-repository-repair` caller forwards only the URI and unchanged
+completion metadata; it never reads the complete result file. Only conflict and
+repair Submit select that Resource mode. Other caller actions retain their
+existing inline transport contract.
+
 ## Executable examples
 
 `RepositorySyncNativeMergeRepairSpec` exercises observable decoder/admission
@@ -147,7 +287,7 @@ behavior. Each group has adjacent Given/When/Then and should assertions.
 | E3 | R2,R5 | Decision-needed with rationale and no replacement succeeds; proposals and unknown decisions fail. |
 | E4 | R1,R3,R4 | Foreign/out-of-policy/traversal paths, incomplete findings, duplicate IDs and incomplete/reordered/foreign file coverage fail. |
 | E5 | R2,R3 | Incomplete/reordered/duplicate/foreign replacements and all-no-op repair fail; one changed file with another unchanged succeeds. |
-| E6 | R1,R4 | Missing consumed values, blank/NUL/invalid-UTF8 rationale and null/NUL/invalid-UTF8 texts fail; complete large Unicode text remains exact. |
+| E6 | R1,R4 | Missing consumed values, blank/NUL/invalid-UTF8 rationale and null/NUL/invalid-UTF8 texts fail; complete large Unicode text remains exact without an application byte ceiling. |
 | E7 | R1,R2,R3,R4,R5 | Current codecs preserve actual semantic fields with inert annotations and refuse missing/mistyped fields or unsupported schemas. |
 
 The installed connection has separately authored executable examples:
@@ -159,7 +299,7 @@ The installed connection has separately authored executable examples:
 | C3 | R1,R6 | Old or missing independent evidence cannot accept the new review; fresh acceptance still requires separate current convergence grants. |
 | C4 | R6 | Actual ordinary SBT failure (exit 1), managed timeout (indeterminate/no exit) and NUL-refused receipt with retained intent prevent new review and check replay. |
 | F1 | R3,R4,R5,R6 | Actual typed capture/observe/apply preserves literal paths, Unicode, assigned unchanged-file coverage, complete preflight and no replay under current coarse workspace authority. |
-| F2 | R4,R6 | Typed complete capture distinguishes absent from empty and preserves exact large non-ASCII text; a lower configured CNCF acquisition limit still refuses without file mutation. |
+| F2 | R4,R6 | Typed complete capture distinguishes absent from empty and preserves exact non-ASCII text; semantic NUL/UTF-8 checks remain enforced after CNCF bounded acquisition. |
 | P1 | R5,R6 | The finite normal-command caller preserves opaque Unicode rationale/replacements and a Unicode acknowledgement only on the actual assigned child route, refuses crossed routes and leaves outer routing unchanged; its subprocess is mocked. |
 
 `RepositorySyncNativeMergeRepairContinuationSpec` owns C1–C4,

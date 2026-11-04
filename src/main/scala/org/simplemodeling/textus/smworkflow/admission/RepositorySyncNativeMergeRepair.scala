@@ -9,16 +9,18 @@ import org.goldenport.cncf.workflow.WorkflowResultJsonV1
 import RepositorySyncNativeConflictInput as I
 import RepositorySyncNativeMergeReview as R
 import RepositorySyncNativeMergeValidation as V
+import RepositorySyncRepairInventory.given
 
 /** Pure affected-file proposal admission. The owning native continuation must
   * obtain a genuine retained repair review and separately authorize effects.
   * @since   Oct. 15, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 25, 2026
+  * @version Nov.  3, 2026
   */
 private[smworkflow] object RepositorySyncNativeMergeRepair {
   final case class File(path: String, text: String)
   final case class Request(review: R.Request, findings: Vector[R.Finding], files: Vector[File],
-    validationFailure: Option[String] = None)
+    validationFailure: Option[String] = None, admittedInventory: Option[RepositorySyncRepairInventory.Scope] = None)
   final case class Result(decision: String, rationale: String, replacements: Vector[File])
   final case class Basis(validated: RepositorySyncNativeProgressStore.Stage, input: R.Request,
     findings: Vector[R.Finding], next: org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceRecord,
@@ -31,6 +33,10 @@ private[smworkflow] object RepositorySyncNativeMergeRepair {
 
   def admitRequestC(request: Request, policy: I.Policy): Consequence[Unit] = for {
     _ <- if (policy != null) policy.validateC else _invalid("selected text policy is missing")
+    _ <- if (request != null && request.admittedInventory != null && request.admittedInventory.forall(scope =>
+        request.findings != null && request.findings.isEmpty && RepositorySyncRepairInventory.valid(scope,
+          request.review, request.validationFailure))) Consequence.unit
+      else _invalid("explicit automatic inventory must bind the actual failed check and immutable review candidate")
     _ <- if (request != null && request.review != null && request.review.changedPaths != null &&
         request.findings != null && request.validationFailure != null &&
         (request.validationFailure match {
@@ -45,9 +51,12 @@ private[smworkflow] object RepositorySyncNativeMergeRepair {
         request.findings.map(_.identity).distinct.size == request.findings.size) Consequence.unit
       else _invalid("review findings are incomplete or outside selected changed text paths")
     paths = if (request.validationFailure.isEmpty) request.findings.flatMap(_.affectedPaths).distinct.sorted
-      else request.review.changedPaths.filter(policy.semanticPaths).distinct.sorted
-    _ <- if (request.files != null && request.files.nonEmpty && request.files.size <= policy.maximumConflicts &&
-        request.files.forall(_file) && request.files.map(_.path) == paths) Consequence.unit
+      else Option(request.files).toVector.flatten.filter(_ != null).map(_.path).distinct.sorted
+    _ <- if (request.files != null && request.files.nonEmpty &&
+        request.files.forall(f => _file(f) &&
+          (request.review.changedPaths.contains(f.path) || request.admittedInventory.exists(_.paths.contains(f.path))) &&
+          policy.semanticPaths(f.path)) && request.files.map(_.path) == paths &&
+        request.admittedInventory.forall(_.paths == paths)) Consequence.unit
       else _invalid("files must cover exactly the sorted affected paths with ordinary UTF-8 text")
   } yield ()
 
@@ -87,9 +96,16 @@ private[smworkflow] object RepositorySyncNativeMergeRepair {
   private given Decoder[File] = deriveDecoder
   private given Encoder[Request] = deriveEncoder[Request].mapJson(_.mapObject(_.filter {
     case ("validationFailure", value) => !value.isNull
+    case ("admittedInventory", value) => !value.isNull
     case _ => true
   }))
-  private given Decoder[Request] = deriveDecoder
+  private val _request_decoder: Decoder[Request] = deriveDecoder
+  private given Decoder[Request] = _request_decoder.emap(request =>
+    if (request.admittedInventory != null && request.admittedInventory.forall(scope =>
+        request.findings != null && request.findings.isEmpty && request.files != null &&
+        request.files.forall(_ != null) && RepositorySyncRepairInventory.valid(scope, request.review,
+          request.validationFailure) && request.files.map(_.path) == scope.paths)) Right(request)
+    else Left("Restored repair inventory must bind the actual failed candidate and exact assigned files"))
   private given Encoder[Result] = deriveEncoder
   private given Decoder[Result] = deriveDecoder
 

@@ -34,7 +34,7 @@ import WorkflowManagedProcessExecution as E
   * Native capture/check/review/closure owners qualify the newly selected bytes.
   * @since   Oct. 26, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  1, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseDependencySourceRevision {

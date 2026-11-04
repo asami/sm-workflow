@@ -15,7 +15,8 @@ import GoalPhaseNativeRun as F
 /** Current paired native host assembly, invoked through session-resolved inputs.
   * The saved complete plan drives progress; the client never dispatches stages.
   * @since   Oct.  6, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 29, 2026
+  * @version Nov.  2, 2026
   */
 private[smworkflow] object GoalPhaseNativeServiceAssembly {
   def bindC(params: ComponentCreate, d: F.Declaration, plans: F.PlanPort,
@@ -31,8 +32,8 @@ private[smworkflow] object GoalPhaseNativeServiceAssembly {
       _ => port.bindHumanCompletionC(params).map(Some(_)))
   } yield NativeWorkflowDescriptionMetadata.service(SmWorkflowComponent.GoalPhaseServiceService,
     spec.OperationDefinitionGroup(NonEmptyVector.fromVectorUnsafe(Vector(
-    new Operation(true, d, definition, plans, port),
-    new Operation(false, d, definition, plans, port), completion, recording) ++ human.toVector ++
+    new Operation(true, d, definition, plans, port, acknowledgement),
+    new Operation(false, d, definition, plans, port, acknowledgement), completion, recording) ++ human.toVector ++
       IncrementalSbtDiagnosisInformation.operations(port) ++
       GoalPhaseValidationRecovery.operations(port) ++ GoalPhaseSourceHistoryRecovery.operations(port) ++
       GoalPhaseSourceHistoryNormalization.operations(port) ++
@@ -62,21 +63,26 @@ private[smworkflow] object GoalPhaseNativeServiceAssembly {
 
   private final class Operation(start: Boolean, d: F.Declaration, definition: DefinitionBinding,
     plans: F.PlanPort,
-    port: GoalPhaseNativeWorkContinuation.Port) extends NativeWorkflowStartInput.Receiver
+    port: GoalPhaseNativeWorkContinuation.Port, acknowledgement: String => Consequence[Unit]) extends NativeWorkflowStartInput.Receiver
       with NativeWorkflowAdvanceInput.Receiver {
     val specification = NativeWorkflowDescriptionMetadata.operation(
       if (start) SmWorkflowComponent.GoalPhaseServiceService.StartGoalPhaseOperation
       else SmWorkflowComponent.GoalPhaseServiceService.AdvanceGoalPhaseOperation)
     def createStartOperationRequestC(request: Request, input: NativeWorkflowStartInput.BusinessInput,
       selection: ProfileStartAdmission.Selection): Consequence[OperationRequest] = input match {
-      case NativeWorkflowStartInput.Goal(value) => Consequence.success(Action(request,
-        Some(value -> selection), None, d, definition, plans, port))
+      case NativeWorkflowStartInput.Goal(value) => GoalPhaseOperatingProfiles.forStartC(request, d).map { execution =>
+        Action(request, Some(value -> selection), None,
+          d.copy(invocationOperatingProfile = Some(execution.selection)), definition, plans, port)
+      }
       case _ => F.invalid("GoalPhase Start requires its own business input")
     }
     def createAdvanceOperationRequestC(request: Request,
       input: NativeWorkflowAdvanceInput.Resolved): Consequence[OperationRequest] = input match {
-      case NativeWorkflowAdvanceInput.Goal(identity) =>
-        Consequence.success(Action(request, None, Some(identity), d, definition, plans, port))
+      case NativeWorkflowAdvanceInput.Goal(identity) => for {
+        selected <- GoalPhaseOperatingProfiles.invocationC(request)
+        current = d.copy(invocationOperatingProfile = selected)
+        currentport <- GoalPhaseNativeWorkContinuation.bindC(current, definition, acknowledgement)
+      } yield Action(request, None, Some(identity), current, definition, plans, currentport)
       case _ => F.invalid("GoalPhase advance requires its own selected target")
     }
     def createOperationRequest(request: Request): Consequence[OperationRequest] =

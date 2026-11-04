@@ -1834,6 +1834,12 @@
               "type": "GoalPhaseRepairProgress",
               "multiplicity": "?",
               "required": false
+            },
+            {
+              "name": "operatingProfile",
+              "type": "org.goldenport.record.Record",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },
@@ -5111,6 +5117,12 @@
               "type": "GoalPhaseIssueState",
               "multiplicity": "?",
               "required": false
+            },
+            {
+              "name": "operatingProfile",
+              "type": "org.goldenport.record.Record",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },
@@ -5189,6 +5201,12 @@
               "type": "RepositorySyncNativeConvergenceResult",
               "multiplicity": "1",
               "required": true
+            },
+            {
+              "name": "metrics",
+              "type": "org.goldenport.record.Record",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },

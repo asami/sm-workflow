@@ -163,6 +163,12 @@ private[smworkflow] object GoalPhasePlanRevision {
       selected = Captured(proposal, plan, documents, Some(phaseRepairInventoryScope))
       _ <- validateCapturedC(selected)
       _ <- controller.adoptPhaseRepairInventoryC(plan, "proposal-eligibility")
+    } yield selected else if (controller.cursor < controller.plan.steps.size &&
+        O.currentInventoryPathsC(controller.plan,
+          proposal.plan.copy(effectiveAcceptance = controller.plan.effectiveAcceptance), controller.step.identity).isSuccess) for {
+      selected <- Consequence.success(Captured(proposal,
+        proposal.plan.copy(effectiveAcceptance = controller.plan.effectiveAcceptance), documents))
+      _ <- eligibleC(controller, selected)
     } yield selected else if (_future_purpose_changed(controller.plan, controller.cursor, proposal.plan)) for {
       _ <- _check(documents.isEmpty, "remaining-purpose requires absent selected documents")
       _ <- _check(proposal.plan.acceptance == controller.plan.acceptance,

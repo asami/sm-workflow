@@ -454,3 +454,11 @@ candidate workspaces; the runtime issues only unresolved semantic grouping and
 preserves partial staging and excluded work. See the
 [runtime contract](docs/spec/repository-sync-runtime-orchestration.md) and
 [Phase 6.9 delivery limits](docs/notes/phase-6.9-s5-delivery-and-handoff.md).
+
+Phase 6.10 forward dispatch uses an explicitly selected future-work logical policy
+and the portable `scripts/goal-phase-dispatch.py` caller adapter. Its exact
+model/effort start and return contract is documented in
+[sm-goal-phase](skills/sm-goal-phase/SKILL.md). Retained close metrics include
+ordinary-work cohorts; configured completion records retain their compact English
+summary through the existing native recording/commit owner. Historical missing
+observations stay unavailable and never gate completion.

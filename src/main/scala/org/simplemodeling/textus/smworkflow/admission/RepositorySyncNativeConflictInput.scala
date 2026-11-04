@@ -11,27 +11,27 @@ import WorkflowManagedProcessExecution as E
   * Paths remain assigned business data; native blobs and worktree text arrive
   * through typed Git/File results. Reading grants no write or resolution authority.
   * @since   Oct.  6, 2026
-  * @version Oct. 15, 2026
+  *  version Oct. 15, 2026
+  * @version Nov.  3, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeConflictInput {
   final case class Entry(mode: String, blob: String, stage: Int, path: String)
   final case class Blob(identity: String, text: String)
-  final case class Conflict(identity: String, path: String, base: Blob, local: Blob, remote: Blob,
+  final case class Conflict(identity: String, path: String, base: Option[Blob], local: Blob, remote: Blob,
     mode: String = "100644", worktree: String = "")
   final case class Request(instanceIdentity: String, conflictRevision: String, localTip: String,
     remoteTip: String, conflicts: Vector[Conflict])
-  final case class Policy(semanticPaths: Set[String], maximumConflicts: Int = 32) {
+  final case class Policy(semanticPaths: Set[String]) {
     def validateC: Consequence[Unit] =
-      if (semanticPaths == null || semanticPaths.exists(p => !relative(p)) ||
-          maximumConflicts <= 0 || maximumConflicts > 128)
+      if (semanticPaths == null || semanticPaths.exists(p => !relative(p)))
         invalid("host conflict policy is incomplete") else Consequence.unit
   }
   val noSemanticPaths = Policy(Set.empty)
 
   def captureC(store: RepositorySyncNativeProgressStore.Store,
     source: RepositorySyncNativeProgressStore.Stage, policy: Policy): Consequence[Request] = for {
-    _ <- policy.validateC
+    _ <- if (policy != null) policy.validateC else invalid("host conflict policy is absent")
     native <- Git.inspectC(store.core)
     _ <- store.scopeC(native.observed)
     _ <- if (source.payload.stage == "MergeConflicted" && source.payload.after.contains(native.observed) &&
@@ -39,22 +39,22 @@ private[smworkflow] object RepositorySyncNativeConflictInput {
       else invalid("actual selected pending conflict differs from its original native stage")
     rows <- entriesC(store.core)
     paths = rows.map(_.path).distinct
-    _ <- if (paths.nonEmpty && paths.size <= policy.maximumConflicts &&
+    _ <- if (paths.nonEmpty &&
         paths.toSet == native.observed.dirty.filter(_.unmerged).map(_.path).toSet &&
         paths.forall(policy.semanticPaths)) Consequence.unit
-      else invalid("conflict scope requires Human handling or exceeds its admitted text policy")
+      else invalid("conflict scope requires Human handling or is outside its admitted text paths")
     conflicts <- paths.zipWithIndex.foldLeft(Consequence.success(Vector.empty[Conflict])) { case (prior, (path, index)) =>
       for {
         values <- prior
         selected = rows.filter(_.path == path)
-        _ <- if (selected.map(_.stage).sorted == Vector(1, 2, 3) &&
+        stages = selected.map(_.stage).sorted
+        _ <- if ((stages == Vector(1, 2, 3) || stages == Vector(2, 3)) &&
             selected.map(_.mode).distinct.size == 1 && Set("100644", "100755")(selected.head.mode)) Consequence.unit
           else invalid("deletion, mode or nonordinary text collision requires Human handling")
-        blobs <- (1 to 3).foldLeft(Consequence.success(Vector.empty[Blob])) { (z, stage) =>
-          z.flatMap(values => blobC(store.core, selected.find(_.stage == stage).get.blob)
-            .map(values :+ _))
+        blobs <- selected.foldLeft(Consequence.success(Map.empty[Int, Blob])) { (prior, entry) =>
+          prior.flatMap(values => blobC(store.core, entry.blob).map(blob => values.updated(entry.stage, blob)))
         }
-      } yield values :+ Conflict("conflict-" + (index + 1), path, blobs(0), blobs(1), blobs(2), selected.head.mode)
+      } yield values :+ Conflict("conflict-" + (index + 1), path, blobs.get(1), blobs(2), blobs(3), selected.head.mode)
     }
     // Current conflict text is part of the semantic edit input. Its expected
     // overwrite value is application data, not a management integrity seal.

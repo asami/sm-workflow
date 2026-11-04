@@ -31,12 +31,12 @@ private[smworkflow] object GoalPhaseRemainingPlanAdoption {
   val purpose = "goal-phase-remaining-plan-adoption"
   val describeOperation = "describeGoalPhaseRemainingPlan"
   val adoptionOperation = "adoptGoalPhaseRemainingPlan"
-  val message = "Adopt only the remaining unaccepted work using an independently admitted actual Human directive, or a covering retained original-purpose inventory authority source. " +
+  val message = "Adopt only the remaining unaccepted work using an independently admitted actual Human directive, or a covering retained legacy inventory authority source. " +
     "The original unanswered question is retained as superseded-by-adoption, without an answer. " +
     "Accepted Steps, commits, reviews, base and repair history remain. Review continuation adds one required Step condition " +
     "for newly issued and future unaccepted work and consumes one ordinary repair. Current primary-Component inventory adoption " +
     "only appends explicitly registered literal paths to the current Step, preserves all conditions and consumes no repair. " +
-    "Host staging ordinals and current-Step Git selection require separate normal registration. No check, Submit, Advance or commit runs here."
+    "Ordinary same-purpose inventory-only semantic results use native automatic continuation before Human; this manual contract remains readable for past receipts and actual concerns. No check, Submit, Advance or commit runs here."
 
   final case class CurrentInventoryTarget(componentInstance: String, stepIdentity: String,
     appendedPaths: Vector[String], candidatePaths: Vector[String])

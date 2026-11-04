@@ -93,7 +93,7 @@ private[admission] object PrimaryPublicationContinuationSpecificationFixture {
 /** Pure bounded contract evidence; supplied _process observations and byte
   * identities are specification data. Installed qualification is separate.
   * @since   Nov.  1, 2026
-  * @version Nov.  1, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

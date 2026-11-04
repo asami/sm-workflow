@@ -69,6 +69,8 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
     SmWorkflowComponent.RepositorySyncServiceService -> Vector(
       "startRepositorySync", "advanceRepositorySync", "submitRepositoryPurposeResult", "submitRepositorySyncWorkResult",
       "describeRepositorySyncValidationContinuation", "adoptRepositorySyncValidationContinuation",
+      "describeRepositorySyncRepairScopeCorrection", "prepareRepositorySyncRepairScopeCorrection",
+      "adoptRepositorySyncRepairScopeCorrection",
       "submitNativeMergeReview", "submitNativeMergeRepair", "submitRepositoryConflictDecision"
     ),
     SmWorkflowComponent.StandaloneFixServiceService -> Vector("startStandaloneFix", "startStandaloneReviewFix", "advanceStandaloneFix",

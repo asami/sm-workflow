@@ -12,7 +12,7 @@ import RepositorySyncNativeProgressStore as N
   * Actual native parent/index deltas decide applicability. Neither docs/ nor a
   * changed commit is a no-program-change certificate or a fresh PASS receipt.
   * @since   Oct. 28, 2026
-  * @version Oct. 28, 2026
+  * @version Nov.  3, 2026
   */
 private[smworkflow] object RepositorySyncDocumentInputs {
   final case class Policy(documentPaths: Vector[String], consumedPaths: Vector[String], reason: String)
@@ -60,7 +60,11 @@ private[smworkflow] object RepositorySyncDocumentInputs {
   private def contains(paths: Vector[String], path: String): Boolean =
     paths.exists(prefix => path == prefix || path.startsWith(prefix + "/"))
 
-  def captureC(store: N.Store, source: N.Stage): Consequence[Assessment] = for {
+  def captureC(store: N.Store, source: N.Stage): Consequence[Assessment] =
+    captureC(store, source, store.declaration.documentInputs)
+
+  /** Observe a proposed host mapping without changing any retained assessment. */
+  def captureC(store: N.Store, source: N.Stage, policy: Option[Policy]): Consequence[Assessment] = for {
     _ <- RepositorySyncNativeMergeValidation.preconditionsC(store, source)
     local <- GitObjectId.parseC(source.payload.before.head)
     remote <- source.payload.mergeHead.map(GitObjectId.parseC).getOrElse(invalid("requires an actual pending merge"))
@@ -69,7 +73,6 @@ private[smworkflow] object RepositorySyncDocumentInputs {
     remoteDelta <- WorkflowManagedProcessExecution.executeGitC(store.core, GitOperation.TreeChanges(remote, tree)).flatMap(_.valueC)
     changes = (localDelta ++ remoteDelta).distinct
     changed = changes.map(_.path.value).distinct.sorted
-    policy = store.declaration.documentInputs
     consumed = changed.filter(path => policy.exists(p => contains(p.consumedPaths, path)))
     unknown = changed.filter(path => !policy.exists(p => contains(p.documentPaths, path) || contains(p.consumedPaths, path))) ++
       changes.filter(c => !Set("000000", "100644", "100755")(c.oldMode) ||

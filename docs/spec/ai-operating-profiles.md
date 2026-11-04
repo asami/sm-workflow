@@ -1,12 +1,14 @@
 # AI Operating Profiles and Lightweight Phase Metrics
 
-Status: accepted target specification; implementation planned in Phase 6.10.
+Status: accepted target specification; M1/M2 selection route authored in Phase 6.10, runtime qualification pending.
 Date: 2026-10-27
 Plan: [Phase 6.10](../phase/phase-6.10.md)
 
 ## Profiles and selection
 
-Provide three named operating profiles: `standard`, `cost`, and `quality`.
+Provide named operating profiles `standard`, `cost`, `quality`, and the explicit
+experimental opt-in `local-experiment`. The latter is not a Phase 6.10 completion
+requirement; see the experimental selection note below.
 `standard` defaults to the versioned classification-based assignment below for
 newly issued work after adoption. Retain the original effective baseline as
 historical evidence; omission selects standard, not a fabricated historical model.
@@ -29,7 +31,7 @@ planning update itself does not switch live configuration.
 
 Add a logical `profile` parameter to sm-goal-phase and its public runtime input.
 For new work, precedence is explicit invocation parameter, configured profile,
-then `standard`. This is a planned public input, not a claim about today's CLI.
+then `standard`. The generated Start and Advance Operations expose this optional logical input.
 The runtime resolves the registered operating-profile name and work requirements.
 The skill-side execution adapter resolves Codex-specific model/effort assignments
 under the captured policy; it does not invent policy or new permissions. Resolve and capture the effective selection
@@ -41,6 +43,46 @@ Record profile identity/version and configured/observed model and effort using
 existing Journal/Evidence and execution records. Unknown actual values remain
 unknown. Preserve mixed-profile attribution when a Phase uses more than one
 selection. Do not add an AI call to choose, inspect or report a profile.
+
+## Authored M1/M2 selection route (retained baseline, before M2A)
+
+The following describes retained M1/M2 behavior, not the final M2A target.
+
+The optional `profile` parameter is generated on `startGoalPhase` and
+`advanceGoalPhase`, preserving the existing two-argument `GoalPhaseStartInput`
+and exact business admission. The normal Component key is
+`sm-workflow.goal-phase.profile`. All three names are registered. Standard uses
+the existing `workflow.execution.profiles` mapping and
+`sm-workflow.execution.origin`; opt-in cost/quality use typed
+`sm-workflow.goal-phase.profiles.cost` / `.quality` with the same existing CNCF
+mapping schema. Caller environments explicitly bind semantic reasoning classes to supported
+concrete profiles. There is no new built-in model table or live configuration
+change. Missing opt-in mapping, class or origin is an explicit unavailable
+failure, never standard fallback. Provider availability is not fetched.
+
+At a new semantic Task/Step issue, explicit current invocation wins, then saved
+explicit Start intent, then current configured profile, then standard. A Start
+choice originating only from config does not freeze later config for unissued
+work. A resume parameter affects newly issued work in that call. Retained pending
+work bypasses all selection; absence in historical records stays absent.
+
+The ordinary issued-work record captures identity/revision/source, semantic
+reasoning class, mapping identity/revision, configured concrete descriptor and
+selected concrete descriptor. Model and effort controls are configured values;
+observed model/effort is not inferred. The public Work view and existing
+extensible issued-context Record project this same retained capture. Existing
+WorkflowIssuedWorkContext constructors and generic protocol fields are unchanged.
+The existing caller harness reconstructs that exact retained mapping with its
+normal mapping constructor; it does not reroute from later caller configuration.
+Cost/quality have no alternate substitution. Standard preserves its previously
+configured finite fallback with explicit failure observation. Result admission
+checks observed profile identity and any supplied model against captured allowed
+selection; missing observation is not a successful mapped execution.
+
+The [bounded M1 baseline inventory](../notes/phase-6.10-standard-baseline.md)
+distinguishes packaged gpt-6.1-sol/medium from unknown observed values. The
+[M2 implementation note](../notes/phase-6.10-profile-capture.md) records source
+coverage and pending runtime qualification. No checklist acceptance is implied.
 
 ## Role-based candidates and operational comparison — 2026-10-30
 
@@ -336,6 +378,36 @@ work only; dedicated comparative experiments remain Phase 9.
 
 Handoff: [cost refinement without interrupting active work](../journal/2026/11/2026-11-02-phase-6.10-cost-profile-refinement-handoff.md).
 
+## Local experiment selection — 2026-11-02
+
+The source selection/configuration route registers `local-experiment` through the
+existing public `profile` input and normal Component key
+`sm-workflow.goal-phase.profiles.local-experiment`. This is optional and never
+selected by default. The selection/capture schema revision remains unchanged;
+existing standard/cost/quality selections retain their meaning.
+
+Supply a complete existing `cncf.workflow-execution-profile-mapping.v1` mapping
+and the ordinary execution origin. The intended configuration starts from cost
+and replaces only its Luna assignments with local models. There is no implicit
+runtime inheritance or automatic transformation of cost; preserve Terra/Sol
+assignments explicitly in the supplied mapping. Do not replace an undifferentiated
+Routine class wholesale if it also contains non-Luna work. Unsupported finer
+classification remains a configuration limitation, not a new development gate.
+
+The adjacent candidate at
+[local model candidate](../../examples/ai-profiles/local-experimental-candidate.json)
+records the desired replacements, not a loadable CNCF mapping. Missing mapping
+or origin reports unavailable through the existing opt-in path; there is no
+silent cost/standard/cloud fallback. Model availability and actual local execution
+remain with the existing caller adapter. Registration alone does not prove those
+models run on the current machine.
+
+Only unissued work uses a newly selected profile. Preserve pending assignments,
+Session/Plan/history/counters and prior evidence. No default/live config change,
+new acceptance item, runtime migration or mandatory local-model test accompanies
+this optional selection support. This source change is uncompiled/untested at
+the user's direction and not installed or published by this side conversation.
+
 ## Two source snapshots, not intermediate work accounting
 
 At Phase start and Phase close, count source lines in the same selected source
@@ -414,3 +486,147 @@ prerequisite. Phase 9 owns dedicated model experiments and enhanced routing. Pha
 the ordinary-work comparison projection defined above. No benchmark,
 new telemetry service, retrospective audit or live configuration change is part
 of adopting this plan.
+
+## Delivered source connection (2026-11-02, qualification pending)
+
+The forward logical policy is selected explicitly by
+`sm-workflow.goal-phase.dispatch-policy=standard-2026-11-01` at an unissued
+boundary. Its captured dispatch fields are distinct from legacy concrete and
+single-alternate records. Concrete assignments are in the versioned product
+caller mapping under `skills/sm-goal-phase/dispatch-mappings.json`; the portable
+`scripts/goal-phase-dispatch.py` adapter preserves the ordinary semantic role
+instructions while emitting supported model/effort launch arguments. Retained
+prepare/start/return state is caller evidence, not proof from a configuration
+name. See the installed sm-goal-phase skill for the exact argument/return route.
+The current implementation worker was issued without that capture and is not
+retrospective qualification of the new policy.
+
+The native Phase projection now declares comparable Step cohorts and retains
+unknown historical time, usage and first-pass evidence explicitly. Caller-owned
+already-retained Task/Step facts can project through
+`NativeCallerPhaseMetrics.compare`; it performs no acquisition or workflow effect.
+The terminal denominator includes unsuccessful terminal outcomes, while pending
+work remains separate. Conflicting repeated units and cross-cohort execution
+attribution are excluded with limitations instead of being silently counted.
+
+The existing `sm-workflow.completion.records` Phase recording owner can append
+the compact English summary to a selected tracked Markdown destination such as
+`docs/notes/phase-6.10-completion.md`. It retains the end endpoint before clerical
+recording and reuses it in actual close. Required ownership/staging and the
+phase-release commit owner must already be configured. Missing metrics remain
+nonblocking; this feature supplies no new file or effect permission. Source tests
+and fixture launches establish contracts, not installed delivery, provider
+availability or completion of this development Phase. Actual qualification and
+independent acceptance remain with the parent runtime.
+
+Optional November 2 cost Low refinements and local candidate materialization
+remain nonblocking future configuration work where finer classification or
+availability is unsupported. No live cost/local setting is changed here.
+
+The logical dispatch-policy setting may explicitly supply `{revision, edges}`
+with the standard revision and a finite subset of its documented logical role edges. The short revision
+string selects the documented default. Captures retain the actual edges; cyclic,
+unknown-role and parent/runtime fallback edges are refused. The caller validates
+its versioned edge data against that capture before resolving availability. No
+runtime concrete-model table or provider discovery is added.
+
+## Passive retained observations
+
+Fresh logical-only preparation selects the dispatch policy and registers
+`sm-workflow.goal-phase.origin-context` with the actual caller context identity
+(trimmed, nonblank, no controls, at most 1,024 characters). It needs no invented
+model/provider descriptor or duplicate runtime concrete assignment. When a
+legacy concrete origin is also present its context must agree. Pending work
+retains its original capture; later registration affects only fresh issuance.
+The adapter accepts real `task_name` tool returns, preserves them unchanged and
+refuses disagreement with a simultaneous `agent_id` alias. A verified absolute
+`request_artifact` public Request file provides bounded launch context while the
+adapter retains the full original Request. It is required above 131,072 serialized
+characters. The file must decode to the exact original Request; no guessed path
+or rewritten work request is accepted.
+
+`sm-workflow.goal-phase.retained-observations` accepts an exact structured value
+or its JSON string (at most 1 MiB). This is a passive snapshot of facts acquired
+during ordinary authorized work, with provenance references, never permission
+or a source of new telemetry. The closed canonical v1 form is:
+
+```json
+{
+  "schemaVersion": "sm-workflow.goal-phase-retained-observations.v1",
+  "phaseSession": "actual-native-session",
+  "sourceReference": "caller-owned-retained-record-reference",
+  "attempts": [{
+    "continuationIdentity": "actual-native-session:actual-continuation",
+    "stepIdentity": "actual-Step",
+    "kind": "ImplementStep",
+    "executionIdentity": "actual-caller-execution",
+    "status": "completed",
+    "startedAt": "2026-11-02T00:00:00Z",
+    "endedAt": "2026-11-02T00:01:00Z",
+    "sourceReference": "actual-launch-and-return-reference",
+    "usage": [{
+      "identity": "actual-retained-usage-record",
+      "revision": 1,
+      "phaseSession": "actual-native-session",
+      "execution": "actual-caller-execution",
+      "destination": "codex",
+      "role": "worker",
+      "model": null,
+      "intervalStart": "2026-11-02T00:00:00Z",
+      "intervalEnd": "2026-11-02T00:01:00Z",
+      "inputTokens": null,
+      "outputTokens": null,
+      "cachedInputTokens": null,
+      "reasoningOutputTokens": null,
+      "inclusion": "self-only",
+      "coveredExecutions": [],
+      "coverage": "unavailable",
+      "status": "completed"
+    }]
+  }],
+  "closures": [{
+    "stepIdentity": "actual-Step",
+    "commitIdentity": "0123456789012345678901234567890123456789",
+    "endedAt": "2026-11-02T00:02:00Z",
+    "sourceReference": "actual-accepted-local-commit-reference"
+  }],
+  "completeHistorySteps": []
+}
+```
+
+The example is a schema illustration, not a real execution observation. All
+listed fields are required; nullable fields use explicit null, vectors may be
+empty, unknown fields and duplicate JSON keys are refused. Do not populate facts from configured model
+names or inferred time. Attempts allow at most 512 unique execution identities,
+64 usage rows each, and unique usage identity/revision pairs. Closures and
+complete-history Step IDs allow at most 64 unique Steps each; provenance and
+identity strings are trimmed, nonblank, control-free and at most 4,096 characters.
+Usage inclusion covers at most 512 unique execution IDs. Timestamps must be ISO
+instants with nonnegative intervals; known token counts/revisions are nonnegative.
+Missing tokens are null, never an aggregate fake zero.
+
+Attempt kinds are ImplementStep, RepairStep, ReviewStep, ReviewPhase or TriageStep;
+ReviewPhase has null stepIdentity. Status is completed, failed, declined,
+cancelled or unknown. Usage destination is codex/local/other/unknown, inclusion
+is self-only/inclusive/unknown and coverage is complete/partial/unavailable.
+Every attempt must match an actual retained native continuation, Session,
+Step and kind. Each closure must match the accepted Step's commit. Complete
+history may only name an actual planned implemented Step, and asserts that the
+caller retained its entire attempt history. The projection additionally requires
+all native work to be represented and accepted before reporting positive
+first-pass success. Native RepairStep or actual failed attempts always establish
+non-first-pass work; caller flags never override native repair/outcome facts.
+A missing or unknown attempt remains incomplete history. PhaseReview resources
+may contribute to Phase totals but are not silently attributed to a Step cohort.
+
+Normal completion recording captures the snapshot once before writing the English
+record and reuses it on close/recollection. Later config changes cannot recapture
+observations for a completed Session. Legacy absent completion endpoints and
+missing historical facts remain unavailable. Structurally invalid configuration
+is refused; valid data whose native binding differs is excluded with a limitation
+instead of blocking completion or triggering repair. The durable English record
+shows provenance, available time/first-pass/resource facts and missing coverage.
+Cross-cohort attribution exclusions or absent referenced usage downgrade affected
+totals to partial/unavailable while retaining confirmed non-overlapping totals.
+No new benchmark, acquisition service, evidence-authentication shortcut or effect
+permission is introduced.

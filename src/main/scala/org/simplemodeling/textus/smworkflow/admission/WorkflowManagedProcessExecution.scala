@@ -62,13 +62,13 @@ private[smworkflow] object WorkflowManagedProcessExecution {
 
   /** Ordinals select host-bound paths and never carry filenames. */
   def stageConflictC(core: ActionCall.Core, ordinal: Int): Consequence[GitExecutionResult[Unit]] = for {
-    _ <- _ordinal_c(ordinal, 128)
+    _ <- if (ordinal > 0) Consequence.unit else Consequence.stateConflict("Workflow Git semantic selection requires a positive ordinal")
     selection <- GitSelectionId.parseC("conflict-" + ordinal)
     result <- executeGitC(core, GitOperation.StageSelected(selection))
   } yield result
 
   def stageGoalCandidateC(core: ActionCall.Core, ordinal: Int): Consequence[GitExecutionResult[Unit]] = for {
-    _ <- _ordinal_c(ordinal, 256)
+    _ <- if (ordinal > 0) Consequence.unit else Consequence.stateConflict("Workflow Git semantic selection requires a positive ordinal")
     selection <- GitSelectionId.parseC("goal-path-" + ordinal)
     result <- executeGitC(core, GitOperation.StageSelectedAll(selection))
   } yield result

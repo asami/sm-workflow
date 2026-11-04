@@ -24,7 +24,7 @@ import GoalPhasePrerequisitePublicationRecovery as P
   * lifecycle facts and Human direction are separate inputs. Neither replaces
   * the old publication result nor the accepted semantic work.
   * @since   Nov.  1, 2026
-  * @version Nov.  1, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhasePrerequisitePublicationUnknownRecovery {

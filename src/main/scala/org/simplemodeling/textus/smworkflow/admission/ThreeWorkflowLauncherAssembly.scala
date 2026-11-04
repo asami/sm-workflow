@@ -13,7 +13,9 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
   * The standard launcher uses ThreeWorkflowRuntimeParameters after CNCF bootstrap.
   * Parameter data selects storage/targets/policies, never independent authority ports.
   * @since   Oct.  6, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  *  version Nov.  2, 2026
+  * @version Nov.  3, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowLauncherAssembly {
@@ -72,6 +74,13 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     "RepositorySyncService.submitRepositorySyncWorkResult", "RepositorySyncService.submitRepositoryPurposeResult", "RepositorySyncService.submitNativeMergeReview",
     "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitNativeMergeRepair")
 
+  private val _standard_operations = publishedMcpOperations ++ Set(
+    "RepositorySyncService." + RepositorySyncRepairScopeCorrection.prepareOperation,
+    "RepositorySyncService." + RepositorySyncRepairScopeCorrection.describeOperation,
+    "RepositorySyncService." + RepositorySyncRepairScopeCorrection.adoptionOperation,
+    "RepositorySyncService." + RepositorySyncValidationContinuation.describeOperation,
+    "RepositorySyncService." + RepositorySyncValidationContinuation.adoptionOperation)
+
   /** Only implemented public Operations, using their generated CML contracts.
     * Their handlers are composed from the real run when invoked.
     */
@@ -85,7 +94,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     SmWorkflowComponent.EvidenceServiceService, SmWorkflowComponent.DevelopmentObservationServiceService,
     SmWorkflowComponent.LocalPublicationServiceService).map { service =>
     NativeWorkflowDescriptionMetadata.service(service, spec.OperationDefinitionGroup(NonEmptyVector.fromVectorUnsafe(
-      service.operations.operations.toVector.filter(operation => publishedMcpOperations(service.name + "." + operation.name)))))
+      service.operations.operations.toVector.filter(operation => _standard_operations(service.name + "." + operation.name)))))
   }
 
   def factory(declarations: Vector[ComponentParameterKey[?]], routes: Vector[ComponentParameterPathRoute],
