@@ -36,11 +36,12 @@ private[smworkflow] object BoundedWorkRuntime {
   final case class Payload(state: S.State, root: String, branch: String, baseHead: String,
     implementationWorker: Option[String] = None, unrelated: Option[Vector[G.DirtyPath]] = None, implementationWorkers: Option[Vector[String]] = None,
     supersededWork: Option[String] = None, hygiene: Option[CommitHygiene.Record] = None,
-    records: Option[CompletionRecords.Plan] = None)
+    records: Option[CompletionRecords.Plan] = None,
+    repairContinuation: Option[GoalTaskRepairContinuation.Direction] = None)
   private given Encoder[G.DirtyPath] = deriveEncoder
   private given Decoder[G.DirtyPath] = deriveDecoder
   given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
-    case ("unrelated" | "implementationWorkers" | "supersededWork" | "hygiene" | "records", value) => !value.isNull
+    case ("unrelated" | "implementationWorkers" | "supersededWork" | "hygiene" | "records" | "repairContinuation", value) => !value.isNull
     case _ => true
   }))
   given Decoder[Payload] = deriveDecoder

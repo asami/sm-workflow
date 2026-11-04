@@ -682,6 +682,20 @@
         },
         {
           "service": "GoalTaskService",
+          "name": "describeGoalTaskRepairContinuation",
+          "kind": "COMMAND",
+          "input": "GoalTaskRepairContinuationDescriptionInput",
+          "output": "GoalTaskRepairContinuationDescriptionResult"
+        },
+        {
+          "service": "GoalTaskService",
+          "name": "resumeGoalTaskRepair",
+          "kind": "COMMAND",
+          "input": "GoalTaskRepairContinuationInput",
+          "output": "GoalTaskRepairContinuationDescriptionResult"
+        },
+        {
+          "service": "GoalTaskService",
           "name": "describeGoalTaskMalformedIssuedWorkRecovery",
           "kind": "COMMAND",
           "input": "GoalTaskMalformedIssuedWorkRecoveryDescriptionInput",
@@ -6681,6 +6695,108 @@
             },
             {
               "name": "effect",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalTaskRepairContinuationDescriptionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalTaskRepairContinuationInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choice",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalTaskRepairContinuationDescriptionResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "componentInstance",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choices",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "resumeOperation",
               "type": "string",
               "multiplicity": "1",
               "required": true

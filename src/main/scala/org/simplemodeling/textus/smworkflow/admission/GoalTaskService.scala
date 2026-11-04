@@ -48,12 +48,14 @@ private[admission] final class BoundedTaskService(N: BoundedWorkNativeRun) {
     reader <- NativeExternalEvidence.bindBoundedC(creation.configuration, h)
     recovery = if (N.delegation) Vector.empty else GoalTaskMalformedIssuedWorkRecovery.operations(h, definition,
       new ThreeWorkflowExternalEvidencePorts(reader).goalTaskMalformedIssuedWorkRecovery)
+    continuation = if (N.delegation) Vector.empty else GoalTaskRepairContinuation.operations(h, definition,
+      new ThreeWorkflowExternalEvidencePorts(reader).goalTaskRepairContinuation)
     completion <- completionC(h, definition, storage, None, None)
     wrapped = CallScopedOperationBinding.wrapResult(completion, (core, submitted) =>
       N.storageC(h, definition, core).flatMap(storage => completionC(h, definition, storage, Some(core), Some(submitted))))
     service = NativeWorkflowDescriptionMetadata.service(declaredService,
       spec.OperationDefinitionGroup(NonEmptyVector.of(new Operation(true, h, definition, selections),
-        new Operation(false, h, definition, selections), new InformationOperation(h, definition), wrapped).concat(recovery)))
+        new Operation(false, h, definition, selections), new InformationOperation(h, definition), wrapped).concat(recovery ++ continuation)))
   } yield NativeWorkflowResultInput.task(service, creation, h, definition, N)
 
   private final class Operation(start: Boolean, h: Host, definition: DefinitionBinding,

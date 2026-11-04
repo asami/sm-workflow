@@ -194,6 +194,8 @@ final class GoalTaskWorkflowSpec extends AnyWordSpec with GivenWhenThen with Thr
       compiled.requiredOperations.map(_.identity.capability).toSet shouldBe Set("goal-task-implementation-capability", "goal-task-repair-capability", "goal-task-review-capability")
       compiled.actions.find(_.identity == "ReviewGoalTask").map(_.kind) shouldBe Some("JUDGMENT")
       ThreeWorkflowLauncherAssembly.publishedMcpOperations should contain("GoalTaskService.startGoalTask")
+      ThreeWorkflowLauncherAssembly.publishedMcpOperations should contain("GoalTaskService.describeGoalTaskRepairContinuation")
+      ThreeWorkflowLauncherAssembly.publishedMcpOperations should contain("GoalTaskService.resumeGoalTaskRepair")
       take(StandaloneFixRuntimeCatalog.loadC()).workflowIdentity.value shouldBe "StandaloneFixWorkflow"
       take(GoalPhaseRuntimeCatalog.loadC()).definition.workflowIdentity.value shouldBe "GoalPhaseWorkflow"
     }
