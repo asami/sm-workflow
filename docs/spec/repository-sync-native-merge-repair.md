@@ -320,14 +320,37 @@ historical frontier must be the exact failed source immediately preceding the
 saved adoption receipt, with its original failed payload. Check sources match
 actual retained settled failure and selection; review sources match the actual
 paired retained repair review. Multiple finite grants form that authenticated
-chain. A persisted identical adoption recollects `already-adopted` after later
+chain. A scope supersession can retain the same
+`RepairBudgetContinuationAdmitted` progression without creating a new grant.
+Budget restoration authenticates every such entry through the existing typed
+native WorkOrder supersession adapter and its canonical `UNKNOWN` checkpoint.
+The actual latest native instance must match the current retained history;
+the exact original suspension, frontier cause and adjacent source/next
+revisions must match the saved direction. The original issued repair
+WorkOrder must bind the same continuation, expected revision, completion,
+failed check and assigned paths. Component, context, root and endpoint remain
+bound, and the target's source, candidate and failure references must select
+their exact immutable native prefixes and retained typed receipts. Historical
+targets are checked against their own candidate and original input after
+later repairs too. An authenticated scope entry leaves the finite allowance
+unchanged; its replacement identity still normalizes to the same used repair.
+Unknown causes, forged directions, missing receipts, crossed candidates and
+nonadjacent transitions refuse; a scope-shaped cause alone confers no authority.
+Ordinary Advance admits only that authenticated scope frontier or its immediate
+qualified replacement suspension for the same original repair source, while
+retaining the exact original grant and failed-source binding.
+
+A persisted identical adoption recollects `already-adopted` after later
 progression without another write or issue; a contradictory or crossed repeat
 refuses. A new grant is available only at another actual exhausted formal
 failure with no existing issue to replay.
 
 `RepositorySyncRepairBudgetContinuationSpec` supplies pure exact-target,
 answer/binding, overflow, cumulative-chain accounting, no-refund,
-scope-normalization and old-row provenance cases. The dedicated installed CLI
+scope-normalization, historical scope authentication, crossed/forged checkpoint
+and adjacency refusal, exact replacement frontier and old-row provenance cases.
+The pure history predicates supply no stored WorkOrder or lifecycle authority;
+the actual adapter remains mandatory on the runtime path. The dedicated installed CLI
 fixture owns actual same-Session budget exhaustion, passive evidence/adoption,
 separate Advance, new repair and fresh qualification through the normal
 runtime. Fixture-authored Human/review answers are specification evidence and

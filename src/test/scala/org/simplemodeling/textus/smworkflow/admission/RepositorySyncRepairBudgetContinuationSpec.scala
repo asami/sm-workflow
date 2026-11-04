@@ -5,7 +5,8 @@ import io.circe.generic.auto.*
 import io.circe.syntax.*
 import java.nio.charset.StandardCharsets.UTF_8
 import org.goldenport.cncf.processexecution.{ProcessExecutionCapture, ProcessExecutionResult, ProcessExecutionTermination}
-import org.goldenport.cncf.workflow.ContextReference
+import org.goldenport.cncf.workflow.{ContextReference, ContinuationIdentity, WorkflowManagedWorkOrderSupersession}
+import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{ContinuationIdentity as NativeContinuationIdentity, *}
 import org.goldenport.protocol.Request
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -13,6 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 import RepositorySyncRepairBudgetContinuation as B
 import RepositorySyncNativeProgressStore as N
 import RepositorySyncPurposeRepairScopeFixture as F
+import RepositorySyncRepairScopeCorrection as S
 import SplitPhaseExplicitPartitionFixture.take
 
 private[admission] object RepositorySyncRepairBudgetContinuationFixture {
@@ -21,6 +23,48 @@ private[admission] object RepositorySyncRepairBudgetContinuationFixture {
   val target = B.Target("component", "session", F.context, F.request.root, "/specification/upstream.git",
     "10", cause, "10", cause, "10", cause, F.scope.failureReference, Some(F.failed), F.review,
     Some(F.snapshot), 1, 1, used, 1, B.policy)
+}
+
+/** Authored immutable prefixes for the narrow predicates only. No stored
+  * supersession, issued WorkOrder or Human evidence is created here. */
+private[admission] object RepositorySyncRepairScopeHistoryFixture {
+  val target = F.target.copy(frontierRevision = "12", expectedRevision = "12")
+  val direction = S.Direction(target, F.paths, S.lifecycleChoices.head, "Prior fixture worker ended; accept UNKNOWN",
+    "participant", ContextReference("fixture-scope-direction", "1"), true, true)
+  val checkpoint = S.Checkpoint(direction, "UNKNOWN")
+  val receipt = WorkflowManagedWorkOrderSupersession.Receipt(ContinuationIdentity(target.oldContinuationId),
+    InstanceRevision(12), InstanceRevision(13), checkpoint)
+  private val _definition = take(RepositorySyncDefinitionBinding.bindC)
+  private def _boundary(identity: String, revision: Long): SuspensionBoundary = SuspensionBoundary(
+    NativeContinuationIdentity(identity), InstanceRevision(revision), ContextSnapshotReference("fixture-snapshot"),
+    CompletionReference("fixture-completion"), EvidenceReference("fixture-evidence"), CorrelationReference("fixture-correlation"))
+  private def _record(revision: Int): InstanceRecord = {
+    val correlation = CorrelationReference("fixture-correlation")
+    val history = (1 to revision).toVector.map { ordinal =>
+      val (stage, cause, suspension) = ordinal match {
+        case 7 => ("PurposePrepared", "native-repository:session:purpose-1-prepared", None)
+        case 10 => ("PurposeRepairRequired", "native-repository:session:purpose-1-check-1-result", None)
+        case 11 => ("RepairBudgetContinuationAdmitted", "native-repository:session:repair-budget-10-adopted", None)
+        case 12 => ("RepairBudgetContinuationAdmitted", "native-repair-issued:session", Some(_boundary(target.oldContinuationId, 12)))
+        case 13 => ("RepairBudgetContinuationAdmitted", S.resumeCause + target.oldContinuationId, None)
+        case 14 => ("RepairBudgetContinuationAdmitted", "native-repair-issued:session", Some(_boundary(target.oldContinuationId + ":scope:13", 14)))
+        case _ => ("PurposePrepared", "native-repository:session:fixture-later-" + ordinal, None)
+      }
+      HistoryEntry(HistorySequence(ordinal.toLong), InstanceRevision(ordinal.toLong), Lifecycle.Active,
+        Some(ProgressionReference("sync." + stage)), correlation, CausationReference(cause), None, None, suspension)
+    }
+    val last = history.last
+    InstanceRecord(InstanceIdentity("session"), _definition, last.revision, last.lifecycle, last.currentProgression,
+      last.correlation, last.causation, last.derivedCompositeOccurrence, last.committedPredecessor, last.suspension, history)
+  }
+  val before = _record(12)
+  val adopted = _record(13)
+  val replacement = _record(14)
+  val later = _record(16)
+  val candidate = N.Stage(_record(7), N.Payload("PurposePrepared", F.request.root, F.actual.observed,
+    purposes = Some(F.progress.copy(receipts = F.progress.receipts.take(1)))))
+  val failed = N.Stage(_record(10), N.Payload("PurposeRepairRequired", F.request.root, F.actual.observed, purposes = Some(F.progress)))
+  val input = F.input.copy(files = F.input.files.filter(file => target.oldAssignedPaths.contains(file.path)), admittedInventory = None)
 }
 
 /** Pure finite allowance contracts. These authored inputs provide no native
@@ -287,6 +331,98 @@ final class RepositorySyncRepairBudgetContinuationSpec extends AnyWordSpec with 
       Then("the administrative replacement costs no second repair but the new failed source does")
       normalized shouldBe Vector("session:native-repair:7", "session:native-repair:10")
       B.Budget(1, 2, normalized).usedRepairs shouldBe 2
+    }
+  }
+  "C01 authenticated scope history within the finite grant chain" should {
+    "retain the same finite allowance across an authenticated administrative checkpoint and later candidate history" in {
+      Given("an original issued input and its own failed candidate prefixes followed by a scope checkpoint and later repaired candidate")
+      val f = RepositorySyncRepairScopeHistoryFixture
+      val budget = B.Budget(1, 2, Vector("session:native-repair:7", f.target.oldContinuationId))
+      When("the predicates used after native supersession loading bind that historical transition and its original typed input")
+      val transition = S.validHistoryTransition(f.receipt, f.later, f.later, f.before, f.adopted)
+      val candidate = S.validHistoryCandidate(f.target, f.input, f.failed, f.candidate, f.failed)
+      val binding = S.validHistoryBinding(f.target, "component", "session", F.context, F.request.root, f.target.endpoint)
+      Then("the old checkpoint stays valid independently of the latest candidate and adds no grant or second used identity")
+      transition shouldBe true
+      candidate shouldBe true
+      binding shouldBe true
+      budget shouldBe B.Budget(1, 2, Vector("session:native-repair:7", "session:native-repair:10"))
+      budget.copy(usedIdentities = (budget.usedIdentities :+ (f.target.oldContinuationId + ":scope:13"))
+        .map(S.budgetIdentity).distinct) shouldBe budget
+      budget.exhausted shouldBe true
+    }
+    "refuse missing UNKNOWN malformed directions forged causes crossed native identity and nonadjacent supersession revisions" in {
+      Given("one exact historical checkpoint and alternatives which a cause-prefix exemption would wrongly trust")
+      val f = RepositorySyncRepairScopeHistoryFixture
+      val checkpoints = Vector(f.checkpoint.copy(externalEffects = "NONE"),
+        f.checkpoint.copy(direction = f.direction.copy(priorExecutionEnded = false)),
+        f.checkpoint.copy(direction = f.direction.copy(acceptOriginalUncertainty = false)),
+        f.checkpoint.copy(direction = f.direction.copy(choice = "Defer")),
+        f.checkpoint.copy(direction = f.direction.copy(participant = "foreign")))
+      val receipts = checkpoints.map(value => f.receipt.copy(payload = value)) ++ Vector(
+        f.receipt.copy(identity = ContinuationIdentity("foreign:native-repair:10")),
+        f.receipt.copy(sourceRevision = InstanceRevision(11)), f.receipt.copy(nextRevision = InstanceRevision(14)),
+        f.receipt.copy(payload = f.checkpoint.copy(direction = f.direction.copy(target = f.target.copy(frontierCause = "forged-cause")))))
+      val forgedevent = f.adopted.history.last.copy(causation = CausationReference(S.resumeCause + "foreign:native-repair:10"))
+      val forged = f.adopted.copy(causation = forgedevent.causation, history = f.adopted.history.dropRight(1) :+ forgedevent)
+      When("strict checkpoint decoding and transition validation consume the supplied alternatives")
+      val decoded = checkpoints.map(value => S.checkpointCodec.decode(S.checkpointCodec.encode(value)))
+      val rejected = receipts.map(value => S.validHistoryTransition(value, f.later, f.later, f.before, f.adopted)) ++ Vector(
+        S.validHistoryTransition(f.receipt, forged, forged, f.before, forged),
+        S.validHistoryTransition(f.receipt, f.later, f.adopted, f.before, f.adopted),
+        S.validHistoryTransition(f.receipt, f.later, f.later, f.before.copy(suspension = None), f.adopted),
+        S.validHistoryTransition(f.receipt, f.later, f.later, f.before, f.replacement))
+      Then("all malformed crossed and adjacency violations fail closed despite having a scope-shaped cause")
+      decoded.foreach(_.isLeft shouldBe true)
+      rejected.foreach(_ shouldBe false)
+      S.checkpointCodec.decode(S.checkpointCodec.encode(f.checkpoint).mapObject(_.add("unknown", Json.True))).isLeft shouldBe true
+    }
+    "refuse crossed component context root endpoint original files failed receipts and historical candidate references" in {
+      Given("the actual original-input-shaped contract and independent forged or crossed historical facts")
+      val f = RepositorySyncRepairScopeHistoryFixture
+      val metadata = Vector(
+        (f.target, "foreign", "session", F.context, F.request.root, f.target.endpoint),
+        (f.target, "component", "foreign", F.context, F.request.root, f.target.endpoint),
+        (f.target, "component", "session", F.context.copy(participantIdentity = "foreign"), F.request.root, f.target.endpoint),
+        (f.target, "component", "session", F.context, "/foreign/root", f.target.endpoint),
+        (f.target, "component", "session", F.context, F.request.root, "/foreign/upstream.git"))
+      val changedchecks = f.input.review.checks.updated(1, F.failed.copy(stderr = "forged failure"))
+      val changedprogress = F.progress.copy(effects = Vector.empty)
+      val inputs = Vector(f.input.copy(validationFailure = Some("compile")), f.input.copy(validationFailure = None),
+        f.input.copy(files = F.input.files), f.input.copy(review = f.input.review.copy(indexTree = "9" * 40)),
+        f.input.copy(review = f.input.review.copy(checks = changedchecks)))
+      val targets = Vector(f.target.copy(candidateReference = ContextReference("session:native-forged-candidate", "1")),
+        f.target.copy(failureReference = ContextReference("session:native-forged-failure", "1")),
+        f.target.copy(candidateRevision = "8"), f.target.copy(purpose = Some(F.snapshot.copy(progress = changedprogress))))
+      When("the historical candidate predicate checks exact original files and the retained failed selection and candidate")
+      val bindings = metadata.map((target, component, identity, context, root, endpoint) =>
+        S.validHistoryBinding(target, component, identity, context, root, endpoint))
+      val rejected = bindings ++ inputs.map(value => S.validHistoryCandidate(f.target, value, f.failed, f.candidate, f.failed)) ++
+        targets.map(value => S.validHistoryCandidate(value, f.input, f.failed, f.candidate, f.failed)) ++ Vector(
+          S.validHistoryCandidate(f.target, f.input, f.failed, f.candidate.copy(record = f.later), f.failed),
+          S.validHistoryCandidate(f.target, f.input, f.failed, f.candidate, f.failed.copy(payload = f.failed.payload.copy(root = "/foreign/root"))))
+      Then("none can borrow the checkpoint or the latest candidate to create allowance authority")
+      rejected.foreach(_ shouldBe false)
+      S.validHistoryCandidate(f.target, f.input, f.failed, f.candidate, f.failed) shouldBe true
+    }
+    "admit only the authenticated scope frontier and its immediately following exact replacement suspension" in {
+      Given("a finite-grant scope frontier its ordinary qualified replacement and a later unrelated candidate")
+      val f = RepositorySyncRepairScopeHistoryFixture
+      val revision = f.receipt.nextRevision
+      val wrongboundary = f.replacement.suspension.get.copy(continuationIdentity = NativeContinuationIdentity("session:native-repair:99:scope:13"))
+      val forged = f.adopted.copy(causation = CausationReference(S.resumeCause + "forged"),
+        history = f.adopted.history.updated(f.adopted.history.size - 1,
+          f.adopted.history.last.copy(causation = CausationReference(S.resumeCause + "forged"))))
+      When("the same frontier predicate used after budget restoration and actual selectedC authentication checks each candidate")
+      val admitted = Vector(f.adopted, f.replacement).map(value => B.validScopeFrontier(value, f.target, revision, f.target.oldContinuationId))
+      val rejected = Vector(f.later, forged, f.replacement.copy(suspension = Some(wrongboundary)),
+        f.replacement.copy(causation = CausationReference("unrelated-issue"))).map(value =>
+        B.validScopeFrontier(value, f.target, revision, f.target.oldContinuationId)) ++ Vector(
+          B.validScopeFrontier(f.adopted, f.target, revision, "session:native-repair:99"),
+          B.validScopeFrontier(f.adopted, f.target, revision.next, f.target.oldContinuationId))
+      Then("only the two exact frontiers survive and no arbitrary descendant or forged correction can reopen the grant")
+      admitted.foreach(_ shouldBe true)
+      rejected.foreach(_ shouldBe false)
     }
   }
   "ID10 backward compatible native progress provenance" should {

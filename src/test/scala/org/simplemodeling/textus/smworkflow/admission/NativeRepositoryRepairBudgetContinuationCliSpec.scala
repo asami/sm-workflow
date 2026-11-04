@@ -6,8 +6,9 @@ import io.circe.parser.parse
 import io.circe.syntax.*
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.{Files, Path, StandardOpenOption}
-import org.goldenport.cncf.workflow.WorkflowInstanceRecordJsonV1
+import org.goldenport.cncf.workflow.{WorkflowInstanceRecordJsonV1, WorkflowWorkOrderJsonV1}
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
+import org.goldenport.cncf.workflow.WorkflowProtocolV1.WorkflowContinuation
 import org.scalatest.{DoNotDiscover, GivenWhenThen}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -17,6 +18,9 @@ import RepositorySyncPurpose as P
 import RepositorySyncNativeMergeValidation as C
 import RepositorySyncRepairBudgetContinuation as B
 import RepositorySyncPurposePreparationContinuation as A
+import RepositorySyncRepairScopeCorrection as N
+import RepositorySyncNativeMergeRepair as M
+import RepositorySyncRepairInventory.given
 import SplitPhaseExplicitPartitionFixture.take
 
 /** Explicit before/after qualification against installed product images.
@@ -32,13 +36,18 @@ import SplitPhaseExplicitPartitionFixture.take
 final class NativeRepositoryRepairBudgetContinuationCliSpec extends AnyWordSpec with Matchers with GivenWhenThen
     with NativeRepositorySelectionCorrectionFixture {
   private val _phase = sys.props.getOrElse("smworkflow.spec.repairBudgetPhase",
-    fail("Select -Dsmworkflow.spec.repairBudgetPhase=before|after"))
-  require(Set("before", "after")(_phase), "Select exactly one installed repair-budget phase")
-  private val _episode = Path.of(sys.props.getOrElse("smworkflow.spec.repairBudgetEpisode",
-    fail("Select -Dsmworkflow.spec.repairBudgetEpisode=<absolute saved JSON>")))
+    fail("Select -Dsmworkflow.spec.repairBudgetPhase=before|after|scope-before|scope-after"))
+  require(Set("before", "after", "scope-before", "scope-after")(_phase), "Select exactly one installed repair-budget phase")
+  private val _scope_mode = _phase.startsWith("scope-")
+  private lazy val _scope_episode = Path.of(sys.props.getOrElse("smworkflow.spec.repairBudgetScopeEpisode",
+    fail("Select -Dsmworkflow.spec.repairBudgetScopeEpisode=<fresh absolute scope checkpoint JSON>")))
+  private val _episode = if (_scope_mode) _scope_episode.resolveSibling(_scope_episode.getFileName.toString + ".limit.json")
+    else Path.of(sys.props.getOrElse("smworkflow.spec.repairBudgetEpisode",
+      fail("Select -Dsmworkflow.spec.repairBudgetEpisode=<absolute saved JSON>")))
   require(_episode.isAbsolute && _episode.normalize == _episode && Files.isDirectory(_episode.getParent))
   private val _test_path = "src/test/scala/fixture/SelectedInputSpec.scala"
   private val _document_path = "docs/budget.md"
+  private val _baseline_path = "src/main/scala/fixture/BudgetBaseline.scala"
   private val _checks = originalChecks :+ appendedCheck
   // The frozen corrected recipe uses StandardWorkflowRuntime's unchanged
   // default three repairs; there is no fixture limit or later host override.
@@ -58,7 +67,13 @@ final class NativeRepositoryRepairBudgetContinuationCliSpec extends AnyWordSpec 
     |    }
     |  }
     |}
-    |""".stripMargin.replace("__EXPECTED__", expected.asJson.noSpaces)
+    |""".stripMargin.replace("      actual shouldBe __EXPECTED__",
+      "      actual shouldBe __EXPECTED__" + (if (_scope_mode)
+        "\n      BudgetBaseline.expectedValue shouldBe __EXPECTED__" else ""))
+      .replace("__EXPECTED__", expected.asJson.noSpaces)
+
+  private def _baseline(expected: String): String =
+    "package fixture\nobject BudgetBaseline {\n  def expectedValue: String = " + expected.asJson.noSpaces + "\n}\n"
 
   private def _array(value: Json, key: String): Vector[Json] = value.hcursor.get[Vector[Json]](key).toOption.get
   private def _repository(scenario: F.Scenario): Path = Path.of(scenario.host.target.root)
@@ -110,9 +125,10 @@ final class NativeRepositoryRepairBudgetContinuationCliSpec extends AnyWordSpec 
       "indexTree" -> git(scenario.root, "-C", repository.toString, "write-tree").asJson,
       "status" -> git(scenario.root, "-C", repository.toString, "status", "--porcelain").asJson,
       "diff" -> git(scenario.root, "-C", repository.toString, "diff", "HEAD", "--").asJson,
-      "source" -> Json.obj("value.txt" -> Files.readString(repository.resolve("value.txt")).asJson,
+      "source" -> Json.obj((Vector("value.txt" -> Files.readString(repository.resolve("value.txt")).asJson,
         _test_path -> Files.readString(repository.resolve(_test_path)).asJson,
-        _document_path -> Files.readString(repository.resolve(_document_path)).asJson),
+        _document_path -> Files.readString(repository.resolve(_document_path)).asJson) ++
+        Option.when(_scope_mode)(_baseline_path -> Files.readString(repository.resolve(_baseline_path)).asJson))*),
       "checks" -> formalReceipts(scenario, session).asJson, "invocations" -> _invocations(scenario).asJson)
   }
   private def _record(scenario: F.Scenario, session: String): String =
@@ -192,6 +208,11 @@ final class NativeRepositoryRepairBudgetContinuationCliSpec extends AnyWordSpec 
     Files.createDirectories(repository.resolve(_test_path).getParent)
     Files.writeString(repository.resolve(_test_path), _test("initial\n"))
     Files.writeString(repository.resolve(_document_path), "Original independent document\n")
+    if (_scope_mode) {
+      Files.createDirectories(repository.resolve(_baseline_path).getParent)
+      Files.writeString(repository.resolve(_baseline_path), _baseline("initial\n"))
+      git(scenario.root, "-C", repository.toString, "add", "--", _baseline_path)
+    }
     git(scenario.root, "-C", repository.toString, "add", "--", "build.sbt", _test_path, _document_path)
     git(scenario.root, "-C", repository.toString, "commit", "-m", "Tiny actual repair-budget product fixture")
     git(scenario.root, "-C", repository.toString, "push", scenario.host.target.endpoint, "HEAD:refs/heads/main")
@@ -775,12 +796,299 @@ final class NativeRepositoryRepairBudgetContinuationCliSpec extends AnyWordSpec 
       UTF_8, StandardOpenOption.CREATE_NEW)
   }
 
+  private def _scope_work_rows(scenario: F.Scenario, identity: String): Vector[String] =
+    stored(scenario).filter(raw => WorkflowWorkOrderJsonV1.decodeC(raw, M.inputCodec).toOption.exists(_.current match {
+      case order: WorkflowContinuation.WorkOrder[M.Request] => order.request.continuationId.value == identity
+      case _ => false
+    }))
+
+  private def _scope_work(scenario: F.Scenario, identity: String): M.Request = {
+    val rows = _scope_work_rows(scenario, identity)
+    rows.size shouldBe 1
+    take(WorkflowWorkOrderJsonV1.decodeC(rows.head, M.inputCodec)).current match {
+      case order: WorkflowContinuation.WorkOrder[M.Request] => order.request.input.get.value
+      case _ => fail("Retain the actual original native repair WorkOrder")
+    }
+  }
+
+  private def _scope_invocation(result: F.Result): Json = Json.obj("exitCode" -> result.exitCode.asJson,
+    "argv" -> result.invocation.argv.asJson, "pid" -> result.invocation.pid.asJson,
+    "stdout" -> result.invocation.stdout.toString.asJson, "stderr" -> result.invocation.stderr.toString.asJson)
+
+  private def _scope_direction(scenario: F.Scenario, session: String,
+    described: F.Result): (V.RepositorySyncRepairScopeCorrectionAdoptionInput, F.Result) = {
+    val description = successful(described).business[V.RepositorySyncRepairScopeCorrectionDescriptionResult]
+    val target = take(N.targetC(description.target))
+    val directory = Files.createTempDirectory(scenario.root, "fixture-budget-scope-lifecycle-")
+    val reference = V.WorkflowArtifactReference(directory.getFileName.toString, "1")
+    val answer = V.RepositorySyncRepairScopeCorrectionAnswer(N.lifecycleChoices.head, Vector.empty,
+      "Independent fixture lifecycle direction: prior CLI returned and worker ended; accept retained UNKNOWN effects; no real Human approval is claimed",
+      true, true)
+    val execution = V.WorkflowExecutionEvidence(Vector(reference), Some(target.context.participantIdentity), None, None)
+    val preparation = V.WorkflowEvidencePreparationInput("RepositorySyncRepairScopeCorrection", "adoption",
+      described.invocation.stdout.toUri.toASCIIString, save(directory, "answer.json", json(answer)),
+      save(directory, "reference.json", json(reference)), save(directory, "execution.json", json(execution)),
+      "normal-development-host", java.time.Instant.now().toString, "entity:smworkflow.cli.host_evidence", Some(target.context.participantIdentity))
+    val prepared = successful(scenario.prepareHostInput("prepareEvidence",
+      take(new org.goldenport.record.io.RecordDecoder().json(json(preparation)))))
+    scenario.selectPreparedImport(prepared)
+    (V.RepositorySyncRepairScopeCorrectionAdoptionInput(session, description.target, answer.choice, Vector.empty,
+      answer.rationale, reference, true, true, execution), prepared)
+  }
+
+  private def _scope_snapshot(scenario: F.Scenario, session: String): Json = Json.obj(
+    "record" -> _record(scenario, session).asJson, "effects" -> _effects(scenario, session),
+    "nativeReceipts" -> _native(scenario, session).asJson, "formal" -> formalReceipts(scenario, session).asJson,
+    "unknownRows" -> stored(scenario).filter(_.contains("UNKNOWN")).asJson,
+    "configuration" -> Files.readString(scenario.root.resolve(".textus/config.json")).asJson,
+    "usedIdentities" -> _used(scenario, session).asJson)
+
+  private def _scope_assert_checkpoint(scenario: F.Scenario, saved: Json): Unit = {
+    val session = saved.hcursor.get[String]("session").toOption.get
+    _scope_snapshot(scenario, session) shouldBe saved.hcursor.get[Json]("postScope").toOption.get
+    ThreeWorkflowRuntimeParameters.encode(scenario.host) shouldBe saved.hcursor.get[Json]("host").toOption.get
+    scenario.plan.asJson shouldBe saved.hcursor.get[Json]("plan").toOption.get
+    _scope_work_rows(scenario, saved.hcursor.get[String]("oldIdentity").toOption.get) shouldBe
+      saved.hcursor.get[Vector[String]]("oldWorkRows").toOption.get
+    val failed = saved.hcursor.get[Json]("oldAdvance").toOption.get
+    failed.hcursor.get[Int]("exitCode").toOption.get should not be 0
+    val logs = Vector("stdout", "stderr").map { name =>
+      val path = Path.of(failed.hcursor.get[String](name).toOption.get)
+      Files.isRegularFile(path) shouldBe true
+      Files.readString(path)
+    }.mkString("\n")
+    logs should include("409")
+    logs should include("repair budget stage has no native adoption reference")
+    logs shouldBe saved.hcursor.get[String]("oldAdvanceLogs").toOption.get
+  }
+
+  private def _scope_before(): Unit = {
+    installed()
+    if (Files.exists(_scope_episode)) {
+      Given("the exact already captured scope supersession and actual old installed 409")
+      val saved = parse(Files.readString(_scope_episode)).toOption.get
+      val scenario = _reopen(saved)
+      When("the fixture recollects that same Session with read-only observations")
+      if (current(scenario, saved.hcursor.get[String]("session").toOption.get).lifecycle == Lifecycle.Completed)
+        _scope_recollect_completed(scenario, saved)
+      else _scope_assert_checkpoint(scenario, saved)
+      Then("the saved grant scope direction and actual failure remain untouched")
+      return
+    }
+    Given("a fresh separate tiny scope episode with its tracked baseline helper and unchanged default repair limit")
+    _before()
+    val limited = parse(Files.readString(_episode)).toOption.get
+    val scenario = _reopen(limited)
+    val session = limited.hcursor.get[String]("session").toOption.get
+    val repository = _repository(scenario)
+    val beforegrant = _scope_snapshot(scenario, session)
+    When("independent fixture evidence grants exactly one finite repair and ordinary Advance issues the fourth original assignment")
+    val described = successful(scenario.repositoryCall(B.describeOperation, Vector("--sessionId", session)))
+    val input = _direction(scenario, session, described, "ContinueRepairs", 1)
+    val adoption = successful(_adopt(scenario, input))
+    val grant = adoption.business[V.RepositorySyncRepairBudgetContinuationAdoptionResult]
+    grant.accepted shouldBe true
+    (grant.originalLimit, grant.effectiveLimit, grant.usedRepairs) shouldBe ((_original_limit, _original_limit + 1, _original_limit))
+    _effects(scenario, session) shouldBe beforegrant.hcursor.get[Json]("effects").toOption.get
+    val issued = successful(advance(scenario, session))
+    val original = issued.business[V.RepositorySyncAdvanceResult]
+    original.submitOperation shouldBe Some("submitNativeMergeRepair")
+    original.repair.get.files.map(_.path).toSet shouldBe Set("value.txt", _test_path)
+    val oldidentity = original.issuedWorkContext.get.continuationId
+    val oldwork = _scope_work(scenario, oldidentity)
+    val used = _used(scenario, session)
+    used.size shouldBe _original_limit + 1
+    N.budgetIdentity(oldidentity) shouldBe used.last
+    val prescope = _scope_snapshot(scenario, session)
+    When("native preparation qualifies the exact original assignment plus the necessary existing tracked baseline helper")
+    val paths = (oldwork.files.map(_.path) :+ _baseline_path).distinct.sorted
+    val preparedscope = successful(scenario.repositoryCall(N.prepareOperation, Vector("--input",
+      N.Preparation(session, paths, "The intended selected specification also requires correcting the tracked baseline expectation helper").asJson.noSpaces)))
+    val target = take(N.targetC(preparedscope.business[V.RepositorySyncRepairScopeCorrectionDescriptionResult].target))
+    target.oldContinuationId shouldBe oldidentity
+    target.oldAssignedPaths shouldBe oldwork.files.map(_.path)
+    target.inventory.get.paths shouldBe paths
+    target.purpose.get.progress shouldBe _failed(scenario, session)
+    _scope_snapshot(scenario, session) shouldBe prescope
+    val (direction, evidence) = _scope_direction(scenario, session, preparedscope)
+    val scopeadoption = successful(scenario.repositoryCall(N.adoptionOperation, Vector("--input", json(direction))))
+    scopeadoption.business[V.RepositorySyncRepairScopeCorrectionAdoptionResult].accepted shouldBe true
+    scopeadoption.business[V.RepositorySyncRepairScopeCorrectionAdoptionResult].outcome shouldBe "adopted"
+    _effects(scenario, session) shouldBe prescope.hcursor.get[Json]("effects").toOption.get
+    _used(scenario, session) shouldBe used
+    _scope_work(scenario, oldidentity) shouldBe oldwork
+    val postscope = _scope_snapshot(scenario, session)
+    postscope.hcursor.get[Vector[String]]("unknownRows").toOption.get should not be empty
+    When("one ordinary Advance on the old installed image encounters the actual budget and scope composition defect")
+    val failed = advance(scenario, session)
+    failed.exitCode should not be 0
+    val failurelogs = Vector(failed.invocation.stdout, failed.invocation.stderr).map(Files.readString(_)).mkString("\n")
+    failurelogs should include("409")
+    failurelogs should include("repair budget stage has no native adoption reference")
+    Then("the same physical Session is checkpointed with the grant scope supersession original work UNKNOWN effects and literal old failure")
+    _scope_snapshot(scenario, session) shouldBe postscope
+    git(scenario.root, "-C", repository.toString, "rev-parse", "HEAD") shouldBe limited.hcursor.get[String]("firstCommit").toOption.get
+    val checkpoint = Json.obj("root" -> scenario.root.toString.asJson, "session" -> session.asJson,
+      "host" -> ThreeWorkflowRuntimeParameters.encode(scenario.host), "plan" -> scenario.plan.asJson,
+      "originalLimit" -> _original_limit.asJson, "effectiveLimit" -> (_original_limit + 1).asJson,
+      "limitCheckpoint" -> limited, "beforeGrant" -> beforegrant, "preScope" -> prescope, "postScope" -> postscope,
+      "firstCommit" -> limited.hcursor.get[Json]("firstCommit").toOption.get,
+      "oldIdentity" -> oldidentity.asJson, "oldWork" -> M.inputCodec.encode(oldwork),
+      "oldWorkRows" -> _scope_work_rows(scenario, oldidentity).asJson,
+      "retainedScopeRows" -> stored(scenario).filter(_.contains(oldidentity)).asJson,
+      "budgetInput" -> parse(json(input)).toOption.get, "budgetDescription" -> _scope_invocation(described),
+      "budgetAdoption" -> _scope_invocation(adoption), "fourthIssue" -> _scope_invocation(issued),
+      "scopeTarget" -> target.asJson, "scopeInput" -> parse(json(direction)).toOption.get,
+      "scopePreparation" -> _scope_invocation(preparedscope), "scopeEvidence" -> _scope_invocation(evidence),
+      "scopeAdoption" -> _scope_invocation(scopeadoption), "oldAdvance" -> _scope_invocation(failed),
+      "oldAdvanceLogs" -> failurelogs.asJson, "installedCommand" -> installed().toString.asJson)
+    Files.writeString(_scope_episode, checkpoint.noSpaces, UTF_8, StandardOpenOption.CREATE_NEW)
+  }
+
+  private def _scope_result: Path = _scope_episode.resolveSibling(_scope_episode.getFileName.toString + ".result.json")
+
+  private def _scope_recollect_completed(scenario: F.Scenario, saved: Json): Unit = {
+    val result = parse(Files.readString(_scope_result)).toOption.get
+    val session = saved.hcursor.get[String]("session").toOption.get
+    Given("the exact scope episode already completed with retained fresh checks and its second Purpose commit")
+    When("the fixture recollects only the retained result and current read-only native observations")
+    result.hcursor.get[Json]("checkpoint").toOption.get shouldBe saved
+    current(scenario, session).lifecycle shouldBe Lifecycle.Completed
+    Then("the saved successful effects are unchanged without any workflow call or repeated evidence adoption")
+    _scope_snapshot(scenario, session) shouldBe result.hcursor.get[Json]("finalState").toOption.get
+    _scope_work_rows(scenario, saved.hcursor.get[String]("oldIdentity").toOption.get) shouldBe
+      saved.hcursor.get[Vector[String]]("oldWorkRows").toOption.get
+  }
+
+  private def _scope_after(): Unit = {
+    installed()
+    Given("the new installed runtime and the exact old failed scope checkpoint on the same physical Session")
+    val saved = parse(Files.readString(_scope_episode)).toOption.get
+    def _field_[A: io.circe.Decoder](name: String): A = saved.hcursor.get[A](name).toOption.get
+    val scenario = _reopen(saved)
+    val session = _field_[String]("session")
+    if (current(scenario, session).lifecycle == Lifecycle.Completed) {
+      _scope_recollect_completed(scenario, saved)
+      return
+    }
+    _scope_assert_checkpoint(scenario, saved)
+    val repository = _repository(scenario)
+    val old = current(scenario, session)
+    val original = formalReceipts(scenario, session)
+    val oldnative = _native(scenario, session)
+    val passive = _effects(scenario, session)
+    val used = _used(scenario, session)
+    val firstcommit = _field_[String]("firstCommit")
+    val oldidentity = _field_[String]("oldIdentity")
+    val target = _field_[N.Target]("scopeTarget")
+    used.size shouldBe _original_limit + 1
+    val budgetgrants = receipts(scenario, session).filter(_.payload.value.stage == "RepairBudgetContinuationAdmitted")
+    budgetgrants.size shouldBe 1
+    val direction = budgetgrants.head.payload.value.repairBudget.get
+    direction.target.originalLimit shouldBe _original_limit
+    take(B.effectiveLimitC(direction.target, direction.additionalRepairs)) shouldBe _original_limit + 1
+    When("separate ordinary Advance authenticates the existing scope supersession and issues its qualified replacement")
+    val issuedcall = successful(advance(scenario, session))
+    val issued = issuedcall.business[V.RepositorySyncAdvanceResult]
+    issued.submitOperation shouldBe Some("submitNativeMergeRepair")
+    val identity = issued.issuedWorkContext.get.continuationId
+    identity should startWith(oldidentity + ":scope:")
+    N.budgetIdentity(identity) shouldBe N.budgetIdentity(oldidentity)
+    _used(scenario, session) shouldBe used
+    issued.repair.get.files.map(_.path) shouldBe target.inventory.get.paths
+    _scope_work(scenario, identity).admittedInventory shouldBe target.inventory
+    _effects(scenario, session) shouldBe passive
+    val issuedrecord = current(scenario, session)
+    successful(advance(scenario, session)).business[V.RepositorySyncAdvanceResult] shouldBe issued
+    current(scenario, session) shouldBe issuedrecord
+    _effects(scenario, session) shouldBe passive
+    When("the fixture corrects the actual issued input and necessary baseline helper while retaining the complete intended test")
+    val files = issued.repair.get.files
+    files.find(_.path == _test_path).get.text shouldBe _test("expected\n")
+    files.find(_.path == _baseline_path).get.text shouldBe _baseline("initial\n")
+    val replacements = files.map(file => file.path match {
+      case "value.txt" => file.copy(text = "expected\n")
+      case path if path == _baseline_path => file.copy(text = _baseline("expected\n"))
+      case _ => file
+    })
+    val reference = V.WorkflowArtifactReference("fixture-budget-scope-fourth-repair", "1")
+    val result = V.RepositorySyncNativeMergeRepairResult("repaired",
+      "Fixture-authored fourth repair of the actual qualified input and stale baseline helper; preserve the original intended specification",
+      replacements, None)
+    val submission = successful(scenario.repositoryCall("submitNativeMergeRepair", Vector("--sessionId", session,
+      "--result", json(result), "--resultReference", json(reference), "--executionEvidence",
+      json(V.WorkflowExecutionEvidence(Vector(reference), Some("fixture-budget-scope-repair-author"), None, None)))))
+    submission.business[V.RepositorySyncNativeMergeRepairSubmissionResult].accepted shouldBe true
+    _effects(scenario, session) shouldBe passive
+    successful(advance(scenario, session)).business[V.RepositorySyncAdvanceResult].condition shouldBe Some("PurposeGrouped")
+    val reviewed = successful(advance(scenario, session))
+    reviewed.business[V.RepositorySyncAdvanceResult].submitOperation shouldBe Some("submitNativeMergeReview")
+    val fresh = formalReceipts(scenario, session).filterNot(original.contains)
+    fresh.size shouldBe _checks.size
+    fresh.map(_._2.identity).toSet shouldBe _checks.map(_.identity).toSet
+    fresh.foreach { (_, receipt) =>
+      receipt.termination shouldBe "exited"
+      receipt.exitCode shouldBe Some(0)
+      receipt.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Succeeded
+    }
+    val focused = fresh.find(_._2.identity == appendedCheck.identity).get._2.sbt.get
+    focused.kind shouldBe WorkflowSbtValidation.Kind.TestOnly
+    focused.selection.get.testClasses shouldBe Vector(selectedClass)
+    focused.selection.get.testsRun should be > 0L
+    _invocations(scenario).size shouldBe passive.hcursor.get[Vector[String]]("invocations").toOption.get.size + _checks.size
+    git(scenario.root, "-C", repository.toString, "rev-parse", "HEAD") shouldBe firstcommit
+    When("independent fixture review accepts only the fresh actual candidate and ordinary Advance installs its second Purpose commit")
+    _review(scenario, session, reviewed, "scope-second")
+    val terminalcall = successful(advance(scenario, session))
+    val terminal = terminalcall.business[V.RepositorySyncAdvanceResult]
+    Then("the same clean Session completes with four cumulative repairs one original grant and every old native failure retained")
+    terminal.kind shouldBe "Terminal"
+    current(scenario, session).lifecycle shouldBe Lifecycle.Completed
+    current(scenario, session).history.take(old.history.size) shouldBe old.history
+    git(scenario.root, "-C", repository.toString, "status", "--porcelain") shouldBe ""
+    git(scenario.root, "-C", repository.toString, "rev-parse", "HEAD^") shouldBe firstcommit
+    val head = git(scenario.root, "-C", repository.toString, "rev-parse", "HEAD")
+    head should not be firstcommit
+    Files.readString(repository.resolve("value.txt")) shouldBe "expected\n"
+    Files.readString(repository.resolve(_test_path)) shouldBe _test("expected\n")
+    Files.readString(repository.resolve(_baseline_path)) shouldBe _baseline("expected\n")
+    Files.readString(repository.resolve(_document_path)) shouldBe "Completed independent document\n"
+    val purpose = receipts(scenario, session).flatMap(_.payload.value.purposes).maxBy(value => (value.cursor, value.attempt))
+    purpose.commits shouldBe Vector(firstcommit, head)
+    _used(scenario, session) shouldBe used
+    original.foreach(value => formalReceipts(scenario, session) should contain(value))
+    oldnative.foreach(value => _native(scenario, session) should contain(value))
+    receipts(scenario, session).filter(_.payload.value.stage == "RepairBudgetContinuationAdmitted") shouldBe budgetgrants
+    _field_[Json]("postScope").hcursor.get[Vector[String]]("unknownRows").toOption.get
+      .foreach(raw => stored(scenario) should contain(raw))
+    _scope_work_rows(scenario, oldidentity) shouldBe _field_[Vector[String]]("oldWorkRows")
+    P.repairProgressJson(_failed(scenario, session)) shouldBe _field_[Json]("limitCheckpoint").hcursor.get[Json]("failure").toOption.get
+    _assert_configuration(scenario, _field_[Json]("postScope").hcursor.get[String]("configuration").toOption.get)
+    val finalstate = _scope_snapshot(scenario, session)
+    successful(advance(scenario, session)).business[V.RepositorySyncAdvanceResult] shouldBe terminal
+    _scope_snapshot(scenario, session) shouldBe finalstate
+    Files.writeString(_scope_result, Json.obj("checkpoint" -> saved, "qualifiedIdentity" -> identity.asJson,
+      "originalLimit" -> _original_limit.asJson, "effectiveLimit" -> (_original_limit + 1).asJson,
+      "usedRepairs" -> used.size.asJson, "usedIdentities" -> used.asJson,
+      "replacementIssue" -> _scope_invocation(issuedcall), "repairSubmission" -> _scope_invocation(submission),
+      "reviewIssue" -> _scope_invocation(reviewed), "terminalInvocation" -> _scope_invocation(terminalcall),
+      "freshReceipts" -> fresh.asJson, "purposeCommits" -> Vector(firstcommit, head).asJson,
+      "terminal" -> parse(json(terminal)).toOption.get, "finalState" -> finalstate,
+      "installedCommand" -> installed().toString.asJson).noSpaces, UTF_8, StandardOpenOption.CREATE_NEW)
+  }
+
   "ID10 installed same-Session finite repair budget" should {
     if (_phase == "before") {
       "retain three accepted still-failing repairs at the actual original limit" in { _before() }
     }
     if (_phase == "after") {
       "adopt one finite allowance passively and complete through one new actual repair" in { _after() }
+    }
+    if (_phase == "scope-before") {
+      "retain the actual old budget and scope 409 after one finite grant and fourth repair issuance" in { _scope_before() }
+    }
+    if (_phase == "scope-after") {
+      "resume the exact scope checkpoint and complete its fourth repair without counting the administrative reissue" in { _scope_after() }
     }
   }
 }

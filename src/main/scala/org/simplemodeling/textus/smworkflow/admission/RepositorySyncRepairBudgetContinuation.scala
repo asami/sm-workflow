@@ -213,6 +213,9 @@ private[smworkflow] object RepositorySyncRepairBudgetContinuation {
     current.history.filter(entry => entry.currentProgression.contains(ProgressionReference("sync." + _stage)) &&
       entry.suspension.isEmpty).foldLeft(Consequence.success(Budget(original, original, Vector.empty))) { (prior, entry) => for {
       budget <- prior
+      next <- if (entry.causation.value.startsWith(RepositorySyncRepairScopeCorrection.resumeCause))
+        RepositorySyncRepairScopeCorrection.authenticateHistoryC(store, current, entry).map(_ => budget)
+      else for {
       _ <- if (entry.causation.value.startsWith(prefix)) Consequence.unit else N.invalid("repair budget stage has no native adoption reference")
       saved <- store.scoped("").loadC(entry.causation.value.stripPrefix("native-repository:" + store.identity + ":"))
         .flatMap(_.map(Consequence.success).getOrElse(N.invalid("repair budget adoption history has no retained receipt")))
@@ -237,7 +240,8 @@ private[smworkflow] object RepositorySyncRepairBudgetContinuation {
           saved.payload == failed.payload.copy(stage = _stage, repairBudget = Some(direction))) Consequence.unit
         else N.invalid("repair budget grant crosses original selection, cumulative budget, failed source or adjacent native history")
       granted <- grantC(budget, direction, usedIdentities(before))
-    } yield granted }.flatMap { budget =>
+      } yield granted
+    } yield next }.flatMap { budget =>
       val used = usedIdentities(current)
       if (used.take(budget.usedIdentities.size) == budget.usedIdentities && used.forall(_identity(store.identity, _)))
         Consequence.success(budget.copy(usedIdentities = used))
@@ -289,6 +293,25 @@ private[smworkflow] object RepositorySyncRepairBudgetContinuation {
       else N.invalid("repair budget grant is not at the actual failed source frontier")
   } yield failed
 
+  /** The authenticated scope frontier or its one ordinary replacement issue;
+    * later or unrelated descendants cannot stand in for this assignment. */
+  private[admission] def validScopeFrontier(current: InstanceRecord, target: RepositorySyncRepairScopeCorrection.Target,
+    revision: InstanceRevision, originalIdentity: String): Boolean = RepositorySyncRepairScopeCorrection.validTarget(target) &&
+    target.oldContinuationId == originalIdentity && current.identity.value == target.sessionId &&
+    current.lifecycle == Lifecycle.Active && current.currentProgression.contains(ProgressionReference("sync." + _stage)) &&
+    revision.value.toString == (target.frontierRevision.toLong + 1L).toString &&
+    current.history.find(_.revision == revision).exists(entry => entry.lifecycle == Lifecycle.Active && entry.suspension.isEmpty &&
+      entry.currentProgression.contains(ProgressionReference("sync." + _stage)) &&
+      entry.causation.value == RepositorySyncRepairScopeCorrection.resumeCause + originalIdentity &&
+      (if (current.revision == revision) current.suspension.isEmpty && current.causation == entry.causation
+       else current.revision == revision.next && current.history.dropRight(1).lastOption.contains(entry) &&
+         current.lifecycle == Lifecycle.Active && current.currentProgression == entry.currentProgression &&
+         current.correlation == entry.correlation && current.derivedCompositeOccurrence == entry.derivedCompositeOccurrence &&
+         current.committedPredecessor == entry.committedPredecessor &&
+         current.causation.value == "native-repair-issued:" + target.sessionId && current.suspension.exists(boundary =>
+           boundary.continuationIdentity.value == originalIdentity + ":scope:" + revision.value &&
+           boundary.expectedRevision == current.revision)))
+
   def admittedFrontierC(source: R.Source): Consequence[Boolean] =
     if (!source.session.started.current.currentProgression.contains(ProgressionReference("sync." + _stage))) Consequence.success(false)
     else for {
@@ -301,6 +324,7 @@ private[smworkflow] object RepositorySyncRepairBudgetContinuation {
       direction <- saved.payload.repairBudget.map(Consequence.success).getOrElse(N.invalid("current budget marker lacks its direction"))
       target = direction.target
       _ <- budgetC(source, target.originalLimit)
+      correction <- RepositorySyncRepairScopeCorrection.selectedC(source)
       current = source.session.started.current
       _ <- if (target.sourceRevision == source.basis.next.revision.value.toString &&
           target.sourceCause == source.basis.next.causation.value && target.failedRevision == source.basis.validated.record.revision.value.toString &&
@@ -308,7 +332,9 @@ private[smworkflow] object RepositorySyncRepairBudgetContinuation {
             priorReview = target.review.priorReview) && target.purpose.map(_.progress) == source.basis.validated.payload.purposes &&
           (saved.record == current || (current.revision == saved.record.revision.next &&
             current.history.dropRight(1) == saved.record.history && current.suspension.exists(boundary =>
-              boundary.continuationIdentity.value == RepositorySyncRepairScopeCorrection.originalIdentity(source)))))
+              boundary.continuationIdentity.value == RepositorySyncRepairScopeCorrection.originalIdentity(source))) ||
+            correction.exists(value => validScopeFrontier(current, value.direction.target, value.revision,
+              RepositorySyncRepairScopeCorrection.originalIdentity(source)))))
         Consequence.unit else N.invalid("current budget marker crosses the actual repair assignment")
     } yield true
 
