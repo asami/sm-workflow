@@ -130,7 +130,7 @@ private[smworkflow] object RepositorySyncPurposePreparationContinuation {
   /** Eligibility is separate from receipt readability: an unknown or different
     * effect is still described honestly but has no execution choice. */
   def eligibility(p: P.Progress, failedkey: String, intentstage: String, failure: Json,
-    actual: G.Native, index: String, rootMatches: Boolean): String = {
+    actual: G.Native, index: String, rootMatches: Boolean, expectedIndex: Option[String] = None): String = {
     val process = failure.hcursor.get[Json]("process").toOption.flatMap(WorkflowSbtCapture.decode(_).toOption)
     val known = process.exists(result => WorkflowSbtCapture.exitCode(result).exists(code => code != 0 &&
       failure.hcursor.get[String]("outcome").toOption.contains("Failed(" + code + ")")) &&
@@ -138,13 +138,16 @@ private[smworkflow] object RepositorySyncPurposePreparationContinuation {
       Vector(result.stdout, result.stderr).forall(c => WorkflowSbtCapture.text(c).textStatus == "complete"))
     if (!failedkey.endsWith("-prepare-result") || intentstage != "PurposePreparing") "The actual failed effect is not preparation"
     else if (!known) "The actual provider result is unknown, incomplete or not an exited nonzero preparation"
-    else if (p.cursor != 0 || p.commits.nonEmpty || p.attempt <= 0 || p.baselineTree.isEmpty || p.candidate.nonEmpty ||
-        p.plan.isEmpty || p.ownership.isEmpty || !RepositorySyncPurposeOwnership.validProgress(p))
-      "Only an intact accepted repair of the first ordered Purpose is eligible"
+    else if (!p.plan.exists(plan => plan != null && plan.groups != null && p.cursor >= 0 && p.cursor < plan.groups.size) ||
+        p.commits == null || p.commits.size != p.cursor || !p.commits.forall(oid) || p.attempt <= 0 ||
+        p.baselineTree.isEmpty || p.candidate.nonEmpty || !RepositorySyncPurposeOwnership.validProgress(p))
+      "Only an intact accepted repair of the current ordered Purpose with its exact completed commit prefix is eligible"
     else if (!RepositorySyncPurposeOwnership.worktreeProjectionC(p, p.plan.get.groups(p.cursor)).isSuccess)
       "Accepted later owners disagree on the integrated worktree text"
     else if (actual.mergeHead.nonEmpty || actual.observed.dirty.exists(_.unmerged) ||
-        actual.observed.branch != p.request.branch || actual.observed.head != p.request.parent || index != p.request.indexTree || !rootMatches)
+        actual.observed.branch != p.request.branch ||
+        actual.observed.head != (if (p.cursor > 0) p.commits.last else p.request.parent) ||
+        index != expectedIndex.getOrElse(p.request.indexTree) || !rootMatches)
       "The actual source HEAD, index, branch or expected worktree has changed"
     else ""
   }
@@ -157,6 +160,56 @@ private[smworkflow] object RepositorySyncPurposePreparationContinuation {
 
   def matchingFailure(before: P.Progress, after: P.Progress, failure: Json): Boolean =
     after.effects == (before.effects :+ failure) && after.copy(effects = before.effects) == before
+
+  private[admission] def completedPrefixIndexC(current: P.Progress, installed: P.Progress,
+    prior: P.Progress): Consequence[String] = for {
+    _ <- if (current.cursor > 0 && current.commits != null && current.commits.size == current.cursor &&
+        current.commits.forall(oid) && installed.cursor == current.cursor && installed.commits == current.commits &&
+        installed.request == current.request && prior.request == current.request && prior.cursor == current.cursor - 1)
+      Consequence.unit else N.invalid("preparation completed Purpose prefix differs from the current cursor, request or commits")
+    candidate <- prior.candidate.map(Consequence.success)
+      .getOrElse(N.invalid("preparation completed Purpose has no actual preceding commit candidate"))
+    _ <- if (candidate.commit == current.commits.last && installed.commits == (prior.commits :+ candidate.commit) &&
+        oid(candidate.projectedIndex)) Consequence.unit
+      else N.invalid("preparation completed Purpose candidate differs from the actual commit prefix or projected index")
+  } yield candidate.projectedIndex
+
+  /** Later-Purpose source facts come only from this Session's last completed
+    * installation and its immediately preceding retained commit intent. */
+  private def _completed_index_c(store: N.Store, current: InstanceRecord, p: P.Progress): Consequence[String] =
+    if (p.cursor == 0) Consequence.success(p.request.indexTree)
+    else for {
+      entry <- current.history.reverse.find(entry => entry.suspension.isEmpty &&
+        entry.currentProgression.contains(ProgressionReference("sync.PurposeInstalled")))
+        .map(Consequence.success).getOrElse(N.invalid("preparation has no actual earlier completed Purpose installation"))
+      prefix = "native-repository:" + store.identity + ":"
+      _ <- if (current.identity.value == store.identity && entry.causation.value.startsWith(prefix) &&
+          entry.causation.value.endsWith("-installed")) Consequence.unit
+        else N.invalid("preparation completed Purpose installation has no this-Session native reference")
+      key = entry.causation.value.stripPrefix(prefix)
+      installed <- store.loadC(key).flatMap(_.map(Consequence.success)
+        .getOrElse(N.invalid("preparation completed Purpose installation receipt is absent")))
+      installedprefix <- RepositorySyncPurposeContentContinuation.prefixC(current, entry.revision.value.toString)
+      previous <- current.history.find(_.revision.value == entry.revision.value - 1).map(Consequence.success)
+        .getOrElse(N.invalid("preparation completed Purpose installation has no immediately preceding intent"))
+      intentkey = key.stripSuffix("-installed") + "-commit-intent"
+      _ <- if (previous.currentProgression.contains(ProgressionReference("sync.PurposeInstalling")) &&
+          previous.causation.value == prefix + intentkey) Consequence.unit
+        else N.invalid("preparation completed Purpose predecessor is not its actual commit intent")
+      intent <- store.loadC(intentkey).flatMap(_.map(Consequence.success)
+        .getOrElse(N.invalid("preparation completed Purpose commit intent receipt is absent")))
+      intentprefix <- RepositorySyncPurposeContentContinuation.prefixC(current, previous.revision.value.toString)
+      _ <- if (installed.record == installedprefix && intent.record == intentprefix &&
+          installed.payload.stage == "PurposeInstalled" && intent.payload.stage == "PurposeInstalling" &&
+          installed.record.revision == intent.record.revision.next &&
+          installed.record.history.dropRight(1) == intent.record.history) Consequence.unit
+        else N.invalid("preparation completed Purpose pair crosses its adjacent immutable native history")
+      completed <- installed.payload.purposes.map(Consequence.success)
+        .getOrElse(N.invalid("preparation completed Purpose installation progress is absent"))
+      before <- intent.payload.purposes.map(Consequence.success)
+        .getOrElse(N.invalid("preparation completed Purpose commit intent progress is absent"))
+      index <- completedPrefixIndexC(p, completed, before)
+    } yield index
 
   private[admission] def rootMatchesC(p: P.Progress,
     read: String => Consequence[Option[String]]): Consequence[Boolean] = {
@@ -204,6 +257,7 @@ private[smworkflow] object RepositorySyncPurposePreparationContinuation {
     actual <- G.inspectC(core)
     root <- G.rootC(core)
     index <- G.indexTreeC(core)
+    expectedindex <- _completed_index_c(store, current, p)
     matches <- _root_matches_c(store, p)
     reason = if (root != failed.payload.root || d.target.root.toString != failed.payload.root ||
         d.input.repositoryIdentity != session.context.repositoryIdentity ||
@@ -211,7 +265,7 @@ private[smworkflow] object RepositorySyncPurposePreparationContinuation {
         d.input.trackingBranch != session.context.trackingBranch || d.input.remoteEndpointIdentity != session.context.remoteEndpointIdentity ||
         d.target.endpoint != session.context.remoteEndpointIdentity)
       "The actual repository root, endpoint or retained target mapping has changed"
-      else eligibility(p, key, intent.payload.stage, failure, actual, index, matches)
+      else eligibility(p, key, intent.payload.stage, failure, actual, index, matches, Some(expectedindex))
     target = Target(core.component.get.core.instanceId.canonicalKey, identity, session.context, failed.payload.root,
       d.target.endpoint, current.revision.value.toString, current.causation.value,
       key, failed.record.revision.value.toString, intentkey, intent.record.revision.value.toString,
@@ -261,12 +315,14 @@ private[smworkflow] object RepositorySyncPurposePreparationContinuation {
           else N.invalid("preparation direction or accepted repair progress changed")
         actual <- G.inspectC(store.core)
         index <- G.indexTreeC(store.core)
+        expectedindex <- _completed_index_c(store, source.record, p)
         matches <- _root_matches_c(store, p)
         _ <- store.scopeC(actual.observed)
         _ <- if (store.declaration.target.endpoint == direction.target.endpoint && store.context == direction.target.context &&
             store.original.repositoryRoot == direction.target.root && store.context.remoteEndpointIdentity == direction.target.endpoint) Consequence.unit
           else N.invalid("preparation continuation host target or participant changed")
-        _ <- if (eligibility(p, direction.target.failureKey, "PurposePreparing", original.effects.last, actual, index, matches).isEmpty &&
+        _ <- if (eligibility(p, direction.target.failureKey, "PurposePreparing", original.effects.last, actual, index, matches,
+            Some(expectedindex)).isEmpty &&
             RepositorySyncPurposeContentContinuation.canonical(actual.asJson).noSpaces == direction.target.actualSnapshot && index == direction.target.indexTree)
           Consequence.unit else N.invalid("source changed after preparation continuation adoption")
       } yield ()

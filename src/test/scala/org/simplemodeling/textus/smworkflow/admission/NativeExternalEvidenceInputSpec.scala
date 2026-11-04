@@ -36,7 +36,7 @@ private[admission] object NativeExternalEvidenceToolFixture {
     Map("family" -> family, "kind" -> kind, "request" -> "request.json", "result" -> "result.json",
       "reference" -> "reference.json", "execution-evidence" -> "execution.json", "issuer" -> issuer,
       "occurred-at" -> now.minusSeconds(60).toString, "collection" -> collection) ++
-      (if (Set("human", "candidate-recovery", "candidate-observation-continuation")(kind))
+      (if (Set("human", "candidate-recovery", "candidate-observation-continuation", "repair-budget-continuation")(kind))
         Map("participant" -> participantIdentity) else Map.empty[String, String])
   def files(request: RecordPresentable, answer: RecordPresentable, resultReference: V.WorkflowArtifactReference = reference,
     executionEvidence: V.WorkflowExecutionEvidence = execution): Map[String, String] = Map(
@@ -87,6 +87,82 @@ final class NativeExternalEvidenceInputSpec extends AnyWordSpec with Matchers wi
   private val _tool = NativeExternalEvidenceToolFixture
   private val _goal_result = V.GoalPhaseWorkResult("accept", "Fixture review", Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
   private val _repository_result = V.RepositorySyncNativeMergeReviewResult("accept", "Fixture merge review", Vector.empty)
+  private val _repair_budget_cause = "native-repository:session:purpose-1-check-1-result"
+  private val _repair_budget_target = {
+    val fixture = RepositorySyncPurposeRepairScopeFixture
+    RepositorySyncRepairBudgetContinuation.Target("component", "session", fixture.context, fixture.request.root,
+      "/specification/upstream.git", "10", _repair_budget_cause, "10", _repair_budget_cause,
+      "10", _repair_budget_cause, fixture.scope.failureReference, Some(fixture.failed), fixture.review,
+      Some(fixture.snapshot), 1, 1, Vector("session:native-repair:7"), 1, RepositorySyncRepairBudgetContinuation.policy)
+  }
+
+  "ID10 finite repair budget evidence" should {
+    "encode the exact supplied finite direction and passive Defer as normal host import rows" in {
+      Given("the strict exhausted-budget fixture target and externally supplied participant, reference, execution, issuer and time")
+      val target = _repair_budget_target
+      val owner = target.context.participantIdentity
+      val worker = execution.copy(workerIdentity = Some(owner))
+      val description = V.RepositorySyncRepairBudgetContinuationDescriptionResult(target.sessionId,
+        "adoption-required", "Fixture exhausted finite budget", target.componentInstance,
+        RepositorySyncRepairBudgetContinuation.targetRecord(target),
+        RepositorySyncRepairBudgetContinuation.targetChoices(target), RepositorySyncRepairBudgetContinuation.adoptionOperation)
+      val answers = Vector(V.RepositorySyncRepairBudgetContinuationAnswer("ContinueRepairs", 2, "Fixture finite allowance"),
+        V.RepositorySyncRepairBudgetContinuationAnswer("Defer", 0, "Fixture passive deferral"))
+      When("passive preparation reads each public description and exact typed answer through the normal command formatter")
+      val prepared = answers.map(answer => take(_tool.prepareNormalCommand("RepositorySync", "repair-budget-continuation",
+        description, answer, owner, reference, worker)))
+      Then("each row binds the actual complete target and answer without performing the adoption")
+      prepared.zip(answers).foreach { (seed, answer) =>
+        val expected = take(RepositorySyncRepairBudgetContinuation.bindingC(target.componentInstance, target,
+          answer.choice, answer.additionalRepairs, answer.rationale, owner,
+          org.goldenport.cncf.workflow.ContextReference(reference.identity, reference.revision)))
+        val evidence = _tool.evidence(seed)
+        evidence.purpose shouldBe Purpose.RepositoryRepairBudgetContinuation.identity
+        evidence.participant shouldBe owner
+        evidence.reference shouldBe reference.identity
+        evidence.revision shouldBe reference.revision
+        evidence.binding shouldBe expected
+        take(NativeExternalEvidence.observeC(evidence, declaration, Purpose.RepositoryRepairBudgetContinuation,
+          evidenceKey, expected, now)).evidence.binding shouldBe expected
+      }
+    }
+
+    "refuse crossed descriptions, principals and malformed finite answers before producing an import row" in {
+      Given("the exact exhausted-budget fixture description with its matching external Human worker")
+      val target = _repair_budget_target
+      val owner = target.context.participantIdentity
+      val worker = execution.copy(workerIdentity = Some(owner))
+      val description = V.RepositorySyncRepairBudgetContinuationDescriptionResult(target.sessionId,
+        "adoption-required", "Fixture exhausted finite budget", target.componentInstance,
+        RepositorySyncRepairBudgetContinuation.targetRecord(target),
+        RepositorySyncRepairBudgetContinuation.targetChoices(target), RepositorySyncRepairBudgetContinuation.adoptionOperation)
+      val answer = V.RepositorySyncRepairBudgetContinuationAnswer("ContinueRepairs", 1, "Fixture finite allowance")
+      val descriptions = Vector(description.copy(sessionId = "foreign-session"),
+        description.copy(componentInstance = "foreign-component"), description.copy(choices = Vector("Defer")),
+        description.copy(adoptionOperation = "foreign-operation"), description.copy(outcome = "unavailable"))
+      val answers = Vector(answer.copy(additionalRepairs = 0), answer.copy(additionalRepairs = -1),
+        answer.copy(additionalRepairs = Int.MaxValue), answer.copy(choice = "Unknown"),
+        answer.copy(choice = "Defer", additionalRepairs = 1))
+      val files = _tool.files(description, answer, reference, worker)
+      val options = _tool.arguments("RepositorySync", "repair-budget-continuation", owner)
+      val malformed = Vector("{\"choice\":\"ContinueRepairs\",\"additionalRepairs\":null,\"rationale\":\"fixture\"}",
+        "{\"choice\":\"ContinueRepairs\",\"additionalRepairs\":1.5,\"rationale\":\"fixture\"}",
+        "{\"choice\":\"ContinueRepairs\",\"additionalRepairs\":1,\"rationale\":\"fixture\",\"unknown\":true}")
+      When("preparation receives altered public metadata, absent or crossed participants and workers, or nonfinite answers")
+      val failures = descriptions.map(_tool.prepareRecord("RepositorySync", "repair-budget-continuation", _, answer,
+        owner, reference, worker)) ++ answers.map(_tool.prepareRecord("RepositorySync", "repair-budget-continuation",
+        description, _, owner, reference, worker)) ++ Vector(
+        _tool.prepareRecord("RepositorySync", "repair-budget-continuation", description, answer, "foreign-participant", reference, worker),
+        _tool.prepareRecord("RepositorySync", "repair-budget-continuation", description, answer, owner, reference,
+          worker.copy(workerIdentity = None)),
+        Main.prepareC(options - "participant", path => Consequence.success(files(path)))) ++ malformed.map { raw =>
+        val changed = files.updated("result.json", raw)
+        Main.prepareC(options, path => Consequence.success(changed(path)))
+      }
+      Then("every crossed or malformed input fails without a host import row")
+      failures.foreach(_.isSuccess shouldBe false)
+    }
+  }
 
   "T1 Own Goal review input" should afterWord("in spec:native-host-evidence-tool, example:T1, rules:R1,R2,R3,R4, phase:6") {
     "export selected ReviewStep and ReviewPhase rows identical to public passive preparation" in {

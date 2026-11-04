@@ -16,6 +16,7 @@ import RepositorySyncManagedFetch as F
 import RepositorySyncNativeConflictInput as I
 import RepositorySyncNativeMergeRepair as M
 import RepositorySyncNativeProgressStore as N
+import RepositorySyncRepairBudgetContinuation as B
 
 /** Genuine paired review -> assigned affected-file proposal. Submit owns only
   * proposal admission; explicit Advance owns fixed effects and fresh review.
@@ -58,6 +59,7 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
       raw <- sourceC(identity, core)
       correction <- RepositorySyncRepairScopeCorrection.selectedC(raw)
       source = raw.copy(correction = correction)
+      budget <- budgetC(source)
       issued <- source.session.storage.bindIssuedC(completionOperation, M.inputCodec)
       existing <- issued.loadC(_continuation_id(source))(using core.executionContext)
       native <- _native_completion_c(source.session.storage)
@@ -85,10 +87,11 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
         } yield output
         case None => existing match {
           case Some(work) => NativeWorkflowOperationOutput.repositoryRepairRequestC(work)
-          case None if _budget_exhausted(source) => Consequence.success(NativeWorkflowOperationOutput.repositoryWait(identity,
+          case None if source.correction.isEmpty && budget.exists(_.exhausted) => Consequence.success(NativeWorkflowOperationOutput.repositoryWait(identity,
             "Selected merge repair budget is exhausted; actual Human handling is required. No new repair or counter reset.", "native-repair-limit"))
           case None => for {
-            _ <- if (source.session.started.current.currentProgression.exists(p => Set("sync.ReviewRepairRequired", "sync.ValidationRepairRequired", "sync.PurposeRepairRequired")(p.value)) &&
+            admitted <- B.admittedFrontierC(source)
+            _ <- if (admitted || source.session.started.current.currentProgression.exists(p => Set("sync.ReviewRepairRequired", "sync.ValidationRepairRequired", "sync.PurposeRepairRequired")(p.value)) &&
                 (source.session.started.current.revision == source.basis.next.revision ||
                   source.correction.exists(_.revision == source.session.started.current.revision))) Consequence.unit
               else N.invalid("repair issuance requires the actual current repair review completion")
@@ -105,12 +108,13 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
           core.action.request.service.contains(completionOperation.service) &&
           Set(F.advanceOperation.operation, completionOperation.operation,
             RepositorySyncRepairScopeCorrection.describeOperation, RepositorySyncRepairScopeCorrection.adoptionOperation,
-            RepositorySyncRepairScopeCorrection.prepareOperation)(core.action.request.operation)) Consequence.unit
+            RepositorySyncRepairScopeCorrection.prepareOperation, B.describeOperation, B.adoptionOperation)(core.action.request.operation)) Consequence.unit
         else N.invalid("repair requires its actual owning Operation")
       session <- F.sessionC(identity, declaration, definition, core)
       // Public correction observes source facts without archiving another diff.
       selecteddeclaration = if (Set(RepositorySyncRepairScopeCorrection.describeOperation,
-        RepositorySyncRepairScopeCorrection.adoptionOperation, RepositorySyncRepairScopeCorrection.prepareOperation)(core.action.request.operation))
+        RepositorySyncRepairScopeCorrection.adoptionOperation, RepositorySyncRepairScopeCorrection.prepareOperation,
+        B.describeOperation, B.adoptionOperation)(core.action.request.operation))
         declaration.copy(evidencePolicy = None) else declaration
       store <- N.bindC(session, selecteddeclaration, core, acknowledgement)
       purpose <- store.currentPurposeC(session.started.current)
@@ -145,6 +149,29 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
     } yield Source(session, store, saved)
 
     private[admission] def automaticInventory: Boolean = declaration.runtimeCleanSync
+
+    def originalRepairLimit: Option[Int] = validation.assessment.map(_.repairLimit)
+    private[admission] def budgetC(source: Source): Consequence[Option[B.Budget]] = originalRepairLimit match {
+      case Some(limit) => B.budgetC(source, limit).map(Some(_))
+      case None if source.session.started.current.history.exists(_.currentProgression.contains(
+          ProgressionReference("sync.RepairBudgetContinuationAdmitted"))) => N.invalid("adopted repair budget lost its original selected finite allowance")
+      case None => Consequence.success(None)
+    }
+    private[admission] def passiveC(identity: String, core: ActionCall.Core): Consequence[(F.Session, N.Store)] = for {
+      session <- F.sessionC(identity, declaration, definition, core)
+      store <- N.bindC(session, declaration.copy(evidencePolicy = None), core, acknowledgement)
+    } yield (session, store)
+    private[admission] def requireUnissuedC(source: Source): Consequence[Unit] = for {
+      correction <- RepositorySyncRepairScopeCorrection.selectedC(source)
+      selected = source.copy(correction = correction)
+      issued <- source.session.storage.bindIssuedC(completionOperation, M.inputCodec)
+      work <- issued.loadC(_continuation_id(selected))(using source.store.core.executionContext)
+      native <- _native_completion_c(source.session.storage)
+      retained <- native.loadRetainedC(_continuation_id(selected))(using source.store.core.executionContext)
+      _ <- if (work.isEmpty && retained.isEmpty && correction.isEmpty &&
+          !B.usedIdentities(source.session.started.current).contains(RepositorySyncRepairScopeCorrection.originalIdentity(source)))
+        Consequence.unit else N.invalid("repair budget cannot replace or replay an actual issued, claimed or completed repair")
+    } yield ()
 
     private def _current_policy(source: Source, inventory: Option[RepositorySyncRepairInventory.Scope] = None): I.Policy =
       if (declaration.runtimeCleanSync && source.session.context.syncMode == "FULL_STATE" &&
@@ -265,20 +292,13 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
       _ <- RepositorySyncNativeMergeValidation.preconditionsC(source.store, source.basis.validated)
     } yield input
 
-    private def _budget_exhausted(source: Source): Boolean = {
-      val used = source.session.started.current.history.flatMap(_.suspension.map(_.continuationIdentity.value))
-        .filter(_.startsWith(source.store.identity + ":native-repair:")).map(RepositorySyncRepairScopeCorrection.budgetIdentity).distinct.size
-      source.correction.isEmpty && validation.assessment.exists(policy => used >= policy.repairLimit)
-    }
-
     private def _issue_c(source: Source, input: M.Request,
       issued: WorkflowManagedIssuedWork[M.Request]): Consequence[WorkflowInteraction[M.Request, Nothing]] = for {
       required <- RepositorySyncDefinitionBinding.nativeRepairOperationC
       from = source.session.started.current
-      used = from.history.flatMap(_.suspension.map(_.continuationIdentity.value)).filter(_.startsWith(
-        source.store.identity + ":native-repair:")).map(RepositorySyncRepairScopeCorrection.budgetIdentity).distinct.size
-      _ <- if (validation.assessment.forall(policy => used < policy.repairLimit ||
-          (source.correction.nonEmpty && used <= policy.repairLimit))) Consequence.unit
+      budget <- budgetC(source)
+      _ <- if (budget.forall(value => value.usedRepairs < value.effectiveLimit ||
+          (source.correction.nonEmpty && value.usedRepairs <= value.effectiveLimit))) Consequence.unit
         else N.invalid("selected merge repair budget is exhausted; no new repair issue or counter reset")
       bundle = ContextBundle("Repair only the actual retained review findings or failed selected checks and assigned captured files. " +
         (if (RepositorySyncPurposeOwnership.work(input).nonEmpty)
@@ -343,8 +363,10 @@ private[smworkflow] object RepositorySyncNativeMergeRepairContinuation {
             raw <- sourceC(current.identity.value, call)
             correction <- RepositorySyncRepairScopeCorrection.selectedC(raw)
             source = raw.copy(correction = correction)
+            _ <- budgetC(source)
+            admitted <- B.admittedFrontierC(source)
             _ <- if (submitted.continuationId == _continuation_id(source) &&
-                current.currentProgression.exists(p => Set("sync.ReviewRepairRequired", "sync.ValidationRepairRequired", "sync.PurposeRepairRequired")(p.value))) Consequence.unit
+                (admitted || current.currentProgression.exists(p => Set("sync.ReviewRepairRequired", "sync.ValidationRepairRequired", "sync.PurposeRepairRequired")(p.value)))) Consequence.unit
               else N.invalid("repair result crosses the actual current review assignment")
             work <- issued.loadC(submitted.continuationId).flatMap(_.map(Consequence.success)
               .getOrElse(N.invalid("repair result has no actual issued WorkOrder")))

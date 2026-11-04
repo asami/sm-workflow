@@ -159,6 +159,30 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
       }
     }
 
+    "retain both finite repair budget operations and their generated contracts in normal deferred declarations" in {
+      Given("the generated RepositorySync finite repair budget description and adoption contracts")
+      val names = Set(RepositorySyncRepairBudgetContinuation.describeOperation,
+        RepositorySyncRepairBudgetContinuation.adoptionOperation)
+      val generated = SmWorkflowComponent.RepositorySyncServiceService.operations.operations.toVector
+        .filter(operation => names(operation.name)).map(operation => operation.name -> operation).toMap
+      When("the normal launcher selects the RepositorySync service from its standard deferred inventory")
+      val deferred = ThreeWorkflowLauncherAssembly.deferredDeclarations
+        .find(_.name == "RepositorySyncService").get.operations.operations.toVector
+        .filter(operation => names(operation.name))
+      Then("the exact two operations retain their generated requests and responses without entering MCP publication")
+      deferred.map(_.name).toSet shouldBe names
+      deferred.size shouldBe 2
+      deferred.foreach { operation =>
+        operation.specification.request shouldBe generated(operation.name).specification.request
+        operation.specification.response shouldBe generated(operation.name).specification.response
+        ThreeWorkflowLauncherAssembly.publishedMcpOperations should not contain ("RepositorySyncService." + operation.name)
+      }
+      deferred.find(_.name == RepositorySyncRepairBudgetContinuation.describeOperation).get
+        .specification.request.parameters.map(_.name).toVector shouldBe Vector("sessionId")
+      deferred.find(_.name == RepositorySyncRepairBudgetContinuation.adoptionOperation).get
+        .specification.request.parameters.map(_.name).toVector shouldBe Vector("input", "inputResource")
+    }
+
     "bind generated passive preparation signatures without adding semantic MCP publication" in {
       Given("the actual generated preparation declarations and unchanged workflow publication boundary")
       val declared = SmWorkflowComponent.NativeWorkflowPreparationServiceService

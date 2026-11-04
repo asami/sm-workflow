@@ -115,6 +115,108 @@ final class RepositorySyncPurposePreparationContinuationSpec extends AnyWordSpec
   }
 
   "ID08 preparation eligibility" should {
+    "authorize only a new preparation namespace for an accepted later-Purpose repair with its completed commit prefix intact" in {
+      Given("one completed Purpose commit followed by two accepted repairs of the current later Purpose and a known preparation failure")
+      val committed = "f" * 40
+      val installedindex = "5" * 40
+      val group = f.later.copy(content = f.later.content.map(content =>
+        if (content.path == f.laterPath) content.copy(text = Some("second accepted later-Purpose repair")) else content))
+      val laterbefore = before.copy(cursor = 1, attempt = 2, slotCursor = before.slotCursor + 2,
+        commits = Vector(committed), plan = f.progress.plan.map(plan => plan.copy(groups = plan.groups.updated(1, group))),
+        ownership = None, projectedWorktree = None, baselineTree = Some("7" * 40))
+      val laterprogress = laterbefore.copy(effects = laterbefore.effects :+ failed)
+      val actual = f.actual.copy(observed = f.actual.observed.copy(head = committed, tree = "6" * 40))
+      val prior = before.copy(plan = f.progress.plan, ownership = None, projectedWorktree = None,
+        candidate = Some(f.candidate.copy(commit = committed, tree = "6" * 40, projectedIndex = installedindex)),
+        receipts = f.progress.receipts.map(receipt => receipt.copy(exitCode = Some(0))),
+        review = Some(ContextReference("fixture-first-purpose-acceptance", "1")))
+      val installed = prior.copy(cursor = 1, commits = Vector(committed), candidate = None, attempt = 0,
+        baselineTree = None, receipts = Vector.empty, selection = None, review = None)
+      val laterprefix = RepositorySyncPurposeRuntime.attemptPrefix(laterprogress)
+      val expected = (laterprogress.request.files.map(_.path) ++ laterprogress.projectedWorktree.toVector.flatten.map(_.path))
+        .distinct.map(path => path -> RepositorySyncPurposeOwnership.expected(laterprogress, path).get.text).toMap
+      When("the existing source predicate and known-failure eligibility qualify that unchanged later-Purpose progress")
+      val expectedindex = take(N.completedPrefixIndexC(laterprogress, installed, prior))
+      val matches = take(N.rootMatchesC(laterprogress, path => Consequence.success(expected(path))))
+      val reason = N.eligibility(laterprogress, laterprefix + "-prepare-result", "PurposePreparing", failed,
+        actual, installedindex, matches, Some(expectedindex))
+      val latertarget = target.copy(frontierRevision = "30", failureRevision = "30", intentRevision = "29",
+        frontierCause = "native-repository:session:" + laterprefix + "-prepare-result",
+        failureKey = laterprefix + "-prepare-result", intentKey = laterprefix + "-prepare-intent",
+        progressSnapshot = P.repairProgressJson(laterprogress).noSpaces,
+        actualSnapshot = RepositorySyncPurposeContentContinuation.canonical(actual.asJson).noSpaces,
+        sourceHead = committed, indexTree = installedindex, eligibilityReason = reason)
+      val next = take(N.continuedProgressC(latertarget, laterprogress))
+      Then("only the fresh exact namespace changes while earlier commits original expectations effects baseline and counters remain literal")
+      reason shouldBe ""
+      N.decodeTarget(latertarget.asJson) shouldBe Right(latertarget)
+      N.matchingFailure(laterbefore, laterprogress, failed) shouldBe true
+      N.targetChoices(latertarget) shouldBe N.choices
+      next.preparationNamespace shouldBe Some("prepare-continuation-30")
+      next.copy(preparationNamespace = laterprogress.preparationNamespace) shouldBe laterprogress
+      next.request shouldBe laterprogress.request
+      next.projectedWorktree shouldBe None
+      next.ownership shouldBe None
+      next.baselineTree shouldBe laterprogress.baselineTree
+      next.commits shouldBe Vector(committed)
+      next.effects shouldBe laterprogress.effects
+      (next.cursor, next.attempt, next.slotCursor, next.ownership, next.receipts) shouldBe
+        ((laterprogress.cursor, laterprogress.attempt, laterprogress.slotCursor, laterprogress.ownership, laterprogress.receipts))
+      RepositorySyncPurposeOwnership.expected(next, "value.txt") shouldBe
+        Some(P.Content("value.txt", f.request.files.find(_.path == "value.txt").get.worktree))
+      RepositorySyncPurposeRuntime.attemptPrefix(next) shouldBe laterprefix + "-prepare-continuation-30"
+      expectedindex shouldBe installedindex
+      expectedindex should not be laterprogress.request.indexTree
+
+      Given("the same known preparation failure with a malformed cursor or completed commit prefix")
+      val malformed = Vector(laterprogress.copy(cursor = -1), laterprogress.copy(cursor = laterprogress.plan.get.groups.size),
+        laterprogress.copy(commits = Vector.empty), laterprogress.copy(commits = Vector(committed, "7" * 40)),
+        laterprogress.copy(commits = Vector("not-an-object-id")), laterprogress.copy(attempt = 0),
+        laterprogress.copy(baselineTree = None), laterprogress.copy(candidate = Some(f.candidate)),
+        laterprogress.copy(plan = None))
+      When("each malformed progress or changed current HEAD is checked against the same exact source facts")
+      val refused = malformed.map(p => N.eligibility(p, laterprefix + "-prepare-result", "PurposePreparing", failed,
+        actual, installedindex, true, Some(expectedindex)))
+      val wrongparent = N.eligibility(laterprogress, laterprefix + "-prepare-result", "PurposePreparing", failed,
+        f.actual, installedindex, true, Some(expectedindex))
+      val wrongindex = N.eligibility(laterprogress, laterprefix + "-prepare-result", "PurposePreparing", failed,
+        actual, f.request.indexTree, true, Some(expectedindex))
+      Then("each refuses without qualifying missing completed commits or falling back to the original request parent")
+      refused.zipWithIndex.foreach((message, index) => withClue(s"malformed later-Purpose progress $index: ") {
+        message should not be empty
+      })
+      wrongparent should not be empty
+      wrongindex should not be empty
+      N.continuedProgressC(latertarget, laterprogress.copy(attempt = 3)).isSuccess shouldBe false
+
+      Given("a malformed installed/commit-intent prefix or two accepted later owners with conflicting selected text")
+      val candidate = prior.candidate.get
+      val malformedpairdata = Vector(
+        (installed.copy(cursor = 0), prior),
+        (installed.copy(commits = Vector("8" * 40)), prior),
+        (installed.copy(request = installed.request.copy(parent = "8" * 40)), prior),
+        (installed, prior.copy(cursor = 1)),
+        (installed, prior.copy(commits = Vector("8" * 40))),
+        (installed, prior.copy(candidate = None)),
+        (installed, prior.copy(candidate = Some(candidate.copy(commit = "8" * 40)))),
+        (installed, prior.copy(candidate = Some(candidate.copy(projectedIndex = "invalid")))))
+      val third = group.copy(identity = "third-purpose", dependencies = Vector(group.identity), content = group.content.take(1))
+      val fourth = third.copy(identity = "fourth-purpose", dependencies = Vector(third.identity))
+      val conflicting = laterprogress.copy(plan = laterprogress.plan.map(plan => plan.copy(groups = plan.groups ++ Vector(third, fourth))),
+        ownership = Some(P.OwnershipContinuation(Vector(
+          P.OwnershipGroup(third.identity, Vector(P.Content(f.laterPath, Some("first explicit later meaning")))),
+          P.OwnershipGroup(fourth.identity, Vector(P.Content(f.laterPath, Some("conflicting explicit later meaning"))))),
+          "The later owners supplied incompatible outcomes")))
+      When("the same prefix and projection guards examine these contradictory facts")
+      val malformedpairs = malformedpairdata.map((completed, before) => N.completedPrefixIndexC(laterprogress, completed, before))
+      val conflictingreason = N.eligibility(conflicting, laterprefix + "-prepare-result", "PurposePreparing", failed,
+        actual, installedindex, true, Some(expectedindex))
+      Then("malformed completed prefixes and conflicting later meanings remain ineligible")
+      malformedpairs.zipWithIndex.foreach((result, index) => withClue(s"malformed completed pair $index: ") {
+        result.isSuccess shouldBe false
+      })
+      conflictingreason should include("later owners disagree")
+    }
     "offer execution only for known nonzero preparation and leave unknown incomplete and different effects passive" in {
       Given("the unchanged original source, index and accepted first Purpose repair")
       def reason(key: String = target.failureKey, stage: String = "PurposePreparing", result: Json = failed,

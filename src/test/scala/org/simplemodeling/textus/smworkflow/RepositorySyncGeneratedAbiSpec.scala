@@ -15,7 +15,7 @@ import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseNativeMetadata, 
 /**
  * @since   Oct.  6, 2026
  *  version Oct. 28, 2026
- * @version Nov.  3, 2026
+ * @version Nov.  4, 2026
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -32,7 +32,11 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
     SmWorkflowComponent.RepositorySyncServiceService.AdoptRepositorySyncValidationContinuationOperation,
     SmWorkflowComponent.RepositorySyncServiceService.DescribeRepositorySyncRepairScopeCorrectionOperation,
     SmWorkflowComponent.RepositorySyncServiceService.PrepareRepositorySyncRepairScopeCorrectionOperation,
-    SmWorkflowComponent.RepositorySyncServiceService.AdoptRepositorySyncRepairScopeCorrectionOperation)
+    SmWorkflowComponent.RepositorySyncServiceService.AdoptRepositorySyncRepairScopeCorrectionOperation,
+    SmWorkflowComponent.RepositorySyncServiceService.DescribeRepositorySyncPurposePreparationContinuationOperation,
+    SmWorkflowComponent.RepositorySyncServiceService.AdoptRepositorySyncPurposePreparationContinuationOperation,
+    SmWorkflowComponent.RepositorySyncServiceService.DescribeRepositorySyncRepairBudgetContinuationOperation,
+    SmWorkflowComponent.RepositorySyncServiceService.AdoptRepositorySyncRepairBudgetContinuationOperation)
   private def _request(operation: OperationDefinition, properties: List[Property]): Request =
     Request.of(component = SmWorkflowComponent.componentId.name, service = "RepositorySyncService",
       operation = operation.specification.name, arguments = Nil, switches = Nil,
@@ -67,7 +71,8 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
       val started = _operations(0).createOperationRequest(_request(_operations(0), start))
       val advanced = _operations(1).createOperationRequest(_request(_operations(1), advance))
       val optionaltransports = Set("prepareRepositorySyncRepairScopeCorrection", "adoptRepositorySyncRepairScopeCorrection",
-        "adoptRepositorySyncValidationContinuation")
+        "adoptRepositorySyncValidationContinuation", "adoptRepositorySyncPurposePreparationContinuation",
+        "adoptRepositorySyncRepairBudgetContinuation")
       val absent = _operations.filterNot(op => optionaltransports(op.specification.name))
         .map(op => op.createOperationRequest(_request(op, Nil)))
       Then("Start accepts its business selection and Advance requires the canonical session")
@@ -96,7 +101,34 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
         "adoptRepositorySyncValidationContinuation" -> Some("RepositorySyncValidationContinuationAdoptionInput"),
         "describeRepositorySyncRepairScopeCorrection" -> Some("RepositorySyncRepairScopeCorrectionDescriptionInput"),
         "prepareRepositorySyncRepairScopeCorrection" -> Some("RepositorySyncRepairScopeCorrectionPreparationInput"),
-        "adoptRepositorySyncRepairScopeCorrection" -> Some("RepositorySyncRepairScopeCorrectionAdoptionInput"))
+        "adoptRepositorySyncRepairScopeCorrection" -> Some("RepositorySyncRepairScopeCorrectionAdoptionInput"),
+        "describeRepositorySyncPurposePreparationContinuation" -> Some("RepositorySyncPurposePreparationContinuationDescriptionInput"),
+        "adoptRepositorySyncPurposePreparationContinuation" -> Some("RepositorySyncPurposePreparationContinuationAdoptionInput"),
+        "describeRepositorySyncRepairBudgetContinuation" -> Some("RepositorySyncRepairBudgetContinuationDescriptionInput"),
+        "adoptRepositorySyncRepairBudgetContinuation" -> Some("RepositorySyncRepairBudgetContinuationAdoptionInput"))
+    }
+
+    "expose only the session description and typed adoption transports for finite repair budget direction" in {
+      Given("the generated finite repair budget description and adoption Operations and their public business types")
+      val describe = SmWorkflowComponent.RepositorySyncServiceService.DescribeRepositorySyncRepairBudgetContinuationOperation
+      val adopt = SmWorkflowComponent.RepositorySyncServiceService.AdoptRepositorySyncRepairBudgetContinuationOperation
+      val provided = RepositorySyncWorkflowStateMachineProvidedApi3.workflow.providedOperations.map(op => op.name -> op).toMap
+      When("the generated description reader receives the explicit session and adoption exposes its optional typed envelope")
+      val described = describe.createOperationRequest(_request(describe,
+        admission.NativeWorkflowOperationInputFixture.advance("repository-execution-1")))
+      val absent = describe.createOperationRequest(_request(describe, Nil))
+      val resource = adopt.createOperationRequest(_request(adopt,
+        List(Property("inputResource", "fixture-budget-direction.json", None))))
+      Then("description requires exactly sessionId and adoption declares exactly input and inputResource")
+      describe.specification.request.parameters.map(_.name).toVector shouldBe Vector("sessionId")
+      adopt.specification.request.parameters.map(_.name).toVector shouldBe Vector("input", "inputResource")
+      described.isSuccess shouldBe true
+      absent.isSuccess shouldBe false
+      resource.isSuccess shouldBe true
+      provided(describe.specification.name).inputType shouldBe Some("RepositorySyncRepairBudgetContinuationDescriptionInput")
+      provided(describe.specification.name).resultType shouldBe Some("RepositorySyncRepairBudgetContinuationDescriptionResult")
+      provided(adopt.specification.name).inputType shouldBe Some("RepositorySyncRepairBudgetContinuationAdoptionInput")
+      provided(adopt.specification.name).resultType shouldBe Some("RepositorySyncRepairBudgetContinuationAdoptionResult")
     }
 
     "consume the repository business selection without an unused policy version" in {

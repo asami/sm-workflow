@@ -49,6 +49,7 @@ private[smworkflow] object NativeExternalEvidence {
     case RepositoryValidationContinuation extends Purpose(RepositorySyncValidationContinuation.purpose)
     case RepositoryPurposePreparationContinuation extends Purpose(RepositorySyncPurposePreparationContinuation.purpose)
     case RepositoryRepairScopeCorrection extends Purpose(RepositorySyncRepairScopeCorrection.purpose)
+    case RepositoryRepairBudgetContinuation extends Purpose(RepositorySyncRepairBudgetContinuation.purpose)
     case CandidateRecovery extends Purpose(GoalPhaseCandidateRecovery.purpose)
     case CandidateObservationContinuation extends Purpose(GoalPhaseCandidateObservationContinuation.purpose)
     case WholePhaseCandidateRecovery extends Purpose(GoalPhaseWholePhaseCandidateRecovery.purpose)
@@ -275,7 +276,7 @@ private[smworkflow] object NativeExternalEvidence {
           answer.downField("reference").get[String]("identity").contains(value.reference) &&
           answer.downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
       else Consequence.securityPermissionDenied("Task recovery Human evidence crosses its participant or reference")
-    } else if (purpose == Purpose.RepositoryPurposePreparationContinuation || purpose == Purpose.RepositoryRepairScopeCorrection || purpose == Purpose.RepositoryValidationContinuation || purpose == Purpose.ValidationRecovery || purpose == Purpose.SourceHistoryRecovery || purpose == Purpose.SourceHistoryNormalization || purpose == Purpose.CandidateRecovery ||
+    } else if (purpose == Purpose.RepositoryRepairBudgetContinuation || purpose == Purpose.RepositoryPurposePreparationContinuation || purpose == Purpose.RepositoryRepairScopeCorrection || purpose == Purpose.RepositoryValidationContinuation || purpose == Purpose.ValidationRecovery || purpose == Purpose.SourceHistoryRecovery || purpose == Purpose.SourceHistoryNormalization || purpose == Purpose.CandidateRecovery ||
         purpose == Purpose.CandidateObservationContinuation || purpose == Purpose.WholePhaseCandidateRecovery ||
         purpose == Purpose.ClosureRecovery || purpose == Purpose.RemainingPlanAdoption || purpose == Purpose.FailedPhaseRepairAdoption ||
         purpose == Purpose.CompletionPolicyAdoption || purpose == Purpose.RepairPolicyAdoption || purpose == Purpose.ReviewPurposeRepair || purpose == Purpose.ValidationRepairAdoption ||
@@ -289,6 +290,7 @@ private[smworkflow] object NativeExternalEvidence {
         else if (purpose == Purpose.RepositoryValidationContinuation) selected.hcursor.downField("repositoryValidationContinuation").downField("answer")
         else if (purpose == Purpose.RepositoryPurposePreparationContinuation) selected.hcursor.downField("repositoryPurposePreparationContinuation").downField("answer")
         else if (purpose == Purpose.RepositoryRepairScopeCorrection) selected.hcursor.downField("repositoryRepairScopeCorrection").downField("answer")
+        else if (purpose == Purpose.RepositoryRepairBudgetContinuation) selected.hcursor.downField("repositoryRepairBudgetContinuation").downField("answer")
         else if (purpose == Purpose.ValidationRepairAdoption) selected.hcursor.downField("validationRepairAdoption").downField("answer")
         else if (purpose == Purpose.SourceHistoryRecovery) selected.hcursor.downField("sourceHistoryRecovery").downField("answer")
         else if (purpose == Purpose.SourceHistoryNormalization) selected.hcursor.downField("sourceHistoryNormalization").downField("answer")
@@ -338,6 +340,7 @@ private[smworkflow] object NativeExternalEvidence {
       case Purpose.RepositoryValidationContinuation => RepositorySyncValidationContinuation.selectBinding(value)
       case Purpose.RepositoryPurposePreparationContinuation => RepositorySyncPurposePreparationContinuation.selectBinding(value)
       case Purpose.RepositoryRepairScopeCorrection => RepositorySyncRepairScopeCorrection.selectBinding(value)
+      case Purpose.RepositoryRepairBudgetContinuation => RepositorySyncRepairBudgetContinuation.selectBinding(value)
       case Purpose.CandidateRecovery => GoalPhaseCandidateRecovery.selectBinding(value)
       case Purpose.CandidateObservationContinuation => GoalPhaseCandidateObservationContinuation.selectBinding(value)
       case Purpose.WholePhaseCandidateRecovery => GoalPhaseWholePhaseCandidateRecovery.selectBinding(value)

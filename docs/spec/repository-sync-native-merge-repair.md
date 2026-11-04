@@ -126,7 +126,8 @@ results, checks and history remain readable. Historical completion comes from
 its actual committed revision, without reappend or regenerated certificates.
 Only that current candidate's genuine paired acceptance can proceed toward
 separately granted current commit/push/final convergence. Review acceptance grants
-none of those effects. There is no reset, recovery budget or scanner.
+none of those effects. There is no reset or scanner. The explicit finite Human
+allowance below preserves the original cumulative repair accounting.
 
 The original whole Phase objective and its actual task/mode/provider completion,
 protected Step acceptance, full Phase review and local release remain open.
@@ -259,6 +260,112 @@ qualifies the regression, receives fixture-authored lifecycle evidence, and
 uses actual native issue/Submit/Advance/File/Git operations before fresh checks
 and separately supplied independent review. These isolated supplied answers
 are specification facts and make no claim about any real consumer worker.
+
+## Finite repair budget continuation (ID10)
+
+The current selected assessment's `repairLimit` remains the original finite
+limit. Native `:native-repair:` suspension identities are counted cumulatively
+and distinctly; a `:scope:<revision>` administrative suffix normalizes to its
+original repair identity. Earlier issues, failed checks, successful checks,
+Purpose commits and native history remain literal. No grant resets, refunds,
+overwrites or replays them, and no absent assessment becomes an unlimited
+continuation grant.
+
+`describeRepositorySyncRepairBudgetContinuation --sessionId` observes only an
+Active, unsuspended, formally failed current repair source whose actual finite
+allowance is exhausted. The exact source must have no old available, claimed
+or completed repair to consume. A resultless intent, missing execution or
+unknown termination is not a known formal failure. Description qualifies the
+actual candidate through the existing typed File/Git reads and fixed repair
+policy without creating work or archiving another diff.
+
+The strict canonical target binds the actual Component instance, Session,
+retained Start context and participant, root and endpoint, frontier revision
+and cause, original failed repair source and reference, exact review/check
+selection, optional actual Purpose snapshot, original limit, previous effective
+limit, cumulative normalized used identities and count, and policy
+`sm-workflow.repository-sync-repair-budget-continuation.v1`. The answer contains
+exactly `choice`, `additionalRepairs` and `rationale`. `ContinueRepairs` requires
+a positive finite Int and checked addition:
+`effectiveLimit = target.usedRepairs + additionalRepairs`. There is no arbitrary
+numerical ceiling; overflow refuses. `Defer` requires zero and writes nothing.
+Null, missing, extra, nonintegral, stale, contradictory or crossed fields refuse.
+
+`adoptRepositorySyncRepairBudgetContinuation` accepts exactly `input` or
+`inputResource`. Its typed input contains `sessionId`, `target`, `choice`,
+`additionalRepairs`, `rationale`, `directionReference` and `executionEvidence`.
+Independent actual Human evidence must cover that exact described target,
+answer, artifact reference and retained participant; a caller's approval claim
+or this maintenance authorization supplies none of that evidence. Passive
+`NativeWorkflowPreparationService.prepareEvidence` supports family
+`RepositorySync`, kind `repair-budget-continuation`, encoding the supplied public
+description, typed answer, participant, reference, execution, issuer and time
+for the normal host import.
+
+Adoption appends only the existing managed mechanical transition at key
+`repair-budget-<frontierRevision>-adopted`, event `repair-budget-continuation`,
+stage `RepairBudgetContinuationAdmitted`. Its optional `repairBudget` direction
+preserves all original failed payload and Purpose fields. The field is absent
+on old schema-v3 rows and omitted when absent; explicit null is refused. A
+separate ordinary `advanceRepositorySync` authenticates that frontier and may
+issue one new paired repair under the fixed source identity. Paired completion
+accepts that marker only for its actual issued assignment. Adoption changes no
+file selection, test/check selection, source content, result acceptance,
+commit/push grant or unknown-execution interpretation.
+
+Budget restoration loads only actual adoption references from this instance's
+native history. Each direction must match its original context, root, endpoint,
+limit, previous effective allowance and cumulative used-identity prefix. The
+historical frontier must be the exact failed source immediately preceding the
+saved adoption receipt, with its original failed payload. Check sources match
+actual retained settled failure and selection; review sources match the actual
+paired retained repair review. Multiple finite grants form that authenticated
+chain. A persisted identical adoption recollects `already-adopted` after later
+progression without another write or issue; a contradictory or crossed repeat
+refuses. A new grant is available only at another actual exhausted formal
+failure with no existing issue to replay.
+
+`RepositorySyncRepairBudgetContinuationSpec` supplies pure exact-target,
+answer/binding, overflow, cumulative-chain accounting, no-refund,
+scope-normalization and old-row provenance cases. The dedicated installed CLI
+fixture owns actual same-Session budget exhaustion, passive evidence/adoption,
+separate Advance, new repair and fresh qualification through the normal
+runtime. Fixture-authored Human/review answers are specification evidence and
+make no claim about actual consumer approval.
+
+## Exact failed preparation continuation
+
+`describeRepositorySyncPurposePreparationContinuation` and the separate typed
+adoption operation can qualify a known exited nonzero preparation failure of
+the current accepted-repair Purpose, including a later ordered Purpose. Its
+cursor must select an existing planned group; the complete retained commit
+prefix must contain exactly one ordinary Git object ID per completed Purpose.
+The current HEAD must be the last completed commit for a later Purpose, or
+the original captured request parent for the first Purpose. For a later
+Purpose, the expected index comes from that completed candidate's retained
+`projectedIndex`: the exact native `PurposeInstalled` receipt and immediately
+preceding `PurposeInstalling` commit intent must match adjacent immutable
+history prefixes, the same original request, cursor and complete commit prefix.
+Both description and pre-execution authentication use that same retained pair;
+no repository-wide discovery supplies it. The original captured index remains
+the first Purpose's expected index. Branch, root expected-before text and
+projected worktree checks still apply.
+The exact progress must also retain a positive repair attempt, baseline,
+accepted plan and valid ownership state, with no prepared candidate. Ownership
+may be absent when there are no supplied later-owner projections; explicit
+later-owner disagreements still refuse. Resultless, unknown,
+incomplete, materialization and commit failures remain ineligible.
+
+The existing historical paired intent/result, failed process observation,
+source snapshot, exact target and independent Human evidence checks remain
+required. Adoption changes only `preparationNamespace` to
+`prepare-continuation-<actual failed frontier revision>`; separate ordinary
+Advance owns that new preparation. The original captured request, expected
+root contents, earlier commits, failed effects, baseline and repair counters
+remain unchanged. No accepted repair is resubmitted and no old effect is
+replayed. `RepositorySyncPurposePreparationContinuationSpec` covers both first
+and later current-Purpose eligibility, malformed cursor/commit-prefix refusal
+and the exact namespace-only transition.
 
 ## Complete repair result Resource transport
 

@@ -37,7 +37,8 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     reviewInputs: Option[RepositorySyncReviewInputContinuation.Direction] = None,
     formalFailure: Option[RepositorySyncFormalFailureContinuation.Direction] = None,
     purposeContent: Option[RepositorySyncPurposeContentContinuation.Direction] = None,
-    purposePreparation: Option[RepositorySyncPurposePreparationContinuation.Direction] = None)
+    purposePreparation: Option[RepositorySyncPurposePreparationContinuation.Direction] = None,
+    repairBudget: Option[RepositorySyncRepairBudgetContinuation.Direction] = None)
   final case class Stage(record: InstanceRecord, payload: Payload)
   final case class Candidate(namespace: String, pending: Stage)
   def candidateKey(namespace: String, key: String): String =
@@ -48,7 +49,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
   private given publicationEncoder: Encoder[RepositorySyncPublication.State] = RepositorySyncPublication.stateEncoder
   private given publicationDecoder: Decoder[RepositorySyncPublication.State] = RepositorySyncPublication.stateDecoder
   private given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
-    case ("assessment" | "repairContext" | "continuation" | "hygiene" | "records" | "purposes" | "requiredLint" | "reviewInputs" | "publication" | "formalFailure" | "purposeContent" | "purposePreparation", value) => !value.isNull
+    case ("assessment" | "repairContext" | "continuation" | "hygiene" | "records" | "purposes" | "requiredLint" | "reviewInputs" | "publication" | "formalFailure" | "purposeContent" | "purposePreparation" | "repairBudget", value) => !value.isNull
     case _ => true
   }))
   private given Decoder[Payload] = deriveDecoder
@@ -60,7 +61,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
       version <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
       _ <- Either.cond(version == schema, (), "Native progress schema differs")
       payload <- wire.hcursor.get[Payload]("payload").left.map(_.message)
-      _ <- Either.cond(Vector("formalFailure", "purposeContent", "purposePreparation").forall(name =>
+      _ <- Either.cond(Vector("formalFailure", "purposeContent", "purposePreparation", "repairBudget").forall(name =>
         !wire.hcursor.downField("payload").downField(name).focus.exists(_.isNull)), (), "Continuation provenance cannot be explicitly null")
       _ <- Either.cond(!wire.hcursor.downField("payload").downField("hygiene").focus.exists(_.isNull) &&
         payload.hygiene != null && payload.hygiene.forall(CommitHygiene.valid), (), "Invalid commit hygiene receipt")

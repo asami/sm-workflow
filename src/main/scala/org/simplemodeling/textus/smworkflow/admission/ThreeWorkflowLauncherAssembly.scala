@@ -76,6 +76,8 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
   private val _standard_operations = publishedMcpOperations ++ Set(
     "RepositorySyncService." + RepositorySyncPurposePreparationContinuation.describeOperation,
     "RepositorySyncService." + RepositorySyncPurposePreparationContinuation.adoptionOperation,
+    "RepositorySyncService." + RepositorySyncRepairBudgetContinuation.describeOperation,
+    "RepositorySyncService." + RepositorySyncRepairBudgetContinuation.adoptionOperation,
     "RepositorySyncService." + RepositorySyncRepairScopeCorrection.prepareOperation,
     "RepositorySyncService." + RepositorySyncRepairScopeCorrection.describeOperation,
     "RepositorySyncService." + RepositorySyncRepairScopeCorrection.adoptionOperation,

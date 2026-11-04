@@ -275,12 +275,13 @@ final class RepositorySyncPurposeRuntimeSpec extends AnyWordSpec with Matchers w
       When("the second repair prepares root-after projections for its current effective group")
       val secondgroup = RepositorySyncPurposeOwnership.effectiveGroup(second, second.plan.get.groups.head)
       val secondprojection = take(RepositorySyncPurposeOwnership.worktreeProjectionC(second, secondgroup))
-      Then("clean additions project the current correction while the later owner's supplied integration takes precedence")
-      secondprojection shouldBe Vector(RepositorySyncPurpose.Content(f.baselinePath, Some("second corrected extra test")),
+      Then("current-only paths project the current correction while the later owner's supplied integration takes precedence")
+      secondprojection shouldBe Vector(f.current.content.head, RepositorySyncPurpose.Content(f.baselinePath, Some("second corrected extra test")),
         RepositorySyncPurpose.Content(f.laterPath, Some("second correction plus future test")),
         RepositorySyncPurpose.Content(newbaseline.path, Some("second corrected new test")))
       RepositorySyncPurposeOwnership.expected(second, f.baselinePath) shouldBe Some(rootexpectations.head)
-      secondprojection.exists(_.path == "value.txt") shouldBe false
+      RepositorySyncPurposeOwnership.expected(second, "value.txt") shouldBe
+        Some(RepositorySyncPurpose.Content("value.txt", f.request.files.find(_.path == "value.txt").get.worktree))
 
       Given("the prior captured root explicitly records deletion while the qualified candidate baseline still has text")
       val deletedroot = Vector(RepositorySyncPurpose.Content(f.baselinePath, None))
@@ -298,7 +299,7 @@ final class RepositorySyncPurposeRuntimeSpec extends AnyWordSpec with Matchers w
       deletednext.projectedWorktree shouldBe Some(deletedexpectations)
       deletednext.asJson.as[RepositorySyncPurpose.Progress] shouldBe Right(deletednext)
     }
-    "preserve explicit clean-addition deletion without projecting original request paths or unresolved later ownership" in {
+    "preserve explicit current-only content and clean-addition deletion without resolving unsupplied later ownership" in {
       Given("a qualified clean addition whose newly admitted current content is deletion and an original dirty path")
       val f = RepositorySyncPurposeRepairScopeFixture
       val clean = RepositorySyncPurpose.Content(f.baselinePath, None)
@@ -313,12 +314,12 @@ final class RepositorySyncPurposeRuntimeSpec extends AnyWordSpec with Matchers w
       val projection = take(RepositorySyncPurposeOwnership.worktreeProjectionC(progress, group))
       val unresolved = take(RepositorySyncPurposeOwnership.worktreeProjectionC(owned, group))
       val uncaptured = take(RepositorySyncPurposeOwnership.worktreeProjectionC(progress.copy(projectedWorktree = None), group))
-      Then("deletion stays explicit, original dirty paths receive no override, and unresolved or uncaptured additions receive none")
-      projection shouldBe Vector(clean)
-      projection.head.text shouldBe None
-      projection.exists(_.path == "value.txt") shouldBe false
-      unresolved shouldBe Vector.empty
-      uncaptured shouldBe Vector.empty
+      Then("deletion stays explicit, original current-only content is selected, and unresolved or uncaptured additions receive none")
+      projection shouldBe Vector(f.current.content.head, clean)
+      projection.last.text shouldBe None
+      unresolved shouldBe f.current.content
+      uncaptured shouldBe f.current.content
+      RepositorySyncPurposeOwnership.expected(progress, "value.txt") shouldBe Some(f.current.content.head)
       RepositorySyncPurposeOwnership.expected(progress, f.baselinePath) shouldBe
         Some(RepositorySyncPurpose.Content(f.baselinePath, Some("old test")))
 
@@ -451,6 +452,66 @@ final class RepositorySyncPurposeRuntimeSpec extends AnyWordSpec with Matchers w
   }
 
   "ID08 explicit accepted later-root projection" should {
+    "project each successive still-failing current-file correction while retaining original root expectations and repair provenance" in {
+      Given("an originally owned current file whose selected input and captured root both still fail the retained Test receipt")
+      val f = RepositorySyncPurposeRepairScopeFixture
+      val initial = RepositorySyncPurpose.Content("value.txt", Some("wrong initial"))
+      val current = f.current.copy(content = Vector(initial))
+      val request = f.request.copy(files = f.request.files.map(file =>
+        if (file.path == initial.path) file.copy(worktree = initial.text) else file))
+      val original = f.progress.copy(request = request, plan = f.progress.plan.map(plan =>
+        plan.copy(groups = plan.groups.updated(0, current))), candidate = Some(f.candidate.copy(
+        changes = current.content, expected = current.content)))
+      val policy = RepositorySyncNativeConflictInput.Policy(Set(initial.path))
+      val firstinput = RepositorySyncNativeMergeRepair.Request(f.review, Vector.empty,
+        Vector(RepositorySyncNativeMergeRepair.File(initial.path, initial.text.get)), Some(f.failed.identity))
+      val firstcontent = initial.copy(text = Some("wrong first correction"))
+      val firstresult = RepositorySyncNativeMergeRepair.Result("repaired", "First still-failing fixture proposal",
+        Vector(RepositorySyncNativeMergeRepair.File(firstcontent.path, firstcontent.text.get)))
+      When("the first accepted proposal prepares its fresh attempt and explicit current-only root-after selection")
+      val first = take(RepositorySyncPurposeRuntime.repairedProgressC(original, firstinput, firstresult, policy))
+      val firstgroup = RepositorySyncPurposeOwnership.effectiveGroup(first, first.plan.get.groups.head)
+      val firstprojection = take(RepositorySyncPurposeOwnership.worktreeProjectionC(first, firstgroup))
+      Then("the selected correction is explicit and the captured root expectation remains the original wrong text")
+      firstprojection shouldBe Vector(firstcontent)
+      RepositorySyncPurposeOwnership.expected(first, initial.path) shouldBe Some(initial)
+      first.baselineTree shouldBe Some(f.candidate.tree)
+
+      Given("that new candidate also has a retained failed Test while the root before-text remains the original captured input")
+      val candidate = f.candidate.copy(tree = "7" * 40, changes = firstgroup.content,
+        expected = Vector(initial), baselineTree = first.baselineTree, worktreeProjection = Some(firstprojection))
+      val failedagain = first.copy(candidate = Some(candidate), receipts = original.receipts, selection = original.selection)
+      val secondinput = firstinput.copy(review = f.review.copy(validatedRevision = "20", indexTree = candidate.tree),
+        files = Vector(RepositorySyncNativeMergeRepair.File(firstcontent.path, firstcontent.text.get)))
+      val secondcontent = initial.copy(text = Some("wrong second correction"))
+      val secondresult = firstresult.copy(rationale = "Second still-failing fixture proposal", replacements =
+        Vector(RepositorySyncNativeMergeRepair.File(secondcontent.path, secondcontent.text.get)))
+      When("the second accepted proposal advances the baseline and reconstructs the typed Git request")
+      val second = take(RepositorySyncPurposeRuntime.repairedProgressC(failedagain, secondinput, secondresult, policy))
+      val secondgroup = RepositorySyncPurposeOwnership.effectiveGroup(second, second.plan.get.groups.head)
+      val secondprojection = take(RepositorySyncPurposeOwnership.worktreeProjectionC(second, secondgroup))
+      val secondcandidate = candidate.copy(tree = "8" * 40, changes = secondgroup.content,
+        expected = secondgroup.content.map(content => RepositorySyncPurposeOwnership.expected(second, content.path).get),
+        baselineTree = second.baselineTree, worktreeProjection = Some(secondprojection))
+      val selected = take(RepositorySyncPurpose.producerC(secondcandidate)).request.changes.head
+      Then("explicit selected-after content replaces three-way inference without rewriting original expectations receipts commits or counters")
+      secondprojection shouldBe Vector(secondcontent)
+      selected.content shouldBe secondcontent.text
+      selected.expectedWorktree shouldBe initial.text
+      selected.worktreeProjection.map(_.content) shouldBe Some(secondcontent.text)
+      RepositorySyncPurposeOwnership.expected(second, initial.path) shouldBe Some(initial)
+      second.request shouldBe original.request
+      second.plan.get.groups.tail shouldBe original.plan.get.groups.tail
+      second.baselineTree shouldBe Some(candidate.tree)
+      (second.cursor, second.attempt, second.slotCursor, second.commits, second.effects, second.hostContinuation) shouldBe
+        ((original.cursor, original.attempt + 2, original.slotCursor + 2, original.commits, original.effects, original.hostContinuation))
+      original.receipts shouldBe f.progress.receipts
+      failedagain.receipts shouldBe original.receipts
+      failedagain.receipts.last shouldBe f.failed
+      second.receipts shouldBe Vector.empty
+      second.candidate shouldBe None
+      RepositorySyncPurposeOwnership.worktreeProjectionC(second.copy(baselineTree = None), secondgroup).toOption shouldBe Some(Vector.empty)
+    }
     "reconstruct the complete CNCF request for materialization and commit while legacy candidates retain absence" in {
       Given("an accepted same-hunk correction with different current commit and integrated later-owner text")
       val f = RepositorySyncPurposeRepairScopeFixture
@@ -519,11 +580,12 @@ final class RepositorySyncPurposeRuntimeSpec extends AnyWordSpec with Matchers w
       val conflicting = expanded.copy(ownership = expanded.ownership.map(owner => owner.copy(groups = owner.groups.updated(1,
         owner.groups(1).copy(content = Vector(RepositorySyncPurpose.Content(f.laterPath, Some("different semantic outcome"))))))))
       Then("agreement is explicit and disagreement stays decision-needed before any Git effect")
-      same.toOption shouldBe Some(f.continuation.groups.head.content)
+      same.toOption shouldBe Some(f.current.content ++ f.continuation.groups.head.content)
       RepositorySyncPurposeOwnership.worktreeProjectionC(conflicting, group).isSuccess shouldBe false
       val deleted = expanded.copy(ownership = expanded.ownership.map(owner => owner.copy(groups = owner.groups.map(owner =>
         owner.copy(content = Vector(RepositorySyncPurpose.Content(f.laterPath, None)))))))
-      RepositorySyncPurposeOwnership.worktreeProjectionC(deleted, group).toOption shouldBe Some(Vector(RepositorySyncPurpose.Content(f.laterPath, None)))
+      RepositorySyncPurposeOwnership.worktreeProjectionC(deleted, group).toOption shouldBe
+        Some(f.current.content :+ RepositorySyncPurpose.Content(f.laterPath, None))
       progress.plan.get.groups.tail shouldBe Vector(f.later)
       progress.request shouldBe f.request
     }

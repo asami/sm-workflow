@@ -21,7 +21,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
   type Finish = (N.Stage, G.Observed) => Consequence[V.RepositorySyncAdvanceResult]
   def selected(current: InstanceRecord): Boolean = current.currentProgression.exists { value =>
     value.value.startsWith("sync.Purpose") || (Set("sync.ReviewAccepted", "sync.ReviewRepairRequired", "sync.ReviewDecisionRequired",
-      "sync.ReviewRejected", "sync.RepairProposalAdmitted", "sync.RepairDecisionRequired")(value.value) &&
+      "sync.ReviewRejected", "sync.RepairProposalAdmitted", "sync.RepairDecisionRequired", "sync.RepairBudgetContinuationAdmitted")(value.value) &&
       current.history.reverse.find(entry => entry.currentProgression.exists(p =>
         Set("sync.PurposeChecked", "sync.PurposeRepairRequired", "sync.PendingMergePrepared")(p.value))).exists(_.currentProgression.exists(p =>
           Set("sync.PurposeChecked", "sync.PurposeRepairRequired")(p.value))))
@@ -282,7 +282,9 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
         .map(d => "-host-" + d.target.frontierRevision).getOrElse("") +
       progress.preparationNamespace.map("-" + _).getOrElse("")
 
-  private[admission] def validRepairSnapshot(value: P.RepairSnapshot): Boolean = {
+  private[admission] def validRepairSnapshot(value: P.RepairSnapshot): Boolean = _valid_snapshot(value, false)
+  private[admission] def validBudgetSnapshot(value: P.RepairSnapshot): Boolean = _valid_snapshot(value, true)
+  private def _valid_snapshot(value: P.RepairSnapshot, review: Boolean): Boolean = {
     def _oid_(value: String) = value != null && value.matches("[0-9a-f]{40}|[0-9a-f]{64}")
     value != null && value.progress != null && value.actual != null && value.actual.observed != null &&
       value.actual.mergeHead != null && value.actual.mergeHead.isEmpty && _oid_(value.indexTree) && {
@@ -304,8 +306,11 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
           !value.actual.observed.dirty.exists(_.unmerged) && p.receipts != null && p.selection != null &&
           p.selection.exists(selection => selection != null && selection.checks != null && p.receipts.size >= 2 &&
             p.receipts.drop(1).zip(selection.checks).forall((receipt, check) => receipt != null && receipt.identity == check.identity) &&
-            p.receipts.size - 1 <= selection.checks.size && p.receipts.last.termination == "exited" &&
-            p.receipts.last.exitCode.exists(_ != 0)) && p.commits != null && p.effects != null &&
+            p.receipts.size - 1 <= selection.checks.size &&
+            ((p.receipts.last.termination == "exited" && p.receipts.last.exitCode.exists(_ != 0)) ||
+              (review && p.receipts.size == selection.checks.size + 1 && p.receipts.head.termination == "exited" &&
+                p.receipts.head.exitCode.contains(0) && selection.checks.zip(p.receipts.drop(1)).forall((check, receipt) =>
+                  C.productSuccessful(receipt, check.kind))))) && p.commits != null && p.effects != null &&
           p.reusable != null && p.hostContinuation != null && RepositorySyncPurposeOwnership.validProgress(p)
       }
   }
@@ -324,8 +329,13 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
   /** Read only: authenticate the actual retained failed receipt and selected
     * slot, then compare the original repository and every captured worktree
     * file. This branch deliberately has no pending-merge preconditions. */
-  private[admission] def repairSnapshotC(store: N.Store, failed: N.Stage): Consequence[P.RepairSnapshot] = for {
-    _ <- if (failed.payload.stage == "PurposeRepairRequired" && failed.payload.purposes.nonEmpty)
+  private[admission] def repairSnapshotC(store: N.Store, failed: N.Stage): Consequence[P.RepairSnapshot] =
+    _snapshot_c(store, failed, false)
+  private[admission] def budgetSnapshotC(store: N.Store, source: N.Stage): Consequence[P.RepairSnapshot] =
+    _snapshot_c(store, source, true)
+  private def _snapshot_c(store: N.Store, failed: N.Stage, review: Boolean): Consequence[P.RepairSnapshot] = for {
+    _ <- if ((failed.payload.stage == "PurposeRepairRequired" || (review && failed.payload.stage == "PurposeChecked")) &&
+        failed.payload.purposes.nonEmpty)
       Consequence.unit else N.invalid("Purpose scope correction requires the actual failed Purpose stage")
     prefix = "native-repository:" + store.identity + ":"
     _ <- if (failed.record.causation.value.startsWith(prefix)) Consequence.unit else N.invalid("Purpose failure has no native receipt")
@@ -341,7 +351,8 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
     _ <- store.scopeC(actual.observed)
     index <- G.indexTreeC(store.core)
     snapshot = P.RepairSnapshot(progress, actual, index)
-    _ <- if (validRepairSnapshot(snapshot)) Consequence.unit else N.invalid("Failed Purpose original HEAD branch index or candidate relationships have drifted")
+    _ <- if (if (review) validBudgetSnapshot(snapshot) else validRepairSnapshot(snapshot)) Consequence.unit
+      else N.invalid("Failed Purpose original HEAD branch index or candidate relationships have drifted")
     workspace <- WorkspaceId.parseC("sm-workflow-repository")
     expected = (progress.request.files.map(_.path) ++ progress.projectedWorktree.toVector.flatten.map(_.path)).distinct
       .flatMap(path => RepositorySyncPurposeOwnership.expected(progress, path))

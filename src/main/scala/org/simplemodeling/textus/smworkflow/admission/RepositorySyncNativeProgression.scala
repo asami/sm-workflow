@@ -33,6 +33,9 @@ private[smworkflow] object RepositorySyncNativeProgression {
       _retained_terminal_c(session, declaration, core, acknowledgement)
       else session.started.current.suspension match {
       case None if session.started.current.currentProgression.contains(
+          WorkflowInstancePersistence.ProgressionReference("sync.RepairBudgetContinuationAdmitted")) =>
+        repair.map(_.advanceC(identity, core)).getOrElse(invalid("adopted repair budget requires its installed native repair Port"))
+      case None if session.started.current.currentProgression.contains(
           WorkflowInstancePersistence.ProgressionReference("sync.PurposeContentContinuationAdmitted")) => for {
         inventory <- RepositorySyncPurposeContentContinuation.advanceC(continuationstore, session.started.current)
         output <- RepositorySyncPurposeRuntime.advanceC(continuationstore, inventory.record, inventory.payload.before,

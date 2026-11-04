@@ -1,6 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
+import io.circe.syntax.*
 import java.nio.file.Paths
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
@@ -197,6 +198,7 @@ private[smworkflow] object StandardWorkflowRuntime {
       humanConflict = if (paths.isEmpty) None else Some(RepositorySyncHumanConflict.Installation(shared.ports.repositoryHuman)),
       repositoryContinuation = Some(RepositorySyncValidationContinuation.Installation(shared.ports.repositoryValidationContinuation)),
       repositoryRepairScopeCorrection = Some(RepositorySyncRepairScopeCorrection.Installation(shared.ports.repositoryRepairScopeCorrection)),
+      repairBudgetContinuation = Some(RepositorySyncRepairBudgetContinuation.Installation(shared.ports.repositoryRepairBudgetContinuation)),
       purposePreparation = Some(RepositorySyncPurposePreparationContinuation.Installation(shared.ports.repositoryPurposePreparationContinuation)))
     selected <- RuntimeGitSelections.repositoryC(NativeWorkflowSessionInput.repository(
       NativeWorkflowResultInput.repository(service, creation, declaration, definition), creation, declaration, definition, runtimeIntent = true), paths)
@@ -232,7 +234,7 @@ private[smworkflow] object StandardWorkflowRuntime {
           org.goldenport.cncf.processexecution.GitOperation.UnmergedIndex).flatMap(_.valueC)
         selected <- if (unmerged.nonEmpty || !session.started.current.currentProgression.exists(p =>
             Set("sync.PendingMergePrepared", "sync.RequiredLintContinuationAdmitted", "sync.ReviewInputContinuationAdmitted", "sync.ValidationChecking", "sync.ValidationRepairRequired", "sync.MergeValidated",
-              "sync.RepairProposalAdmitted", "sync.MaterializingRepair")(p.value))) Consequence.success(unmerged.map(_.path.value).toSet)
+              "sync.RepairBudgetContinuationAdmitted", "sync.RepairProposalAdmitted", "sync.MaterializingRepair")(p.value))) Consequence.success(unmerged.map(_.path.value).toSet)
           else for {
             store <- RepositorySyncNativeProgressStore.bindC(session, declaration, selectedcore, _ => Consequence.unit)
             candidate <- store.currentMergeCandidateC(session.started.current)
@@ -269,7 +271,46 @@ private[smworkflow] object StandardWorkflowRuntime {
       } yield if (latest.exists(value => RepositorySyncRepairScopeCorrection.budgetIdentity(
         value.continuationIdentity.value) == old)) target.inventory.toVector.flatMap(_.paths) else Vector.empty[String]
     }
-  } yield paths ++ (if (declaration.runtimeCleanSync) supplied ++ inventory else Vector.empty[String])
+    normalpaths = paths ++ (if (declaration.runtimeCleanSync) supplied ++ inventory else Vector.empty[String])
+    composed <- if (normalpaths.isEmpty && Set(RepositorySyncRepairBudgetContinuation.describeOperation,
+        RepositorySyncRepairBudgetContinuation.adoptionOperation)(request.operation))
+      _repair_budget_paths_c(purposestore, session) else Consequence.success(normalpaths)
+  } yield composed
+
+  /** Retained budget paths compose only the passive budget Operations after
+    * normal scope is empty. The budget handler still authenticates the full
+    * direction, evidence and adjacent grant history before recollection. */
+  private def _repair_budget_paths_c(store: RepositorySyncNativeProgressStore.Store,
+    session: RepositorySyncManagedFetch.Session): Consequence[Set[String]] = {
+    val current = session.started.current
+    val prefix = "native-repository:" + store.identity + ":"
+    current.history.reverseIterator.find(entry => entry.suspension.isEmpty &&
+      entry.currentProgression.contains(ProgressionReference("sync.RepairBudgetContinuationAdmitted"))) match {
+      case None => Consequence.success(Set.empty[String])
+      case Some(entry) => for {
+        _ <- if (current.identity.value == store.identity && entry.causation.value.startsWith(prefix) &&
+            entry.causation.value.stripPrefix(prefix).matches("repair-budget-[1-9][0-9]*-adopted")) Consequence.unit
+          else invalid("Retained budget scope has no exact this-Session native adoption reference")
+        saved <- store.loadC(entry.causation.value.stripPrefix(prefix)).flatMap(_.map(Consequence.success)
+          .getOrElse(invalid("Retained budget scope adoption receipt is absent")))
+        actual <- RepositorySyncPurposeContentContinuation.prefixC(current, entry.revision.value.toString)
+        direction <- saved.payload.repairBudget.map(Consequence.success)
+          .getOrElse(invalid("Retained budget scope receipt has no direction"))
+        _ <- direction.asJson.as[RepositorySyncRepairBudgetContinuation.Direction]
+          .fold(error => invalid(error.message), _ => Consequence.unit)
+        target = direction.target
+        source <- RepositorySyncPurposeContentContinuation.prefixC(current, target.sourceRevision)
+        _ <- if (saved.record == actual && saved.record.identity == current.identity &&
+            saved.payload.stage == "RepairBudgetContinuationAdmitted" &&
+            entry.causation.value == prefix + RepositorySyncRepairBudgetContinuation.adoptionKey(target) &&
+            RepositorySyncRepairBudgetContinuation.validTarget(target) && target.sessionId == current.identity.value &&
+            target.context == session.context && target.root == store.original.repositoryRoot &&
+            target.review.instanceIdentity == current.identity.value && source.identity == current.identity &&
+            source.causation.value == target.sourceCause) Consequence.unit
+          else invalid("Retained budget composition scope crosses its actual source, Session or native history")
+      } yield target.review.changedPaths.toSet
+    }
+  }
 
   private def _repository_session_c(request: Request, core: ActionCall.Core): Consequence[String] =
     if (Set(RepositorySyncRepairScopeCorrection.adoptionOperation,
@@ -277,6 +318,8 @@ private[smworkflow] object StandardWorkflowRuntime {
       RepositorySyncRepairScopeCorrection.sessionC(request, core)
     else if (request.operation == RepositorySyncPurposePreparationContinuation.adoptionOperation)
       RepositorySyncPurposePreparationContinuation.sessionC(request, core)
+    else if (request.operation == RepositorySyncRepairBudgetContinuation.adoptionOperation)
+      RepositorySyncRepairBudgetContinuation.sessionC(request, core)
     else if (request.operation == RepositorySyncValidationContinuation.adoptionOperation)
       RepositorySyncValidationContinuation.sessionC(request, core)
     else NativeWorkflowOperationInput.textC(request, "sessionId")
