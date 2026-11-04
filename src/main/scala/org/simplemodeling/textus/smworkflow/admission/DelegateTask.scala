@@ -1,6 +1,6 @@
 /**
  * @since   Oct. 27, 2026
- * @version Oct. 27, 2026
+ * @version Nov. 5, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -85,6 +85,29 @@ private[smworkflow] object DelegateTask {
       v.reviewRequired, v.kind, v.scalaLint, v.repairLimit, Some(S.Task(v.sourceKind, v.dependencies)), delegation = Some(contract))
     S.inputC(value).map(_ => value)
   }
+
+  def requester(input: S.Input): Boolean = input != null && input.delegation != null &&
+    input.delegation.exists(c => valid(c) && c.role == "requester")
+
+  /** Passive request policy remains applicable without destination check bindings. */
+  def requesterInputC(input: S.Input): Consequence[Unit] = for {
+    _ <- S.inputC(input)
+    _ <- if (requester(input)) Consequence.unit else invalid("requester admission requires an exact requester contract")
+    _ <- if ((input.kind == "documentation") == (input.delegation.get.validationScope == "documentation"))
+      Consequence.unit else invalid("incomplete owners, authority, delivery or impact policy")
+  } yield ()
+
+  /** Requester admission retains destination requirements as request data.
+    * No destination check binding or execution fact belongs to this role.
+    */
+  def startRequesterC(input: S.Input, participant: String): Consequence[S.State] = for {
+    _ <- requesterInputC(input)
+    _ <- if (exact(participant)) Consequence.unit
+      else invalid("requester Start requires an exact requester contract and actual participant")
+  } yield S.State(input, participant, "DispatchReady", 1, Vector.empty, None, Vector.empty, 0, 0,
+    GoalPhaseRuntimeRepairControl.Context(GoalPhaseRuntimeRepairControl.version, input.repairLimit),
+    message = "One authorized existing-chat dispatch is ready for the caller; no transport or destination work is implied",
+    delivery = Some(Delivery()))
 
   /** Deterministic scope admission independent of sibling skills. Broad/full
     * requests retain FULL as well as focused behavior; no HEAVY substitution.

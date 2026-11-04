@@ -49,7 +49,7 @@ private[smworkflow] object BoundedWorkRuntime {
 /** Standalone business ownership over canonical CNCF persistence and execution.
   * No Phase Start, Plan, Step acceptance, commit or private command driver.
   * @since   Oct. 26, 2026
-  * @version Oct. 28, 2026
+  * @version Nov. 5, 2026
   */
 private[smworkflow] object StandaloneFixNativeRun extends BoundedWorkNativeRun(false) {
   type Host = BoundedWorkRuntime.Host
@@ -61,7 +61,7 @@ private[smworkflow] object StandaloneFixNativeRun extends BoundedWorkNativeRun(f
 private[smworkflow] object GoalTaskNativeRun extends BoundedWorkNativeRun(true)
 private[smworkflow] object DelegateTaskNativeRun extends BoundedWorkNativeRun(true, true)
 
-/** Both entries use one native progression owner and the same typed executor. */
+/** Bounded entries share one native owner; only executing roles use its typed executor. */
 private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation: Boolean = false) {
   import BoundedWorkRuntime.*
   import BoundedWorkRuntime.given
@@ -164,11 +164,14 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     } yield requirement
   }
 
-  /** New Starts must support both repair/implementation and possible independent review.
+  /** Executing Starts must support repair/implementation and possible independent review.
+    * Requesters admit complete metadata and optional paired configuration only.
     * Resolve classes without manufacturing an issued WorkOrder or execution observation.
     */
   private[admission] def preflightExecutionC(input: S.Input, profiles: Option[WorkflowExecutionProfileMapping],
-    origin: Option[GoalPhaseNativeExecution.Origin]): Consequence[Unit] = if (input.kind == "validation")
+    origin: Option[GoalPhaseNativeExecution.Origin]): Consequence[Unit] = if (delegation && DelegateTask.requester(input))
+    DelegateTask.requesterInputC(input).flatMap(_ => GoalPhaseNativeExecution.validatePairC(profiles, origin))
+    else if (input.kind == "validation")
     S.inputC(input).flatMap(_ => GoalPhaseNativeExecution.validatePairC(profiles, origin))
     else for {
     _ <- GoalPhaseNativeExecution.validatePairC(profiles, origin)
@@ -187,20 +190,20 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     core: ActionCall.Core): Consequence[V.StandaloneFixView] = for {
     _ <- S.inputC(input)
     _ <- if (input.task.nonEmpty == task && input.delegation.nonEmpty == delegation) Consequence.unit else invalid("Entry completion policy differs from the adopted input")
+    requester = delegation && DelegateTask.requester(input)
     _ <- preflightExecutionC(input, h.profiles, h.origin)
-    _ <- input.delegation.flatMap(_.publicationTarget).fold(Consequence.unit) { target =>
+    _ <- (if (requester) None else input.delegation.flatMap(_.publicationTarget)).fold(Consequence.unit) { target =>
       if (h.publication.exists(p => LocalPublicationRuntime.validateC(p).isSuccess && p.targets.exists(t =>
           t.identity == target && t.component == input.delegation.get.componentIdentity && t.workspace == "sm-workflow-repository")))
         Consequence.unit else invalid("Required delegated publication target is not installed for this Component/workspace")
     }
     _ <- GoalPhaseParticipantAdmission.admitC(participant, core.executionContext)
-    _ <- if (input.repositoryIdentity == h.repository && input.ownedPaths.forall(p => h.paths.contains(p))) Consequence.unit
+    _ <- if (requester || (input.repositoryIdentity == h.repository && input.ownedPaths.forall(p => h.paths.contains(p)))) Consequence.unit
       else invalid("Requested repository/paths exceed the configured host bindings")
-    selected <- if (delegation) DelegateTask.selectChecksC(input, h.checks) else Consequence.success(input.checks.flatMap(id => h.checks.find(_.identity == id)))
+    selected <- if (requester) Consequence.success(Vector.empty[GoalPhaseNativeValidation.Check])
+      else if (delegation) DelegateTask.selectChecksC(input, h.checks) else Consequence.success(input.checks.flatMap(id => h.checks.find(_.identity == id)))
     _ <- if (task) Consequence.unit else WorkflowRepairAssessment.standaloneSelectionC(input, selected)
-    initialstate <- S.startC(input, participant, selected)
-    state = if (input.delegation.exists(_.role == "requester")) initialstate.copy(stage = "DispatchReady", delivery = Some(DelegateTask.Delivery()),
-      message = "One authorized existing-chat dispatch is ready for the caller; no transport or destination work is implied") else initialstate
+    state <- if (requester) DelegateTask.startRequesterC(input, participant) else S.startC(input, participant, selected)
     admissionoperation = if (input.reviewOrigin.nonEmpty) reviewStartOperation else startOperation
     inputtype = if (input.reviewOrigin.nonEmpty) "StandaloneReviewFixInput" else entry + "Input"
     binding = ProfileStartAdmission.Binding(admissionoperation, definition.workflowIdentity, definition.workflowRevision, inputtype)
@@ -222,11 +225,11 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     _ <- prior.fold(Consequence.unit)(WorkflowForceClosure.requireOpenC)
     root <- G.rootC(core)
     observed <- G.observeC(core)
-    _ <- if (root == h.root && observed.branch == h.branch && (prior.nonEmpty || observed.dirty.forall(d =>
+    _ <- if (root == h.root && observed.branch == h.branch && (requester || prior.nonEmpty || observed.dirty.forall(d =>
       (S.owned(d.path, input.ownedPaths) && d.renamedFrom.forall(S.owned(_, input.ownedPaths))) ||
       (task && Set(' ', '?')(d.index) && !d.renamedFrom.exists(S.owned(_, input.ownedPaths)))))) Consequence.unit
       else invalid("Start preserves unrelated work by refusing a crossed repository or dirty scope")
-    _ <- if (prior.nonEmpty || !task || !observed.dirty.exists(d => S.owned(d.path, input.ownedPaths))) Consequence.unit
+    _ <- if (requester || prior.nonEmpty || !task || !observed.dirty.exists(d => S.owned(d.path, input.ownedPaths))) Consequence.unit
       else invalid("Task Start requires clean selected ownership so pre-existing edits cannot be silently captured")
     retainedStart <- prior match {
       case Some(current) => for {
@@ -245,11 +248,14 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
           CorrelationReference(key), CausationReference("standalone-started"), None, None, None, Vector.empty).validateC
         _ <- instances.createC(initial)(using core.executionContext)
         active <- instances.appendC(identity, initial.revision, history(initial, "standalone-started"))(using core.executionContext)
-        saved <- saveC(h, store, active, Payload(state, root, observed.branch, observed.head, unrelated = if (task) Some(observed.dirty.filterNot(d => S.owned(d.path, input.ownedPaths))) else None), core)
+        // Requester Git facts describe this caller only, never the destination base.
+        saved <- saveC(h, store, active, Payload(state, root, observed.branch, observed.head,
+          unrelated = if (requester) Some(observed.dirty) else if (task) Some(observed.dirty.filterNot(d => S.owned(d.path, input.ownedPaths))) else None), core)
       } yield saved -> state
     }
   } yield view(retainedStart._1, retainedStart._2, if (prior.nonEmpty) "Retained" else "Started", if (prior.nonEmpty)
     "Redelivery retains the original native Session and actual frontier; ordinary Advance collects its work/result without a new Start"
+    else if (requester) "Requester request retained; normal Advance collects dispatch and delivery observations"
     else if (task) "Task request retained; normal Advance owns implementation and selected checks"
     else if (input.reviewOrigin.nonEmpty) "Original review findings retained; normal Advance owns bounded repair and selected checks"
     else "Standalone request retained; normal Advance owns the selected checks")

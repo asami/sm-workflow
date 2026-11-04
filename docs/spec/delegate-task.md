@@ -1,6 +1,6 @@
 # Delegated development and delivery
 
-Date: 2026-10-27
+Date: 2026-11-05
 Status: D1–D3 source routes delivered; C5 distribution alignment authored; installed and actual cross-chat qualification pending.
 Owner: [Phase 6.8](../phase/phase-6.8.md), D1–D4.
 Public skill: [sm-delegate-task](../../skills/sm-delegate-task/SKILL.md), packaged by the Component.
@@ -42,6 +42,30 @@ identity; do not merge their histories or create a new repair Session on redeliv
 Where the chat transport belongs to the caller, runtime issues typed dispatch or
 return work to that authorized caller. Preserve the existing chat context; no new
 Codex API session or autonomous messaging authority is implied.
+
+Requester admission and destination execution have separate host requirements.
+An exact valid requester keeps the full destination request as metadata and
+starts at `DispatchReady` with no selected executable checks or execution facts.
+Its normal host still owns complete-input selection, participant and idempotency
+admission, canonical Session/storage/definition/closure checks, independent
+adoption evidence and read-only Git observation of its own caller repository.
+The configured caller root and branch must match the actual observation; its
+retained head and dirty paths describe that caller only. Unrelated staged and
+dirty files are preserved without destination path filtering or any staging,
+normalization or commit. The requester needs no producer checkout, concrete
+executor mapping/origin, destination check binding or publication registration.
+Optional mapping/origin configuration must still be a valid pair. No parent
+executor model or destination evidence may be invented to satisfy metadata
+admission.
+
+The destination retains strict concrete mapping/origin resolution, adopted
+repository/path/dirty-scope admission, installed validation and publication
+bindings, and genuine execution, review, commit and publication evidence.
+StandaloneFix and GoalTask retain their existing execution requirements.
+The requester exemption adds no operation, schema, persistence, property,
+executor, permission or queue. See the [finite caller sequence and role-specific
+host bindings](native-delegate-task-caller.md) for normal prepare, Start,
+Advance, delivery observation, description and adoption operations.
 
 Transport acknowledgement is not acceptance, work started, tests passed or result
 delivery. Consume actual observations and retained outputs. No extra AI calls,
@@ -146,8 +170,10 @@ consent. The input includes distinct requester/destination identities, return
 owner, Component, purpose, conditions, source and authorization references,
 permitted operations, literal exclusions, impact scope and optional publication
 target/coordinates. Both roles use the same admitted request with only `role`
-changed. Missing complete-input execution/profile mapping is refused before a
-fresh WorkOrder. The runtime derives one stable native Session identity per
+changed. The destination refuses missing concrete execution/profile mapping
+before fresh semantic work. The requester validates the complete input and any
+optional profile/origin pair without resolving destination executable bindings.
+The runtime derives one stable native Session identity per
 request, Component and role; exact Start redelivery returns that Session's current
 native state and rejects changed ownership/input. There is no second queue or
 execution ledger.
@@ -159,7 +185,7 @@ entry. Localized code requires actual compile and focused behavioral checks;
 broad scope retains an explicitly selected FULL check. Detailed review remains
 conditional unless the request requires it. The original goal-task mandatory
 review and standalone FIX uncommitted completion contracts remain unchanged.
-Delegate commits use the shared selected staging and mechanical hygiene policy;
+Destination commits use the shared selected staging and mechanical hygiene policy;
 required publication uses `LocalPublicationRuntime` and its retained actual
 request/result. A legitimate unchanged candidate returns the applicable existing
 commit. A publication wait retains the commit and successful checks.
@@ -212,7 +238,10 @@ the standalone FIX contract or authorize a new semantic narrative after Terminal
 Broad impact selects the uniquely installed `FULL` Test binding in addition to
 explicit focused acceptance checks. Localized impact does not add FULL merely
 because delegation or publication occurs. Missing or ambiguous required bindings
-refuse before issuing unusable work. Existing check ordering retains compile
+refuse at the destination before issuing unusable work. The requester retains
+these full requirements in its original input with an empty executable selection;
+it cannot substitute empty receipts for the genuine returned destination checks.
+Existing check ordering retains compile
 failure short-circuiting; FULL and HEAVY remain distinct bindings.
 
 Delivery publication uses the existing LocalPublication decision/execution/result

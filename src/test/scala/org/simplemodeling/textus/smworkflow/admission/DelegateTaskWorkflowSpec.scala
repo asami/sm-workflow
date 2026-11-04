@@ -324,6 +324,12 @@ final class DelegateTaskWorkflowSpec extends AnyWordSpec with GivenWhenThen with
       take(DelegateTask.selectChecksC(input, full)) shouldBe _checks
       DelegateTask.selectChecksC(broad, _checks).isSuccess shouldBe false
       take(S.startC(broad.copy(checks = full.map(_.identity)), "participant", full)).selected shouldBe full
+      Given("the admitted destination request and its requester role carry the same requirements")
+      val requester = input.copy(delegation = input.delegation.map(_.copy(role = "requester")))
+      When("fresh admission has no concrete execution mapping or origin")
+      val requesteradmission = DelegateTaskNativeRun.preflightExecutionC(requester, None, None)
+      Then("requester metadata is admitted while destination execution still requires its mapping")
+      requesteradmission.isSuccess shouldBe true
       DelegateTaskNativeRun.preflightExecutionC(input, None, None).isSuccess shouldBe false
       val mapping = take(BoundedWorkExecutionAdmissionFixture.mappingC())
       take(DelegateTaskNativeRun.preflightExecutionC(input, Some(mapping), Some(BoundedWorkExecutionAdmissionFixture.origin)))
