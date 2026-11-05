@@ -28,7 +28,8 @@ import D.given
 /** Fresh independent Human direction after a separately authorized observation failed.
   * Historical uncertainty and every completed effect remain immutable.
   * @since   Oct. 22, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 25, 2026
+  * @version Nov.  5, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseCandidateObservationContinuation {
@@ -123,10 +124,10 @@ private[smworkflow] object GoalPhaseCandidateObservationContinuation {
     wire <- GoalPhaseNativeMetadata.normalizePublicJson(supplied)
     original <- R.decodePublicTarget(wire.hcursor.downField("original").focus.getOrElse(Json.Null))
     controller <- R.publicController(wire.hcursor.downField("controller").focus.getOrElse(Json.Null))
-    repository <- _public_repository(wire.hcursor.downField("repository").focus.getOrElse(Json.Null))
+    repository <- publicRepository(wire.hcursor.downField("repository").focus.getOrElse(Json.Null))
     dependency <- wire.hcursor.downField("dependencyRepository").focus match {
       case None => Right(None)
-      case Some(snapshot) => _public_repository(snapshot).map(Some(_))
+      case Some(snapshot) => publicRepository(snapshot).map(Some(_))
     }
     _ <- R.publicMembers(wire, "priorObservations", false)(p => for {
       _ <- R.publicCandidatePayload(p.hcursor.downField("intent").focus.getOrElse(Json.Null))
@@ -150,7 +151,7 @@ private[smworkflow] object GoalPhaseCandidateObservationContinuation {
     dirty <- _public_dirty_decoder(value.hcursor).left.map(_.message)
   } yield dirty
 
-  private def _public_repository(value: Json): Either[String, RepositorySnapshot] = for {
+  private[admission] def publicRepository(value: Json): Either[String, RepositorySnapshot] = for {
     _ <- R.publicNonNullObject(value, "repository snapshot")
     entries <- value.hcursor.get[Vector[Json]]("dirty").left.map(_.message)
     dirty <- entries.foldLeft[Either[String, Vector[Dirty]]](Right(Vector.empty))((result, item) =>
@@ -389,7 +390,8 @@ private[smworkflow] object GoalPhaseCandidateObservationContinuation {
         "ordered-candidate-observation-continuation:" + from.revision.value), TypedValue(codec.typeIdentity, payload)),
       ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](()))(using core.executionContext)
   } yield ()
-  final case class Resumed(record: InstanceRecord, target: Target, controller: O.State, choice: String)
+  final case class Resumed(record: InstanceRecord, target: Target, controller: O.State, choice: String,
+    directionReference: ContextReference)
   private def _state_c(controller: O.State, from: InstanceRecord, direction: Direction): Consequence[O.State] =
     if (direction.choice == "AuthorizeNewObservation") Consequence.success(controller)
     else if (direction.choice == "ReviseWork") controller.acceptC(O.CandidateWorkRevisionAdmitted(
@@ -429,7 +431,7 @@ private[smworkflow] object GoalPhaseCandidateObservationContinuation {
         _ <- if (direction.choice != "ReviseWork" || d.candidatePaths == actual.original.candidatePaths ||
             session.current.revision.value > next.revision.value) Consequence.unit
           else invalid("pending revision work crosses its exact admitted candidate policy")
-      } yield Some(Resumed(next, actual, state, direction.choice))
+      } yield Some(Resumed(next, actual, state, direction.choice, direction.reference))
     }
   } yield result
 

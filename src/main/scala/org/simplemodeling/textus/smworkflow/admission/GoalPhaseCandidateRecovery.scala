@@ -27,7 +27,8 @@ import D.given
 /** Independent Human direction for one new observation after fully recorded staging.
   * Old process settlement remains unknown; no completed effect is replayed.
   * @since   Oct. 22, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  5, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseCandidateRecovery {
@@ -484,7 +485,8 @@ private[smworkflow] object GoalPhaseCandidateRecovery {
       TypedValue(codec.typeIdentity, payload)), ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](()))(
       using core.executionContext)
   } yield ()
-  final case class Resumed(record: InstanceRecord, target: RecoveryTarget, controller: O.State, choice: String)
+  final case class Resumed(record: InstanceRecord, target: RecoveryTarget, controller: O.State, choice: String,
+    directionReference: ContextReference)
   def directionStateC(controller: O.State, from: InstanceRecord, direction: Direction): Consequence[O.State] =
     if (direction.choice == "AuthorizeNewObservation" && observationAllowed(direction.target)) Consequence.success(controller)
     else if (direction.choice == "ReviseWork" && choicesFor(direction.target).contains("ReviseWork"))
@@ -528,7 +530,7 @@ private[smworkflow] object GoalPhaseCandidateRecovery {
         _ <- if (direction.choice != "ReviseWork" || d.candidatePaths == actual.candidatePaths ||
             session.current.revision.value > next.revision.value) Consequence.unit
           else _invalid("pending revision work crosses its exact admitted candidate policy")
-      } yield Some(Resumed(next, actual, state, direction.choice))
+      } yield Some(Resumed(next, actual, state, direction.choice, direction.reference))
     }
   } yield result
 

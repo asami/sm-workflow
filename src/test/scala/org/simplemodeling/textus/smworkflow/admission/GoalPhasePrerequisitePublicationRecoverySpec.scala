@@ -68,7 +68,7 @@ private[admission] object PrimaryPublicationContinuationSpecificationFixture {
     F.approvals.map(a => S.Coverage(a.decision, a.proposal.acceptance, F.binding.checks.map(_.identity))), consumption)
   val sourceTarget = S.Target(S.primarySchema, "same-session", "", "26", "26", F.plan, F.binding.step, 1L,
     F.primaryBase, Vector.empty, sourceRequired.repairProgress, sourceRequired.requestingResult, F.admission, Vector.empty,
-    proposal, F.binding.copy(revision = 2), corrected, corrected, primaryFailureOrigin = Some(sourceRequired.copy(dependencyGuard = corrected)))
+    proposal, F.binding.copy(revision = 2), Some(corrected), corrected, primaryFailureOrigin = Some(sourceRequired.copy(dependencyGuard = corrected)))
   val sourceDirection = S.Direction(sourceTarget, ContextReference("combined-source-human", "1"), "participant",
     "SPECIFICATION-OWNED concrete source/artifact/one-primary plan", Some(S.combinedPrimaryChoice))
   val postGuard = corrected.copy(indexTree = "9" * 40, dirty = corrected.dirty.map(_.copy(worktree = " ")),
@@ -93,7 +93,8 @@ private[admission] object PrimaryPublicationContinuationSpecificationFixture {
 /** Pure bounded contract evidence; supplied _process observations and byte
   * identities are specification data. Installed qualification is separate.
   * @since   Nov.  1, 2026
-  * @version Nov.  2, 2026
+  *  version Nov.  2, 2026
+  * @version Nov.  5, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -594,7 +595,7 @@ final class GoalPhasePrerequisitePublicationRecoverySpec extends AnyWordSpec wit
       Then("only the new binding reaches physical observation and the complete committed inventory preserves original provenance")
       observations shouldBe Vector(selected -> Vector.empty)
       inventories shouldBe Vector((selected, Vector.empty, origin.requestingResult, F.binding.base))
-      result.predecessorGuard shouldBe origin.guard
+      result.predecessorGuard shouldBe Some(origin.guard)
       result.preStageGuard shouldBe fresh
       result.waitOrigin shouldBe Some(origin)
       result.committedBaseSuccession shouldBe Some(succession)
@@ -675,7 +676,7 @@ final class GoalPhasePrerequisitePublicationRecoverySpec extends AnyWordSpec wit
       Then("the retained old guard remains exact while the fresh outer selection includes only the retained-approved addition")
       observed shouldBe Vector(selected)
       inventories shouldBe 0
-      result.predecessorGuard shouldBe origin.guard
+      result.predecessorGuard shouldBe Some(origin.guard)
       result.preStageGuard shouldBe fresh
       result.waitOrigin.get.scopeApprovals shouldBe Vector(approval)
       result.proposal.coverage shouldBe coverage

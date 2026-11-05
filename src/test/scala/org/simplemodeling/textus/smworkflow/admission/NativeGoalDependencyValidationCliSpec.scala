@@ -22,14 +22,15 @@ import GoalPhaseDependencyValidation.given
   * SPECIFICATION-OWNED; no production adoption, installed qualification or acceptance is claimed.
   * @since   Oct. 24, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  2, 2026
+  *  version Nov.  2, 2026
+  * @version Nov.  5, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.scalatest.DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.DependencyValidationTestDeclaration])
 final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Matchers with GivenWhenThen
-    with ThreeWorkflowManagedRepositoryFixture {
+    with ThreeWorkflowManagedRepositoryFixture with NativeGoalSourceHistoryCliFixture {
   import NativeCallerExecutionFixture.json
 
   override protected def process_plan(root: Path, scenario: String,
@@ -129,7 +130,8 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
   private def _selected(name: String, denial: String = "none",
     bindingtransform: D.Binding => D.Binding = value => value, legacysuccessor: Boolean = false,
     assessmentpolicy: Option[GoalPhaseStepAssessment.Policy] = None, sourcerevisionfixture: Boolean = false,
-    dependencychecks: Option[Vector[GoalPhaseNativeValidation.Check]] = None): Selected = {
+    dependencychecks: Option[Vector[GoalPhaseNativeValidation.Check]] = None,
+    beforestart: F.Scenario => Unit = _ => ()): Selected = {
     val scenario = F.freshDependency(name, denial, bindingtransform, dependencyChecks = dependencychecks)
     // Both ordinary launchers select this fresh host's existing assembly. The
     // installed entry changes cwd only; host configuration owns its descriptor.
@@ -183,11 +185,15 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
           reference => Consequence(Files.readString(Path.of(java.net.URI.create(reference))))))
       Files.writeString(scenario.root.resolve("selected-input.json"), SplitPhaseExplicitPartitionFixture.take(prepared.toJsonStringC))
     }
+    beforestart(scenario)
     val task = scenario.ownTask("dependency-validation")
     val started = scenario.start().business[V.GoalPhaseStartResult]
     scenario.retain(task, started)
     val original = scenario.advance(task).business[V.GoalPhaseAdvanceResult]
-    val binding = scenario.host.goal.dependencyValidation.get
+    val configured = parse(Files.readString(hostconfig)).toOption.get
+    val actualhost = SplitPhaseExplicitPartitionFixture.take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(
+      parse(configured.hcursor.get[String]("sm-workflow.runtime.definition").toOption.get).toOption.get))
+    val binding = actualhost.goal.dependencyValidation.get
     val proposal = GoalPhaseDependencyScope.Proposal("specification-dependency-scope", "1", "IMPLEMENTATION",
       binding.requester, binding.dependency, ContextReference("specification-linked-api", "1"),
       "SPECIFICATION-OWNED linked dependency change", binding.paths, Vector("Validate the exact dependency candidate"),
@@ -540,42 +546,49 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
     * and the old workspace/programs remain available to authenticate the prefix.
     */
   private def _source_host(selected: Selected, replacement: D.Binding,
-    consumption: GoalPhaseDependencySourceRevision.Consumption): Unit = {
+    consumption: GoalPhaseDependencySourceRevision.Consumption): Unit =
+    _configure_source_host(selected.scenario, replacement, consumption)
+
+  private def _configure_source_host(scenario: F.Scenario, replacement: D.Binding,
+    consumption: GoalPhaseDependencySourceRevision.Consumption,
+    testclasses: Vector[String] = Vector.empty): Unit = {
     import org.goldenport.cncf.processexecution.GitOperationKind
     import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms.Target
-    val path = selected.scenario.root.resolve(".textus/config.json")
+    val path = scenario.root.resolve(".textus/config.json")
     val config = parse(Files.readString(path)).toOption.get
     val existing = parse(config.hcursor.get[String]("textus.subsystem.process-execution.plan").toOption.get).toOption.get
     val host = SplitPhaseExplicitPartitionFixture.take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(
       parse(config.hcursor.get[String]("sm-workflow.runtime.definition").toOption.get).toOption.get))
-    def array(value: Json, key: String): Vector[Json] = value.hcursor.get[Vector[Json]](key).toOption.get
+    def _array_(value: Json, key: String): Vector[Json] = value.hcursor.get[Vector[Json]](key).toOption.get
     val workspace = replacement.dependency.workspace
     val dependencyPrograms = consumption.programs.filter(p => replacement.checks.exists(_.identity == p.check))
     val replacementWorkspaces = dependencyPrograms.map(_.workspace).toSet + workspace
     val retained = Vector("gitPrograms" -> "target", "sbtPrograms" -> "target", "workspaces" -> "identity",
       "workspaceGrants" -> "workspaceId").foldLeft(existing) { case (previous, (key, field)) =>
-      previous.mapObject(_.add(key, Json.fromValues(array(previous, key)
+      previous.mapObject(_.add(key, Json.fromValues(_array_(previous, key)
         .filterNot(_.hcursor.get[String](field).toOption.exists(replacementWorkspaces.contains)))))
     }
+    val builderbinding = replacement.copy(checks = replacement.checks.map(check =>
+      if (check.kind == WorkflowSbtValidation.Kind.TestOnly) check.copy(kind = WorkflowSbtValidation.Kind.Test) else check))
     val combined = TypedSbtHostPlanFixture.dependencyPlan(retained, Path.of(replacement.root).getParent,
-      TypedSbtHostPlanFixture.normalExecutable, replacement)
+      TypedSbtHostPlanFixture.normalExecutable, builderbinding)
     val reads = (host.goal.dependencyValidation.toVector :+ replacement).flatMap { binding =>
       val declarations = TypedGitHostPlanFixture.plan(Target(Path.of(binding.root), binding.branch, "origin", "main",
-        selected.scenario.root.resolve("unused-source-upstream.git").toString),
+        scenario.root.resolve("unused-source-upstream.git").toString),
         kinds = Vector(GitOperationKind.TreeChanges, GitOperationKind.BlobContent, GitOperationKind.CommitMetadata))
-      def rebind(value: Json): Json = value.fold(Json.Null, Json.fromBoolean, Json.fromJsonNumber,
+      def _rebind_(value: Json): Json = value.fold(Json.Null, Json.fromBoolean, Json.fromJsonNumber,
         text => Json.fromString(if (text == TypedGitHostPlanFixture.workspace) binding.dependency.workspace
           else if (text.startsWith("sm-workflow-git-")) binding.dependency.workspace + "-source-" +
             text.stripPrefix("sm-workflow-git-") else text),
-        values => Json.fromValues(values.map(rebind)), fields => Json.fromJsonObject(fields.mapValues(rebind)))
-      val programs = array(rebind(declarations), "gitPrograms")
+        values => Json.fromValues(values.map(_rebind_)), fields => Json.fromJsonObject(fields.mapValues(_rebind_)))
+      val programs = _array_(_rebind_(declarations), "gitPrograms")
       val selection = GoalPhaseDependencySourceRevision.committedInventorySelection
       val identity = binding.dependency.workspace + "-source-tree-entries"
       programs :+ programs.head.mapObject(_.add("operation", GitOperationKind.TreeEntries.wireName.asJson)
         .add("identity", identity.asJson).add("capability", identity.asJson)
         .add("selectionId", selection.asJson).add("selectedPaths", binding.paths.asJson))
     }
-    val sourceGit = array(combined, "gitPrograms").map { program =>
+    val sourceGit = _array_(combined, "gitPrograms").map { program =>
       if (program.hcursor.get[String]("target").toOption.contains(workspace)) program.mapObject(fields =>
         fields.add("identity", (workspace + "-" + program.hcursor.get[String]("identity").toOption.get
           .stripPrefix("dependency-sm-workflow-git-")).asJson)
@@ -583,14 +596,24 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
             .stripPrefix("dependency-sm-workflow-git-")).asJson))
       else program
     }
-    val git = (sourceGit ++ reads).groupBy(program => (program.hcursor.get[String]("target").toOption.get,
+    val primaryreads = TypedGitHostPlanFixture.plan(Target(Path.of(host.target.root), host.target.localBranch,
+      host.target.remote, host.target.remoteBranch, host.target.endpoint),
+      kinds = Vector(GitOperationKind.TreeChanges, GitOperationKind.BlobContent))
+    val git = (sourceGit ++ reads ++ _array_(primaryreads, "gitPrograms")).groupBy(program => (program.hcursor.get[String]("target").toOption.get,
       program.hcursor.get[String]("operation").toOption.get, program.hcursor.get[String]("selectionId").toOption))
       .values.map(_.last).toVector.sortBy(_.hcursor.get[String]("identity").toOption.get)
-    val sbt = array(combined, "sbtPrograms").map { original =>
+    val sbt = _array_(combined, "sbtPrograms").map { original =>
       val routed = if (original.hcursor.get[String]("target").toOption.contains(workspace))
-        dependencyPrograms.find(p => original.hcursor.get[String]("operation").toOption.contains(p.kind)) else None
-      val program = routed.fold(original)(p => original.mapObject(_.add("target", p.workspace.asJson)
-        .add("identity", p.program.asJson)))
+        dependencyPrograms.find(p => original.hcursor.get[String]("operation").toOption.contains(
+          if (p.kind == "test-only") "test" else p.kind)) else None
+      val program = routed.fold(original) { p =>
+        val selected = original.mapObject(_.add("target", p.workspace.asJson).add("identity", p.program.asJson)
+          .add("operation", p.kind.asJson))
+        if (p.kind != "test-only") selected else {
+          require(testclasses.nonEmpty, "Select the fixed small dependency TestOnly suite")
+          selected.mapObject(_.add("testClasses", testclasses.asJson))
+        }
+      }
       if (consumption.programs.exists(p => program.hcursor.get[String]("target").toOption.contains(p.workspace) &&
           program.hcursor.get[String]("identity").toOption.contains(p.program))) {
         val environment = program.hcursor.get[Json]("environment").toOption.get.mapObject(_.add("TEXTUS_CNCF_SOURCE_ROOT",
@@ -601,9 +624,9 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
     val capabilities = (git ++ sbt).map(_.hcursor.get[String]("capability").toOption.get).distinct
     val aliases = dependencyPrograms.map(_.workspace).distinct.filterNot(_ == workspace)
     val processes = combined.mapObject(_.add("gitPrograms", Json.fromValues(git)).add("sbtPrograms", Json.fromValues(sbt))
-      .add("workspaces", Json.fromValues(array(combined, "workspaces") ++ aliases.map(alias =>
+      .add("workspaces", Json.fromValues(_array_(combined, "workspaces") ++ aliases.map(alias =>
         Json.obj("identity" -> alias.asJson, "root" -> replacement.root.asJson))))
-      .add("workspaceGrants", Json.fromValues(array(combined, "workspaceGrants") ++ aliases.map(alias =>
+      .add("workspaceGrants", Json.fromValues(_array_(combined, "workspaceGrants") ++ aliases.map(alias =>
         Json.obj("componentId" -> org.simplemodeling.textus.smworkflow.SmWorkflowComponent.componentId.name.asJson,
           "workspaceId" -> alias.asJson, "access" -> "manage".asJson))))
       .add("grants", Json.arr(Json.obj(
@@ -617,6 +640,771 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
     Files.writeString(path, config.mapObject(_.add("sm-workflow.runtime.definition",
       ThreeWorkflowRuntimeParameters.encode(revised).noSpaces.asJson)
       .add("textus.subsystem.process-execution.plan", processes.noSpaces.asJson)).noSpaces)
+  }
+
+  /** A small ordinary build in each of two repositories. No producer sources or
+    * native records are copied into the dependency fixture. */
+  private def _initial_source_build(scenario: F.Scenario): Unit = {
+    import io.circe.generic.auto.*
+    import org.goldenport.cncf.processexecution.GitOperationKind
+    import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms.Target
+    def _setup_(repository: Path, arguments: String*): Unit = {
+      SplitPhaseExplicitPartitionFixture.take(_run_setup_command_(Vector("-C", repository.toString,
+        "-c", "core.hooksPath=/dev/null", "-c", "user.name=Initial Source Specification",
+        "-c", "user.email=initial-source@example.invalid") ++ arguments))
+    }
+    val dependency = scenario.root.resolve("dependency/repository")
+    Files.writeString(dependency.resolve("build.sbt"), """scalaVersion := "2.12.18"
+      |lazy val root = project.in(file("."))
+      |libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.19" % Test
+      |Compile / sourceGenerators += Def.task {
+      |  val generated = (Compile / sourceManaged).value / "SourceRevisionMarker.scala"
+      |  IO.write(generated, "object SourceRevisionMarker { def source: String = " +
+      |    "\"" + baseDirectory.value.getCanonicalPath.replace("\\", "\\\\") + "\" }\n")
+      |  IO.append(baseDirectory.value.getParentFile / "sbt-compile-executions.txt", "compile\n")
+      |  Seq(generated)
+      |}.taskValue
+      |""".stripMargin)
+    Files.createDirectories(dependency.resolve("src/test/scala/fixture"))
+    Files.writeString(dependency.resolve("src/test/scala/fixture/SelectedDependencyCheck.scala"), """package fixture
+      |class SelectedDependencyCheck extends org.scalatest.wordspec.AnyWordSpec
+      |    with org.scalatest.matchers.should.Matchers with org.scalatest.GivenWhenThen {
+      |  "The selected dependency source" should {
+      |    "compile and consume its pending input" in {
+      |      Given("the actual dependency workspace, generated source marker and pending input")
+      |      val root = java.nio.file.Paths.get("").toAbsolutePath.normalize
+      |      When("the fixed TestOnly suite checks the selected source and input")
+      |      java.nio.file.Files.write(root.getParent.resolve("sbt-executions.txt"), "selected-test-only\n".getBytes("UTF-8"),
+      |        java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND)
+      |      Then("the pending input is expected and the compiled source marker identifies this workspace")
+      |      java.nio.file.Files.readString(root.resolve("value.txt")) shouldBe "expected\n"
+      |      val marker = Class.forName("SourceRevisionMarker$").getField("MODULE$").get(null)
+      |      marker.getClass.getMethod("source").invoke(marker) shouldBe root.toString
+      |    }
+      |  }
+      |}
+      |""".stripMargin)
+    _setup_(dependency, "add", "--", "build.sbt", "src/test/scala/fixture/SelectedDependencyCheck.scala")
+    _setup_(dependency, "commit", "--no-verify", "--no-gpg-sign", "-m", "Small fixed dependency TestOnly fixture")
+    val primary = Path.of(scenario.host.target.root)
+    Files.createDirectories(primary.resolve(sourcePath).getParent)
+    Files.writeString(primary.resolve(sourcePath), "/**\n * @since   Oct.  1, 2026\n * @version Oct.  2, 2026\n */\nobject HistoryExample { val value = 0 }\n")
+    _setup_(primary, "add", "--", sourcePath)
+    _setup_(primary, "commit", "--no-verify", "--no-gpg-sign", "-m", "Primary normalization fixture baseline")
+    val file = scenario.root.resolve(".textus/config.json")
+    val config = parse(Files.readString(file)).toOption.get
+    val host = SplitPhaseExplicitPartitionFixture.take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(
+      parse(config.hcursor.get[String]("sm-workflow.runtime.definition").toOption.get).toOption.get))
+    val observed = _native_fixture(scenario)(RepositorySyncManagedGitObservation.observeInWorkspaceC(_,
+      host.goal.dependencyValidation.get.dependency.workspace))
+    val binding = host.goal.dependencyValidation.get.copy(base = GoalPhaseOrderedProgression.Snapshot(observed.head, observed.tree),
+      checks = host.goal.dependencyValidation.get.checks.map(check =>
+        if (check.kind == WorkflowSbtValidation.Kind.Test) check.copy(kind = WorkflowSbtValidation.Kind.TestOnly) else check))
+    val paths = host.goal.candidatePaths :+ sourcePath
+    val planpath = scenario.root.resolve("goal-plan.json")
+    val oldplan = parse(Files.readString(planpath)).toOption.get.as[GoalPhaseOrderedProgression.Plan].toOption.get
+    val plan = oldplan.copy(steps = oldplan.steps.updated(0, oldplan.steps.head.copy(ownedPaths = paths)))
+    Files.writeString(planpath, plan.asJson.noSpaces)
+    val revised = host.copy(goal = host.goal.copy(candidatePaths = paths, dependencyValidation = Some(binding)))
+    val current = parse(config.hcursor.get[String]("textus.subsystem.process-execution.plan").toOption.get).toOption.get
+    def _array_(value: Json, name: String): Vector[Json] = value.hcursor.get[Vector[Json]](name).toOption.get
+    val git = TypedGitHostPlanFixture.plan(Target(primary, host.target.localBranch, host.target.remote,
+      host.target.remoteBranch, host.target.endpoint), kinds = TypedGitHostPlanFixture.observations ++ Vector(
+      GitOperationKind.IndexTree, GitOperationKind.PendingPaths, GitOperationKind.PendingDiff,
+      GitOperationKind.CommitMetadata, GitOperationKind.TreeChanges, GitOperationKind.BlobContent), goalPaths = paths,
+      goalMessages = Vector("Complete selected continuation Step 1", "Complete selected continuation Step 2"),
+      goalSelections = Vector(paths, Vector("docs/phase.md")))
+    val programs = _array_(current, "gitPrograms").filterNot(_.hcursor.get[String]("target").toOption
+      .contains(TypedGitHostPlanFixture.workspace)) ++ _array_(git, "gitPrograms")
+    val process = current.mapObject(_.add("gitPrograms", programs.asJson).add("grants", Json.arr(Json.obj(
+      "componentId" -> org.simplemodeling.textus.smworkflow.SmWorkflowComponent.componentId.name.asJson,
+      "capabilities" -> (programs ++ _array_(current, "sbtPrograms")).map(_.hcursor.get[String]("capability").toOption.get).distinct.asJson))))
+    Files.writeString(file, config.mapObject(_.add("sm-workflow.runtime.definition",
+      ThreeWorkflowRuntimeParameters.encode(revised).noSpaces.asJson).add("textus.subsystem.process-execution.plan",
+      process.noSpaces.asJson)).noSpaces)
+    configure(scenario, enabledSettings)
+    val consumption = _initial_consumption(binding)
+    _configure_source_host(scenario, binding.copy(revision = 2), consumption, Vector("fixture.SelectedDependencyCheck"))
+    val prepared = SplitPhaseExplicitPartitionFixture.take(org.simplemodeling.textus.smworkflow.preparation.NativeGoalStartInput.prepareC(Map(
+      "input" -> scenario.root.resolve("goal-input.json").toUri.toASCIIString, "plan" -> planpath.toUri.toASCIIString,
+      "selection-id" -> "native-goal-selection", "participant" -> "participant", "origin" -> "ExplicitHuman",
+      "idempotency-key" -> "native-specification-input", "selection-collection" -> "entity:smworkflow.cli.goal_selection",
+      "plan-collection" -> "entity:smworkflow.cli.goal_plans"), reference => Consequence(Files.readString(Path.of(java.net.URI.create(reference))))))
+    Files.writeString(scenario.root.resolve("selected-input.json"), SplitPhaseExplicitPartitionFixture.take(prepared.toJsonStringC))
+  }
+
+  private def _initial_consumption(binding: D.Binding): GoalPhaseDependencySourceRevision.Consumption = {
+    import GoalPhaseDependencySourceRevision as R
+    R.Consumption(binding.requester.workspace, binding.root, Vector.empty, binding.paths.map(R.ExpectedMode(_, "100644")),
+      Vector(R.CheckProgram("test", "sm-workflow-repository-validation-1", "test", "sm-workflow-repository-validation-1")) ++
+        binding.checks.map(check => R.CheckProgram(check.identity, binding.dependency.workspace, check.kind.wire,
+          binding.dependency.workspace + "-" + (if (check.kind == WorkflowSbtValidation.Kind.TestOnly) "test" else check.kind.wire))))
+  }
+
+  def qualifyInitialSource(reporter: GivenWhenThen): Path = {
+      import GoalPhaseDependencySourceRevision as R
+      import org.goldenport.convert.ValueReader
+      import org.goldenport.record.io.RecordDecoder
+      val mode = sys.props.getOrElse("smworkflow.spec.initialSourceMode", "continue-new")
+      val episode = Path.of(sys.props.getOrElse("smworkflow.spec.initialSourceEpisode",
+        cancel("Select the explicit caller-owned smworkflow.spec.initialSourceEpisode locator file"))).toAbsolutePath.normalize
+      val checkpoint = episode.resolveSibling(episode.getFileName.toString + ".capture.json")
+      require(Set("capture-old", "capture-old-resume", "continue-new", "continue-new-review", "continue-new-closed")(mode),
+        "Select capture-old, capture-old-resume, continue-new, continue-new-review or continue-new-closed")
+      require(sys.props.contains("smworkflow.spec.installedCommand") && sys.props.contains("smworkflow.spec.componentFile"),
+        "This before/after leaf requires the actual installed executable and its normally published component, with no source fallback")
+      def _host_(scenario: F.Scenario): ThreeWorkflowRuntimeParameters.Definition = {
+        val config = parse(Files.readString(scenario.root.resolve(".textus/config.json"))).toOption.get
+        SplitPhaseExplicitPartitionFixture.take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(
+          parse(config.hcursor.get[String]("sm-workflow.runtime.definition").toOption.get).toOption.get))
+      }
+      def _advance_(value: Json): V.GoalPhaseAdvanceResult = SplitPhaseExplicitPartitionFixture.take(
+        summon[ValueReader[V.GoalPhaseAdvanceResult]].readC(SplitPhaseExplicitPartitionFixture.take(new RecordDecoder().json(value.noSpaces))))
+      def _proposal_(selected: Selected, binding: D.Binding): R.Proposal = R.Proposal(R.sourceSchema,
+        ContextReference(binding.identity, binding.revision.toString), "selected-changes", Vector.empty,
+        Vector(R.Coverage(selected.selection.approvals.head.decision, Vector("Validate the exact dependency candidate"),
+          binding.checks.map(_.identity))), _initial_consumption(binding))
+      def _describe_(selected: Selected, value: R.Proposal): F.Result = {
+        val input = V.GoalPhaseDependencySourceRevisionDescriptionInput(selected.original.sessionId, GoalPhaseNativeMetadata.record(value.asJson))
+        selected.scenario.call("command", R.describeOperation, Vector("--input", json(input.toRecord()).noSpaces))
+      }
+      def _read_public_capture_(request: V.GoalPhaseAdvanceResult): (R.Capture, Vector[D.Execution]) = {
+        val review = request.work.flatMap(_.review).getOrElse(fail("Actual ReviewStep has no public review context"))
+        val actual = review.dependencyValidations.lastOption.getOrElse(fail("Actual ReviewStep has no dependency validation record"))
+        val validation = GoalPhaseNativeMetadata.normalizePublicJson(json(actual))
+          .fold(reason => fail("Actual public dependency validation: " + reason), identity)
+        val rawcapture = validation.hcursor.get[Json]("capture")
+          .fold(error => fail("Actual public Capture: " + error.message), identity)
+        val direction = rawcapture.hcursor.get[Json]("direction")
+          .fold(error => fail("Actual public Capture Direction: " + error.message), identity)
+        val fragment = direction.hcursor.get[Json]("target")
+          .fold(error => fail("Actual public Capture target: " + error.message), identity)
+        val target = R.targetC(GoalPhaseNativeMetadata.record(fragment))
+          .fold(error => fail("Actual public Capture target: " + error.toString), identity)
+        val canonical = rawcapture.mapObject(_.add("direction", direction.mapObject(_.add("target", target.asJson))))
+        val capture = canonical.as[R.Capture].fold(error => fail("Actual Capture decoder: " + error.message), identity)
+        val executions = validation.hcursor.get[Vector[D.Execution]]("executions")
+          .fold(error => fail("Actual Capture executions: " + error.message), identity)
+        (capture, executions)
+      }
+      def _post_closure_audit_(selected: Selected, closed: V.GoalPhaseAdvanceResult, capture: R.Capture,
+        old: GoalPhaseCandidateRecovery.RecoveryTarget, oldsnapshot: Map[String, String],
+        previous: V.GoalPhaseAdvanceResult, primarybytes: Vector[Byte], bytecontext: String): Unit = {
+        import org.goldenport.cncf.workflow.{ContinuationRecordJsonV1, ContinuationRuntimePersistence}
+        val scenario = selected.scenario
+        val target = capture.direction.target
+        val primary = Path.of(_host_(scenario).target.root)
+        reporter.Then("the actual closed Step retains its original base, counters and primary bytes from the " + bytecontext + " observation")
+        closed.kind shouldBe "Request"
+        closed.sessionId shouldBe target.sessionId
+        closed.work.get.kind shouldBe "ImplementStep"
+        closed.work.get.stepIdentity shouldBe Some("step-2")
+        closed.work.get.completed.map(_.step) shouldBe Vector("step-1")
+        closed.work.get.originalBase shouldBe selected.original.work.get.originalBase
+        closed.repairProgress shouldBe previous.repairProgress
+        Files.readAllBytes(primary.resolve(sourcePath)).toVector shouldBe primarybytes
+        val (git, index) = _native_fixture(scenario) { core => for {
+          observed <- RepositorySyncManagedGitObservation.observeC(core)
+          tree <- RepositorySyncManagedGitObservation.indexTreeC(core)
+        } yield (observed, tree) }
+        val commit = closed.work.get.completed.last.commit
+        git.head shouldBe commit.identity
+        git.tree shouldBe commit.tree
+        index shouldBe commit.tree
+        _executions(scenario.root) should have size 1
+        _executions(scenario.root.resolve("dependency")) shouldBe Vector("selected-test-only")
+        val after = _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, target.sessionId)).toMap
+        reporter.Then("only the exact source-frontier Human is superseded while its issued meaning and all other original rows stay unchanged")
+        def _continuation_row_(bytes: String): (Json, ContinuationRuntimePersistence.Record) = {
+          val record = SplitPhaseExplicitPartitionFixture.take(new RecordDecoder().json(bytes))
+          val payload = record.getString("continuationPayload").getOrElse(fail("Native Human row lacks its continuation payload"))
+          payload should startWith("cncf.workflow-json.v1:")
+          val decoded = ContinuationRecordJsonV1.decodeC(payload.stripPrefix("cncf.workflow-json.v1:"))
+            .fold(error => fail("Native Human continuation decoder: " + error.toString), identity)
+          val row = parse(bytes).fold(error => fail("Native Human row JSON: " + error.message), identity)
+          (row, decoded)
+        }
+        val question = target.questionIdentity
+        val (originalrow, original) = _continuation_row_(oldsnapshot.getOrElse(question,
+          fail("Original snapshot lacks the exact source-frontier Human: " + question)))
+        val (currentrow, current) = _continuation_row_(after.getOrElse(question,
+          fail("Current snapshot lacks the exact source-frontier Human: " + question)))
+        original.continuation.continuationId.value shouldBe question
+        original.continuation.runId.value shouldBe target.sessionId
+        original.status shouldBe ContinuationRuntimePersistence.Status.Available
+        current.status shouldBe ContinuationRuntimePersistence.Status.Superseded
+        current.continuation shouldBe original.continuation
+        current.claimId shouldBe original.claimId
+        current.copy(status = ContinuationRuntimePersistence.Status.Available) shouldBe original
+        val revision = originalrow.hcursor.get[Long]("cncf_revision")
+          .fold(error => fail("Original Human concurrency revision: " + error.message), identity)
+        val superseded = ContinuationRecordJsonV1.encodeC(original.copy(status = ContinuationRuntimePersistence.Status.Superseded))
+          .fold(error => fail("Superseded Human continuation encoder: " + error.toString), identity)
+        val expectedrow = originalrow.mapObject(_.add("cncf_revision", (revision + 1L).asJson)
+          .add("continuationPayload", ("cncf.workflow-json.v1:" + superseded).asJson))
+        reporter.Then("the appended native decision-supersession receipt binds only this exact source Direction and contiguous transition")
+        originalrow.hcursor.downField("decisionSupersessionPayload").focus shouldBe None
+        val payload = currentrow.hcursor.get[String]("decisionSupersessionPayload")
+          .fold(error => fail("Native decision-supersession receipt: " + error.message), identity)
+        payload should startWith("cncf.workflow-json.v1:")
+        val envelope = parse(payload.stripPrefix("cncf.workflow-json.v1:"))
+          .fold(error => fail("Native decision-supersession envelope: " + error.message), identity)
+        envelope.asObject.map(_.keys.toSet) shouldBe Some(Set("schemaVersion", "identity", "sourceRevision",
+          "nextRevision", "typeIdentity", "payload"))
+        envelope.hcursor.get[String]("schemaVersion")
+          .fold(error => fail("Native decision-supersession schema: " + error.message), identity) shouldBe
+          "cncf.workflow-decision-supersession.v1"
+        envelope.hcursor.get[String]("identity")
+          .fold(error => fail("Native decision-supersession identity: " + error.message), identity) shouldBe question
+        envelope.hcursor.get[String]("sourceRevision")
+          .fold(error => fail("Native decision-supersession source revision: " + error.message), identity) shouldBe target.pendingRevision
+        val nextrevision = envelope.hcursor.get[String]("nextRevision")
+          .fold(error => fail("Native decision-supersession next revision: " + error.message), identity)
+        nextrevision.toLongOption.exists(value => value > 0 && value.toString == nextrevision) shouldBe true
+        nextrevision shouldBe (BigInt(target.pendingRevision) + 1).toString
+        envelope.hcursor.get[String]("typeIdentity")
+          .fold(error => fail("Native decision-supersession payload type: " + error.message), identity) shouldBe
+          GoalPhaseLegacyPurposeRepairContinuation.storageCodec.typeIdentity
+        val actualpayload = envelope.hcursor.get[Json]("payload")
+          .fold(error => fail("Native decision-supersession payload: " + error.message), identity)
+        val disposition = GoalPhaseLegacyPurposeRepairContinuation.storageCodec.decode(actualpayload)
+          .fold(reason => fail("Native decision-supersession disposition: " + reason), identity)
+        disposition shouldBe GoalPhaseLegacyPurposeRepairContinuation.DependencySourceRevision(capture.direction)
+        currentrow.mapObject(_.remove("decisionSupersessionPayload")) shouldBe expectedrow
+        oldsnapshot.filterNot((key, _) => key == "instance" || key == question)
+          .foreach { (key, row) => after.get(key) shouldBe Some(row) }
+        def _candidate_key_(key: String): String = SplitPhaseExplicitPartitionFixture.take(org.goldenport.cncf.workflow.WorkflowMechanicalTransition.keyC(
+          org.goldenport.cncf.workflow.WorkflowMechanicalTransition.Reference(target.sessionId + ":ordered-candidate:" + capture.sourceRevision + ":" + key, "1")))
+        after.get(_candidate_key_("initial-source-primary-effects")) should not be empty
+        after.get(_candidate_key_("stage-intent-0")) shouldBe None
+        after.get(_candidate_key_("stage-result-0")) shouldBe None
+        after.get(_candidate_key_("source-history-intent-0")) shouldBe None
+        after.get(_candidate_key_("source-history-result-0")) shouldBe None
+        old.oldObservationOutcome shouldBe "UNKNOWN"
+        old.oldObservationTermination shouldBe "termination-unconfirmed"
+      }
+      def _finish_review_(selected: Selected, reviewed: F.Result, target: R.Target,
+        old: GoalPhaseCandidateRecovery.RecoveryTarget, oldsnapshot: Map[String, String],
+        previous: V.GoalPhaseAdvanceResult, primarybytes: Vector[Byte], bytecontext: String): Unit = {
+        val scenario = selected.scenario
+        val root = scenario.root
+        val primary = Path.of(_host_(scenario).target.root)
+        val request = reviewed.business[V.GoalPhaseAdvanceResult]
+        reporter.Then("the actual pending Step review contains passed fresh checks for the exact adopted v8 capture")
+        request.kind shouldBe "Request"
+        request.work.get.kind shouldBe "ReviewStep"
+        request.validation.get.outcome shouldBe Some("passed")
+        val (capture, executions) = _read_public_capture_(request)
+        capture.schemaVersion shouldBe R.initialCaptureSchema
+        capture.direction.target shouldBe target
+        R.bindingOf(capture) shouldBe target.binding
+        executions.map(_.operation) shouldBe Vector("compile", "test-only")
+        _executions(root) should have size 1
+        _executions(root.resolve("dependency")) shouldBe Vector("selected-test-only")
+        reporter.Then("current primary bytes match the actual " + bytecontext + " observation before closure")
+        Files.readAllBytes(primary.resolve(sourcePath)).toVector shouldBe primarybytes
+        reporter.When("the independent fixture reviewer accepts the new candidate and ordinary Step closure commits it")
+        val closed = _close_step(selected, reviewed, "initial-source-current-candidate").business[V.GoalPhaseAdvanceResult]
+        _post_closure_audit_(selected, closed, capture, old, oldsnapshot, previous, primarybytes, bytecontext)
+      }
+      def _next_log_index_(root: Path, minimum: Int): Int = {
+        import scala.jdk.CollectionConverters.*
+        val pattern = "([0-9]+)\\.(?:stdout\\.json|stderr)".r
+        val entries = Files.list(root.resolve("logs"))
+        try {
+          val maximum = entries.iterator.asScala.map(_.getFileName.toString).collect {
+            case pattern(index) => index
+          }.foldLeft(minimum - 1) { (previous, index) =>
+            val actual = index.toIntOption.getOrElse(fail("Owned fixture log index exceeds the Int allocation API"))
+            math.max(previous, actual)
+          }
+          require(maximum < Int.MaxValue, "Owned fixture log index cannot advance beyond the Int allocation API")
+          maximum + 1
+        } finally entries.close()
+      }
+      def _finish_capture_(selected: Selected, recovery: GoalPhaseCandidateRecovery.RecoveryTarget,
+        revised: V.GoalPhaseAdvanceResult, oldstdout: String, oldstderr: String): Unit = {
+        val scenario = selected.scenario
+        val summary = "SPECIFICATION-OWNED diagnostic: preserve current primary and choose a higher dependency base"
+        reporter.Given("the retained actual ReviseWork request and its completed old primary effects, with no dependency prefix")
+        reporter.Then("the retained UNKNOWN prefix and check logs remain unchanged before the remaining capture actions")
+        recovery.dependencyPrefix shouldBe empty
+        recovery.historyPrefix should have size 1
+        recovery.stagingPrefix.map(_.result.stagedPaths.size) shouldBe Vector(1, 2)
+        recovery.oldObservationOutcome shouldBe "UNKNOWN"
+        recovery.oldObservationTermination shouldBe "termination-unconfirmed"
+        _executions(scenario.root) shouldBe empty
+        _executions(scenario.root.resolve("dependency")) shouldBe empty
+        reporter.When("one ordinary installed Advance retrieves the retained revision request or its exact diagnostic Human frontier")
+        val current = scenario.advance(selected.task).business[V.GoalPhaseAdvanceResult]
+        reporter.Then("the current public result belongs to the exact retained fixture Session")
+        current.sessionId shouldBe revised.sessionId
+        val human = current.kind match {
+          case "Request" =>
+            reporter.Then("the retained implementation request has the saved Plan, Step and issued-work key")
+            current.work.get.kind shouldBe "ImplementStep"
+            current.work.get.selectedPlan shouldBe revised.work.get.selectedPlan
+            current.work.get.originalBase shouldBe revised.work.get.originalBase
+            current.work.get.stepIdentity shouldBe revised.work.get.stepIdentity
+            current.submitSessionId shouldBe revised.submitSessionId
+            current.submitOperation shouldBe revised.submitOperation
+            current.issuedWorkContext.get.continuationId shouldBe revised.issuedWorkContext.get.continuationId
+            current.issuedWorkContext.get.expectedRevision shouldBe revised.issuedWorkContext.get.expectedRevision
+            val diagnostic = Json.obj("outcome" -> "decision-needed".asJson, "summary" -> summary.asJson,
+              "findings" -> Json.arr())
+            reporter.When("the retained issued worker submits the corrected fixture diagnostic once, omitting completed-work dependencyValidation")
+            val submitted = _submit(scenario, current, diagnostic, V.WorkflowArtifactReference("initial-source-diagnostic", "1"))
+              .business[V.GoalPhaseWorkSubmissionResult]
+            reporter.Then("the diagnostic semantic result is accepted while the native owner retains the standing admission")
+            submitted.accepted shouldBe true
+            reporter.When("a separate installed Advance exposes the accepted diagnostic's unanswered frontier")
+            scenario.advance(selected.task).business[V.GoalPhaseAdvanceResult]
+          case "Human" =>
+            reporter.Then("the already issued Human frontier is the exact fixture diagnostic, so Submit is not repeated")
+            current.human.get.requestingResult.outcome shouldBe "decision-needed"
+            current.human.get.requestingResult.summary shouldBe summary
+            current.human.get.work.selectedPlan shouldBe revised.work.get.selectedPlan
+            current.human.get.work.originalBase shouldBe revised.work.get.originalBase
+            current.human.get.work.stepIdentity shouldBe revised.work.get.stepIdentity
+            current
+          case other => fail("Initial source capture cannot resume the unexpected public frontier: " + other)
+        }
+        reporter.Then("the latest unanswered frontier requires a Human Decision for that exact diagnostic")
+        human.kind shouldBe "Human"
+        human.sessionId shouldBe selected.original.sessionId
+        human.human.get.requestingResult.summary shouldBe summary
+        val before = recovery.inspection.dependencyAdmission.get.binding
+        val actual = _native_fixture(scenario)(RepositorySyncManagedGitObservation.observeInWorkspaceC(_, before.dependency.workspace))
+        val replacement = before.copy(revision = 2, base = GoalPhaseOrderedProgression.Snapshot(actual.head, actual.tree))
+        _configure_source_host(scenario, replacement, _initial_consumption(replacement), Vector("fixture.SelectedDependencyCheck"))
+        reporter.When("the old installed CLI describes the independently declared successor at that frontier")
+        val faileddescription = _describe_(selected, _proposal_(selected, replacement))
+        reporter.Then("the old description refuses instead of inventing a predecessor Guard")
+        faileddescription.exitCode should not be 0
+        val snapshot = _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, selected.original.sessionId))
+        reporter.Then("the actual old failed episode, exact unanswered frontier and immutable native records are retained for the runtime switch")
+        _executions(scenario.root) shouldBe empty
+        _executions(scenario.root.resolve("dependency")) shouldBe empty
+        val receipt = Json.obj("root" -> scenario.root.toString.asJson, "task" -> selected.task.toString.asJson,
+          "original" -> json(selected.original.toRecord()), "resumed" -> json(selected.resumed.toRecord()),
+          "selection" -> selected.selection.asJson, "human" -> json(human.toRecord()), "recovery" -> recovery.asJson,
+          "proposal" -> _proposal_(selected, replacement).asJson,
+          "oldFailureStdout" -> oldstdout.asJson, "oldFailureStderr" -> oldstderr.asJson,
+          "oldDescriptionStderr" -> faileddescription.invocation.stderr.toString.asJson,
+          "snapshot" -> Json.obj(snapshot.map((key, value) => key -> value.asJson)*))
+        reporter.When("the caller retains the actual old-runtime episode only after the remaining capture actions succeed")
+        Files.writeString(episode, receipt.noSpaces, StandardOpenOption.CREATE_NEW)
+      }
+      if (mode == "capture-old") {
+        reporter.Given("an explicit old installed CLI and two small specification-owned repositories, before any Session exists")
+        reporter.Then("the caller-selected episode locator has not been used")
+        Files.exists(episode) shouldBe false
+        Files.exists(checkpoint) shouldBe false
+        reporter.When("a fresh installed Start selects the small Plan and independently approved dependency work")
+        val selected = _selected("p611-initial-pre-capture-source", sourcerevisionfixture = true, beforestart = _initial_source_build)
+        val scenario = selected.scenario
+        val primary = Path.of(_host_(scenario).target.root)
+        Files.writeString(primary.resolve(sourcePath), "/**\n * @since   Oct.  1, 2026\n * @version Oct.  2, 2026\n */\nobject HistoryExample { val value = 42 }\n")
+        _complete(selected)
+        val before = _host_(scenario).goal.dependencyValidation.get
+        val dependency = Path.of(before.root)
+        Files.writeString(dependency.resolve("unrelated-base.txt"), "Independent committed input outside the selected pending paths\n")
+        def _setup_(arguments: String*): Unit = SplitPhaseExplicitPartitionFixture.take(_run_setup_command_(Vector("-C", dependency.toString,
+          "-c", "core.hooksPath=/dev/null", "-c", "user.name=Independent Fixture Owner",
+          "-c", "user.email=independent@example.invalid") ++ arguments))
+        _setup_("add", "--", "unrelated-base.txt")
+        _setup_("commit", "--no-verify", "--no-gpg-sign", "-m", "Advance unrelated dependency base")
+        reporter.When("the old installed Advance reaches the changed base after completing primary normalization and staging")
+        val failed = scenario.advance(selected.task)
+        reporter.Then("the changed old dependency base refuses the candidate attempt")
+        failed.exitCode should not be 0
+        reporter.When("the old installed recovery operation describes the actual failed candidate prefix")
+        val described = _describe_recovery(selected)
+        val recoverydescription = described.business[V.GoalPhaseCandidateRecoveryDescriptionResult]
+        val recovery = SplitPhaseExplicitPartitionFixture.take(GoalPhaseCandidateRecovery.targetC(recoverydescription.target))
+        reporter.Then("primary normalization and staging are complete and no dependency effect has begun")
+        recovery.dependencyPrefix shouldBe empty
+        recovery.historyPrefix should have size 1
+        recovery.stagingPrefix.map(_.result.stagedPaths.size) shouldBe Vector(1, 2)
+        reporter.When("the independent fixture Human selects ReviseWork for that exact failed prefix")
+        val recoveryoutput = _recover(selected, described, "ReviseWork")
+        val recovered = recoveryoutput.business[V.GoalPhaseCandidateRecoveryResult]
+        reporter.Then("the original recovery direction is accepted")
+        recovered.accepted shouldBe true
+        reporter.When("a separate installed Advance issues the same-Step revision work")
+        val revised = scenario.advance(selected.task).business[V.GoalPhaseAdvanceResult]
+        reporter.Then("the revision remains ordinary implementation work")
+        revised.work.get.kind shouldBe "ImplementStep"
+        val capture = Json.obj("schemaVersion" -> "p611-initial-source-fixture-capture.v1".asJson,
+          "stage" -> "after-revise-before-diagnostic".asJson, "root" -> scenario.root.toString.asJson,
+          "task" -> selected.task.toString.asJson, "original" -> json(selected.original.toRecord()),
+          "resumed" -> json(selected.resumed.toRecord()), "revised" -> json(revised.toRecord()),
+          "recovery" -> json(recoverydescription.target),
+          "oldFailureStdout" -> failed.invocation.stdout.toString.asJson,
+          "oldFailureStderr" -> failed.invocation.stderr.toString.asJson,
+          "reviseAcceptedResponse" -> recoveryoutput.invocation.stdout.toString.asJson)
+        reporter.When("the actual public revision request is checkpointed before diagnostic submission")
+        Files.writeString(checkpoint, capture.noSpaces, StandardOpenOption.CREATE_NEW)
+        _finish_capture_(selected, recovery, revised, failed.invocation.stdout.toString, failed.invocation.stderr.toString)
+      } else if (mode == "capture-old-resume") {
+        reporter.Given("the caller-selected public checkpoint of the same physical old-runtime fixture after accepted ReviseWork")
+        require(Files.isRegularFile(checkpoint), "Select the actual retained .capture.json public-response checkpoint")
+        require(!Files.exists(episode), "A completed episode must use continue-new instead of repeating capture")
+        val capture = parse(Files.readString(checkpoint)).fold(error => fail(error.message), identity)
+        require(capture.hcursor.get[String]("schemaVersion").contains("p611-initial-source-fixture-capture.v1") &&
+          capture.hcursor.get[String]("stage").contains("after-revise-before-diagnostic"), "Checkpoint schema or capture stage differs")
+        val root = Path.of(capture.hcursor.get[String]("root").toOption.get)
+        val task = Path.of(capture.hcursor.get[String]("task").toOption.get)
+        val config = parse(Files.readString(root.resolve(".textus/config.json"))).toOption.get
+        val definition = SplitPhaseExplicitPartitionFixture.take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(
+          parse(config.hcursor.get[String]("sm-workflow.runtime.definition").toOption.get).toOption.get))
+        val plan = parse(Files.readString(root.resolve("goal-plan.json"))).toOption.get.as[GoalPhaseOrderedProgression.Plan].toOption.get
+        val recovery = SplitPhaseExplicitPartitionFixture.take(GoalPhaseCandidateRecovery.targetC(
+          GoalPhaseNativeMetadata.record(capture.hcursor.downField("recovery").focus.get)))
+        val original = _advance_(capture.hcursor.downField("original").focus.get)
+        val resumed = _advance_(capture.hcursor.downField("resumed").focus.get)
+        val revised = _advance_(capture.hcursor.downField("revised").focus.get)
+        require(recovery.sessionId == original.sessionId && resumed.sessionId == original.sessionId &&
+          revised.sessionId == original.sessionId && recovery.controller.plan == plan && recovery.root == definition.target.root &&
+          original.kind == "Request" && resumed.kind == "Request" &&
+          original.work.exists(_.selectedPlan == F.publicPlan(plan)) &&
+          resumed.work.exists(_.selectedPlan == F.publicPlan(plan)) && revised.work.exists(work =>
+            work.kind == "ImplementStep" && work.selectedPlan == F.publicPlan(plan) &&
+              work.originalBase == original.work.get.originalBase && work.stepIdentity == resumed.work.get.stepIdentity) &&
+          revised.kind == "Request" && revised.issuedWorkContext.nonEmpty &&
+          recovery.controller.base.head == original.work.get.originalBase.head &&
+          recovery.controller.base.tree == original.work.get.originalBase.tree,
+          "Checkpoint public Session, Plan, primary root/base or revision-work linkage differs")
+        val admission = recovery.inspection.dependencyAdmission.get
+        val selection = D.Selection(ContextReference(admission.binding.identity, admission.binding.revision.toString),
+          admission.approvals.map(approval => D.ApprovalReference(
+            ContextReference(approval.proposal.identity, approval.proposal.revision), approval.decision)))
+        val scenario = F.reopenInstalledRepository(root, definition, plan, _next_log_index_(root, 1000))
+        require(scenario.retrieve(task) == recovery.sessionId, "Checkpoint task routes to another actual Session")
+        val selected = Selected(scenario, task, original, resumed, selection)
+        reporter.Then("the checkpoint reopens the same actual Session and Plan without Start, prefix effects or ReviseWork replay")
+        scenario.root shouldBe root
+        _finish_capture_(selected, recovery, revised, capture.hcursor.get[String]("oldFailureStdout").toOption.get,
+          capture.hcursor.get[String]("oldFailureStderr").toOption.get)
+      } else {
+        reporter.Given("the same retained old-runtime Session and an explicitly selected new normally published installed CLI")
+        val receipt = parse(Files.readString(episode)).toOption.get
+        val root = Path.of(receipt.hcursor.get[String]("root").toOption.get)
+        val configfile = root.resolve(".textus/config.json")
+        val config = parse(Files.readString(configfile)).toOption.get
+        val definition = SplitPhaseExplicitPartitionFixture.take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(
+          parse(config.hcursor.get[String]("sm-workflow.runtime.definition").toOption.get).toOption.get))
+        val plan = parse(Files.readString(root.resolve("goal-plan.json"))).toOption.get.as[GoalPhaseOrderedProgression.Plan].toOption.get
+        val scenario = F.reopenInstalledRepository(root, definition, plan, _next_log_index_(root, 10000))
+        // Only the normal component loading selection changes at the runtime switch.
+        Files.writeString(configfile, config.mapObject(_.add("textus.component.file", sys.props("smworkflow.spec.componentFile").asJson)).noSpaces)
+        val selected = Selected(scenario, Path.of(receipt.hcursor.get[String]("task").toOption.get),
+          _advance_(receipt.hcursor.downField("original").focus.get), _advance_(receipt.hcursor.downField("resumed").focus.get),
+          receipt.hcursor.get[D.Selection]("selection").toOption.get)
+        val old = receipt.hcursor.get[GoalPhaseCandidateRecovery.RecoveryTarget]("recovery").toOption.get
+        val value = receipt.hcursor.get[R.Proposal]("proposal").toOption.get
+        val oldsnapshot = receipt.hcursor.get[Map[String, String]]("snapshot").toOption.get
+        if (mode == "continue-new-review") {
+          import org.goldenport.cncf.workflow.WorkflowInstanceRecordJsonV1
+          reporter.Given("the actual saved public ReviewStep response for this same fixture after successful native v8 checks")
+          val reviewpath = Path.of(sys.props.getOrElse("smworkflow.spec.initialSourceReview",
+            fail("Select the actual saved public ReviewStep response with smworkflow.spec.initialSourceReview")))
+          require(reviewpath.isAbsolute && reviewpath.normalize == reviewpath &&
+            reviewpath.getParent == root.resolve("logs") && Files.isRegularFile(reviewpath) && reviewpath.toRealPath() == reviewpath,
+            "Select an actual regular absolute ReviewStep response directly under this same fixture's logs")
+          val saved = _advance_(parse(Files.readString(reviewpath)).fold(error => fail(error.message), identity))
+          reporter.Then("the saved response identifies the passed pending review for the original Session, Plan, primary base and Step")
+          saved.kind shouldBe "Request"
+          saved.sessionId shouldBe selected.original.sessionId
+          saved.work.get.kind shouldBe "ReviewStep"
+          saved.work.get.selectedPlan shouldBe F.publicPlan(plan)
+          saved.work.get.originalBase shouldBe selected.original.work.get.originalBase
+          saved.work.get.stepIdentity shouldBe Some(old.inspection.step)
+          saved.validation.get.outcome shouldBe Some("passed")
+          saved.issuedWorkContext should not be empty
+          val issued = saved.issuedWorkContext.get
+          issued.runId shouldBe saved.sessionId
+          val (capture, _) = _read_public_capture_(saved)
+          val target = capture.direction.target
+          capture.schemaVersion shouldBe R.initialCaptureSchema
+          target.schemaVersion shouldBe R.initialSchema
+          target.sessionId shouldBe saved.sessionId
+          target.plan shouldBe plan
+          target.primaryBase shouldBe old.controller.base
+          target.step shouldBe old.inspection.step
+          target.initialOrigin.get.lineage.recovery shouldBe old
+          target.initialOrigin.get.lineage.continuation shouldBe None
+          target.proposal shouldBe value
+          definition.goal.dependencySourceRevisions should contain(R.bindingOf(capture))
+          definition.goal.dependencySourceConsumptions should contain(R.consumptionOf(capture))
+          reporter.When("the fixture reads only the current native instance to authenticate this exact pending ReviewStep")
+          val pending = _native_fixture(scenario) { core => for {
+            snapshot <- LegacyDependencyHistoryFixture.snapshotC(core, saved.sessionId)
+            catalog <- GoalPhaseRuntimeCatalog.loadC()
+            definitions <- WorkflowInstanceRecordJsonV1.catalogC(Vector(catalog.definition))
+            instance <- WorkflowInstanceRecordJsonV1.decodeC(snapshot.toMap.apply("instance"), definitions)
+          } yield instance }
+          reporter.Then("the native identity, current revision and suspension match the saved issued-work context before any Advance")
+          pending.identity.value shouldBe saved.sessionId
+          pending.revision.value.toString shouldBe issued.expectedRevision
+          pending.suspension.map(_.continuationIdentity.value) shouldBe Some(issued.continuationId)
+          scenario.retrieve(selected.task) shouldBe saved.sessionId
+          val primary = Path.of(definition.target.root)
+          // This is a current recollection checkpoint; the earlier process's pre-adoption byte vector is unavailable.
+          val primarybytes = Files.readAllBytes(primary.resolve(sourcePath)).toVector
+          val primarychecks = _executions(root)
+          val dependencychecks = _executions(root.resolve("dependency"))
+          val compilepath = root.resolve("dependency/sbt-compile-executions.txt")
+          val compilebytes = Option.when(Files.exists(compilepath))(Files.readAllBytes(compilepath).toVector)
+          primarychecks should have size 1
+          dependencychecks shouldBe Vector("selected-test-only")
+          reporter.When("one ordinary installed Advance recollects only that exact pending ReviewStep")
+          val recollected = scenario.advance(selected.task)
+          val current = recollected.business[V.GoalPhaseAdvanceResult]
+          reporter.Then("recollection retains the actual issued context and passed candidate without replaying checks")
+          current.kind shouldBe "Request"
+          current.work.get.kind shouldBe "ReviewStep"
+          current.issuedWorkContext shouldBe saved.issuedWorkContext
+          current.sessionId shouldBe saved.sessionId
+          current.work.get.selectedPlan shouldBe saved.work.get.selectedPlan
+          current.work.get.originalBase shouldBe saved.work.get.originalBase
+          current.work.get.stepIdentity shouldBe saved.work.get.stepIdentity
+          current.validation.get.outcome shouldBe Some("passed")
+          _executions(root) shouldBe primarychecks
+          _executions(root.resolve("dependency")) shouldBe dependencychecks
+          Option.when(Files.exists(compilepath))(Files.readAllBytes(compilepath).toVector) shouldBe compilebytes
+          _finish_review_(selected, recollected, target, old, oldsnapshot, saved, primarybytes, "current review-recollection checkpoint")
+        } else if (mode == "continue-new-closed") {
+          import org.goldenport.cncf.workflow.WorkflowInstanceRecordJsonV1
+          reporter.Given("the actual saved Step-closure result and earlier passed ReviewStep capture for this same physical fixture")
+          def _saved_log_(property: String): V.GoalPhaseAdvanceResult = {
+            val path = Path.of(sys.props.getOrElse(property, fail("Select the actual saved public response with " + property)))
+            require(path.isAbsolute && path.normalize == path && path.getParent == root.resolve("logs") &&
+              Files.isRegularFile(path) && path.toRealPath() == path,
+              "Select an actual regular absolute public response directly under this same fixture's logs")
+            _advance_(parse(Files.readString(path)).fold(error => fail(error.message), identity))
+          }
+          val saved = _saved_log_("smworkflow.spec.initialSourceClosed")
+          val review = _saved_log_("smworkflow.spec.initialSourceReview")
+          reporter.Then("the saved closure has completed Step 1 and issued Step 2 in the original Session and Plan with preserved counters")
+          saved.kind shouldBe "Request"
+          saved.sessionId shouldBe selected.original.sessionId
+          saved.work.get.kind shouldBe "ImplementStep"
+          saved.work.get.stepIdentity shouldBe Some("step-2")
+          saved.work.get.selectedPlan shouldBe F.publicPlan(plan)
+          saved.work.get.originalBase shouldBe selected.original.work.get.originalBase
+          saved.work.get.completed.map(_.step) shouldBe Vector("step-1")
+          saved.repairProgress shouldBe review.repairProgress
+          saved.issuedWorkContext should not be empty
+          val issued = saved.issuedWorkContext.get
+          issued.runId shouldBe saved.sessionId
+          review.kind shouldBe "Request"
+          review.sessionId shouldBe saved.sessionId
+          review.work.get.kind shouldBe "ReviewStep"
+          review.work.get.stepIdentity shouldBe Some(old.inspection.step)
+          review.work.get.selectedPlan shouldBe saved.work.get.selectedPlan
+          review.work.get.originalBase shouldBe saved.work.get.originalBase
+          review.validation.get.outcome shouldBe Some("passed")
+          val (capture, executions) = _read_public_capture_(review)
+          val target = capture.direction.target
+          capture.schemaVersion shouldBe R.initialCaptureSchema
+          target.schemaVersion shouldBe R.initialSchema
+          target.sessionId shouldBe saved.sessionId
+          target.plan shouldBe plan
+          target.primaryBase shouldBe old.controller.base
+          target.step shouldBe old.inspection.step
+          target.initialOrigin.get.lineage.recovery shouldBe old
+          target.initialOrigin.get.lineage.continuation shouldBe None
+          target.proposal shouldBe value
+          definition.goal.dependencySourceRevisions should contain(R.bindingOf(capture))
+          definition.goal.dependencySourceConsumptions should contain(R.consumptionOf(capture))
+          executions.map(_.operation) shouldBe Vector("compile", "test-only")
+          reporter.When("the fixture reads the current native pending request and typed Git state for the already completed closure")
+          val (pending, git, index) = _native_fixture(scenario) { core => for {
+            snapshot <- LegacyDependencyHistoryFixture.snapshotC(core, saved.sessionId)
+            catalog <- GoalPhaseRuntimeCatalog.loadC()
+            definitions <- WorkflowInstanceRecordJsonV1.catalogC(Vector(catalog.definition))
+            instance <- WorkflowInstanceRecordJsonV1.decodeC(snapshot.toMap.apply("instance"), definitions)
+            observed <- RepositorySyncManagedGitObservation.observeC(core)
+            tree <- RepositorySyncManagedGitObservation.indexTreeC(core)
+          } yield (instance, observed, tree) }
+          reporter.Then("the current native identity, revision, suspension and task route identify only the saved pending Step 2 request")
+          pending.identity.value shouldBe saved.sessionId
+          pending.revision.value.toString shouldBe issued.expectedRevision
+          pending.suspension.map(_.continuationIdentity.value) shouldBe Some(issued.continuationId)
+          scenario.retrieve(selected.task) shouldBe saved.sessionId
+          val commit = saved.work.get.completed.last.commit
+          git.head shouldBe commit.identity
+          git.tree shouldBe commit.tree
+          index shouldBe commit.tree
+          val primary = Path.of(definition.target.root)
+          // Observe current bytes only for this already-closed evidence-collection checkpoint.
+          val primarybytes = Files.readAllBytes(primary.resolve(sourcePath)).toVector
+          val primarychecks = _executions(root)
+          val dependencychecks = _executions(root.resolve("dependency"))
+          val compilepath = root.resolve("dependency/sbt-compile-executions.txt")
+          val compilebytes = Option.when(Files.exists(compilepath))(Files.readAllBytes(compilepath).toVector)
+          primarychecks should have size 1
+          dependencychecks shouldBe Vector("selected-test-only")
+          reporter.When("one ordinary installed Advance recollects the already pending Step 2 request for evidence collection only")
+          val collected = scenario.advance(selected.task).business[V.GoalPhaseAdvanceResult]
+          reporter.Then("collection preserves the saved run, issued context, completed commit and counters without new checks or closure")
+          collected.kind shouldBe "Request"
+          collected.sessionId shouldBe saved.sessionId
+          collected.work.get.kind shouldBe "ImplementStep"
+          collected.work.get.stepIdentity shouldBe saved.work.get.stepIdentity
+          collected.work.get.selectedPlan shouldBe saved.work.get.selectedPlan
+          collected.work.get.originalBase shouldBe saved.work.get.originalBase
+          collected.work.get.completed shouldBe saved.work.get.completed
+          collected.repairProgress shouldBe saved.repairProgress
+          collected.issuedWorkContext shouldBe saved.issuedWorkContext
+          _executions(root) shouldBe primarychecks
+          _executions(root.resolve("dependency")) shouldBe dependencychecks
+          Option.when(Files.exists(compilepath))(Files.readAllBytes(compilepath).toVector) shouldBe compilebytes
+          _post_closure_audit_(selected, collected, capture, old, oldsnapshot, review, primarybytes,
+            "current already-closed evidence-collection checkpoint")
+        } else {
+        reporter.Then("the retained episode has executed no primary or dependency check")
+        _executions(root) shouldBe empty
+        _executions(root.resolve("dependency")) shouldBe empty
+        reporter.When("the new installed CLI describes the initial source target without requiring an invented old dependency Guard")
+        val described = _describe_(selected, value)
+        val description = described.business[V.GoalPhaseDependencySourceRevisionDescriptionResult]
+        val target = SplitPhaseExplicitPartitionFixture.take(R.targetC(description.target))
+        reporter.Then("v8 retains the exact direct recovery origin, current-primary observation and unrelated committed delta")
+        target.schemaVersion shouldBe R.initialSchema
+        target.predecessorGuard shouldBe None
+        target.initialOrigin.get.lineage.recovery shouldBe old
+        target.initialOrigin.get.lineage.continuation shouldBe None
+        target.initialOrigin.get.currentPrimary.observed shouldBe "current-at-description"
+        target.initialOrigin.get.baseChanges.map(_.path) shouldBe Vector("unrelated-base.txt")
+        description.choices shouldBe Vector(R.initialChoice, "Defer")
+        reporter.Given("the exact current-target answer, initially without independently provisioned Human evidence")
+        val reference = V.WorkflowArtifactReference("fixture-current-primary-and-initial-source-direction", "1")
+        val adoption = V.GoalPhaseDependencySourceRevisionAdoptionInput(target.sessionId, description.target, R.initialChoice,
+          "SPECIFICATION-OWNED exact current-primary/source selection accepting prior UNKNOWN effects", reference)
+        val primary = Path.of(definition.target.root)
+        val dependency = Path.of(target.binding.root)
+        val originalprimary = Files.readAllBytes(primary.resolve(sourcePath))
+        val originaldependency = Files.readAllBytes(dependency.resolve("value.txt"))
+        def _effect_facts_(): Vector[Option[Vector[Byte]]] = Vector(root.resolve("sbt-executions.txt"),
+          root.resolve("dependency/sbt-executions.txt"), root.resolve("dependency/sbt-compile-executions.txt"),
+          primary.resolve(sourcePath), dependency.resolve("value.txt"),
+          primary.resolve(".git/refs/heads/main"), dependency.resolve(".git/refs/heads/main"))
+          .map(path => Option.when(Files.exists(path))(Files.readAllBytes(path).toVector))
+        def _refused_without_effects_(action: String, expectation: String, diagnostic: Option[(Int, String)])
+          (invoke: => F.Result): Unit = {
+          val before = _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, target.sessionId))
+          val effects = _effect_facts_()
+          val primarychecks = _executions(root)
+          val dependencychecks = _executions(root.resolve("dependency"))
+          reporter.When(action)
+          val refused = invoke
+          reporter.Then(expectation)
+          withClue(refused.invocation.logs) {
+            refused.exitCode should not be 0
+            Files.readString(refused.invocation.stdout).trim shouldBe empty
+            diagnostic.foreach { (status, message) =>
+              val error = Files.readString(refused.invocation.stderr)
+              error should include("status=" + status)
+              error should include(message)
+            }
+          }
+          _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, target.sessionId)) shouldBe before
+          _effect_facts_() shouldBe effects
+          _executions(root) shouldBe primarychecks
+          _executions(root.resolve("dependency")) shouldBe dependencychecks
+        }
+        _refused_without_effects_("the unprovisioned answer is submitted to the installed adoption operation",
+          "missing independent Human evidence refuses with no native frontier or effect change",
+          Some(403 -> "Action has no independently issued host evidence for its actual target")) {
+          scenario.call("command", R.adoptionOperation, Vector("--input", json(adoption.toRecord()).noSpaces))
+        }
+        val beforeprovision = _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, target.sessionId))
+        reporter.When("the independent trusted fixture provisions the exact valid current-target Human answer once")
+        _provision(selected, described, "dependency-source-revision", adoption, reference)
+        reporter.Then("evidence provisioning leaves the native Phase frontier and both check logs unchanged")
+        _native_fixture(scenario)(LegacyDependencyHistoryFixture.snapshotC(_, target.sessionId)) shouldBe beforeprovision
+        _executions(root) shouldBe empty
+        _executions(root.resolve("dependency")) shouldBe empty
+        reporter.Given("valid exact Human evidence and a primary worktree edit made after target description")
+        Files.writeString(primary.resolve(sourcePath), "// changed after target\n", StandardOpenOption.APPEND)
+        try _refused_without_effects_("the exact provisioned answer is adopted with unstaged current-primary drift",
+          "current-primary stage readiness refuses without a native frontier or effect change",
+          Some(409 -> "current primary requires completed scoped staging without new effects")) {
+          scenario.call("command", R.adoptionOperation, Vector("--input", json(adoption.toRecord()).noSpaces))
+        } finally Files.write(primary.resolve(sourcePath), originalprimary)
+        reporter.Given("the restored primary, valid exact Human evidence and dependency bytes changed after description")
+        Files.writeString(dependency.resolve("value.txt"), "foreign post-target bytes\n")
+        try _refused_without_effects_("the exact provisioned answer is adopted with changed successor bytes",
+          "successor target drift refuses without a native frontier or effect change",
+          Some(409 -> "dependency source direction target drifted")) {
+          scenario.call("command", R.adoptionOperation, Vector("--input", json(adoption.toRecord()).noSpaces))
+        } finally Files.write(dependency.resolve("value.txt"), originaldependency)
+        val exactconfig = Files.readAllBytes(configfile)
+        val parsedconfig = parse(Files.readString(configfile)).toOption.get
+        val processes = parse(parsedconfig.hcursor.get[String]("textus.subsystem.process-execution.plan").toOption.get).toOption.get
+        val programs = processes.hcursor.get[Vector[Json]]("sbtPrograms").toOption.get
+        val crossedprograms = programs.map(program => if (program.hcursor.get[String]("operation").contains("test-only"))
+          program.mapObject(_.add("identity", "foreign-fixed-check".asJson)) else program)
+        reporter.Given("restored source bytes, valid exact Human evidence and a crossed fixed-check program identity")
+        Files.writeString(configfile, parsedconfig.mapObject(_.add("textus.subsystem.process-execution.plan",
+          processes.mapObject(_.add("sbtPrograms", crossedprograms.asJson)).noSpaces.asJson)).noSpaces)
+        try _refused_without_effects_("the exact provisioned answer is adopted under the crossed check declaration",
+          "the inherited source contract refuses without a native frontier or effect change",
+          Some(409 -> "source revision crosses inherited source, runtime or acceptance obligations")) {
+          scenario.call("command", R.adoptionOperation, Vector("--input", json(adoption.toRecord()).noSpaces))
+        } finally Files.write(configfile, exactconfig)
+        reporter.Given("the restored check declaration and valid exact Human evidence with all process capability grants removed")
+        Files.writeString(configfile, parsedconfig.mapObject(_.add("textus.subsystem.process-execution.plan",
+          processes.mapObject(_.add("grants", Json.arr())).noSpaces.asJson)).noSpaces)
+        try _refused_without_effects_("the exact provisioned answer is adopted without its typed Git component capability grant",
+          "typed capability admission refuses with Argument Invalid status before any frontier or effect change",
+          Some(400 -> "git.execution.component-grant")) {
+          scenario.call("command", R.adoptionOperation, Vector("--input", json(adoption.toRecord()).noSpaces))
+        } finally Files.write(configfile, exactconfig)
+        reporter.Given("the exact restored host and an obsolete worker completion from before ReviseWork")
+        _refused_without_effects_("the late original worker result is submitted to its old issued work",
+          "the obsolete completion refuses without a native frontier or effect change", None) {
+          _submit(scenario, selected.resumed, Json.obj("outcome" -> "completed".asJson,
+          "summary" -> "SPECIFICATION-OWNED late old completion".asJson, "findings" -> Json.arr(),
+            "dependencyValidation" -> selected.selection.asJson), V.WorkflowArtifactReference("late-original-result", "1"))
+        }
+        reporter.When("the exact provisioned current-target answer is adopted under the restored host and bytes")
+        val adopted = scenario.call("command", R.adoptionOperation, Vector("--input", json(adoption.toRecord()).noSpaces))
+          .business[V.GoalPhaseDependencySourceRevisionAdoptionResult]
+        reporter.Then("the exact independent source and current-primary Direction is accepted")
+        adopted.accepted shouldBe true
+        val stale = adoption.copy(reference = V.WorkflowArtifactReference("unadmitted-stale-source-answer", "1"))
+        _refused_without_effects_("a different unadmitted reference tries to reuse the consumed Human frontier",
+          "the stale source answer refuses without a native frontier or effect change", None) {
+          scenario.call("command", R.adoptionOperation, Vector("--input", json(stale.toRecord()).noSpaces))
+        }
+        reporter.When("the same exact authenticated adoption is repeated")
+        val repeated = scenario.call("command", R.adoptionOperation, Vector("--input", json(adoption.toRecord()).noSpaces))
+          .business[V.GoalPhaseDependencySourceRevisionAdoptionResult]
+        reporter.Then("idempotent adoption is accepted and neither check log has changed")
+        repeated.accepted shouldBe true
+        _executions(root) shouldBe empty
+        _executions(root.resolve("dependency")) shouldBe empty
+        reporter.When("a separate ordinary installed Advance issues implementation under the adopted current-primary/source Direction")
+        val next = scenario.advance(selected.task).business[V.GoalPhaseAdvanceResult]
+        reporter.Then("the same-Step continuation remains ordinary implementation work")
+        next.work.get.kind shouldBe "ImplementStep"
+        val completion = Json.obj("outcome" -> "completed".asJson,
+          "summary" -> "SPECIFICATION-OWNED current-primary selection under the newly admitted source Direction".asJson,
+          "findings" -> Json.arr())
+        reporter.When("the newly issued worker completes its semantic work under the adopted Direction")
+        val completed = _submit(scenario, next, completion, V.WorkflowArtifactReference("current-initial-source-completion", "1"))
+          .business[V.GoalPhaseWorkSubmissionResult]
+        reporter.Then("the new semantic result is accepted without replaying the original Submit")
+        completed.accepted shouldBe true
+        reporter.When("a separate installed Advance captures the selected source and current primary and runs the fresh required checks")
+        val reviewed = scenario.advance(selected.task)
+        _finish_review_(selected, reviewed, target, old, oldsnapshot, next, originalprimary.toVector, "pre-adoption primary-byte")
+        }
+      }
+      episode
   }
 
   "A new dependency source through ordinary public operations" should {
@@ -2359,6 +3147,27 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
       scenario.candidateHead shouldBe head
       scenario.retrieve(selected.task) shouldBe selected.original.sessionId
       _executions(scenario.root.resolve("dependency")) shouldBe executed
+    }
+  }
+}
+
+/** One normal installed initial-source scenario, with fixture-owned evidence.
+  * @since   Nov.  5, 2026
+  * @version Nov.  5, 2026
+  * @author  ASAMI, Tomoharu
+  */
+@org.scalatest.DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.DependencyValidationTestDeclaration])
+final class NativeInitialDependencySourceRevisionCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  "Installed initial dependency source revision" should {
+    "retain an old installed episode and resume initial pre-capture source succession through fresh checks review and Step commit" in {
+      Given("the actual normal installed mode and caller-selected initial-source episode fixture")
+      val support = new NativeGoalDependencyValidationCliSpec
+      When("the existing fixture implementation qualifies that exact initial-source episode")
+      val episode = support.qualifyInitialSource(this)
+      Then("the actual episode locator is retained as a regular file")
+      Files.isRegularFile(episode) shouldBe true
     }
   }
 }

@@ -39,7 +39,8 @@ import GoalPhaseCurrentInventoryContinuation as L
   *  version Oct. 28, 2026
   *  version Oct. 31, 2026
   *  version Oct. 29, 2026
-  * @version Nov.  2, 2026
+  *  version Nov.  2, 2026
+  * @version Nov.  5, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWorkContinuation {
@@ -206,6 +207,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     closureSource: Option[InstanceRecord] = None,
     candidateObservation: Option[GoalPhaseCandidateRecovery.RecoveryTarget] = None,
     candidateObservationContinuation: Option[GoalPhaseCandidateObservationContinuation.Target] = None,
+    initialSourceLineage: Option[GoalPhaseDependencySourceRevision.InitialLineage] = None,
     wholePhaseCandidateRecovery: Option[GoalPhaseWholePhaseCandidateRecovery.Target] = None,
     completionDirection: Option[GoalPhaseCompletionPolicyAdoption.Direction] = None,
     legacyClosure: Option[GoalPhaseNativeRepositoryClosure.Payload] = None,
@@ -617,7 +619,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             .getOrElse(F.invalid("source revision requires an actual standing dependency admission"))
           _ <- cursor.dependencyChain.resolveC(predecessor)
         } yield GoalPhaseDependencySourceRevision.Source(value, predecessor,
-          cursor.dependencyChain.accepted.map(a => GoalPhaseDependencySourceRevision.Ancestor(a.capture, a.closureRevision)))
+          cursor.dependencyChain.accepted.map(a => GoalPhaseDependencySourceRevision.Ancestor(a.capture, a.closureRevision)),
+          initialLineage = cursor.initialSourceLineage)
         case Human(value, _, cursor) if cursor.dependencySourceDirection.nonEmpty => for {
           original <- Consequence.success(cursor.dependencySourceDirection.get)
           _ <- if (value.input.stepIdentity.contains(original.target.step)) Consequence.unit
@@ -637,11 +640,34 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         source => W.describeSourceC(source, d, core, input.proposal))
 
     def adoptDependencySourceRevisionC(input: org.simplemodeling.textus.smworkflow.value.GoalPhaseDependencySourceRevisionAdoptionInput,
-      core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseDependencySourceRevisionAdoptionResult] =
-      _source_revision_dispatch_c(input.sessionId, core)(
+      core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseDependencySourceRevisionAdoptionResult] = for {
+      _ <- if (input != null && input.reference != null) Consequence.unit
+        else F.invalid("Source revision adoption requires its exact supplied Human reference")
+      supplied <- GoalPhaseDependencySourceRevision.targetC(input.target)
+      retained <- if (supplied.initialOrigin.isEmpty) Consequence.success(Option.empty[GoalPhaseDependencySourceRevision.Direction])
+        else for {
+          source <- F.retainedSessionC(input.sessionId, d, definition, core)
+          initial <- _initial_cursor_c(source)
+          located <- _walk_c(source, initial, None, None, None, core, historyonly = true)
+          cursor = located match {
+            case Human(_, _, value) => Some(value)
+            case Frontier(value) => Some(value)
+            case Paused(value, _, _) => Some(value)
+            case _ => None
+          }
+        } yield cursor.flatMap(_.dependencySourceDirection).filter(direction => direction.target == supplied &&
+          direction.directive == ContextReference(input.reference.identity, input.reference.revision) &&
+          direction.participant == source.participantIdentity && direction.rationale == input.rationale &&
+          direction.choice.contains(input.choice))
+      result <- retained match {
+        case Some(direction) => Consequence.success(org.simplemodeling.textus.smworkflow.value.GoalPhaseDependencySourceRevisionAdoptionResult(
+          input.sessionId, true, "dependency-source-revision-adopted", GoalPhaseDependencySourceRevision.messageFor(direction.target)))
+        case None => _source_revision_dispatch_c(input.sessionId, core)(
         _dependency_source_revision_source_c(input.sessionId, core).flatMap(
           GoalPhaseDependencySourceRevision.adoptC(_, d, core, input)),
         source => W.adoptSourceC(source, d, core, input))
+      }
+    } yield result
 
     private def _source_revision_dispatch_c[A](identity: String, core: ActionCall.Core)(human: => Consequence[A],
       wait: W.Source => Consequence[A]): Consequence[A] = for {
@@ -1319,7 +1345,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                         else cursor.consumptionDirection.isEmpty) =>
                       cursor.dependencyChain.sourceC(original)
                     case _ => F.invalid("consumption direction crosses the original source or actual native approvals")
-                  } else if (cursor.dependencySourceDirection.isEmpty && cursor.dependencyAdmission.contains(direction.target.predecessor) &&
+                  } else if (direction.target.initialOrigin.exists(origin =>
+                      !cursor.initialSourceLineage.contains(origin.lineage))) F.invalid("initial source Direction crosses its genuine retained ReviseWork lineage")
+                  else if (cursor.dependencySourceDirection.isEmpty && cursor.dependencyAdmission.contains(direction.target.predecessor) &&
                       direction.target.ancestors == cursor.dependencyChain.accepted.map(a =>
                         GoalPhaseDependencySourceRevision.Ancestor(a.capture, a.closureRevision)))
                     cursor.dependencyChain.resolveC(direction.target.predecessor)
@@ -1700,7 +1728,11 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             next <- continuation match {
               case Some(value) if value.choice == "ReviseWork" => _walk_c(source, cursor.copy(from = value.record,
                 controller = value.controller, candidate = None, validation = None, inspectionSource = None,
-                sourceHistoryContinuation = None, candidateObservation = None, candidateObservationContinuation = None),
+                sourceHistoryContinuation = None, candidateObservation = None, candidateObservationContinuation = None,
+                initialSourceLineage = Option.when(cursor.dependencySourceDirection.isEmpty)(GoalPhaseDependencySourceRevision.InitialLineage(
+                  value.target.original, Some(value.target), value.directionReference,
+                  ContextReference(value.record.identity.value, value.record.revision.value.toString)))
+                  .filter(GoalPhaseDependencySourceRevision.initialLineageValid)),
                 soughtwork, soughthuman, soughtrecording, core, historyonly)
               case Some(value) => _walk_c(source, cursor.copy(from = value.record,
                 controller = value.controller, candidateObservationContinuation = Some(value.target)), soughtwork, soughthuman, soughtrecording, core, historyonly)
@@ -1714,7 +1746,11 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             next <- candidateRecovery match {
               case Some(value) if value.choice == "ReviseWork" => _walk_c(source, cursor.copy(from = value.record,
                 controller = value.controller, candidate = None, validation = None, inspectionSource = None,
-                sourceHistoryContinuation = None, candidateObservation = None, candidateObservationContinuation = None),
+                sourceHistoryContinuation = None, candidateObservation = None, candidateObservationContinuation = None,
+                initialSourceLineage = Option.when(cursor.dependencySourceDirection.isEmpty)(GoalPhaseDependencySourceRevision.InitialLineage(
+                  value.target, None, value.directionReference,
+                  ContextReference(value.record.identity.value, value.record.revision.value.toString)))
+                  .filter(GoalPhaseDependencySourceRevision.initialLineageValid)),
                 soughtwork, soughthuman, soughtrecording, core, historyonly)
               case Some(value) => _walk_c(source, cursor.copy(from = value.record, controller = value.controller, inspectionSource = None,
                 candidateObservation = Some(value.target)), soughtwork, soughthuman, soughtrecording, core, historyonly)
@@ -1773,7 +1809,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
               candidate = Some(value.copy(record = record)), validation = None, prerequisiteRecovery = None,
               prerequisiteUnknownDirection = None, prerequisiteWaitSource = None, primaryPublicationDirections = Vector.empty,
               sourceHistoryContinuation = None, candidateObservation = None, candidateObservationContinuation = None,
-              sourceHistoryNormalizationContinuation = None,
+              sourceHistoryNormalizationContinuation = None, initialSourceLineage = None,
               wholePhaseCandidateRecovery = None), soughtwork, soughthuman, soughtrecording, core, historyonly)
           } yield result
         }

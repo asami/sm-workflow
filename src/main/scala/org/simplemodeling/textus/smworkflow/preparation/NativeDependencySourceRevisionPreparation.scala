@@ -9,7 +9,8 @@ import org.simplemodeling.textus.smworkflow.value as V
 
 /** Passive conversion of independently supplied direction; no Workflow mutation.
   * @since   Oct. 26, 2026
-  * @version Nov.  2, 2026
+  *  version Nov.  2, 2026
+  * @version Nov.  5, 2026
   * @author  ASAMI, Tomoharu
   */
 object NativeDependencySourceRevisionPreparation {
@@ -27,7 +28,8 @@ object NativeDependencySourceRevisionPreparation {
     target <- R.targetC(description.target)
     supplied <- R.targetC(input.target)
     _ <- if (target == supplied && target.sessionId == input.sessionId && description.choices == R.choicesFor(target) &&
-        (input.choice == "AdoptDependencySourceRevision" || (target.waitOrigin.nonEmpty || target.primaryFailureOrigin.nonEmpty) && description.choices.contains(input.choice)) &&
+        input.choice != "Defer" && description.choices.contains(input.choice) &&
+        target.initialOrigin.forall(_.lineage.recovery.participant == participant) &&
         target.primaryFailureOrigin.forall(o => o.componentInstance == description.componentInstance && o.participant == participant) &&
         target.waitOrigin.forall(o => o.componentInstance == description.componentInstance && o.participant == participant))
       Consequence.unit else Consequence.stateConflict("Source revision direction crosses its described target")
