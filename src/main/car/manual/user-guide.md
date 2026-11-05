@@ -216,9 +216,17 @@ native Git observation, zero Git/source mutation; it performs no staging, work,
 SBT check, commit or publication. Describe and repeated collection read storage;
 Defer requires no source observation. A separate ordinary `advanceGoalTask` owns
 the next Repair and normal completion charges its existing
-allowance. Matching repeated calls collect the original continuation, including
-following later progress and restart. Stale/crossed/unadmitted, pending, exhausted,
-other-Human and terminal cases refuse. Review and local commit obligations remain.
+allowance. A later eligible Human stop gets a fresh current target and requires
+separate exact Human evidence. An ineligible or exhausted Human stop refuses
+description even with an earlier retained direction. During non-Human active
+progress, description collects the latest direction. Explicit repeated resume
+collects any earlier or latest admitted direction after Advance, Submit, later
+progress and restart only when the entire original target/choice/rationale/
+participant/reference matches. Earlier directions remain inside the exact opaque
+target ancestry and native history, bounded by the existing native repair limit
+with decreasing frontier revisions and the same owner/Session/participant/input.
+Changed answers, malformed/crossed ancestry, unresumed stale targets, pending new
+work and terminal cases refuse. Review and local commit obligations remain.
 See [GoalTask runtime contract](../../../../docs/spec/goal-task-runtime.md).
 
 This is source capability documentation. Native qualification, independent review,

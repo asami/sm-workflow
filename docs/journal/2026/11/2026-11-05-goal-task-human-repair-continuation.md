@@ -63,3 +63,40 @@ changes plus this journal addition against original base
 `906d17fe5a134c9214e59776f6282914a1cc3cba` remain required, followed by native
 acceptance and any separately authorized local publication; no consumer operation
 or passing qualification is claimed by this source-readiness handoff.
+
+
+## Later Human episode source readiness
+
+The issued `ess5-goaltask-later-human-episodes-20261105` Task follows the accepted
+`1203a337da0cc5651a75ee0cda522f933c4c4791` producer baseline. The observed consumer
+gap was description collecting its original direction at target revision 56 and
+counts 5 while the same UserAccount Task had reached a later Human stop at 6/10
+after its logout qualification failure. The accepted baseline and its earlier
+qualification/local-delivery evidence remain historical facts; this source change
+does not replace or extend that evidence.
+
+The existing compatible optional Direction now retains successive episodes through
+its exact opaque pre-resume target ancestry and native history. The loading boundary
+bounds this ancestry by the native repair limit, requires decreasing frontier
+revisions and the same owner/Session/participant/frozen input, and refuses malformed
+or crossed data. Current eligible Human description takes precedence over old
+directions. Each later stop requires separate exact Human evidence; complete
+original directions from either episode remain collectable through later progress
+and reopen. Defer, one normal checkpoint per new continuation, source verification,
+normal Advance ownership and allowance charging retain their existing boundaries.
+
+Managed executable specifications now describe two public continuation episodes,
+public Repair/Submit and ordinary Advance completion consumption, exact collection,
+reopen and negative cases. The fixture uses explicitly specification-owned failed
+qualification facts after confirmed nonexecution in its Git-only host plan; these
+are not actual SBT failure receipts or real Human/consumer success. Passive evidence
+preparation also describes the later opaque target and separate source binding.
+
+This handoff is source readiness only. Native compile, focused/full qualification,
+independent review, acceptance commit, local SNAPSHOT delivery and real consumer
+continuation remain with their owners. The earlier producer's two used repairs
+remain used; this producer has the admitted remaining eight, without refund.
+Actual Human direction permits the same UserAccount logout repair within its
+remaining four batches from 6/10, including resulting Human stops. This source
+worker did not operate UserAccount or Studio, change consumer source/storage,
+relax SQL/expected values/authorization/expiry, integrate main, push or publish.

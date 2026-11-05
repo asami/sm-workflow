@@ -1,6 +1,7 @@
 /**
  * @since   Oct. 26, 2026
- * @version Oct. 27, 2026
+ *  version Oct. 27, 2026
+ * @version Nov.  5, 2026
  */
 package org.simplemodeling.textus.smworkflow.preparation
 
@@ -135,6 +136,43 @@ final class GoalTaskExternalEvidencePreparationSpec extends AnyWordSpec with Mat
         execution, target.participant, declared.issuer, now).isSuccess shouldBe false
       NativeExternalEvidenceInput.prepareC(options.updated("family", "GoalPhase"), _read_).isSuccess shouldBe false
       NativeExternalEvidenceInput.prepareC(options.removed("participant"), _read_).isSuccess shouldBe false
+    }
+  }
+
+  "Later Task trend-continuation passive preparation" should {
+    "require independent exact evidence while preserving an earlier direction in the opaque target" in {
+      import org.simplemodeling.textus.smworkflow.admission.GoalTaskRepairContinuation as C
+      Given("a later eligible stop whose pre-resume business contains the first specification direction")
+      val original = GoalTaskRepairContinuationFixture.target
+      val oldreference = ContextReference("fixture-first-human", "1")
+      val direction = C.Direction(original.asJson, "ContinueRepair", "Fixture first direction", original.participant, oldreference)
+      val target = original.copy(frontierRevision = original.frontierRevision + 5,
+        business = original.business.copy(repairContinuation = Some(direction)))
+      val description = V.GoalTaskRepairContinuationDescriptionResult(target.sessionId, target.componentInstance,
+        "decision-required", "Fixture later Human admission required", target.asJson.noSpaces, C.choices, C.resumeOperation)
+      val reference = V.WorkflowArtifactReference("fixture-second-human", "1")
+      val answer = V.GoalTaskRepairContinuationInput(target.sessionId, description.target, "ContinueRepair",
+        "Fixture independent later direction", target.participant, reference)
+      val execution = V.WorkflowExecutionEvidence(Vector(reference), Some(target.participant), None, None)
+      When("the ordinary passive preparation binds the later exact target and separately supplied Human source")
+      val prepared = take(NativeReviewPreparation.taskRepairContinuationC(description, answer, reference, execution,
+        target.participant, declared.issuer, now))
+      val evidence = take(NativeExternalEvidence.decodeStorageC(prepared.record.getString(NativeExternalEvidence.storageField).get))
+      val binding = take(C.bindingC(target.componentInstance, target, answer.choice, answer.rationale, target.participant,
+        ContextReference(reference.identity, reference.revision)))
+      val purpose = NativeExternalEvidence.Purpose.GoalTaskRepairContinuation
+      val lookup = ThreeWorkflowExternalEvidencePorts.key(reference.identity, reference.revision)
+      Then("both opaque episodes remain intact and evidence for the earlier target cannot admit the later answer")
+      C.decodeTarget(target.asJson) shouldBe Right(target)
+      evidence.binding shouldBe binding
+      NativeExternalEvidence.observeC(evidence, declared, purpose, lookup, binding, now).isSuccess shouldBe true
+      val earlierbinding = take(C.bindingC(original.componentInstance, original, direction.choice, direction.rationale,
+        original.participant, oldreference))
+      NativeExternalEvidence.observeC(evidence, declared, purpose, lookup, earlierbinding, now).isSuccess shouldBe false
+      NativeReviewPreparation.taskRepairContinuationC(description, answer.copy(target = original.asJson.noSpaces), reference,
+        execution, target.participant, declared.issuer, now).isSuccess shouldBe false
+      NativeReviewPreparation.taskRepairContinuationC(description, answer, reference,
+        execution.copy(workerIdentity = None), target.participant, declared.issuer, now).isSuccess shouldBe false
     }
   }
 
