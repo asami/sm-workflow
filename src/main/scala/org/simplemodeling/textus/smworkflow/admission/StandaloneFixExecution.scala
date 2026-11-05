@@ -12,7 +12,8 @@ import GoalPhaseRuntimeRepairControl as R
 /** One bounded business request over the existing execution and repair policy.
   * It is neither a Phase Plan nor a second mechanical command runner.
   * @since   Oct. 26, 2026
-  * @version Oct. 27, 2026
+  *  version Oct. 27, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object StandaloneFixExecution {
@@ -131,6 +132,15 @@ private[smworkflow] object StandaloneFixExecution {
         message = "Unchanged candidate retains its applicable complete successful check batch before assessment"))
     else Consequence.success(state.copy(stage = "Validate", candidate = Some(candidate), receipts = Vector.empty,
       pendingCheck = None, message = "Runtime observed the selected uncommitted candidate"))
+
+  /** Called only by a later native Advance after existing candidate freshness.
+    * The predecessor checkpoint retains the removed incomplete raw receipt.
+    */
+  def continueTerminatedValidationC(state: State): Consequence[State] =
+    if (TerminatedValidationContinuation.eligible(state)) Consequence.success(state.copy(
+      stage = "Validate", receipts = state.receipts.dropRight(1),
+      message = "Confirmed terminated incomplete attempt retained in history; continue only its selected check"))
+    else invalid("Validation continuation requires the original confirmed terminal incomplete observation")
 
   /** An intent is retained before its typed SBT effect. Redisplay of an intent
     * is uncertainty/collection work, never permission to run it again. */

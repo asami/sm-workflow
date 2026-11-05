@@ -50,7 +50,8 @@ private[smworkflow] object BoundedWorkRuntime {
 /** Standalone business ownership over canonical CNCF persistence and execution.
   * No Phase Start, Plan, Step acceptance, commit or private command driver.
   * @since   Oct. 26, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  6, 2026
   */
 private[smworkflow] object StandaloneFixNativeRun extends BoundedWorkNativeRun(false) {
   type Host = BoundedWorkRuntime.Host
@@ -354,6 +355,17 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
             "Managed SBT effects remain uncertain: " + conclusion.toString + "; retain intent and observe before any new attempt"))
         }
       } yield response
+      // Depth zero is a later public Advance, never this invocation's new observation.
+      case "Wait" if TerminatedValidationContinuation.eligible(s, depth) =>
+        freshC(payload, core) match {
+          case Consequence.Success(_) => for {
+            next <- S.continueTerminatedValidationC(s)
+            saved <- saveC(h, store, record, payload.copy(state = next), core)
+            response <- progressC(h, definition, store, saved, payload.copy(state = next), core, depth + 1)
+          } yield response
+          case _ => Consequence.success(view(record, s, "Wait",
+            s.message + "; current candidate freshness was not established; no new attempt"))
+        }
       case "AdmissionBlocked" => for {
         _ <- freshC(payload, core)
         next = s.copy(stage = "Validate", message = "Ordinary preparation continuation of confirmed unstarted selected work")

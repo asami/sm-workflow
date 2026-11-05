@@ -10,7 +10,7 @@ project:
     name: "SmWorkflow"
     className: "SmWorkflowComponent"
     displayName: "SM Workflow"
-    version: "0.1.0-SNAPSHOT"
+    version: "0.1.1-SNAPSHOT"
 
 build:
   scalaVersion: "3.3.8"

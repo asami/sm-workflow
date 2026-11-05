@@ -1,6 +1,7 @@
 /**
  * @since   Oct. 27, 2026
- * @version Oct. 27, 2026
+ *  version Oct. 27, 2026
+ * @version Nov.  6, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -15,6 +16,7 @@ import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms as Programs
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import BoundedWorkRuntime.*
@@ -31,7 +33,7 @@ import SplitPhaseExplicitPartitionFixture.take
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
-final class BoundedWorkNativeOutcomeSpec extends AnyWordSpec with Matchers with ThreeWorkflowManagedRepositoryFixture {
+final class BoundedWorkNativeOutcomeSpec extends AnyWordSpec with Matchers with GivenWhenThen with ThreeWorkflowManagedRepositoryFixture {
   private val selected = Vector(GoalPhaseNativeValidation.Check("compile", 1, V.Kind.Compile),
     GoalPhaseNativeValidation.Check("focused", 2, V.Kind.TestOnly))
   private val journal = DevelopmentJournal.Policy("workflow", _collection_("development_journal"))
@@ -158,6 +160,86 @@ final class BoundedWorkNativeOutcomeSpec extends AnyWordSpec with Matchers with 
     text = Files.readString(directory.resolve("archive").resolve(allocation.path))
     json <- io.circe.parser.parse(text).fold(error => Consequence.stateConflict(error.message), Consequence.success)
   } yield json
+
+  "Later native Advance of confirmed terminated validation" should {
+    "retain the old checkpoint and successful prefix for both Task and Fix while admitting only the affected check" in {
+      Given("fixture-managed Task and Fix Wait checkpoints with confirmed terminal incomplete captures")
+      Vector(false, true).foreach { task =>
+        val directory = root(); prepare(directory)
+        Files.writeString(directory.resolve("repository/value.txt"), "selected continuation delta\n")
+        _with_runtime_(directory, "Outcome", hostParameters = parameters(directory)) { (_, _, _, project) =>
+          project(call => for {
+            before <- G.observeC(call.core)
+            _ <- E.stageGoalCandidateC(call.core, 1).flatMap(_.valueC)
+            candidate <- candidateC(call.core, before.head)
+            n = native(task)
+            h = host(directory)
+            session = "fixture-terminal-continuation-" + task
+            raw = TerminatedValidationFixture.receipt(selected.last)
+            waiting = state(task, "Wait").copy(candidate = Some(candidate), automaticCount = 3, ordinaryCount = 2,
+              receipts = state(task, "Wait").receipts.dropRight(1) :+ raw)
+            payload = Payload(waiting, h.root, "main", before.head,
+              implementationWorker = Some("original-worker"), implementationWorkers = Some(Vector("original-worker", "repair-worker")))
+            seeded <- seedC(n, h, session, payload, call.core)
+            _ = When("the subsequent public native Advance uses an unchanged candidate but no admitted SBT target")
+            result <- n.advanceC(session, h, seeded._1, call.core)
+            record <- currentC(seeded._2, session, call.core)
+            retained <- n.loadPayloadC(seeded._2, session, record.revision.value, call.core)
+            original <- n.loadPayloadC(seeded._2, session, seeded._3.revision.value, call.core)
+            _ = Then("only the affected fresh attempt is admission-blocked and its predecessor capture remains immutable")
+            _ = result.kind shouldBe "Wait"
+            _ = retained.state.stage shouldBe "AdmissionBlocked"
+            _ = retained.state.receipts shouldBe waiting.receipts.dropRight(1)
+            _ = original shouldBe payload
+            _ = original.state.receipts.last shouldBe raw
+            _ = retained.copy(state = waiting) shouldBe payload
+            _ = retained.state.candidate shouldBe waiting.candidate
+            _ = retained.state.automaticCount shouldBe 3
+            _ = retained.state.ordinaryCount shouldBe 2
+            _ = retained.state.repairControl shouldBe waiting.repairControl
+            _ = record.revision.value should be > seeded._3.revision.value
+            _ = commitCalls(directory) shouldBe 0L
+          } yield ())
+        }
+      }
+    }
+
+    "leave changed candidates and unconfirmed executions at the same Wait without a duplicate intent" in {
+      Given("an existing Wait whose original capture is either terminal or termination-unconfirmed")
+      Vector(false, true).foreach { changed =>
+        val directory = root(); prepare(directory)
+        Files.writeString(directory.resolve("repository/value.txt"), "selected continuation delta\n")
+        _with_runtime_(directory, "Outcome", hostParameters = parameters(directory)) { (_, _, _, project) =>
+          project(call => for {
+            before <- G.observeC(call.core)
+            _ <- E.stageGoalCandidateC(call.core, 1).flatMap(_.valueC)
+            candidate <- candidateC(call.core, before.head)
+            h = host(directory)
+            raw = if (changed) TerminatedValidationFixture.receipt(selected.last)
+              else TerminatedValidationFixture.receipt(selected.last,
+                org.goldenport.cncf.processexecution.ProcessExecutionTermination.TerminationUnconfirmed)
+            waiting = state(true, "Wait").copy(candidate = Some(candidate),
+              receipts = state(true, "Wait").receipts.dropRight(1) :+ raw)
+            payload = Payload(waiting, h.root, "main", before.head)
+            session = "fixture-refused-continuation-" + changed
+            seeded <- seedC(GoalTaskNativeRun, h, session, payload, call.core)
+            _ = if (changed) Files.writeString(directory.resolve("repository/value.txt"), "changed after capture\n") else ()
+            _ = When("Advance is repeated without a valid current candidate and confirmed termination pair")
+            first <- GoalTaskNativeRun.advanceC(session, h, seeded._1, call.core)
+            second <- GoalTaskNativeRun.advanceC(session, h, seeded._1, call.core)
+            record <- currentC(seeded._2, session, call.core)
+            retained <- GoalTaskNativeRun.loadPayloadC(seeded._2, session, record.revision.value, call.core)
+            _ = Then("both reads remain Wait and retain exactly the old checkpoint, counts and incomplete observation")
+            _ = first.kind shouldBe "Wait"
+            _ = second.kind shouldBe "Wait"
+            _ = record.revision shouldBe seeded._3.revision
+            _ = retained shouldBe payload
+            _ = commitCalls(directory) shouldBe 0L
+          } yield ())
+        }
+      }
+    }
+  }
 
   "Shared bounded native Evidence" should {
     "archive confirmed raw check and semantic outcomes through real managed Evidence and Journal without promoting uncertainty" in {

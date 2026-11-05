@@ -1,6 +1,7 @@
 /**
  * @since   Oct. 26, 2026
- * @version Oct. 27, 2026
+ *  version Oct. 27, 2026
+ * @version Nov.  6, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -58,6 +59,27 @@ final class GoalTaskWorkflowSpec extends AnyWordSpec with GivenWhenThen with Thr
   override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json =
     TypedGitHostPlanFixture.plan(Programs.Target(root.resolve("repository"), "main", "origin", "main",
       root.resolve("upstream.git").toString), kinds = TypedGitHostPlanFixture.observations)
+
+  "Retained confirmed terminal validation" should {
+    "resume only its affected check without consuming repair counts or replacing the candidate" in {
+      Given("an existing selected candidate and a fixture-owned terminal incomplete capture")
+      val captured = take(S.candidateC(implementation, candidate))
+      val waiting = take(S.observedC(take(S.intentC(captured)), TerminatedValidationFixture.receipt(checks.head)))
+      When("a later ordinary continuation prepares the affected check")
+      val resumed = take(S.continueTerminatedValidationC(waiting))
+      val intent = take(S.intentC(resumed))
+      Then("the original source/candidate and counts survive and an unresolved intent cannot be resumed again")
+      waiting.stage shouldBe "Wait"
+      waiting.receipts.last.processObservation should not be empty
+      resumed.input shouldBe waiting.input
+      resumed.candidate shouldBe waiting.candidate
+      resumed.automaticCount shouldBe waiting.automaticCount
+      resumed.ordinaryCount shouldBe waiting.ordinaryCount
+      resumed.repairControl shouldBe waiting.repairControl
+      intent.pendingCheck shouldBe Some(checks.head.identity)
+      S.continueTerminatedValidationC(intent).isSuccess shouldBe false
+    }
+  }
 
   "Ad hoc Task workflow" should {
     "adopt journal and direct instruction requirements without Phase input and require initial implementation" in {

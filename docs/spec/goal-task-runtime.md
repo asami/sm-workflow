@@ -198,3 +198,14 @@ These test-owned facts are not installed deployment or real consumer acceptance.
 Source readiness is separate from native compile, focused/full qualification,
 independent integrated review, local acceptance commit, SNAPSHOT publication and
 real stopped-Session continuation; those remain runtime/owner obligations.
+
+## Later Advance after confirmed terminated validation
+
+GoalTask and standalone Fix share the bounded continuation in
+[normal typed validation](normal-typed-sbt-validation.md#confirmed-terminated-bounded-validation-continuation-november-6-2026).
+It preserves the same Task/Session and original work input. The original Wait
+checkpoint and raw incomplete capture remain readable in managed history; only
+the affected check gets a fresh native attempt on a later Advance after candidate
+freshness. No repair count, review exclusion or successful check is reset.
+Unconfirmed termination and unresolved intents remain Wait. This internal
+continuation adds no public operation or caller-supplied execution proof.

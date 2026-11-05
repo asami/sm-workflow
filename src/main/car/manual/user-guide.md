@@ -5,10 +5,20 @@ Operation implementations through the normal component factory. Executable
 Specifications call Operations directly, including normal managed effects.
 Phase 5 is formally released; Phase 5.1 verifies these normal paths. Command/CLI
 wiring and real skill integration belong to Phase 6. Duplicate answers and
-competing submissions are the caller's responsibility. Intermediate recovery,
-identical replay responses and complete runtime-history preservation are not
-promised. Abandon unsuccessful work and start a NEW execution from the beginning;
-this does not clean up or restore uncertain effects of the abandoned execution.
+competing submissions are the caller's responsibility. Preserve the original
+Session, history, counters and successful results when continuing work.
+
+For a retained bounded Task/Fix validation Wait with an original typed confirmed
+terminal incomplete capture, correct the owning runtime settings first (for
+example output capture limits). Then use the ordinary later Advance on the same
+Session. It checks the unchanged candidate and attempts only the affected check;
+the old capture stays in managed history. The Advance which first observes
+incomplete never retries it. Unknown/live/unconfirmed termination, missing raw
+capture and unresolved intent remain Wait; do not restart or replay Submit to
+bypass them. AdmissionBlocked is a separate confirmed nonstart case. Product
+failures continue through ordinary bounded Repair. A corrected setting is not a
+passing test result. Source 0.1.1-SNAPSHOT requires normal validation, independent
+review and local publication before installed consumer qualification.
 
 ## Prepare the owning runtime
 
