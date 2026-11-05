@@ -46,3 +46,20 @@ be interpreted as forbidding the necessary read-only native source observation.
 The raw adopted Task input and result001 remain unchanged as history; result002
 records the amended source readiness. No validation or generation was executed
 for either result. Qualification, independent review and delivery remain pending.
+
+Actual Human direction approved re-entry within the same explicit 20-path producer
+scope after producer `1042c6d6fee7abf1a8981dcd5e58940a` revision 6 was closed
+NotAccepted, retaining its zero check receipts and zero counts. Nonacceptance
+checkpoint `11dd9cd9` preserves the inherited 17 source changes and nonacceptance
+checkpoint `ff2980a6` preserves the additional canonical help catalog change; the
+new producer Task `15c3df61a4857a26831ac04e2a1c365a` starts from that clean
+checkpoint with only the remaining eight repairs. Earlier producer
+`d060e9b95b403601ba541b5ae1756adc` remains NotAccepted with its historical focused
+success, full-check failure and two consumed repairs. UserAccount remains in its
+same stopped Task at automatic/ordinary 5 with limit 10, and Studio remains in its
+same Session. These checkpoints preserve source without accepting delivery.
+Native qualification and independent cumulative review of all 18 inherited source
+changes plus this journal addition against original base
+`906d17fe5a134c9214e59776f6282914a1cc3cba` remain required, followed by native
+acceptance and any separately authorized local publication; no consumer operation
+or passing qualification is claimed by this source-readiness handoff.
