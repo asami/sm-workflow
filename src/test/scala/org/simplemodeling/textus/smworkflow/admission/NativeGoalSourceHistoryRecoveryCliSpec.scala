@@ -21,7 +21,8 @@ import SplitPhaseExplicitPartitionFixture.take
   * standard native codec bytes; no private row is ever seeded or changed.
   * Optional installed-command qualification uses the same isolated host.
   * @since   Oct. 21, 2026
-  * @version Oct. 26, 2026
+  *  version Oct. 26, 2026
+  * @version Nov.  5, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] abstract class NativeGoalSourceHistoryRecoveryCliSupport extends AnyWordSpec with NativeGoalSourceHistoryCliFixture {
@@ -215,7 +216,7 @@ private[admission] abstract class NativeGoalSourceHistoryRecoveryCliSupport exte
       execution.toVector.flatMap(value => Vector("--executionEvidence", _json(value))))
       .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
   }
-  protected def _document_episode(name: String, later: Boolean = false): DocumentEpisode = {
+  protected def _document_episode(name: String, later: Boolean = false, canonicalHost: Boolean = false): DocumentEpisode = {
     Given("CB1,CB2: a fresh normal source-history host with two document-selected Steps and fixed closure programs")
     val scenario = F.fresh(name, sbtRepair = Some(TypedSbtHostPlanFixture.normalExecutable), sourceHistory = true)
     val repository = Path.of(scenario.host.target.root)
@@ -235,10 +236,17 @@ private[admission] abstract class NativeGoalSourceHistoryRecoveryCliSupport exte
     val git = TypedGitHostPlanFixture.plan(target, goalPaths = host.goal.candidatePaths,
       goalMessages = Vector("Complete first recovery fixture Step", "Complete second recovery fixture Step"),
       goalSelections = Vector.fill(2)(host.goal.candidatePaths))
-    val processplan = TypedSbtHostPlanFixture.plan(scenario.root, TypedSbtHostPlanFixture.normalExecutable, Vector(1), Some(git))
-    configure(scenario, enabledSettings ++ Map("sm-workflow.runtime.definition" ->
-      Json.fromString(ThreeWorkflowRuntimeParameters.encode(host).noSpaces), "textus.subsystem.process-execution.plan" ->
+    val processplan = if (canonicalHost) NativeCommonDelegateTaskFixture.processPlan(scenario.root, focused = false)
+      else TypedSbtHostPlanFixture.plan(scenario.root, TypedSbtHostPlanFixture.normalExecutable, Vector(1), Some(git))
+    val runtimesettings = if (canonicalHost) Map.empty[String, Json] else Map("sm-workflow.runtime.definition" ->
+      Json.fromString(ThreeWorkflowRuntimeParameters.encode(host).noSpaces))
+    configure(scenario, enabledSettings ++ runtimesettings ++ Map("textus.subsystem.process-execution.plan" ->
       Json.fromString(processplan.noSpaces), "textus.resource.url.file.roots" -> Json.fromString(scenario.root.toString)))
+    if (canonicalHost) {
+      val config = scenario.root.resolve(".textus/config.json")
+      val current = parse(Files.readString(config)).toOption.get
+      Files.writeString(config, current.mapObject(_.remove("sm-workflow.runtime.definition")).noSpaces)
+    }
     Files.writeString(scenario.root.resolve("goal-plan.json"), Json.obj(
       "schemaVersion" -> Json.fromString(GoalPhaseDocumentSource.declarationSchema),
       "phasePath" -> Json.fromString("verification-inputs/phase.md"),

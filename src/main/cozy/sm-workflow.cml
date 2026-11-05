@@ -7829,7 +7829,7 @@ GoalPhaseSourceHistoryNormalizationDescriptionResult
 
 ##### DESCRIPTION
 
-Adopt the already held same-authority policy direction for the exact described target, rationale and actual policy-direction artifact reference. Independent host evidence under goal-phase-source-history-normalization must bind priorExecutionEnded=true to actual old invocation terminal evidence; absent receipts, elapsed time and current content never prove termination. This reference is existing policy direction, not an answer to the old Human or a new per-file permission. Append immutable mechanical direction, or supersede the exact pending source-history Human without answering it, preserving UNKNOWN, prefix, Plan/base and repair counts. Defer writes nothing. No File/Git/SBT or Advance follows adoption. Separate ordinary Advance verifies retained prefix/rule/date, observes an already normalized current comment without writing or uses managed UpdateExisting(expectedText) for bounded normalization. Its independent reconciliation intent/result never fills the old missing result. Known prewrite failures retain concrete failed observations. Interrupted new writers require actual terminal evidence and are never automatically repeated. Actual success precedes fresh ordinary candidate, selected validation and independent admission.
+Supply exactly one of input or inputResource for the complete unchanged adoption DTO. inputResource is an absolute local file URI read by the executing call under normal Resource/UoW authorization, finite read budget and UTF-8 decoding. Adopt the already held same-authority policy direction for the exact described target, rationale and actual policy-direction artifact reference. Independent host evidence under goal-phase-source-history-normalization must bind priorExecutionEnded=true to actual old invocation terminal evidence; absent receipts, elapsed time and current content never prove termination. This reference is existing policy direction, not an answer to the old Human or a new per-file permission. Append immutable mechanical direction, or supersede the exact pending source-history Human without answering it, preserving UNKNOWN, prefix, Plan/base and repair counts. Defer writes nothing. No File/Git/SBT or Advance follows adoption. Separate ordinary Advance verifies retained prefix/rule/date, observes an already normalized current comment without writing or uses managed UpdateExisting(expectedText) for bounded normalization. Its independent reconciliation intent/result never fills the old missing result. Known prewrite failures retain concrete failed observations. Interrupted new writers require actual terminal evidence and are never automatically repeated. Actual success precedes fresh ordinary candidate, selected validation and independent admission.
 
 ##### TYPE
 
@@ -7845,7 +7845,8 @@ GoalPhaseSourceHistoryNormalizationAdoptionInput
 
 | name | type | multiplicity |
 |------+------|--------------|
-| input | GoalPhaseSourceHistoryNormalizationAdoptionInput | 1 |
+| input | GoalPhaseSourceHistoryNormalizationAdoptionInput | 0..1 |
+| inputResource | string | 0..1 |
 
 ##### OUTPUT
 

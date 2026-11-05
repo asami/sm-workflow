@@ -25,7 +25,7 @@ import GoalPhaseAcceptanceBoundary as A
   * No Workflow state is read or seeded by this caller.
   * @since   Oct. 13, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  2, 2026
+  * @version Nov.  5, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeWorkflowCliFixture {
@@ -467,7 +467,7 @@ private[admission] object NativeWorkflowCliFixture {
         val executable = Path.of(command)
         require(executable.isAbsolute && Files.isRegularFile(executable) && Files.isExecutable(executable),
           "Select an actual absolute installed command; no source-launcher fallback")
-        Vector(command)
+        Vector(command, s"--textus.assembly.descriptor=$_assembly")
       case None => Vector(_primary.resolve("bin/launcher").toString, "--classpath-file",
         _primary.resolve("target/cncf.d/runtime-classpath.txt").toString, "--main-class",
         "org.goldenport.cncf.CncfMain", "--", "--force-exit", "--component-dev-dir", _primary.toString,

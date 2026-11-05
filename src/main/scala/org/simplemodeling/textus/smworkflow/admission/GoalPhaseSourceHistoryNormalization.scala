@@ -4,6 +4,7 @@ import io.circe.{Decoder, Encoder, Json}
 import io.circe.generic.auto.*
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
+import java.nio.charset.StandardCharsets.UTF_8
 import java.time.LocalDate
 import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.{ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall}
@@ -26,7 +27,7 @@ import GoalPhaseSourceHistoryRecovery as R
 /** Append-only adoption of existing comment authority. Neither description nor
   * adoption answers the old Human question or performs a File effect.
   * @since   Oct. 26, 2026
-  * @version Oct. 26, 2026
+  * @version Nov.  5, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseSourceHistoryNormalization {
@@ -497,6 +498,25 @@ private[smworkflow] object GoalPhaseSourceHistoryNormalization {
         None, None, target.recovery.intent.dateUncertain))
   } yield target.recovery.intent.path
 
+  /** Acquisition and business validation belong to the actual executing call. */
+  def inputForCallC(incoming: Request, core: ActionCall.Core): Consequence[V.GoalPhaseSourceHistoryNormalizationAdoptionInput] = {
+    val call = core
+    final class Reader extends ProcedureActionCall {
+      val core = call
+      def readInputC: Consequence[V.GoalPhaseSourceHistoryNormalizationAdoptionInput] = for {
+        source <- NativeWorkflowResourceInput.selectC[V.GoalPhaseSourceHistoryNormalizationAdoptionInput](incoming)
+        input <- NativeWorkflowResourceInput.readC(source, reference => read_resource_text(reference, Some(UTF_8)))
+        _ <- if (input == null || !exact(input.sessionId) || input.reference == null || !choices.contains(input.choice) ||
+            !text(input.rationale) || !exact(input.reference.identity) || !exact(input.reference.revision))
+          F.invalid("Normalization requires an actual policy direction reference and typed answer")
+          else Consequence.unit
+        _ <- targetC(input.target)
+      } yield input
+      def execute(): Consequence[OperationResponse] = F.invalid("Normalization input reader is not an Operation")
+    }
+    new Reader().readInputC
+  }
+
   def operations(port: GoalPhaseNativeWorkContinuation.Port): Vector[spec.OperationDefinition] =
     Vector(new Operation(true, port), new Operation(false, port))
   private final class Operation(describe: Boolean, port: GoalPhaseNativeWorkContinuation.Port) extends spec.OperationDefinition {
@@ -506,24 +526,22 @@ private[smworkflow] object GoalPhaseSourceHistoryNormalization {
     def createOperationRequest(request: Request): Consequence[OperationRequest] =
       if (request == null || !request.service.contains("GoalPhaseService") ||
           request.operation != (if (describe) describeOperation else adoptionOperation)) F.invalid("Normalization Operation identity differs")
-      else if (describe) NativeWorkflowOperationInput.textC(request, "sessionId").map(identity => Action(request, identity, None, port))
-      else NativeWorkflowOperationInput.valueC[V.GoalPhaseSourceHistoryNormalizationAdoptionInput](request, "input").flatMap { input =>
-        if (input == null || !exact(input.sessionId) || input.reference == null || !choices.contains(input.choice) ||
-            !text(input.rationale) || !exact(input.reference.identity) || !exact(input.reference.revision))
-          F.invalid("Normalization requires an actual policy direction reference and typed answer")
-        else targetC(input.target).map(_ => Action(request, input.sessionId, Some(input), port))
-      }
+      else if (describe) NativeWorkflowOperationInput.textC(request, "sessionId").map(identity => Action(request, Some(identity), port))
+      else Consequence.success(Action(request, None, port))
   }
-  private final case class Action(request: Request, identity: String,
-    input: Option[V.GoalPhaseSourceHistoryNormalizationAdoptionInput], port: GoalPhaseNativeWorkContinuation.Port) extends CommandAction {
+  private final case class Action(request: Request, identity: Option[String],
+    port: GoalPhaseNativeWorkContinuation.Port) extends CommandAction {
     override def commandExecutionMode = CommandExecutionMode.Sync
     def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
       val core = c
       def execute(): Consequence[OperationResponse] = for {
-        context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(identity))
+        input <- identity.map(_ => Consequence.success(Option.empty[V.GoalPhaseSourceHistoryNormalizationAdoptionInput]))
+          .getOrElse(inputForCallC(Action.this.request, core).map(Some(_)))
+        session = identity.getOrElse(input.get.sessionId)
+        context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(session))
         selected = core.copy(executionContext = context)
         result <- input match {
-          case None => port.describeSourceHistoryNormalizationC(identity, selected).map(NativeWorkflowOperationOutput.response(_))
+          case None => port.describeSourceHistoryNormalizationC(session, selected).map(NativeWorkflowOperationOutput.response(_))
           case Some(value) => port.adoptSourceHistoryNormalizationC(value, selected).map(NativeWorkflowOperationOutput.response(_))
         }
       } yield result

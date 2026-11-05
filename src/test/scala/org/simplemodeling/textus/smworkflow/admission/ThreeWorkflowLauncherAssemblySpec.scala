@@ -21,7 +21,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /**
  * @since   Oct.  6, 2026
  *  version Oct. 28, 2026
- * @version Nov.  3, 2026
+ * @version Nov.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -159,6 +159,30 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
         operation.specification.request shouldBe generated(operation.name).specification.request
         operation.specification.response shouldBe generated(operation.name).specification.response
       }
+    }
+
+    "retain both source-history normalization operations and their generated contracts in normal deferred declarations" in {
+      Given("the generated GoalPhase source-history normalization description and adoption contracts")
+      val names = Set(GoalPhaseSourceHistoryNormalization.describeOperation,
+        GoalPhaseSourceHistoryNormalization.adoptionOperation)
+      val generated = SmWorkflowComponent.GoalPhaseServiceService.operations.operations.toVector
+        .filter(operation => names(operation.name)).map(operation => operation.name -> operation).toMap
+      When("the normal launcher selects the GoalPhase service from its standard deferred inventory")
+      val deferred = ThreeWorkflowLauncherAssembly.deferredDeclarations
+        .find(_.name == "GoalPhaseService").get.operations.operations.toVector
+        .filter(operation => names(operation.name))
+      Then("both exact operations retain their generated requests and responses without entering MCP publication")
+      deferred.map(_.name).toSet shouldBe names
+      deferred.size shouldBe 2
+      deferred.foreach { operation =>
+        operation.specification.request shouldBe generated(operation.name).specification.request
+        operation.specification.response shouldBe generated(operation.name).specification.response
+        ThreeWorkflowLauncherAssembly.publishedMcpOperations should not contain ("GoalPhaseService." + operation.name)
+      }
+      deferred.find(_.name == GoalPhaseSourceHistoryNormalization.describeOperation).get
+        .specification.request.parameters.map(_.name).toVector shouldBe Vector("sessionId")
+      deferred.find(_.name == GoalPhaseSourceHistoryNormalization.adoptionOperation).get
+        .specification.request.parameters.map(_.name).toVector shouldBe Vector("input", "inputResource")
     }
 
     "retain both finite repair budget operations and their generated contracts in normal deferred declarations" in {

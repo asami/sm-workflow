@@ -455,12 +455,29 @@ The source implementation adds these ordinary `GoalPhaseService` Operations:
   `adoption-required`, the exact target, choices
   `AdoptSameAuthorityNormalization` and `Defer`, and
   `adoptionOperation = adoptGoalPhaseSourceHistoryNormalization`.
-- `adoptGoalPhaseSourceHistoryNormalization(input)` accepts
+- `adoptGoalPhaseSourceHistoryNormalization(input | inputResource)` accepts exactly one transport for
   `GoalPhaseSourceHistoryNormalizationAdoptionInput`: `sessionId`, `target`,
   `choice`, `rationale`, actual policy-direction `reference`, and Boolean
   `priorExecutionEnded`. It returns
-  `GoalPhaseSourceHistoryNormalizationAdoptionResult`. Adoption and description
-  use managed native storage only; neither calls File, Git, SBT or Advance.
+  `GoalPhaseSourceHistoryNormalizationAdoptionResult`. Description remains
+  sessionId-only and performs no Resource acquisition. Adoption reads its
+  complete DTO in the executing owning call, then uses managed native storage;
+  it performs no source File effect, Git, SBT or Advance.
+
+`input` carries the existing complete inline DTO. `inputResource` carries an
+absolute local file URI without authority, query or fragment. Exactly one is
+required. The existing Resource/UoW reader applies the actual executing call's
+authorization, allowed local roots, configured finite byte budget and strict
+UTF-8 decoding. Both transports use the same DTO reader and unchanged business
+validation, including the complete canonical target, choice, rationale and exact
+policy reference. Missing, conflicting, unreadable, outside-root, over-budget,
+malformed UTF-8 or invalid business input refuses before native adoption.
+There is no normalization-specific size or prefix-count ceiling and no
+shortening of the target to accommodate command arguments. Request binding
+performs no Resource read. Standard deferred runtime composition resolves only
+this adoption Operation's Session from that acquired business DTO through the
+same owning-call reader; no separate session hint or generic Resource fallback
+is introduced. Transport never attests termination, policy authority or consent.
 
 The canonical target contains the complete existing `recovery` target, exact
 current `frontierRevision` and `frontierCause`, the named policy
@@ -588,7 +605,11 @@ readable and retain their existing choices.
 `GoalPhaseSourceHistoryNormalizationSpec` covers the strict later-intent8 target,
 own-purpose binding and passive preparation, real managed File idempotence,
 read-only current observation, bounded update, ambiguous known failure and
-changed-rule refusal. `NativeGoalSourceHistoryNormalizationCliSpec` uses the
+changed-rule refusal. Its Resource examples also retain an identical complete
+DTO inline and through authorized local acquisition, decode a complete target
+over 500 KiB with many successful prefix entries, and exercise real root,
+UTF-8 and configured finite-budget refusals before native adoption.
+`NativeGoalSourceHistoryNormalizationCliSpec` uses the
 existing isolated normal CLI fixture with a completed Step, four actual prefix
 updates and an unresolved successor. It covers public adoption without an old
 Human answer, separate Advance through actual selected SBT to independent
@@ -610,3 +631,32 @@ policy metadata and terminal assertions; they establish no live Human consent.
 Generation, compilation, focused validation, independent review, publication
 and installed qualification remain parent-owned requirements. The source
 contract alone does not claim an installed product or live consumer adoption.
+
+`NativeGoalSourceHistoryNormalizationResourceCliSpec` is a separate explicitly
+selected `@DoNotDiscover` Runtime specification. With
+`smworkflow.spec.installedCommand`, its public GoalPhase and preparation calls
+use the existing isolated Scenario launcher and that Scenario's actual
+`.textus/assembly.yaml`. It selects no immutable image, old runtime, installation
+override or copied application. Without installedCommand it permits the normal
+source fixture route for focused development.
+
+The two cases obtain a real two-Step episode, completed first Step, four actual
+successful source-history prefix entries, original missing-result UNKNOWN and
+an actual pending legacy Human through ordinary public Operations. Independent
+specification-owned policy and terminal evidence are prepared normally, then
+adoption uses only inputResource with the unchanged complete target. Legal JSON
+whitespace makes each complete request representation exceed 500 KiB; this
+proves large-request transport, while the pure specification separately covers
+a large complete business target. One case retains the configured definition
+and requires actual same-rule/date normalization. The other removes only
+`sm-workflow.runtime.definition` after the existing question is created and
+requires standard deferred composition to recover the same Session from the
+Resource DTO, then observe an already satisfied postcondition without source
+replacement or mtime change. Separate ordinary Advance reaches a real selected
+native check and independent ReviewStep. Original UNKNOWN, successful prefix
+rows/content/mtime, accepted base/Plan/completed Steps and repair progress
+remain retained; recollection repeats no successful work. These fixture facts
+prove transport and program admission, never actual user consent. Authored
+examples require parent-owned generation, validation, independent review,
+normal local publication and isolated installed qualification before any PASS
+claim.

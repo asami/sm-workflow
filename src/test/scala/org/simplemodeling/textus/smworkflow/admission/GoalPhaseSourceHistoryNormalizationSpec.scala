@@ -2,11 +2,14 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
 import io.circe.syntax.*
-import java.nio.file.Files
+import java.nio.charset.StandardCharsets.UTF_8
+import java.nio.file.{Files, Path}
 import java.time.{Instant, LocalDate, ZoneId}
 import org.goldenport.cncf.context.RuntimeContext
 import org.goldenport.cncf.workflow.ContextReference
 import org.goldenport.cncf.workspace.{FileTarget, WorkspaceId}
+import org.goldenport.protocol.{Property, Request}
+import org.goldenport.record.Record
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.value as V
 import org.simplemodeling.textus.smworkflow.preparation.NativeSourceHistoryNormalizationPreparation
@@ -18,12 +21,13 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Immutable binding and actual managed File specifications. Supplied policy
   * references and lifecycle assertions are test-owned facts, never live consent.
   * @since   Oct. 26, 2026
-  * @version Oct. 26, 2026
+  * @version Nov.  5, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
-final class GoalPhaseSourceHistoryNormalizationSpec extends AnyWordSpec with NativeGoalSourceHistoryCliFixture {
+final class GoalPhaseSourceHistoryNormalizationSpec extends AnyWordSpec with NativeGoalSourceHistoryCliFixture
+    with NativePreparationOperationFixture {
   private val snapshot = O.Snapshot("a" * 40, "b" * 40)
   private val day = LocalDate.of(2026, 10, 21)
   private val artifact = ContextReference("already-held-policy-direction", "1")
@@ -55,6 +59,109 @@ final class GoalPhaseSourceHistoryNormalizationSpec extends AnyWordSpec with Nat
     Files.writeString(file, text)
     WorkflowFileRuntimeFixture.withCore(root, workspace = "sm-workflow-repository", access = access,
       mapping = enabledSettings) { core => task(file, core, FileTarget(take(WorkspaceId.parseC("sm-workflow-repository")))) }
+  }
+
+  private def _adoption_input(prefixsize: Int = 2): V.GoalPhaseSourceHistoryNormalizationAdoptionInput =
+    V.GoalPhaseSourceHistoryNormalizationAdoptionInput("session", N.targetRecord(target(prefixsize)), N.choices.head,
+      "Specification-owned retained policy direction", V.WorkflowArtifactReference(artifact.identity, artifact.revision), true)
+  private def _adoption_request(properties: Property*): Request = Request.of(
+    component = "org.simplemodeling.textus.SmWorkflow", service = "GoalPhaseService", operation = N.adoptionOperation,
+    properties = properties.toList)
+
+  "Complete normalization adoption Resource transport" should {
+    "retain the identical complete DTO inline and through the authorized owning Resource call including a large target" in {
+      withPreparation(cap = 8388608) { episode =>
+        Given("an unchanged complete adoption DTO and a finite authorized local Resource budget")
+        val input = _adoption_input()
+        val text = take(input.toRecord().toJsonStringC)
+        val uri = episode.save("normalization-complete", text)
+        val large = _adoption_input(1024)
+        val largetext = take(large.toRecord().toJsonStringC)
+        val largeuri = episode.save("normalization-large-target", largetext)
+        take(N.targetC(large.target)).asJson.noSpaces.getBytes(UTF_8).length should be > (500 * 1024)
+        episode.project { call =>
+          When("the same business reader acquires inline and complete local file representations in the current Resource UoW")
+          val inlineinput = take(N.inputForCallC(_adoption_request(Property("input", text, None)), call.core))
+          val resource = take(N.inputForCallC(_adoption_request(Property("inputResource", uri, None)), call.core))
+          val acquired = take(N.inputForCallC(_adoption_request(Property("inputResource", largeuri, None)), call.core))
+          Then("every field and the entire many-entry target survive without an application size ceiling")
+          inlineinput shouldBe input
+          resource shouldBe input
+          acquired shouldBe large
+          take(N.targetC(acquired.target)) shouldBe target(1024)
+          acquired.choice shouldBe large.choice
+          acquired.reference shouldBe large.reference
+          acquired.priorExecutionEnded shouldBe true
+          org.goldenport.Consequence.unit
+        }
+      }
+    }
+
+    "bind without Resource acquisition while preserving the session-only description and exact operation identity" in {
+      Given("the real Operations with no port and an absent Resource")
+      val operations = N.operations(null)
+      val request = _adoption_request(Property("inputResource", "file:///private/tmp/absent-normalization.json", None))
+      When("request binding constructs the deferred action without executing its owning call")
+      val bound = operations.last.createOperationRequest(request)
+      val description = operations.head.createOperationRequest(Request.of(component = "org.simplemodeling.textus.SmWorkflow", service = "GoalPhaseService",
+        operation = N.describeOperation, properties = List(Property("sessionId", "session", None))))
+      val wrongservice = operations.last.createOperationRequest(Request.of(component = "org.simplemodeling.textus.SmWorkflow", service = "RepositorySyncService",
+        operation = N.adoptionOperation, properties = List(Property("inputResource", "file:///private/tmp/absent-normalization.json", None))))
+      val wrongoperation = operations.last.createOperationRequest(Request.of(component = "org.simplemodeling.textus.SmWorkflow", service = "GoalPhaseService",
+        operation = N.describeOperation, properties = List(Property("sessionId", "session", None))))
+      Then("adoption and describe bind without reading while crossed identities and absent describe session refuse")
+      bound.isSuccess shouldBe true
+      description.isSuccess shouldBe true
+      wrongservice.isSuccess shouldBe false
+      wrongoperation.isSuccess shouldBe false
+      operations.head.createOperationRequest(Request.of(component = "org.simplemodeling.textus.SmWorkflow", service = "GoalPhaseService", operation = N.describeOperation,
+        properties = List(Property("inputResource", "file:///private/tmp/absent-normalization.json", None)))).isSuccess shouldBe false
+    }
+
+    "refuse exclusive-source acquisition and business failures before native adoption under the actual finite Resource policy" in {
+      withPreparation(cap = 16384) { episode =>
+        Given("the actual public adoption handler with an absent native Start and one valid complete control")
+        val input = _adoption_input()
+        val text = take(input.toRecord().toJsonStringC)
+        val control = episode.save("normalization-valid", text)
+        val outside = Files.createTempFile(episode.root.getParent, "outside-normalization-", ".json")
+        Files.writeString(outside, text, UTF_8)
+        val invalidutf8 = episode.root.resolve("invalid-normalization-utf8.json")
+        Files.write(invalidutf8, Array(0xc3.toByte, 0x28.toByte))
+        val overbudget = episode.save("normalization-over-budget", text + (" " * 16384))
+        Files.size(Path.of(java.net.URI.create(overbudget))) should be > 16384L
+        val invalidbusiness = Vector("{", "null", "[]", "{}") ++ Vector(
+          input.copy(sessionId = " session"), input.copy(choice = "unsupported"), input.copy(rationale = ""),
+          input.copy(reference = V.WorkflowArtifactReference("", "1")),
+          input.copy(reference = V.WorkflowArtifactReference(artifact.identity, " 1")),
+          input.copy(target = Record.data("unexpected" -> true))).map(value => take(value.toRecord().toJsonStringC))
+        val resourceuris = Vector(episode.root.resolve("missing.json").toUri.toASCIIString,
+          outside.toUri.toASCIIString, invalidutf8.toUri.toASCIIString, overbudget) ++
+          invalidbusiness.zipWithIndex.map((value, index) => episode.save("invalid-normalization-" + index, value))
+        val selectors = Vector(_adoption_request(), _adoption_request(Property("input", text, None),
+          Property("inputResource", control, None))) ++
+          (resourceuris ++ Vector("relative.json", "file:relative", "file://host/tmp/a", "https://example.test/a",
+            control + "?query=1", control + "#fragment")).map(uri => _adoption_request(Property("inputResource", uri, None))) ++
+          invalidbusiness.map(value => _adoption_request(Property("input", value, None)))
+        def _failure_(request: Request): String = episode.owner.executeOperationResponseInContext(request, episode.actor) match {
+          case org.goldenport.Consequence.Failure(conclusion) => conclusion.toString
+          case _ => fail("An absent native Start cannot admit normalization")
+        }
+        try {
+          When("the normal handler reads the complete control through its authorized Resource")
+          val acquired = _failure_(_adoption_request(Property("inputResource", control, None)))
+          Then("only the valid DTO reaches the native absent-Start guard")
+          acquired should include("owning advance has no actual native ordered Start")
+          selectors.foreach { request =>
+            When("the same handler receives an invalid selector acquisition or business value")
+            val refused = _failure_(request)
+            Then("refusal precedes native policy adoption without source fallback")
+            refused should not include("owning advance has no actual native ordered Start")
+            refused should not be acquired
+          }
+        } finally Files.deleteIfExists(outside)
+      }
+    }
   }
 
   "Fresh source history dates" should {
