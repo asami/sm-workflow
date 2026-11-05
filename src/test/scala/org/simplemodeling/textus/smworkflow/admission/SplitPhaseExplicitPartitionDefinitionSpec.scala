@@ -20,7 +20,8 @@ import SplitPhasePartitionEnumeration.EdgeDisposition
 
 /**
   * @since Oct.  2, 2026
-  * @version Oct. 24, 2026
+  *  version Oct. 24, 2026
+  * @version Nov.  6, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -94,7 +95,7 @@ final class SplitPhaseExplicitPartitionDefinitionSpec extends AnyWordSpec with M
     }
     "retain the converted Judgment policy and every Required correlation in the actual component JAR" in {
       Given("the normal packageBin artifact containing the complete official ABI resources")
-      val jar = Path.of("target/scala-3.3.8/textus-sm-workflow_3-0.1.0-SNAPSHOT.jar")
+      val jar = Path.of("target/scala-3.3.8/textus-sm-workflow_3-0.1.1-SNAPSHOT.jar")
       Files.isRegularFile(jar) shouldBe true
       val loader = new URLClassLoader(Array(jar.toUri.toURL), null)
       try {

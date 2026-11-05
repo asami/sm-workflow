@@ -15,7 +15,6 @@ import RepositorySyncNativeMergeValidation as V
 /** Bounded admission specifications using explicitly fixture-owned receipts.
   * These do not assert installed delivery or execution of a real SBT process.
   * @since   Oct. 26, 2026
-  *  version Oct. 26, 2026
   * @version Nov.  6, 2026
   * @author ASAMI, Tomoharu
   */

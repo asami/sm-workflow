@@ -20,7 +20,7 @@ import RepositorySyncNativeMergeValidation as B
 /** Bounded public-operation specifications. Check, worker, chat and source facts
   * are fixture-owned; these cases prove no installed/cross-chat acceptance.
   * @since   Oct. 27, 2026
-  * @version Oct. 27, 2026
+  * @version Nov.  6, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -139,9 +139,9 @@ final class ThreeWorkflowTaskFixDeliverySpec extends AnyWordSpec with Matchers w
     }
 
     "retain matching skill and contract bytes in the actual source JAR and ZIP without asserting deployment" in {
-      val jar = new JarFile("target/scala-3.3.8/textus-sm-workflow_3-0.1.0-SNAPSHOT.jar")
+      val jar = new JarFile("target/scala-3.3.8/textus-sm-workflow_3-0.1.1-SNAPSHOT.jar")
       try {
-        val zip = new ZipFile("target/sm-workflow-skills-0.1.0-SNAPSHOT.zip")
+        val zip = new ZipFile("target/sm-workflow-skills-0.1.1-SNAPSHOT.zip")
         try {
           val paths = Vector("sm-test-fix", "sm-goal-task", "sm-review-fix").map(n => s"skills/$n/SKILL.md") ++
             Vector("task-fix-delivery", "standalone-fix-runtime", "goal-task-runtime", "standalone-review-fix-runtime",

@@ -12,7 +12,8 @@ import org.simplemodeling.textus.smworkflow.value as V
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 28, 2026
+ *  version Oct. 28, 2026
+ * @version Nov.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -81,7 +82,7 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
       val descriptor = descriptors.head
       descriptor.schemaVersion shouldBe Some(3)
       descriptor.componentId shouldBe Some(ComponentId("org.simplemodeling.textus.SmWorkflow"))
-      descriptor.version shouldBe Some("0.1.0-SNAPSHOT")
+      descriptor.version shouldBe Some("0.1.1-SNAPSHOT")
 
       And("the descriptor supplies no settings or extensions that manufacture storage or user authority")
       descriptor.config shouldBe Map.empty
@@ -166,7 +167,7 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
       text(abi, "format") shouldBe "cozy.car.abi-manifest.v2"
       abi.hcursor.downField("component").get[String]("namespace") shouldBe Right("org.simplemodeling.textus")
       abi.hcursor.downField("component").get[String]("id") shouldBe Right("SmWorkflow")
-      abi.hcursor.downField("component").get[String]("version") shouldBe Right("0.1.0-SNAPSHOT")
+      abi.hcursor.downField("component").get[String]("version") shouldBe Right("0.1.1-SNAPSHOT")
       abi.hcursor.downField("abi").get[Int]("version") shouldBe Right(1)
       names("GoalPhaseService") should contain theSameElementsAs Vector(
         "startGoalPhase", "advanceGoalPhase", "submitGoalPhaseWorkResult", "submitGoalPhaseOrderedDecision", "submitGoalPhaseFindingRecording",

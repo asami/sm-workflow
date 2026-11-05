@@ -25,7 +25,7 @@ import GoalPhaseAcceptanceBoundary as A
   * No Workflow state is read or seeded by this caller.
   * @since   Oct. 13, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  2, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeWorkflowCliFixture {
@@ -93,7 +93,7 @@ private[admission] object NativeWorkflowCliFixture {
     val original = Files.readString(descriptor)
     require(original.contains("components: []"), "Only the direct producer fixture descriptor is selected")
     Files.writeString(descriptor, original.replace("components: []",
-      "components:\n  - namespace: org.simplemodeling.textus\n    id: SmWorkflow\n    version: 0.1.0-SNAPSHOT"))
+      "components:\n  - namespace: org.simplemodeling.textus\n    id: SmWorkflow\n    version: 0.1.1-SNAPSHOT"))
     new Scenario(root, host, plan, None, None)
   }
 
@@ -105,7 +105,7 @@ private[admission] object NativeWorkflowCliFixture {
     private val original = Files.readString(descriptor)
     require(original.contains("components: []"), "Select the actual direct producer descriptor once")
     Files.writeString(descriptor, original.replace("components: []",
-      "components:\n  - namespace: org.simplemodeling.textus\n    id: SmWorkflow\n    version: 0.1.0-SNAPSHOT"))
+      "components:\n  - namespace: org.simplemodeling.textus\n    id: SmWorkflow\n    version: 0.1.1-SNAPSHOT"))
     private var index = 0
     def call(service: String, operation: String, parameters: Vector[String]): Result = {
       require(Set("SplitPhaseService", "RepositorySyncService", "JournalService")(service))
@@ -2041,7 +2041,7 @@ private[admission] object NativeWorkflowCliFixture {
         |components:
         |  - namespace: org.simplemodeling.textus
         |    id: SmWorkflow
-        |    version: 0.1.0-SNAPSHOT
+        |    version: 0.1.1-SNAPSHOT
         |security:
         |  authentication:
         |    convention: enabled
