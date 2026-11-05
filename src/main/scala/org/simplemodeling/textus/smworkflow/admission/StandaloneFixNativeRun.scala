@@ -405,11 +405,17 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     val s = payload.state
     if (depth > 36) invalid("Bounded native progress exceeded its finite check batch")
     else s.stage match {
-      case "Inspect" => for {
-        // Persist before any staging/read effect. A loaded intent cannot replay it.
-        intent <- saveC(h, store, record, payload.copy(state = s.copy(stage = "CandidateIntent")), core)
-        candidate <- captureC(h, payload, core)
-        next <- S.candidateC(s, candidate)
+      case "Inspect" | "CandidateIntent" => for {
+        // A retained capture observes current Git state; only unfinished selected
+        // staging is needed. It grants no replay of validation or commit intent.
+        intent <- if (s.stage == "Inspect")
+          saveC(h, store, record, payload.copy(state = s.copy(stage = "CandidateIntent")), core)
+          else Consequence.success(record)
+        observed <- captureC(h, payload, core)
+        next <- observed match {
+          case Right(candidate) => S.candidateC(s.copy(stage = "Inspect"), candidate)
+          case Left(reason) => Consequence.success(s.copy(stage = "Human", message = reason))
+        }
         saved <- saveC(h, store, intent, payload.copy(state = next), core)
         result <- _progress_c(h, definition, store, saved, payload.copy(state = next), core, depth + 1)
       } yield result
@@ -476,23 +482,35 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     }
   }
 
-  private def captureC(h: Host, payload: Payload, core: ActionCall.Core): Consequence[S.Candidate] = for {
-    before <- G.observeC(core)
+  private def captureC(h: Host, payload: Payload, core: ActionCall.Core): Consequence[Either[String, S.Candidate]] = for {
+    native <- G.inspectC(core)
+    before = native.observed
     root <- G.rootC(core)
-    _ <- if (root == payload.root && before.branch == payload.branch && before.head == payload.baseHead &&
-      dirtyCovers(payload, before.dirty))
-      Consequence.unit else invalid("Candidate observation crosses the adopted root, HEAD or ownership")
-    _ <- payload.state.input.ownedPaths.foldLeft(Consequence.unit) { (previous, path) => previous.flatMap(_ =>
-      E.stageGoalCandidateC(core, h.paths.indexOf(path) + 1).flatMap(_.valueC).map(_ => ())) }
-    head <- GitObjectId.parseC(payload.baseHead)
-    selected <- E.executeGitC(core, GitOperation.PendingPaths(head)).flatMap(_.valueC)
-    diff <- E.executeGitC(core, GitOperation.PendingDiff(head)).flatMap(_.valueC)
-    tree <- G.indexTreeC(core)
-    after <- G.observeC(core)
-    _ <- if (after.head == before.head && dirtyCovers(payload, after.dirty) && after.dirty.filter(d => S.owned(d.path, payload.state.input.ownedPaths)).forall(_.worktree == ' ') &&
-      selected.forall(p => S.owned(p.value, payload.state.input.ownedPaths))) Consequence.unit
-      else invalid("Candidate changed during observation or contains unrelated staged work")
-  } yield S.Candidate(before.head, tree, selected.map(_.value), diff.text)
+    owners = payload.state.input.ownedPaths
+    outside = before.dirty.filter(d => !S.owned(d.path, owners) && d.index != ' ' && d.index != '?')
+    observed <- if (root != payload.root || before.branch != payload.branch || before.head != payload.baseHead ||
+      native.mergeHead.nonEmpty || before.dirty.exists(_.unmerged) || !dirtyCovers(payload, before.dirty) || outside.nonEmpty)
+      Consequence.success(Left("Candidate selection requires Human: adopted paths=" + owners.mkString(", ") +
+        "; observed root=" + root + "; branch=" + before.branch + "; HEAD=" + before.head +
+        "; actual changes=" + before.dirty.map(d => s"${d.index}${d.worktree} ${d.path}").mkString(", ") +
+        "; select which current changes belong to the original Task before staging or validation"))
+      else for {
+        _ <- owners.filter(path => before.dirty.exists(d => S.owned(d.path, Vector(path)) && d.worktree != ' '))
+          .foldLeft(Consequence.unit) { (previous, path) => previous.flatMap(_ =>
+            E.stageGoalCandidateC(core, h.paths.indexOf(path) + 1).flatMap(_.valueC).map(_ => ())) }
+        head <- GitObjectId.parseC(payload.baseHead)
+        selected <- E.executeGitC(core, GitOperation.PendingPaths(head)).flatMap(_.valueC)
+        diff <- E.executeGitC(core, GitOperation.PendingDiff(head)).flatMap(_.valueC)
+        tree <- G.indexTreeC(core)
+        after <- G.observeC(core)
+      } yield if (after.head == before.head && dirtyCovers(payload, after.dirty) &&
+        after.dirty.filter(d => S.owned(d.path, owners)).forall(_.worktree == ' ') &&
+        selected.forall(p => S.owned(p.value, owners)))
+        Right(S.Candidate(before.head, tree, selected.map(_.value), diff.text))
+        else Left("Candidate selection requires Human: current index/worktree no longer resolves the adopted paths=" +
+          owners.mkString(", ") + "; actual index paths=" + selected.map(_.value).mkString(", ") +
+          "; select the intended candidate before validation")
+  } yield observed
 
   private[admission] def freshC(payload: Payload, core: ActionCall.Core): Consequence[Unit] = for {
     root <- G.rootC(core)

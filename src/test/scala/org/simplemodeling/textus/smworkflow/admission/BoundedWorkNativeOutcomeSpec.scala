@@ -1,6 +1,6 @@
 /**
  * @since   Oct. 27, 2026
- * @version Oct. 27, 2026
+ * @version Nov.  5, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -10,12 +10,13 @@ import java.nio.file.{Files, Path}
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.datastore.{ComponentRecordStorage, DataStore}
-import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation}
+import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation, SbtOperation}
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms as Programs
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.GivenWhenThen
 import org.scalatest.wordspec.AnyWordSpec
 import BoundedWorkRuntime.*
 import StandaloneFixExecution as S
@@ -31,7 +32,7 @@ import SplitPhaseExplicitPartitionFixture.take
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
-final class BoundedWorkNativeOutcomeSpec extends AnyWordSpec with Matchers with ThreeWorkflowManagedRepositoryFixture {
+final class BoundedWorkNativeOutcomeSpec extends AnyWordSpec with Matchers with GivenWhenThen with ThreeWorkflowManagedRepositoryFixture {
   private val selected = Vector(GoalPhaseNativeValidation.Check("compile", 1, V.Kind.Compile),
     GoalPhaseNativeValidation.Check("focused", 2, V.Kind.TestOnly))
   private val journal = DevelopmentJournal.Policy("workflow", _collection_("development_journal"))
@@ -73,13 +74,16 @@ final class BoundedWorkNativeOutcomeSpec extends AnyWordSpec with Matchers with 
 
   override protected def process_plan(directory: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
     val plan = TypedGitHostPlanFixture.plan(Programs.Target(directory.resolve("repository"), "main", "origin", "main",
-      directory.resolve("upstream.git").toString), goalPaths = Vector("value.txt"),
+      directory.resolve("upstream.git").toString), goalPaths = Vector("value.txt", "second.txt"),
       goalMessages = Vector("Fixture Task selected commit"), goalSelections = Vector(Vector("value.txt")))
-    plan.mapObject(fields => fields.add("gitPrograms", Json.fromValues(fields("gitPrograms").get.asArray.get.map { program =>
+    val git = plan.mapObject(fields => fields.add("gitPrograms", Json.fromValues(fields("gitPrograms").get.asArray.get.map { program =>
       val selection = if (program.hcursor.get[String]("selectionId").toOption.contains("goal-step-1"))
         program.mapObject(_.add("selectionId", Json.fromString("goal-task"))) else program
       selection.mapObject(_.add("gitExecutable", Json.fromString(directory.resolve("observed-git").toString)))
     })))
+    val executable = directory.resolve("candidate-check")
+    if (Files.exists(executable)) TypedSbtHostPlanFixture.plan(directory, executable, Vector(1),
+      gitPlan = Some(git), operation = SbtOperation.Compile) else git
   }
   private def parameters(directory: Path): Map[String, String] = {
     Files.createDirectories(directory.resolve("archive/logs"))
@@ -99,7 +103,8 @@ final class BoundedWorkNativeOutcomeSpec extends AnyWordSpec with Matchers with 
   }
   private def prepare(directory: Path): Unit = {
     Files.createDirectories(directory.resolve("repository"))
-    val wrapper = "#!/bin/sh\nfor arg in \"$@\"; do\n if [ \"$arg\" = commit ]; then\n" +
+    val wrapper = "#!/bin/sh\nfor arg in \"$@\"; do\n if [ \"$arg\" = add ]; then\n" +
+      "  printf '%s\\n' add >> " + quote(directory.resolve("stage-calls").toString) + "\n fi\n if [ \"$arg\" = commit ]; then\n" +
       "  printf '%s\\n' commit >> " + quote(directory.resolve("commit-calls").toString) + "\n" +
       "  if [ -f " + quote(directory.resolve("fail-commit").toString) + " ]; then exit 1; fi\n" +
       "  if [ -f " + quote(directory.resolve("commit-then-fail").toString) + " ]; then\n" +
@@ -158,6 +163,115 @@ final class BoundedWorkNativeOutcomeSpec extends AnyWordSpec with Matchers with 
     text = Files.readString(directory.resolve("archive").resolve(allocation.path))
     json <- io.circe.parser.parse(text).fold(error => Consequence.stateConflict(error.message), Consequence.success)
   } yield json
+
+  "Retained Task candidate capture" should {
+    "observe complete indexes and finish only remaining staging before the final repair validation once" in {
+      for (mode <- Vector("unstaged", "partial", "staged", "deletion")) {
+        Given("a specification-owned final accepted repair with interrupted capture and a " + mode + " index")
+        val directory = root(); prepare(directory)
+        val repository = directory.resolve("repository")
+        Files.writeString(repository.resolve("second.txt"), "second baseline\n")
+        take(_run_setup_command_(Vector("-C", repository.toString, "add", "--", "second.txt")))
+        take(_run_setup_command_(Vector("-C", repository.toString, "-c", "user.name=Fixture",
+          "-c", "user.email=fixture@example.invalid", "commit", "-m", "Second owned fixture path")))
+        Files.writeString(repository.resolve("value.txt"), "accepted final repair\n")
+        if (mode == "deletion") Files.delete(repository.resolve("second.txt"))
+        else Files.writeString(repository.resolve("second.txt"), "accepted second repair\n")
+        val executable = directory.resolve("candidate-check")
+        Files.writeString(executable, "#!/bin/sh\nprintf '%s\\n' compile >> " +
+          quote(directory.resolve("check-calls").toString) + "\nprintf '[success] Total time: 0 s\\n'\n")
+        executable.toFile.setExecutable(true) shouldBe true
+        _with_runtime_(directory, "Outcome", hostParameters = parameters(directory) ++
+          BoundedWorkExecutionAdmissionFixture.parameters) { (_, _, _, project) =>
+          project(call => for {
+            base <- G.observeC(call.core)
+            _ <- if (mode == "partial" || mode == "staged" || mode == "deletion")
+              E.stageGoalCandidateC(call.core, 1).flatMap(_.valueC).map(_ => ()) else Consequence.unit
+            _ <- if (mode == "staged" || mode == "deletion")
+              E.stageGoalCandidateC(call.core, 2).flatMap(_.valueC).map(_ => ()) else Consequence.unit
+            mapping <- BoundedWorkExecutionAdmissionFixture.mappingC()
+            h = host(directory).copy(paths = Vector("value.txt", "second.txt"), checks = selected.take(1),
+              profiles = Some(mapping), origin = Some(BoundedWorkExecutionAdmissionFixture.origin))
+            original = state(true, "CandidateIntent")
+            pending = original.copy(input = original.input.copy(ownedPaths = h.paths, checks = Vector("compile"),
+              kind = "documentation", repairLimit = 3), selected = h.checks, candidate = None, receipts = Vector.empty,
+              automaticCount = 3, ordinaryCount = 3,
+              repairControl = GoalPhaseRuntimeRepairControl.Context(GoalPhaseRuntimeRepairControl.version, 3))
+            payload = Payload(pending, h.root, "main", base.head, unrelated = Some(Vector.empty))
+            seeded <- seedC(GoalTaskNativeRun, h, "fixture-final-capture", payload, call.core)
+            stagedbefore = if (Files.exists(directory.resolve("stage-calls")))
+              Files.readString(directory.resolve("stage-calls")).linesIterator.size else 0
+            _ = When("ordinary Advance observes the retained capture, without another repair Submit")
+            first <- GoalTaskNativeRun.advanceC("fixture-final-capture", h, seeded._1, call.core)
+            current <- currentC(seeded._2, "fixture-final-capture", call.core)
+            issued <- seeded._2.bindIssuedC(GoalTaskNativeRun.completionOperation, GoalTaskNativeRun.inputCodec)
+            work <- issued.loadC(org.goldenport.cncf.workflow.ContinuationIdentity(current.suspension.get.continuationIdentity.value))(using call.core.executionContext)
+              .flatMap {
+                case Some(value) => Consequence.success(value)
+                case None => Consequence.stateConflict("Expected actual retained review")
+              }
+            retained <- NativeWorkflowOperationOutput.workInputC(work)
+            _ = Then("the same Session reaches independent Review after exactly one controlled validation process")
+            _ = first.kind shouldBe "Request"
+            _ = first.sessionId shouldBe "fixture-final-capture"
+            _ = retained.kind shouldBe "Review"
+            _ = retained.state.input shouldBe pending.input
+            _ = retained.state.semanticReference shouldBe pending.semanticReference
+            _ = retained.state.conditionReport shouldBe pending.conditionReport
+            _ = retained.state.generation shouldBe pending.generation
+            _ = retained.state.automaticCount shouldBe 3
+            _ = retained.state.ordinaryCount shouldBe 3
+            _ = retained.state.repairControl shouldBe pending.repairControl
+            _ = retained.state.candidate.get.paths.toSet shouldBe h.paths.toSet
+            _ = retained.state.receipts.map(_.identity) shouldBe Vector("compile")
+            _ = current.history.take(seeded._3.history.size) shouldBe seeded._3.history
+            stagedafter = Files.readString(directory.resolve("stage-calls")).linesIterator.size
+            _ = (stagedafter - stagedbefore) shouldBe (if (mode == "unstaged") 2 else if (mode == "partial") 1 else 0)
+            _ = Files.readString(directory.resolve("check-calls")).linesIterator.size shouldBe 1
+            _ = When("another Advance collects the retained Review boundary")
+            second <- GoalTaskNativeRun.advanceC("fixture-final-capture", h, seeded._1, call.core)
+            _ = Then("no repair submission, staging or validation is repeated")
+            _ = second.work shouldBe first.work
+            _ = Files.readString(directory.resolve("check-calls")).linesIterator.size shouldBe 1
+            _ = Files.readString(directory.resolve("stage-calls")).linesIterator.size shouldBe stagedafter
+          } yield ())
+        }
+      }
+    }
+
+    "return the actual ownership choice to Human without staging another worker's index" in {
+      Given("an interrupted Task capture and an extra staged path outside the adopted ownership")
+      val directory = root(); prepare(directory)
+      Files.writeString(directory.resolve("repository/value.txt"), "accepted Task repair\n")
+      Files.writeString(directory.resolve("repository/unrelated.txt"), "another worker's selected change\n")
+      take(_run_setup_command_(Vector("-C", directory.resolve("repository").toString, "add", "--", "unrelated.txt")))
+      _with_runtime_(directory, "Outcome", hostParameters = parameters(directory)) { (_, _, _, project) =>
+        project(call => for {
+          base <- G.observeC(call.core)
+          h = host(directory)
+          original = state(true, "CandidateIntent")
+          pending = original.copy(input = original.input.copy(repairLimit = 3), candidate = None, receipts = Vector.empty,
+            automaticCount = 3, ordinaryCount = 3,
+            repairControl = GoalPhaseRuntimeRepairControl.Context(GoalPhaseRuntimeRepairControl.version, 3))
+          seeded <- seedC(GoalTaskNativeRun, h, "fixture-ownership-choice",
+            Payload(pending, h.root, "main", base.head, unrelated = Some(Vector.empty)), call.core)
+          _ = When("Advance cannot choose that extra index change as part of the original Task")
+          result <- GoalTaskNativeRun.advanceC("fixture-ownership-choice", h, seeded._1, call.core)
+          record <- currentC(seeded._2, "fixture-ownership-choice", call.core)
+          retained <- GoalTaskNativeRun.loadPayloadC(seeded._2, "fixture-ownership-choice", record.revision.value, call.core)
+          _ = Then("Human receives the actual paths and all original accepted work/counts remain")
+          _ = result.kind shouldBe "Human"
+          _ = result.message should include("unrelated.txt")
+          _ = result.message should include("value.txt")
+          _ = retained.state.semanticReference shouldBe pending.semanticReference
+          _ = retained.state.automaticCount shouldBe 3
+          _ = retained.state.ordinaryCount shouldBe 3
+          _ = Files.exists(directory.resolve("stage-calls")) shouldBe false
+          _ = Files.readString(directory.resolve("repository/unrelated.txt")) shouldBe "another worker's selected change\n"
+        } yield ())
+      }
+    }
+  }
 
   "Shared bounded native Evidence" should {
     "archive confirmed raw check and semantic outcomes through real managed Evidence and Journal without promoting uncertainty" in {

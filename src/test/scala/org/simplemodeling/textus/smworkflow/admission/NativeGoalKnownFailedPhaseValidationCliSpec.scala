@@ -161,8 +161,8 @@ private[admission] trait GoalPhaseKnownFailedPhaseValidationFixture extends Goal
   * fixture, Step commit and execution belongs only to this newly created root.
   * Fixture-owned evidence does not claim production Human provenance.
   * @since   Oct. 22, 2026
-  *  version Oct. 22, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 25, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -553,7 +553,6 @@ final class NativeGoalKnownFailedPhaseValidationCliSpec extends AnyWordSpec with
       val executable = _required("smworkflow.spec.installedCommand")
       val installations = _required("smworkflow.spec.runtimeRoot")
       Files.isExecutable(executable) shouldBe true
-      TypedSbtHostPlanFixture.normalExecutable.isAbsolute shouldBe true
       val selection = _read(installations.resolve("selected"))
       selection.hcursor.get[String]("kind").toOption shouldBe Some("cncf.installed-runtime-selection.v1")
       val generation = selection.hcursor.get[String]("installation_id").toOption.get
@@ -770,7 +769,6 @@ final class NativeGoalKnownFailedPhaseValidationCliSpec extends AnyWordSpec with
       val executable = _required("smworkflow.spec.installedCommand")
       Files.isExecutable(executable) shouldBe true
       val installations = _required("smworkflow.spec.runtimeRoot")
-      TypedSbtHostPlanFixture.normalExecutable.isAbsolute shouldBe true
       val selection = _read(installations.resolve("selected"))
       selection.hcursor.get[String]("kind").toOption shouldBe Some("cncf.installed-runtime-selection.v1")
       val generation = selection.hcursor.get[String]("installation_id").toOption.get

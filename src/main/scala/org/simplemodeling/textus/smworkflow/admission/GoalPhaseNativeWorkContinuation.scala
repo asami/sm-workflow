@@ -376,7 +376,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         documentpolicy = policy,
         dependencyChain = if (selectedplan &&
             saved.payload.assessment.incompatible.isEmpty && saved.payload.assessment.uncertainEffects.isEmpty &&
-            (saved.payload.assessment.questions.isEmpty || saved.payload.humanAnswer.nonEmpty))
+            (saved.payload.assessment.questions.isEmpty || saved.payload.humanAnswer.nonEmpty)) {
           new DependencyChain(cursor.dependencyChain.accepted, cursor.dependencyChain._legacy,
             cursor.dependencyChain.acceptedSources, cursor.dependencyChain.activePhaseCapture,
             cursor.dependencyChain.activePhaseSource, cursor.dependencyChain.historicalPhase,
@@ -384,7 +384,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
               saved.record.identity.value, saved.controller.plan, saved.controller.base,
               saved.controller.plan.steps.lift(saved.controller.cursor).map(_.identity).getOrElse("phase:" + saved.controller.plan.phase),
               saved.controller.generation, saved.record.revision.value))
-          else cursor.dependencyChain,
+        } else cursor.dependencyChain,
         developmentReconstruction = Some(saved), developmentReconstructionAnswer = None)
     }
 

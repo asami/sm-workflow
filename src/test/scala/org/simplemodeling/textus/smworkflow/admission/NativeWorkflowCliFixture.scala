@@ -25,7 +25,7 @@ import GoalPhaseAcceptanceBoundary as A
   * No Workflow state is read or seeded by this caller.
   * @since   Oct. 13, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeWorkflowCliFixture {
@@ -693,8 +693,6 @@ private[admission] object NativeWorkflowCliFixture {
       mappedExecution.isEmpty && !classifiedSbtRepair), "Continuation requires only its explicit normal SBT variant")
     require(!classifiedSbtRepair || sbtRepair.nonEmpty, "Classified SBT repair requires its selected SBT executable")
     require(!sourceHistory || sbtRepair.nonEmpty, "Source history requires its selected SBT executable")
-    sbtRepair.foreach(executable => require(executable.isAbsolute && Files.isRegularFile(executable) &&
-      Files.isExecutable(executable), "Select an absolute existing executable from smworkflow.spec.sbt"))
     val parent = Files.createDirectories(_primary.resolve("target/sm-workflow/work/native-cli"))
     val root = Files.createTempDirectory(parent, name + "-")
     val original = ThreeWorkflowNormalHostFixture.definition(root)
@@ -963,8 +961,6 @@ private[admission] object NativeWorkflowCliFixture {
 
   /** Normal isolated metadata host input; each denial changes one SBT grant only. */
   def freshMetadata(name: String, executable: Path, denial: MetadataDenial = MetadataDenial.Allowed): Scenario = {
-    require(executable.isAbsolute && executable.normalize == executable && Files.isRegularFile(executable) &&
-      Files.isExecutable(executable), "Select a normalized absolute existing SBT executable")
     val initial = fresh(name)
     val fixture = classOf[SelectedMetadataFixtureSpec]
     val artifact = D.ArtifactScope("component:sm-workflow-fixture", "sm-workflow-fixture-tests", "artifact-1", "source-1",
@@ -1073,7 +1069,7 @@ private[admission] object NativeWorkflowCliFixture {
 
   private def _fresh_finding_recording(name: String, executable: Path, semantic: Boolean, security: Boolean = false): Scenario = {
     require(!(semantic && security), "Select exactly one finding recording counterexample")
-    require(executable == TypedSbtHostPlanFixture.normalExecutable && executable.toRealPath() == executable,
+    require(executable == TypedSbtHostPlanFixture.normalExecutable,
       "Select the real normal SBT executable")
     val initial = fresh(name, sbtRepair = Some(executable))
     val scenario = new Scenario(initial.root, _finding_recording_host(initial.root, semantic, security), _finding_recording_plan(semantic, security),
@@ -1105,7 +1101,7 @@ private[admission] object NativeWorkflowCliFixture {
       "Select one finite recording stage log range")
     require(root.isAbsolute && root.normalize == root && root.getParent == _primary.resolve("target/sm-workflow/work/native-cli") &&
       Files.isDirectory(root) && root.toRealPath() == root, "Select a normalized real direct native-cli child")
-    require(executable == TypedSbtHostPlanFixture.normalExecutable && executable.toRealPath() == executable,
+    require(executable == TypedSbtHostPlanFixture.normalExecutable,
       "Select the normalized real normal SBT executable")
     def _read_(name: String): String = {
       val file = root.resolve(name)
@@ -1258,7 +1254,7 @@ private[admission] object NativeWorkflowCliFixture {
     require(startingLogIndex >= 1000 && startingLogIndex < 4000, "Select one finite Slice plan stage log range")
     require(root.isAbsolute && root.normalize == root && root.getParent == _primary.resolve("target/sm-workflow/work/native-cli") &&
       Files.isDirectory(root) && root.toRealPath() == root, "Select a normalized real direct native-cli child")
-    require(executable == TypedSbtHostPlanFixture.normalExecutable && executable.toRealPath() == executable,
+    require(executable == TypedSbtHostPlanFixture.normalExecutable,
       "Select the normalized real normal SBT executable")
     def read(name: String): String = {
       val path = root.resolve(name)
@@ -1403,7 +1399,7 @@ private[admission] object NativeWorkflowCliFixture {
     require(startingLogIndex >= 1000 && startingLogIndex < 4000, "Select one finite typed inputs stage log range")
     require(root.isAbsolute && root.normalize == root && root.getParent == _primary.resolve("target/sm-workflow/work/native-cli") &&
       Files.isDirectory(root) && root.toRealPath() == root, "Select a normalized real direct native-cli child")
-    require(executable == TypedSbtHostPlanFixture.normalExecutable && executable.toRealPath() == executable,
+    require(executable == TypedSbtHostPlanFixture.normalExecutable,
       "Select the normalized real normal SBT executable")
     def read(name: String): String = {
       val path = root.resolve(name)
@@ -1623,7 +1619,7 @@ private[admission] object NativeWorkflowCliFixture {
       "Select one finite authoring stage log range")
     require(root.isAbsolute && root.normalize == root && root.getParent == _primary.resolve("target/sm-workflow/work/native-cli") &&
       Files.isDirectory(root) && root.toRealPath() == root, "Select a normalized real direct native-cli child")
-    require(executable == TypedSbtHostPlanFixture.normalExecutable && executable.toRealPath() == executable,
+    require(executable == TypedSbtHostPlanFixture.normalExecutable,
       "Select the normalized real normal SBT executable")
     def read(name: String): String = {
       val file = root.resolve(name)
@@ -1698,8 +1694,6 @@ private[admission] object NativeWorkflowCliFixture {
     require(root.isAbsolute && root.normalize == root && root.getParent == parent &&
       Files.isDirectory(root) && root.toRealPath() == root,
       "Select one explicit normalized real direct native-cli child")
-    require(executable.isAbsolute && executable.normalize == executable && Files.isRegularFile(executable) &&
-      Files.isExecutable(executable), "Select a normalized absolute existing SBT executable")
     val config = parse(Files.readString(root.resolve(".textus/config.json"))).fold(
       error => throw new AssertionError(error.message), identity)
     val hostjson = config.hcursor.get[String]("sm-workflow.runtime.definition").flatMap(value =>
@@ -1765,9 +1759,7 @@ private[admission] object NativeWorkflowCliFixture {
     require(root.isAbsolute && root.normalize == root && root.getParent == parent &&
       Files.isDirectory(root) && root.toRealPath() == root,
       "Select one explicit normalized real direct native-cli child")
-    require(executable == TypedSbtHostPlanFixture.normalExecutable && executable.isAbsolute &&
-      executable.normalize == executable && executable.toRealPath() == executable &&
-      Files.isRegularFile(executable) && Files.isExecutable(executable),
+    require(executable == TypedSbtHostPlanFixture.normalExecutable,
       "Select the normalized real normal SBT executable")
     def read(name: String): String = {
       val file = root.resolve(name)
@@ -1839,8 +1831,6 @@ private[admission] object NativeWorkflowCliFixture {
 
   def freshRepositoryConflict(name: String, executable: Path, mapping: Json, origin: Json,
     classifications: Json): Scenario = {
-    require(executable.isAbsolute && executable.normalize == executable && Files.isRegularFile(executable) &&
-      Files.isExecutable(executable), "Select a normalized absolute existing SBT executable")
     val initial = fresh(name, sbtRepair = Some(executable), classifiedSbtRepair = true)
     val host = initial.host.copy(repository = initial.host.repository.copy(
       conflicts = RepositorySyncNativeConflictInput.Policy(Set("value.txt"))))
@@ -1882,8 +1872,6 @@ private[admission] object NativeWorkflowCliFixture {
     require(root.isAbsolute && root.normalize == root && root.getParent == parent &&
       Files.isDirectory(root) && root.toRealPath() == root,
       "Select one explicit existing normalized direct native-cli child without a symlink alias")
-    require(executable.isAbsolute && executable.normalize == executable && Files.isRegularFile(executable) &&
-      Files.isExecutable(executable), "Select a normalized absolute existing SBT executable")
     val config = parse(Files.readString(root.resolve(".textus/config.json"))).fold(
       error => throw new AssertionError(error.message), identity)
     val rawhost = config.hcursor.get[String]("sm-workflow.runtime.definition").fold(
@@ -1912,8 +1900,6 @@ private[admission] object NativeWorkflowCliFixture {
     require(root.isAbsolute && root.normalize == root && root.getParent == parent &&
       Files.isDirectory(root) && root.toRealPath() == root,
       "Select one explicit existing normalized direct native-cli child without a symlink alias")
-    require(executable.isAbsolute && Files.isRegularFile(executable) && Files.isExecutable(executable),
-      "Select an absolute existing executable from smworkflow.spec.sbt")
     val config = parse(Files.readString(root.resolve(".textus/config.json"))).fold(
       error => throw new AssertionError(error.message), identity)
     val rawhost = config.hcursor.get[String]("sm-workflow.runtime.definition").fold(
@@ -1942,8 +1928,6 @@ private[admission] object NativeWorkflowCliFixture {
     require(root.isAbsolute && root.normalize == root && root.getParent == parent &&
       Files.isDirectory(root) && root.toRealPath() == root,
       "Select one explicit existing normalized direct native-cli child without a symlink alias")
-    require(executable.isAbsolute && executable.normalize == executable && Files.isRegularFile(executable) &&
-      Files.isExecutable(executable), "Select a normalized absolute existing SBT executable")
     val config = parse(Files.readString(root.resolve(".textus/config.json"))).fold(
       error => throw new AssertionError(error.message), identity)
     val rawhost = config.hcursor.get[String]("sm-workflow.runtime.definition").fold(

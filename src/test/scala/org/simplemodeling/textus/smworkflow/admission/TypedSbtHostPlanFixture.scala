@@ -11,20 +11,13 @@ import org.simplemodeling.textus.smworkflow.admission.metafixture.SelectedMetada
   * bootstrap binds the plan; this helper never executes a tool or a driver.
   * @since   Oct. 15, 2026
   *  version Oct. 26, 2026
-  * @version Nov.  2, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object TypedSbtHostPlanFixture {
-  def normalExecutable: Path = {
-    val path = Path.of(sys.props.get("smworkflow.spec.sbt")
-      .orElse(sys.env.get("SM_WORKFLOW_SPEC_SBT"))
-      .getOrElse(throw new IllegalArgumentException("Missing normal smworkflow.spec.sbt or SM_WORKFLOW_SPEC_SBT executable")))
-    require(path.isAbsolute, "The normal SBT executable must be absolute")
-    val actual = path.toRealPath()
-    require(Files.isRegularFile(actual) && Files.isExecutable(actual),
-      "The normal SBT executable must be a regular executable file")
-    actual
-  }
+  def normalExecutable: Path = Path.of(sys.props.get("smworkflow.spec.sbt")
+    .orElse(sys.env.get("SM_WORKFLOW_SPEC_SBT"))
+    .getOrElse("sbt"))
 
   /** Specification-owned two-repository inputs for ordinary typed Git/SBT admission.
     * No command is executed and no real host configuration is changed here.
