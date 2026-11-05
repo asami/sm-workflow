@@ -1568,6 +1568,18 @@
               "type": "string",
               "multiplicity": "*",
               "required": false
+            },
+            {
+              "name": "actionPolicy",
+              "type": "org.goldenport.record.Record",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "workClassification",
+              "type": "org.goldenport.record.Record",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },
@@ -1626,6 +1638,18 @@
             {
               "name": "effectiveAcceptance",
               "type": "GoalPhaseEffectiveAcceptanceBoundary",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "phaseRepairInventory",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "phaseReviewClassification",
+              "type": "org.goldenport.record.Record",
               "multiplicity": "?",
               "required": false
             }

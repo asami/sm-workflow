@@ -1634,6 +1634,7 @@ OperationResult
 | dependencies | string | * |
 | checks | string | * |
 | actionPolicy | org.goldenport.record.Record | ? |
+| workClassification | org.goldenport.record.Record | ? |
 
 ## GoalPhaseOrderedPlan
 
@@ -1651,6 +1652,7 @@ OperationResult
 | acceptance | GoalPhaseAcceptanceAdoption | ? |
 | effectiveAcceptance | GoalPhaseEffectiveAcceptanceBoundary | ? |
 | phaseRepairInventory | string | * |
+| phaseReviewClassification | org.goldenport.record.Record | ? |
 
 ## GoalPhaseAcceptanceCondition
 
