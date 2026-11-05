@@ -24,7 +24,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * Native completion consumes the typed result and owns its state, scope,
   * participant and update boundary. Public callers supply no control envelope.
   * @since   Oct.  9, 2026
-  * @version Nov.  3, 2026
+  * @version Nov. 5, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowResultInput {
@@ -188,7 +188,7 @@ private[smworkflow] object NativeWorkflowResultInput {
       storage.bindIssuedC(operation, codec).flatMap(_.loadC(identity)(using context)).flatMap {
         case Some(value) => value.current match {
           case order: WorkflowContinuation.WorkOrder[?] =>
-            if (operation == GoalTaskNativeRun.completionOperation) for {
+            if (Set(GoalTaskNativeRun.completionOperation, DelegateTaskNativeRun.completionOperation)(operation)) for {
               input <- order.request.input.map(_.value).collect { case work: StandaloneFixExecution.Work => work }
                 .map(Consequence.success).getOrElse(_invalid("Task result target has no Task business input"))
               context <- NativeWorkflowIssuedWorkContext.fromIssuedC(value,
@@ -233,7 +233,7 @@ private[smworkflow] object NativeWorkflowResultInput {
       facts <- NativeWorkflowOperationInput.vectorC[V.WorkflowArtifactReference](request, "completionFacts")
       evidence <- NativeWorkflowOperationInput.optionalValueC[V.WorkflowExecutionEvidence](request, "executionEvidence")
         .flatMap(_evidence_c)
-      issued <- if (target.operation == GoalTaskNativeRun.completionOperation)
+      issued <- if (Set(GoalTaskNativeRun.completionOperation, DelegateTaskNativeRun.completionOperation)(target.operation))
         NativeWorkflowOperationInput.optionalValueC[V.WorkflowIssuedWorkContext](request, "issuedWorkContext").flatMap {
           case None => Consequence.success(Option.empty[Json])
           case Some(_) => NativeWorkflowOperationInput.recordC(request, "issuedWorkContext").flatMap(_context_json_c).map(Some(_))
@@ -264,7 +264,8 @@ private[smworkflow] object NativeWorkflowResultInput {
           .getOrElse(_invalid("result session has no pending assignment"))
         assigned <- target.load(storage, identity, context)
         _ <- if (target.operation == GoalTaskNativeRun.completionOperation)
-          _admit_task_context_c(storage, current, assigned, submission, context) else Consequence.unit
+          _admit_task_context_c(storage, current, assigned, submission, context) else if (target.operation == DelegateTaskNativeRun.completionOperation)
+          _admit_delegate_context_c(storage, current, assigned, submission, context) else Consequence.unit
         value <- submission.value.resolve(reference => read_resource_text(reference, Some(StandardCharsets.UTF_8)))
         submitted <- _result_c(assigned, submission, value)
         operation <- original match {
@@ -313,6 +314,28 @@ private[smworkflow] object NativeWorkflowResultInput {
       case Some(value) if assigned.issuedContext.contains(value) => Consequence.unit
       case Some(_) => _invalid("Task result issuedWorkContext differs from the actual current issued request")
       case None if recovered.nonEmpty => _invalid("A recovered Task result requires its actual issuedWorkContext")
+      case None => Consequence.unit
+    }
+  } yield ()
+
+  private def _admit_delegate_context_c(storage: WorkflowComponentStorage, current: InstanceRecord,
+    assigned: Assigned, submission: Submission, context: ExecutionContext): Consequence[Unit] = for {
+    adapter <- storage.bindWorkOrderSupersessionC(DelegateTaskNativeRun.completionOperation,
+      DelegateTaskNativeRun.inputCodec, DelegateTaskScopeCorrection.checkpointCodec)
+    corrections = current.history.filter(_.causation.value.startsWith(DelegateTaskScopeCorrection.resumeCause))
+    _ <- corrections.foldLeft(Consequence.unit) { (prior, entry) => prior.flatMap { _ =>
+      val old = entry.causation.value.stripPrefix(DelegateTaskScopeCorrection.resumeCause)
+      adapter.loadRetainedC(ContinuationIdentity(old), current.identity)(using context).flatMap {
+        case Some(saved) if saved.receipt.nextRevision == entry.revision &&
+            saved.receipt.payload.target.sessionId == current.identity.value &&
+            saved.receipt.payload.target.oldContinuationId == old => Consequence.unit
+        case _ => _invalid("Task scope-correction history has no matching committed disposition")
+      }
+    } }
+    _ <- submission.issuedContext match {
+      case Some(value) if assigned.issuedContext.contains(value) => Consequence.unit
+      case Some(_) => _invalid("DelegateTask result issuedWorkContext differs from its actual current issue")
+      case None if corrections.nonEmpty => _invalid("A scope-corrected DelegateTask requires its actual issuedWorkContext")
       case None => Consequence.unit
     }
   } yield ()

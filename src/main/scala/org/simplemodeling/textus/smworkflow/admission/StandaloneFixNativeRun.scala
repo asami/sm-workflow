@@ -139,6 +139,8 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
           .flatMap(_.map(Consequence.success).getOrElse(invalid("Retained bounded work input is absent")))
         value <- NativeWorkflowOperationOutput.workInputC(work)
       } yield value.state.input
+      case None if delegation && current.causation.value.startsWith(DelegateTaskScopeCorrection.resumeCause) =>
+        DelegateTaskScopeCorrection.retainedInputC(storage, current, selected)
       case None if task && current.causation.value.startsWith(GoalTaskMalformedIssuedWorkRecovery.resumeCause) =>
         GoalTaskMalformedIssuedWorkRecovery.retainedInputC(storage, current, selected)
       case None =>
@@ -154,9 +156,9 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
   private[admission] def executionRequirementC(input: S.Input, stage: String): Consequence[ExecutionRequirement] = {
     import GoalPhaseWorkClassification.*
     for {
-      _ <- if (Set("Implement", "Repair", "Review")(stage) && Set("code", "documentation")(input.kind))
+      _ <- if (Set("Implement", "Repair", "Review", "DeliveryAcceptance")(stage) && Set("code", "documentation")(input.kind))
         Consequence.unit else invalid("Fresh work has no supported semantic classification")
-      required <- requiredC(stage)
+      required <- _required_c(stage)
       kind = if (stage == "Review") Kind.REVIEW else if (input.kind == "code") Kind.CODING else Kind.DESIGN
       requirement <- Classification(kind, Complexity.STANDARD, Domain.PROGRAMMING, Footprint.SMALL).requirementC(
         ExecutionRequirement(Vector(CapabilityRequirement(required.identity.capability)), RiskLevel("SOURCE_IMPLEMENTATION"),
@@ -305,18 +307,20 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
                 Some((payload.implementationWorkers.getOrElse(Vector.empty) ++ done.evidence.workerIdentity.toVector).distinct)
                 else payload.implementationWorkers), core)
           } yield saved
-        } else if (task && current.causation.value.startsWith(GoalTaskMalformedIssuedWorkRecovery.resumeCause))
+        } else if (delegation && current.causation.value.startsWith(DelegateTaskScopeCorrection.resumeCause))
+          DelegateTaskScopeCorrection.resumeC(h, storage, current, core)
+        else if (task && current.causation.value.startsWith(GoalTaskMalformedIssuedWorkRecovery.resumeCause))
           GoalTaskMalformedIssuedWorkRecovery.resumeC(h, storage, current, core)
         else Consequence.success(current)
         payload <- loadPayloadC(storage, id, state.revision.value, core)
         _ <- GoalPhaseParticipantAdmission.admitC(payload.state.participant, core.executionContext)
-        response <- progressC(h, definition, storage, state, payload, core, 0)
+        response <- _progress_c(h, definition, storage, state, payload, core, 0)
       } yield response
     }
     }
   } yield result
 
-  private def progressC(h: Host, definition: DefinitionBinding, store: WorkflowComponentStorage,
+  private def _progress_c(h: Host, definition: DefinitionBinding, store: WorkflowComponentStorage,
     record: InstanceRecord, payload: Payload, core: ActionCall.Core, depth: Int): Consequence[V.StandaloneFixView] = {
     val s = payload.state
     if (depth > 36) invalid("Bounded native progress exceeded its finite check batch")
@@ -327,7 +331,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
         candidate <- captureC(h, payload, core)
         next <- S.candidateC(s, candidate)
         saved <- saveC(h, store, intent, payload.copy(state = next), core)
-        result <- progressC(h, definition, store, saved, payload.copy(state = next), core, depth + 1)
+        result <- _progress_c(h, definition, store, saved, payload.copy(state = next), core, depth + 1)
       } yield result
       case "Validate" => for {
         _ <- freshC(payload, core)
@@ -348,7 +352,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
             next = observed.copy(evidenceReferences = observed.evidenceReferences ++ references)
             saved <- saveC(h, store, savedIntent, payload.copy(state = next), core)
             retained <- loadPayloadC(store, saved.identity.value, saved.revision.value, core)
-            response <- progressC(h, definition, store, saved, retained, core, depth + 1)
+            response <- _progress_c(h, definition, store, saved, retained, core, depth + 1)
           } yield response
           case SbtExecutionAttempt.AdmissionRejected(_, _, conclusion) =>
             val blocked = intent.copy(stage = "AdmissionBlocked", pendingCheck = None,
@@ -363,15 +367,15 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
         _ <- freshC(payload, core)
         next = s.copy(stage = "Validate", message = "Ordinary preparation continuation of confirmed unstarted selected work")
         saved <- saveC(h, store, record, payload.copy(state = next), core)
-        response <- progressC(h, definition, store, saved, payload.copy(state = next), core, depth + 1)
+        response <- _progress_c(h, definition, store, saved, payload.copy(state = next), core, depth + 1)
       } yield response
       case "Assess" => for {
         _ <- if (s.recoveredValidation.isEmpty) freshC(payload, core) else Consequence.unit
         next <- S.assessC(s)
         saved <- saveC(h, store, record, payload.copy(state = next), core)
-        result <- progressC(h, definition, store, saved, payload.copy(state = next), core, depth + 1)
+        result <- _progress_c(h, definition, store, saved, payload.copy(state = next), core, depth + 1)
       } yield result
-      case "Repair" | "Review" | "Implement" => issueC(h, store, record, payload, core)
+      case "Repair" | "Review" | "Implement" | "DeliveryAcceptance" => _issue_c(h, store, record, payload, core)
       case "RecordsReady" if task => recordsC(h, store, record, payload, core)
       case "NoChange" if task && recordPaths(h, payload).nonEmpty && payload.records.isEmpty => commitC(h, store, record, payload, core)
       case "CommitReady" => commitC(h, store, record, payload, core)
@@ -380,9 +384,9 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
       // failed). Observe its actual effect; a nonzero exit is no retry authority.
       case "CommitFailed" if task => reconcileC(h, store, record, payload, core)
       case "CommitFailed" => Consequence.success(view(record, s, "Incomplete", s.message))
-      case "Completed" | "NoChange" if delegation => deliverC(h, store, record, payload, core)
+      case "Completed" | "NoChange" if delegation => _deliver_c(h, store, record, payload, core)
       case "HygieneReady" if delegation => hygieneC(h, store, record, payload, core)
-      case "PublicationWait" if delegation => deliverC(h, store, record, payload, core)
+      case "PublicationWait" if delegation => _deliver_c(h, store, record, payload, core)
       case "DispatchReady" => Consequence.success(view(record, s, "Dispatch", s.message))
       case "ReturnReady" => Consequence.success(view(record, s, "Return", s.message))
       case "Returned" | "Adopted" if delegation => Consequence.success(view(record, s, "Terminal", s.message))
@@ -418,6 +422,17 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
       payload.state.candidate.exists(c => c.head == current.head && c.tree == tree) &&
       dirtyCovers(payload, current.dirty) && current.dirty.filter(d => S.owned(d.path, payload.state.input.ownedPaths)).forall(_.worktree == ' ')) Consequence.unit
       else invalid("Actual candidate changed; previous checks cannot be accepted for different bytes")
+  } yield ()
+
+  /** Delivery evaluation is read-only over the actual committed source. */
+  private[admission] def _delivery_fresh_c(payload: Payload, core: ActionCall.Core): Consequence[Unit] = for {
+    root <- G.rootC(core)
+    current <- G.observeC(core)
+    tree <- G.indexTreeC(core)
+    _ <- if (root == payload.root && current.branch == payload.branch &&
+      payload.state.commit.exists(c => c.identity == current.head && c.tree == tree) &&
+      current.dirty == payload.unrelated.getOrElse(Vector.empty)) Consequence.unit
+      else invalid("Delivery acceptance changed committed source or unrelated work")
   } yield ()
 
   private def dirtyCovers(payload: Payload, dirty: Vector[G.DirtyPath]): Boolean = {
@@ -469,7 +484,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     result <- if (next.candidate.exists(_.paths.isEmpty)) {
       val unchanged = next.copy(stage = "NoChange")
       saveC(h, store, saved, retained.copy(state = unchanged), core).flatMap(r =>
-        if (delegation) progressC(h, from.definition, store, r, retained.copy(state = unchanged), core, 0)
+        if (delegation) _progress_c(h, from.definition, store, r, retained.copy(state = unchanged), core, 0)
         else Consequence.success(view(r, unchanged, "Terminal", "Existing committed records and accepted no-change work retained")))
     } else commitPreparedC(h, store, saved, retained, core)
   } yield result
@@ -530,7 +545,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
       next <- S.committedC(payload.state, S.Commit(commit.identity, payload.baseHead, commit.tree))
       saved <- saveC(h, store, from, payload.copy(state = next), core)
       retained <- loadPayloadC(store, saved.identity.value, saved.revision.value, core)
-      response <- if (delegation) progressC(h, from.definition, store, saved, retained, core, 0)
+      response <- if (delegation) _progress_c(h, from.definition, store, saved, retained, core, 0)
         else Consequence.success(view(saved, retained.state, "Terminal", retained.state.message))
     } yield response
     else Consequence.success(view(from, payload.state, "Incomplete",
@@ -550,7 +565,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     result <- commitC(h, store, saved, retained, core)
   } yield result
 
-  private def deliverC(h: Host, store: WorkflowComponentStorage, from: InstanceRecord, payload: Payload,
+  private def _deliver_c(h: Host, store: WorkflowComponentStorage, from: InstanceRecord, payload: Payload,
     core: ActionCall.Core): Consequence[V.StandaloneFixView] = for {
     contract <- payload.state.input.delegation.filter(DelegateTask.valid).map(Consequence.success).getOrElse(invalid("Delivery has no admitted contract"))
     observed <- G.observeC(core)
@@ -570,15 +585,16 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
       } yield Some(result) }.getOrElse(invalid("Required runtime-owned publication capability is not configured"))
     }
     ready = publication.forall(_.ready)
-    next = payload.state.copy(stage = if (ready) "ReturnReady" else "PublicationWait", commit = Some(commit),
+    next = payload.state.copy(stage = if (ready && S.deliveryPending(payload.state)) "DeliveryAcceptance" else if (ready) "ReturnReady" else "PublicationWait", commit = Some(commit),
       delivery = Some(delivery.copy(publication = publication, destinationSessionId = Some(from.identity.value))), message = if (ready)
         "Accepted checks and local commit retained; actual required publication ready. Return this result to the named requester; adoption is separate"
         else "Local commit retained; publication unfinished: " + publication.get.status + "; " + publication.get.reason)
     saved <- if (next == payload.state) Consequence.success(from) else saveC(h, store, from, payload.copy(state = next), core)
-  } yield view(saved, next, if (ready) "Return" else "Wait", next.message)
+  } yield view(saved, next, if (next.stage == "DeliveryAcceptance") "Progress" else if (ready) "Return" else "Wait",
+    if (next.stage == "DeliveryAcceptance") "Publication retained; later adopted conditions still require actual semantic acceptance through ordinary Advance" else next.message)
 
-  private def requiredC(kind: String): Consequence[StateMachineRequiredOperation] = {
-    val capability = wire + (if (kind == "Review") "-review-capability" else if (kind == "Implement") "-implementation-capability" else "-repair-capability")
+  private def _required_c(kind: String): Consequence[StateMachineRequiredOperation] = {
+    val capability = wire + (if (kind == "Review") "-review-capability" else if (Set("Implement", "DeliveryAcceptance")(kind)) "-implementation-capability" else "-repair-capability")
     val operations = if (delegation) domain.statemachine.workflow.DelegateTaskWorkflowStateMachineWorkflow6.workflow.requiredOperations
       else if (task) domain.statemachine.workflow.GoalTaskWorkflowStateMachineWorkflow5.workflow.requiredOperations
       else domain.statemachine.workflow.StandaloneFixWorkflowStateMachineWorkflow4.workflow.requiredOperations
@@ -593,14 +609,15 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
           CompletionContract(capability + ":completion", Vector.empty), EvidenceContract(capability + ":evidence", Vector.empty), Vector.empty)))
     }
   }
-  private def issueC(h: Host, store: WorkflowComponentStorage, from: InstanceRecord, payload: Payload,
+  private def _issue_c(h: Host, store: WorkflowComponentStorage, from: InstanceRecord, payload: Payload,
     core: ActionCall.Core): Consequence[V.StandaloneFixView] = for {
     _ <- payload.supersededWork.fold(Consequence.unit)(old =>
       GoalTaskMalformedIssuedWorkRecovery.correctionCurrentC(h, store, old, from.identity.value, core))
-    _ <- if (payload.state.stage == "Implement") implementationFreshC(payload, core) else freshC(payload, core)
-    required <- requiredC(payload.state.stage)
+    _ <- if (payload.state.stage == "Implement") implementationFreshC(payload, core)
+      else if (payload.state.stage == "DeliveryAcceptance") _delivery_fresh_c(payload, core) else freshC(payload, core)
+    required <- _required_c(payload.state.stage)
     work = S.Work(from.identity.value, from.revision.value.toString, payload.state.stage, payload.state)
-    bundle = ContextBundle("Return only the assigned semantic result within the adopted objective and ownership. Native runtime owns validation, limits and acceptance. Review is independent and read-only; never execute commands or commit. If a prior review exists, judge only its retained findings, repair delta against priorReviewCandidate and affected meaning; preserve settled scope and applicable successful checks. Review-origin input retains the original review/context/findings: repair only these findings and affected meaning, return exact reviewDispositions and never repeat the original whole-repository review.",
+    bundle = ContextBundle("Return only the assigned semantic result within the adopted objective and ownership. DeliveryAcceptance evaluates retained later conditions against actual validation, publication and application evidence; it is read-only and must not repeat implementation, validation, commit or publication. Conditions not assigned to submission remain false during Implement/Repair/Review and require genuine evidence before DeliveryAcceptance accepts. Native runtime owns validation, limits and acceptance. Review is independent and read-only; never execute commands or commit. If a prior review exists, judge only its retained findings, repair delta against priorReviewCandidate and affected meaning; preserve settled scope and applicable successful checks. Review-origin input retains the original review/context/findings: repair only these findings and affected meaning, return exact reviewDispositions and never repeat the original whole-repository review.",
       (payload.state.input.sourceReferences ++ payload.state.input.reviewOrigin.toVector.flatMap(StandaloneReviewFix.references) ++ payload.state.evidenceReferences).distinct,
       payload.supersededWork.toVector.map(id => ContextReference(id, "1")),
       ContextSnapshot(from.definition.workflowRevision.value, evidenceRevision = Some(work.sourceRevision)))

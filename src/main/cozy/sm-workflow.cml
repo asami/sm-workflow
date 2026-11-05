@@ -11595,6 +11595,34 @@ WorkflowDelegateTaskStartPreparationInput
 
 WorkflowPreparedImport
 
+#### prepareDelegateTaskScopeCorrection
+
+##### DESCRIPTION
+
+Passively prepare the complete scope-correction input for exact ExplicitHuman selection; the import alone grants no authority.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+WorkflowDelegateTaskScopeCorrectionPreparationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowDelegateTaskScopeCorrectionPreparationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowPreparedImport
+
 #### prepareGoalTaskStart
 
 ##### DESCRIPTION
@@ -13539,6 +13567,62 @@ Independent single-request existing-chat delegation. Reuse the shared bounded Wo
 
 ### OPERATION
 
+#### describeDelegateTaskScopeCorrection
+
+##### DESCRIPTION
+
+Describe exact additional owned paths and an optional explicit submission-condition subset for the same unclaimed initial implementation. All original conditions remain adopted. Passive description changes no Session or effect.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskScopeCorrectionDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | DelegateTaskScopeCorrectionDescriptionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskScopeCorrectionView
+
+#### correctDelegateTaskScope
+
+##### DESCRIPTION
+
+Admit an exact independently selected same-purpose scope correction. Retain the immutable old issue and all results, base and repair counts; retire it through managed supersession. Only ordinary Advance issues the amended work. Unknown external effects remain unknown.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskScopeCorrectionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | DelegateTaskScopeCorrectionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskScopeCorrectionView
+
 #### resolveDelegateTaskDiagnosticInformation
 
 ##### DESCRIPTION
@@ -14177,3 +14261,71 @@ ForceCloseWorkflowInput
 ###### TYPE
 
 WorkflowForceClosureView
+
+# VALUE
+
+## DelegateTaskScopeCorrectionDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| oldContinuationId | string | 1 |
+| additionalOwnedPaths | string | * |
+| submissionConditions | string | * |
+
+# VALUE
+
+## DelegateTaskScopeCorrectionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| oldContinuationId | string | 1 |
+| target | string | 1 |
+| selectionId | string | 1 |
+| participant | string | 1 |
+| idempotencyKey | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+
+# VALUE
+
+## DelegateTaskScopeCorrectionView
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| target | string | 1 |
+| ownedPaths | string | * |
+
+# VALUE
+
+## WorkflowDelegateTaskScopeCorrectionPreparationInput
+
+- input-kind :: COMMAND
+
+### DESCRIPTION
+
+Explicit ad hoc Task request selection metadata and absolute local file: URI reference. Supplied facts authenticate no origin and grant no effect.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | string | 1 |
+| selectionId | string | 1 |
+| participant | string | 1 |
+| origin | string | 1 |
+| idempotencyKey | string | 1 |
+| selectionCollection | string | 1 |

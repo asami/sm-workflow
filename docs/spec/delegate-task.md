@@ -250,3 +250,58 @@ failure may receive a retained successor for the same delivery source, and a liv
 or unknown result is not replayed. Accepted implementation, checks, review,
 original failure and local commit survive this continuation. Publication is an
 artifact outcome; requester adoption and consumer activation are separate facts.
+
+## Condition timing and pending initial scope correction
+
+All adopted condition identities remain mandatory in every semantic result, in
+their original order. An explicit destination-only `submissionConditions` plan
+may select a nonempty, unique, order-preserving proper subset of those identities.
+During Implement, Repair and Review, a successful result reports those submission
+conditions true and every later condition false. A premature all-true claim is
+refused. Without an explicit plan the existing all-true submission contract
+continues unchanged. Validation-only qualification remains nonsemantic, and the
+requester continues to retain the complete destination request as passive data.
+There is no lexical classification of condition prose and no automatic weakening
+of an original obligation.
+
+For an existing still-unclaimed initial Implement issue, the destination can use
+`describeDelegateTaskScopeCorrection`, passive
+`prepareDelegateTaskScopeCorrection`, and `correctDelegateTaskScope` to admit the
+exact current-call ExplicitHuman selection on that same Session. Description
+binds the actual Component instance, native frontier, issue, business payload,
+root, branch, participant, and the selected original IDs. The actual responsible
+Human chooses that subset; maintenance authorization and passive preparation do
+not supply that choice. The same published correction also supports additional
+literal owned paths for the same purpose, subject to the retained host ownership
+and delegation exclusions. It replaces no original ownership, purpose, operation
+or authority.
+
+Correction appends a typed native WorkOrder supersession, preserving the old
+immutable issue, base, generation, repair control and counters, prior results and
+UNKNOWN effects. An unclaimed issue does not establish that external effects did
+not occur. Correction changes no source file and executes no checks, commit or
+publication. Only a separate ordinary Advance issues the amended successor.
+Repeated exact correction is idempotent; a changed or stale target is refused.
+A timing plan can be adopted only once. An old worker result cannot complete the
+successor: after any correction history, submission must carry the exact current
+`issuedWorkContext`, and every historical supersession checkpoint is verified.
+Force-closed work remains closed.
+
+After actual selected validation, required independent review, local commit and
+normal required publication are ready, pending later conditions cause ordinary
+Advance to issue read-only `DeliveryAcceptance` through the existing
+implementation capability. This is final semantic evaluation of the original
+obligations against genuine retained validation, delivery and application
+evidence. It does not execute implementation, checks, commit or publication
+again, and it cannot request repair, diagnostic work or a new review disposition.
+Only accept or decision-needed is available. Acceptance requires every original
+condition true and retains the actual committed source and ready required
+publication. It appends the final report and evidence reference while preserving
+checks, prior independent review, candidate, commit, publication and counters.
+
+`ReturnReady` still requires all final conditions, actual checks, required
+review, the selected source commit and actual required publication. Requester
+receipt permits the destination's explicitly adopted submission timing while
+continuing to compare the original conditions, ownership, authority and every
+other request field. It does not certify consumer activation or application from
+prose or publication alone.

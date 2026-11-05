@@ -160,7 +160,7 @@ private[smworkflow] object DelegateTask {
     _ <- S.inputC(state.input)
     contract <- state.input.delegation.map(Consequence.success).getOrElse(invalid("returned result is not delegation"))
     _ <- if (state.stage == "ReturnReady" || state.stage == "Returned") Consequence.unit else invalid("producer delivery is unfinished")
-    _ <- if (state.input.copy(delegation = expected.delegation) == expected &&
+    _ <- if (state.input.copy(delegation = expected.delegation, submissionConditions = expected.submissionConditions) == expected &&
       expected.delegation.exists(c => c.copy(role = "destination") == contract)) Consequence.unit
       else invalid("returned request, owners, scope or authorization differs")
     _ <- WorkflowRepairAssessment.checksC(state.input.kind, state.input.scalaLint, state.selected, state.receipts)

@@ -17,7 +17,8 @@ import StandaloneFixExecution as S
 
 /** Ordinary public operations around the canonical CNCF continuation engine.
   * @since   Oct. 26, 2026
-  * @version Oct. 27, 2026
+  *  version Oct. 27, 2026
+  * @version Nov. 5, 2026
   */
 private[smworkflow] object GoalTaskService {
   def bindC(creation: ComponentCreate, declaration: GoalPhaseNativeRun.Declaration): Consequence[spec.ServiceDefinition] =
@@ -46,11 +47,11 @@ private[admission] final class BoundedTaskService(N: BoundedWorkNativeRun) {
     storage <- WorkflowComponentStorage.bindC(creation, SmWorkflowComponent.componentId, h.configuration,
       Vector(definition), h.instances, h.continuations)
     reader <- NativeExternalEvidence.bindBoundedC(creation.configuration, h)
-    recovery = if (N.delegation) Vector.empty else GoalTaskMalformedIssuedWorkRecovery.operations(h, definition,
+    recovery = if (N.delegation) DelegateTaskScopeCorrection.operations(h, definition, selections) else GoalTaskMalformedIssuedWorkRecovery.operations(h, definition,
       new ThreeWorkflowExternalEvidencePorts(reader).goalTaskMalformedIssuedWorkRecovery)
-    completion <- completionC(h, definition, storage, None, None)
+    completion <- _completion_c(h, definition, storage, None, None)
     wrapped = CallScopedOperationBinding.wrapResult(completion, (core, submitted) =>
-      N.storageC(h, definition, core).flatMap(storage => completionC(h, definition, storage, Some(core), Some(submitted))))
+      N.storageC(h, definition, core).flatMap(storage => _completion_c(h, definition, storage, Some(core), Some(submitted))))
     service = NativeWorkflowDescriptionMetadata.service(declaredService,
       spec.OperationDefinitionGroup(NonEmptyVector.of(new Operation(true, h, definition, selections),
         new Operation(false, h, definition, selections), new InformationOperation(h, definition), wrapped).concat(recovery)))
@@ -122,7 +123,7 @@ private[admission] final class BoundedTaskService(N: BoundedWorkNativeRun) {
       p.providedOperations.map(o => GeneratedProvidedApiAbi.Operation(o.service, o.name, o.inputType, o.resultType,
         GeneratedProvidedApiAbi.SourceIdentity(o.source.line))))
   }
-  private def completionC(h: Host, definition: DefinitionBinding, storage: WorkflowComponentStorage,
+  private def _completion_c(h: Host, definition: DefinitionBinding, storage: WorkflowComponentStorage,
     core: Option[ActionCall.Core], resolved: Option[ContinuationResult[NativeWorkflowResultInput.Value]]): Consequence[spec.OperationDefinition] = for {
     native <- storage.bindCompletionC(N.completionOperation, N.inputCodec, N.resultCodec, N.closingType,
       (_, _) => Consequence.success(Vector.empty))
@@ -174,11 +175,13 @@ private[admission] final class BoundedTaskService(N: BoundedWorkNativeRun) {
             else N.invalid("Actual semantic completion requires its worker identity, without inventing execution placement")
           observation <- RepositorySyncManagedGitObservation.observeC(call)
           root <- RepositorySyncManagedGitObservation.rootC(call)
-          _ <- if (root == payload.root && observation.branch == payload.branch && observation.head == payload.baseHead &&
+          _ <- if (root == payload.root && observation.branch == payload.branch &&
+            (if (work.kind == "DeliveryAcceptance") payload.state.commit.exists(_.identity == observation.head) else observation.head == payload.baseHead) &&
             observation.dirty.filterNot(d => S.owned(d.path, payload.state.input.ownedPaths)) == payload.unrelated.getOrElse(Vector.empty) &&
             observation.dirty.filter(d => S.owned(d.path, payload.state.input.ownedPaths)).forall(d =>
               !d.unmerged && S.permitted(d.path, payload.state.input) && d.renamedFrom.forall(S.permitted(_, payload.state.input))))
             Consequence.unit else N.invalid("Semantic completion changed HEAD or exceeded ownership")
+          _ <- if (work.kind == "DeliveryAcceptance") N._delivery_fresh_c(payload, call) else Consequence.unit
           _ <- if (work.kind == "Review") for {
             _ <- N.freshC(payload, call)
             _ <- h.review.map(_.admitStandaloneC(call, work, submitted)).getOrElse(N.invalid("Independent review evidence installation is absent"))

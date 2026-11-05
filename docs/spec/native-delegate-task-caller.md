@@ -60,6 +60,90 @@ executionEvidence. A separate Advance owns checks, acceptance and commit.
 Those semantic work, validation and commit operations belong to the destination
 role. A requester never completes them on the destination's behalf.
 
+## Correct an existing unsubmitted initial issue
+
+Use the current destination Session and the actual pending Implement
+`issuedWorkContext.continuationId`; do not Start again or create a repair Session.
+The initial WorkOrder must still be unclaimed and unsubmitted. The description
+operation takes a structured input because the Session, old continuation,
+additional paths and submission IDs belong to one exact target:
+
+```text
+org.simplemodeling.textus.SmWorkflow.DelegateTaskService.describeDelegateTaskScopeCorrection --input <description-json>
+```
+
+The `DelegateTaskScopeCorrectionDescriptionInput` is:
+
+```json
+{
+  "sessionId": "<actual-destination-session>",
+  "oldContinuationId": "<actual-pending-continuation>",
+  "additionalOwnedPaths": [],
+  "submissionConditions": ["<Human-selected-original-condition-ID>"]
+}
+```
+
+The selected submission IDs must be a nonempty, unique, order-preserving proper
+subset of the original conditions. The actual responsible Human must choose
+those exact IDs. Do not infer them from lexical condition text or from permission
+to repair the runtime. With no timing change, an empty submission list instead
+retains the existing plan, and new same-purpose literal additional owned paths
+must be supplied. Added paths retain the configured host and exclusion checks.
+
+Retain the returned `target` string unchanged. Write the complete
+`DelegateTaskScopeCorrectionInput` to an absolute local file URI:
+
+```json
+{
+  "sessionId": "<actual-destination-session>",
+  "oldContinuationId": "<actual-pending-continuation>",
+  "target": "<exact-description-target-string>",
+  "selectionId": "<independently-selected-correction>",
+  "participant": "<actual-participant>",
+  "idempotencyKey": "<correction-key>",
+  "reference": {"identity": "<actual-Human-selection-reference>", "revision": "<actual-revision>"}
+}
+```
+
+Call `NativeWorkflowPreparationService.prepareDelegateTaskScopeCorrection
+--input <preparation-json>`, with `input` equal to that file URI and
+`selectionId`, `participant`, `origin: ExplicitHuman`, `idempotencyKey` and
+`selectionCollection: entity:smworkflow.cli.goal_selection`. The selection
+metadata must match the complete correction input. This only prepares a passive
+import; the existing host must independently admit the exact Human selection.
+Then call `DelegateTaskService.correctDelegateTaskScope --input
+<complete-correction-json>`. It returns `corrected-awaiting-advance`; repeated
+exact input returns `already-corrected`. A changed target, subset, participant,
+Session or issue is refused. A previously adopted timing plan cannot be replaced.
+
+A separate `advanceDelegateTask --sessionId <same-session>` issues the successor
+WorkOrder. Keep its actual current `issuedWorkContext`; the retired issue remains
+historical and cannot be submitted as that successor. Neither correction nor
+description changes files, checks, counters, source base, prior results or
+unknown external effects. Force-closed work cannot be reopened this way.
+
+Every Implement, Repair and Review result must retain all original condition IDs
+in order. With the selected timing plan, report submission IDs true and later
+IDs false; no premature all-true completion is admitted. Once normal validation,
+required independent review, local commit and required publication finish,
+ordinary Advance issues read-only `DeliveryAcceptance` through the same
+implementation capability. Return accept with all original conditions true only
+after evaluating their actual evidence, or decision-needed for unresolved
+meaning. This work cannot launch checks, change source, commit, publish or ask
+for a repair. Final ReturnReady and requester receipt still require every
+original condition, actual qualification and retained source/publication.
+
+`DelegateTaskScopeCorrectionSpec` covers native managed supersession, condition
+timing, legacy wire omission and final gates. The explicitly selected
+`NativeDelegateTaskScopeCorrectionCliSpec` uses the normal installed executable
+and optional Component archive inputs described below. Its tiny isolated
+destination uses an existing concrete fixture profile and genuine public
+prepare, Start, description, independently fixture-selected correction and
+Advance. It checks same-Session successor binding, immutable condition IDs,
+idempotence, retired-result refusal and absence of file, SBT or publication
+effects. All its Human and worker facts are SPECIFICATION-OWNED; it establishes
+no actual consumer choice, full delivery or application result.
+
 ## Transport and adoption
 
 `DelegateTaskDeliveryService.observeDelegateTaskDelivery --input <json>` takes
