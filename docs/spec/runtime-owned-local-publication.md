@@ -66,6 +66,14 @@ staged paths alone produce a bounded build-relevance question. Unknown unstaged
 inputs are conservatively rebuilt; an answer cannot stand in for unknown bytes.
 Renamed source paths retain their original provenance in this decision.
 
+Historical target-attempt traversal matches `identity`, `component`, `workspace`
+and `dependency`. Changing only `beforeChecks` or `beforeSync` does not change
+that effect identity: ordinary source necessity still decides whether a new
+request publishes, and retained unknown effects still prevent execution.
+Scheduling changes grant no retry or renewed authority. Persisted targets and
+requests retain both flags; replay, collection and qualified successor admission
+continue to require their exact full bindings. Historical rows are never rewritten.
+
 For an explicitly bound catalog, the runtime may project one unstaged modified
 worktree entry with an unchanged index status and no rename. It reads the actual
 index tree's regular blob and the actual working text through typed Git and File

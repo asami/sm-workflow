@@ -825,6 +825,119 @@ final class LocalPublicationSpec extends AnyWordSpec with Matchers with GivenWhe
     }
   }
 
+  "Historical publication scheduling" should {
+    "publish changed source once across either scheduling flag without rewriting history" in {
+      Vector(_target.copy(beforeChecks = true), _target.copy(beforeSync = true),
+        _target.copy(beforeChecks = true, beforeSync = true)).foreach { target =>
+        Given("a retained successful publication before the host changes only its scheduling flags")
+        val m = new Memory
+        val original = _ensure(m)
+        val history = m.rows.toMap.map { (key, value) => key -> value.noSpaces }
+        m.source = Source("c" * 40, "d" * 40, Vector.empty)
+        val input = original.request.input.copy(requestIdentity = "changed-source")
+        When("a new request ensures the changed source with the new schedule and is recollected")
+        val published = take(ensureC(input, target, "actor", m))
+        val repeated = take(ensureC(input, target, "actor", m))
+        val collected = take(collectC(original.request.input, _target, "actor", m))
+        Then("exactly one fresh actual publication retains the new full target and the old result remains passive")
+        published.status shouldBe "published"
+        published.request.target shouldBe target
+        published.request.source shouldBe m.source
+        repeated shouldBe published
+        collected shouldBe Some(original)
+        m.starts shouldBe 2
+        m.rows.keys.count(_.startsWith("local-publication-target:")) shouldBe 2
+        history.foreach { (key, bytes) => m.rows(key).noSpaces shouldBe bytes }
+      }
+    }
+
+    "skip the same clean source when only scheduling changes" in {
+      Vector(_target.copy(beforeChecks = true), _target.copy(beforeSync = true),
+        _target.copy(beforeChecks = true, beforeSync = true)).foreach { target =>
+        Given("successful evidence for the same clean source under the original schedule")
+        val m = new Memory
+        val original = _ensure(m)
+        val history = m.rows.toMap.map { (key, value) => key -> value.noSpaces }
+        When("a new request selects either or both prerequisite scheduling flags")
+        val skipped = take(ensureC(original.request.input.copy(requestIdentity = "same-source"), target, "actor", m))
+        Then("the retained source success makes publication unnecessary without another actual attempt")
+        skipped.status shouldBe "unnecessary"
+        skipped.request.target shouldBe target
+        m.starts shouldBe 1
+        m.rows.keys.count(_.startsWith("local-publication-target:")) shouldBe 1
+        history.foreach { (key, bytes) => m.rows(key).noSpaces shouldBe bytes }
+      }
+    }
+
+    "reject a changed stable target field before executing or saving a new request" in {
+      Vector(_target.copy(component = "org.example.Other"),
+        _target.copy(workspace = "other-workspace"),
+        _target.copy(dependency = Some("other-dependency"))).foreach { target =>
+        Given("an actual publication indexed by the same target identity with different effect bindings")
+        val m = new Memory
+        val original = _ensure(m)
+        val history = m.rows.toMap
+        m.source = Source("c" * 40, "d" * 40, Vector.empty)
+        When("a fresh request changes component, workspace or dependency under that identity")
+        val rejected = ensureC(original.request.input.copy(requestIdentity = "crossed-target"), target, "actor", m)
+        Then("historical traversal rejects the mismatch without executing or mutating retained rows")
+        rejected.isFaillure shouldBe true
+        m.starts shouldBe 1
+        m.rows.toMap shouldBe history
+      }
+    }
+
+    "keep unknown effects unreplayed across scheduling changes" in {
+      Vector(false, true).foreach { missingresult =>
+        Given("an actual UNKNOWN publication or its intent with a missing terminal result")
+        val m = new Memory
+        m.next = _observed(ProcessExecutionTermination.TerminationUnconfirmed)
+        val original = _ensure(m)
+        original.status shouldBe "uncertain"
+        if (missingresult) m.rows.remove(_request_key(original.request) + ":result")
+        val history = m.rows.toMap.map { (key, value) => key -> value.noSpaces }
+        val target = _target.copy(beforeChecks = true, beforeSync = true)
+        m.source = Source("c" * 40, "d" * 40, Vector.empty)
+        m.next = _observed(ProcessExecutionTermination.Exited(0))
+        val input = original.request.input.copy(requestIdentity = "new-schedule")
+        When("a new request and its repeat encounter the old uncertainty under the new schedule")
+        val blocked = take(ensureC(input, target, "actor", m))
+        val repeated = take(ensureC(input, target, "actor", m))
+        val collected = take(collectC(original.request.input, _target, "actor", m)).get
+        Then("uncertainty remains retained and neither source nor scheduling changes authorize execution")
+        blocked.status shouldBe "uncertain"
+        blocked.request.target shouldBe target
+        repeated shouldBe blocked
+        collected.status shouldBe "uncertain"
+        collected.request shouldBe original.request
+        m.starts shouldBe 1
+        m.rows.keys.count(_.startsWith("local-publication-target:")) shouldBe 1
+        history.foreach { (key, bytes) => m.rows(key).noSpaces shouldBe bytes }
+      }
+    }
+
+    "retain exact full target bindings for request replay and collection" in {
+      Vector(_target.copy(beforeChecks = true), _target.copy(beforeSync = true)).foreach { target =>
+        Given("an original request whose retained full target has different scheduling flags")
+        val m = new Memory
+        val original = _ensure(m)
+        val history = m.rows.toMap
+        val observations = m.sourceObservations
+        When("replay, original collection and latest collection use the changed schedule")
+        val replay = ensureC(original.request.input, target, "actor", m)
+        val collected = collectC(original.request.input, target, "actor", m)
+        val latest = collectLatestC(LatestCollectionInput(target.identity, "same-retained-session"), target, "actor", m)
+        Then("all refuse the crossed request binding without observing source or changing history")
+        replay.isFaillure shouldBe true
+        collected.isFaillure shouldBe true
+        latest.isFaillure shouldBe true
+        m.starts shouldBe 1
+        m.sourceObservations shouldBe observations
+        m.rows.toMap shouldBe history
+      }
+    }
+  }
+
   "Runtime-owned publication" should {
     "project only canonical version timestamps while preserving semantic and exact text inputs" in {
       Given("a canonical CAR catalog and the publisher's changed offset timestamp")

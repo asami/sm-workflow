@@ -198,14 +198,19 @@ private[smworkflow] object LocalPublication {
     value.as[A].fold(e => Consequence.stateConflict("Invalid retained publication fact: " + e.message), Consequence.success)
   private def _invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("Local publication: " + reason)
 
+  private def _same_historical_target(left: Target, right: Target): Boolean =
+    left.identity == right.identity && left.component == right.component &&
+      left.workspace == right.workspace && left.dependency == right.dependency
+
   /** Target-scoped actual attempt order. Immutable records preserve interrupted
     * and superseded publications; an old source receipt is never a current-artifact index.
+    * Scheduling flags select prerequisites, not the historical effect identity.
     */
   private def _latest_attempt_c(target: Target, port: Port, ordinal: Long = 1L,
     previous: Option[PublicationAttempt] = None): Consequence[(Long, Option[PublicationAttempt])] =
     port.loadC(_attempt_key(target, ordinal)).flatMap {
       case Some(value) => _decode_c[PublicationAttempt](value).flatMap(attempt =>
-        if (attempt.request.target == target && ordinal < Long.MaxValue)
+        if (_same_historical_target(attempt.request.target, target) && ordinal < Long.MaxValue)
           _latest_attempt_c(target, port, ordinal + 1L, Some(attempt))
         else _invalid("publication history belongs to a different target or exhausted its sequence"))
       case None => Consequence.success(ordinal -> previous)
