@@ -58,7 +58,7 @@ Optional mapping/origin configuration must still be a valid pair. No parent
 executor model or destination evidence may be invented to satisfy metadata
 admission.
 
-The destination retains strict concrete mapping/origin resolution, adopted
+The destination retains strict logical or concrete operating-context resolution, adopted
 repository/path/dirty-scope admission, installed validation and publication
 bindings, and genuine execution, review, commit and publication evidence.
 StandaloneFix and GoalTask retain their existing execution requirements.
@@ -170,8 +170,8 @@ consent. The input includes distinct requester/destination identities, return
 owner, Component, purpose, conditions, source and authorization references,
 permitted operations, literal exclusions, impact scope and optional publication
 target/coordinates. Both roles use the same admitted request with only `role`
-changed. The destination refuses missing concrete execution/profile mapping
-before fresh semantic work. The requester validates the complete input and any
+changed. The destination refuses a missing actual logical origin/dispatch policy
+or required concrete execution/profile pair before fresh semantic work. The requester validates the complete input and any
 optional profile/origin pair without resolving destination executable bindings.
 The runtime derives one stable native Session identity per
 request, Component and role; exact Start redelivery returns that Session's current
@@ -189,6 +189,37 @@ Destination commits use the shared selected staging and mechanical hygiene polic
 required publication uses `LocalPublicationRuntime` and its retained actual
 request/result. A legitimate unchanged candidate returns the applicable existing
 commit. A publication wait retains the commit and successful checks.
+
+Fresh destination `Implement`, `Repair`, independent `Review` and
+`DeliveryAcceptance` retain an optional
+`operatingProfile` capture and the resolved requirement in the actual issued Work.
+They share GoalPhase's pure capture computation and the existing versioned finite
+caller adapter, including its deployed semantic role definitions and actual tool
+observations. Selection is configuration, not an observed parent/provider/model.
+DeliveryAcceptance uses the implementation capability class for read-only
+post-delivery judgment after actual checks, required independent review, commit
+and selected publication. It is separate from independent Review and owns no
+delivery effects.
+Pending work keeps its stored route after configuration changes. Actual Submit
+checks the original public issued context, captured candidate chain, native
+ownership/state and actual worker; Review also requires independently admitted
+host evidence and a worker different from every retained implementer/repairer.
+Delayed contexts, malformed/crossed captures and evidence outside the captured
+chain refuse. A result cannot supply a replacement operating capture.
+Each fresh missing-row destination issuance repeats preflight against the actual
+input and host before capture and suspension. Removing origin or standard policy
+after Start refuses before any new issued row or native frontier/history change.
+The public issued context contains the exact stored capture. Logical completion
+also requires the actual worker identity to equal the observed executor context
+identity before candidate-chain and independent-review admission; concrete and
+historical captures preserve their existing identity rules.
+
+Older Work without the optional capture retains its original concrete meaning and
+omits the field when re-encoded. A present null or malformed capture is refused.
+The existing concrete caller harness remains unchanged; standalone FIX semantic
+execution keeps its concrete route and validation-only FIX stays check-only.
+This logical source connection does not establish private D2 publication,
+installed qualification or actual cross-chat delivery acceptance.
 
 `DelegateTaskDeliveryService.observeDelegateTaskDelivery` records attributable
 `dispatch-observed`, `result-received`, `return-observed`, `adopt` or `defer`
@@ -251,18 +282,39 @@ or unknown result is not replayed. Accepted implementation, checks, review,
 original failure and local commit survive this continuation. Publication is an
 artifact outcome; requester adoption and consumer activation are separate facts.
 
-## Condition timing and pending initial scope correction
+## Initial condition timing and pending legacy scope correction
 
 All adopted condition identities remain mandatory in every semantic result, in
-their original order. An explicit destination-only `submissionConditions` plan
-may select a nonempty, unique, order-preserving proper subset of those identities.
-During Implement, Repair and Review, a successful result reports those submission
-conditions true and every later condition false. A premature all-true claim is
-refused. Without an explicit plan the existing all-true submission contract
-continues unchanged. Validation-only qualification remains nonsemantic, and the
-requester continues to retain the complete destination request as passive data.
-There is no lexical classification of condition prose and no automatic weakening
-of an original obligation.
+their original order. New public `DelegateTaskInput` has a final repeated optional
+`submissionConditions` field. Its default absence at the public input becomes
+the explicit durable value `Some(Vector.empty)`: no condition is evaluated at
+submission and every original obligation is deferred to final DeliveryAcceptance.
+This is an empty timing selection, never lost or removed conditions. A nonempty
+selection must be a unique order-preserving subset of the original identities;
+the full original vector is valid too. Requester and destination carry the same
+declared timing with only their role changed. Standalone FIX and ordinary
+GoalTask cannot use this delegation timing field.
+
+For example, `conditions: [behavior, validation, commit, publication]` with
+`submissionConditions: []` reports all four false during Implement, Repair and
+Review, with truthful detail that actual later checks and delivery are not yet
+established. `submissionConditions: [behavior]` reports behavior true and the
+other three false when successful implementation or review is submitted. The
+full subset requires all four true at submission. No English-string heuristic
+classifies timing, and no additional Human timing selection is required for a
+new request's declared subset. A missing condition or prematurely true deferred
+condition refuses.
+
+Historical durable `S.Input` without the optional field retains `None`, omits
+that field when re-encoded and preserves strict all-true submission semantics.
+Reading an old record never changes its timing. Existing pending legacy requests
+may use the already available public correction described below when an actual
+responsible Human selects it; no private row migration or accepted resubmission
+is implied. Validation-only qualification remains nonsemantic. Requester
+transport retains the complete original conditions, owners, authority and
+explicit timing. A returned destination cannot substitute different timing for
+a new explicit request; already supported explicitly corrected legacy timing
+remains admissible with all other original request fields unchanged.
 
 For an existing still-unclaimed initial Implement issue, the destination can use
 `describeDelegateTaskScopeCorrection`, passive
@@ -282,7 +334,14 @@ UNKNOWN effects. An unclaimed issue does not establish that external effects did
 not occur. Correction changes no source file and executes no checks, commit or
 publication. Only a separate ordinary Advance issues the amended successor.
 Repeated exact correction is idempotent; a changed or stale target is refused.
-A timing plan can be adopted only once. An old worker result cannot complete the
+Changing a declared timing subset requires a fresh description of the exact
+current still-unclaimed initial Implement issue and its independently selected
+actual Human correction. A changed subset is permitted even when that input
+already declares timing. The same subset without new paths is a no-op and
+refuses. Invalid, duplicate, out-of-order or foreign condition IDs refuse.
+Existing immutable checkpoints and correction histories retain their original
+meaning; passive description and normal Submit provide no replacement authority.
+An old worker result cannot complete the
 successor: after any correction history, submission must carry the exact current
 `issuedWorkContext`, and every historical supersession checkpoint is verified.
 Force-closed work remains closed.
@@ -301,7 +360,19 @@ checks, prior independent review, candidate, commit, publication and counters.
 
 `ReturnReady` still requires all final conditions, actual checks, required
 review, the selected source commit and actual required publication. Requester
-receipt permits the destination's explicitly adopted submission timing while
+receipt preserves the original explicit timing, or the destination's explicitly
+adopted correction of a historical absent timing plan, while
 continuing to compare the original conditions, ownership, authority and every
 other request field. It does not certify consumer activation or application from
 prose or publication alone.
+
+`NativeCommonDelegateTaskCliSpec` is an explicitly selected, DoNotDiscover
+RuntimeTestDeclaration over one tiny isolated LineWriter build. Its normal host
+has no runtime.definition and supplies a fixed nonempty TestOnly binding at
+ordinal two. Public requester transport and destination preparation/Start share
+the original explicit empty timing. Actual typed Compile/TestOnly, destination
+local commit and normal tiny artifact publication precede DeliveryAcceptance.
+Final result transport and repeated collection must retain those effects
+without duplication. Human, worker and transport judgments in this fixture are
+specification-owned. Source authorship of this case is not an installed result,
+actual consumer consent, independent product review or consumer activation.

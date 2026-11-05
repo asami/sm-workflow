@@ -92,7 +92,8 @@ private[admission] trait NativePreparationManagedFixture extends ThreeWorkflowMa
 /** Issued fixture questions and explicit fixture answers exercise passive preparation.
   * @since   Oct. 14, 2026
   *  version Oct. 26, 2026
-  * @version Nov.  3, 2026
+  *  version Nov.  3, 2026
+  * @version Nov.  5, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -102,6 +103,95 @@ final class NativeHumanDecisionPreparationSpec extends AnyWordSpec with Matchers
   import NativePreparationFixture.*
   private val _goal = NativeHumanEvidenceFixture
   private val _split = NativeSplitAnswerEvidenceFixture
+
+  "Common reconstruction Human preparation" should {
+    "require the actual common business target and its applicable choice after normal public projection" in {
+      Given("a specification-owned common question with exact Session result and canonical business context")
+      withCore { call =>
+        val payload = GoalPhaseDevelopmentReconstruction.Payload("instance", "3", participant,
+          call.core.component.get.core.instanceId.canonicalKey, ContextReference("GoalPhaseWorkflow", "actual-executable"),
+          GoalPhaseDevelopmentReconstruction.Documents("docs/phase.md", "docs/checklist.md", "Fixture current Phase\n",
+            "- [ ] behavior: Fixture common meaning\n", GoalPhasePlanRevision.Captured(
+              GoalPhasePlanRevision.Proposal("common-context", "1", "Fixture common meaning", _goal.plan), _goal.plan)),
+          GoalPhaseDevelopmentReconstruction.Observation("/specification/repository", "main", _goal.snapshot.head,
+            _goal.snapshot.tree, _goal.snapshot.tree,
+            Vector(GoalPhaseCandidateObservationContinuation.Dirty(" ", "M", "one.scala", None))),
+          GoalPhaseDevelopmentReconstruction.Assessment(Vector.empty, Vector("Actual fixture Usage Contract ambiguity"),
+            Vector.empty, false, true), "SPECIFICATION-OWNED common meaning question", None,
+          Some(_goal.goalInput.requestingResult), None, None, Vector("one.scala"))
+        val decision = _goal.goalQuestion.current.asInstanceOf[WorkflowContinuation.Decision[GoalPhaseOrderedHumanDecision.Input]]
+        val input = _goal.goalInput.copy(developmentReconstruction = Some(payload))
+        val question = _goal.goalQuestion.copy(current = decision.copy(request = decision.request.copy(input = Some(
+          TypedValue(GoalPhaseOrderedHumanDecision.inputCodec.typeIdentity, input))), presentation = MinimalPresentation(
+          "SPECIFICATION-OWNED common question", Json.obj("choices" -> Json.arr(
+            GoalPhaseDevelopmentReconstruction.choices.map(Json.fromString)*)).noSpaces)))
+        val answers = GoalPhaseDevelopmentReconstruction.choices.map(choice =>
+          goalAnswer.copy(choice = choice, rationale = "SPECIFICATION-OWNED common direction"))
+        When("normal public Human output and its generated reader supply the context to passive preparation")
+        val output = take(NativeWorkflowOperationOutput.goalHumanC(question, call.core))
+        val decoded = take(V.GoalPhaseAdvanceResult.createC(wire(output)))
+        val context = decoded.human.get.humanDecisionContext.get
+        val prepared = answers.map { answer =>
+          val value = take(Preparation.goalC(context, answer, reference, execution, participant, issuer, now))
+          val submitted = _goal.goalAnswer.copy(result = TypedValue(GoalPhaseOrderedHumanDecision.answerCodec.typeIdentity,
+            GoalPhaseOrderedHumanDecision.Answer(answer.choice, answer.rationale)))
+          val binding = take(ThreeWorkflowExternalEvidencePorts.goalHumanBindingC(context.componentInstance,
+            question, submitted, participant))
+          value -> binding
+        }
+        Then("Adopt Keep Defer and Cancel retain their complete normal binding without any actual consent claim")
+        GoalPhaseDevelopmentReconstruction.valid(payload) shouldBe true
+        decoded.human.get.choices shouldBe GoalPhaseDevelopmentReconstruction.choices
+        prepared.foreach { (value, binding) =>
+          observe(evidence(value), Purpose.GoalHuman, binding).isSuccess shouldBe true
+          evidence(value).binding.hcursor.downField("humanAttestation").downField("question").downField("source")
+            .downField("developmentReconstruction").focus.nonEmpty shouldBe true
+        }
+
+        Given("the same common question with its target removed or supplied as null through the actual Record converter")
+        val raw = json(context.question)
+        val omitted = _goal.alter(raw, Vector("source"))(_.mapObject(_.remove("developmentReconstruction")))
+        val nullcontext = _goal.alter(raw, Vector("source", "developmentReconstruction"))(_ => Json.Null)
+        val targetless = Vector(record(omitted), GoalPhaseNativeMetadata.record(nullcontext))
+        val commonanswers = answers.filter(answer => Set("AdoptDevelopmentReconstruction", "KeepCurrentRequirements")(answer.choice))
+        When("passive preparation receives either unique common choice without its target or against a legacy question")
+        val missing = targetless.flatMap(value => commonanswers.map(answer => Preparation.goalC(
+          context.copy(question = value), answer, reference, execution, participant, issuer, now)))
+        val legacyoutput = take(NativeWorkflowOperationOutput.goalHumanC(_goal.goalQuestion, call.core))
+        val legacycontext = take(V.GoalPhaseAdvanceResult.createC(wire(legacyoutput))).human.get.humanDecisionContext.get
+        val legacycommon = commonanswers.map(answer => Preparation.goalC(legacycontext, answer,
+          reference, execution, participant, issuer, now))
+        val legacyordinary = Vector("ResumeAssignedWork", "Defer").map(choice => Preparation.goalC(legacycontext,
+          goalAnswer.copy(choice = choice), reference, execution, participant, issuer, now))
+        val crossedchoice = Preparation.goalC(context, goalAnswer, reference, execution, participant, issuer, now)
+        Then("common target loss refuses while legacy ordinary direction remains unchanged and cannot replace a common choice")
+        missing.foreach(_.isSuccess shouldBe false)
+        legacycommon.foreach(_.isSuccess shouldBe false)
+        legacyordinary.foreach(_.isSuccess shouldBe true)
+        crossedchoice.isSuccess shouldBe false
+        json(targetless.last).hcursor.downField("source").downField("developmentReconstruction").focus shouldBe None
+
+        Given("the same complete common context with an incompatible proposed obligation")
+        val incompatible = payload.copy(assessment = payload.assessment.copy(incompatible = Vector("Fixture original obligation differs")))
+        val boundedinput = input.copy(developmentReconstruction = Some(incompatible))
+        val bounded = question.copy(current = decision.copy(request = decision.request.copy(input = Some(
+          TypedValue(GoalPhaseOrderedHumanDecision.inputCodec.typeIdentity, boundedinput))), presentation = MinimalPresentation(
+          "SPECIFICATION-OWNED bounded common question", Json.obj("choices" -> Json.arr(
+            GoalPhaseDevelopmentReconstruction.choicesFor(incompatible).map(Json.fromString)*)).noSpaces)))
+        When("normal projection prepares Adopt and Keep against the incompatible context's actual applicable choices")
+        val boundedoutput = take(NativeWorkflowOperationOutput.goalHumanC(bounded, call.core))
+        val boundedcontext = take(V.GoalPhaseAdvanceResult.createC(wire(boundedoutput))).human.get.humanDecisionContext.get
+        val adopt = Preparation.goalC(boundedcontext, goalAnswer.copy(choice = "AdoptDevelopmentReconstruction"),
+          reference, execution, participant, issuer, now)
+        val keep = Preparation.goalC(boundedcontext, goalAnswer.copy(choice = "KeepCurrentRequirements"),
+          reference, execution, participant, issuer, now)
+        Then("incompatible adoption refuses and the existing Keep choice remains available for the original requirements")
+        adopt.isSuccess shouldBe false
+        keep.isSuccess shouldBe true
+        Consequence.unit
+      }
+    }
+  }
 
   "Ordinary source-history recovery Human preparation" should {
     "retain the complete target across public names and refuse missing crossed malformed or legacy consent" in {
@@ -626,7 +716,8 @@ final class NativeHumanDecisionPreparationSpec extends AnyWordSpec with Matchers
         val goal = take(NativeHumanDecisionContext.goalC(call.core, _goal.goalQuestion))
         val repository = take(NativeHumanDecisionContext.repositoryC(call.core, _goal.repositoryQuestion))
         val split = take(NativeHumanDecisionContext.splitC(call.core, _split.scopeQuestion))
-        val ordinarychoices = GoalPhaseOrderedHumanDecision.choices.filterNot(_ == "AuthorizeNewAttempt")
+        val ordinarychoices = GoalPhaseOrderedHumanDecision.choices.filterNot(Set(
+          "AuthorizeNewAttempt", "AdoptDevelopmentReconstruction", "KeepCurrentRequirements"))
         When("public preparation consumes each selected answer while unused annotations vary")
         val goals = ordinarychoices.map(choice => evidence(take(Preparation.goalC(goal,
           goalAnswer.copy(choice = choice, rationale = null), reference, execution, participant, issuer, now))))

@@ -18,6 +18,7 @@ import org.goldenport.cncf.testutil.RuntimeBindingAdmissionFixture
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkOp}
 import org.goldenport.cncf.validation.{ValidationDiscoveryV1 as D, ValidationMetadataV1 as M, ValidationInputsV1 as I}
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
+import org.goldenport.cncf.workflow.ContextReference
 import org.goldenport.cncf.workspace.WorkspaceId
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -30,6 +31,7 @@ import GoalPhaseNativeMetadata as N
 import GoalPhaseNativeValidation as V
 import GoalPhaseSliceValidationPlan as L
 import GoalPhaseOrderedProgression as O
+import StandaloneFixExecution as S
 import SplitPhaseExplicitPartitionFixture.take
 
 /** Shared real producer discovery, never a synthetic positive inventory.
@@ -56,13 +58,15 @@ private[admission] object GoalPhaseNativeMetadataFixture {
 /** Actual selection and passive transport; synthetic return values test refusal
   * only and do not establish native execution or independent review.
   * @since   Oct. 18, 2026
-  * @version Oct. 19, 2026
+  *  version Oct. 19, 2026
+  * @version Nov.  5, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseNativeMetadataSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import N.given
+  import S.given
   import GoalPhaseNativeMetadataFixture.*
   private val _snapshot = GoalPhaseOrderedProgression.Snapshot("a" * 40, "b" * 40)
   private def _payload(checks: Vector[V.Check], batches: Vector[N.Batch]) =
@@ -93,6 +97,118 @@ final class GoalPhaseNativeMetadataSpec extends AnyWordSpec with Matchers with G
       })
     factory.primaryFactory.createPrimaryC(creation).flatMap(_ => selected.map(Consequence.success)
       .getOrElse(Consequence.stateConflict("Host definition was not initialized")))
+  }
+
+  private def _logical_work: S.Work = {
+    val input = S.Input("metadata-repository", "logical-public-work", "Retain the exact logical capture",
+      Vector("src"), Vector("focused"), Vector("behavior"), Vector(ContextReference("adopted-source", "1")), false,
+      scalaLint = "off", task = Some(S.Task("direct-instruction", Vector.empty)))
+    val requirement = take(GoalTaskNativeRun.executionRequirementC(input, "Implement"))
+    val classification = take(GoalTaskNativeRun._classification_c(input, "Implement"))
+    val capture = take(GoalPhaseOperatingProfiles.captureFreshC(BoundedWorkExecutionAdmissionFixture.logicalContext,
+      "Implement", Some(classification), requirement, None))._2
+    val state = take(S.startC(input, "participant", Vector(V.Check("focused", 1))))
+    S.Work("logical-public-session", "2", "Implement", state, Some(capture))
+  }
+  private def _public_json(value: Json): Json = io.circe.parser.parse(take(RuntimeContext.PropertyNameContext.default
+    .transformRecord(N.record(value)).toJsonStringC)).fold(error => fail(error.message), identity)
+
+  "Logical capture public role maps" should {
+    "restore exact retained Work and context captures from canonical snake Record and CamelCase role presentations" in {
+      Given("an existing freshly captured logical Work and its actual CNCF public Record projection")
+      val work = _logical_work
+      val capture = work.operatingProfile.get
+      val canonical = work.asJson
+      val snake = _public_json(canonical)
+      val camel = canonical.hcursor.downField("operatingProfile").downField("dispatch").downField("edges")
+        .withFocus(_.mapObject(fields => fields.remove("sol-medium").add("solMedium", Json.fromString("difficult")))).top.get
+      val context = Json.obj("context" -> Json.obj("operatingProfile" -> capture.asJson))
+      val publiccontext = _public_json(context)
+      val publiccapture = _public_json(capture.asJson)
+      When("the public normalizer restores the Work context and bare-capture shapes before strict domain decoding")
+      val normalized = Vector(canonical, snake, camel).map(N.normalizePublicJson)
+      val normalizedcontext = N.normalizePublicJson(publiccontext)
+      val normalizedcapture = N.normalizePublicJson(publiccapture)
+      Then("every supported presentation has the same exact native capture and valid Work with literal role values")
+      normalized.foreach { value =>
+        value.flatMap(_.as[S.Work].left.map(_.message)) shouldBe Right(work)
+      }
+      normalizedcontext.flatMap(_.hcursor.downField("context")
+        .get[GoalPhaseOperatingProfiles.Capture]("operatingProfile").left.map(_.message)) shouldBe Right(capture)
+      normalizedcapture.flatMap(_.as[GoalPhaseOperatingProfiles.Capture].left.map(_.message)) shouldBe Right(capture)
+      capture.dispatch.get.edges("small") shouldBe "sol-medium"
+      capture.dispatch.get.candidates shouldBe Vector("ordinary", "difficult", "hardest")
+      GoalPhaseOperatingProfiles.captureValid(capture) shouldBe true
+    }
+
+    "reject every supported role spelling collision even when both edges have the same value" in {
+      Given("one canonical logical Work and each pair of already supported sol-medium presentations")
+      val work = _logical_work.asJson
+      val edges = work.hcursor.downField("operatingProfile").downField("dispatch").get[Json]("edges").toOption.get
+      val variants = Vector("sol-medium", "sol_medium", "solMedium").combinations(2).map { pair =>
+        val changed = edges.mapObject(fields => fields.remove("sol-medium")
+          .add(pair.head, Json.fromString("difficult")).add(pair.last, Json.fromString("difficult")))
+        work.hcursor.downField("operatingProfile").downField("dispatch").downField("edges").withFocus(_ => changed).top.get
+      }.toVector
+      When("the public boundary encounters two keys for the same canonical role")
+      val refused = variants.map(N.normalizePublicJson)
+      Then("each duplicate canonical role refuses rather than silently replacing a retained edge")
+      refused.foreach { value =>
+        value.isLeft shouldBe true
+        value.left.toOption.get should include("Ambiguous public logical dispatch role: sol-medium")
+      }
+    }
+
+    "refuse malformed role maps and nonstring edge values without accepting unknown roles or changing role values" in {
+      Given("a canonical logical Work with malformed map shapes or edge values and separate invalid literal roles")
+      val work = _logical_work.asJson
+      val edges = work.hcursor.downField("operatingProfile").downField("dispatch").get[Json]("edges").toOption.get
+      val malformed = Vector(Json.Null, Json.arr(), Json.fromString("edges")) ++
+        Vector(Json.Null, Json.fromInt(1), Json.True, Json.arr(), Json.obj()).map(value =>
+          edges.mapObject(_.add("sol-medium", value)))
+      val invalidroles = Vector(edges.mapObject(_.remove("sol-medium").add("unknown-role", Json.fromString("difficult"))),
+        edges.mapObject(_.add("small", Json.fromString("solMedium"))))
+      val malformedwork = malformed.map(value => work.hcursor.downField("operatingProfile").downField("dispatch")
+        .downField("edges").withFocus(_ => value).top.get)
+      val invalidwork = invalidroles.map(value => work.hcursor.downField("operatingProfile").downField("dispatch")
+        .downField("edges").withFocus(_ => value).top.get)
+      When("public presentation is normalized and the existing strict Work codec checks the resulting captures")
+      val malformedresults = malformedwork.map(N.normalizePublicJson)
+      val invalidresults = invalidwork.map(N.normalizePublicJson)
+      Then("malformed transport refuses and unknown role identities or target values stay literal for policy rejection")
+      malformedresults.foreach(_.isLeft shouldBe true)
+      invalidresults.zip(invalidroles).foreach { (result, expected) =>
+        result.toOption.get.hcursor.downField("operatingProfile").downField("dispatch").get[Json]("edges") shouldBe Right(expected)
+        result.flatMap(_.as[S.Work].left.map(_.message)).isLeft shouldBe true
+      }
+    }
+
+    "retain canonical stored capture wire historical omission and ordinary normalization outside the known role-map paths" in {
+      Given("an exact retained logical Work its historical capture-less counterpart and an unrelated dispatch-shaped map")
+      val work = _logical_work
+      val codec = GoalTaskNativeRun.inputCodec
+      val stored = codec.encode(work)
+      val legacy = work.copy(operatingProfile = None)
+      val legacywire = codec.encode(legacy)
+      val alias = stored.hcursor.downField("payload").downField("operatingProfile").downField("dispatch").downField("edges")
+        .withFocus(_.mapObject(fields => fields.remove("sol-medium").add("solMedium", Json.fromString("difficult")))).top.get
+      val unrelated = Json.obj("other" -> Json.obj("dispatch" -> Json.obj("edges" -> Json.obj("sol-medium" -> Json.fromString("difficult")))))
+      When("the unchanged stored codec round-trips canonical wire and rejects a public alias while ordinary maps normalize normally")
+      val restored = codec.decode(stored)
+      val old = codec.decode(legacywire)
+      val refused = codec.decode(alias)
+      val normalized = N.normalizePublicJson(unrelated)
+      Then("stored role keys stay canonical old absence retains its meaning and no arbitrary edges map gains special treatment")
+      restored shouldBe Right(work)
+      codec.encode(restored.toOption.get) shouldBe stored
+      stored.hcursor.downField("payload").downField("operatingProfile").downField("dispatch").get[Json]("edges") shouldBe
+        Right(work.operatingProfile.get.dispatch.get.edges.asJson)
+      old shouldBe Right(legacy)
+      codec.encode(old.toOption.get) shouldBe legacywire
+      legacywire.hcursor.downField("payload").downField("operatingProfile").focus shouldBe None
+      refused.isLeft shouldBe true
+      normalized shouldBe Right(Json.obj("other" -> Json.obj("dispatch" -> Json.obj("edges" -> Json.obj("solMedium" -> Json.fromString("difficult"))))))
+    }
   }
 
   "Structured native metadata configuration" should {

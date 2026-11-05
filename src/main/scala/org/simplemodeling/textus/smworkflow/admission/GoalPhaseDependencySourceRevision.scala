@@ -61,6 +61,7 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
   val primaryCaptureSchema = "sm-workflow.goal-phase-dependency-source-capture.v7"
   val initialSchema = "sm-workflow.goal-phase-dependency-source-revision.v8"
   val initialCaptureSchema = "sm-workflow.goal-phase-dependency-source-capture.v8"
+  val developmentCaptureSchema = "sm-workflow.goal-phase-dependency-source-capture.v9"
   val initialChoice = "AdoptInitialDependencySourceRevisionAcceptingUnknownEffects"
   val initialGuardUnavailable = "not-recorded-before-first-dependency-capture"
   val combinedPrimaryChoice = "AdoptDependencySourceRevisionAndContinuePublicationWithUnknownEffects"
@@ -650,18 +651,19 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
 
   final case class Capture(schemaVersion: String, sessionId: String, plan: ContextReference, step: String,
     generation: Long, sourceRevision: String, primaryBase: O.Snapshot, direction: Direction,
-    postStageGuard: Guard, stagedPaths: Vector[String], preStageGuard: Guard, scope: Option[ScopeSuccessor] = None)
+    postStageGuard: Guard, stagedPaths: Vector[String], preStageGuard: Guard, scope: Option[ScopeSuccessor] = None,
+    planSelection: Option[ContextReference] = None)
   object Capture {
     given Encoder[Capture] = deriveEncoder[Capture].mapJson(_.mapObject(_.filter {
-      case ("scope", value) => !value.isNull
+      case ("scope" | "planSelection", value) => !value.isNull
       case _ => true
     }))
     private val _decoder: Decoder[Capture] = closed(Set("schemaVersion", "sessionId", "plan", "step", "generation",
-      "sourceRevision", "primaryBase", "direction", "postStageGuard", "stagedPaths", "preStageGuard", "scope"),
-      deriveDecoder, captureValid, optional = Set("scope"))
+      "sourceRevision", "primaryBase", "direction", "postStageGuard", "stagedPaths", "preStageGuard", "scope", "planSelection"),
+      deriveDecoder, captureValid, optional = Set("scope", "planSelection"))
     given Decoder[Capture] = Decoder.instance { cursor =>
-      if (cursor.downField("scope").focus.contains(Json.Null))
-        Left(DecodingFailure("scope must be absent or a complete versioned successor", cursor.history))
+      if (Vector("scope", "planSelection").exists(key => cursor.downField(key).focus.contains(Json.Null)))
+        Left(DecodingFailure("scope and planSelection must be omitted or complete versioned data", cursor.history))
       else _decoder(cursor)
     }
   }
@@ -1384,11 +1386,18 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
         choice == "AdoptDependencySourceRevisionWithUnknownEffects" && (value.target.waitOrigin.nonEmpty || value.target.primaryFailureOrigin.nonEmpty) ||
           choice == combinedPrimaryChoice && value.target.primaryFailureOrigin.nonEmpty ||
           choice == initialChoice && value.target.initialOrigin.nonEmpty)
-  def captureValid(value: Capture): Boolean = value != null && value.scope != null &&
-    value.schemaVersion == _capture_schema(value.direction, value.scope) &&
+  def captureValid(value: Capture): Boolean = value != null && value.scope != null && value.planSelection != null &&
+    value.schemaVersion == (if (value.planSelection.nonEmpty) developmentCaptureSchema else _capture_schema(value.direction, value.scope)) &&
     value.scope.forall(scopeValid(value.direction, _)) &&
     directionValid(value.direction) && value.sessionId == value.direction.target.sessionId &&
-    value.plan != null && value.plan == ContextReference(value.direction.target.plan.identity, value.direction.target.plan.revision) &&
+    value.plan != null && revision(value.sourceRevision) && (value.planSelection match {
+      case None => value.plan == ContextReference(value.direction.target.plan.identity, value.direction.target.plan.revision)
+      case Some(selection) => referenceValid(selection) && selection.revision == "1" &&
+        selection.identity.startsWith(value.sessionId + ":ordered-development-reconstruction:") &&
+        revision(selection.identity.stripPrefix(value.sessionId + ":ordered-development-reconstruction:")) &&
+        BigInt(selection.identity.stripPrefix(value.sessionId + ":ordered-development-reconstruction:")) < BigInt(value.sourceRevision) &&
+        value.plan.identity == value.direction.target.plan.identity && text(value.plan.revision)
+    }) &&
     value.step == value.direction.target.step && value.generation > value.direction.target.generation &&
     revision(value.sourceRevision) && BigInt(value.sourceRevision) > BigInt(value.direction.target.pendingRevision) &&
     value.primaryBase == value.direction.target.primaryBase &&
@@ -1449,21 +1458,26 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
   def captureC(core: ActionCall.Core, controller: O.State, current: GoalPhaseNativeCandidate.Saved,
     loadC: String => Consequence[Option[GoalPhaseNativeCandidate.Saved]],
     saveC: (String, InstanceRecord, GoalPhaseNativeCandidate.Payload) => Consequence[GoalPhaseNativeCandidate.Saved],
-    acknowledgeC: String => Consequence[Unit]): Consequence[GoalPhaseNativeCandidate.Saved] = current.payload.dependencySourceDirection match {
+    acknowledgeC: String => Consequence[Unit],
+    chain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None): Consequence[GoalPhaseNativeCandidate.Saved] = current.payload.dependencySourceDirection match {
     case None => Consequence.success(current)
     case Some(direction) =>
       val scope = current.payload.dependencySourceScope
       val binding = bindingOf(direction, scope)
-      def observe: Consequence[Guard] = _qualified_observation_c(core, direction, scope)
-      def git[A](op: GitOperation[A]): Consequence[A] = E.executeGitC(core, op, binding.dependency.workspace).flatMap(_.valueC)
+      def _observe_(): Consequence[Guard] = _qualified_observation_c(core, direction, scope)
+      def _git_[A](op: GitOperation[A]): Consequence[A] = E.executeGitC(core, op, binding.dependency.workspace).flatMap(_.valueC)
       for {
         _ <- if (candidateValid(current.payload) && controller.cursor < controller.plan.steps.size &&
             controller.plan.steps(controller.cursor).identity == direction.target.step &&
-            controller.base == direction.target.primaryBase && controller.plan == direction.target.plan &&
+            controller.base == direction.target.primaryBase &&
             current.record.identity.value == direction.target.sessionId) Consequence.unit
           else D.invalid("source capture crosses its native direction, Session, Plan or primary base")
+        planselection <- if (controller.plan == direction.target.plan) Consequence.success(Option.empty[ContextReference])
+          else chain.map(_.developmentSelectionC(controller.plan, current.record.identity.value, controller.base,
+            direction.target.step, controller.generation, current.payload.sourceRevision).map(Some(_)))
+            .getOrElse(D.invalid("changed Plan source capture has no actual common reconstruction selection"))
         before <- if (direction.target.primaryFailureOrigin.nonEmpty && current.payload.dependencySourceGuard.nonEmpty)
-          Consequence.success(current.payload.dependencySourceGuard.get) else observe
+          Consequence.success(current.payload.dependencySourceGuard.get) else _observe_()
         _ <- if (captureBaseValid(direction, controller.generation, before, scope)) Consequence.unit
           else D.invalid("source capture differs from its adopted bytes or permitted ordinary repair")
         existing <- loadC("dependency-source-inspection")
@@ -1478,23 +1492,27 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
             previous <- prior
             retained <- loadC("dependency-source-stage-intent-" + index)
             _ <- if (retained.isEmpty) Consequence.unit else D.invalid("source staging intent is retained; its unknown result is not replayed")
-            actualBefore <- observe
+            actualbefore <- _observe_()
             expected = previous.payload.dependencySourceStages.lastOption.map(_.after).getOrElse(before)
-            _ <- if (actualBefore == expected) Consequence.unit else D.invalid("source changed before its selected stage")
+            _ <- if (actualbefore == expected) Consequence.unit else D.invalid("source changed before its selected stage")
             intent <- saveC("dependency-source-stage-intent-" + index, previous.record, previous.payload)
             _ <- acknowledgeC("goal-dependency-source-stage-prepared:" + path)
             selection <- GitSelectionId.parseC("goal-path-" + (binding.paths.indexOf(path) + 1))
-            _ <- git(GitOperation.StageSelectedAll(selection))
-            after <- observe
-            oldTree <- GitObjectId.parseC(actualBefore.indexTree)
-            newTree <- GitObjectId.parseC(after.indexTree)
-            changes <- git(GitOperation.TreeChanges(oldTree, newTree))
-            fact = StageFact(path, actualBefore, after, changes.map(change))
+            indexed = GoalPhaseNativeCandidate.alreadyIndexed(path, actualbefore.dirty.map(value =>
+              G.DirtyPath(value.index.head, value.worktree.head, value.path, value.renamedFrom)))
+            _ <- if (indexed) acknowledgeC("goal-dependency-source-stage-observed:" + path)
+              else _git_(GitOperation.StageSelectedAll(selection)).flatMap(_ =>
+                acknowledgeC("goal-dependency-source-stage-executed:" + path))
+            after <- _observe_()
+            oldtree <- GitObjectId.parseC(actualbefore.indexTree)
+            newtree <- GitObjectId.parseC(after.indexTree)
+            changes <- _git_(GitOperation.TreeChanges(oldtree, newtree))
+            fact = StageFact(path, actualbefore, after, changes.map(change))
             _ <- if (stageFactValid(fact) && stageModeValid(direction, fact, scope)) Consequence.unit
               else D.invalid("source staging changed an unselected entry, source byte or adopted file mode")
             _ <- changes.foldLeft(Consequence.unit)((p, c) => p.flatMap(_ => c.newBlob match {
               case None => Consequence.unit
-              case Some(blob) => git(GitOperation.BlobContent(blob)).flatMap(content =>
+              case Some(blob) => _git_(GitOperation.BlobContent(blob)).flatMap(content =>
                 if (after.selectedFiles.find(_.path == path).contains(fileIdentity(path, Some(content.bytes)))) Consequence.unit
                 else D.invalid("selected index blob differs from the guarded source bytes"))
             }))
@@ -1505,10 +1523,11 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
             _ <- acknowledgeC("goal-dependency-source-stage-recorded:" + path)
           } yield result }
         intent <- saveC("dependency-source-observation-intent", staged.record, staged.payload)
-        after <- observe
-        capture = Capture(_capture_schema(direction, scope), current.record.identity.value, ContextReference(controller.plan.identity, controller.plan.revision),
+        after <- _observe_()
+        capture = Capture(if (planselection.nonEmpty) developmentCaptureSchema else _capture_schema(direction, scope),
+          current.record.identity.value, ContextReference(controller.plan.identity, controller.plan.revision),
           binding.step, controller.generation, current.payload.sourceRevision, controller.base, direction, after,
-          staged.payload.dependencySourceStages.map(_.path), before, scope)
+          staged.payload.dependencySourceStages.map(_.path), before, scope, planselection)
         _ <- if (captureValid(capture) && after == staged.payload.dependencySourceStages.lastOption.map(_.after).getOrElse(before))
           Consequence.unit else D.invalid("source capture changed after its actual stage prefix")
         result <- saveC("dependency-source-observation-result", intent.record, staged.payload.copy(dependencySourceCapture = Some(capture)))

@@ -13,7 +13,7 @@ import GoalPhaseRuntimeRepairControl as R
   * It is neither a Phase Plan nor a second mechanical command runner.
   * @since   Oct. 26, 2026
   *  version Oct. 27, 2026
-  * @version Nov. 5, 2026
+  * @version Nov.  5, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object StandaloneFixExecution {
@@ -56,7 +56,8 @@ private[smworkflow] object StandaloneFixExecution {
     delivery: Option[DelegateTask.Delivery] = None,
     commitReconciliation: Option[CommitReconciliation] = None,
     recoveredValidation: Option[StandaloneFixValidationRecovery.Direction] = None)
-  final case class Work(session: String, sourceRevision: String, kind: String, state: State)
+  final case class Work(session: String, sourceRevision: String, kind: String, state: State,
+    operatingProfile: Option[GoalPhaseOperatingProfiles.Capture] = None)
 
   private given Encoder[ContextReference] = deriveEncoder
   private given Decoder[ContextReference] = deriveDecoder
@@ -86,8 +87,18 @@ private[smworkflow] object StandaloneFixExecution {
   private given Decoder[R.Context] = deriveDecoder
   given Encoder[State] = deriveEncoder[State].mapJson(_.mapObject(o => o.filter { case ("commit" | "commitExecution" | "projectionWarning" | "reviewDispositions" | "delivery" | "commitReconciliation" | "recoveredValidation", value) => !value.isNull; case _ => true }))
   given Decoder[State] = deriveDecoder
-  given Encoder[Work] = deriveEncoder
-  given Decoder[Work] = deriveDecoder
+  given Encoder[Work] = deriveEncoder[Work].mapJson(_.mapObject(_.filter {
+    case ("operatingProfile", value) => !value.isNull
+    case _ => true
+  }))
+  private val _work_decoder: Decoder[Work] = deriveDecoder
+  given Decoder[Work] = Decoder.instance { cursor =>
+    if (cursor.downField("operatingProfile").focus.exists(_.isNull))
+      Left(io.circe.DecodingFailure("operatingProfile must be absent or a valid retained capture", cursor.history))
+    else _work_decoder(cursor).flatMap(value =>
+      if (value.operatingProfile != null && value.operatingProfile.forall(GoalPhaseOperatingProfiles.captureValid)) Right(value)
+      else Left(io.circe.DecodingFailure("Invalid bounded operatingProfile capture", cursor.history)))
+  }
 
   def inputC(input: Input): Consequence[Unit] = {
     val valid = try input != null && Vector(input.repositoryIdentity, input.requestIdentity, input.objective).forall(text) &&
@@ -97,8 +108,8 @@ private[smworkflow] object StandaloneFixExecution {
       Set("code", "documentation", "validation")(input.kind) && Set("off", "required")(input.scalaLint) &&
       input.repairLimit > 0 && input.repairLimit <= R.ceiling && input.task != null &&
       input.delegation != null && input.delegation.forall(c => DelegateTask.valid(c) && input.task.nonEmpty && input.reviewOrigin.isEmpty) &&
-      input.submissionConditions != null && input.submissionConditions.forall(ids => input.delegation.exists(_.role == "destination") &&
-        strings(ids, true) && ids.size < input.conditions.size && ids == input.conditions.filter(ids.contains)) &&
+      input.submissionConditions != null && input.submissionConditions.forall(ids => input.delegation.nonEmpty && input.task.nonEmpty &&
+        strings(ids) && ids.size <= input.conditions.size && ids == input.conditions.filter(ids.contains)) &&
       input.reviewOrigin != null && input.task.forall(t => t != null && Set("journal", "direct-instruction")(t.sourceKind) && strings(t.dependencies)) &&
       (input.kind != "validation" || (input.task.isEmpty && input.delegation.isEmpty && input.reviewOrigin.isEmpty && !input.reviewRequired))
       catch { case scala.util.control.NonFatal(_) => false }
@@ -241,6 +252,13 @@ private[smworkflow] object StandaloneFixExecution {
         p.request.source.clean)) &&
       Set("accept", "decision-needed")(result.outcome) && result.fixAssessment.isEmpty && result.diagnosticRepair.isEmpty &&
       result.reviewDispositions.isEmpty)) Consequence.unit else invalid("delivery acceptance requires retained commit/publication and cannot request a repair")
+    _ <- if (work.kind != "DeliveryAcceptance") Consequence.unit else for {
+      _ <- WorkflowRepairAssessment.checksC(work.state.input.kind, work.state.input.scalaLint, work.state.selected, work.state.receipts)
+      _ <- if ((!work.state.input.reviewRequired || work.state.reviewReference.nonEmpty) && committedResultValid(work.state)) Consequence.unit
+        else invalid("delivery acceptance requires the actual retained checks, required review and local commit")
+      _ <- if (result.outcome != "decision-needed" || (result.conditions.exists(!_.satisfied) && result.unresolvedQuestions.nonEmpty)) Consequence.unit
+        else invalid("delivery decision requires an unresolved condition and precise retained explanation")
+    } yield ()
     _ <- if (work.kind != "Implement" || (work.state.input.task.nonEmpty && work.state.stage == "Implement" &&
       result.fixAssessment.isEmpty && result.diagnosticRepair.isEmpty)) Consequence.unit
       else invalid("initial Task implementation is not a failure repair")

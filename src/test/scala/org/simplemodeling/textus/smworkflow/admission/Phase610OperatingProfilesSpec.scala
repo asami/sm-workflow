@@ -30,7 +30,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Specification-owned configurations and Operation construction only. No live
   * model, execution observation, workflow storage or accepted Phase is inferred.
   * @since   Oct. 29, 2026
-  * @version Nov.  2, 2026
+  * @version Nov.  5, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -240,6 +240,28 @@ final class Phase610OperatingProfilesSpec extends AnyWordSpec with Matchers with
 
   "Named profile capture at fresh work issuance" should afterWord(
     "in spec:ai-operating-profiles, example:M2-E1, rules:P610-02,P610-03,P610-10, phase:6.10") {
+    "share the same pure context and capture result with the Phase WorkOrder binder" in {
+      Given("the actual declaration's concrete or logical configuration and unchanged Phase classification")
+      val logical = _declaration.copy(logicalOrigin = Some("spec-context"), dispatchPolicy = Some(GoalPhaseDispatchPolicy.defaultPolicy))
+      Vector(_declaration, _mapped, logical, _mapped.copy(operatingProfile = Some("cost"))).foreach { declaration =>
+        val original = _work()
+        val order = _order(original)
+        When("the shared pure method and the existing Phase binder receive the same fresh intent")
+        val resolved = take(GoalPhaseOperatingProfiles.captureFreshC(GoalPhaseOperatingProfiles.context(declaration),
+          _business.kind, GoalPhaseDispatchPolicy.classification(_business), order.requirement, None))
+        val bound = take(GoalPhaseOperatingProfiles.bindFreshC(original, declaration, None))
+        Then("requirement and capture are identical without a second resolver or persisted host context")
+        _order(bound).requirement shouldBe resolved._1
+        _capture(bound) shouldBe resolved._2
+      }
+      Given("an invalid logical context or a context that contradicts its concrete origin")
+      val context = GoalPhaseOperatingProfiles.context(_mapped)
+      When("the pure shared boundary validates caller configuration")
+      val invalid = Vector(context.copy(logicalOrigin = null), context.copy(logicalOrigin = Some(null)),
+        context.copy(logicalOrigin = Some("crossed-context")), context.copy(dispatchPolicy = Some(null)))
+      Then("each fails before a fresh selection can be returned")
+      invalid.foreach(value => GoalPhaseOperatingProfiles.validateContextC(value).isSuccess shouldBe false)
+    }
     "resolve explicit over config over standard and let a resume parameter supersede saved Start intent only for new work" in {
       Given("registered logical profiles, saved explicit Start intent and current configuration")
       GoalPhaseOperatingProfiles.registered shouldBe Set("standard", "cost", "quality", "local-experiment")

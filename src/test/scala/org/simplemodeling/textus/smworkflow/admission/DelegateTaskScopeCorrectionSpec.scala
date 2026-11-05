@@ -20,7 +20,7 @@ import S.given
 /** Public native operations and real managed persistence, without launching SBT.
   * Authority is specification-owned; this does not claim an actual Human event.
   * @since Oct. 30, 2026
-  * @version Nov. 5, 2026
+  * @version Nov.  5, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -33,7 +33,7 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
   private val _input = V.DelegateTaskInput("sm-workflow", "scope-correction-specification", "Correct the same SBT connection",
     NonEmptyVector.one("src/test/scala"), NonEmptyVector.of("compile", "focused"), NonEmptyVector.one("behavior"),
     NonEmptyVector.one(V.WorkflowArtifactReference("specification-request", "1")), false, "code", "off", 10,
-    "direct-instruction", Vector.empty, _contract)
+    "direct-instruction", Vector.empty, _contract, Vector("behavior"))
   private val _checks = Vector(GoalPhaseNativeValidation.Check("compile", 1, WorkflowSbtValidation.Kind.Compile),
     GoalPhaseNativeValidation.Check("focused", 2, WorkflowSbtValidation.Kind.TestOnly))
   override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json =
@@ -158,7 +158,7 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
 
     "admit evaluation timing through the same public Session without replacing its conditions or running SBT" in {
       Given("the original two obligations and an unsubmitted SPECIFICATION-OWNED destination issue.")
-      val input = _input.copy(conditions = NonEmptyVector.of("behavior", "delivery"))
+      val input = _input.copy(conditions = NonEmptyVector.of("behavior", "delivery"), submissionConditions = Vector("behavior", "delivery"))
       val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/sm-workflow/work/scope-correction").toAbsolutePath), "episode-").toRealPath()
       val original = ThreeWorkflowNormalHostFixture.definition(root)
       val host = original.copy(goal = original.goal.copy(candidatePaths = input.ownedPaths.toVector ++ _added,
@@ -219,7 +219,7 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
         val after = _state(next)
         after.input.conditions shouldBe before.input.conditions
         after.input.submissionConditions shouldBe Some(Vector("behavior"))
-        after.input.copy(submissionConditions = None) shouldBe before.input
+        after.input.copy(submissionConditions = before.input.submissionConditions) shouldBe before.input
         after.copy(input = before.input, evidenceReferences = before.evidenceReferences) shouldBe before
         after.evidenceReferences should contain (ContextReference(correction.reference.identity, correction.reference.revision))
         after.conditionReport shouldBe before.conditionReport
@@ -235,18 +235,29 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
         recollected.issuedWorkContext shouldBe next.issuedWorkContext
         describedagain.outcome shouldBe "already-corrected"
         correctedagain.outcome shouldBe "already-corrected"
-        When("a replacement timing plan is requested against the successor")
+        When("a fresh timing description is requested against the exact current successor")
         val replacement = _call_("describeDelegateTaskScopeCorrection", List(Property("input",
           V.DelegateTaskScopeCorrectionDescriptionInput(started.sessionId, next.issuedWorkContext.get.continuationId,
             Vector.empty, Vector("delivery")), None)))
-        Then("an already adopted timing plan cannot be replaced")
-        replacement.isSuccess shouldBe false
+        Then("the changed subset is described without granting authority or changing its current issue")
+        replacement.isSuccess shouldBe true
+        val replacementdescription = read_value[V.DelegateTaskScopeCorrectionView](take(replacement))
+        val replacementtarget = take(DelegateTaskScopeCorrection.targetC(replacementdescription.target))
+        replacementtarget.business.state.input shouldBe after.input
+        replacementtarget.submissionConditions shouldBe Some(Vector("delivery"))
+        val unselectedreplacement = correction.copy(oldContinuationId = next.issuedWorkContext.get.continuationId,
+          target = replacementdescription.target, selectionId = "unselected-replacement", idempotencyKey = "unselected-replacement-key")
+        When("the fresh changed timing is submitted without its own exact current Human selection")
+        val unauthorized = _call_("correctDelegateTaskScope", List(Property("input", unselectedreplacement, None)))
+        Then("the current pending issue remains unchanged")
+        unauthorized.isSuccess shouldBe false
+        _advance_().issuedWorkContext shouldBe next.issuedWorkContext
       }
     }
 
     "retain later obligations without certifying them at implementation submission or review" in {
       Given("the original adopted destination contract.")
-      val original = take(DelegateTask.inputC(_input)).copy(conditions = Vector("behavior", "delivery"))
+      val original = take(DelegateTask.inputC(_input)).copy(conditions = Vector("behavior", "delivery"), submissionConditions = None)
       When("only the original behavior obligation is selected for submission.")
       val planned = take(DelegateTaskScopeCorrection.correctedInputC(original, Vector.empty, Some(Vector("behavior"))))
       Then("every original obligation remains adopted.")
@@ -287,24 +298,29 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
       Then("both incomplete final claims are refused")
       incomplete.isSuccess shouldBe false
       uncommitted.isSuccess shouldBe false
-      When("the final semantic report satisfies every original condition against retained delivery")
-      val accepted = take(S.completedC(work, premature.copy(outcome = "accept"), ContextReference("actual-delivery-evidence", "1")))
-      Then("only the final report and its evidence append while retained delivery facts survive")
-      accepted.stage shouldBe "ReturnReady"
-      accepted.conditionReport.forall(_.satisfied) shouldBe true
-      accepted.commit shouldBe delivered.commit
-      accepted.receipts shouldBe delivered.receipts
-      accepted.reviewReference shouldBe delivered.reviewReference
-      accepted.evidenceReferences should contain (ContextReference("actual-delivery-evidence", "1"))
-      When("unknown IDs, all IDs, empty or duplicate or reversed IDs, and a replacement plan are proposed")
-      val invalidcorrections = Vector(
-        DelegateTaskScopeCorrection.correctedInputC(original, Vector.empty, Some(Vector("not-adopted"))),
+      When("even an all-true final report has no retained successful checks or matching committed candidate")
+      val unevidenced = S.admitResultC(work, premature.copy(outcome = "accept"))
+      Then("truthful stage-local submission cannot fabricate completed delivery")
+      unevidenced.isSuccess shouldBe false
+      When("a fresh current business input selects changed ordered timing including empty and full subsets")
+      val changed = Vector(
+        DelegateTaskScopeCorrection.correctedInputC(original, Vector.empty, Some(Vector.empty)),
         DelegateTaskScopeCorrection.correctedInputC(original, Vector.empty, Some(original.conditions)),
         DelegateTaskScopeCorrection.correctedInputC(planned, Vector.empty, Some(Vector("delivery"))))
-      val invalidinputs = Vector(Vector.empty[String], Vector("behavior", "behavior"), Vector("delivery", "behavior")).map { ids =>
+      Then("changed timing is model-valid without changing the original request conditions or authority")
+      changed.foreach { result =>
+        val current = take(result)
+        current.copy(submissionConditions = original.submissionConditions) shouldBe original
+      }
+      When("unknown IDs, duplicate or reversed IDs, or the same unchanged timing without added paths are proposed")
+      val invalidcorrections = Vector(
+        DelegateTaskScopeCorrection.correctedInputC(original, Vector.empty, Some(Vector("not-adopted"))),
+        DelegateTaskScopeCorrection.correctedInputC(planned, Vector.empty, planned.submissionConditions),
+        DelegateTaskScopeCorrection.correctedInputC(planned, Vector.empty, None))
+      val invalidinputs = Vector(Vector("behavior", "behavior"), Vector("delivery", "behavior"), Vector("foreign")).map { ids =>
         S.inputC(original.copy(submissionConditions = Some(ids)))
       }
-      Then("every invalid or replacement timing proposal is refused")
+      Then("every invalid or no-op timing proposal is refused")
       invalidcorrections.foreach(result => result.isSuccess shouldBe false)
       invalidinputs.foreach(result => result.isSuccess shouldBe false)
       import io.circe.syntax.*
@@ -317,7 +333,7 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
 
     "retain ordinary all-true requester and validation-only admission when no destination timing plan is adopted" in {
       Given("an unchanged ordinary destination and its original requester.")
-      val original = take(DelegateTask.inputC(_input)).copy(conditions = Vector("behavior", "delivery"))
+      val original = take(DelegateTask.inputC(_input)).copy(conditions = Vector("behavior", "delivery"), submissionConditions = None)
       val initial = take(S.startC(original, "participant", _checks))
       val report = original.conditions.map(id => S.Condition(id, true, "SPECIFICATION-OWNED original obligation"))
       val result = S.Result("completed", "SPECIFICATION-OWNED ordinary completion", Vector.empty, report, Vector.empty)
@@ -355,7 +371,7 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
       import WorkflowSbtValidation as T
       import RepositorySyncNativeMergeValidation.Receipt
       import io.circe.syntax.*
-      val original = take(DelegateTask.inputC(_input)).copy(conditions = Vector("behavior", "delivery"), reviewRequired = true,
+      val original = take(DelegateTask.inputC(_input)).copy(conditions = Vector("behavior", "delivery"), reviewRequired = true, submissionConditions = None,
         delegation = Some(take(DelegateTask.inputC(_input)).delegation.get.copy(publicationTarget = Some("fixture-publication"),
           permittedOperations = _contract.permittedOperations.toVector :+ "publishLocal", artifactCoordinates = Vector("org.example:fixture:0.0.1-SNAPSHOT"))))
       val planned = take(DelegateTaskScopeCorrection.correctedInputC(original, Vector.empty, Some(Vector("behavior"))))

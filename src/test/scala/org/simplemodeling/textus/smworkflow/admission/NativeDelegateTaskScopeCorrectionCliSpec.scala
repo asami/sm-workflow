@@ -18,8 +18,8 @@ import S.given
 /** Explicit installed qualification over a tiny, isolated destination.
   * All Human selections, worker observations and semantic facts below are
   * SPECIFICATION-OWNED. They establish no actual consumer consent or delivery.
-  * @since   Nov. 5, 2026
-  * @version Nov. 5, 2026
+  * @since   Nov.  5, 2026
+  * @version Nov.  5, 2026
   */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -66,7 +66,7 @@ final class NativeDelegateTaskScopeCorrectionCliSpec extends AnyWordSpec with Ma
           "SPECIFICATION-OWNED-requester", "org.example.ScopeCorrectionFixture", "destination", "documentation",
           NonEmptyVector.of("dispatch", "implement", "validate", "review", "commit", "return", "adopt"),
           Vector("remote-push"), NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-Human", "1")),
-          None, Vector.empty, "SPECIFICATION-OWNED fixture; actual consumer remains untouched"))
+          None, Vector.empty, "SPECIFICATION-OWNED fixture; actual consumer remains untouched"), Vector("behavior", "delivery"))
       val repository = Path.of(scenario.host.target.root)
       val document = Files.readString(repository.resolve("docs/phase.md"))
       val head = scenario.candidateHead
@@ -94,7 +94,7 @@ final class NativeDelegateTaskScopeCorrectionCliSpec extends AnyWordSpec with Ma
       before.stage shouldBe "Implement"
       old.kind shouldBe "Request"
       before.input.conditions shouldBe Vector("behavior", "delivery")
-      before.input.submissionConditions shouldBe None
+      before.input.submissionConditions shouldBe Some(Vector("behavior", "delivery"))
 
       When("the public structured description names this still-unclaimed issue and the selected submission IDs")
       val descriptioninput = V.DelegateTaskScopeCorrectionDescriptionInput(started.sessionId, oldcontext.continuationId,
@@ -142,7 +142,7 @@ final class NativeDelegateTaskScopeCorrectionCliSpec extends AnyWordSpec with Ma
       next.submitSessionId shouldBe old.submitSessionId
       after.input.conditions shouldBe before.input.conditions
       after.input.submissionConditions shouldBe Some(Vector("behavior"))
-      after.input.copy(submissionConditions = None) shouldBe before.input
+      after.input.copy(submissionConditions = before.input.submissionConditions) shouldBe before.input
       after.copy(input = before.input, evidenceReferences = before.evidenceReferences) shouldBe before
       successor.business.baseHead shouldBe originaltarget.business.baseHead
       successor.business shouldBe originaltarget.business

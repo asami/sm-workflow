@@ -18,7 +18,7 @@ import StandaloneFixExecution as S
 /** Ordinary public operations around the canonical CNCF continuation engine.
   * @since   Oct. 26, 2026
   *  version Oct. 27, 2026
-  * @version Nov. 5, 2026
+ * @version Nov.  5, 2026
   */
 private[smworkflow] object GoalTaskService {
   def bindC(creation: ComponentCreate, declaration: GoalPhaseNativeRun.Declaration): Consequence[spec.ServiceDefinition] =
@@ -29,6 +29,8 @@ private[smworkflow] object GoalTaskService {
 private[smworkflow] object DelegateTaskService {
   def bindC(creation: ComponentCreate, declaration: GoalPhaseNativeRun.Declaration): Consequence[spec.ServiceDefinition] =
     new BoundedTaskService(DelegateTaskNativeRun).bindC(creation, declaration)
+  def bindC(creation: ComponentCreate, h: Host, selections: ProfileStartAdmission.CallScopedSelectionPort): Consequence[spec.ServiceDefinition] =
+    new BoundedTaskService(DelegateTaskNativeRun).bindC(creation, h, selections)
 }
 
 /** One binding/completion implementation for independently declared entries. */
@@ -42,7 +44,7 @@ private[admission] final class BoundedTaskService(N: BoundedWorkNativeRun) {
   } yield service
 
   def bindC(creation: ComponentCreate, h: Host, selections: ProfileStartAdmission.CallScopedSelectionPort): Consequence[spec.ServiceDefinition] = for {
-    _ <- GoalPhaseNativeExecution.validatePairC(h.profiles, h.origin)
+    _ <- N._operating_context_c(h)
     definition <- if (N.delegation) DelegateTaskRuntimeCatalog.loadC() else GoalTaskRuntimeCatalog.loadC()
     storage <- WorkflowComponentStorage.bindC(creation, SmWorkflowComponent.componentId, h.configuration,
       Vector(definition), h.instances, h.continuations)
@@ -144,6 +146,16 @@ private[admission] final class BoundedTaskService(N: BoundedWorkNativeRun) {
           actual <- issued.loadC(submitted.continuationId).flatMap(_.map(Consequence.success)
             .getOrElse(N.invalid("Actual assigned work missing")))
           work <- NativeWorkflowOperationOutput.workInputC(actual)
+          _ <- if (work.operatingProfile.nonEmpty) for {
+            expected <- NativeWorkflowIssuedWorkContext.fromIssuedC(actual,
+              if (work.kind == "Review") NativeWorkflowIssuedWorkContext.Mode.Review else NativeWorkflowIssuedWorkContext.Mode.Implementation, N.inputCodec)
+            supplied <- NativeWorkflowOperationInput.recordC(request, "issuedWorkContext")
+            expectedjson <- expected.toRecord().toJsonStringC.flatMap(s => io.circe.parser.parse(s).fold(e => N.invalid(e.message), Consequence.success))
+              .flatMap(j => GoalPhaseNativeMetadata.normalizePublicJson(j).fold(N.invalid(_), Consequence.success))
+            suppliedjson <- supplied.toJsonStringC.flatMap(s => io.circe.parser.parse(s).fold(e => N.invalid(e.message), Consequence.success))
+              .flatMap(j => GoalPhaseNativeMetadata.normalizePublicJson(j).fold(N.invalid(_), Consequence.success))
+            _ <- if (suppliedjson == expectedjson) Consequence.unit else N.invalid("Task result issuedWorkContext differs from its actual captured request")
+          } yield () else Consequence.unit
           _ <- core.map(c => GoalPhaseParticipantAdmission.admitC(work.state.participant, c.executionContext))
             .getOrElse(N.invalid("Completion requires its current actor"))
           _ = decodedWork = Some(work)
@@ -159,9 +171,10 @@ private[admission] final class BoundedTaskService(N: BoundedWorkNativeRun) {
       val closing = new WorkflowCompletionServiceOperation.ClosingProgram[S.Result] {
         def selectC(submitted: ContinuationResult[S.Result], current: InstanceRecord) = core.map { call => for {
           actual <- issued.loadC(submitted.continuationId).flatMap(_.map(Consequence.success).getOrElse(N.invalid("Result is not assigned")))
+          _ <- WorkflowProtocolV1.admitResultC(actual, submitted)
           work <- actual.current match {
-            case order: WorkflowContinuation.WorkOrder[S.Work] => order.request.input.map(i => Consequence.success(i.value))
-              .getOrElse(N.invalid("Assigned input missing"))
+            case order: WorkflowContinuation.WorkOrder[S.Work] => N._admit_operating_execution_c(order, submitted.evidence)
+              .flatMap(_ => order.request.input.map(i => Consequence.success(i.value)).getOrElse(N.invalid("Assigned input missing")))
             case _ => N.invalid("Result is not a Task WorkOrder")
           }
           revision <- scala.util.Try(work.sourceRevision.toLong).toOption.map(Consequence.success)

@@ -25,7 +25,8 @@ import RepositorySyncManagedGitObservation as G
   * controller digest or AI-supplied plan admission is introduced.
   * @since   Oct.  6, 2026
   *  version Oct. 29, 2026
-  * @version Nov.  2, 2026
+  *  version Nov.  2, 2026
+  * @version Nov.  5, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeRun {
@@ -306,6 +307,7 @@ private[smworkflow] object GoalPhaseNativeRun {
             GoalPhaseClosureRecovery.describeOperation, GoalPhaseClosureRecovery.recoveryOperation,
             GoalPhaseRemainingPlanAdoption.describeOperation, GoalPhaseRemainingPlanAdoption.adoptionOperation,
             GoalPhaseDependencySourceRevision.describeOperation, GoalPhaseDependencySourceRevision.adoptionOperation,
+            GoalPhaseDevelopmentReconstruction.operation,
             GoalPhasePrerequisitePublicationRecovery.describeOperation, GoalPhasePrerequisitePublicationRecovery.recoveryOperation,
             GoalPhaseLegacyPurposeRepairContinuation.describeOperation, GoalPhaseLegacyPurposeRepairContinuation.admissionOperation,
             GoalPhaseReleaseRepairContinuation.describeOperation, GoalPhaseReleaseRepairContinuation.recoveryOperation,

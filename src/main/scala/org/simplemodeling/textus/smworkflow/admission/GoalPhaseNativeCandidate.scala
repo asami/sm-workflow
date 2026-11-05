@@ -239,6 +239,14 @@ private[smworkflow] object GoalPhaseNativeCandidate {
   }
   final case class Saved(record: InstanceRecord, payload: Payload)
 
+  /** Current typed status proves staging has no remaining selected worktree
+    * content to add. A staged deletion is already indexed as well.
+    */
+  private[admission] def alreadyIndexed(path: String, dirty: Vector[G.DirtyPath]): Boolean =
+    path != null && dirty != null && dirty.filter(entry => _covers(path, entry.path) ||
+      entry.renamedFrom.exists(_covers(path, _))).forall(entry =>
+      entry.worktree == ' ' && entry.index != '?' && !entry.unmerged)
+
   def ownershipC(session: F.Session, d: F.Declaration, core: ActionCall.Core, controller: O.State): Consequence[Unit] = for {
     actual <- G.observeC(core)
     owned = if (controller.releaseRepairActive) controller.plan.phaseOwnedPaths
@@ -456,7 +464,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
           observed <- store.inspectPinnedC(parent)
           prepared <- store.saveC("stage-intent-" + index, current.record, current.payload)
           _ <- store.acknowledgeC("goal-candidate-prepared:" + path)
-          _ <- if (store.primaryRepair.exists(saved => GoalPhasePrerequisitePrimaryRepair.stagedRemovalObserved(
+          _ <- if (alreadyIndexed(path, observed.dirty) || store.primaryRepair.exists(saved => GoalPhasePrerequisitePrimaryRepair.stagedRemovalObserved(
             store.d.candidatePaths, store.ownedPaths, current.payload.selectedPaths, observed.dirty,
             saved.fact.failure.excludedDirty, path))) store.acknowledgeC("goal-candidate-observed:" + path)
             else for {
@@ -480,7 +488,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
         store.loadC, store.saveC, store.acknowledgeC, store.dependencyChain)
     dependency <- if (historical) Consequence.success(legacyDependency)
       else GoalPhaseDependencySourceRevision.captureC(store.core, store.controller, legacyDependency,
-        store.loadC, store.saveC, store.acknowledgeC)
+        store.loadC, store.saveC, store.acknowledgeC, store.dependencyChain)
     prepared <- if (store.whole && store.controller.releaseRepairActive) _release_hygiene_c(store, dependency, parent)
       else Consequence.success(dependency)
     candidate <- if (prepared.payload.hygiene.exists(h => Set("diagnostic", "remaining-findings")(h.outcome)))

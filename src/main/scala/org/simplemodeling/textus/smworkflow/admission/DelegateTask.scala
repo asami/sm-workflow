@@ -1,6 +1,6 @@
 /**
  * @since   Oct. 27, 2026
- * @version Nov. 5, 2026
+ * @version Nov.  5, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -82,7 +82,8 @@ private[smworkflow] object DelegateTask {
       c.artifactCoordinates, c.consumerInstructions)
     val value = S.Input(v.repositoryIdentity, v.requestIdentity, v.objective, v.ownedPaths.toVector, v.checks.toVector,
       v.conditions.toVector, v.sourceReferences.toVector.map(r => ContextReference(r.identity, r.revision)),
-      v.reviewRequired, v.kind, v.scalaLint, v.repairLimit, Some(S.Task(v.sourceKind, v.dependencies)), delegation = Some(contract))
+      v.reviewRequired, v.kind, v.scalaLint, v.repairLimit, Some(S.Task(v.sourceKind, v.dependencies)), delegation = Some(contract),
+      submissionConditions = Some(v.submissionConditions.toVector))
     S.inputC(value).map(_ => value)
   }
 
@@ -163,6 +164,8 @@ private[smworkflow] object DelegateTask {
     _ <- if (state.input.copy(delegation = expected.delegation, submissionConditions = expected.submissionConditions) == expected &&
       expected.delegation.exists(c => c.copy(role = "destination") == contract)) Consequence.unit
       else invalid("returned request, owners, scope or authorization differs")
+    _ <- if (state.input.submissionConditions == expected.submissionConditions || expected.submissionConditions.isEmpty)
+      Consequence.unit else invalid("returned condition timing differs from the original explicit request")
     _ <- WorkflowRepairAssessment.checksC(state.input.kind, state.input.scalaLint, state.selected, state.receipts)
     _ <- checksC(state.input, state.selected)
     _ <- if (state.conditionReport.map(_.identity) == state.input.conditions && state.conditionReport.forall(_.satisfied) &&

@@ -31,6 +31,7 @@ import GoalPhasePrerequisitePublicationRecovery as B
 import GoalPhasePrerequisitePrimaryRepair as A
 import GoalPhaseCurrentSourceArtifactAdoption as Z
 import GoalPhaseCurrentInventoryContinuation as L
+import GoalPhaseDevelopmentReconstruction as X
 
 /** Ordered implementation, repair and review work and their provided result are installed
   * together. Canonical atomic suspension/completion owns all writes. No result
@@ -55,7 +56,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           direction.target.plan.revision) && capture.primaryBase == direction.target.primaryBase) ||
         failure.validation.dependencySource.exists(capture => GoalPhaseDependencySourceRevision.captureValid(capture) &&
           capture.direction == direction && capture.sessionId == direction.target.sessionId &&
-          capture.plan == ContextReference(direction.target.plan.identity, direction.target.plan.revision) &&
+          (capture.plan == ContextReference(direction.target.plan.identity, direction.target.plan.revision) ||
+            capture.planSelection.nonEmpty) &&
           capture.primaryBase == direction.target.primaryBase && capture.step == direction.target.step))
 
   /** Constructed only while walking genuine accepted native closures. Decoding
@@ -64,6 +66,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     capture: GoalPhaseDependencyValidation.Capture, closureRevision: String)
   final case class AcceptedSourceDependency private[GoalPhaseNativeWorkContinuation](
     capture: GoalPhaseDependencySourceRevision.Capture, closureRevision: String)
+  final case class AcceptedDevelopmentSelection private[GoalPhaseNativeWorkContinuation](
+    reference: ContextReference, session: String, plan: O.Plan, base: O.Snapshot,
+    step: String, generation: Long, recordRevision: Long)
   final case class HistoricalPhaseDependency private[GoalPhaseNativeWorkContinuation](
     source: R.Payload, validation: GoalPhaseNativeValidation.Saved, review: S.Request,
     returned: ContinuationResult[S.Result], completion: InstanceRecord, repairGeneration: Long) {
@@ -77,7 +82,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     val acceptedSources: Vector[AcceptedSourceDependency] = Vector.empty,
     val activePhaseCapture: Option[GoalPhaseDependencyValidation.Capture] = None,
     val activePhaseSource: Option[R.Payload] = None,
-    val historicalPhase: Vector[HistoricalPhaseDependency] = Vector.empty) {
+    val historicalPhase: Vector[HistoricalPhaseDependency] = Vector.empty,
+    val developmentSelections: Vector[AcceptedDevelopmentSelection] = Vector.empty) {
     import GoalPhaseDependencyValidation as V
     private def _same(a: V.Binding, b: V.Binding): Boolean =
       a.requester == b.requester && a.dependency == b.dependency && a.root == b.root &&
@@ -170,10 +176,24 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     }
     def sourceCaptureC(capture: GoalPhaseDependencySourceRevision.Capture): Consequence[Unit] =
       sourceC(capture.direction).flatMap { _ =>
-        if (GoalPhaseDependencySourceRevision.captureValid(capture) &&
+        val selected = GoalPhaseDependencySourceRevision.captureValid(capture) && capture.planSelection.forall(reference => developmentSelections.exists(value =>
+          value.reference == reference && value.session == capture.sessionId &&
+            ContextReference(value.plan.identity, value.plan.revision) == capture.plan && value.base == capture.primaryBase &&
+            value.step == capture.step && value.generation <= capture.generation &&
+            value.recordRevision <= capture.sourceRevision.toLong &&
+            value.recordRevision > capture.direction.target.pendingRevision.toLong))
+        if (GoalPhaseDependencySourceRevision.captureValid(capture) && selected &&
             acceptedSources.find(_.capture.step == capture.step).forall(_.capture == capture)) Consequence.unit
         else V.invalid("source capture differs from its accepted native closure")
       }
+    /** Lookup is authority only because the private-constructor chain is built
+      * while traversing an actual admitted managed reconstruction receipt. */
+    def developmentSelectionC(plan: O.Plan, session: String, base: O.Snapshot, step: String,
+      generation: Long, sourceRevision: String): Consequence[ContextReference] =
+      developmentSelections.findLast(value => value.plan == plan && value.session == session && value.base == base &&
+        value.step == step && value.generation <= generation && sourceRevision.toLongOption.exists(_ >= value.recordRevision))
+        .map(value => Consequence.success(value.reference))
+        .getOrElse(V.invalid("source capture has no matching actual common Plan selection"))
   }
   private val _empty_dependency_chain = new DependencyChain(Vector.empty, Vector.empty)
   private final case class Prepared(source: F.Session, input: S.Request,
@@ -235,7 +255,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     primaryPublicationDirections: Vector[B.PrimarySaved] = Vector.empty,
     primaryRepair: Option[A.Saved] = None,
     primaryPublicationAuthority: Vector[A.Directed] = Vector.empty,
-    currentArtifactDirections: Vector[Z.Saved] = Vector.empty)
+    currentArtifactDirections: Vector[Z.Saved] = Vector.empty,
+    developmentReconstruction: Option[X.Saved] = None,
+    developmentReconstructionAnswer: Option[(String, ContextReference)] = None)
   private sealed trait Located
   private final case class Frontier(cursor: Cursor) extends Located
   private final case class Work(prepared: Prepared) extends Located
@@ -245,6 +267,146 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
 
   final class Port private[GoalPhaseNativeWorkContinuation](d: F.Declaration, definition: DefinitionBinding,
     acknowledgement: String => Consequence[Unit]) {
+    def reconstructDevelopmentC(input: org.simplemodeling.textus.smworkflow.value.GoalPhaseDevelopmentReconstructionInput,
+      core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
+      _ <- X.proposalC(input)
+      source <- F.retainedSessionC(input.sessionId, d, definition, core)
+      _ <- WorkflowForceClosure.requireOpenC(source.current)
+      initial <- _initial_cursor_c(source)
+      located <- _walk_c(source, initial, None, None, None, core, historyonly = true)
+      result <- located match {
+        case Work(prepared) => _work_output_c(prepared, core)
+        case Human(human, findings, _) => _human_output_c(human, findings, core)
+        case LocatedRecording(recording) => _recording_port.issuedC(recording, core)
+          .flatMap(NativeWorkflowOperationOutput.goalRecordingRequestC(_, recording.findings))
+        case Frontier(cursor) if cursor.controller.pendingRepair.nonEmpty || cursor.controller.policyRepairPending ||
+            cursor.controller.repairControl.flatMap(_.stop).nonEmpty =>
+          if (cursor.controller.stage == O.Stage.Decision) _human_source_c(source, cursor)
+            .flatMap(human => _human_output_c(human, cursor.findings, core))
+          else _wait_cursor_c(cursor, "The current repair reservation/stop remains its existing boundary; collect or resume it through ordinary Advance.")
+        case Frontier(cursor) => _reconstruct_development_c(source, cursor, input, core, Vector.empty)
+        case Paused(cursor, reason, _) => _reconstruct_development_c(source, cursor, input, core,
+          Vector("Remaining native action is unresolved: " + reason +
+            " Retain the original UNKNOWN; observe or reconcile through its existing owner before any replay."))
+      }
+    } yield result
+
+    private def _reconstruct_development_c(source: F.Session, cursor: Cursor,
+      input: org.simplemodeling.textus.smworkflow.value.GoalPhaseDevelopmentReconstructionInput,
+      core: ActionCall.Core, uncertainty: Vector[String]):
+      Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
+      _ <- if (cursor.from == source.current && cursor.from.suspension.isEmpty) Consequence.unit
+        else F.invalid("Collect the actual pending work or Human decision before development reconstruction")
+      documents <- X.documentsC(input, d, core)
+      unchanged = cursor.developmentReconstruction.exists(saved =>
+        saved.payload.documents.captured.plan == documents.captured.plan &&
+          saved.payload.documents.phasePath == documents.phasePath &&
+          saved.payload.documents.checklistPath == documents.checklistPath &&
+          saved.payload.documents.phaseText == documents.phaseText &&
+          saved.payload.documents.checklistText == documents.checklistText)
+      unstarted = cursor.developmentReconstruction.exists(_.record == cursor.from) && cursor.candidate.isEmpty &&
+        cursor.validation.isEmpty && cursor.controller.closureIntent.isEmpty &&
+        Set(O.Stage.InspectCandidate, O.Stage.PhaseInspection)(cursor.controller.stage)
+      result <- if (cursor.developmentReconstructionAnswer.exists(answer =>
+          Set("AdoptDevelopmentReconstruction", "KeepCurrentRequirements")(answer._1))) _wait_cursor_c(cursor,
+        "The actual Human document choice is retained. Separate ordinary Advance appends its common selection before further reconstruction.")
+      else if (unchanged && unstarted && uncertainty.isEmpty) _wait_cursor_c(cursor,
+        "The selected current document projection already has an unstarted native capture. " +
+          "Its generation is retained; ordinary Advance will observe the then-current worktree. No byte-identity claim is made.")
+      else for {
+        observed <- X.observeC(d, core)
+        target = cursor.dependencySourceDirection.filter(_.target.initialOrigin.nonEmpty).map(_.target.generation)
+        assessment = X.assess(cursor.controller, documents.captured.plan, d.candidatePaths,
+          d.validationPolicy.toVector.flatMap(_.checks.map(_.identity)),
+          d.phaseValidationPolicy.toVector.flatMap(_.checks.map(_.identity)), observed,
+          cursor.controller.candidate, unstarted, target, uncertainty ++
+            cursor.controller.closureIntent.toVector.map(identity => "Unresolved native closure intent " + identity +
+              "; a requirements choice cannot authorize commit, publication or push replay."))
+        reuse = unchanged && assessment.retainEvidence && uncertainty.isEmpty &&
+          cursor.developmentReconstruction.nonEmpty
+        result <- if (reuse) _wait_cursor_c(cursor,
+          "The current HEAD/index and clean selected worktree retain the applicable native candidate/check/review evidence. No new generation or effects.")
+        else for {
+          payload <- Consequence.success(X.Payload(source.current.identity.value, cursor.from.revision.value.toString,
+            source.participantIdentity, core.component.get.core.instanceId.canonicalKey,
+            ContextReference(cursor.from.definition.workflowIdentity.value, cursor.from.definition.workflowRevision.value),
+            documents, observed, assessment, input.rationale, target,
+            cursor.lastresult.map(_._2.resultReference), cursor.candidate.map(saved =>
+              ContextReference(saved.record.identity.value, saved.record.revision.value.toString)),
+            cursor.validation.map(saved => ContextReference(saved.record.identity.value, saved.record.revision.value.toString)),
+            d.candidatePaths,
+            cursor.developmentReconstruction.map(X.contextReference)))
+          _ <- if (assessment.reasons.isEmpty || cursor.lastresult.nonEmpty) Consequence.unit
+            else F.invalid("Reconstruction uncertainty has no genuine retained semantic result for its ordered Human context")
+          saved <- X.saveC(source, cursor.from, cursor.controller, d, core, payload)
+          selected <- _development_cursor_c(cursor, saved)
+          output <- if (assessment.reasons.nonEmpty) {
+            val current = source.copy(current = saved.record)
+            _human_source_c(current, selected).flatMap(human => _human_output_c(human, selected.findings, core))
+          } else _wait_cursor_c(selected,
+            "Current development selection retained in this Session. Use a separate ordinary Advance for remaining native work, checks, independent review and closure.")
+        } yield output
+      } yield result
+    } yield result
+
+    private def _development_cursor_c(cursor: Cursor, saved: X.Saved): Consequence[Cursor] = for {
+      selectedplan <- Consequence.success(saved.controller.plan == saved.payload.documents.captured.plan &&
+        (saved.payload.humanAnswer.isEmpty || cursor.developmentReconstructionAnswer.exists(_._1 == "AdoptDevelopmentReconstruction")))
+      documents <- Consequence.success(if (selectedplan)
+        saved.payload.documents.captured.documents else cursor.documents)
+      policy <- if (!selectedplan) Consequence.success(cursor.documentpolicy)
+        else documents.fold(Consequence.success(Option.empty[P.Policy]))(value =>
+          P.policyC(saved.controller.plan, value, saved.payload.candidatePaths).map(Some(_)))
+    } yield {
+      val fresh = saved.controller.generation > cursor.controller.generation && saved.controller.candidate.isEmpty &&
+        Set(O.Stage.InspectCandidate, O.Stage.PhaseInspection)(saved.controller.stage)
+      cursor.copy(from = saved.record, controller = saved.controller,
+        documents = documents,
+        candidate = if (fresh) None else cursor.candidate, validation = if (fresh) None else cursor.validation,
+        recordingCandidate = if (fresh) None else cursor.recordingCandidate,
+        inspectionSource = if (fresh) None else cursor.inspectionSource,
+        sourceHistoryRecovery = if (fresh) None else cursor.sourceHistoryRecovery,
+        sourceHistoryContinuation = if (fresh) None else cursor.sourceHistoryContinuation,
+        sourceHistoryNormalization = if (fresh) None else cursor.sourceHistoryNormalization,
+        sourceHistoryNormalizationContinuation = if (fresh) None else cursor.sourceHistoryNormalizationContinuation,
+        candidateObservation = if (fresh) None else cursor.candidateObservation,
+        candidateObservationContinuation = if (fresh) None else cursor.candidateObservationContinuation,
+        wholePhaseCandidateRecovery = if (fresh) None else cursor.wholePhaseCandidateRecovery,
+        sourceHistoryRecoveryConsumed = if (fresh) false else cursor.sourceHistoryRecoveryConsumed,
+        documentpolicy = policy,
+        dependencyChain = if (selectedplan &&
+            saved.payload.assessment.incompatible.isEmpty && saved.payload.assessment.uncertainEffects.isEmpty &&
+            (saved.payload.assessment.questions.isEmpty || saved.payload.humanAnswer.nonEmpty))
+          new DependencyChain(cursor.dependencyChain.accepted, cursor.dependencyChain._legacy,
+            cursor.dependencyChain.acceptedSources, cursor.dependencyChain.activePhaseCapture,
+            cursor.dependencyChain.activePhaseSource, cursor.dependencyChain.historicalPhase,
+            cursor.dependencyChain.developmentSelections :+ AcceptedDevelopmentSelection(X.contextReference(saved),
+              saved.record.identity.value, saved.controller.plan, saved.controller.base,
+              saved.controller.plan.steps.lift(saved.controller.cursor).map(_.identity).getOrElse("phase:" + saved.controller.plan.phase),
+              saved.controller.generation, saved.record.revision.value))
+          else cursor.dependencyChain,
+        developmentReconstruction = Some(saved), developmentReconstructionAnswer = None)
+    }
+
+    private def _select_development_c(source: F.Session, cursor: Cursor, core: ActionCall.Core):
+      Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
+      previous <- cursor.developmentReconstruction.map(Consequence.success)
+        .getOrElse(F.invalid("development answer has no actual common selection"))
+      answer <- cursor.developmentReconstructionAnswer.map(Consequence.success)
+        .getOrElse(F.invalid("development selection has no actual ordered Human answer"))
+      _ <- if (Set("AdoptDevelopmentReconstruction", "KeepCurrentRequirements")(answer._1)) Consequence.unit
+        else F.invalid("only the actual admitted development choice selects requirements")
+      payload = previous.payload.copy(fromRevision = cursor.from.revision.value.toString,
+        previousSelection = Some(X.contextReference(previous)), humanAnswer = Some(answer._2))
+      saved <- X.saveC(source, cursor.from, cursor.controller, d, core, payload, Some(answer))
+      next <- _development_cursor_c(cursor, saved)
+      output <- if (saved.payload.assessment.uncertainEffects.nonEmpty)
+        _wait_cursor_c(next, "The Human document choice is retained. Remaining uncertainty: " +
+          saved.payload.assessment.uncertainEffects.mkString("; ") +
+          ". No uncertain effect is replayed and no repair allowance is refunded.")
+      else _wait_cursor_c(next, "The actual Human development selection is retained. Separate ordinary Advance owns all further work and effects.")
+    } yield output
+
     /** Invocation-local standard composition reads history, never advances it.
       * Fixed host declarations do not use this projection or gain new paths.
       */
@@ -1230,6 +1392,42 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     /** The sole read-only traversal follows only contiguous actual predecessors. */
     private def _walk_c(source: F.Session, cursor: Cursor, soughtwork: Option[ContinuationIdentity],
       soughthuman: Option[ContinuationIdentity], soughtrecording: Option[ContinuationIdentity], core: ActionCall.Core,
+      historyonly: Boolean = false): Consequence[Located] =
+      source.current.history.find(entry => entry.revision.value > cursor.from.revision.value &&
+        entry.causation.value == X.causation) match {
+        case None => _walk_history_c(source, cursor, soughtwork, soughthuman, soughtrecording, core, historyonly)
+        case Some(entry) => for {
+          predecessor <- GoalPhaseNativeHistory.prefixC(source.current, InstanceRevision(entry.revision.value - 1))
+          located <- _walk_history_c(source.copy(current = predecessor), cursor, None, None, None, core, historyonly = true)
+          prior <- located match {
+            case Frontier(value) if value.from == predecessor => Consequence.success(value)
+            case Paused(value, _, _) if value.from == predecessor => Consequence.success(value)
+            case _ => F.invalid("development reconstruction crossed pending actual work, Human or recording")
+          }
+          actualanswer = prior.developmentReconstructionAnswer.filter(answer =>
+            Set("AdoptDevelopmentReconstruction", "KeepCurrentRequirements")(answer._1))
+          saved <- X.retainedC(source, predecessor, prior.controller, core, actualanswer)
+          _ <- if (saved.payload.semanticResult == prior.lastresult.map(_._2.resultReference)) Consequence.unit
+            else F.invalid("development reconstruction changed its genuine retained semantic result")
+          _ <- if (saved.payload.candidateReference == prior.candidate.map(value =>
+              ContextReference(value.record.identity.value, value.record.revision.value.toString)) &&
+              saved.payload.validationReference == prior.validation.map(value =>
+                ContextReference(value.record.identity.value, value.record.revision.value.toString))) Consequence.unit
+            else F.invalid("development reconstruction changed its retained candidate/check references")
+          _ <- if (saved.payload.previousSelection == prior.developmentReconstruction.map(X.contextReference) &&
+              saved.payload.humanAnswer == actualanswer.map(_._2) &&
+              saved.payload.humanAnswer.forall(_ => prior.developmentReconstruction.exists(previous =>
+                previous.payload.documents == saved.payload.documents && previous.payload.observation == saved.payload.observation &&
+                  previous.payload.assessment == saved.payload.assessment))) Consequence.unit
+            else F.invalid("development reconstruction crosses its actual selected projection or ordered Human answer")
+          selected <- _development_cursor_c(prior, saved)
+          result <- _walk_c(source, selected, soughtwork, soughthuman,
+            soughtrecording, core, historyonly)
+        } yield result
+      }
+
+    private def _walk_history_c(source: F.Session, cursor: Cursor, soughtwork: Option[ContinuationIdentity],
+      soughthuman: Option[ContinuationIdentity], soughtrecording: Option[ContinuationIdentity], core: ActionCall.Core,
       historyonly: Boolean = false): Consequence[Located] = for {
       _ <- if (cursor.dependencyChain.historicalPhase.forall(p => d.phaseDependencyValidation.contains(p.capture.admission.binding)))
         Consequence.unit else F.invalid("historical phase dependency binding was removed or changed")
@@ -1320,7 +1518,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
               saved <- L.retainedC(selected, d, core).flatMap(_.map(Consequence.success)
                 .getOrElse(F.invalid("current inventory supersession has no retained receipt")))
             } yield Some(saved) else Consequence.success(Option.empty[L.Saved])
-            adopted <- if (policy.nonEmpty || inventory.nonEmpty || currentinventory.nonEmpty || decision.sourceHistoryRecovery.nonEmpty) Consequence.success(Option.empty[GoalPhaseRemainingPlanAdoption.Selected])
+            adopted <- if (policy.nonEmpty || inventory.nonEmpty || currentinventory.nonEmpty || decision.sourceHistoryRecovery.nonEmpty ||
+                decision.developmentReconstruction.nonEmpty) Consequence.success(Option.empty[GoalPhaseRemainingPlanAdoption.Selected])
               else GoalPhaseRemainingPlanAdoption.retainedC(decision, core, Some(d))
             result <- if (normalization.nonEmpty) {
               val saved = normalization.get
@@ -1380,6 +1579,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                   phasedeferral = answer.result.value.choice == "AdoptPlanRevision" &&
                     input.planRevision.exists(_.revisionScope.contains(GoalPhasePlanRevision.phaseAcceptanceDeferralScope))
                   resumed = cursor.copy(from = next, controller = state, documents = documents, deferredHuman = deferred,
+                    developmentReconstructionAnswer = if (input.developmentReconstruction.nonEmpty)
+                      Some(answer.result.value.choice -> answer.resultReference) else cursor.developmentReconstructionAnswer,
                     dependencyApprovals = if (answer.result.value.choice == "ApproveDependencyScope")
                       cursor.dependencyApprovals :+ GoalPhaseDependencyValidation.Approval(
                         cursor.controller.plan.steps.lift(cursor.controller.cursor).map(_.identity)
@@ -1400,7 +1601,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                       S.DecisionContext(decision.result.result.value, answer.result.value.choice, answer.result.value.rationale,
                         Some(answer.resultReference))))
                   following <- GoalPhaseNativeHistory.nextC(source.current, next)
-                  result <- if (Set("ResumeAssignedWork", "ContinueRepairs", "AdoptPlanRevision", "RejectPlanRevision", "ApproveDependencyScope", "RejectDependencyScope", "AuthorizeNewAttempt")(answer.result.value.choice) ||
+                  result <- if (Set("ResumeAssignedWork", "ContinueRepairs", "AdoptPlanRevision", "RejectPlanRevision", "ApproveDependencyScope", "RejectDependencyScope", "AuthorizeNewAttempt", "AdoptDevelopmentReconstruction", "KeepCurrentRequirements")(answer.result.value.choice) ||
                       (deferred.nonEmpty && following.exists(_.causation.value == K.causation)))
                     _walk_c(source, resumed, soughtwork, soughthuman, soughtrecording, core, historyonly)
                   else Consequence.success[Located](Paused(resumed, if (answer.result.value.choice == "Defer")
@@ -1433,7 +1634,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                             prepared.input.stepIdentity.getOrElse(""), prepared.input.generation, prepared.input.originalBase,
                             pending.revision.next.value, admission), prepared.dependencyChain.acceptedSources,
                           prepared.dependencyChain.activePhaseCapture, prepared.dependencyChain.activePhaseSource,
-                          prepared.dependencyChain.historicalPhase)
+                          prepared.dependencyChain.historicalPhase, prepared.dependencyChain.developmentSelections)
                       }
                     state <- _completed_state_c(prepared.copy(dependencyChain = authenticated), value.completion.result)
                     findings <- N.accumulateC(cursor.findings, prepared.input, value.completion.result)
@@ -1465,7 +1666,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                       proof = HistoricalPhaseDependency(original, validation, prepared.input,
                         value.completion.result, next, state.generation)
                     } yield new DependencyChain(authenticated.accepted, authenticated._legacy, authenticated.acceptedSources,
-                      None, None, authenticated.historicalPhase :+ proof)
+                      None, None, authenticated.historicalPhase :+ proof, authenticated.developmentSelections)
                     clear = state.stage == O.Stage.InspectCandidate || state.stage == O.Stage.Repair ||
                       (prepared.input.kind == "RepairStep" && state.stage == O.Stage.PhaseInspection)
                     result <- _walk_c(source, cursor.copy(from = next, controller = state,
@@ -1594,7 +1795,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         else for {
           capture <- retained.saved.payload.capture.map(Consequence.success).getOrElse(F.invalid("Release capture disappeared"))
           chain = new DependencyChain(cursor.dependencyChain.accepted, cursor.dependencyChain._legacy,
-            cursor.dependencyChain.acceptedSources, Some(capture), Some(retained.saved.payload), cursor.dependencyChain.historicalPhase)
+            cursor.dependencyChain.acceptedSources, Some(capture), Some(retained.saved.payload), cursor.dependencyChain.historicalPhase,
+            cursor.dependencyChain.developmentSelections)
           _ <- chain.captureC(capture)
           result <- _walk_c(source, cursor.copy(from = retained.saved.record, dependencyChain = chain,
             releaseDependency = Some(retained)), soughtwork, soughthuman, soughtrecording, core, historyonly)
@@ -2144,12 +2346,16 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     private def _source_check_failure(cursor: Cursor): Option[S.CheckFailureContext] = for {
       direction <- cursor.dependencySourceDirection
       if cursor.candidate.isEmpty && cursor.validation.isEmpty && !cursor.controller.releaseRepairActive &&
-        cursor.controller.plan == direction.target.plan && cursor.controller.base == direction.target.primaryBase &&
+        (cursor.controller.plan == direction.target.plan || cursor.dependencyChain.developmentSelectionC(
+          cursor.controller.plan, direction.target.sessionId, cursor.controller.base, direction.target.step,
+          cursor.controller.generation, cursor.from.revision.value.toString).isSuccess) &&
+        cursor.controller.base == direction.target.primaryBase &&
         cursor.controller.plan.steps.lift(cursor.controller.cursor).exists(_.identity == direction.target.step)
       prior <- cursor.lastresult
       input = prior._1
       if input.kind == "RepairStep" && input.review.isEmpty && input.instanceIdentity == direction.target.sessionId &&
-        input.selectedPlan == direction.target.plan && input.originalBase == direction.target.primaryBase &&
+        (input.selectedPlan == direction.target.plan || input.selectedPlan == cursor.controller.plan) &&
+        input.originalBase == direction.target.primaryBase &&
         input.stepIdentity.contains(direction.target.step)
       failure <- input.checkFailure
       if sourceCheckFailureMatches(direction, failure)
@@ -2204,7 +2410,14 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     private def _frontier_c(source: F.Session, cursor: Cursor, core: ActionCall.Core):
       Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = {
       val recording = _recording_source(source, cursor)
-      if (cursor.controller.stage == O.Stage.Validation && (cursor.prerequisiteRecovery.nonEmpty ||
+      if (cursor.developmentReconstructionAnswer.exists(answer =>
+          Set("AdoptDevelopmentReconstruction", "KeepCurrentRequirements")(answer._1)))
+        _select_development_c(source, cursor, core)
+      else if (cursor.developmentReconstruction.exists(saved => saved.payload.humanAnswer.nonEmpty &&
+          saved.payload.assessment.uncertainEffects.nonEmpty))
+        _wait_cursor_c(cursor, "The development requirements choice is retained; unresolved native effects remain: " +
+          cursor.developmentReconstruction.get.payload.assessment.uncertainEffects.mkString("; "))
+      else if (cursor.controller.stage == O.Stage.Validation && (cursor.prerequisiteRecovery.nonEmpty ||
           cursor.prerequisiteWaitSource.nonEmpty || cursor.prerequisiteUnknownDirection.nonEmpty) ||
           cursor.sourceHistoryNormalization.nonEmpty || cursor.sourceHistoryNormalizationContinuation.nonEmpty ||
           cursor.candidateObservation.nonEmpty || cursor.wholePhaseCandidateRecovery.nonEmpty) _dispatch_c(source, cursor, core)
@@ -2473,7 +2686,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           else F.invalid("source successor requires genuine fresh checks, independent review and native Step closure")
       } yield new DependencyChain(cursor.dependencyChain.accepted, cursor.dependencyChain._legacy,
         cursor.dependencyChain.acceptedSources :+ AcceptedSourceDependency(capture, record.revision.value.toString),
-        cursor.dependencyChain.activePhaseCapture, cursor.dependencyChain.activePhaseSource, cursor.dependencyChain.historicalPhase)
+        cursor.dependencyChain.activePhaseCapture, cursor.dependencyChain.activePhaseSource, cursor.dependencyChain.historicalPhase,
+        cursor.dependencyChain.developmentSelections)
       else if (next.cursor == cursor.controller.cursor || cursor.candidate.flatMap(_.payload.dependency).isEmpty)
         Consequence.success(cursor.dependencyChain)
       else for {
@@ -2487,7 +2701,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           else F.invalid("accepted dependency anchor requires genuine successful checks, review and Step closure")
       } yield new DependencyChain(cursor.dependencyChain.accepted :+ AcceptedDependency(capture, record.revision.value.toString),
         cursor.dependencyChain._legacy, cursor.dependencyChain.acceptedSources, cursor.dependencyChain.activePhaseCapture,
-        cursor.dependencyChain.activePhaseSource, cursor.dependencyChain.historicalPhase)
+        cursor.dependencyChain.activePhaseSource, cursor.dependencyChain.historicalPhase, cursor.dependencyChain.developmentSelections)
 
     private def _dependency_freshness_c(cursor: Cursor, core: ActionCall.Core): Consequence[Unit] = for {
       _ <- if (cursor.dependencyChain.historicalPhase.forall(p => d.phaseDependencyValidation.contains(p.capture.admission.binding)))
@@ -2700,7 +2914,12 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     } yield plan.copy(work = work, input = captured)
 
     private def _human_source_c(source: F.Session, cursor: Cursor): Consequence[H.Source] =
-      cursor.lastresult.map { case (input, result) => for {
+      if (cursor.developmentReconstruction.exists(saved => saved.payload.assessment.reasons.nonEmpty &&
+          saved.payload.humanAnswer.isEmpty)) cursor.lastresult.map { case (input, result) =>
+        Consequence.success(H.Source(source, input, cursor.controller, cursor.from, result, cursor.candidate,
+          cursor.documents, developmentReconstruction = cursor.developmentReconstruction.map(_.payload)))
+      }.getOrElse(F.invalid("development reconstruction Human has no genuine preceding semantic result"))
+      else cursor.lastresult.map { case (input, result) => for {
         reason <- result.result.value.dependencyProposal.filter(_.scopeUpdate.nonEmpty) match {
           case None => Consequence.success(Option.empty[String])
           case Some(proposed) => I.assessAssignmentC(input, proposed, cursor.dependencyApprovals, cursor.dependencyDecisions).flatMap {
@@ -2711,7 +2930,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         human <- if (cursor.controller.stage == O.Stage.Decision ||
             (cursor.controller.stage == O.Stage.InspectCandidate && cursor.sourceHistoryRecovery.nonEmpty)) Consequence.success(
           H.Source(source, if (cursor.sourceHistoryRecovery.nonEmpty) input else input.copy(issues = cursor.issues), cursor.controller, cursor.from,
-            result, cursor.candidate, cursor.documents, cursor.sourceHistoryRecovery, reason))
+            result, cursor.candidate, cursor.documents, cursor.sourceHistoryRecovery, reason,
+            cursor.developmentReconstruction.filter(saved => saved.payload.assessment.reasons.nonEmpty &&
+              saved.payload.humanAnswer.isEmpty).map(_.payload)))
         else F.invalid("Human question has no actual Decision predecessor")
       } yield human }.getOrElse(F.invalid("Human question has no genuine preceding semantic result"))
 

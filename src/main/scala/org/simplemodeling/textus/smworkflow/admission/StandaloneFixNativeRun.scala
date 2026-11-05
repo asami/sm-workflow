@@ -29,10 +29,12 @@ private[smworkflow] object BoundedWorkRuntime {
     review: Option[GoalPhaseNativeReview.EvidencePort],
     evidence: Option[CommonEvidence.Policy], journal: Option[DevelopmentJournal.Policy],
     publication: Option[LocalPublicationRuntime.Policy] = None, hygieneMode: String = CommitHygiene.autoFix,
-    completionRecords: Option[CompletionRecords.Policy] = None)
+    completionRecords: Option[CompletionRecords.Policy] = None,
+    operatingContext: Option[GoalPhaseOperatingProfiles.Context] = None)
   def host(d: GoalPhaseNativeRun.Declaration): Host = Host(d.configuration, d.instances, d.continuations,
     d.input.repositoryIdentity, d.target.root.toString, d.target.localBranch, d.candidatePaths,
-    d.validationPolicy.toVector.flatMap(_.checks), d.executionProfiles, d.executionOrigin, d.reviewInstallation.map(_.evidence), d.evidencePolicy, d.journalPolicy, d.localPublication, d.commitHygieneMode, d.completionRecords)
+    d.validationPolicy.toVector.flatMap(_.checks), d.executionProfiles, d.executionOrigin, d.reviewInstallation.map(_.evidence), d.evidencePolicy, d.journalPolicy, d.localPublication, d.commitHygieneMode, d.completionRecords,
+    Some(GoalPhaseOperatingProfiles.context(d)))
   final case class Payload(state: S.State, root: String, branch: String, baseHead: String,
     implementationWorker: Option[String] = None, unrelated: Option[Vector[G.DirtyPath]] = None, implementationWorkers: Option[Vector[String]] = None,
     supersededWork: Option[String] = None, hygiene: Option[CommitHygiene.Record] = None,
@@ -49,7 +51,7 @@ private[smworkflow] object BoundedWorkRuntime {
 /** Standalone business ownership over canonical CNCF persistence and execution.
   * No Phase Start, Plan, Step acceptance, commit or private command driver.
   * @since   Oct. 26, 2026
-  * @version Nov. 5, 2026
+  * @version Nov.  5, 2026
   */
 private[smworkflow] object StandaloneFixNativeRun extends BoundedWorkNativeRun(false) {
   type Host = BoundedWorkRuntime.Host
@@ -153,18 +155,21 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
   } yield input
 
   /** Semantic intent only; the configured runtime owns concrete profile selection. */
-  private[admission] def executionRequirementC(input: S.Input, stage: String): Consequence[ExecutionRequirement] = {
+  private[admission] def _classification_c(input: S.Input, stage: String): Consequence[GoalPhaseWorkClassification.Classification] = {
     import GoalPhaseWorkClassification.*
-    for {
-      _ <- if (Set("Implement", "Repair", "Review", "DeliveryAcceptance")(stage) && Set("code", "documentation")(input.kind))
-        Consequence.unit else invalid("Fresh work has no supported semantic classification")
-      required <- _required_c(stage)
-      kind = if (stage == "Review") Kind.REVIEW else if (input.kind == "code") Kind.CODING else Kind.DESIGN
-      requirement <- Classification(kind, Complexity.STANDARD, Domain.PROGRAMMING, Footprint.SMALL).requirementC(
-        ExecutionRequirement(Vector(CapabilityRequirement(required.identity.capability)), RiskLevel("SOURCE_IMPLEMENTATION"),
-          ReasoningLevel.Standard, stage == "Review"))
-    } yield requirement
+    if (input == null || !Set("Implement", "Repair", "Review", "DeliveryAcceptance")(stage) || !Set("code", "documentation")(input.kind))
+      invalid("Fresh work has no supported semantic classification")
+    else Consequence.success(Classification(if (stage == "Review") Kind.REVIEW else if (input.kind == "code") Kind.CODING else Kind.DESIGN,
+      Complexity.STANDARD, Domain.PROGRAMMING, Footprint.SMALL))
   }
+
+  private[admission] def executionRequirementC(input: S.Input, stage: String): Consequence[ExecutionRequirement] = for {
+    classification <- _classification_c(input, stage)
+    required <- _required_c(stage)
+    requirement <- classification.requirementC(
+      ExecutionRequirement(Vector(CapabilityRequirement(required.identity.capability)), RiskLevel("SOURCE_IMPLEMENTATION"),
+        ReasoningLevel.Standard, stage == "Review"))
+  } yield requirement
 
   /** Executing Starts must support repair/implementation and possible independent review.
     * Requesters admit complete metadata and optional paired configuration only.
@@ -187,13 +192,88 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     _ <- mapping.resolveC(review, current.current, current.preference)
   } yield ()
 
+  private[admission] def _operating_context_c(h: Host): Consequence[GoalPhaseOperatingProfiles.Context] = for {
+    _ <- if (h != null && h.operatingContext != null) Consequence.unit else invalid("Host operating context is absent")
+    context = h.operatingContext.getOrElse(GoalPhaseOperatingProfiles.Context(executionProfiles = h.profiles, executionOrigin = h.origin))
+    _ <- GoalPhaseOperatingProfiles.validateContextC(context)
+    _ <- if (context.executionProfiles == h.profiles && context.executionOrigin == h.origin) Consequence.unit
+      else invalid("Host concrete and operating execution inputs differ")
+  } yield context
+
+  /** Requesters dispatch the admitted input; only destinations preflight semantic execution. */
+  private[admission] def _preflight_execution_c(input: S.Input, h: Host): Consequence[Unit] =
+    if (!task || input.kind == "validation") preflightExecutionC(input, h.profiles, h.origin)
+    else for {
+      _ <- S.inputC(input)
+      context <- _operating_context_c(h)
+      _ <- if (input.delegation.exists(_.role == "requester")) Consequence.unit else for {
+        execution <- GoalPhaseOperatingProfiles.forIssueC(context, None)
+        _ <- if ((execution.selection.identity == GoalPhaseOperatingProfiles.standard && context.dispatchPolicy.nonEmpty &&
+            context.logicalOrigin.orElse(context.executionOrigin.map(_.current.contextIdentity)).nonEmpty) ||
+            (execution.profiles.nonEmpty && execution.origin.nonEmpty)) Consequence.unit
+          else invalid("New Start requires actual logical origin and standard dispatch policy or full concrete profiles and origin")
+        _ <- Vector("Implement", "Repair", "Review", "DeliveryAcceptance").foldLeft(Consequence.unit) { (prior, stage) => prior.flatMap { _ => for {
+          requirement <- executionRequirementC(input, stage)
+          classification <- _classification_c(input, stage)
+          _ <- GoalPhaseOperatingProfiles.captureFreshC(context, stage, Some(classification), requirement, None, stage == "Review")
+        } yield () } }
+      } yield ()
+    } yield ()
+
+  /** Called solely for a fresh Task row, retaining requirement and capture atomically. */
+  private[admission] def _bind_fresh_task_c(work: WorkflowInteraction[S.Work, Nothing], h: Host):
+    Consequence[WorkflowInteraction[S.Work, Nothing]] = for {
+    _ <- if (task) Consequence.unit else invalid("Standalone FIX retains its concrete issuance route")
+    order <- work.current match {
+      case order: WorkflowContinuation.WorkOrder[S.Work] => Consequence.success(order)
+      case _ => invalid("Fresh Task capture requires its actual WorkOrder")
+    }
+    input <- order.request.input.map(i => Consequence.success(i.value)).getOrElse(invalid("Fresh Task input is absent"))
+    _ <- if (input.operatingProfile != null && input.operatingProfile.isEmpty && input.state.input.task.nonEmpty &&
+        !input.state.input.delegation.exists(_.role == "requester")) Consequence.unit else invalid("Already issued or dispatch-only work cannot be selected")
+    _ <- _preflight_execution_c(input.state.input, h)
+    context <- _operating_context_c(h)
+    classification <- _classification_c(input.state.input, input.kind)
+    selected <- GoalPhaseOperatingProfiles.captureFreshC(context, input.kind, Some(classification), order.requirement, None, input.kind == "Review")
+  } yield work.copy(current = order.copy(requirement = selected._1,
+    request = order.request.copy(input = order.request.input.map(i => i.copy(value = input.copy(operatingProfile = Some(selected._2)))))))
+
+  /** Admit the stored Work and requirement only; current host selection never rebinds pending work. */
+  private[admission] def _admit_operating_execution_c(order: WorkflowContinuation.WorkOrder[S.Work],
+    evidence: ExecutionEvidence): Consequence[Unit] = for {
+    work <- order.request.input.map(i => Consequence.success(i.value)).getOrElse(invalid("Assigned Task input is absent"))
+    _ <- if (work.operatingProfile != null && work.operatingProfile.forall(GoalPhaseOperatingProfiles.captureValid)) Consequence.unit
+      else invalid("Assigned Task operating capture is invalid")
+    _ <- work.operatingProfile.fold(Consequence.unit) { capture => for {
+      original <- executionRequirementC(work.state.input, work.kind)
+      classification <- _classification_c(work.state.input, work.kind)
+      _ <- if (order.requirement != null && order.requirement.copy(disposition = None) == original &&
+          capture.reasoningClass == original.reasoningClass.map(_.value) && order.requirement.disposition.nonEmpty)
+        Consequence.unit else invalid("Assigned Task capture crosses its original execution intent")
+      _ <- capture.dispatch.fold(Consequence.unit) { dispatch => for {
+        _ <- if (evidence != null && evidence.workerIdentity.exists(worker => worker != null && worker.nonEmpty &&
+            evidence.execution.exists(_.executorContextIdentity == worker))) Consequence.unit
+          else invalid("Logical Task worker identity must match its actual executor context identity")
+        expected <- GoalPhaseDispatchPolicy.captureC(work.kind, Some(classification), original, work.kind == "Review",
+          GoalPhaseDispatchPolicy.Policy(dispatch.revision, dispatch.edges))
+        disposition = order.requirement.disposition.get
+        _ <- if (dispatch == expected && capture.mappingIdentity.contains("caller-standard") &&
+            capture.mappingRevision.contains(dispatch.revision) && capture.configured.isEmpty && capture.selected.isEmpty && capture.fallback.isEmpty &&
+            disposition.placement.value == dispatch.placement &&
+            disposition.independence == (if (original.reviewRequired || work.kind == "Review") ExecutionIndependence.Required else ExecutionIndependence.Optional))
+          Consequence.unit else invalid("Assigned Task dispatch capture differs from its issued requirement")
+      } yield () }
+      _ <- GoalPhaseOperatingProfiles.admitExecutionC(Some(capture), evidence)
+    } yield () }
+  } yield ()
+
   def startC(input: S.Input, participant: String, key: String, selection: String,
     selections: ProfileStartAdmission.CallScopedSelectionPort, h: Host, definition: DefinitionBinding,
     core: ActionCall.Core): Consequence[V.StandaloneFixView] = for {
     _ <- S.inputC(input)
     _ <- if (input.task.nonEmpty == task && input.delegation.nonEmpty == delegation) Consequence.unit else invalid("Entry completion policy differs from the adopted input")
     requester = delegation && DelegateTask.requester(input)
-    _ <- preflightExecutionC(input, h.profiles, h.origin)
+    _ <- _preflight_execution_c(input, h)
     _ <- (if (requester) None else input.delegation.flatMap(_.publicationTarget)).fold(Consequence.unit) { target =>
       if (h.publication.exists(p => LocalPublicationRuntime.validateC(p).isSuccess && p.targets.exists(t =>
           t.identity == target && t.component == input.delegation.get.componentIdentity && t.workspace == "sm-workflow-repository")))
@@ -636,7 +716,8 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
         required.operation, Some(TypedValue(inputCodec.typeIdentity, work)), required.resultType, bundle,
         required.metadata.completionContract, required.metadata.evidenceContract, completionOperation),
       requirement, MinimalPresentation(entry + " " + work.kind, payload.state.input.objective)))
-    selected <- GoalPhaseNativeExecution.bindIssuedC(interaction, h.profiles, h.origin)
+    selected <- if (task) _bind_fresh_task_c(interaction, h)
+      else GoalPhaseNativeExecution.bindIssuedC(interaction, h.profiles, h.origin)
     issued <- store.bindIssuedC(completionOperation, inputCodec)
     _ <- issued.suspendC(WorkflowInstanceAtomicTransitionV1.SuspensionIntent(WorkflowInstanceAtomicTransitionV1.schemaVersion,
       h.configuration, from, from.revision, historyentry, ContinuationRuntimePersistence.Record(continuation, ContinuationRuntimePersistence.Status.Available)), selected)(using core.executionContext)

@@ -33,7 +33,7 @@ private[admission] object DelegateTaskRequesterRoutingFixture extends Matchers {
       Vector("remote-push", "consumer-activation"),
       NonEmptyVector.of(V.WorkflowArtifactReference("SPECIFICATION-OWNED-authorization", "1")),
       Some("destination-only-publication"), Vector("org.goldenport:goldenport-cncf_3:0.1.0-SNAPSHOT"),
-      "Return actual destination checks, review, commit and publication; consumer activation remains separate"))
+      "Return actual destination checks, review, commit and publication; consumer activation remains separate"), Vector.empty)
 
   def state(view: V.DelegateTaskView): S.State = {
     val json = parser.parse(take(view.state.get.toJsonStringC)).toOption.get

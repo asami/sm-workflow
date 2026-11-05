@@ -1,6 +1,6 @@
 /**
  * @since   Oct. 30, 2026
- * @version Nov. 5, 2026
+ * @version Nov.  5, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -41,12 +41,10 @@ private[smworkflow] object DelegateTaskScopeCorrection {
 
   def correctedInputC(input: S.Input, additional: Vector[String], submission: Option[Vector[String]] = None): Consequence[S.Input] = for {
     _ <- if (input != null && input.delegation.exists(_.role == "destination") &&
-        additional != null && (additional.nonEmpty || submission.nonEmpty) && additional.distinct == additional &&
+        additional != null && (additional.nonEmpty || submission.exists(next => !input.submissionConditions.contains(next))) && additional.distinct == additional &&
         !additional.exists(input.ownedPaths.contains)) Consequence.unit
-      else N.invalid("Scope correction needs new literal paths for the same destination Task")
+      else N.invalid("Scope correction needs new literal paths or changed condition timing for the same destination Task")
     corrected = input.copy(ownedPaths = input.ownedPaths ++ additional, submissionConditions = submission.orElse(input.submissionConditions))
-    _ <- if (submission.isEmpty || input.submissionConditions.isEmpty) Consequence.unit
-      else N.invalid("An adopted condition timing plan cannot be replaced by scope correction")
     _ <- S.inputC(corrected)
     _ <- if (additional.forall(S.permitted(_, corrected))) Consequence.unit
       else N.invalid("Added ownership crosses the retained delegation exclusions")

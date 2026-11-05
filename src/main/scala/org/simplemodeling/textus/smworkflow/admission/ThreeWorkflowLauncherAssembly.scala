@@ -15,7 +15,7 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
   *  version Nov.  2, 2026
-  * @version Nov.  3, 2026
+  * @version Nov.  5, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowLauncherAssembly {
@@ -57,6 +57,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     "EvidenceService.manageEvidenceRetention", "EvidenceService.findDueEvidence",
     "JournalService.readJournalEntry",
     "GoalPhaseService.startGoalPhase", "GoalPhaseService.advanceGoalPhase", "GoalPhaseService.submitGoalPhaseWorkResult",
+    "GoalPhaseService.reconstructGoalPhaseDevelopment",
     "GoalPhaseService.submitGoalPhaseOrderedDecision",
     "GoalPhaseService.submitGoalPhaseFindingRecording",
     "GoalPhaseService.describeGoalPhasePrerequisitePublicationRecovery", "GoalPhaseService.recoverGoalPhasePrerequisitePublication",

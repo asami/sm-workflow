@@ -90,6 +90,20 @@ org.simplemodeling.textus.smworkflow
 | completionOperation | org.goldenport.record.Record | 1 |
 | executionRequirement | org.goldenport.record.Record | 1 |
 
+## GoalPhaseDevelopmentReconstructionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| phasePath | string | 1 |
+| checklistPath | string | 1 |
+| proposal | record | 1 |
+| rationale | string | 1 |
+
 ## GoalPhaseAdvanceInput
 
 - input-kind :: COMMAND
@@ -1841,6 +1855,7 @@ OperationResult
 | reason | string | 1 |
 | repairProgress | GoalPhaseRepairProgress | ? |
 | sourceHistoryRecovery | org.goldenport.record.Record | ? |
+| developmentReconstruction | org.goldenport.record.Record | ? |
 
 ## GoalPhaseOrderedDecisionAnswer
 
@@ -3402,6 +3417,10 @@ action = RecordGoalFindings
 
 operation = GoalPhaseService.advanceGoalPhase
 
+#### reconstructGoalPhaseDevelopment
+
+operation = GoalPhaseService.reconstructGoalPhaseDevelopment
+
 #### describeGoalPhaseValidationRecovery
 
 operation = GoalPhaseService.describeGoalPhaseValidationRecovery
@@ -3584,6 +3603,16 @@ on = repair-policy-adopted
 
 ##### TRANSITION
 
+to = Decision
+on = development-reconstruction-uncertain
+
+##### TRANSITION
+
+to = Implementation
+on = development-reconstructed-Implementation
+
+##### TRANSITION
+
 to = Implementation
 on = journal-findings-intent
 
@@ -3633,6 +3662,16 @@ on = implementation-decision-needed
 
 to = InspectCandidate
 on = repair-policy-adopted
+
+##### TRANSITION
+
+to = Decision
+on = development-reconstruction-uncertain
+
+##### TRANSITION
+
+to = InspectCandidate
+on = development-reconstructed-InspectCandidate
 
 ##### TRANSITION
 
@@ -3688,6 +3727,21 @@ on = repair-policy-adopted
 
 ##### TRANSITION
 
+to = Decision
+on = development-reconstruction-uncertain
+
+##### TRANSITION
+
+to = Validation
+on = development-reconstructed-Validation
+
+##### TRANSITION
+
+to = InspectCandidate
+on = development-reconstructed-InspectCandidate
+
+##### TRANSITION
+
 to = Validation
 on = documents-selected
 
@@ -3740,6 +3794,21 @@ on = repair-policy-adopted
 
 ##### TRANSITION
 
+to = Decision
+on = development-reconstruction-uncertain
+
+##### TRANSITION
+
+to = Triage
+on = development-reconstructed-Triage
+
+##### TRANSITION
+
+to = InspectCandidate
+on = development-reconstructed-InspectCandidate
+
+##### TRANSITION
+
 to = Triage
 on = documents-selected
 
@@ -3764,6 +3833,21 @@ on = triage-escalated
 
 to = Review
 on = repair-policy-adopted
+
+##### TRANSITION
+
+to = Decision
+on = development-reconstruction-uncertain
+
+##### TRANSITION
+
+to = Review
+on = development-reconstructed-Review
+
+##### TRANSITION
+
+to = InspectCandidate
+on = development-reconstructed-InspectCandidate
 
 ##### TRANSITION
 
@@ -3796,6 +3880,16 @@ on = review-decision-needed
 
 to = Repair
 on = repair-policy-adopted
+
+##### TRANSITION
+
+to = Decision
+on = development-reconstruction-uncertain
+
+##### TRANSITION
+
+to = Repair
+on = development-reconstructed-Repair
 
 ##### TRANSITION
 
@@ -3836,6 +3930,21 @@ on = repair-policy-adopted
 
 ##### TRANSITION
 
+to = Decision
+on = development-reconstruction-uncertain
+
+##### TRANSITION
+
+to = Closing
+on = development-reconstructed-Closing
+
+##### TRANSITION
+
+to = InspectCandidate
+on = development-reconstructed-InspectCandidate
+
+##### TRANSITION
+
 to = Closing
 on = documents-selected
 
@@ -3865,6 +3974,16 @@ on = last-step-closed
 
 to = PhaseInspection
 on = repair-policy-adopted
+
+##### TRANSITION
+
+to = Decision
+on = development-reconstruction-uncertain
+
+##### TRANSITION
+
+to = PhaseInspection
+on = development-reconstructed-PhaseInspection
 
 ##### TRANSITION
 
@@ -3915,6 +4034,21 @@ on = repair-policy-adopted
 
 ##### TRANSITION
 
+to = Decision
+on = development-reconstruction-uncertain
+
+##### TRANSITION
+
+to = PhaseValidation
+on = development-reconstructed-PhaseValidation
+
+##### TRANSITION
+
+to = PhaseInspection
+on = development-reconstructed-PhaseInspection
+
+##### TRANSITION
+
 to = PhaseValidation
 on = documents-selected
 
@@ -3962,6 +4096,21 @@ on = repair-policy-adopted
 
 ##### TRANSITION
 
+to = Decision
+on = development-reconstruction-uncertain
+
+##### TRANSITION
+
+to = PhaseReview
+on = development-reconstructed-PhaseReview
+
+##### TRANSITION
+
+to = PhaseInspection
+on = development-reconstructed-PhaseInspection
+
+##### TRANSITION
+
 to = PhaseReview
 on = documents-selected
 
@@ -3996,6 +4145,21 @@ on = phase-review-decision-needed
 
 to = PhaseClosing
 on = repair-policy-adopted
+
+##### TRANSITION
+
+to = Decision
+on = development-reconstruction-uncertain
+
+##### TRANSITION
+
+to = PhaseClosing
+on = development-reconstructed-PhaseClosing
+
+##### TRANSITION
+
+to = PhaseInspection
+on = development-reconstructed-PhaseInspection
 
 ##### TRANSITION
 
@@ -4048,6 +4212,91 @@ on = phase-repository-closed
 
 to = Decision
 on = repair-policy-adopted
+
+##### TRANSITION
+
+to = Decision
+on = development-reconstruction-uncertain
+
+##### TRANSITION
+
+to = Decision
+on = development-reconstructed-Decision
+
+##### TRANSITION
+
+to = Implementation
+on = development-reconstructed-Implementation
+
+##### TRANSITION
+
+to = InspectCandidate
+on = development-reconstructed-InspectCandidate
+
+##### TRANSITION
+
+to = Validation
+on = development-reconstructed-Validation
+
+##### TRANSITION
+
+to = Triage
+on = development-reconstructed-Triage
+
+##### TRANSITION
+
+to = Review
+on = development-reconstructed-Review
+
+##### TRANSITION
+
+to = Repair
+on = development-reconstructed-Repair
+
+##### TRANSITION
+
+to = Closing
+on = development-reconstructed-Closing
+
+##### TRANSITION
+
+to = PhaseInspection
+on = development-reconstructed-PhaseInspection
+
+##### TRANSITION
+
+to = PhaseValidation
+on = development-reconstructed-PhaseValidation
+
+##### TRANSITION
+
+to = PhaseReview
+on = development-reconstructed-PhaseReview
+
+##### TRANSITION
+
+to = PhaseClosing
+on = development-reconstructed-PhaseClosing
+
+##### TRANSITION
+
+to = Decision
+on = human-development-reconstruction-AdoptDevelopmentReconstruction
+
+##### TRANSITION
+
+to = Decision
+on = human-development-reconstruction-KeepCurrentRequirements
+
+##### TRANSITION
+
+to = Decision
+on = human-development-reconstruction-Defer
+
+##### TRANSITION
+
+to = Decision
+on = human-development-reconstruction-Cancel
 
 ##### TRANSITION
 
@@ -7192,6 +7441,41 @@ GoalPhaseAdvanceInput
 | profile | string | ? |
 | sm-workflow.source-history.style | string | ? |
 | sm-workflow.source-history.rule | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseAdvanceResult
+
+#### reconstructGoalPhaseDevelopment
+
+##### DESCRIPTION
+
+Reconstruct current development in the same native Session from actual selected Phase/checklist files and a complete raw GoalPhasePlanRevision Proposal. Supply exactly one input or inputResource; the latter is an absolute local file URI read through ordinary configured CNCF Resource authorization and limits. The input contains sessionId, two distinct literal workspace-relative document paths, proposal and rationale. Current native participant, Component, definition, root, branch and revision own admission.
+
+Read both nonempty actual documents through typed File. A selected sm-workflow-plan block must equal the supplied raw Plan; a plain prose Phase retains its actual text and uses the supplied Plan as semantic projection. The existing checklist parser owns actual items. Required proposed checklist identities/text must exist; checked boxes establish no check, review, Step or Phase success. The Project owner captures effective acceptance.
+
+Retain original Plan/base, actual accepted completed prefix, repair reservations/counters/control, findings, successful/failed/UNKNOWN effects, source dependency Direction/consumption/approvals and all native history. Pending actual work or Human is recollected before any replacement. Compatible remaining work selects a managed common reconstruction record; protected requirement/effect ambiguity uses the existing independently evidenced ordered Human question with AdoptDevelopmentReconstruction, KeepCurrentRequirements, Defer and Cancel. Adopting requirements never authorizes replay of unresolved commit/publication/push effects.
+
+At an unstarted reconstructed capture, the same effective document projection retains its record/generation even after additional worktree edits; it makes no unchanged-byte claim. Applicable actual candidate/check/review evidence is retained only when observed HEAD/index still matches that candidate and the selected worktree is clean. Changed source selects fresh ordinary candidate capture with original dependency obligations. Old results remain evidence at their original subjects. Separate ordinary Advance owns actual capture, affected checks, repair, independent review and closure. This Operation issues no Start, semantic Submit, validation, commit or publication.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseDevelopmentReconstructionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseDevelopmentReconstructionInput | ? |
+| inputResource | string | ? |
 
 ##### OUTPUT
 
@@ -10541,6 +10825,7 @@ GoalPhaseWorkSubmissionResult
 | humanDecisionContext | WorkflowHumanDecisionContext | ? |
 | planRevision | org.goldenport.record.Record | ? |
 | sourceHistoryRecovery | org.goldenport.record.Record | ? |
+| developmentReconstruction | org.goldenport.record.Record | ? |
 
 ## GoalPhaseCompletionResult
 
@@ -13332,6 +13617,7 @@ One original finding identity with fixed, not-applicable or unresolved outcome; 
 | sourceKind | string | 1 |
 | dependencies | string | * |
 | delegation | DelegateTaskContract | 1 |
+| submissionConditions | string | * |
 
 ## DelegateTaskAdvanceInput
 

@@ -44,6 +44,50 @@ private[admission] object DependencySourceRevisionSpecificationFixture {
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseInitialDependencySourceRevisionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  "Common reconstructed Plan capture provenance" should {
+    "retain legacy wire meaning and describe a newer Plan only through explicit common provenance data" in {
+      Given("a valid older source Direction and its unchanged ordinary capture")
+      val old = DependencySourceRevisionSpecificationFixture.capture
+      val oldwire = old.asJson
+      val selected = old.copy(schemaVersion = R.developmentCaptureSchema,
+        plan = old.plan.copy(revision = "current-development"),
+        planSelection = Some(ContextReference(old.sessionId + ":ordered-development-reconstruction:20", "1")))
+      When("the legacy and common provenance variants are encoded and decoded")
+      val result = selected.asJson.as[R.Capture]
+      Then("old records omit the optional field and new records retain the unchanged original Direction")
+      oldwire.hcursor.downField("planSelection").focus shouldBe None
+      oldwire.as[R.Capture] shouldBe Right(old)
+      R.captureValid(old.copy(plan = selected.plan)) shouldBe false
+      R.captureValid(selected) shouldBe true
+      result shouldBe Right(selected)
+      selected.direction shouldBe old.direction
+      selected.direction.asJson shouldBe old.direction.asJson
+      selected.preStageGuard shouldBe old.preStageGuard
+      selected.postStageGuard shouldBe old.postStageGuard
+    }
+
+    "reject mismatched versions crossed references unknown fields and explicit null metadata" in {
+      Given("a shaped common reconstructed Plan capture whose native authenticity is not asserted by this pure spec")
+      val old = DependencySourceRevisionSpecificationFixture.capture
+      val selected = old.copy(schemaVersion = R.developmentCaptureSchema,
+        plan = old.plan.copy(revision = "current-development"),
+        planSelection = Some(ContextReference(old.sessionId + ":ordered-development-reconstruction:20", "1")))
+      val invalid = Vector(selected.copy(schemaVersion = old.schemaVersion), selected.copy(planSelection = None),
+        selected.copy(plan = selected.plan.copy(identity = "another-plan")),
+        selected.copy(planSelection = Some(ContextReference("another-session:ordered-development-reconstruction:20", "1"))),
+        selected.copy(planSelection = Some(ContextReference(old.sessionId + ":ordered-development-reconstruction:25", "1"))),
+        selected.copy(planSelection = Some(ContextReference(old.sessionId + ":ordered-development-reconstruction:20", "2"))),
+        selected.copy(sourceRevision = "not-a-revision"))
+      When("capture shape/version admission is applied before native chain authentication")
+      val result = invalid.map(R.captureValid)
+      Then("only shaped provenance survives and no JSON field can impersonate actual retained native selection")
+      result shouldBe Vector.fill(invalid.size)(false)
+      selected.asJson.mapObject(_.add("planSelection", Json.Null)).as[R.Capture].isLeft shouldBe true
+      selected.asJson.mapObject(_.add("unknown", Json.True)).as[R.Capture].isLeft shouldBe true
+      old.asJson.mapObject(_.add("planSelection", Json.Null)).as[R.Capture].isLeft shouldBe true
+    }
+  }
+
   private def _initial_fixture: (R.Target, R.Direction, R.Capture) = {
     import DependencyValidationSpecificationFixture as F
     import GoalPhaseOrderedProgression as O
