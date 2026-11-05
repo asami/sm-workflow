@@ -39,9 +39,11 @@ private[admission] object NativeWorkflowCliFixture {
   def publicPlan(value: GoalPhaseOrderedProgression.Plan): V.GoalPhaseOrderedPlan =
     V.GoalPhaseOrderedPlan(value.identity, value.revision, value.phase, value.repository,
       value.steps.map(s => V.GoalPhaseOrderedStep(s.identity, s.purpose, s.ownedPaths, s.dependencies, s.checks,
-        s.actionPolicy.map(p => { import io.circe.syntax.*; GoalPhaseNativeMetadata.record(p.asJson) }))),
+        s.actionPolicy.map(p => { import io.circe.syntax.*; GoalPhaseNativeMetadata.record(p.asJson) }),
+        s.workClassification.map(c => { import io.circe.syntax.*; GoalPhaseNativeMetadata.record(c.asJson) }))),
       value.phaseChecks, value.repairLimit, A.publicAdoption(value.acceptance),
-      A.publicEffective(value.effectiveAcceptance), value.phaseRepairInventory)
+      A.publicEffective(value.effectiveAcceptance), value.phaseRepairInventory,
+      value.phaseReviewClassification.map(c => { import io.circe.syntax.*; GoalPhaseNativeMetadata.record(c.asJson) }))
 
   final case class Invocation(argv: Vector[String], pid: Long, stdout: Path, stderr: Path) {
     def logs: String = s"argv=$argv; pid=$pid; stdout=$stdout; stderr=$stderr\n" +

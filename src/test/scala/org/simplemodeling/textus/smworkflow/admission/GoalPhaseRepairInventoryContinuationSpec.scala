@@ -16,7 +16,6 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Pure inventory contracts; the CLI specification owns native provenance.
   * @since   Oct. 27, 2026
-  *  version Oct. 27, 2026
   * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
@@ -30,8 +29,9 @@ final class GoalPhaseRepairInventoryContinuationSpec extends AnyWordSpec with Ma
     Vector("phase-test"), repairLimit = 2)
   private val _directive = O.RepairDirective("Repair the actual failed Phase check", Vector("Product check fails"))
   private def _key(state: O.State): O.WorkKey = state.next.asInstanceOf[O.Semantic].key
-  private def _closed: O.State = {
-    val started = take(O.startC(_plan, _base, Some(GoalPhaseRuntimeRepairControl.version)))
+  private def _closed: O.State = _closed_with_plan(_plan)
+  private def _closed_with_plan(plan: O.Plan): O.State = {
+    val started = take(O.startC(plan, _base, Some(GoalPhaseRuntimeRepairControl.version)))
     val ready = take(started.acceptC(O.SemanticCompleted(_key(started), "Product ready")))
     val candidate = O.Snapshot(_base.head, _oid('c'))
     val observed = take(ready.acceptC(O.CandidateObserved(candidate)))
@@ -40,10 +40,11 @@ final class GoalPhaseRepairInventoryContinuationSpec extends AnyWordSpec with Ma
     val intent = take(accepted.acceptC(O.ClosureIntentSaved(candidate, "step-intent")))
     take(intent.acceptC(O.StepCommitObserved("step-intent", O.Commit(_oid('d'), _base.head, candidate.tree))))
   }
-  private def _repair: O.State = {
-    val closed = _closed
+  private def _repair: O.State = _repair_with_plan(_plan)
+  private def _repair_with_plan(plan: O.Plan): O.State = {
+    val closed = _closed_with_plan(plan)
     val seen = take(closed.acceptC(O.CandidateObserved(closed.tipSnapshot)))
-    val failed = take(seen.acceptC(O.ChecksObserved(closed.tipSnapshot, _plan.phaseChecks, "real-failure", false)))
+    val failed = take(seen.acceptC(O.ChecksObserved(closed.tipSnapshot, plan.phaseChecks, "real-failure", false)))
     take(failed.continueInitialPhaseCheckRepairC("real-failure", _directive))
   }
   private def _proposed(state: O.State): O.Plan = state.plan.copy(revision = "2",
@@ -77,10 +78,10 @@ final class GoalPhaseRepairInventoryContinuationSpec extends AnyWordSpec with Ma
       val coding = C.Classification(C.Kind.CODING, C.Complexity.STANDARD, C.Domain.PROGRAMMING, C.Footprint.SMALL)
       val review = coding.copy(kind = C.Kind.REVIEW)
       val assignment = C.Assignment(coding, coding, review)
-      val repair = _repair
-      val classified = repair.copy(plan = repair.plan.copy(steps = repair.plan.steps.map(_.copy(workClassification = Some(assignment))),
-        phaseReviewClassification = Some(review)))
-      val decision = take(classified.acceptC(O.NativeFailure("The assigned repair needs a missing test")))
+      val classifiedplan = _plan.copy(steps = _plan.steps.map(_.copy(workClassification = Some(assignment))),
+        phaseReviewClassification = Some(review))
+      val repair = _repair_with_plan(classifiedplan)
+      val decision = take(repair.acceptC(O.NativeFailure("The assigned repair needs a missing test")))
       val complete = _proposed(decision).copy(effectiveAcceptance = None)
       val legacy = complete.copy(steps = complete.steps.map(_.copy(workClassification = None)), phaseReviewClassification = None)
       val proposal = R.Proposal("legacy-inventory", "1", "Append the required exact test", legacy)

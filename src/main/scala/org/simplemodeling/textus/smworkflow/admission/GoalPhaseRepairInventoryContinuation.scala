@@ -21,7 +21,6 @@ import GoalPhasePlanRevision as R
 /** Native provenance for an inventory-only continuation of the already reserved
   * Phase repair. Decoded business values alone never construct a Source.
   * @since   Oct. 27, 2026
-  *  version Oct. 27, 2026
   * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */

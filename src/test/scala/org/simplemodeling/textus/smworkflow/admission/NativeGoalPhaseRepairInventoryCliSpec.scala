@@ -27,7 +27,6 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Isolated real Git/Compile/Test and public native Operations. Optional installed
   * selection uses the same fixture, with no production Human/provider claim.
   * @since   Oct. 27, 2026
-  *  version Oct. 27, 2026
   * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
