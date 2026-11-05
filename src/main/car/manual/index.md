@@ -21,7 +21,7 @@ Help navigation and runtime routes still require verification.
 
 The component name is `org.simplemodeling.textus.SmWorkflow`, JVM package
 `org.simplemodeling.textus.smworkflow`, artifact `textus-sm-workflow`, and current
-development version `0.1.0-SNAPSHOT`. Component discovery and operation dispatch
+development version `0.1.1-SNAPSHOT`. Component discovery and operation dispatch
 belong to the CNCF launcher; this project does not provide a second workflow CLI.
 
 ## Runtime availability
