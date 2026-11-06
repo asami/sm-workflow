@@ -153,8 +153,8 @@ Steps and unselected future Steps. Existing bounded controller eligibility,
 ownership, dependencies, classifications and accepted-prefix guards still apply.
 
 Captured input is the question owner's selected business input, not a consent or
-anti-tamper certificate. Its saved Plan, with effective acceptance removed, must
-equal its explicit raw proposal Plan. This equality checks the relationship
+anti-tamper certificate. Outside the omission-only Phase repair inventory case defined below, its saved
+Plan, with effective acceptance removed, must equal its explicit raw proposal Plan. This equality checks the relationship
 between two business objects. Readback and adoption consume the saved capture
 without consulting later project configuration or reconstructing prior defaults
 from a replaced effective boundary. There are no management hashes, aliases,
@@ -418,3 +418,23 @@ adoption, completed corrective work, affected Phase re-review or final Phase
 closure. Those installed acceptance obligations and the parent's comprehensive
 development Phase review and aggregate validation remain owed in the same
 active Phase 6.3 Goal.
+
+## Lossless public classification and legacy inventory proposals (2026-11-06)
+
+The existing public ordered Step and Plan carry optional Record-valued
+`workClassification` and `phaseReviewClassification`, respectively. Projection
+preserves the controller's exact saved assignment/classification; it does not
+reselect a profile or substitute current host defaults. Raw proposal acceptance
+and derived effective acceptance remain distinct.
+
+The Phase repair inventory scope alone permits an omission-only classification
+representation difference between `Captured.proposal.plan` and `Captured.plan`.
+The original raw semantic proposal is retained unchanged. Missing optional Step
+assignments and Phase review classification inherit the exact values from the
+actual controller Plan, while saved effective acceptance is retained as before.
+Explicit classification changes are never overwritten. Structural capture
+validation permits only that omission relationship; source-paired scope validation
+recomputes it against the saved predecessor and requires exact equality with the
+captured Plan. The final strict inventory delta comparison is unchanged. Other
+revision scopes still require complete raw/captured equality. Decoding alone
+supplies neither source provenance nor authority.

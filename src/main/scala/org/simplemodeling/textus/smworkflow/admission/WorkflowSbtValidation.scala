@@ -7,10 +7,13 @@ import org.goldenport.cncf.processexecution.*
 
 /** Actual typed SBT facts, without command or host-selection authority.
   * @since   Oct. 15, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 25, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowSbtValidation {
+  // Incomplete is never successful or nonexecuted. Bounded continuation additionally
+  // requires the original valid CNCF terminal process observation, not these facts alone.
   enum Kind(val wire: String) {
     case Compile extends Kind("compile")
     case Test extends Kind("test")

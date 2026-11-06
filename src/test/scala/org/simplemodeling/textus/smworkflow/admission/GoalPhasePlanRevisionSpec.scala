@@ -20,7 +20,8 @@ import GoalPhaseDocumentPlan as P
 /** Pure proposal/controller examples with explicit fixture answer references.
   * Native persistence, providers, Human admission and effects are not proved.
   * @since   Oct. 18, 2026
-  * @version Oct. 27, 2026
+  *  version Oct. 27, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -64,6 +65,30 @@ final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with Giv
     val accepted = _take(checked.acceptC(O.ReviewAdmitted(_key(checked), snapshot, "fixture-check", "fixture-independent-review", O.ReviewOutcome.Accept)))
     val pending = _take(accepted.acceptC(O.ClosureIntentSaved(snapshot, "fixture-intent")))
     _take(pending.acceptC(O.StepCommitObserved("fixture-intent", O.Commit("c" * 40, _base.head, snapshot.tree))))
+  }
+
+  "Lossless public ordered Plan representation" should {
+    "retain the exact saved Step assignment and Phase review classification in the existing public work view" in {
+      Given("a saved Plan with explicit Standard implementation, repair and independent review classifications")
+      val state = _start
+      val request = _review_request(state)
+      When("the normal native operation output projects that work")
+      val projected = NativeWorkflowOperationOutput.goalWork(request).selectedPlan
+      Then("both optional classification Records carry their original exact typed values")
+      val step = projected.steps.head.workClassification.get
+      val phase = projected.phaseReviewClassification.get
+      io.circe.parser.parse(_take(step.toJsonStringC)).toOption.get shouldBe _assignment.asJson
+      io.circe.parser.parse(_take(phase.toJsonStringC)).toOption.get shouldBe _review.asJson
+      projected.phaseChecks shouldBe state.plan.phaseChecks
+      projected.repairLimit shouldBe state.plan.repairLimit
+      projected.acceptance shouldBe A.publicAdoption(state.plan.acceptance)
+      projected.effectiveAcceptance shouldBe A.publicEffective(state.plan.effectiveAcceptance)
+      val unclassified = request.copy(selectedPlan = state.plan.copy(
+        steps = state.plan.steps.map(_.copy(workClassification = None)), phaseReviewClassification = None))
+      val absent = NativeWorkflowOperationOutput.goalWork(unclassified).selectedPlan
+      absent.steps.map(_.workClassification) shouldBe Vector.fill(state.plan.steps.size)(None)
+      absent.phaseReviewClassification shouldBe None
+    }
   }
 
   "E4 CBD12-PLAN-HUMAN-409 remaining-purpose capture" should afterWord(

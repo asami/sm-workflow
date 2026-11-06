@@ -5,10 +5,20 @@ Operation implementations through the normal component factory. Executable
 Specifications call Operations directly, including normal managed effects.
 Phase 5 is formally released; Phase 5.1 verifies these normal paths. Command/CLI
 wiring and real skill integration belong to Phase 6. Duplicate answers and
-competing submissions are the caller's responsibility. Intermediate recovery,
-identical replay responses and complete runtime-history preservation are not
-promised. Abandon unsuccessful work and start a NEW execution from the beginning;
-this does not clean up or restore uncertain effects of the abandoned execution.
+competing submissions are the caller's responsibility. Preserve the original
+Session, history, counters and successful results when continuing work.
+
+For a retained bounded Task/Fix validation Wait with an original typed confirmed
+terminal incomplete capture, correct the owning runtime settings first (for
+example output capture limits). Then use the ordinary later Advance on the same
+Session. It checks the unchanged candidate and attempts only the affected check;
+the old capture stays in managed history. The Advance which first observes
+incomplete never retries it. Unknown/live/unconfirmed termination, missing raw
+capture and unresolved intent remain Wait; do not restart or replay Submit to
+bypass them. AdmissionBlocked is a separate confirmed nonstart case. Product
+failures continue through ordinary bounded Repair. A corrected setting is not a
+passing test result. Source 0.1.1-SNAPSHOT requires normal validation, independent
+review and local publication before installed consumer qualification.
 
 ## Prepare the owning runtime
 
@@ -192,3 +202,35 @@ relay. Phase 7 owns workspace-wide synchronization. Phase 8 owns broader
 provider/event/transport/concurrency/restart and comparative AI-cost evaluation.
 Moving those obligations preserves them; it neither accepts them nor makes a
 separate deployed client a Phase 2 prerequisite.
+
+
+## Continue a GoalTask repair-trend stop
+
+Call `GoalTaskService.describeGoalTaskRepairContinuation` with `sessionId`.
+Retain its complete opaque `target`. A trusted host must separately admit the
+actual Human direction for that target under `goal-task-repair-continuation`.
+`NativeWorkflowPreparationService.prepareEvidence` with family `GoalTask` and
+kind `repair-continuation` passively prepares the import from the actual description,
+answer, Human participant/reference/worker, issuer and occurrence time; preparation
+itself grants no authority.
+
+Call `GoalTaskService.resumeGoalTaskRepair` with the same Session/target and
+`ContinueRepair` or `Defer`, rationale, participant and actual Human reference.
+Defer writes nothing. ContinueRepair appends one Repair checkpoint, preserving
+history, original stop reason, failed checks, source/candidate, counts and repair
+policy. Before saving, it compares the current host repository/root/branch and
+uses the existing native read-only Git observation of root, HEAD, index and scoped
+working tree against the retained source/candidate. Physical source drift or a
+crossed host refuses without changing native history or counters. This is read-only
+native Git observation, zero Git/source mutation; it performs no staging, work,
+SBT check, commit or publication. Describe and repeated collection read storage;
+Defer requires no source observation. A separate ordinary `advanceGoalTask` owns
+the next Repair and normal completion charges its existing
+allowance. Matching repeated calls collect the original continuation, including
+following later progress and restart. Stale/crossed/unadmitted, pending, exhausted,
+other-Human and terminal cases refuse. Review and local commit obligations remain.
+See [GoalTask runtime contract](../../../../docs/spec/goal-task-runtime.md).
+
+This is source capability documentation. Native qualification, independent review,
+local acceptance commit, installed publication and actual consumer adoption are
+separate evidence; no production or real stopped-Session acceptance is claimed.

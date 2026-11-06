@@ -12,7 +12,8 @@ import org.simplemodeling.textus.smworkflow.value as V
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 28, 2026
+ *  version Oct. 28, 2026
+ * @version Nov.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -81,7 +82,7 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
       val descriptor = descriptors.head
       descriptor.schemaVersion shouldBe Some(3)
       descriptor.componentId shouldBe Some(ComponentId("org.simplemodeling.textus.SmWorkflow"))
-      descriptor.version shouldBe Some("0.1.0-SNAPSHOT")
+      descriptor.version shouldBe Some("0.1.1-SNAPSHOT")
 
       And("the descriptor supplies no settings or extensions that manufacture storage or user authority")
       descriptor.config shouldBe Map.empty
@@ -133,7 +134,10 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
           "WorkflowTaskFixAdoptionPreparationInput", "WorkflowTaskFixAdoption", "DelegateTaskContract",
           "DelegateTaskObservationInput", "DelegateTaskAdoptionContext", "WorkflowDelegateTaskStartPreparationInput",
           "WorkflowForceClosureDescriptionInput", "WorkflowForceClosureAnswer", "DescribeWorkflowForceClosureInput",
-          "ForceCloseWorkflowInput", "WorkflowForceClosureView")
+          "ForceCloseWorkflowInput", "WorkflowForceClosureView",
+          "GoalPhaseDevelopmentReconstructionInput", "DelegateTaskScopeCorrectionDescriptionInput",
+          "DelegateTaskScopeCorrectionInput", "DelegateTaskScopeCorrectionView",
+          "WorkflowDelegateTaskScopeCorrectionPreparationInput")
       values.foreach { name =>
         val fields = "(?m)^\\| (\\w+) \\| ([\\w.]+) \\| ([1?*+]) \\|".r.findAllMatchIn(sections(name)).map { m =>
           Json.obj("name" -> Json.fromString(m.group(1)), "type" -> Json.fromString(m.group(2)),
@@ -162,18 +166,18 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
         operations.find(op => text(op, "service") == service && text(op, "name") == name)
           .getOrElse(fail(s"Missing Operation $service.$name"))
 
-      Then("the distribution identifies this component and exactly the authored thirteen, six and nine participant Operations")
+      Then("the distribution identifies this component and exactly the authored Phase, Split and Repository participant Operations")
       text(abi, "format") shouldBe "cozy.car.abi-manifest.v2"
       abi.hcursor.downField("component").get[String]("namespace") shouldBe Right("org.simplemodeling.textus")
       abi.hcursor.downField("component").get[String]("id") shouldBe Right("SmWorkflow")
-      abi.hcursor.downField("component").get[String]("version") shouldBe Right("0.1.0-SNAPSHOT")
+      abi.hcursor.downField("component").get[String]("version") shouldBe Right("0.1.1-SNAPSHOT")
       abi.hcursor.downField("abi").get[Int]("version") shouldBe Right(1)
       names("GoalPhaseService") should contain theSameElementsAs Vector(
         "startGoalPhase", "advanceGoalPhase", "submitGoalPhaseWorkResult", "submitGoalPhaseOrderedDecision", "submitGoalPhaseFindingRecording",
         "describeGoalPhaseStepReview", "requestGoalPhaseStepReview",
         "describeGoalPhaseReleaseRepairContinuation", "recoverGoalPhaseReleaseRepairContinuation",
         "describeGoalPhaseFailedPhaseRepair", "adoptGoalPhaseFailedPhaseRepair",
-        "describeGoalPhaseValidationRepair", "adoptGoalPhaseValidationRepair")
+        "describeGoalPhaseValidationRepair", "adoptGoalPhaseValidationRepair", "reconstructGoalPhaseDevelopment")
       names("SplitPhaseService") should contain theSameElementsAs Vector(
         "startSplitPhase", "advanceSplitPhase", "submitPartitionSemanticResult",
         "submitHandoffScopeResult", "submitReasoningResult", "submitSplitHumanDirection")
@@ -190,6 +194,7 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
       val preparation = Map("prepareStandaloneFixStart" -> "WorkflowStandaloneFixStartPreparationInput", "prepareGoalStart" -> "WorkflowGoalStartPreparationInput",
         "prepareStandaloneReviewFixStart" -> "WorkflowStandaloneReviewFixStartPreparationInput", "prepareGoalTaskStart" -> "WorkflowGoalTaskStartPreparationInput",
         "prepareDelegateTaskStart" -> "WorkflowDelegateTaskStartPreparationInput",
+        "prepareDelegateTaskScopeCorrection" -> "WorkflowDelegateTaskScopeCorrectionPreparationInput",
         "prepareRepositoryStart" -> "WorkflowRepositoryStartPreparationInput", "prepareSplitStart" -> "WorkflowSplitStartPreparationInput",
         "prepareRepositoryEffect" -> "WorkflowRepositoryEffectPreparationInput", "prepareAuthority" -> "WorkflowAuthorityPreparationInput",
         "prepareEvidence" -> "WorkflowEvidencePreparationInput")
@@ -226,6 +231,7 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
           .fold(error => fail(error.message), identity)).toMap
       participantInputs shouldBe Map(
         "advanceGoalPhase" -> "GoalPhaseAdvanceInput",
+        "reconstructGoalPhaseDevelopment" -> "GoalPhaseDevelopmentReconstructionInput",
         "describeGoalPhaseStepReview" -> "GoalPhaseStepReviewDescriptionInput",
         "requestGoalPhaseStepReview" -> "GoalPhaseStepReviewRequestInput",
         "describeGoalPhaseFailedPhaseRepair" -> "GoalPhaseFailedPhaseRepairDescriptionInput",

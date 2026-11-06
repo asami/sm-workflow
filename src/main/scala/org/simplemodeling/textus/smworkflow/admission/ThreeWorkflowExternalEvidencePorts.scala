@@ -17,7 +17,7 @@ import NativeExternalEvidence.Purpose
   * actor, dummy verifier, success default or reply-decoded authority is used.
   * @since   Oct.  7, 2026
   *  version Oct. 27, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: NativeExternalEvidence.Reader) {
@@ -43,6 +43,10 @@ private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: Nativ
       override def admitNonexecutionC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
         _admit_evidence_c(core, Purpose.GoalTaskMalformedIssuedWorkNonexecution, key(reference.identity, reference.revision), binding)
     }
+  val goalTaskRepairContinuation: GoalTaskRepairContinuation.EvidencePort = new GoalTaskRepairContinuation.EvidencePort {
+    def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
+      _admit_evidence_c(core, Purpose.GoalTaskRepairContinuation, key(reference.identity, reference.revision), binding)
+  }
   val splitStart: SplitPhaseTypedStartHumanVerification.EvidencePort = new SplitPhaseTypedStartHumanVerification.EvidencePort {
     def admitC(core: ActionCall.Core, lookupIdentity: String, target: Json) =
       _admit_evidence_c(core, Purpose.SplitStart, lookupIdentity, target)

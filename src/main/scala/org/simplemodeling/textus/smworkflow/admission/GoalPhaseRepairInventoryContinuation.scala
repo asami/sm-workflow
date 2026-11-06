@@ -21,7 +21,7 @@ import GoalPhasePlanRevision as R
 /** Native provenance for an inventory-only continuation of the already reserved
   * Phase repair. Decoded business values alone never construct a Source.
   * @since   Oct. 27, 2026
-  * @version Oct. 27, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseRepairInventoryContinuation {
@@ -219,6 +219,7 @@ private[smworkflow] object GoalPhaseRepairInventoryContinuation {
       if (value.deferredResult.nonEmpty) (BigInt(revision) + 1).toString else revision).getOrElse(value.sourceRevision) &&
     _paths(value.candidatePaths) &&
     R.validateCapturedC(value.captured).isSuccess && value.captured.revisionScope.contains(R.phaseRepairInventoryScope) &&
+    R.validateCapturedScopeC(value.plan, value.plan.steps.size, value.captured).isSuccess &&
     O.phaseRepairInventoryPathsC(value.plan, value.captured.plan).toOption.exists(_.forall(value.candidatePaths.contains))
 
   def bindingC(component: String, target: Target, rationale: String, participant: String,

@@ -15,7 +15,7 @@ import RepositorySyncNativeMergeValidation as V
 /** Bounded admission specifications using explicitly fixture-owned receipts.
   * These do not assert installed delivery or execution of a real SBT process.
   * @since   Oct. 26, 2026
-  * @version Oct. 26, 2026
+  * @version Nov.  6, 2026
   * @author ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -50,6 +50,27 @@ final class StandaloneFixWorkflowSpec extends AnyWordSpec with Matchers with Giv
     take(S.completedC(work, result, ContextReference("actual-semantic-result", "1")))
   }
   private def passed(s: S.State) = checks.foldLeft(s)((state, check) => observe(state, receipt(check)))
+
+  "Retained confirmed terminal validation" should {
+    "resume only its affected check without consuming repair counts or replacing the candidate" in {
+      Given("an existing selected candidate and a fixture-owned terminal incomplete capture")
+      val captured = selected
+      val waiting = take(S.observedC(take(S.intentC(captured)), TerminatedValidationFixture.receipt(checks.head)))
+      When("a later ordinary continuation prepares the affected check")
+      val resumed = take(S.continueTerminatedValidationC(waiting))
+      val intent = take(S.intentC(resumed))
+      Then("the original source/candidate and counts survive and an unresolved intent cannot be resumed again")
+      waiting.stage shouldBe "Wait"
+      waiting.receipts.last.processObservation should not be empty
+      resumed.input shouldBe waiting.input
+      resumed.candidate shouldBe waiting.candidate
+      resumed.automaticCount shouldBe waiting.automaticCount
+      resumed.ordinaryCount shouldBe waiting.ordinaryCount
+      resumed.repairControl shouldBe waiting.repairControl
+      intent.pendingCheck shouldBe Some(checks.head.identity)
+      S.continueTerminatedValidationC(intent).isSuccess shouldBe false
+    }
+  }
 
   "Standalone repair admission" should {
     "retain the final successful observation before a missing-Compile code assessment can refuse" in {

@@ -40,8 +40,7 @@ import GoalPhaseDevelopmentReconstruction as X
   *  version Oct. 28, 2026
   *  version Oct. 31, 2026
   *  version Oct. 29, 2026
-  *  version Nov.  2, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWorkContinuation {
@@ -443,7 +442,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         case Some(value) => for {
           selected <- proposal.orElse(value.result.result.value.planRevision).map(Consequence.success)
             .getOrElse(F.invalid("runtime inventory lost its actual proposal"))
-          appended <- O.phaseRepairInventoryPathsC(controller.plan, selected.plan)
+          captured <- GoalPhasePlanRevision.phaseRepairInventoryPlanC(controller.plan, selected.plan)
+          appended <- O.phaseRepairInventoryPathsC(controller.plan, captured)
           paths = (d.candidatePaths ++ controller.plan.phaseOwnedPaths ++ appended).distinct
           _ <- K.targetForC(value, d.copy(candidatePaths = paths), core, selected)
         } yield paths

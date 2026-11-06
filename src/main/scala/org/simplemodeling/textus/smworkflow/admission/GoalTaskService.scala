@@ -18,7 +18,7 @@ import StandaloneFixExecution as S
 /** Ordinary public operations around the canonical CNCF continuation engine.
   * @since   Oct. 26, 2026
   *  version Oct. 27, 2026
- * @version Nov.  5, 2026
+  * @version Nov.  6, 2026
   */
 private[smworkflow] object GoalTaskService {
   def bindC(creation: ComponentCreate, declaration: GoalPhaseNativeRun.Declaration): Consequence[spec.ServiceDefinition] =
@@ -51,12 +51,14 @@ private[admission] final class BoundedTaskService(N: BoundedWorkNativeRun) {
     reader <- NativeExternalEvidence.bindBoundedC(creation.configuration, h)
     recovery = if (N.delegation) DelegateTaskScopeCorrection.operations(h, definition, selections) else GoalTaskMalformedIssuedWorkRecovery.operations(h, definition,
       new ThreeWorkflowExternalEvidencePorts(reader).goalTaskMalformedIssuedWorkRecovery)
+    continuation = if (N.delegation) Vector.empty else GoalTaskRepairContinuation.operations(h, definition,
+      new ThreeWorkflowExternalEvidencePorts(reader).goalTaskRepairContinuation)
     completion <- _completion_c(h, definition, storage, None, None)
     wrapped = CallScopedOperationBinding.wrapResult(completion, (core, submitted) =>
       N.storageC(h, definition, core).flatMap(storage => _completion_c(h, definition, storage, Some(core), Some(submitted))))
     service = NativeWorkflowDescriptionMetadata.service(declaredService,
       spec.OperationDefinitionGroup(NonEmptyVector.of(new Operation(true, h, definition, selections),
-        new Operation(false, h, definition, selections), new InformationOperation(h, definition), wrapped).concat(recovery)))
+        new Operation(false, h, definition, selections), new InformationOperation(h, definition), wrapped).concat(recovery ++ continuation)))
   } yield NativeWorkflowResultInput.task(service, creation, h, definition, N)
 
   private final class Operation(start: Boolean, h: Host, definition: DefinitionBinding,

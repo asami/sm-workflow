@@ -2,6 +2,7 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
 import io.circe.syntax.*
+import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -9,12 +10,13 @@ import org.goldenport.cncf.workflow.ContextReference
 import GoalPhaseOrderedProgression as O
 import GoalPhasePlanRevision as R
 import GoalPhaseAcceptanceBoundary as A
+import GoalPhaseWorkClassification as C
 import GoalPhaseRepairInventoryContinuation as K
 import SplitPhaseExplicitPartitionFixture.take
 
 /** Pure inventory contracts; the CLI specification owns native provenance.
   * @since   Oct. 27, 2026
-  * @version Oct. 27, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -27,8 +29,9 @@ final class GoalPhaseRepairInventoryContinuationSpec extends AnyWordSpec with Ma
     Vector("phase-test"), repairLimit = 2)
   private val _directive = O.RepairDirective("Repair the actual failed Phase check", Vector("Product check fails"))
   private def _key(state: O.State): O.WorkKey = state.next.asInstanceOf[O.Semantic].key
-  private def _closed: O.State = {
-    val started = take(O.startC(_plan, _base, Some(GoalPhaseRuntimeRepairControl.version)))
+  private def _closed: O.State = _closed_with_plan(_plan)
+  private def _closed_with_plan(plan: O.Plan): O.State = {
+    val started = take(O.startC(plan, _base, Some(GoalPhaseRuntimeRepairControl.version)))
     val ready = take(started.acceptC(O.SemanticCompleted(_key(started), "Product ready")))
     val candidate = O.Snapshot(_base.head, _oid('c'))
     val observed = take(ready.acceptC(O.CandidateObserved(candidate)))
@@ -37,14 +40,81 @@ final class GoalPhaseRepairInventoryContinuationSpec extends AnyWordSpec with Ma
     val intent = take(accepted.acceptC(O.ClosureIntentSaved(candidate, "step-intent")))
     take(intent.acceptC(O.StepCommitObserved("step-intent", O.Commit(_oid('d'), _base.head, candidate.tree))))
   }
-  private def _repair: O.State = {
-    val closed = _closed
+  private def _repair: O.State = _repair_with_plan(_plan)
+  private def _repair_with_plan(plan: O.Plan): O.State = {
+    val closed = _closed_with_plan(plan)
     val seen = take(closed.acceptC(O.CandidateObserved(closed.tipSnapshot)))
-    val failed = take(seen.acceptC(O.ChecksObserved(closed.tipSnapshot, _plan.phaseChecks, "real-failure", false)))
+    val failed = take(seen.acceptC(O.ChecksObserved(closed.tipSnapshot, plan.phaseChecks, "real-failure", false)))
     take(failed.continueInitialPhaseCheckRepairC("real-failure", _directive))
   }
   private def _proposed(state: O.State): O.Plan = state.plan.copy(revision = "2",
     phaseRepairInventory = Vector("src/test/ProductSpec.scala"))
+
+  "E5 omission-only classification inheritance" should {
+    "preserve every source classification across shrinking optional-field omission combinations" in {
+      Given("saved classifications with varied complexity and optional public-view omissions")
+      val property = Prop.forAll(Gen.oneOf(C.Complexity.values.toSeq), Gen.oneOf(true, false), Gen.oneOf(true, false)) {
+        (complexity, omitstep, omitphase) =>
+          val coding = C.Classification(C.Kind.CODING, complexity, C.Domain.PROGRAMMING, C.Footprint.SMALL)
+          val review = coding.copy(kind = C.Kind.REVIEW)
+          val assignment = C.Assignment(coding, coding, review)
+          val previous = _repair.plan.copy(steps = _repair.plan.steps.map(_.copy(workClassification = Some(assignment))),
+            phaseReviewClassification = Some(review))
+          val complete = previous.copy(revision = "property-2", effectiveAcceptance = None,
+            phaseRepairInventory = Vector("src/test/PropertySpec.scala"))
+          val raw = complete.copy(steps = complete.steps.map(step =>
+            if (omitstep) step.copy(workClassification = None) else step),
+            phaseReviewClassification = if (omitphase) None else complete.phaseReviewClassification)
+          R.phaseRepairInventoryPlanC(previous, raw).toOption.contains(complete.copy(effectiveAcceptance = previous.effectiveAcceptance))
+      }
+      When("the source-paired inventory owner derives the complete Plan")
+      val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(100), property)
+      Then("only missing classification fields inherit and all exact source values survive")
+      checked.passed shouldBe true
+    }
+
+    "derive missing classifications solely from the saved source while retaining the exact raw proposal and acceptance" in {
+      Given("an existing all-closed reserved repair and its original explicit classifications")
+      val coding = C.Classification(C.Kind.CODING, C.Complexity.STANDARD, C.Domain.PROGRAMMING, C.Footprint.SMALL)
+      val review = coding.copy(kind = C.Kind.REVIEW)
+      val assignment = C.Assignment(coding, coding, review)
+      val classifiedplan = _plan.copy(steps = _plan.steps.map(_.copy(workClassification = Some(assignment))),
+        phaseReviewClassification = Some(review))
+      val repair = _repair_with_plan(classifiedplan)
+      val decision = take(repair.acceptC(O.NativeFailure("The assigned repair needs a missing test")))
+      val complete = _proposed(decision).copy(effectiveAcceptance = None)
+      val legacy = complete.copy(steps = complete.steps.map(_.copy(workClassification = None)), phaseReviewClassification = None)
+      val proposal = R.Proposal("legacy-inventory", "1", "Append the required exact test", legacy)
+      When("native semantic capture selects only the Phase repair inventory scope")
+      val captured = take(R.captureSemanticProposalC(decision, proposal, None))
+      Then("the raw semantic proposal is retained and the derived Plan has exactly the saved classifications")
+      captured.proposal shouldBe proposal
+      captured.plan shouldBe complete.copy(effectiveAcceptance = decision.plan.effectiveAcceptance)
+      captured.asJson.as[R.Captured] shouldBe Right(captured)
+      take(R.validateCapturedScopeC(decision.plan, decision.cursor, captured)) shouldBe ()
+      take(R.adoptedC(decision, captured, "actual-semantic-source")).completed shouldBe decision.completed
+      R.validateCapturedC(captured.copy(revisionScope = None)).isSuccess shouldBe false
+      val changed = coding.copy(complexity = C.Complexity.COMPLEX)
+      val forged = captured.copy(plan = captured.plan.copy(phaseReviewClassification = Some(changed.copy(kind = C.Kind.REVIEW))))
+      R.validateCapturedC(forged).isSuccess shouldBe true // Structural omission equivalence alone supplies no source proof.
+      R.validateCapturedScopeC(decision.plan, decision.cursor, forged).isSuccess shouldBe false
+      val mutations = Vector(legacy.copy(phaseReviewClassification = Some(changed.copy(kind = C.Kind.REVIEW))),
+        legacy.copy(steps = legacy.steps.map(_.copy(workClassification = Some(assignment.copy(implementation = changed))))),
+        legacy.copy(steps = legacy.steps.map(_.copy(purpose = "Changed purpose"))),
+        legacy.copy(steps = legacy.steps.map(_.copy(checks = Vector("different-check")))),
+        legacy.copy(steps = legacy.steps.map(_.copy(ownedPaths = Vector("other.scala")))),
+        legacy.copy(steps = legacy.steps.map(_.copy(actionPolicy = Some(GoalPhaseStepAssessment.Policy(
+          "different-policy", "code", "required", "off", "off", Vector.empty))))),
+        legacy.copy(acceptance = Some(A.Adoption("Changed purpose", Vector.empty))),
+        legacy.copy(steps = legacy.steps :+ O.Step("S2", "Changed Step count", Vector("other.scala"), Vector("S1"), Vector("compile"))),
+        legacy.copy(phaseChecks = Vector("other-phase-check")), legacy.copy(repairLimit = decision.plan.repairLimit + 1))
+      mutations.foreach { plan =>
+        R.captureSemanticProposalC(decision, proposal.copy(plan = plan), None).isSuccess shouldBe false
+      }
+      decision.repairs shouldBe repair.repairs
+      decision.base shouldBe repair.base
+    }
+  }
 
   "E1 the exact phase repair inventory delta" should afterWord(
     "in spec:goal-phase-repair-inventory-continuation, example:E1, rules:R1,R2, phase:P99-INVENTORY-01") {
