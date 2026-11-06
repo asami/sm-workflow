@@ -28,7 +28,7 @@ import D.given
   * review are SPECIFICATION-OWNED, never actual user/provider acceptance.
   * SQLite is read only; all progression uses the ordinary public lifecycle.
   * @since   Oct. 28, 2026
-  * @version Oct. 28, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object ReleaseDependencyCliSpecification extends ThreeWorkflowManagedRepositoryFixture {
@@ -1104,7 +1104,7 @@ private[admission] object ReleaseDependencyCliSpecification extends ThreeWorkflo
       request.hcursor.get[String]("producer") shouldBe Right(scenario.host.target.root)
       request.hcursor.get[String]("admission_host") shouldBe Right(scenario.root.toString)
       request.hcursor.get[String]("component_identity") shouldBe Right(SmWorkflowComponent.componentId.name)
-      request.hcursor.get[String]("component_coordinate") shouldBe Right("org.simplemodeling.textus:textus-sm-workflow:0.1.0-SNAPSHOT")
+      request.hcursor.get[String]("component_coordinate") shouldBe Right("org.simplemodeling.textus:textus-sm-workflow:0.1.1-SNAPSHOT")
       val archive = Path.of(request.hcursor.get[String]("archive").toOption.get)
       archive.startsWith(Path.of(scenario.host.target.root).resolve("target")) shouldBe true
       Files.isRegularFile(archive) shouldBe true

@@ -1,11 +1,11 @@
 # Component-owned standard declarations. User configuration overrides them.
 # Run-specific Phase, Plan, paths, checks and Step programs enter at Start.
 subsystem: sm-workflow
-version: 0.1.0-SNAPSHOT
+version: 0.1.1-SNAPSHOT
 components:
   - namespace: org.simplemodeling.textus
     id: SmWorkflow
-    version: 0.1.0-SNAPSHOT
+    version: 0.1.1-SNAPSHOT
 security:
   authentication:
     local_subject:

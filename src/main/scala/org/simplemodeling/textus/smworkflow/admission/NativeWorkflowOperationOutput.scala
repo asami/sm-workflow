@@ -15,7 +15,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * outcome. No extra store read, result verifier or transport envelope.
   * @since   Oct. 12, 2026
   *  version Oct. 29, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationOutput {
@@ -273,9 +273,11 @@ private[smworkflow] object NativeWorkflowOperationOutput {
   private def _goal_plan(value: GoalPhaseOrderedProgression.Plan): V.GoalPhaseOrderedPlan =
     V.GoalPhaseOrderedPlan(value.identity, value.revision, value.phase, value.repository,
       value.steps.map(s => V.GoalPhaseOrderedStep(s.identity, s.purpose, s.ownedPaths, s.dependencies, s.checks,
-        s.actionPolicy.map(p => GoalPhaseNativeMetadata.record(p.asJson)))),
+        s.actionPolicy.map(p => GoalPhaseNativeMetadata.record(p.asJson)),
+        s.workClassification.map(c => GoalPhaseNativeMetadata.record(c.asJson)))),
       value.phaseChecks, value.repairLimit, GoalPhaseAcceptanceBoundary.publicAdoption(value.acceptance),
-      GoalPhaseAcceptanceBoundary.publicEffective(value.effectiveAcceptance), value.phaseRepairInventory)
+      GoalPhaseAcceptanceBoundary.publicEffective(value.effectiveAcceptance), value.phaseRepairInventory,
+      value.phaseReviewClassification.map(c => GoalPhaseNativeMetadata.record(c.asJson)))
   private def _goal_snapshot(value: GoalPhaseOrderedProgression.Snapshot): V.GoalPhaseNativeSnapshot =
     V.GoalPhaseNativeSnapshot(value.head, value.tree)
   private def _goal_check(value: RepositorySyncNativeMergeValidation.Receipt): V.GoalPhaseNativeCheckReceipt =

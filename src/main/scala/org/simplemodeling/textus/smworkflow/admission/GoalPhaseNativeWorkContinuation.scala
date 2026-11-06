@@ -579,7 +579,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         case Some(value) => for {
           selected <- proposal.orElse(value.result.result.value.planRevision).map(Consequence.success)
             .getOrElse(F.invalid("runtime inventory lost its actual proposal"))
-          appended <- O.phaseRepairInventoryPathsC(controller.plan, selected.plan)
+          captured <- GoalPhasePlanRevision.phaseRepairInventoryPlanC(controller.plan, selected.plan)
+          appended <- O.phaseRepairInventoryPathsC(controller.plan, captured)
           paths = (d.candidatePaths ++ controller.plan.phaseOwnedPaths ++ appended).distinct
           _ <- K.targetForC(value, d.copy(candidatePaths = paths), core, selected)
         } yield paths

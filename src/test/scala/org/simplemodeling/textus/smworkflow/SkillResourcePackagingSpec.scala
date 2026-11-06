@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /**
  * @since   Oct.  2, 2026
  *  version Oct. 28, 2026
- * @version Nov.  2, 2026
+ * @version Nov.  6, 2026
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -59,7 +59,7 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
   "Component-owned skill resources" should {
     "retain exactly the seven public semantic skill sources in the actual component JAR" in {
       Given("the official packageBin component artifact and the independently readable authoring sources")
-      val artifact = Paths.get("target/scala-3.3.8/textus-sm-workflow_3-0.1.0-SNAPSHOT.jar")
+      val artifact = Paths.get("target/scala-3.3.8/textus-sm-workflow_3-0.1.1-SNAPSHOT.jar")
       withClue("Run packageBin before this artifact acceptance spec: ")(Files.isRegularFile(artifact) shouldBe true)
       val prefix = "META-INF/sm-workflow/skills/"
       val names = Vector("sm-goal-phase", "sm-split-phase", "sm-repository-sync", "sm-test-fix", "sm-goal-task", "sm-review-fix", "sm-delegate-task")
@@ -83,8 +83,8 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
 
     "retain identical bytes for every declared distribution file in the standalone ZIP and component JAR" in {
       Given("the actual skillBundle ZIP, packageBin JAR and independent authoring sources")
-      val archive = Paths.get("target/sm-workflow-skills-0.1.0-SNAPSHOT.zip")
-      val artifact = Paths.get("target/scala-3.3.8/textus-sm-workflow_3-0.1.0-SNAPSHOT.jar")
+      val archive = Paths.get("target/sm-workflow-skills-0.1.1-SNAPSHOT.zip")
+      val artifact = Paths.get("target/scala-3.3.8/textus-sm-workflow_3-0.1.1-SNAPSHOT.jar")
       withClue("Run skillBundle before this distribution spec: ")(Files.isRegularFile(archive) shouldBe true)
       Files.isRegularFile(artifact) shouldBe true
       val zip = new ZipFile(archive.toFile)
@@ -117,7 +117,7 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
 
     "resolve actual direct contract links from installed skill instructions within the standalone ZIP" in {
       Given("the actual standalone ZIP and its installed relative skill paths")
-      val archive = Paths.get("target/sm-workflow-skills-0.1.0-SNAPSHOT.zip")
+      val archive = Paths.get("target/sm-workflow-skills-0.1.1-SNAPSHOT.zip")
       withClue("Run skillBundle before this link specification: ")(Files.isRegularFile(archive) shouldBe true)
       val markdownlink = "\\[[^\\]]*\\]\\(([^)]+)\\)".r
       val zip = new ZipFile(archive.toFile)
@@ -150,7 +150,7 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
 
     "produce identical standalone archive bytes after source timestamp and input-order changes" in {
       Given("the original skillBundle archive and the build task's separately copied and repacked source probe")
-      val original = Paths.get("target/sm-workflow-skills-0.1.0-SNAPSHOT.zip")
+      val original = Paths.get("target/sm-workflow-skills-0.1.1-SNAPSHOT.zip")
       val probeRoot = Paths.get("target/skill-bundle-reproducibility")
       val probe = probeRoot.resolve("repacked.zip")
       Files.isRegularFile(original) shouldBe true

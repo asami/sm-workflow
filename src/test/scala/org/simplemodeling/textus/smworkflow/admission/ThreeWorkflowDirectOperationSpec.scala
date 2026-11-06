@@ -707,9 +707,10 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
           prepare(call => call.currentC(identity).map(value => { state = Some(value); () }))
           state.get
         }
-        Then("exactly the fifty-five installed Operations expose named business input and explicit execution parameters")
+        Then("exactly the fifty-six installed Operations expose named business input and explicit execution parameters")
         val expected = Set(
           "GoalPhaseService.startGoalPhase", "GoalPhaseService.advanceGoalPhase", "GoalPhaseService.submitGoalPhaseWorkResult",
+          "GoalPhaseService.reconstructGoalPhaseDevelopment",
           "GoalPhaseService.submitGoalPhaseOrderedDecision",
           "GoalPhaseService.submitGoalPhaseFindingRecording",
           "GoalPhaseService.describeGoalPhaseStepReview", "GoalPhaseService.requestGoalPhaseStepReview",
@@ -741,8 +742,8 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
           "RepositorySyncService.describeRepositorySyncValidationContinuation", "RepositorySyncService.adoptRepositorySyncValidationContinuation",
           "RepositorySyncService.submitRepositorySyncWorkResult", "RepositorySyncService.submitRepositoryPurposeResult", "RepositorySyncService.submitNativeMergeReview",
           "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitNativeMergeRepair")
-        published should have size 55
-        published.map(_._1).distinct should have size 55
+        published should have size 56
+        published.map(_._1).distinct should have size 56
         published.map(_._1).toSet shouldBe expected
         val sessiondescriptions = Set("describeGoalPhaseValidationRecovery", "describeGoalPhaseClosureRecovery",
           "describeGoalPhaseSourceHistoryRecovery", "describeGoalPhaseCandidateRecovery",
@@ -754,13 +755,14 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
             operation.specification.request.parameters.head.name shouldBe
               (if (sessiondescriptions(operation.name)) "sessionId"
                 else if (operation.name == "requestGoalPhaseStepReview" ||
-                  Vector("start", "describe", "recover", "adopt", "admit", "continue", "resolve").exists(operation.name.startsWith)) "input"
+                  Vector("start", "describe", "recover", "adopt", "admit", "continue", "resolve", "reconstruct").exists(operation.name.startsWith)) "input"
                 else "sessionId")
             if (Set("describeGoalPhaseValidationRepair", "adoptGoalPhaseValidationRepair",
                 "recoverGoalPhaseCandidate", "recoverGoalPhaseWholePhaseCandidate", "describeGoalPhaseReleaseRepairContinuation",
                 "recoverGoalPhaseReleaseRepairContinuation", "describeGoalPhaseDependencySourceRevision",
                 "adoptGoalPhaseDependencySourceRevision", "recoverGoalPhasePrerequisitePublication",
-                "adoptRepositorySyncValidationContinuation").contains(operation.name)) {
+                "adoptRepositorySyncValidationContinuation", "adoptGoalPhaseSourceHistoryNormalization",
+                "reconstructGoalPhaseDevelopment").contains(operation.name)) {
               operation.specification.request.parameters.map(_.name) shouldBe Vector("input", "inputResource")
               operation.specification.request.parameters.map(_.domain.multiplicity) shouldBe
                 Vector(Multiplicity.ZeroOne, Multiplicity.ZeroOne)

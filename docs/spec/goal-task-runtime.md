@@ -137,3 +137,92 @@ owning runtime performs selected validation. Phase 6.7 checklist conditions rema
 open until their actual phase-scoped observations exist. Existing Phase/standalone
 schemas and optional-field decoding retain old Sessions, counters and attribution;
 no migration, restart or accepted Submit replay is introduced.
+
+
+## Same Task continuation after a repair-trend Human stop
+
+`GoalTaskService.describeGoalTaskRepairContinuation` takes `sessionId` and returns
+an opaque JSON-text `target`, `ContinueRepair` / `Defer`, and `resumeGoalTaskRepair`.
+Only an active GoalTask with no pending WorkOrder, check or commit/effect intent,
+a retained runtime repair-trend stop, its terminal failed selected-check receipt,
+and remaining native allowance is eligible. Other Human reasons, DelegateTask,
+Phase, standalone FIX, unknown Sessions, exhausted and terminal Tasks refuse.
+The target contains the component instance, native definition and complete frontier,
+participant, immutable business payload, source root/branch/base, candidate,
+generation, selected checks, receipts, counters, repair-control observations,
+policy and limit, and implementation-worker exclusions.
+
+`resumeGoalTaskRepair` takes `sessionId`, the unchanged opaque `target`, `choice`,
+`rationale`, `participant` and actual `reference`. Its independently admitted Human
+source must bind all these values under `goal-task-repair-continuation` through
+the existing evidence Reader. Authentication, describe output and passive JSON
+preparation supply no consent. The trusted host separately observes and admits
+covering actual user direction for this exact target. Passive
+`NativeWorkflowPreparationService.prepareEvidence` uses family `GoalTask`, kind
+`repair-continuation`, the actual description and answer, reference, matching
+Human worker/participant, issuer, occurrence time and declared import collection.
+It writes no storage and authorizes no operation.
+
+Defer appends nothing. ContinueRepair uses the normal native mechanical transition
+and its revision precondition to append exactly one Repair checkpoint with a typed
+retained direction. The same Session and complete old history prefix remain;
+only current stage and the optional retained direction change. The original stop
+reason remains in the payload and original opaque target. Counters, observations,
+limit, failed receipts, candidate, generation and frozen input remain unchanged.
+Before the append, ContinueRepair requires the current host repository/root/branch
+to match the retained payload, then uses the existing native read-only Git/root,
+HEAD, index and scoped working-tree observation (`freshC`) against the saved
+candidate and unrelated-work boundary. A physically changed candidate or crossed
+host refuses before any checkpoint append; history, receipts and counters remain
+unchanged. This is read-only native Git observation, zero Git/source mutation:
+resume performs no staging, source write, work, check, commit or publication.
+Describe and retained collection read native storage; Defer writes nothing and
+requires no source observation. A separate ordinary Advance issues the next
+Repair, and normal completed Repair charges one existing batch.
+Independent integrated review, all implementation-worker exclusions and actual
+local commit obligations still apply. There is no reset, refund, new policy,
+re-Start, forced closure, accepted Submit replay, controller or file ledger.
+
+At each later eligible unsuspended Human stop, description returns the exact current
+frontier and business, even when an earlier direction is retained. A later
+ineligible or exhausted Human stop refuses description. Non-Human active progress
+collects the latest retained continuation. Each new stop requires separate exact
+Human evidence; prior evidence does not authorize its new target. Defer still
+writes nothing and ContinueRepair still appends only one ordinary Repair checkpoint.
+
+The compatible optional `Payload.repairContinuation` retains the latest Direction.
+Its exact opaque pre-resume `target.business` already embeds any prior Direction;
+the native history and that ancestry retain earlier episodes without another
+record/controller/store. Loading validates canonical eligible targets, the same
+component/Session/participant and frozen input, strictly decreasing frontier
+revisions and a finite bound from the existing native repair limit. Malformed,
+crossed, noncanonical and over-bound chains refuse without writes.
+
+An explicit repeated resume collects any originally admitted target in that
+ancestry only when its entire original direction matches: target, choice,
+rationale, participant and reference. This includes the earliest and latest
+episodes after ordinary Advance, Submit, later progress and physical reopen.
+Collection appends nothing and issues no work. Changed answers/references and
+stale targets that were never resumed refuse; terminal and forced-closed Tasks
+remain closed. Old payloads omit the optional field and remain decodable.
+
+Executable coverage: `GoalTaskRepairContinuationSpec` (managed public episode,
+refusals including physical source and changed-host drift, historical decoding
+and finite allowance properties),
+`GoalTaskExternalEvidencePreparationSpec` (opaque passive preparation and exact
+Human source), and `GoalTaskWorkflowSpec` (published public operations).
+These test-owned facts are not installed deployment or real consumer acceptance.
+Source readiness is separate from native compile, focused/full qualification,
+independent integrated review, local acceptance commit, SNAPSHOT publication and
+real stopped-Session continuation; those remain runtime/owner obligations.
+
+## Later Advance after confirmed terminated validation
+
+GoalTask and standalone Fix share the bounded continuation in
+[normal typed validation](normal-typed-sbt-validation.md#confirmed-terminated-bounded-validation-continuation-november-6-2026).
+It preserves the same Task/Session and original work input. The original Wait
+checkpoint and raw incomplete capture remain readable in managed history; only
+the affected check gets a fresh native attempt on a later Advance after candidate
+freshness. No repair count, review exclusion or successful check is reset.
+Unconfirmed termination and unresolved intents remain Wait. This internal
+continuation adds no public operation or caller-supplied execution proof.

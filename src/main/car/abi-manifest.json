@@ -3,7 +3,7 @@
   "component": {
     "namespace": "org.simplemodeling.textus",
     "id": "SmWorkflow",
-    "version": "0.1.0-SNAPSHOT"
+    "version": "0.1.1-SNAPSHOT"
   },
   "abi": {
     "version": 1,
@@ -682,6 +682,20 @@
         },
         {
           "service": "GoalTaskService",
+          "name": "describeGoalTaskRepairContinuation",
+          "kind": "COMMAND",
+          "input": "GoalTaskRepairContinuationDescriptionInput",
+          "output": "GoalTaskRepairContinuationDescriptionResult"
+        },
+        {
+          "service": "GoalTaskService",
+          "name": "resumeGoalTaskRepair",
+          "kind": "COMMAND",
+          "input": "GoalTaskRepairContinuationInput",
+          "output": "GoalTaskRepairContinuationDescriptionResult"
+        },
+        {
+          "service": "GoalTaskService",
           "name": "describeGoalTaskMalformedIssuedWorkRecovery",
           "kind": "COMMAND",
           "input": "GoalTaskMalformedIssuedWorkRecoveryDescriptionInput",
@@ -882,6 +896,55 @@
           "kind": "COMMAND",
           "input": "StandaloneFixValidationRecoveryInput",
           "output": "StandaloneFixView"
+        },
+        {
+          "service": "NativeWorkflowPreparationService",
+          "name": "prepareDelegateTaskScopeCorrection",
+          "kind": "COMMAND",
+          "input": "WorkflowDelegateTaskScopeCorrectionPreparationInput",
+          "output": "WorkflowPreparedImport"
+        },
+        {
+          "service": "GoalPhaseService",
+          "name": "reconstructGoalPhaseDevelopment",
+          "kind": "COMMAND",
+          "input": "GoalPhaseDevelopmentReconstructionInput",
+          "output": "GoalPhaseAdvanceResult"
+        },
+        {
+          "service": "DelegateTaskService",
+          "name": "describeDelegateTaskScopeCorrection",
+          "kind": "COMMAND",
+          "input": "DelegateTaskScopeCorrectionDescriptionInput",
+          "output": "DelegateTaskScopeCorrectionView"
+        },
+        {
+          "service": "DelegateTaskService",
+          "name": "correctDelegateTaskScope",
+          "kind": "COMMAND",
+          "input": "DelegateTaskScopeCorrectionInput",
+          "output": "DelegateTaskScopeCorrectionView"
+        },
+        {
+          "service": "NativeWorkflowPreparationService",
+          "name": "prepareDelegateTaskCandidateContinuation",
+          "kind": "COMMAND",
+          "input": "WorkflowDelegateTaskCandidateContinuationPreparationInput",
+          "output": "WorkflowPreparedImport"
+        },
+        {
+          "service": "DelegateTaskService",
+          "name": "describeDelegateTaskCandidateContinuation",
+          "kind": "COMMAND",
+          "input": "DelegateTaskCandidateContinuationDescriptionInput",
+          "output": "DelegateTaskCandidateContinuationView"
+        },
+        {
+          "service": "DelegateTaskService",
+          "name": "recoverDelegateTaskCandidateContinuation",
+          "kind": "COMMAND",
+          "input": "DelegateTaskCandidateContinuationInput",
+          "output": "DelegateTaskCandidateContinuationView"
         }
       ],
       "types": [
@@ -1560,6 +1623,18 @@
               "type": "string",
               "multiplicity": "*",
               "required": false
+            },
+            {
+              "name": "actionPolicy",
+              "type": "org.goldenport.record.Record",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "workClassification",
+              "type": "org.goldenport.record.Record",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },
@@ -1618,6 +1693,18 @@
             {
               "name": "effectiveAcceptance",
               "type": "GoalPhaseEffectiveAcceptanceBoundary",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "phaseRepairInventory",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "phaseReviewClassification",
+              "type": "org.goldenport.record.Record",
               "multiplicity": "?",
               "required": false
             }
@@ -6694,6 +6781,108 @@
           ]
         },
         {
+          "name": "GoalTaskRepairContinuationDescriptionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalTaskRepairContinuationInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choice",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalTaskRepairContinuationDescriptionResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "componentInstance",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choices",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "resumeOperation",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
           "name": "GoalTaskMalformedIssuedWorkRecoveryDescriptionInput",
           "kind": "value",
           "fields": [
@@ -6996,6 +7185,12 @@
               "type": "DelegateTaskContract",
               "multiplicity": "1",
               "required": true
+            },
+            {
+              "name": "submissionConditions",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
             }
           ]
         },
@@ -8104,6 +8299,324 @@
             {
               "name": "reference",
               "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseDevelopmentReconstructionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "phasePath",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "checklistPath",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "proposal",
+              "type": "record",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskScopeCorrectionDescriptionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "oldContinuationId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "additionalOwnedPaths",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "submissionConditions",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskScopeCorrectionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "oldContinuationId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskScopeCorrectionView",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "ownedPaths",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "WorkflowDelegateTaskScopeCorrectionPreparationInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "input",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "origin",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionCollection",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskCandidateContinuationDescriptionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskCandidateContinuationInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskCandidateContinuationView",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowDelegateTaskCandidateContinuationPreparationInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "input",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "origin",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionCollection",
+              "type": "string",
               "multiplicity": "1",
               "required": true
             }

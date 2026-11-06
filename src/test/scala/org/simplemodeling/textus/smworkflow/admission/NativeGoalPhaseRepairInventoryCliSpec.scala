@@ -20,13 +20,14 @@ import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms
 import org.simplemodeling.textus.smworkflow.value as V
 import GoalPhaseOrderedProgression as O
 import GoalPhaseRepairInventoryContinuation as K
+import GoalPhaseWorkClassification as C
 import NativeWorkflowCliFixture as F
 import SplitPhaseExplicitPartitionFixture.take
 
 /** Isolated real Git/Compile/Test and public native Operations. Optional installed
   * selection uses the same fixture, with no production Human/provider claim.
   * @since   Oct. 27, 2026
-  * @version Oct. 27, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -35,6 +36,14 @@ final class NativeGoalPhaseRepairInventoryCliSpec extends AnyWordSpec with Given
     with GoalPhaseKnownFailedPhaseValidationFixture {
   private val _product = "src/test/scala/ProductCheck.scala"
   private val _primary = Path.of("").toAbsolutePath.normalize
+  private val _coding = C.Classification(C.Kind.CODING, C.Complexity.STANDARD, C.Domain.PROGRAMMING, C.Footprint.SMALL)
+  private val _review = _coding.copy(kind = C.Kind.REVIEW)
+  private val _assignment = C.Assignment(_coding, _coding, _review)
+  override protected def _recovery_plan: O.Plan = {
+    val original = super._recovery_plan
+    original.copy(steps = original.steps.map(_.copy(workClassification = Some(_assignment))),
+      phaseReviewClassification = Some(_review))
+  }
   override protected def known_repair_limit: Int = 1
   override protected def goal_completion_policy: String = GoalPhasePostCompletionSync.localPolicy
   override protected def recoveryHost(root: Path): ThreeWorkflowRuntimeParameters.Definition = {
@@ -266,7 +275,11 @@ final class NativeGoalPhaseRepairInventoryCliSpec extends AnyWordSpec with Given
       val episode = _episode("phase-inventory-automatic")
       val cli = episode.cli
       When("the assigned phase repair returns the inventory-only typed planRevision")
-      cli.submit(episode.repair, _result("decision-needed", Some(_proposal)), "inventory-proposal-result")
+      val legacy = _proposal.copy(plan = _proposal.plan.copy(
+        steps = _proposal.plan.steps.map(_.copy(workClassification = None)), phaseReviewClassification = None))
+      episode.repair.work.get.selectedPlan.steps.head.workClassification should not be empty
+      episode.repair.work.get.selectedPlan.phaseReviewClassification should not be empty
+      cli.submit(episode.repair, _result("decision-needed", Some(legacy)), "inventory-proposal-result")
       val continued = cli.advance().business[V.GoalPhaseAdvanceResult]
       Then("ordinary Advance issues the same phase Repair once without another Human or batch")
       continued.kind shouldBe "Request"
@@ -330,6 +343,12 @@ final class NativeGoalPhaseRepairInventoryCliSpec extends AnyWordSpec with Given
             val target = inventory.get.receipt.payload.value.target
             _bounded_target(target)
             target.plan.steps shouldBe _recovery_plan.steps
+            target.captured.proposal shouldBe legacy
+            target.captured.plan.steps shouldBe target.plan.steps
+            target.captured.plan.phaseReviewClassification shouldBe target.plan.phaseReviewClassification
+            target.captured.plan.acceptance shouldBe target.plan.acceptance
+            target.captured.plan.effectiveAcceptance shouldBe target.plan.effectiveAcceptance
+            take(GoalPhasePlanRevision.validateCapturedScopeC(target.plan, target.plan.steps.size, target.captured)) shouldBe ()
             target.repairProgress.automaticCount shouldBe 1
             target.requestingWork shouldBe ContextReference(episode.history.suspension.get.continuationIdentity.value,
               (episode.history.revision.value - 1).toString)
@@ -449,6 +468,9 @@ final class NativeGoalPhaseRepairInventoryCliSpec extends AnyWordSpec with Given
           target.deferredChoice shouldBe Option.when(choice == "Defer")("Defer")
           val unregistered = _proposal.copy(plan = _proposal.plan.copy(phaseRepairInventory = Vector("src/test/Unregistered.scala")))
           cli.describe(unregistered).exitCode should not be 0
+          val changedclassification = _proposal.copy(plan = _proposal.plan.copy(
+            phaseReviewClassification = Some(_review.copy(complexity = C.Complexity.COMPLEX))))
+          cli.describe(changedclassification).exitCode should not be 0
           prior.foreach(value => cli.adopt(cli.input(value, _proposal, "stale-before-defer")).exitCode should not be 0)
           target.deferredResult.nonEmpty shouldBe (choice == "Defer")
           target.questionIdentity should not be empty
@@ -458,6 +480,11 @@ final class NativeGoalPhaseRepairInventoryCliSpec extends AnyWordSpec with Given
           cli.adopt(input).exitCode should not be 0
           val crossed = input.copy(target = K.targetRecord(target.copy(generation = target.generation + 1)))
           cli.adopt(crossed).exitCode should not be 0
+          val forgedcapture = input.copy(target = K.targetRecord(target.copy(captured = target.captured.copy(
+            plan = target.captured.plan.copy(phaseReviewClassification = Some(_review.copy(complexity = C.Complexity.COMPLEX)))))))
+          cli.adopt(forgedcapture).exitCode should not be 0
+          val foreignsource = input.copy(target = K.targetRecord(target.copy(requestingResult = ContextReference("foreign-semantic-source", "1"))))
+          cli.adopt(foreignsource).exitCode should not be 0
           val malformed = input.copy(target = GoalPhaseNativeMetadata.record(target.asJson.mapObject(_.add("extra", Json.True))))
           cli.adopt(malformed).exitCode should not be 0
           val explicitnull = input.copy(target = GoalPhaseNativeMetadata.record(target.asJson.mapObject(_.add("deferredResult", Json.Null))))

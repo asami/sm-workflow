@@ -18,8 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Oct.  5, 2026
  *  version Oct. 28, 2026
- *  version Nov.  2, 2026
- * @version Nov.  3, 2026
+ * @version Nov.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -39,11 +38,11 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
       "prepareGoalStart", "prepareRepositoryStart", "prepareSplitStart", "prepareRepositoryEffect", "prepareAuthority", "prepareEvidence",
       "prepareExecution", "recordExecution", "prepareCallerInformation", "recordCallerInformation",
       "prepareStandaloneFixStart", "prepareStandaloneReviewFixStart", "prepareGoalTaskStart", "prepareTaskFixDelivery", "prepareTaskFixAdoption",
-      "prepareDelegateTaskStart"
+      "prepareDelegateTaskStart", "prepareDelegateTaskScopeCorrection", "prepareDelegateTaskCandidateContinuation"
     ),
     SmWorkflowComponent.GoalPhaseServiceService -> Vector(
       "startGoalPhase", "advanceGoalPhase", "submitGoalPhaseWorkResult", "submitGoalPhaseOrderedDecision", "submitGoalPhaseFindingRecording",
-      "resolveGoalPhaseDiagnosticInformation",
+      "resolveGoalPhaseDiagnosticInformation", "reconstructGoalPhaseDevelopment",
       "describeGoalPhaseValidationRecovery", "recoverGoalPhaseValidation",
       "describeGoalPhaseClosureRecovery", "recoverGoalPhaseClosure",
       "describeGoalPhaseSourceHistoryRecovery", "recoverGoalPhaseSourceHistory",
@@ -83,9 +82,12 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
     SmWorkflowComponent.StandaloneFixReviewServiceService -> Vector("reviewStandaloneFix"),
     SmWorkflowComponent.StandaloneFixSemanticAdmissionServiceService -> Vector("admitStandaloneFixReview"),
     SmWorkflowComponent.GoalTaskServiceService -> Vector("startGoalTask", "advanceGoalTask", "submitGoalTaskWorkResult", "resolveGoalTaskDiagnosticInformation",
-      "describeGoalTaskMalformedIssuedWorkRecovery", "recoverGoalTaskMalformedIssuedWork"),
+      "describeGoalTaskMalformedIssuedWorkRecovery", "recoverGoalTaskMalformedIssuedWork",
+      "describeGoalTaskRepairContinuation", "resumeGoalTaskRepair"),
     SmWorkflowComponent.DelegateTaskServiceService -> Vector("startDelegateTask", "advanceDelegateTask",
-      "submitDelegateTaskWorkResult", "resolveDelegateTaskDiagnosticInformation"),
+      "submitDelegateTaskWorkResult", "resolveDelegateTaskDiagnosticInformation",
+      "describeDelegateTaskScopeCorrection", "correctDelegateTaskScope",
+      "describeDelegateTaskCandidateContinuation", "recoverDelegateTaskCandidateContinuation"),
     SmWorkflowComponent.DelegateTaskImplementationServiceService -> Vector("implementDelegateTask"),
     SmWorkflowComponent.DelegateTaskRepairServiceService -> Vector("repairDelegateTask"),
     SmWorkflowComponent.DelegateTaskReviewServiceService -> Vector("reviewDelegateTask"),

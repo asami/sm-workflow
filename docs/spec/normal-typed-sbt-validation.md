@@ -516,3 +516,37 @@ VM-06 additionally selects focused cases for CNCF mode-dependent behavior,
 including test-only external integrations. Use the same managed execution and
 metadata/reference selection, with actual mode/adapter attribution; no third
 full-suite run or new caller-supplied command/configuration parameters.
+
+## Confirmed terminated bounded validation continuation (November 6, 2026)
+
+The shared bounded Task/Fix owner may continue a retained validation Wait on a
+**later ordinary Advance** only when its last selected receipt contains a valid
+original typed process capture and Incomplete SBT facts. CNCF's explicit
+OutputLimitExceeded, TimedOut, Cancelled and ArtifactLimitExceeded terminations
+are terminal observations; TerminationUnconfirmed is not. Missing captures,
+legacy strings alone, unverified tests, nonstart, launch failure and unresolved
+ValidationIntent remain outside this continuation. A nonzero product exit still
+uses ordinary bounded Repair. AdmissionBlocked keeps its distinct confirmed
+nonexecution continuation.
+
+The same invocation that first observes Incomplete stops at Wait. On a later
+Advance, existing root/branch/base/index/candidate/ownership freshness must pass
+before saving Validate and a fresh typed execution intent. Failure to establish
+freshness leaves Wait unchanged. Only the affected receipt leaves the active
+check prefix; the original complete capture remains in the immutable managed
+checkpoint/history. Prior successful checks, evidence references, semantic and
+review attribution, worker exclusions, source, candidate, counters and repair
+observations are retained. A repeated Advance encountering the new unresolved
+intent cannot launch again. No new RPC, accepted Submit replay, Task restart,
+private store repair, retry counter or additional approval mechanism is involved.
+
+Operators correct the owning host's execution settings before continuing (for
+example CNCF's stdout/stderr capture limits after OutputLimitExceeded). Settings
+changes are not successful test evidence. A new result is required; another
+incomplete result remains a new retained Wait. This is not an automatic retry
+loop or permission to rerun an unknown/live process.
+
+Source executable coverage: TerminatedValidationContinuationSpec,
+StandaloneFixWorkflowSpec, GoalTaskWorkflowSpec and BoundedWorkNativeOutcomeSpec.
+Fixture captures qualify behavior only; installed consumer acceptance and normal
+validation/review/publication remain separate pending gates.

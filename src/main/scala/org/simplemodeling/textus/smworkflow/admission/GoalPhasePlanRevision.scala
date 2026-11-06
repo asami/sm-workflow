@@ -15,7 +15,8 @@ import GoalPhaseDocumentPlan as P
 /** Pure complete-Plan proposal and the question owner's captured business input.
   * Neither value certifies consent, transport integrity or execution authority.
   * @since   Oct. 18, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhasePlanRevision {
@@ -118,12 +119,15 @@ private[smworkflow] object GoalPhasePlanRevision {
     _ <- validateProposalC(value.proposal)
     _ <- O.validatePlanC(value.plan)
     _ <- A.savedPlanC(value.plan)
-    _ <- _check(value.plan.copy(effectiveAcceptance = None) == value.proposal.plan,
-      "captured Plan differs from its explicit raw proposal")
-    _ <- _check(value.documents != null, "captured documents Option is null")
     _ <- _check(value.revisionScope != null && value.revisionScope.forall(scope =>
       Set(remainingPurposeScope, phaseRepairInventoryScope, phaseAcceptanceDeferralScope)(scope)),
       "captured revision scope is invalid")
+    raw = value.plan.copy(effectiveAcceptance = None)
+    _ <- _check(raw == value.proposal.plan ||
+      (value.revisionScope.contains(phaseRepairInventoryScope) && raw.steps.size == value.proposal.plan.steps.size &&
+        _inherit_classifications(value.proposal.plan, raw) == raw),
+      "captured Plan differs from its raw proposal beyond omitted inventory classifications")
+    _ <- _check(value.documents != null, "captured documents Option is null")
     _ <- _check(!value.revisionScope.exists(Set(remainingPurposeScope, phaseAcceptanceDeferralScope)) || value.documents.isEmpty,
       "remaining-purpose and Phase acceptance deferral require absent selected documents")
     _ <- value.documents.fold(Consequence.unit)(_documents_c(value.plan, _))
@@ -159,7 +163,7 @@ private[smworkflow] object GoalPhasePlanRevision {
       selected = Captured(proposal, plan, revisionScope = Some(phaseAcceptanceDeferralScope))
       _ <- adoptedC(controller, selected, "proposal-eligibility")
     } yield selected else if (proposal.plan.phaseRepairInventory != controller.plan.phaseRepairInventory) for {
-      plan <- Consequence.success(proposal.plan.copy(effectiveAcceptance = controller.plan.effectiveAcceptance))
+      plan <- phaseRepairInventoryPlanC(controller.plan, proposal.plan)
       selected = Captured(proposal, plan, documents, Some(phaseRepairInventoryScope))
       _ <- validateCapturedC(selected)
       _ <- controller.adoptPhaseRepairInventoryC(plan, "proposal-eligibility")
@@ -179,6 +183,23 @@ private[smworkflow] object GoalPhasePlanRevision {
       _ <- adoptedC(controller, selected, "proposal-eligibility")
     } yield selected else captureC(controller, proposal, project)
   } yield captured
+
+  /** Only omitted optional classifications inherit; every explicit value and
+    * all remaining fields still pass the unchanged strict inventory delta guard.
+    */
+  def phaseRepairInventoryPlanC(previous: O.Plan, proposed: O.Plan): Consequence[O.Plan] = for {
+    _ <- O.validatePlanC(previous)
+    _ <- O.validatePlanC(proposed)
+    _ <- _check(proposed.effectiveAcceptance.isEmpty && previous.steps.size == proposed.steps.size,
+      "inventory inheritance requires a raw Plan with the same complete Step sequence")
+    selected = _inherit_classifications(proposed, previous).copy(effectiveAcceptance = previous.effectiveAcceptance)
+    _ <- O.phaseRepairInventoryPathsC(previous, selected)
+  } yield selected
+
+  private def _inherit_classifications(proposed: O.Plan, previous: O.Plan): O.Plan =
+    proposed.copy(steps = proposed.steps.zip(previous.steps).map { (next, prior) =>
+      next.copy(workClassification = next.workClassification.orElse(prior.workClassification))
+    }, phaseReviewClassification = proposed.phaseReviewClassification.orElse(previous.phaseReviewClassification))
 
   /** Pure delta guard shared by fresh capture, saved questions and adoption. */
   def validateRemainingPurposeC(previous: O.Plan, cursor: Int, proposed: O.Plan): Consequence[Unit] = for {
@@ -202,7 +223,10 @@ private[smworkflow] object GoalPhasePlanRevision {
     _ <- O.validatePlanC(previous)
     _ <- captured.revisionScope match {
       case Some(`phaseAcceptanceDeferralScope`) => O.phaseAcceptanceDeferralConditionsC(previous, captured.plan).map(_ => ())
-      case Some(`phaseRepairInventoryScope`) => O.phaseRepairInventoryPathsC(previous, captured.plan).map(_ => ())
+      case Some(`phaseRepairInventoryScope`) => for {
+        expected <- phaseRepairInventoryPlanC(previous, captured.proposal.plan)
+        _ <- _check(expected == captured.plan, "inventory classifications do not match the exact saved predecessor")
+      } yield ()
       case Some(`remainingPurposeScope`) => validateRemainingPurposeC(previous, cursor, captured.plan)
       case None => _check(!(cursor == previous.steps.size && captured.plan.steps.size == previous.steps.size &&
           captured.plan.acceptance != previous.acceptance) &&

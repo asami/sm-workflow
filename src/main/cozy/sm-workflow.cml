@@ -1649,6 +1649,7 @@ OperationResult
 | dependencies | string | * |
 | checks | string | * |
 | actionPolicy | org.goldenport.record.Record | ? |
+| workClassification | org.goldenport.record.Record | ? |
 
 ## GoalPhaseOrderedPlan
 
@@ -1666,6 +1667,7 @@ OperationResult
 | acceptance | GoalPhaseAcceptanceAdoption | ? |
 | effectiveAcceptance | GoalPhaseEffectiveAcceptanceBoundary | ? |
 | phaseRepairInventory | string | * |
+| phaseReviewClassification | org.goldenport.record.Record | ? |
 
 ## GoalPhaseAcceptanceCondition
 
@@ -13120,6 +13122,14 @@ operation = GoalTaskService.submitGoalTaskWorkResult
 
 operation = GoalTaskService.resolveGoalTaskDiagnosticInformation
 
+#### describeGoalTaskRepairContinuation
+
+operation = GoalTaskService.describeGoalTaskRepairContinuation
+
+#### resumeGoalTaskRepair
+
+operation = GoalTaskService.resumeGoalTaskRepair
+
 #### describeGoalTaskMalformedIssuedWorkRecovery
 
 operation = GoalTaskService.describeGoalTaskMalformedIssuedWorkRecovery
@@ -13164,6 +13174,62 @@ on = task-accepted
 Ad hoc single-repository development from journal or direct instructions. Native WorkOrder, shared validation/repair, integrated independent Task review and actual typed selected local commit own completion. Push and publication are separate effects.
 
 ### OPERATION
+
+#### describeGoalTaskRepairContinuation
+
+##### DESCRIPTION
+
+Same active GoalTask repair-trend Human stop only. Complete opaque native target and independently admitted exact Human direction. Before appending one Repair checkpoint, ContinueRepair compares the current host source root/branch/repository and performs existing native read-only Git observation of root/HEAD/index/scoped working tree against the saved candidate; changed source or crossed host refuses without append or counter change. Zero Git/source mutation, staging, work, checks, commit or publication. Defer writes nothing; describe and repeated collection read storage. A separate ordinary Advance owns the next Repair and normal allowance. Repeated collection retains the original direction and target.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalTaskRepairContinuationDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalTaskRepairContinuationDescriptionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalTaskRepairContinuationDescriptionResult
+
+#### resumeGoalTaskRepair
+
+##### DESCRIPTION
+
+Same active GoalTask repair-trend Human stop only. Complete opaque native target and independently admitted exact Human direction. Before appending one Repair checkpoint, ContinueRepair compares the current host source root/branch/repository and performs existing native read-only Git observation of root/HEAD/index/scoped working tree against the saved candidate; changed source or crossed host refuses without append or counter change. Zero Git/source mutation, staging, work, checks, commit or publication. Defer writes nothing; describe and repeated collection read storage. A separate ordinary Advance owns the next Repair and normal allowance. Repeated collection retains the original direction and target.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalTaskRepairContinuationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalTaskRepairContinuationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalTaskRepairContinuationDescriptionResult
 
 #### describeGoalTaskMalformedIssuedWorkRecovery
 
@@ -14779,3 +14845,44 @@ Explicit ad hoc Task request selection metadata and absolute local file: URI ref
 | origin | string | 1 |
 | idempotencyKey | string | 1 |
 | selectionCollection | string | 1 |
+
+# VALUE
+
+## GoalTaskRepairContinuationDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+## GoalTaskRepairContinuationInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | string | 1 |
+| choice | string | 1 |
+| rationale | string | 1 |
+| participant | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+
+## GoalTaskRepairContinuationDescriptionResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| componentInstance | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| target | string | 1 |
+| choices | string | * |
+| resumeOperation | string | 1 |

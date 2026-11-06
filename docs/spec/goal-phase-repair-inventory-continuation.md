@@ -115,3 +115,27 @@ evidence is specification-owned and asserts no production Human provenance.
 
 Execution, generation, focused checks, independent review and installed delivery
 belong to the parent workflow. Authored examples alone are not passing evidence.
+
+## Omitted classification inheritance (R7, E5; 2026-11-06)
+
+R7. An already accepted inventory proposal made from the historical public Plan
+may omit its optional classification fields. Native capture fills only those
+omissions from the exact source controller's Plan. Step count and identity/order,
+all explicit classification values and every other contract remain subject to
+unchanged strict inventory-only delta comparison. The original raw proposal and
+semantic result references remain in the captured receipt. No new Human choice,
+Submit, Session, count or authority is inferred.
+
+Structural captured-payload validation proves only omission equivalence.
+Source-paired validation reconstructs the inherited Plan against the predecessor,
+and the native owner reconstructs the complete target from its sealed contiguous
+Source again before mechanical acceptance/readback. Supplied target values and
+forged captured classifications cannot replace this proof. Public projection now
+includes the original classification Records, preventing future information loss.
+
+E5. The existing Plan/Inventory/Native CLI specifications cover lossless public
+projection, omission-only inheritance and codec round trip, explicit/mutated
+contract and forged capture refusal, then same-Session native continuation and
+idempotent replay with the accepted prefix/base, original proposal references and
+reserved count retained. Fixture evidence remains distinct from production
+qualification, independent review and installation.

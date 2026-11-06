@@ -39,9 +39,11 @@ private[admission] object NativeWorkflowCliFixture {
   def publicPlan(value: GoalPhaseOrderedProgression.Plan): V.GoalPhaseOrderedPlan =
     V.GoalPhaseOrderedPlan(value.identity, value.revision, value.phase, value.repository,
       value.steps.map(s => V.GoalPhaseOrderedStep(s.identity, s.purpose, s.ownedPaths, s.dependencies, s.checks,
-        s.actionPolicy.map(p => { import io.circe.syntax.*; GoalPhaseNativeMetadata.record(p.asJson) }))),
+        s.actionPolicy.map(p => { import io.circe.syntax.*; GoalPhaseNativeMetadata.record(p.asJson) }),
+        s.workClassification.map(c => { import io.circe.syntax.*; GoalPhaseNativeMetadata.record(c.asJson) }))),
       value.phaseChecks, value.repairLimit, A.publicAdoption(value.acceptance),
-      A.publicEffective(value.effectiveAcceptance), value.phaseRepairInventory)
+      A.publicEffective(value.effectiveAcceptance), value.phaseRepairInventory,
+      value.phaseReviewClassification.map(c => { import io.circe.syntax.*; GoalPhaseNativeMetadata.record(c.asJson) }))
 
   final case class Invocation(argv: Vector[String], pid: Long, stdout: Path, stderr: Path) {
     def logs: String = s"argv=$argv; pid=$pid; stdout=$stdout; stderr=$stderr\n" +
@@ -93,7 +95,7 @@ private[admission] object NativeWorkflowCliFixture {
     val original = Files.readString(descriptor)
     require(original.contains("components: []"), "Only the direct producer fixture descriptor is selected")
     Files.writeString(descriptor, original.replace("components: []",
-      "components:\n  - namespace: org.simplemodeling.textus\n    id: SmWorkflow\n    version: 0.1.0-SNAPSHOT"))
+      "components:\n  - namespace: org.simplemodeling.textus\n    id: SmWorkflow\n    version: 0.1.1-SNAPSHOT"))
     new Scenario(root, host, plan, None, None)
   }
 
@@ -105,7 +107,7 @@ private[admission] object NativeWorkflowCliFixture {
     private val original = Files.readString(descriptor)
     require(original.contains("components: []"), "Select the actual direct producer descriptor once")
     Files.writeString(descriptor, original.replace("components: []",
-      "components:\n  - namespace: org.simplemodeling.textus\n    id: SmWorkflow\n    version: 0.1.0-SNAPSHOT"))
+      "components:\n  - namespace: org.simplemodeling.textus\n    id: SmWorkflow\n    version: 0.1.1-SNAPSHOT"))
     private var index = 0
     def call(service: String, operation: String, parameters: Vector[String]): Result = {
       require(Set("SplitPhaseService", "RepositorySyncService", "JournalService")(service))
@@ -2189,7 +2191,7 @@ private[admission] object NativeWorkflowCliFixture {
         |components:
         |  - namespace: org.simplemodeling.textus
         |    id: SmWorkflow
-        |    version: 0.1.0-SNAPSHOT
+        |    version: 0.1.1-SNAPSHOT
         |security:
         |  authentication:
         |    convention: enabled

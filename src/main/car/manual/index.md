@@ -21,7 +21,7 @@ Help navigation and runtime routes still require verification.
 
 The component name is `org.simplemodeling.textus.SmWorkflow`, JVM package
 `org.simplemodeling.textus.smworkflow`, artifact `textus-sm-workflow`, and current
-development version `0.1.0-SNAPSHOT`. Component discovery and operation dispatch
+development version `0.1.1-SNAPSHOT`. Component discovery and operation dispatch
 belong to the CNCF launcher; this project does not provide a second workflow CLI.
 
 ## Runtime availability
@@ -335,3 +335,43 @@ proof that those routes or a workflow handler work. Resolve selectors and
 endpoints from the configured host. Help, manual links, OpenAPI and MCP must be
 verified through their actual runtime transports before release; MCP is not
 assumed to be an ordinary GET page.
+
+
+## Continue a GoalTask repair-trend stop
+
+Call `GoalTaskService.describeGoalTaskRepairContinuation` with `sessionId`.
+Retain its complete opaque `target`. A trusted host must separately admit the
+actual Human direction for that target under `goal-task-repair-continuation`.
+`NativeWorkflowPreparationService.prepareEvidence` with family `GoalTask` and
+kind `repair-continuation` passively prepares the import from the actual description,
+answer, Human participant/reference/worker, issuer and occurrence time; preparation
+itself grants no authority.
+
+Call `GoalTaskService.resumeGoalTaskRepair` with the same Session/target and
+`ContinueRepair` or `Defer`, rationale, participant and actual Human reference.
+Defer writes nothing. ContinueRepair appends one Repair checkpoint, preserving
+history, original stop reason, failed checks, source/candidate, counts and repair
+policy. Before saving, it compares the current host repository/root/branch and
+uses the existing native read-only Git observation of root, HEAD, index and scoped
+working tree against the retained source/candidate. Physical source drift or a
+crossed host refuses without changing native history or counters. This is read-only
+native Git observation, zero Git/source mutation; it performs no staging, work,
+SBT check, commit or publication. Describe and repeated collection read storage;
+Defer requires no source observation. A separate ordinary `advanceGoalTask` owns
+the next Repair and normal completion charges its existing
+allowance. A later eligible Human stop gets a fresh current target and requires
+separate exact Human evidence. An ineligible or exhausted Human stop refuses
+description even with an earlier retained direction. During non-Human active
+progress, description collects the latest direction. Explicit repeated resume
+collects any earlier or latest admitted direction after Advance, Submit, later
+progress and restart only when the entire original target/choice/rationale/
+participant/reference matches. Earlier directions remain inside the exact opaque
+target ancestry and native history, bounded by the existing native repair limit
+with decreasing frontier revisions and the same owner/Session/participant/input.
+Changed answers, malformed/crossed ancestry, unresumed stale targets, pending new
+work and terminal cases refuse. Review and local commit obligations remain.
+See [GoalTask runtime contract](../../../../docs/spec/goal-task-runtime.md).
+
+This is source capability documentation. Native qualification, independent review,
+local acceptance commit, installed publication and actual consumer adoption are
+separate evidence; no production or real stopped-Session acceptance is claimed.

@@ -23,7 +23,8 @@ import SplitPhaseExplicitPartitionFixture.take
   * executable executes a real successful selected partial commit; no Workflow
   * row or execution receipt is seeded, edited or manufactured.
   * @since   Oct. 26, 2026
-  * @version Oct. 27, 2026
+  *  version Oct. 27, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -315,9 +316,11 @@ final class NativeGoalPartialCommitClosureCliSpec extends AnyWordSpec with Match
       def publicPlan(value: O.Plan): V.GoalPhaseOrderedPlan = V.GoalPhaseOrderedPlan(
         value.identity, value.revision, value.phase, value.repository,
         value.steps.map(step => V.GoalPhaseOrderedStep(step.identity, step.purpose, step.ownedPaths,
-          step.dependencies, step.checks, step.actionPolicy.map(policy => GoalPhaseNativeMetadata.record(policy.asJson)))),
+          step.dependencies, step.checks, step.actionPolicy.map(policy => GoalPhaseNativeMetadata.record(policy.asJson)),
+          step.workClassification.map(classification => GoalPhaseNativeMetadata.record(classification.asJson)))),
         value.phaseChecks, value.repairLimit, GoalPhaseAcceptanceBoundary.publicAdoption(value.acceptance),
-        GoalPhaseAcceptanceBoundary.publicEffective(value.effectiveAcceptance), value.phaseRepairInventory)
+        GoalPhaseAcceptanceBoundary.publicEffective(value.effectiveAcceptance), value.phaseRepairInventory,
+        value.phaseReviewClassification.map(classification => GoalPhaseNativeMetadata.record(classification.asJson)))
       Then("the new description reconstructs the exact old base, chain, counts and Plan while binding only the explicit inventory delta")
       describedcall.invocation.pid should not be oldquestioncall.invocation.pid
       target.plan.copy(effectiveAcceptance = None) shouldBe episode.plan
