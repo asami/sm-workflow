@@ -5,6 +5,11 @@ description: Deliver one authorized development request to an available existing
 
 # sm-delegate-task
 
+In the destination chat, for new local implementation work, follow the shared
+[implementation handoff](../../docs/spec/native-host-execution.md#implementation-handoff): normally use a fresh subagent
+without parent history and state the purpose, approach, scope, acceptance criteria
+and expected return. Preserve the issued disposition and any retained continuation.
+
 ## Test classification and selection
 
 Follow the [standard-annotation policy](../../docs/spec/native-host-execution.md#validation-cadence-with-standard-annotations).
@@ -41,14 +46,34 @@ neither request text nor passive preparation supplies consent. Use an available
 existing destination chat through its authorized transport; no new chat, queue,
 busy-chat interruption or polling controller is implied.
 
+Requester and destination have different host requirements. The requester
+retains destination checks and publication as delivery requirements, uses its
+own read-only repository observations and issues transport work only. It does
+not need a destination checkout, executor profile or executable check/publication
+bindings. The destination requires its actual logical origin/dispatch policy or
+complete concrete mapping/origin pair and the execution bindings for its adopted
+scope. Partial supplied configuration is invalid; do not invent executor facts.
+
 Use `NativeWorkflowPreparationService.prepareDelegateTaskStart`, then the
 independently admitted `DelegateTaskService.startDelegateTask` and ordinary
 `advanceDelegateTask`. Preserve the actual Session and issued context on re-entry.
 For issued semantic work, perform only its owned scope and return the declared
 `DelegateTaskWorkResult`; independent review remains read-only and independent.
-Record genuine execution evidence through the normal execution operations and
+Use the exact Request's retained route: `operatingProfile.dispatch` uses the
+[versioned dispatch adapter](../../docs/spec/native-host-execution.md#forward-goalphase-and-bounded-task-logical-dispatch)
+for actual launch/return and `execution_evidence`; legacy concrete work keeps
+its normal execution operations. Independently admit genuine evidence and
 submit it with the original `issuedWorkContext`, actual result and reference to
 `submitDelegateTaskWorkResult`. A semantic return is not native acceptance.
+
+Keep every adopted condition ID and its original order. For new requests,
+`submissionConditions` selects which conditions must be true at submission;
+an omitted or empty list defers all to final `DeliveryAcceptance`. Historical
+absent timing remains strict. Correct an eligible pending initial issue only
+through the public description/correction route and actual Human selection.
+Read-only DeliveryAcceptance evaluates retained delivery evidence; it executes
+no checks, commit or publication and cannot request repair. See the
+[condition timing contract](../../docs/spec/delegate-task.md#initial-condition-timing-and-pending-legacy-scope-correction).
 
 Runtime owns validation selection/execution, diagnostic recovery, counters,
 integrated acceptance, local commit and required `publishLocal`. Do not call a

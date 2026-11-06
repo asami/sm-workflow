@@ -5,6 +5,11 @@ description: Route explicit Phase start/resume requests through the caller and p
 
 # GoalPhase semantic work
 
+For newly assigned implementation or repair, follow the shared
+[implementation handoff](../../docs/spec/native-host-execution.md#implementation-handoff): normally use a fresh subagent
+without parent history and state the purpose, approach, scope, acceptance criteria
+and expected return. Preserve the issued disposition and any retained continuation.
+
 ## Test classification and selection
 
 Follow the [standard-annotation policy](../../docs/spec/native-host-execution.md#validation-cadence-with-standard-annotations).
@@ -223,17 +228,27 @@ presentation.
 
 ## Source-history comment recovery
 
-The runtime owns recovery of an interrupted, already authorized history-comment
-normalization. It must reconcile the current comment or apply the same bounded
-normalization without a new approval solely because the old receipt is missing.
-Preserve the old UNKNOWN record, accepted work and repair counts. The skill does
-not independently infer success, edit comments as a recovery bypass, answer Human,
-or reset the Session. Consume the actual issued outcome and supported public
-adoption route. A legacy pending Human request requires runtime reconciliation;
-report an unavailable route as a producer gap and reuse existing user direction,
-not a new caller-authored permission demand. Genuine scope/intent decisions remain
-with the formal Human channel. This guidance defines target behavior; it is not
-proof that the installed runtime implements it.
+Follow the [current-source and source-history continuation contract](../../docs/spec/native-host-execution.md#current-source-and-source-history-continuation).
+For a new associated intent, retain the runtime's `goal-source-history-invocation`
+event and actual terminal observation. Return those facts through ordinary
+`advanceGoalPhase --sourceHistoryObservationResource`; this is not a Human
+answer or proof that the old File effect succeeded. The runtime owns read-first
+reconciliation and any uniquely prescribed correction under the retained rule.
+
+Legacy UNKNOWN without invocation association cannot use that automatic path.
+Use its actually supported explicit recovery/adoption route and existing
+attributable direction; never invent the missing association or request another
+approval merely to compensate for missing receipts. Unavailable provenance or
+capability remains a concrete producer gap. Genuine new authority stays with
+the formal Human channel. Preserve UNKNOWN, successful results and repair counts;
+do not edit comments as a recovery bypass, reset the Session or replay Submit.
+
+For current Phase/checklist or source applicability after a formal failure,
+use the same contract's common `reconstructGoalPhaseDevelopment` route. It
+selects remaining work in the same Session; it does not make old checks current,
+replay completed prefix effects or settle unresolved writers. Use the actual
+installed capability and returned scope, not source documentation as proof of
+availability.
 
 ## Long-running invocation collection
 

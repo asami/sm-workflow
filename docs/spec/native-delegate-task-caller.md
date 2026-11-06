@@ -53,8 +53,11 @@ or terminal view. Only a Request assigns semantic work. Preserve its full
 `issuedWorkContext`, submit operation, Session and result type. The worker returns
 `DelegateTaskWorkResult`: outcome, summary, findings, nonempty conditions
 (`identity`, `satisfied`, `detail`), unresolvedQuestions and optional
-diagnosticRepair/fixAssessment. Use normal `prepareExecution`/`recordExecution`
-with genuine executor observations. `submitDelegateTaskWorkResult` takes the
+diagnosticRepair/fixAssessment. Use the Request's retained logical dispatch
+adapter or legacy concrete `prepareExecution`/`recordExecution` route with
+genuine executor observations, as specified by the
+[bounded Task dispatch contract](native-host-execution.md#forward-goalphase-and-bounded-task-logical-dispatch).
+`submitDelegateTaskWorkResult` takes the
 original Session, result, resultReference, issuedWorkContext and actual admitted
 executionEvidence. A separate Advance owns checks, acceptance and commit.
 Those semantic work, validation and commit operations belong to the destination
@@ -215,9 +218,11 @@ executor descriptor to dispatch a request. This exemption applies only to an
 exact valid `requester` contract in DelegateTask; it changes no destination,
 GoalTask or StandaloneFix execution requirement.
 
-The destination needs a concrete execution profile mapping and current origin,
-covering CodingProgrammingStandard or DesignStandard for implementation and
-ReviewStandard for possible review. Provider configuration is not a worker
+The destination needs its actual logical origin and standard dispatch policy,
+or a complete concrete execution profile mapping/current-origin pair covering
+CodingProgrammingStandard or DesignStandard for implementation and
+ReviewStandard for possible review. Pending work retains its original captured
+route. Provider configuration is not a worker
 execution observation. Bind its adopted repository and candidate paths to
 ordinary typed Git programs, retaining its strict root/branch and dirty-scope
 admission; the destination commit selection is `delegate-task`. Bind its exact

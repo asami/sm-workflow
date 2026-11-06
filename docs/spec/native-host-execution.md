@@ -171,6 +171,32 @@ Preserve Sessions, work identities, accepted results, history and active/cumulat
 repair counts. An end-to-end responsibility is not permission to bypass real
 runtime decisions, unknown-effect settlement or publication authority.
 
+## Implementation handoff
+
+For a new, bounded implementation or repair, the owning chat normally delegates
+the edits to a fresh subagent with no parent chat history (`fork_turns=none`),
+even when both use the same model. The parent owns design decisions, integration
+and checking the returned work against the acceptance criteria. Preserve an
+already issued INLINE disposition, retained worker continuation or selected
+role/profile. This rule concerns local subagents; it does not replace a
+separately commissioned dependency chat.
+
+Give the worker a self-contained handoff with these five explicit items:
+
+- **Purpose:** the problem and the observable behavior the change should produce.
+- **Approach:** the agreed method and why it was chosen; identify decisions left
+  to the implementer and link only the evidence needed to make them.
+- **Scope:** the repository, owned files or components, and boundaries to preserve.
+- **Acceptance criteria:** observable outcomes and the checks by which the owner
+  will assess them, including behavior that must remain unchanged.
+- **Return:** the required result type, changed paths, actual checks and results
+  (or checks still owed by the owner), and unresolved issues or assumptions.
+
+Carry these items in the issued assignment or its referenced handoff. Preserve
+the exact native Request and adapter-generated launch arguments. Reference
+specific decisions, files and evidence rather than copying a transcript. A
+worker's report is input to the owner's verification, not runtime acceptance.
+
 ## New cross-chat development requests and existing continuations
 
 Use [sm-delegate-task](../../skills/sm-delegate-task/SKILL.md) for a new
@@ -360,6 +386,90 @@ storage-only Submit and unchanged routing permit one ordinary outer Advance,
 without that configuration argument. Preparation/Submit uncertainty, rejection, cancellation
 or changed routing stops without Advance or retry and retains all prior actual
 outputs. See the caller contract for exact input shapes and output sequence.
+
+### Public Operation inputs
+
+Use the selected Operation's published input definition. A Session-only
+description uses `--sessionId`; an adoption, answer or reconstruction with
+structured business data uses its typed `--input` or `--inputResource` route.
+Where both transports are offered, supply exactly one and retain the complete
+DTO and target. Do not move individual fields between transports, invent flags,
+shorten a target or rebuild it from presentation text. A Resource URI uses the
+configured CNCF Resource/UoW authorization, UTF-8 decoding and read budget;
+put the actual artifact under an already authorized root. A refusal does not
+authorize adding another reader or an application-side size bypass.
+
+### Current-source and source-history continuation
+
+Use these routes only when the selected installed runtime supports them. Retain
+the actual public response and any stated eligibility limit; the presence of
+source code or a new skill is not installed qualification.
+
+For an interrupted history-comment normalization, obtain the current target
+through `GoalPhaseService.describeGoalPhaseSourceHistoryNormalization
+--sessionId <existing-session> --json`. Its `adoption-required` presentation
+does not by itself require a new Human answer. When the affected intent retains
+a v2 invocation association, ordinary Advance can accept factual caller evidence
+under the already held same-authority rule:
+
+- Preserve the original call's finite stderr event
+  `goal-source-history-invocation` and its complete `invocation` object. It binds
+  Component instance, Session, operation and invocation identity. An event from
+  a later call cannot substitute for the affected intent's association.
+- Collect the original call's actual termination through its existing transport
+  handle or retained result. An absent receipt, elapsed time, current comment,
+  chat completion or a successful unrelated process proves neither termination
+  nor the old File effect's result. No extra polling agent or process scan is
+  needed to return an observation already held by the caller.
+- Supply a JSON artifact with `schemaVersion` equal to
+  `sm-workflow.goal-phase-source-history-caller-observation.v1`, the complete
+  current `target`, exact original `invocation`, actual `sourceReference`
+  (`identity`, `revision`), canonical `observedAt`, and `termination` equal to
+  `exited`, `live` or `unknown`. Only `exited` carries the actual `exitCode`.
+  These are factual observations, not consent, an old effect result or a Human
+  Direction. Do not fabricate references, times or process observations.
+- Return that artifact through the normal installed command, with the existing
+  host as cwd:
+  `GoalPhaseService.advanceGoalPhase --sessionId <existing-session>
+  --sourceHistoryObservationResource file:///absolute/observation.json --json`
+  (use the full `org.simplemodeling.textus.SmWorkflow.` Operation prefix).
+  The current finite caller's `advance` action has no observation option: use
+  the direct CLI transport with normal event retention/forwarding for this
+  call. Do not add an unsupported helper flag or a replacement wrapper.
+
+Only exact, current, terminal evidence can admit automatic selection. Missing,
+live, unknown, stale or crossed evidence admits no writer or checks. The runtime
+reads first: a conformant comment needs zero writes; one uniquely prescribed
+managed-comment correction uses the retained complete rule/date and observed
+text. The original UNKNOWN remains unchanged. An unresolved new reconciliation
+intent is not automatically retried. Runtime acceptance precedes normal candidate,
+selected validation and independent review. Repeated collection reuses results.
+
+Old v1 UNKNOWN has no invocation association. Do not retrofit one from current
+content or manufacture an automatic selection/Human answer. Keep its supported
+explicit recovery/adoption semantics and actual evidence; report the precise
+missing fact if neither path is applicable. A retained pending question is not
+answered by a factual observation; only the runtime may supersede an eligible
+technical question unanswered. Installed qualification of new associated cases
+does not establish that every legacy pending question can be superseded.
+
+When actual Phase/checklist selection or current-source applicability changes,
+the common Operation is `GoalPhaseService.reconstructGoalPhaseDevelopment`.
+Supply exactly one typed `input`/`inputResource` containing `sessionId`, distinct
+workspace-relative `phasePath` and `checklistPath`, complete raw Plan `proposal`
+and `rationale`. The runtime reads the documents, preserves accepted completion,
+base, repair counters and original evidence, and assesses the actual remaining
+scope. Collect pending work first; genuine ambiguity uses the returned Human
+channel. Do not use reconstruction to replace a potentially active worker or
+to clear unknown writer/publication/commit effects.
+
+For a formal normalization failure, the runtime assesses reusable versus fresh
+prefix paths under the saved rule/date and ownership. Callers do not mark the
+prefix complete or erase the failure. A separate ordinary Advance owns current
+capture and affected checks. Old successful checks remain true for their
+original subject; changed source requires only the affected fresh qualification.
+No reStart, accepted Submit replay, repair refund or new consumer operation is
+implied by any of these routes.
 
 ### Runtime configuration boundary
 
@@ -976,25 +1086,28 @@ from skill discovery symlinks. Preserve existing CNCF definitions. Edit the
 shared workstation sources first and reflect selected changes into the product
 at the chosen integration boundary.
 
-The workstation distribution provides five roles: `sm_workflow_analysis`,
+The workstation distribution provides five semantic roles: `sm_workflow_analysis`,
 `sm_workflow_design`, `sm_workflow_implementation`, `sm_workflow_repair` and
-`sm_workflow_review`. Initial definitions select `gpt-6.1-sol` / `medium` and
+`sm_workflow_review`, plus a separate caller-side `sm_workflow_chat_waiter`.
+Initial semantic definitions select `gpt-6.1-sol` / `medium` and
 omit inherited skill-discovery instructions. Analysis/design/review stay
 read-only by their semantic contract; implementation/repair own only the paths
 explicitly issued. Role instructions do not create filesystem permissions.
 The parent admits matching actual profile/identity and genuine independence;
 never relabel an inherited or different execution as the selected role.
 
-The workstation's `scripts/sm-workflow-tools.py` packages the six sm-* skills,
-seventeen contracts, two finite caller scripts, the offline caller-format migration
-script, five agent files and a standalone installer. It installs only
+The workstation's `scripts/sm-workflow-tools.py` packages seven sm-* skills,
+twenty-two contracts, four scripts (finite caller, passive authority caller,
+offline caller-format migration and logical dispatch adapter), six agent files
+and a standalone installer (42 files). It installs only
 those selected files, shared skill links and regular deployed sm agent files.
 Dry-run is the default; occupied discovery paths or differing contents stop
 before writes unless file replacement was explicitly selected. See the
 workstation's `docs/design/sm-workflow-agent-distribution.md` for installation.
-The product's normal `skillBundle` and component JAR contain the same six
-skills, seventeen contracts, three scripts, five agent definitions and portable
-`install-sm-workflow.py` (32 files). Product installation follows
+The product's normal `skillBundle` and component JAR contain seven skills,
+twenty-two contracts, four scripts, five semantic agent definitions and portable
+`install-sm-workflow.py` (41 files); the workstation waiter is not a product role.
+Product installation follows
 `docs/spec/native-client-installation.md`; the selected installer works without
 a development-workstation checkout. File installation and actual newly loaded
 agent behavior remain separate verification boundaries.

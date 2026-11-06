@@ -5,6 +5,11 @@ description: Develop one authorized journal or direct-instruction Task through n
 
 # sm-goal-task
 
+For newly assigned implementation or repair, follow the shared
+[implementation handoff](../../docs/spec/native-host-execution.md#implementation-handoff): normally use a fresh subagent
+without parent history and state the purpose, approach, scope, acceptance criteria
+and expected return. Preserve the issued disposition and any retained continuation.
+
 ## Test classification and selection
 
 Follow the [standard-annotation policy](../../docs/spec/native-host-execution.md#validation-cadence-with-standard-annotations).
@@ -93,8 +98,13 @@ For actual issued semantic work, consume the complete work request and
 original sources, failure and repair counts. Perform only the issued scope;
 Review is read-only and independent of every implementation/repair worker.
 Return `GoalTaskWorkResult` with actual findings, conditions, unresolved limitations and
-required diagnostic/disposition facts. The caller records genuine execution
-observations through existing `prepareExecution`/`recordExecution`, then submits
+required diagnostic/disposition facts. Route execution observations by that
+Request's retained capture: work with `operatingProfile.dispatch` uses the
+[versioned dispatch adapter](../../docs/spec/native-host-execution.md#forward-goalphase-and-bounded-task-logical-dispatch)
+for preparation, actual launch/return and `execution_evidence`. Legacy concrete
+work keeps its existing `prepareExecution`/`recordExecution` route. Never resolve
+pending work from today's host configuration or relabel an observed model from
+the selected profile. The caller independently admits genuine evidence, then submits
 the actual result/reference/evidence and the unchanged `issuedWorkContext` from
 that exact Request through `GoalTaskService.submitGoalTaskWorkResult`. Never
 reconstruct or refresh this binding for a delayed result. A Task with committed

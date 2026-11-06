@@ -5,6 +5,11 @@ description: Repair identified original review findings with exact disposition a
 
 # sm-review-fix
 
+For newly assigned implementation or repair, follow the shared
+[implementation handoff](../../docs/spec/native-host-execution.md#implementation-handoff): normally use a fresh subagent
+without parent history and state the purpose, approach, scope, acceptance criteria
+and expected return. Preserve the issued disposition and any retained continuation.
+
 ## Test classification and selection
 
 Follow the [standard-annotation policy](../../docs/spec/native-host-execution.md#validation-cadence-with-standard-annotations).
