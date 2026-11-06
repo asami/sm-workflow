@@ -9,7 +9,7 @@ import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.component.{ComponentCreate, ComponentOrigin}
 import org.goldenport.cncf.datastore.DataStore
-import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation, GitSelectionId, GitExecutionOutcome, SbtExecutionAttempt}
+import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation, GitSelectionId, GitExecutionOutcome, SbtExecutionAttempt, SbtOperation, SbtExecutionOutcome}
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{ContinuationIdentity as NativeIdentity, *}
@@ -38,11 +38,17 @@ private[smworkflow] object BoundedWorkRuntime {
   final case class Payload(state: S.State, root: String, branch: String, baseHead: String,
     implementationWorker: Option[String] = None, unrelated: Option[Vector[G.DirtyPath]] = None, implementationWorkers: Option[Vector[String]] = None,
     supersededWork: Option[String] = None, hygiene: Option[CommitHygiene.Record] = None,
-    records: Option[CompletionRecords.Plan] = None)
+    records: Option[CompletionRecords.Plan] = None,
+    validationCompilations: Option[Vector[EstimatedValidationExecution.Compilation]] = None,
+    candidateContinuation: Option[DelegateTaskCandidateContinuation.Checkpoint] = None)
+  private given Encoder[DelegateTaskCandidateContinuation.Checkpoint] = deriveEncoder
+  private given Decoder[DelegateTaskCandidateContinuation.Checkpoint] = deriveDecoder
+  private given Encoder[EstimatedValidationExecution.Compilation] = deriveEncoder
+  private given Decoder[EstimatedValidationExecution.Compilation] = deriveDecoder
   private given Encoder[G.DirtyPath] = deriveEncoder
   private given Decoder[G.DirtyPath] = deriveDecoder
   given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
-    case ("unrelated" | "implementationWorkers" | "supersededWork" | "hygiene" | "records", value) => !value.isNull
+    case ("unrelated" | "implementationWorkers" | "supersededWork" | "hygiene" | "records" | "validationCompilations" | "candidateContinuation", value) => !value.isNull
     case _ => true
   }))
   given Decoder[Payload] = deriveDecoder
@@ -400,17 +406,41 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     }
   } yield result
 
+  private def observeValidationC(h: Host, definition: DefinitionBinding, store: WorkflowComponentStorage,
+    record: InstanceRecord, payload: Payload, check: GoalPhaseNativeValidation.Check,
+    kind: WorkflowSbtValidation.Kind, actual: SbtExecutionAttempt, core: ActionCall.Core,
+    depth: Int): Consequence[V.StandaloneFixView] = actual match {
+    case SbtExecutionAttempt.Observed(result) => for {
+      facts <- WorkflowSbtValidation.factsC(kind, result)
+      p = result.processResult
+      receipt = RepositorySyncNativeMergeValidation.Receipt(check.identity, WorkflowSbtCapture.termination(p),
+        WorkflowSbtCapture.exitCode(p), WorkflowSbtCapture.text(p.stdout).value, WorkflowSbtCapture.text(p.stderr).value,
+        Some(facts), Some(p))
+      _ <- freshC(payload, core)
+      observed <- S.observedC(payload.state.copy(stage = "ValidationIntent"), receipt)
+      references <- recordCheckEvidenceC(h, core, record.identity.value, record.revision.value, receipt)
+      next = observed.copy(evidenceReferences = observed.evidenceReferences ++ references)
+      saved <- saveC(h, store, record, payload.copy(state = next), core)
+      retained <- loadPayloadC(store, saved.identity.value, saved.revision.value, core)
+      response <- _progress_c(h, definition, store, saved, retained, core, depth + 1)
+    } yield response
+    case SbtExecutionAttempt.AdmissionRejected(_, _, conclusion) =>
+      val blocked = payload.state.copy(stage = "AdmissionBlocked", pendingCheck = None,
+        message = "Confirmed SBT nonexecution; original selection and unconsumed authority retained: " + conclusion.toString)
+      saveC(h, store, record, payload.copy(state = blocked), core)
+        .map(saved => view(saved, blocked, "Wait", blocked.message))
+    case SbtExecutionAttempt.Uncertain(_, _, conclusion) => Consequence.success(view(record, payload.state, "Wait",
+      "Managed SBT effects remain uncertain: " + conclusion.toString + "; retain intent and observe before any new attempt"))
+  }
+
   private def _progress_c(h: Host, definition: DefinitionBinding, store: WorkflowComponentStorage,
     record: InstanceRecord, payload: Payload, core: ActionCall.Core, depth: Int): Consequence[V.StandaloneFixView] = {
     val s = payload.state
     if (depth > 36) invalid("Bounded native progress exceeded its finite check batch")
     else s.stage match {
-      case "Inspect" | "CandidateIntent" => for {
-        // A retained capture observes current Git state; only unfinished selected
-        // staging is needed. It grants no replay of validation or commit intent.
-        intent <- if (s.stage == "Inspect")
-          saveC(h, store, record, payload.copy(state = s.copy(stage = "CandidateIntent")), core)
-          else Consequence.success(record)
+      case "Inspect" => for {
+        // Persist before any staging/read effect. A loaded intent cannot replay it.
+        intent <- saveC(h, store, record, payload.copy(state = s.copy(stage = "CandidateIntent")), core)
         observed <- captureC(h, payload, core)
         next <- observed match {
           case Right(candidate) => S.candidateC(s.copy(stage = "Inspect"), candidate)
@@ -419,35 +449,59 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
         saved <- saveC(h, store, intent, payload.copy(state = next), core)
         result <- _progress_c(h, definition, store, saved, payload.copy(state = next), core, depth + 1)
       } yield result
+      case "CandidateContinuationReady" if delegation => for {
+        _ <- DelegateTaskCandidateContinuation.currentC(h, record, payload, core)
+        intent <- saveC(h, store, record, payload.copy(state = s.copy(stage = "CandidateContinuationIntent")), core)
+        observed <- captureC(h, payload, core, remainingOnly = true)
+        next <- observed match {
+          case Right(candidate) => S.candidateC(s.copy(stage = "Inspect"), candidate)
+          case Left(reason) => Consequence.success(s.copy(stage = "Human", message = reason))
+        }
+        retained = payload.copy(state = next)
+        saved <- saveC(h, store, intent, retained, core)
+        result <- _progress_c(h, definition, store, saved, retained, core, depth + 1)
+      } yield result
       case "Validate" => for {
         _ <- freshC(payload, core)
-        intent <- S.intentC(s)
-        savedIntent <- saveC(h, store, record, payload.copy(state = intent), core)
         check = s.selected(s.receipts.size)
-        actual <- E.repositoryValidationAttemptC(core, check.ordinal, check.kind)
-        response <- actual match {
-          case SbtExecutionAttempt.Observed(result) => for {
-            facts <- WorkflowSbtValidation.factsC(check.kind, result)
-            p = result.processResult
-            receipt = RepositorySyncNativeMergeValidation.Receipt(check.identity, WorkflowSbtCapture.termination(p),
-              WorkflowSbtCapture.exitCode(p), WorkflowSbtCapture.text(p.stdout).value, WorkflowSbtCapture.text(p.stderr).value,
-              Some(facts), Some(p))
-            _ <- freshC(payload, core)
-            observed <- S.observedC(intent, receipt)
-            references <- recordCheckEvidenceC(h, core, record.identity.value, savedIntent.revision.value, receipt)
-            next = observed.copy(evidenceReferences = observed.evidenceReferences ++ references)
-            saved <- saveC(h, store, savedIntent, payload.copy(state = next), core)
-            retained <- loadPayloadC(store, saved.identity.value, saved.revision.value, core)
-            response <- _progress_c(h, definition, store, saved, retained, core, depth + 1)
-          } yield response
-          case SbtExecutionAttempt.AdmissionRejected(_, _, conclusion) =>
-            val blocked = intent.copy(stage = "AdmissionBlocked", pendingCheck = None,
-              message = "Confirmed SBT nonexecution; original selection and unconsumed authority retained: " + conclusion.toString)
-            saveC(h, store, savedIntent, payload.copy(state = blocked), core)
-              .map(saved => view(saved, blocked, "Wait", blocked.message))
-          case SbtExecutionAttempt.Uncertain(_, _, conclusion) => Consequence.success(view(savedIntent, intent, "Wait",
-            "Managed SBT effects remain uncertain: " + conclusion.toString + "; retain intent and observe before any new attempt"))
-        }
+        estimated <- EstimatedValidationExecution.selectedC(core, check.ordinal, check.kind)
+        compilation = payload.validationCompilations.toVector.flatten.find(c =>
+          c.ordinal == check.ordinal && c.sourceTree == s.candidate.get.tree)
+        response <- if (estimated && compilation.isEmpty) for {
+          intent <- S.intentC(s)
+          preparing = payload.copy(state = intent.copy(stage = "ValidationPreparationIntent"))
+          savedIntent <- saveC(h, store, record, preparing, core)
+          actual <- E.repositoryValidationAttemptC(core, check.ordinal, WorkflowSbtValidation.Kind.TestCompile)
+          response <- actual match {
+            case SbtExecutionAttempt.Observed(result) if result.outcome == SbtExecutionOutcome.Succeeded => for {
+              facts <- WorkflowSbtValidation.factsC(WorkflowSbtValidation.Kind.TestCompile, result)
+              p = result.processResult
+              receipt = RepositorySyncNativeMergeValidation.Receipt(check.identity + "-preparation",
+                WorkflowSbtCapture.termination(p), WorkflowSbtCapture.exitCode(p),
+                WorkflowSbtCapture.text(p.stdout).value, WorkflowSbtCapture.text(p.stderr).value, Some(facts), Some(p))
+              references <- recordCheckEvidenceC(h, core, record.identity.value, savedIntent.revision.value, receipt)
+              checkpoint = EstimatedValidationExecution.Compilation(check.ordinal, s.candidate.get.tree,
+                WorkflowSbtCapture.encode(p))
+              retained = payload.copy(state = s.copy(evidenceReferences = s.evidenceReferences ++ references,
+                message = "Successful TestCompile retained before inventory observation; test bodies have not started"),
+                validationCompilations = Some(payload.validationCompilations.toVector.flatten :+ checkpoint))
+              saved <- saveC(h, store, savedIntent, retained, core)
+              response <- _progress_c(h, definition, store, saved, retained, core, depth + 1)
+            } yield response
+            case other => observeValidationC(h, definition, store, savedIntent, preparing,
+              check, WorkflowSbtValidation.Kind.TestCompile, other, core, depth)
+          }
+        } yield response
+        else for {
+          ready <- if (estimated) EstimatedValidationExecution.estimateC(core, check.ordinal, s.candidate.get.tree,
+            "Adopted change-specific check: " + check.identity, compilation.get).map(Some(_))
+            else Consequence.success(None)
+          intent <- S.intentC(s)
+          executing = payload.copy(state = intent)
+          savedIntent <- saveC(h, store, record, executing, core)
+          actual <- E.repositoryValidationAttemptC(core, check.ordinal, check.kind, estimate = ready.map(_.estimate))
+          response <- observeValidationC(h, definition, store, savedIntent, executing, check, check.kind, actual, core, depth)
+        } yield response
       } yield response
       case "AdmissionBlocked" => for {
         _ <- freshC(payload, core)
@@ -482,7 +536,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     }
   }
 
-  private def captureC(h: Host, payload: Payload, core: ActionCall.Core): Consequence[Either[String, S.Candidate]] = for {
+  private def captureC(h: Host, payload: Payload, core: ActionCall.Core, remainingOnly: Boolean = false): Consequence[Either[String, S.Candidate]] = for {
     native <- G.inspectC(core)
     before = native.observed
     root <- G.rootC(core)
@@ -495,7 +549,8 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
         "; actual changes=" + before.dirty.map(d => s"${d.index}${d.worktree} ${d.path}").mkString(", ") +
         "; select which current changes belong to the original Task before staging or validation"))
       else for {
-        _ <- owners.filter(path => before.dirty.exists(d => S.owned(d.path, Vector(path)) && d.worktree != ' '))
+        _ <- (if (remainingOnly) DelegateTaskCandidateContinuation.remainingPaths(payload.state.input, before.dirty)
+          else owners.filter(path => before.dirty.exists(d => S.owned(d.path, Vector(path)) && d.worktree != ' ')))
           .foldLeft(Consequence.unit) { (previous, path) => previous.flatMap(_ =>
             E.stageGoalCandidateC(core, h.paths.indexOf(path) + 1).flatMap(_.valueC).map(_ => ())) }
         head <- GitObjectId.parseC(payload.baseHead)

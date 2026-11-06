@@ -26,6 +26,29 @@ final class ValidationTestPolicySpec extends AnyWordSpec with Matchers with Give
       M.resolveC(Some(declaration), None).toOption, Vector.empty)
   }
 
+  "A change-specific focused selection" should {
+    "select ordinary and HEAVY leaves without requiring or changing purpose membership" in {
+      def named(name: String, purposes: Set[M.Purpose]): D.Operation = {
+        val operation = _operation(purposes)
+        operation.copy(reference = operation.reference.copy(operation = name),
+          selector = operation.selector.copy(testName = name))
+      }
+      val ordinary = named("ordinary", Set.empty)
+      val heavy = named("heavy", Set(M.Purpose.HEAVY))
+      val scope = D.DiscoveryScope("selected", "1", Vector(D.ArtifactScope("component:test", "test", "1", "1",
+        Path.of("/tmp/focused-fixture"), "test")))
+      val inventory = D.Inventory(scope, D.Completeness.COMPLETE, Vector(ordinary, heavy), Vector.empty)
+      val result = ValidationTestPolicy.focusedC(inventory, Set(ordinary.selector, heavy.selector), Set.empty,
+        "changed publication preparation").toOption.get
+      result.operations shouldBe Vector(heavy, ordinary)
+      result.query.purposes shouldBe Set.empty
+      result.operations.find(_.selector == heavy.selector).get.metadata.get.purposes shouldBe Set(M.Purpose.HEAVY)
+      ValidationTestPolicy.admitC(D.SelectionQuery(Set(M.Purpose.FULL)), result.operations).isSuccess shouldBe false
+      val missing = ordinary.selector.copy(testName = "not discovered")
+      ValidationTestPolicy.focusedC(inventory, Set(missing), Set.empty, "missing").isSuccess shouldBe false
+    }
+  }
+
   "The shared FULL boundary" should {
     "preserve colliding test names per suite and derive preparation after operation filtering" in {
       Given("two suites sharing a name and an unselected runtime operation in the first suite")
@@ -44,6 +67,15 @@ final class ValidationTestPolicySpec extends AnyWordSpec with Matchers with Give
         Map("fixture.First" -> Vector("local"), "fixture.Second" -> Vector("shared"))
       filtered.map(_.suite) shouldBe Vector("fixture.First")
       filtered.head.requiresRuntime shouldBe false
+    }
+
+    "include unlabelled ordinary and ADMISSION in FULL while excluding HEAVY and external work" in {
+      val ordinary = _operation(Set.empty)
+      val admission = _operation(Set(M.Purpose.ADMISSION))
+      val heavy = _operation(Set(M.Purpose.HEAVY))
+      val external = _operation(Set.empty, external = true)
+      ValidationTestPolicy.fullC(Vector(ordinary, admission, heavy, external)).toOption.get shouldBe Vector(ordinary, admission)
+      ValidationTestPolicy.fullC(Vector(_operation(Set(M.Purpose.FULL, M.Purpose.HEAVY)))).isSuccess shouldBe false
     }
 
     "reject contradictory HEAVY and external-service metadata while allowing explicit HEAVY" in {
@@ -218,15 +250,18 @@ final class ValidationTestPolicySpec extends AnyWordSpec with Matchers with Give
       full.map(_(0)).toSet shouldBe Set(local)
     }
 
-    "reject empty explicit selection and preserve intentional helper exclusion" in {
+    "reject empty selection and preserve automatic helper exclusion while allowing explicit selection" in {
       Given("an actual helper suite retained only for input/discovery contracts")
       val root = Path.of(getClass.getProtectionDomain.getCodeSource.getLocation.toURI).toRealPath().toString
       val helper = classOf[metafixture.SelectedMetadataFixtureSpec].getName
-      When("a routine build selection requests only that helper or no suite")
+      When("a caller explicitly requests that helper, automatic discovery sees it, or no suite is selected")
       val helperresult = scala.util.Try(LabelledTestSelection.select(root, "test", "EXPLICIT", Array(helper)))
+      val automaticresult = scala.util.Try(LabelledTestSelection.select(root, "test", "FULL", Array(helper)))
       val emptyresult = scala.util.Try(LabelledTestSelection.select(root, "test", "EXPLICIT", Array.empty[String]))
-      Then("both requests fail visibly instead of reporting a zero-test pass")
-      helperresult.failed.get shouldBe a[IllegalArgumentException]
+      Then("explicit selection retains actual registrations and empty automatic or explicit runs fail visibly")
+      helperresult.get.map(_(1)).toSet shouldBe Set("metadata input should run smoke feature a",
+        "metadata input should run focused feature b", "metadata input should retain unannotated supplement")
+      automaticresult.failed.get shouldBe a[IllegalArgumentException]
       emptyresult.failed.get shouldBe a[IllegalArgumentException]
     }
   }

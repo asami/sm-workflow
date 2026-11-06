@@ -11918,6 +11918,34 @@ WorkflowDelegateTaskScopeCorrectionPreparationInput
 
 WorkflowPreparedImport
 
+#### prepareDelegateTaskCandidateContinuation
+
+##### DESCRIPTION
+
+Passively prepare the complete exact-target candidate continuation selection. Actual ExplicitHuman current-call admission remains required.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+WorkflowDelegateTaskCandidateContinuationPreparationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowDelegateTaskCandidateContinuationPreparationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowPreparedImport
+
 #### prepareGoalTaskStart
 
 ##### DESCRIPTION
@@ -13919,6 +13947,64 @@ DelegateTaskScopeCorrectionInput
 
 DelegateTaskScopeCorrectionView
 
+#### describeDelegateTaskCandidateContinuation
+
+##### DESCRIPTION
+
+Describe the exact retained CandidateIntent and current Git index/remaining ownership/configuration. This changes no Session and grants no execution.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskCandidateContinuationDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | DelegateTaskCandidateContinuationDescriptionInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskCandidateContinuationView
+
+#### recoverDelegateTaskCandidateContinuation
+
+##### DESCRIPTION
+
+Append independently selected Human authority for one new remaining candidate observation. Preserve the old intent, accepted Submit, base, history and counters. Ordinary Advance alone stages remaining changes and observes the candidate; it never replays an unknown intent.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskCandidateContinuationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | DelegateTaskCandidateContinuationInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskCandidateContinuationView
+
 #### resolveDelegateTaskDiagnosticInformation
 
 ##### DESCRIPTION
@@ -14608,6 +14694,69 @@ WorkflowForceClosureView
 # VALUE
 
 ## WorkflowDelegateTaskScopeCorrectionPreparationInput
+
+- input-kind :: COMMAND
+
+### DESCRIPTION
+
+Explicit ad hoc Task request selection metadata and absolute local file: URI reference. Supplied facts authenticate no origin and grant no effect.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | string | 1 |
+| selectionId | string | 1 |
+| participant | string | 1 |
+| origin | string | 1 |
+| idempotencyKey | string | 1 |
+| selectionCollection | string | 1 |
+
+# VALUE
+
+## DelegateTaskCandidateContinuationDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+# VALUE
+
+## DelegateTaskCandidateContinuationInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | string | 1 |
+| selectionId | string | 1 |
+| participant | string | 1 |
+| idempotencyKey | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+
+# VALUE
+
+## DelegateTaskCandidateContinuationView
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| target | string | 1 |
+
+# VALUE
+
+## WorkflowDelegateTaskCandidateContinuationPreparationInput
 
 - input-kind :: COMMAND
 

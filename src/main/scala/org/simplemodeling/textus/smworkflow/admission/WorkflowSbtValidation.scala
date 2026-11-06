@@ -2,6 +2,7 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.{Decoder, DecodingFailure, Encoder, HCursor, Json}
 import io.circe.syntax.*
+import io.circe.generic.auto.*
 import org.goldenport.Consequence
 import org.goldenport.cncf.processexecution.*
 
@@ -13,6 +14,7 @@ import org.goldenport.cncf.processexecution.*
 private[smworkflow] object WorkflowSbtValidation {
   enum Kind(val wire: String) {
     case Compile extends Kind("compile")
+    case TestCompile extends Kind("test-compile")
     case Test extends Kind("test")
     case TestOnly extends Kind("test-only")
     case FixCheck extends Kind("fix-check")
@@ -56,8 +58,10 @@ private[smworkflow] object WorkflowSbtValidation {
       _ <- Either.cond(value.valid, (), DecodingFailure("Invalid selected SBT tests", cursor.history))
     } yield value)
   }
-  final case class Facts(kind: Kind, outcome: Outcome, selection: Option[Selection], reason: Option[String]) {
+  final case class Facts(kind: Kind, outcome: Outcome, selection: Option[Selection], reason: Option[String],
+    estimate: Option[SbtValidationEstimate] = None) {
     def valid: Boolean = kind != null && outcome != null && selection != null && reason != null &&
+      estimate != null && estimate.forall(e => e != null && kind == Kind.TestOnly && e.timeoutMillisC.isSuccess) &&
       (outcome match {
         case Outcome.Succeeded if kind == Kind.TestOnly => selection.exists(x => x != null && x.valid) && reason.isEmpty
         case Outcome.Unverified => kind == Kind.TestOnly && selection.isEmpty &&
@@ -69,13 +73,15 @@ private[smworkflow] object WorkflowSbtValidation {
   }
   object Facts {
     given Encoder[Facts] = Encoder.instance(value => Json.obj("kind" -> value.kind.asJson,
-      "outcome" -> value.outcome.asJson, "selection" -> value.selection.asJson, "reason" -> value.reason.asJson))
+      "outcome" -> value.outcome.asJson, "selection" -> value.selection.asJson, "reason" -> value.reason.asJson,
+      "estimate" -> value.estimate.asJson))
     given Decoder[Facts] = Decoder.instance(cursor => for {
       kind <- cursor.get[Kind]("kind")
       outcome <- cursor.get[Outcome]("outcome")
       selection <- cursor.get[Option[Selection]]("selection")
       reason <- cursor.get[Option[String]]("reason")
-      value = Facts(kind, outcome, selection, reason)
+      estimate <- cursor.get[Option[SbtValidationEstimate]]("estimate")
+      value = Facts(kind, outcome, selection, reason, estimate)
       _ <- Either.cond(value.valid, (), DecodingFailure("Invalid typed SBT validation facts", cursor.history))
     } yield value)
   }
@@ -88,6 +94,7 @@ private[smworkflow] object WorkflowSbtValidation {
     _ <- if (kind != null && result != null && result.processResult != null &&
         result.processResult.termination != null && result.testSelection != null &&
         ((kind == Kind.Compile && result.operation == SbtOperation.Compile) ||
+          (kind == Kind.TestCompile && result.operation == SbtOperation.TestCompile) ||
           (kind == Kind.Test && result.operation == SbtOperation.Test) ||
           (kind == Kind.TestOnly && result.operation == SbtOperation.TestOnly) ||
           (kind == Kind.FixCheck && result.operation == SbtOperation.FixCheck)) &&
@@ -102,10 +109,14 @@ private[smworkflow] object WorkflowSbtValidation {
         case SbtTestSelectionResult.Verified(classes, suites, tests) => Selection(classes, suites, tests)
       }, None)
       case SbtExecutionOutcome.Failed(_) => Facts(kind, Outcome.Failed, None, None)
+      // Keep the existing consumer receipt contract for zero-exit negative test
+      // verification. CNCF's finer outcome does not make a raw nonzero exit.
+      case SbtExecutionOutcome.TestValidationFailed(reason) => Facts(kind, Outcome.Unverified, None, Some(reason.toString))
       case SbtExecutionOutcome.NotExecuted => Facts(kind, Outcome.NotExecuted, None, None)
       case SbtExecutionOutcome.Incomplete(_) => Facts(kind, Outcome.Incomplete, None, None)
       case SbtExecutionOutcome.UnverifiedTests(reason) => Facts(kind, Outcome.Unverified, None, Some(reason.toString))
     }
-    _ <- facts.validateC
-  } yield facts
+    retained = facts.copy(estimate = result.target.validationEstimate)
+    _ <- retained.validateC
+  } yield retained
 }

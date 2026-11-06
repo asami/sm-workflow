@@ -10,7 +10,7 @@ import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
   * @version Oct. 24, 2026
   */
 class LocalTestDeclaration extends ValidationDeclarationProvider {
-  def declaration: Declaration = Declaration(purposes = Some(Set(Purpose.FOCUSED, Purpose.FULL)),
+  def declaration: Declaration = Declaration(purposes = Some(Set.empty),
     features = Set(FeatureReference("component:sm-workflow", "local-validation")),
     durationClass = Some(DurationClass.NORMAL),
     executionRequirement = Some(ExecutionRequirement(Vector.empty, RiskLevel("local"),
@@ -24,7 +24,7 @@ class LocalTestDeclaration extends ValidationDeclarationProvider {
   */
 class AdmissionTestDeclaration extends LocalTestDeclaration {
   override def declaration: Declaration = super.declaration.copy(
-    purposes = Some(Set(Purpose.ADMISSION, Purpose.FOCUSED, Purpose.FULL)))
+    purposes = Some(Set(Purpose.ADMISSION)))
 }
 
 /** Multi-process CLI/SBT scenarios have variable, substantial execution cost.
@@ -33,7 +33,7 @@ class AdmissionTestDeclaration extends LocalTestDeclaration {
   * @version Oct. 24, 2026
   */
 class RuntimeTestDeclaration extends ValidationDeclarationProvider {
-  def declaration: Declaration = Declaration(purposes = Some(Set(Purpose.FOCUSED, Purpose.HEAVY)),
+  def declaration: Declaration = Declaration(purposes = Some(Set(Purpose.HEAVY)),
     features = Set(FeatureReference("component:sm-workflow", "native-workflows")),
     durationClass = Some(DurationClass.LONG_RUNNING),
     executionRequirement = Some(ExecutionRequirement(Vector(CapabilityRequirement("sm-workflow.runtime")),

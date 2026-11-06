@@ -4,6 +4,17 @@ import sbt.testing.{AnnotatedFingerprint, Fingerprint, Framework, SubclassFinger
 
 /** SBT transport for canonical CNCF metadata. No persistent suite membership list. */
 object LabelledTests {
+  def writeInventory(classpath: Seq[File], classes: File, revision: String, destination: File): Unit = {
+    val loader = new URLClassLoader(classpath.map(_.toURI.toURL).toArray, ClassLoader.getPlatformClassLoader)
+    try {
+      val bridge = loader.loadClass("org.simplemodeling.textus.smworkflow.testing.LabelledTestSelection$")
+      val instance = bridge.getField("MODULE$").get(null)
+      val json = try bridge.getMethod("inventory", classOf[String], classOf[String])
+        .invoke(instance, classes.getCanonicalPath, revision).asInstanceOf[String]
+      catch { case error: java.lang.reflect.InvocationTargetException => throw error.getCause }
+      IO.write(destination, json, java.nio.charset.StandardCharsets.UTF_8)
+    } finally loader.close()
+  }
   def closeLoader(loader: ClassLoader): Unit = loader match {
     case resource: AutoCloseable => resource.close()
     case resource: sbt.internal.inc.classpath.ClasspathFilter => resource.close()
@@ -24,6 +35,8 @@ object LabelledTests {
       result
     } else "EXPLICIT"
     val (patterns, options) = rest.span(_ != "--")
+    require(purpose != "FOCUSED" || patterns.nonEmpty,
+      "FOCUSED requires actual change-specific suite selection; it is not membership")
     require(patterns.nonEmpty || purpose != "EXPLICIT", "Select a suite pattern or --purpose; empty selection is not PASS")
     var filters = options.drop(1)
     var exact = Vector.empty[String]

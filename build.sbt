@@ -73,6 +73,15 @@ lazy val root = project
       checkSkillBundleReproducibility.value
       ()
     },
+    Test / compile := {
+      val compiled = (Test / compile).value
+      val classes = (Test / classDirectory).value
+      LabelledTests.writeInventory(classes +: (Test / dependencyClasspath).value.files,
+        classes, version.value, target.value / "sm-workflow" / "validation-inventory.json")
+      IO.writeLines(target.value / "sm-workflow" / "validation-classpath.txt",
+        (classes +: (Test / dependencyClasspath).value.files).map(_.getCanonicalPath))
+      compiled
+    },
     labelledFullTests := LabelledTests.select((Test / fullClasspath).value.files,
       (Test / classDirectory).value, version.value, "FULL", (Test / definedTests).value),
     Test / test / definedTests := labelledFullTests.value.map(_.definition),

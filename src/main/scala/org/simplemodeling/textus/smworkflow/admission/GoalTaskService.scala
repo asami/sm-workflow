@@ -49,7 +49,7 @@ private[admission] final class BoundedTaskService(N: BoundedWorkNativeRun) {
     storage <- WorkflowComponentStorage.bindC(creation, SmWorkflowComponent.componentId, h.configuration,
       Vector(definition), h.instances, h.continuations)
     reader <- NativeExternalEvidence.bindBoundedC(creation.configuration, h)
-    recovery = if (N.delegation) DelegateTaskScopeCorrection.operations(h, definition, selections) else GoalTaskMalformedIssuedWorkRecovery.operations(h, definition,
+    recovery = if (N.delegation) (DelegateTaskScopeCorrection.operations(h, definition, selections) ++ DelegateTaskCandidateContinuation.operations(h, definition, selections)) else GoalTaskMalformedIssuedWorkRecovery.operations(h, definition,
       new ThreeWorkflowExternalEvidencePorts(reader).goalTaskMalformedIssuedWorkRecovery)
     completion <- _completion_c(h, definition, storage, None, None)
     wrapped = CallScopedOperationBinding.wrapResult(completion, (core, submitted) =>
