@@ -2,6 +2,7 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.{Decoder, Encoder, Json}
 import io.circe.generic.auto.*
+import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
 import java.nio.charset.StandardCharsets.UTF_8
 import org.goldenport.{Consequence, ConsequenceT}
@@ -25,14 +26,29 @@ import RepositorySyncManagedGitObservation as G
   * contains business observations and assessment, never another controller or
   * an authority grant. Native history remains the sole progression source.
   * @since   Nov.  5, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  6, 2026
   */
 private[smworkflow] object GoalPhaseDevelopmentReconstruction {
   val operation = "reconstructGoalPhaseDevelopment"
   val causation = "ordered-development-reconstructed"
   val choices = Vector("AdoptDevelopmentReconstruction", "KeepCurrentRequirements", "Defer", "Cancel")
   val schema = "sm-workflow.goal-phase-development-reconstruction.v1"
+  val prefixSchema = "sm-workflow.goal-phase-development-reconstruction.v2"
+  val prefixVersion = "sm-workflow.source-history-prefix-selection.v1"
   private val _namespace = ":ordered-development-reconstruction:"
+
+  /** Pure scoping of already authenticated native inspection subjects. A
+    * different subject permits observation/Human admission only, never effects.
+    */
+  private[admission] def sourceHistoryConsumed(legacyConsumed: Boolean,
+    consumed: Set[ContextReference], current: ContextReference): Boolean = {
+    def _valid_(reference: ContextReference): Boolean = reference != null && _exact(reference.identity) &&
+      reference.revision != null && reference.revision.toLongOption.exists(value =>
+        value > 0 && value.toString == reference.revision)
+    !_valid_(current) || consumed == null || consumed.exists(reference =>
+      !_valid_(reference) || reference.identity != current.identity) || consumed.contains(current) ||
+      (legacyConsumed && consumed.isEmpty)
+  }
 
   final case class Documents(phasePath: String, checklistPath: String, phaseText: String,
     checklistText: String, captured: R.Captured)
@@ -42,13 +58,27 @@ private[smworkflow] object GoalPhaseDevelopmentReconstruction {
     uncertainEffects: Vector[String], freshCapture: Boolean, retainEvidence: Boolean) {
     def reasons: Vector[String] = incompatible ++ questions ++ uncertainEffects
   }
+  final case class PrefixSelection(version: String, direction: ContextReference, failedResult: ContextReference,
+    reusable: Vector[String], fresh: Vector[String], oldGeneration: Long, newGeneration: Long,
+    supersededQuestion: Option[GoalPhaseSourceHistoryNormalization.Question] = None)
+  object PrefixSelection {
+    given Encoder[PrefixSelection] = deriveEncoder[PrefixSelection].mapJson(_.mapObject(_.filter {
+      case ("supersededQuestion", value) => !value.isNull
+      case _ => true
+    }))
+    given Decoder[PrefixSelection] = deriveDecoder
+  }
+  /** Transient native provenance, scoped to exactly one new candidate generation. */
+  final case class PrefixReuse(target: GoalPhaseSourceHistoryRecovery.RecoveryTarget, selection: PrefixSelection,
+    plan: O.Plan, generation: Long, base: O.Snapshot)
   final case class Payload(sessionId: String, fromRevision: String, participant: String,
     componentInstance: String, definition: ContextReference, documents: Documents,
     observation: Observation, assessment: Assessment, rationale: String,
     sourceTargetGeneration: Option[Long], semanticResult: Option[ContextReference],
     candidateReference: Option[ContextReference], validationReference: Option[ContextReference],
     candidatePaths: Vector[String],
-    previousSelection: Option[ContextReference] = None, humanAnswer: Option[ContextReference] = None)
+    previousSelection: Option[ContextReference] = None, humanAnswer: Option[ContextReference] = None,
+    prefixSelection: Option[PrefixSelection] = None)
   final case class Saved(record: InstanceRecord, controller: O.State, payload: Payload)
 
   def choicesFor(value: Payload): Vector[String] =
@@ -60,15 +90,16 @@ private[smworkflow] object GoalPhaseDevelopmentReconstruction {
 
   val codec = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "GoalPhaseDevelopmentReconstructionRecord"
-    def encode(value: Payload): Json = Json.obj("schemaVersion" -> schema.asJson,
+    def encode(value: Payload): Json = Json.obj("schemaVersion" ->
+      (if (value.prefixSelection.nonEmpty) prefixSchema else schema).asJson,
       "payload" -> value.asJson.mapObject(_.filter { case (key, nested) =>
         !Set("sourceTargetGeneration", "semanticResult", "candidateReference", "validationReference",
-          "previousSelection", "humanAnswer")(key) || !nested.isNull
+          "previousSelection", "humanAnswer", "prefixSelection")(key) || !nested.isNull
       }))
     def decode(value: Json): Either[String, Payload] = for {
       wire <- Option(value).toRight("development reconstruction is absent")
       _ <- Either.cond(wire.asObject.exists(_.keys.toSet == Set("schemaVersion", "payload")) &&
-        wire.hcursor.get[String]("schemaVersion").contains(schema), (), "development reconstruction schema differs")
+        wire.hcursor.get[String]("schemaVersion").exists(Set(schema, prefixSchema)), (), "development reconstruction schema differs")
       payload <- wire.hcursor.get[Payload]("payload").left.map(_.message)
       _ <- Either.cond(valid(payload) && encode(payload) == wire, (), "development reconstruction is malformed or has unknown fields")
     } yield payload
@@ -236,8 +267,16 @@ private[smworkflow] object GoalPhaseDevelopmentReconstruction {
     _ <- _check(selected == controller.plan || _preserves_policy_obligations(controller, selected),
       "selected requirements remove or weaken required original action policy obligations")
     reasons = assessment.incompatible ++ (if (actualAnswer.nonEmpty) Vector.empty else assessment.questions) ++ assessment.uncertainEffects
+    _ <- _check(payload.prefixSelection.forall(proof => validPrefixSelection(proof) && actualAnswer.isEmpty &&
+      reasons.isEmpty && assessment.freshCapture && !assessment.retainEvidence &&
+      proof.oldGeneration == controller.generation && payload.humanAnswer.isEmpty &&
+      (proof.supersededQuestion.nonEmpty == (controller.stage == O.Stage.Decision))),
+      "prefix selection crosses its actual generation or technical Decision")
     state <- controller.reconstructDevelopmentC(selected, assessment.freshCapture && reasons.isEmpty,
-      payload.sourceTargetGeneration, reasons, adoptDecision = actualAnswer.nonEmpty)
+      payload.sourceTargetGeneration, reasons, adoptDecision = actualAnswer.nonEmpty,
+      technicalReassessment = payload.prefixSelection.nonEmpty)
+    _ <- _check(payload.prefixSelection.forall(_.newGeneration == state.generation),
+      "prefix selection did not produce its recorded fresh generation")
   } yield state
 
   def reference(from: InstanceRecord): WorkflowMechanicalTransition.Reference =
@@ -247,27 +286,57 @@ private[smworkflow] object GoalPhaseDevelopmentReconstruction {
 
   def saveC(session: F.Session, from: InstanceRecord, controller: O.State, d: F.Declaration,
     core: ActionCall.Core, payload: Payload,
-    actualAnswer: Option[(String, ContextReference)] = None): Consequence[Saved] = for {
-    _ <- _check(from == session.current && from.suspension.isEmpty && valid(payload),
+    actualAnswer: Option[(String, ContextReference)] = None,
+    superseded: Option[GoalPhaseOrderedHumanDecision.Source] = None): Consequence[Saved] = for {
+    _ <- _check(from == session.current && valid(payload) &&
+      (if (superseded.nonEmpty) payload.prefixSelection.flatMap(_.supersededQuestion).exists(question =>
+        from.suspension.exists(_.continuationIdentity.value == question.identity) &&
+          question.pendingRevision == from.revision.value.toString &&
+          question.identity == GoalPhaseOrderedHumanDecision.identity(superseded.get).value)
+      else from.suspension.isEmpty && payload.prefixSelection.forall(_.supersededQuestion.isEmpty)),
       "selection requires its current unissued canonical native frontier")
     state <- selectedStateC(controller, payload, actualAnswer)
     event = if (state.stage == O.Stage.Decision && state.decision.nonEmpty)
       "development-reconstruction-uncertain" else "development-reconstructed-" + state.stage.toString
     _ <- _check(domain.statemachine.GoalPhaseRunLifecycle.permits(controller.stage.toString, event, state.stage.toString),
       "CML development reconstruction successor is absent")
-    adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
-    saved <- adapter.executeC(WorkflowMechanicalTransition.Intent(d.configuration, reference(from), from, from.revision,
-      F.history(from, "phase." + state.stage.toString, causation), TypedValue(codec.typeIdentity, payload)),
-      ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](()))(using core.executionContext)
-  } yield Saved(saved.receipt.next, state, payload)
+    next <- superseded match {
+      case Some(human) => for {
+        adapter <- session.storage.bindDecisionSupersessionC(GoalPhaseOrderedHumanDecision.completionOperation,
+          GoalPhaseOrderedHumanDecision.inputCodec, codec)
+        saved <- adapter.executeC(GoalPhaseOrderedHumanDecision.identity(human), from.revision, from,
+          F.history(from, "phase." + state.stage.toString, causation), TypedValue(codec.typeIdentity, payload))(using core.executionContext)
+      } yield saved.current
+      case None => for {
+        adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
+        saved <- adapter.executeC(WorkflowMechanicalTransition.Intent(d.configuration, reference(from), from, from.revision,
+          F.history(from, "phase." + state.stage.toString, causation), TypedValue(codec.typeIdentity, payload)),
+          ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](()))(using core.executionContext)
+      } yield saved.receipt.next
+    }
+  } yield Saved(next, state, payload)
 
   /** Replay only stored selection and actual historical predecessor, never current files/configuration. */
   def retainedC(session: F.Session, from: InstanceRecord, controller: O.State,
-    core: ActionCall.Core, actualAnswer: Option[(String, ContextReference)] = None): Consequence[Saved] = for {
-    adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
-    saved <- adapter.loadRetainedC(reference(from))(using core.executionContext)
-      .flatMap(_.map(Consequence.success).getOrElse(F.invalid("actual common reconstruction record is missing")))
-    payload = saved.receipt.payload.value
+    core: ActionCall.Core, actualAnswer: Option[(String, ContextReference)] = None,
+    superseded: Option[GoalPhaseOrderedHumanDecision.Source] = None): Consequence[Saved] = for {
+    retained <- superseded match {
+      case None => for {
+        adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
+        saved <- adapter.loadRetainedC(reference(from))(using core.executionContext)
+          .flatMap(_.map(Consequence.success).getOrElse(F.invalid("actual common reconstruction record is missing")))
+      } yield saved.receipt.payload.value -> saved.receipt.next
+      case Some(human) => for {
+        adapter <- session.storage.bindDecisionSupersessionC(GoalPhaseOrderedHumanDecision.completionOperation,
+          GoalPhaseOrderedHumanDecision.inputCodec, codec)
+        saved <- adapter.loadRetainedC(GoalPhaseOrderedHumanDecision.identity(human), from.identity)(using core.executionContext)
+          .flatMap(_.map(Consequence.success).getOrElse(F.invalid("actual common reconstruction supersession is missing")))
+        _ <- _check(saved.receipt.sourceRevision == from.revision && saved.receipt.nextRevision == from.revision.next,
+          "reconstruction supersession crosses its actual pending revision")
+        next <- GoalPhaseNativeHistory.prefixC(session.current, saved.receipt.nextRevision)
+      } yield saved.receipt.payload -> next
+    }
+    (payload, next) = retained
     _ <- _check(valid(payload) && payload.sessionId == from.identity.value && payload.fromRevision == from.revision.value.toString &&
       payload.participant == session.participantIdentity && payload.definition == ContextReference(
         from.definition.workflowIdentity.value, from.definition.workflowRevision.value) &&
@@ -276,8 +345,16 @@ private[smworkflow] object GoalPhaseDevelopmentReconstruction {
       payload.observation.branch == session.started.receipt.payload.value.branch,
       "stored reconstruction crosses its actual Session, participant, definition or repository")
     state <- selectedStateC(controller, payload, actualAnswer)
-    next <- from.appendC(from.revision, F.history(from, "phase." + state.stage.toString, causation))
-    _ <- _check(next == saved.receipt.next && next.revision == from.revision.next,
+    expected <- if (superseded.isEmpty) from.appendC(from.revision, F.history(from, "phase." + state.stage.toString, causation))
+      else Consequence.success(next)
+    _ <- _check(next == expected && next.revision == from.revision.next &&
+      next.history.dropRight(1) == from.history && next.identity == from.identity && next.definition == from.definition &&
+      next.correlation == from.correlation && next.derivedCompositeOccurrence == from.derivedCompositeOccurrence &&
+      next.committedPredecessor == from.committedPredecessor && next.lifecycle == Lifecycle.Active &&
+      next.suspension.isEmpty && next.causation.value == causation &&
+      next.currentProgression.contains(ProgressionReference("phase." + state.stage.toString)) &&
+      payload.prefixSelection.flatMap(_.supersededQuestion).map(_.identity) == superseded.map(GoalPhaseOrderedHumanDecision.identity(_).value) &&
+      payload.prefixSelection.flatMap(_.supersededQuestion).forall(_.pendingRevision == from.revision.value.toString),
       "stored reconstruction is not its adjacent managed successor")
     actual <- GoalPhaseNativeHistory.prefixC(session.current, next.revision)
     _ <- _check(actual == next, "stored reconstruction is outside actual contiguous history")
@@ -297,9 +374,42 @@ private[smworkflow] object GoalPhaseDevelopmentReconstruction {
     value.candidatePaths != null && value.candidatePaths.nonEmpty && value.candidatePaths.distinct == value.candidatePaths &&
     value.candidatePaths.forall(path => _exact(path) && RepositorySyncNativeConflictInput.relative(path)) &&
     value.sourceTargetGeneration != null && value.sourceTargetGeneration.forall(_ >= 0) &&
+    value.prefixSelection != null && value.prefixSelection.forall(proof => validPrefixSelection(proof) &&
+      value.humanAnswer.isEmpty && value.assessment.reasons.isEmpty && value.assessment.freshCapture && !value.assessment.retainEvidence &&
+      proof.supersededQuestion.forall(question => question.pendingRevision == value.fromRevision &&
+        question.identity.startsWith(value.sessionId + ":ordered-human:"))) &&
     Vector(value.semanticResult, value.candidateReference, value.validationReference,
       value.previousSelection, value.humanAnswer).forall(value => value != null && value.forall(reference =>
       reference != null && _exact(reference.identity) && _exact(reference.revision)))
+
+  def validPrefixSelection(value: PrefixSelection): Boolean = value != null && value.version == prefixVersion &&
+    Vector(value.direction, value.failedResult).forall(reference => reference != null && _exact(reference.identity) && reference.revision == "1") &&
+    value.failedResult.identity == value.direction.identity + ":reconciliation-result" &&
+    value.reusable != null && value.fresh != null && value.fresh.nonEmpty &&
+    value.reusable.distinct == value.reusable && value.fresh.distinct == value.fresh &&
+    value.reusable.intersect(value.fresh).isEmpty && (value.reusable ++ value.fresh).forall(path =>
+      _exact(path) && RepositorySyncNativeConflictInput.relative(path)) &&
+    value.oldGeneration >= 0 && value.oldGeneration < Long.MaxValue && value.newGeneration == value.oldGeneration + 1 &&
+    value.supersededQuestion != null && value.supersededQuestion.forall(question => question != null &&
+      _exact(question.identity) && question.pendingRevision != null && question.pendingRevision.toLongOption.exists(_ > 0))
+
+  /** Pure comparison of already authenticated owner facts; this grants no native
+    * provenance to a caller-supplied Direction or Observation.
+    */
+  def validPrefixSource(selection: PrefixSelection, direction: GoalPhaseSourceHistoryNormalization.Direction,
+    observation: GoalPhaseSourceHistoryNormalization.Observation, generation: Long,
+    question: Option[GoalPhaseSourceHistoryNormalization.Question]): Boolean = {
+    val owner = GoalPhaseSourceHistoryNormalization
+    validPrefixSelection(selection) && direction != null && observation != null &&
+      owner.codec.decode(owner.codec.encode(direction)).isRight &&
+      owner.observationCodec.decode(owner.observationCodec.encode(observation)).isRight &&
+      direction.priorExecutionEnded && observation.outcome.contains("failed") && observation.target == direction.target &&
+      selection.direction == ContextReference(owner.reference(direction.target).identity, "1") &&
+      selection.failedResult == ContextReference(selection.direction.identity + ":reconciliation-result", "1") &&
+      selection.oldGeneration == generation && selection.supersededQuestion == question &&
+      GoalPhaseNativeSourceHistory.validPartition(direction.target.recovery,
+        GoalPhaseNativeSourceHistory.PrefixApplicability(selection.reusable, selection.fresh))
+  }
 
   def notice(value: Payload, original: O.Plan): String = {
     val proposed = value.documents.captured.plan

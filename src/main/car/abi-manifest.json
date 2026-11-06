@@ -1302,6 +1302,12 @@
               "type": "string",
               "multiplicity": "1",
               "required": true
+            },
+            {
+              "name": "sourceHistoryObservationResource",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },

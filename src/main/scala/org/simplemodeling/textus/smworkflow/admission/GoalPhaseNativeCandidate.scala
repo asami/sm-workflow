@@ -25,8 +25,7 @@ import GoalPhaseDependencyValidation.given
   * An intent without its actual recorded result is retained, never replayed.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  *  version Nov.  2, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeCandidate {
@@ -104,6 +103,21 @@ private[smworkflow] object GoalPhaseNativeCandidate {
       })
     })
   }
+  /** Public nesting delegates to the Direction owner; persisted Payload decoding
+    * remains the unchanged strict domain reader. */
+  private[admission] def decodePublicPayload(value: Json): Either[String, Payload] = for {
+    supplied <- Option(value).toRight("Public candidate payload is absent")
+    wire <- GoalPhaseNativeMetadata.normalizePublicJson(supplied)
+    _ <- GoalPhaseCandidateRecovery.publicNonNullObject(wire, "candidate payload")
+    canonical <- wire.hcursor.downField("dependencySourceDirection").focus match {
+      case None => Right(wire)
+      case Some(direction) => GoalPhaseDependencySourceRevision.decodePublicDirection(direction)
+        .map(decoded => wire.mapObject(_.add("dependencySourceDirection", decoded.asJson)))
+    }
+    payload <- canonical.as[Payload].left.map(_.message)
+    _ <- GoalPhaseCandidateRecovery.exactPublicFragment(wire, payload.asJson)
+  } yield payload
+
   private[admission] def sourceCaptureValid(value: Payload): Boolean = value != null &&
     value.primaryPublicationRepair != null && (value.primaryPublicationRepair match {
       case None => GoalPhaseDependencySourceRevision.candidateValid(value)
@@ -292,15 +306,18 @@ private[smworkflow] object GoalPhaseNativeCandidate {
   /** Load the original inspection through the same path/ownership admission as candidates. */
   def recoveryInspectionC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     from: InstanceRecord, controller: O.State, documentPolicy: Option[GoalPhaseDocumentProgress.Policy],
-    recordingPaths: Vector[String], completedCandidates: Vector[Payload]): Consequence[Saved] = for {
+    recordingPaths: Vector[String], completedCandidates: Vector[Payload],
+    primaryRepair: Option[GoalPhasePrerequisitePrimaryRepair.Saved] = None): Consequence[Saved] = for {
     _ <- if (controller.stage == O.Stage.InspectCandidate && controller.cursor < controller.plan.steps.size &&
-        controller.plan.steps(controller.cursor).ownedPaths.forall(d.candidatePaths.contains)) Consequence.unit
+        controller.plan.steps(controller.cursor).ownedPaths.forall(path =>
+          if (primaryRepair.nonEmpty) d.candidatePaths.exists(B.covers(_, path)) else d.candidatePaths.contains(path)) &&
+        primaryRepair.forall(GoalPhasePrerequisitePrimaryRepair.reusableAt(_, controller))) Consequence.unit
       else F.invalid("source history recovery requires the selected Step inspection and unchanged path policy")
     _ <- documentPolicy.fold(Consequence.unit)(_.validateC(controller.plan, d.candidatePaths))
     _ <- GoalPhaseNativeFindingRecording.validatePathsC(recordingPaths, controller.plan, d.candidatePaths)
     adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
     store = new Store(adapter, session, from, controller, d, core, _ => Consequence.unit,
-      documentPolicy, recordingPaths, completedCandidates)
+      documentPolicy, recordingPaths, completedCandidates, primaryRepair = primaryRepair)
     inspection <- store.loadC("inspection").flatMap(_.map(Consequence.success)
       .getOrElse(F.invalid("source history recovery has no exact saved original inspection")))
     candidate <- store.loadC("candidate")
@@ -309,7 +326,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     _ <- if (candidate.isEmpty && stageintent.isEmpty && stageresult.isEmpty &&
         inspection.payload.stagedPaths.isEmpty && inspection.payload.candidate.isEmpty &&
         inspection.payload.changedPaths.isEmpty && inspection.payload.diff.isEmpty &&
-        inspection.payload.stepEvidence.isEmpty) Consequence.unit
+        inspection.payload.stepEvidence.isEmpty &&
+        inspection.payload.primaryPublicationRepair == primaryRepair.map(_.reuse)) Consequence.unit
       else F.invalid("source history recovery cannot cross any candidate or staging fact")
   } yield inspection
 
@@ -328,7 +346,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     sourceHistoryNormalization: Option[GoalPhaseSourceHistoryNormalization.Target] = None,
     dependencySourceDirection: Option[GoalPhaseDependencySourceRevision.Direction] = None,
     dependencySourceScope: Option[GoalPhaseDependencySourceRevision.ScopeSuccessor] = None,
-    primaryRepair: Option[GoalPhasePrerequisitePrimaryRepair.Saved] = None): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
+    primaryRepair: Option[GoalPhasePrerequisitePrimaryRepair.Saved] = None,
+    reconstructionPrefixReuse: Option[GoalPhaseDevelopmentReconstruction.PrefixReuse] = None): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
     whole <- Consequence.success(controller.cursor == controller.plan.steps.size)
     inspection = if (whole) "PhaseInspection" else "InspectCandidate"
     _ <- if (controller.stage.toString == inspection &&
@@ -344,7 +363,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     store = new Store(adapter, session, from, controller, d, core, acknowledgement, documentPolicy, recordingPaths, completedCandidates,
       sourceHistoryRecovery, dependencyAdmission = dependencyAdmission, dependencyChain = dependencyChain,
       sourceHistoryNormalization = sourceHistoryNormalization, dependencySourceDirection = dependencySourceDirection,
-      dependencySourceScope = dependencySourceScope, primaryRepair = primaryRepair)
+      dependencySourceScope = dependencySourceScope, primaryRepair = primaryRepair,
+      reconstructionPrefixReuse = reconstructionPrefixReuse)
     complete <- store.loadC("candidate")
     selected <- complete match {
       case Some(value) => store.completedC(value)
@@ -773,7 +793,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     val sourceHistoryNormalization: Option[GoalPhaseSourceHistoryNormalization.Target] = None,
     val dependencySourceDirection: Option[GoalPhaseDependencySourceRevision.Direction] = None,
     val dependencySourceScope: Option[GoalPhaseDependencySourceRevision.ScopeSuccessor] = None,
-    val primaryRepair: Option[GoalPhasePrerequisitePrimaryRepair.Saved] = None) {
+    val primaryRepair: Option[GoalPhasePrerequisitePrimaryRepair.Saved] = None,
+    val reconstructionPrefixReuse: Option[GoalPhaseDevelopmentReconstruction.PrefixReuse] = None) {
     val plan = controller.plan
     val whole = controller.cursor == plan.steps.size
     val scopeIdentity = if (whole) "phase:" + plan.phase else plan.steps(controller.cursor).identity
@@ -815,7 +836,31 @@ private[smworkflow] object GoalPhaseNativeCandidate {
         case _ => F.invalid("normalization continuation has no matching admitted original source")
       }
     } yield (prefix ++ affected).distinct
-    private def _reuse_prefix_c: Consequence[Vector[String]] = sourceHistoryRecovery match {
+    private def _reuse_prefix_c: Consequence[Vector[String]] = reconstructionPrefixReuse match {
+      case Some(reuse) =>
+        val target = reuse.target
+        if (!whole && reuse.plan == plan && reuse.generation == controller.generation && reuse.base == controller.base &&
+            reuse.selection.newGeneration == controller.generation && GoalPhaseDevelopmentReconstruction.validPrefixSelection(reuse.selection) &&
+            target.sessionId == from.identity.value && target.definitionIdentity == from.definition.workflowIdentity.value &&
+            target.definitionRevision == from.definition.workflowRevision.value && target.participant == session.participantIdentity &&
+            target.planIdentity == plan.identity && target.step == scopeIdentity && target.controllerTip == base &&
+            target.base == session.started.receipt.payload.value.base && target.candidatePaths == d.candidatePaths &&
+            target.ownedPaths == ownedPaths &&
+            from.revision.value > target.frontierRevision.toLong)
+          for {
+            original <- GoalPhaseNativeSourceHistory.verifySelectedPrefixC(core, target,
+              GoalPhaseNativeSourceHistory.PrefixApplicability(reuse.selection.reusable, reuse.selection.fresh))
+            _ <- if (sourceHistoryRecovery.forall(current => current != null &&
+                current.sourceRevision.toLongOption.exists(_ > target.frontierRevision.toLong))) Consequence.unit
+              else F.invalid("current source-history recovery is not a later native inspection than the original prefix")
+            current <- _recovery_prefix_c
+            _ <- if (original.intersect(current).isEmpty) Consequence.unit
+              else F.invalid("original reusable and current successful source-history prefixes claim the same path")
+          } yield original ++ current
+        else F.invalid("current-source prefix reuse crosses its exact new generation, Step, base or ownership")
+      case None => _recovery_prefix_c
+    }
+    private def _recovery_prefix_c: Consequence[Vector[String]] = sourceHistoryRecovery match {
       case None => Consequence.success(Vector.empty)
       case Some(target) if !whole && GoalPhaseSourceHistoryRecovery.validTarget(target) &&
           target.sessionId == from.identity.value && target.definitionIdentity == from.definition.workflowIdentity.value &&

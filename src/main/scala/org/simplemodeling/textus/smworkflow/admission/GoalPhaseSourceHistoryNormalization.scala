@@ -27,7 +27,7 @@ import GoalPhaseSourceHistoryRecovery as R
 /** Append-only adoption of existing comment authority. Neither description nor
   * adoption answers the old Human question or performs a File effect.
   * @since   Oct. 26, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseSourceHistoryNormalization {
@@ -63,7 +63,7 @@ private[smworkflow] object GoalPhaseSourceHistoryNormalization {
     private def _omit_absent(value: Json, names: Set[String]): Json = value.mapObject(_.filter {
       case (name, field) => !names.contains(name) || !field.isNull
     })
-    private def _canonical_recovery(value: Json): Json = value.mapObject { fields =>
+    private[GoalPhaseSourceHistoryNormalization] def _canonical_recovery(value: Json): Json = value.mapObject { fields =>
       val intent = fields("intent").fold(fields)(value =>
         fields.add("intent", _omit_absent(value, Set("outcome"))))
       val inspection = fields("inspection").fold(intent)(value =>
@@ -78,7 +78,8 @@ private[smworkflow] object GoalPhaseSourceHistoryNormalization {
       else Left(io.circe.DecodingFailure("Normalization target requires its exact complete canonical contract", cursor.history))))
   }
   final case class Source(session: F.Session, original: InstanceRecord, controller: O.State,
-    recovery: R.RecoveryTarget, human: Option[H.Source] = None, resume: Option[Saved] = None)
+    recovery: R.RecoveryTarget, human: Option[H.Source] = None, resume: Option[Saved] = None,
+    primaryRepair: Option[GoalPhasePrerequisitePrimaryRepair.Saved] = None)
   final case class Direction(target: Target, choice: String, rationale: String, participant: String,
     reference: ContextReference, priorExecutionEnded: Boolean)
   final case class Saved(record: InstanceRecord, direction: Direction)
@@ -132,8 +133,13 @@ private[smworkflow] object GoalPhaseSourceHistoryNormalization {
   def targetRecord(value: Target): Record = GoalPhaseNativeMetadata.record(value.asJson)
   def decodeTarget(value: Json): Either[String, Target] = Option(value).toRight("Normalization target is absent")
     .flatMap(_.as[Target].left.map(_.message))
-  def decodePublicTarget(value: Json): Either[String, Target] =
-    GoalPhaseNativeMetadata.normalizePublicJson(value).flatMap(decodeTarget)
+  def decodePublicTarget(value: Json): Either[String, Target] = for {
+    supplied <- Option(value).toRight("Public normalization target is absent")
+    wire <- GoalPhaseNativeMetadata.normalizePublicJson(supplied)
+    recovery <- R.decodePublicTarget(wire.hcursor.downField("recovery").focus.getOrElse(Json.Null))
+    target <- decodeTarget(wire.mapObject(_.add("recovery", Target._canonical_recovery(recovery.asJson))))
+    _ <- GoalPhaseCandidateRecovery.exactPublicFragment(wire, target.asJson)
+  } yield target
   def targetC(value: Record): Consequence[Target] = if (value == null) F.invalid("Normalization target is absent")
     else value.toJsonStringC.flatMap(raw => io.circe.parser.parse(raw).left.map(_.message)
       .flatMap(decodePublicTarget).fold(F.invalid, Consequence.success))
@@ -229,8 +235,12 @@ private[smworkflow] object GoalPhaseSourceHistoryNormalization {
   def describeC(source: Source, core: ActionCall.Core): Consequence[V.GoalPhaseSourceHistoryNormalizationDescriptionResult] = for {
     target <- currentTargetC(source, core)
     _ <- requireQuestionC(source.session, core, target, source.human)
+    observed <- GoalPhaseSourceHistoryAutomatic.currentObservationC(core, target)
   } yield V.GoalPhaseSourceHistoryNormalizationDescriptionResult(target.recovery.sessionId, "adoption-required",
-    message + (if (target.resumeFrom.nonEmpty) " This target binds the latest actual normalization invocation; refresh its independent terminal lifecycle evidence under the same retained policy direction."
+    message + " " + observed + (if (target.recovery.intent.invocation.isEmpty)
+      " Legacy UNKNOWN has no retained invocation association; automatic prior-termination proof is unavailable and no association is inferred."
+      else " The affected intent retains its exact Advance invocation; ordinary Advance accepts a finite caller terminal observation through sourceHistoryObservationResource.") +
+    (if (target.resumeFrom.nonEmpty) " This target binds the latest actual normalization invocation; refresh its independent terminal lifecycle evidence under the same retained policy direction."
       else if (target.pendingQuestion.nonEmpty) " The genuinely saved Human target supplies the full captured rule."
       else " The unsuspended legacy intent retained provider/date only; the complete rule is bound at adoption, and its old full-rule provenance is unavailable."),
     core.component.get.core.instanceId.canonicalKey, targetRecord(target), choices, adoptionOperation)
@@ -275,7 +285,8 @@ private[smworkflow] object GoalPhaseSourceHistoryNormalization {
   /** Replay reconstructs the original exact target and validates every native edge. */
   def retainedC(session: F.Session, d: F.Declaration, core: ActionCall.Core, original: InstanceRecord,
     controller: O.State, documentPolicy: Option[GoalPhaseDocumentProgress.Policy], recordingPaths: Vector[String],
-    completedCandidates: Vector[GoalPhaseNativeCandidate.Payload], human: Option[H.Source] = None): Consequence[Option[Saved]] = for {
+    completedCandidates: Vector[GoalPhaseNativeCandidate.Payload], human: Option[H.Source] = None,
+    primaryRepair: Option[GoalPhasePrerequisitePrimaryRepair.Saved] = None): Consequence[Option[Saved]] = for {
     adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
     mechanical <- adapter.loadRetainedC(WorkflowMechanicalTransition.Reference(original.identity.value +
       ":ordered-source-history-normalization:" + original.revision.value, "1"))(using core.executionContext)
@@ -293,7 +304,7 @@ private[smworkflow] object GoalPhaseSourceHistoryNormalization {
               Consequence.unit else F.invalid("Normalization supersession crosses the actual pending revision")
             next <- GoalPhaseNativeHistory.prefixC(session.current, value.receipt.nextRevision)
             saved <- _retained_c(session, d, core, original, controller, documentPolicy, recordingPaths,
-              completedCandidates, pending, next, value.receipt.payload, human)
+              completedCandidates, pending, next, value.receipt.payload, human, primaryRepair)
           } yield Some(saved)
         }
       } yield selected
@@ -302,7 +313,7 @@ private[smworkflow] object GoalPhaseSourceHistoryNormalization {
         case Some(value) => for {
           previous <- GoalPhaseNativeHistory.prefixC(session.current, InstanceRevision(value.receipt.payload.value.target.frontierRevision.toLong))
           saved <- _retained_c(session, d, core, original, controller, documentPolicy, recordingPaths,
-            completedCandidates, previous, value.receipt.next, value.receipt.payload.value, None)
+            completedCandidates, previous, value.receipt.next, value.receipt.payload.value, None, primaryRepair)
         } yield Some(saved)
       }
     }
@@ -310,9 +321,10 @@ private[smworkflow] object GoalPhaseSourceHistoryNormalization {
   private def _retained_c(session: F.Session, d: F.Declaration, core: ActionCall.Core, original: InstanceRecord,
     controller: O.State, documentPolicy: Option[GoalPhaseDocumentProgress.Policy], recordingPaths: Vector[String],
     completedCandidates: Vector[GoalPhaseNativeCandidate.Payload], previous: InstanceRecord, next: InstanceRecord,
-    payload: Direction, human: Option[H.Source]): Consequence[Saved] = for {
+    payload: Direction, human: Option[H.Source],
+    primaryRepair: Option[GoalPhasePrerequisitePrimaryRepair.Saved] = None): Consequence[Saved] = for {
     direction <- codec.decode(codec.encode(payload)).fold(F.invalid, Consequence.success)
-    recovery <- R._target_c(session, d, core, original, controller, documentPolicy, recordingPaths, completedCandidates)
+    recovery <- R._target_c(session, d, core, original, controller, documentPolicy, recordingPaths, completedCandidates, primaryRepair)
     captured = direction.target
     _ <- requireQuestionC(session, core, captured, human)
     _ <- if (captured.recovery == recovery && captured.frontierRevision == previous.revision.value.toString &&
@@ -331,7 +343,7 @@ private[smworkflow] object GoalPhaseSourceHistoryNormalization {
 
   /** The old question's genuinely saved full policy target is provenance; the
     * provider/date fields of its original intent alone never prove an old full rule. */
-  private def requireQuestionC(session: F.Session, core: ActionCall.Core, target: Target,
+  private[admission] def requireQuestionC(session: F.Session, core: ActionCall.Core, target: Target,
     human: Option[H.Source]): Consequence[Unit] = human match {
     case None => if (target.pendingQuestion.isEmpty) Consequence.unit else F.invalid("Normalization lost its actual pending Human source")
     case Some(source) => for {
@@ -429,6 +441,19 @@ private[smworkflow] object GoalPhaseSourceHistoryNormalization {
       } yield Some(observed)
     }
   } yield result
+
+  /** A formal failed result is a completed observation, distinct from a live or
+    * resultless reconciliation. Its old direction and UNKNOWN remain unchanged.
+    */
+  def failedObservationC(session: F.Session, core: ActionCall.Core, saved: Saved): Consequence[Option[Observed]] = for {
+    _ <- codec.decode(codec.encode(saved.direction)).fold(F.invalid, _ => Consequence.unit)
+    observed <- retainedObservationC(session, core, saved)
+  } yield observed.filter(_.observation.outcome.contains("failed"))
+
+  def resultReference(saved: Saved): ContextReference = {
+    val reference = observationReference(saved, "result")
+    ContextReference(reference.identity, reference.revision)
+  }
   def reconcileC(session: F.Session, d: F.Declaration, core: ActionCall.Core, saved: Saved,
     acknowledgement: String => Consequence[Unit]): Consequence[Observed] = for {
     retained <- retainedObservationC(session, core, saved)
@@ -474,7 +499,7 @@ private[smworkflow] object GoalPhaseSourceHistoryNormalization {
         }.recoverWith(_ => Consequence.unit)
         catch { case scala.util.control.NonFatal(_) => Consequence.unit }
     }
-  private def normalizeC(core: ActionCall.Core, target: Target): Consequence[GoldenportSourceHistoryDriver.Normalization] = {
+  private[admission] def normalizeC(core: ActionCall.Core, target: Target): Consequence[GoldenportSourceHistoryDriver.Normalization] = {
     val recovery = target.recovery
     val prepared = for {
       selection <- WorkflowSourceHistoryParameters.resolveC(core.executionContext)

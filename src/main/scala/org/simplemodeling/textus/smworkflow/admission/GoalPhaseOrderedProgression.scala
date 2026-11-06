@@ -13,7 +13,7 @@ import GoalPhaseRuntimeRepairControl as R
   * Semantic replies carry no stage, cursor, command or closure receipt.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseOrderedProgression {
@@ -215,7 +215,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       */
     private[admission] def reconstructDevelopmentC(proposed: Plan, changed: Boolean,
       sourceTargetGeneration: Option[Long], concerns: Vector[String] = Vector.empty,
-      adoptDecision: Boolean = false): Consequence[State] = for {
+      adoptDecision: Boolean = false, technicalReassessment: Boolean = false): Consequence[State] = for {
       _ <- validatePlanC(proposed)
       _ <- GoalPhaseAcceptanceBoundary.savedPlanC(proposed)
       _ <- if (sourceTargetGeneration != null && concerns != null && concerns.forall(text) &&
@@ -229,10 +229,15 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       _ <- if (!changed || generation < Long.MaxValue) Consequence.unit
         else invalid("development reconstruction generation is exhausted")
       stopped = pendingRepair.nonEmpty || policyRepairPending || repairControl.flatMap(_.stop).nonEmpty
+      _ <- if (!technicalReassessment || (changed && concerns.isEmpty && !adoptDecision && !stopped &&
+          candidate.isEmpty && checksReceipt.isEmpty && reviewEvidence.isEmpty && closureIntent.isEmpty &&
+          cursor < plan.steps.size && (stage == Stage.InspectCandidate ||
+            (stage == Stage.Decision && decisionSource.contains(Stage.InspectCandidate))))) Consequence.unit
+        else invalid("technical reassessment requires the exact unresolved inspection without another obligation")
       _ <- if (!stopped || proposed == plan) Consequence.unit
         else invalid("development reconstruction cannot amend a stopped repair reservation")
       uncertain = concerns.nonEmpty
-      origin = if (adoptDecision && stage == Stage.Decision) decisionSource.getOrElse(stage) else stage
+      origin = if ((adoptDecision || technicalReassessment) && stage == Stage.Decision) decisionSource.getOrElse(stage) else stage
       reserved = origin == Stage.Repair || stopped || origin == Stage.Decision
       clear = changed && !reserved && origin != Stage.Implementation && closureIntent.isEmpty
       nextstage = if (uncertain) Stage.Decision else if (clear)
@@ -250,8 +255,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     } yield new State(proposed, nextstage, cursor, nextgeneration, repairs, base, completed,
       if (clear) None else candidate, if (clear) None else checksReceipt,
       if (clear) None else reviewEvidence, closureIntent,
-      if (uncertain) Some(concerns.mkString("; ")) else if (adoptDecision) None else decision, repositoryReceipt, repairDirective,
-      if (uncertain) Some(origin) else if (adoptDecision) None else decisionSource, documentDecision, ordinaryRepairs, pendingRepair,
+      if (uncertain) Some(concerns.mkString("; ")) else if (adoptDecision || technicalReassessment) None else decision, repositoryReceipt, repairDirective,
+      if (uncertain) Some(origin) else if (adoptDecision || technicalReassessment) None else decisionSource, documentDecision, ordinaryRepairs, pendingRepair,
       if (clear) None else phaseReviewedCandidate, if (clear) Vector.empty else phaseRecordingPaths,
       if (clear) None else candidateParent, if (clear) None else stepAdmission, releaseCommit,
       repairControl, policyRepairPending, repairObservations, stepReviewRequired, repairscope)

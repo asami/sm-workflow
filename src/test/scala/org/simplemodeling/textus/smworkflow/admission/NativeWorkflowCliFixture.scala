@@ -143,7 +143,8 @@ private[admission] object NativeWorkflowCliFixture {
     val plan: GoalPhaseOrderedProgression.Plan, val port: Option[Int],
     private[NativeWorkflowCliFixture] val _sbt_repair: Option[Path], startingLogIndex: Int = 0,
     val sourceHistory: Boolean = false, val repairContinuation: Boolean = false,
-    val documentRevision: Boolean = false, val sbtDiagnosticBytes: Int = 0
+    val documentRevision: Boolean = false, val sbtDiagnosticBytes: Int = 0,
+    private[NativeWorkflowCliFixture] val _primary_generation: Boolean = false
   ) {
     require((sbtDiagnosticBytes >= 0 && sbtDiagnosticBytes <= 90000 || sbtDiagnosticBytes == 1500000) &&
       (sbtDiagnosticBytes == 0 || _sbt_repair.nonEmpty), "Select a finite diagnostic fixture with normal SBT")
@@ -500,7 +501,7 @@ private[admission] object NativeWorkflowCliFixture {
       (process, invocation)
     }
     private def _run(argv: Vector[String], installations: Option[Path] = None): Result = {
-      val bound = TimeUnit.SECONDS.toNanos(if (_sbt_repair.nonEmpty) 240 else 60)
+      val bound = TimeUnit.SECONDS.toNanos(if (_primary_generation) 1500 else if (_sbt_repair.nonEmpty) 240 else 60)
       val remaining = _server_deadline.fold(bound)(_ - System.nanoTime())
       require(remaining > 0, "Owned server scenario deadline expired")
       val (process, invocation) = _spawn(argv, installations)
@@ -1867,6 +1868,48 @@ private[admission] object NativeWorkflowCliFixture {
     new Scenario(root, host, plan, None, Some(TypedSbtHostPlanFixture.normalExecutable), startingLogIndex)
   }
 
+  /** Reopen only the explicitly located tiny generation episode. The caller
+    * supplies its retained host and Plan; no store or native result is read,
+    * created or rewritten and no repository is discovered by scanning. */
+  def reopenPrimaryGeneration(root: Path, host: ThreeWorkflowRuntimeParameters.Definition,
+    plan: GoalPhaseOrderedProgression.Plan, startingLogIndex: Int): Scenario = {
+    require(root.isAbsolute && root.normalize == root && Files.isDirectory(root) && root.toRealPath() == root &&
+      root.getParent == _primary.resolve("target/sm-workflow/work/native-cli") &&
+      root.getFileName.toString.startsWith("primary-generation-"), "Select the exact retained generation fixture root")
+    require(Set(1000, 2000, 3000, 4000)(startingLogIndex), "Select the finite capture or continuation log range")
+    val config = parse(Files.readString(root.resolve(".textus/config.json"))).fold(
+      error => throw new AssertionError(error.message), identity)
+    val declared = config.hcursor.get[String]("sm-workflow.runtime.definition").flatMap(value =>
+      parse(value).left.map(error => io.circe.DecodingFailure(error.message, Nil))).fold(
+      error => throw new AssertionError(error.message), identity)
+    val retainedhost = _take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(declared), "Exact retained generation host")
+    val retainedplan = parse(Files.readString(root.resolve("goal-plan.json"))).flatMap(
+      _.as[GoalPhaseOrderedProgression.Plan]).fold(error => throw new AssertionError(error.getMessage), identity)
+    val history = plan.identity == "native-primary-generation-history-plan" &&
+      host.goal.candidatePaths == Vector("src/main") &&
+      config.hcursor.get[String]("sm-workflow.source-history.style").toOption.contains("goldenport") &&
+      config.hcursor.get[Json]("sm-workflow.source-history.rule").toOption.contains(PrimaryGenerationHistorySpecificationFixture.rule)
+    val exactsource = plan.identity == "native-primary-generation-plan" &&
+      host.goal.candidatePaths == Vector("src/main/cozy/generation.cml")
+    val checks = Vector(GoalPhaseNativeValidation.Check("primary-compile", 14, WorkflowSbtValidation.Kind.Compile),
+      GoalPhaseNativeValidation.Check("primary-focused", 15, WorkflowSbtValidation.Kind.TestOnly))
+    require(retainedhost == host && retainedplan == plan && host.target.root == root.resolve("repository").toString &&
+      Path.of(host.target.root).toRealPath() == root.resolve("repository") &&
+      host.goal.input.phaseIdentity == "1" && host.goal.input.repositoryIdentity == "smwf-p62-cli-continuation" &&
+      host.repository.input.repositoryIdentity == host.goal.input.repositoryIdentity &&
+      plan.phase == host.goal.input.phaseIdentity && plan.repository == host.goal.input.repositoryIdentity &&
+      host.goal.dependencyValidation.isEmpty && (exactsource || history) &&
+      host.goal.stepValidation.checks == checks && host.goal.phaseValidation.checks == checks &&
+      plan.steps.size == 1 && plan.steps.head.identity == "step-1" && plan.repairLimit == 2 &&
+      plan.steps.head.ownedPaths == host.goal.candidatePaths &&
+      plan.steps.head.checks == Vector("primary-compile", "primary-focused") &&
+      Files.isRegularFile(root.resolve(".textus/assembly.yaml")), "Retain the exact isolated source, checks, host and Plan")
+    require(!Files.exists(root.resolve(s"logs/$startingLogIndex.stdout.json")) &&
+      !Files.exists(root.resolve(s"logs/$startingLogIndex.stderr")), "Preserve every earlier generation invocation log")
+    new Scenario(root, host, plan, None, Some(TypedSbtHostPlanFixture.normalExecutable), startingLogIndex,
+      _primary_generation = true)
+  }
+
   def reopenRepositoryConflict(root: Path, executable: Path): Scenario = {
     val parent = _primary.resolve("target/sm-workflow/work/native-cli")
     require(root.isAbsolute && root.normalize == root && root.getParent == parent &&
@@ -1952,6 +1995,46 @@ private[admission] object NativeWorkflowCliFixture {
       sourceHistory = true)
     scenario.retrieve(root.resolve("target/sm-workflow/tasks/provider-source-history-task"))
     scenario
+  }
+
+  /** Passive caller reconstruction for the same tiny dated two-Step fixture.
+    * Reads existing host/documents and allocates unused logs; never restores state.
+    */
+  def reopenSourceHistoryPrefix(root: Path): Scenario = {
+    val parent = _primary.resolve("target/sm-workflow/work/native-cli")
+    require(root.isAbsolute && root.normalize == root && root.getParent == parent &&
+      Files.isDirectory(root) && root.toRealPath() == root, "Select the same physical isolated prefix episode")
+    val config = parse(Files.readString(root.resolve(".textus/config.json"))).fold(
+      error => throw new AssertionError(error.message), identity)
+    val raw = config.hcursor.get[String]("sm-workflow.runtime.definition").fold(
+      error => throw new AssertionError(error.message), identity)
+    val host = _take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(parse(raw).fold(
+      error => throw new AssertionError(error.message), identity)), "Retained normal two-Step prefix host")
+    val repository = root.resolve("repository")
+    val imported = _take(GoalPhaseDocumentPlan.decodeC(Files.readString(repository.resolve("verification-inputs/phase.md")),
+      Files.readString(repository.resolve("verification-inputs/checklist.md"))), "Retained actual tiny Phase and checklist")
+    val plan = imported.plan
+    val documentpaths = Vector("verification-inputs/phase.md", "verification-inputs/checklist.md")
+    val source = "src/main/scala/HistoryExample.scala"
+    val paths = ((1 to 4).map(index => "src/main/scala/ARecovery" + index + ".scala").toVector :+ source) ++ documentpaths
+    val declaration = _take(GoalPhaseDocumentSource.decodeDeclarationC(Files.readString(root.resolve("goal-plan.json"))),
+      "Retained literal document source declaration")
+    require(host.target.root == repository.toString && repository.toRealPath() == repository &&
+      host.goal.input.repositoryIdentity == "smwf-p61-cli-source-history" && host.goal.candidatePaths == paths &&
+      plan.repository == host.goal.input.repositoryIdentity && plan.steps.map(_.identity) == Vector("step-1", "step-2") &&
+      plan.steps.head.ownedPaths == (Vector(source) ++ documentpaths) && plan.steps(1).ownedPaths == paths &&
+      plan.steps.forall(step => step.checks == Vector("test") && documentpaths.forall(step.ownedPaths.contains)) &&
+      declaration == GoalPhaseDocumentSource.Source(documentpaths.head, documentpaths(1)) &&
+      Files.isRegularFile(root.resolve("workflow.sqlite")) && Files.isRegularFile(root.resolve(".textus/assembly.yaml")),
+      "Reopen the existing document-owning source-history host without replacing its definition or data")
+    val logs = Files.list(root.resolve("logs"))
+    val indices = try logs.iterator().asScala.toVector.flatMap(path =>
+      path.getFileName.toString.takeWhile(_.isDigit).toIntOption) finally logs.close()
+    val next = indices.maxOption.getOrElse(0) + 1
+    require(next > 0 && !Files.exists(root.resolve(s"logs/$next.stdout.json")) &&
+      !Files.exists(root.resolve(s"logs/$next.stderr")), "Reopened calls require unused output indices")
+    new Scenario(root, host, plan, None, Some(TypedSbtHostPlanFixture.normalExecutable),
+      startingLogIndex = next, sourceHistory = true)
   }
 
   private def _host_files(scenario: Scenario, resourceroots: Vector[Path], bootstrapselectedinput: Boolean,

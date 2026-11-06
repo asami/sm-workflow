@@ -113,6 +113,7 @@ org.simplemodeling.textus.smworkflow
 | name | type | multiplicity |
 |------+------|--------------|
 | sessionId | string | 1 |
+| sourceHistoryObservationResource | string | ? |
 
 ## GoalPhaseDiagnosticSelection
 
@@ -3687,6 +3688,11 @@ on = human-source-history-deferred
 
 to = InspectCandidate
 on = source-history-normalization-adopted
+
+##### TRANSITION
+
+to = InspectCandidate
+on = source-history-automatic-selected
 
 ##### TRANSITION
 
@@ -7423,6 +7429,8 @@ Advance the single execution identified by sessionId. Optional profile (standard
 
 Optional sm-workflow.source-history.style selects none (the default, with no history rule or source work) or goldenport for changed owned Scala sources before staging and checks. sm-workflow.source-history.rule supplies the external goldenport rule as a JSON object string; common configuration also accepts an object. CNCF resolves common configuration and these same-key operation properties for the current call, with operation values taking precedence. Invalid style or a missing/invalid selected rule fails before candidate inspection is recorded. These properties change no host grants, stores or business input binding.
 
+Optional sourceHistoryObservationResource is an absolute local file URI acquired by this executing Action through ordinary Resource authorization, UTF-8 decoding and finite budgets. It supplies only the closed factual caller observation for the exact described source-history normalization target and runtime-emitted invocation reference. Only exited with the exact affected v2 intent, Component, Session, operation and retained full rule admits automatic same-authority selection. Current text is read-only observable before termination and proves neither the old outcome nor termination. Live, unknown, absent, stale and crossed observations never authorize a writer or checks. Legacy v1 UNKNOWN lacks association and retains its explicit recovery/adoption APIs. Automatic selection and reconciliation retain distinct native provenance, never a Human Direction/answer; a genuine pending source-history question can be superseded unanswered. Reconciliation reads first, writes zero bytes when conformant, otherwise uses only one uniquely prescribed managed-comment correction with expected text. Its unresolved new intent is never retried automatically. The old File intent remains UNKNOWN; normal candidate/check/review routes own subsequent progress.
+
 ##### TYPE
 
 COMMAND
@@ -7439,6 +7447,7 @@ GoalPhaseAdvanceInput
 |------+------|--------------|
 | sessionId | string | 1 |
 | profile | string | ? |
+| sourceHistoryObservationResource | string | ? |
 | sm-workflow.source-history.style | string | ? |
 | sm-workflow.source-history.rule | string | ? |
 

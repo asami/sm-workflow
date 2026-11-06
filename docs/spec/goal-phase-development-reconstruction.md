@@ -43,6 +43,10 @@ actual WorkOrder, Human question or recording request is recollected first. Its
 result must be collected before another selection can replace remaining work.
 Reconstruction never supersedes a potentially active worker.
 
+The bounded technical normalization reassessment below is the sole exception
+for an unanswered reconstruction question. It uses native DecisionSupersession;
+the issued question remains unanswered with its original body and history.
+
 An unissued selection preserves Session, participant, Component, definition,
 repository/root/branch, original base, actual completed Step identity/order and
 accepted commits. Remaining paths must fit admitted host candidate coverage;
@@ -170,12 +174,165 @@ keep their original revision-sensitive scope calculation. The override is
 derived from native common-record traversal and is never caller input or another
 persisted registry.
 
+## Current-source completed-prefix selection
+
+A formally failed source-history normalization can have a completed prefix
+whose old rule/date postcondition no longer applies to legitimate current
+source. This is applicability of a new subject, not evidence that the original
+UNKNOWN succeeded, never started, or may be replayed. The normalization
+Direction must retain its admitted `priorExecutionEnded` evidence, and its
+actual adjacent reconciliation result must have `outcome=failed`. A resultless
+reconciliation remains an unresolved writer and is ineligible.
+
+The existing reconstruct Operation reads current prefix files through File/UoW
+under the unchanged complete selected goldenport rule and workspace ownership.
+It partitions the full original prefix, in order, into reusable paths satisfying
+the saved rule/date and fresh paths requiring current preparation. A missing
+file is known absence for ordinary candidate deletion. Read, policy or semantic
+uncertainty is not classified as applicability or nonexecution. Existing
+full-prefix and candidate-prefix verifiers remain strict for their old callers.
+
+Selection requires at least one fresh prefix path, determinate actual documents
+and proposal, the same selected Step/Plan/base/ownership, and no other unresolved
+candidate, Git, closure, publication intent or repair reservation. Required
+checks, independent review and original acceptance obligations remain. A new
+candidate generation preserves completed Steps, semantic results, base, ordinary
+and cumulative repairs, repair-control observations and reservations. It neither
+resets a counter nor creates or refunds an allowance.
+
+The common record uses a v2 envelope only when `prefixSelection` is present.
+Its small versioned proof names the actual retained normalization Direction and
+formal failed result, ordered reusable/fresh paths, old/new generations, and
+optionally the exact superseded question identity/pending revision. The full
+recovery target comes from the authenticated retained normalization owner; it
+is not copied into the common record. Missing, null, unknown, crossed or wrong
+version proof refuses. Legacy v1 records omit the field and retain their exact
+bytes and original replay meaning.
+
+An already issued question is eligible only when its genuinely saved context
+is the previous common reconstruction directly after that same failed result,
+with no incompatibilities or semantic questions and only that normalization
+owner's technical uncertainty. Current documents must also be determinate.
+Native DecisionSupersession retains the original prompt and body, records the
+distinct selection and leaves `humanAnswer` absent. It fabricates no Human
+answer or completion. Unrelated and meaningful Human questions stay pending.
+
+Native traversal authenticates the selection and exact predecessor, retained
+Direction/result, complete ordered partition, generations and optional question
+supersession. Replay of the new selection's classification uses saved facts.
+Existing ancestor normalization/recovery loaders retain their selected-policy
+resolution guards; this does not make that preexisting chain independent of
+configuration. Eligibility requires the same installed rule/provider.
+The transient reuse context is derived from native history for exactly the
+selected new generation, Step and base; it is not another persisted controller
+or permission. Before fresh candidate persistence, only selected reusable
+entries are reverified against their old rule/date and excluded from new
+history effects. Fresh prefix paths and the old affected UNKNOWN path enter
+ordinary current-date preparation with new references. No old receipt is
+trimmed or relabelled.
+
+The original recovery target retains its historical management paths, which are
+authenticated against its original cursor. A new common selection can bind the
+same actual documents to the current document-progress policy; those literal
+paths must be owned by every selected Step and admitted by the current fixed
+host. New candidate reuse does not require the historical management-path
+vector to equal that current policy. Normal current document/recording ownership
+preflight remains required, and legacy recovery reuse retains its exact old
+management-path comparison.
+
+An unchanged unstarted selection retains its generation only while selected
+reusable postconditions still hold. A changed reusable path refuses before
+fresh effects. Successful candidate capture ends the transient reuse; later
+ordinary Repair cannot inherit indefinite skips. Fresh candidate staging,
+dependencies, byte/index freshness, checks, independent review and closure use
+their existing owners. Recollecting the pending Review repeats no success.
+
+## A later current-candidate history obligation
+
+Consumed source-history authority is scoped to its actual native inspection
+subject: Session identity and source revision. The existing Boolean and native
+records retain their meaning. Native traversal additionally derives a set of
+consumed subjects from authenticated normalization/recovery targets and actual
+source-history Human completions. The derived set survives current-source
+selection, Step changes and repair; it is not persisted as another controller.
+A matching subject remains consumed even if a later legacy Boolean is false.
+A legacy true without reconstructible subject, crossed Session, null or invalid
+noncanonical revision fails closed.
+
+A different genuine current inspection can seek its own existing public
+description or Human admission. This grants no retry, effect, consent, new
+generation or semantic repair allowance. Current native intent, Step/Plan/base,
+ownership, participant and evidence checks remain. The old consumed target
+cannot be submitted again. Current normalization requires its own exact target
+and newly admitted prior-execution-ended judgment/evidence; a missing old result
+remains UNKNOWN.
+
+At that same selected generation, candidate preparation composes the original
+reconstruction's verified reusable subset with the authenticated CURRENT
+recovery's successful prefix and separately qualified affected normalization.
+The current source revision must be later than the original frontier. Its full
+legacy target/ownership/rule/date verifier is unchanged. Duplicate claims between
+old reusable and current prefix paths refuse, as does a changed old reusable
+postcondition. Only the verified union is skipped. Old receipts remain intact;
+normal staging, current ownership, dependency, check and independent review
+requirements continue unchanged.
+
 ## Paired executable evidence
 
 `GoalPhaseDevelopmentReconstructionSpec` describes pure evidence reuse, retained
 prefix/base/repair state, unstarted capture recollection, compatible projection,
 concrete applicable choices, checklist semantics and already indexed deletion.
 `GoalPhaseDependencySourceRevisionSpec` describes legacy/v9 wire boundaries.
+
+`GoalPhaseDevelopmentReconstructionSpec` additionally covers exact v1/v2 codec
+boundaries, fresh technical generations, unchanged default controller behavior,
+retained repair accounting and refusal of business/closure Decisions.
+`GoalPhaseSourceHistoryNormalizationSpec` covers the complete ordered prefix
+partition, known absence, strict old verifier, stale reusable paths and refusal
+of resultless or crossed normalization facts.
+
+`NativeGoalSourceHistoryPrefixReconstructionCliSpec` is one explicitly selected
+`@DoNotDiscover` Runtime leaf. It reuses the tiny Resource normalization support
+and normal host. Set `smworkflow.spec.prefixReconstructionMode` to `capture-old`
+or `continue-new`, and `smworkflow.spec.prefixReconstructionEpisode` to one
+explicit absolute caller-owned locator. `smworkflow.spec.installedCommand`
+selects the normal installed launcher and the same host's actual assembly.
+Capture runs before parent-owned publication and retains a real first-Step
+commit, four Nov5 prefix successes, UNKNOWN, actual failed normalization and
+technical Defer/Cancel question. Fixture-local `textus.clock.virtual-start-at`
+sets Nov5 before preparation/Start, then Nov6 after legitimate source changes;
+machine time is unchanged. Continue passively reopens the same physical host
+with unused log indices, supersedes only that stale question, and separately
+Advances through current preparation and actual checks to independent Review.
+It asserts preserved original records, source bytes/mtime for reusable entries,
+new current qualifications, counters and no repeated effects on recollection.
+These authored scenarios require parent-owned validation, independent review,
+normal LocalPublication and both installed stages before any qualification claim.
+
+`GoalPhaseCurrentHistoryRecoverySubjectSpec`, in the existing reconstruction spec
+file, separately covers same/different native subjects, legacy provenance gaps,
+crossed/malformed contexts and unchanged accounting. It also applies the actual
+goldenport rule to the complete multi-class installed-spec source, whose extra
+class descriptions use ordinary `Created:`/`Last revised:` labels instead of a
+second managed source header.
+
+`NativeGoalCurrentSourceHistoryStopCliSpec` is one constant `@DoNotDiscover`
+Runtime leaf. Its explicit `smworkflow.spec.currentCandidateStopMode` is
+`capture-stop` or `continue-stop`; `smworkflow.spec.currentCandidateStopEpisode`
+names one absolute existing seed/locator. It passively reopens the retained
+partial tiny fixture, actual task and logs with its first Step/check/commit and
+four dated prefixes already complete. It never repeats Start, setup or Submit.
+Capture retains an actual current-source v2 selection, then demonstrates a
+distinct current intent stopped by a second managed block comment. Ordinary
+source conformance removes only that extra comment. The old installed runtime
+retains Wait and refuses normalization description. Caller checkpoints retain
+the actual successful selection before later calls and the stopped call/record
+before later assertions; they only add observations/routing to the locator.
+After parent-owned publication, continue uses that exact subject's public Human
+and normalization evidence to reach a fresh native check and independent Review.
+Both UNKNOWNs, formal failure, accepted selection, base, completed Step,
+generation, counters and successful prefix File facts remain. Review recollection
+repeats no successful effects. Execution and qualification remain parent-owned.
 
 `NativeGoalDevelopmentReconstructionCliSpec` and
 `NativeGoalDevelopmentReconstructionAdoptionCliSpec` are independently selected
