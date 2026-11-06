@@ -3,7 +3,6 @@ package org.simplemodeling.textus.smworkflow.admission
 import cats.syntax.all.*
 import io.circe.{Decoder, DecodingFailure, Encoder, Json}
 import io.circe.generic.auto.*
-import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
 import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.ActionCall
@@ -39,6 +38,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     formalFailure: Option[RepositorySyncFormalFailureContinuation.Direction] = None,
     purposeContent: Option[RepositorySyncPurposeContentContinuation.Direction] = None,
     purposePreparation: Option[RepositorySyncPurposePreparationContinuation.Direction] = None,
+    purposePreparationIntent: Option[RepositorySyncPurposePreparationIntentContinuation.Direction] = None,
     purposeMaterialization: Option[RepositorySyncPurposeMaterializationContinuation.Direction] = None,
     repairBudget: Option[RepositorySyncRepairBudgetContinuation.Direction] = None,
     pushContinuation: Option[RepositorySyncPushContinuation.Direction] = None,
@@ -54,11 +54,81 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     RepositorySyncNativeMergeValidation.stateCodec.decode(cursor.value).left.map(reason => DecodingFailure(reason, cursor.history)))
   private given publicationEncoder: Encoder[RepositorySyncPublication.State] = RepositorySyncPublication.stateEncoder
   private given publicationDecoder: Decoder[RepositorySyncPublication.State] = RepositorySyncPublication.stateDecoder
-  private given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
-    case ("assessment" | "repairContext" | "continuation" | "hygiene" | "records" | "purposes" | "requiredLint" | "reviewInputs" | "publication" | "formalFailure" | "purposeContent" | "purposePreparation" | "purposeMaterialization" | "repairBudget" | "pushContinuation" | "pushObservation" | "mergeCheckContinuation" | "validationPreparation", value) => !value.isNull
-    case _ => true
-  }))
-  private given Decoder[Payload] = deriveDecoder
+  object Payload {
+    given Encoder[Payload] = Encoder.instance[Payload](value => Json.obj(
+      "stage" -> value.stage.asJson,
+      "root" -> value.root.asJson,
+      "before" -> value.before.asJson,
+      "indexTree" -> value.indexTree.asJson,
+      "checkpoint" -> value.checkpoint.asJson,
+      "after" -> value.after.asJson,
+      "method" -> value.method.asJson,
+      "mergeHead" -> value.mergeHead.asJson,
+      "validation" -> value.validation.asJson,
+      "finalTip" -> value.finalTip.asJson,
+      "assessment" -> value.assessment.asJson,
+      "repairContext" -> value.repairContext.asJson,
+      "continuation" -> value.continuation.asJson,
+      "hygiene" -> value.hygiene.asJson,
+      "records" -> value.records.asJson,
+      "purposes" -> value.purposes.asJson,
+      "publication" -> value.publication.asJson,
+      "requiredLint" -> value.requiredLint.asJson,
+      "reviewInputs" -> value.reviewInputs.asJson,
+      "formalFailure" -> value.formalFailure.asJson,
+      "purposeContent" -> value.purposeContent.asJson,
+      "purposePreparation" -> value.purposePreparation.asJson,
+      "purposePreparationIntent" -> value.purposePreparationIntent.asJson,
+      "purposeMaterialization" -> value.purposeMaterialization.asJson,
+      "repairBudget" -> value.repairBudget.asJson,
+      "pushContinuation" -> value.pushContinuation.asJson,
+      "pushObservation" -> value.pushObservation.asJson,
+      "mergeCheckContinuation" -> value.mergeCheckContinuation.asJson,
+      "validationPreparation" -> value.validationPreparation.asJson
+    )).mapJson(_.mapObject(_.filter {
+      case ("assessment" | "repairContext" | "continuation" | "hygiene" | "records" | "purposes" | "requiredLint" | "reviewInputs" | "publication" | "formalFailure" | "purposeContent" | "purposePreparation" | "purposePreparationIntent" | "purposeMaterialization" | "repairBudget" | "pushContinuation" | "pushObservation" | "mergeCheckContinuation" | "validationPreparation", value) => !value.isNull
+      case _ => true
+    }))
+    given Decoder[Payload] = Decoder.instance(cursor => for {
+      stage <- cursor.get[String]("stage")
+      root <- cursor.get[String]("root")
+      before <- cursor.get[Git.Observed]("before")
+      index <- cursor.get[Option[String]]("indexTree")
+      checkpoint <- cursor.get[Option[String]]("checkpoint")
+      after <- cursor.get[Option[Git.Observed]]("after")
+      method <- cursor.get[Option[String]]("method")
+      mergehead <- cursor.get[Option[String]]("mergeHead")
+      validation <- cursor.get[Option[RepositorySyncNativeMergeValidation.State]]("validation")
+      finaltip <- cursor.get[Option[String]]("finalTip")
+      assessment <- cursor.get[Option[RepositorySyncMergeAssessment.Result]]("assessment")
+      repaircontext <- cursor.get[Option[RepositorySyncNativeMergeReview.RepairContext]]("repairContext")
+      continuation <- cursor.get[Option[RepositorySyncValidationContinuation.Direction]]("continuation")
+      hygiene <- cursor.get[Option[CommitHygiene.Record]]("hygiene")
+      records <- cursor.get[Option[CompletionRecords.Plan]]("records")
+      purposes <- cursor.get[Option[RepositorySyncPurpose.Progress]]("purposes")
+      publication <- cursor.get[Option[RepositorySyncPublication.State]]("publication")
+      requiredlint <- cursor.get[Option[RepositorySyncRequiredLintContinuation.Direction]]("requiredLint")
+      reviewinputs <- cursor.get[Option[RepositorySyncReviewInputContinuation.Direction]]("reviewInputs")
+      formalfailure <- cursor.get[Option[RepositorySyncFormalFailureContinuation.Direction]]("formalFailure")
+      purposecontent <- cursor.get[Option[RepositorySyncPurposeContentContinuation.Direction]]("purposeContent")
+      purposepreparation <- cursor.get[Option[RepositorySyncPurposePreparationContinuation.Direction]]("purposePreparation")
+      purposepreparationintent <- cursor.get[Option[RepositorySyncPurposePreparationIntentContinuation.Direction]]("purposePreparationIntent")
+      purposematerialization <- cursor.get[Option[RepositorySyncPurposeMaterializationContinuation.Direction]]("purposeMaterialization")
+      repairbudget <- cursor.get[Option[RepositorySyncRepairBudgetContinuation.Direction]]("repairBudget")
+      pushcontinuation <- cursor.get[Option[RepositorySyncPushContinuation.Direction]]("pushContinuation")
+      pushobservation <- cursor.get[Option[RepositorySyncPushContinuation.GitObservation]]("pushObservation")
+      mergecheckcontinuation <- cursor.get[Option[RepositorySyncMergeCheckContinuation.Direction]]("mergeCheckContinuation")
+      validationpreparation <- cursor.get[Option[RepositorySyncMergeCheckContinuation.PreparationRefusal]]("validationPreparation")
+    } yield Payload(stage = stage, root = root, before = before, indexTree = index, checkpoint = checkpoint,
+      after = after, method = method, mergeHead = mergehead, validation = validation, finalTip = finaltip,
+      assessment = assessment, repairContext = repaircontext, continuation = continuation, hygiene = hygiene,
+      records = records, purposes = purposes, publication = publication, requiredLint = requiredlint,
+      reviewInputs = reviewinputs, formalFailure = formalfailure, purposeContent = purposecontent,
+      purposePreparation = purposepreparation, purposePreparationIntent = purposepreparationintent,
+      purposeMaterialization = purposematerialization, repairBudget = repairbudget, pushContinuation = pushcontinuation,
+      pushObservation = pushobservation, mergeCheckContinuation = mergecheckcontinuation,
+      validationPreparation = validationpreparation))
+  }
   val codec: WorkflowResultJsonV1.PayloadCodec[Payload] = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "RepositorySyncNativeProgressReceipt"
     def encode(value: Payload): Json = Json.obj("schemaVersion" -> Json.fromString(schema), "payload" -> value.asJson)
@@ -67,7 +137,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
       version <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
       _ <- Either.cond(version == schema, (), "Native progress schema differs")
       payload <- wire.hcursor.get[Payload]("payload").left.map(_.message)
-      _ <- Either.cond(Vector("formalFailure", "purposeContent", "purposePreparation", "purposeMaterialization", "repairBudget", "pushContinuation", "pushObservation", "mergeCheckContinuation", "validationPreparation").forall(name =>
+      _ <- Either.cond(Vector("formalFailure", "purposeContent", "purposePreparation", "purposePreparationIntent", "purposeMaterialization", "repairBudget", "pushContinuation", "pushObservation", "mergeCheckContinuation", "validationPreparation").forall(name =>
         !wire.hcursor.downField("payload").downField(name).focus.exists(_.isNull)), (), "Continuation provenance cannot be explicitly null")
       _ <- Either.cond(!wire.hcursor.downField("payload").downField("hygiene").focus.exists(_.isNull) &&
         payload.hygiene != null && payload.hygiene.forall(CommitHygiene.valid), (), "Invalid commit hygiene receipt")

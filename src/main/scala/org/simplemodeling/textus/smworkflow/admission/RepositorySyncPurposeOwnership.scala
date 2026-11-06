@@ -72,7 +72,7 @@ private[smworkflow] object RepositorySyncPurposeOwnership {
       groups.map(group => group.identity -> group.content.map(_.path))
 
   def validProgress(progress: P.Progress): Boolean = progress.ownership != null && progress.projectedWorktree != null &&
-    progress.preparationNamespace != null && progress.preparationNamespace.forall(_.matches("prepare-continuation-[1-9][0-9]*")) &&
+    progress.preparationNamespace != null && progress.preparationNamespace.forall(_.matches("prepare-(?:intent-)?continuation-[1-9][0-9]*")) &&
     progress.ownership.forall(value => valid(value) && progress.plan.exists(plan =>
       value.groups.forall(group => plan.groups.exists(original => original.identity == group.identity &&
         group.content.forall(content => original.content.exists(_.path == content.path)))))) &&

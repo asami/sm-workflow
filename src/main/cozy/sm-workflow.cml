@@ -7088,6 +7088,11 @@ on = purpose-progress
 to = PurposeUnfinished
 on = purpose-progress
 
+##### TRANSITION
+
+to = PurposeGrouped
+on = purpose-preparation-continuation
+
 #### PurposePrepared
 
 ##### TRANSITION
@@ -9080,7 +9085,7 @@ RepositorySyncRepairBudgetContinuationAdoptionResult
 
 ##### DESCRIPTION
 
-Describe the actual immutable failed Purpose receipt selected by the current native frontier and its directly paired intent. Return complete opaque progress and process observations, including retained stdout, stderr and termination. Only a complete known nonzero exited preparation for the unchanged current ordered accepted Purpose repair offers AuthorizeNewPreparation. Completed earlier Purpose commits remain unchanged; only the exact failed current preparation receives a fresh namespace through separate Human adoption and ordinary Advance. Unknown, incomplete, different effects and source drift offer Defer only. This operation has no source, validation, workflow mutation or Git preparation effect.
+Describe the actual immutable preparation source selected by the current native frontier. The unchanged legacy v1 policy describes the failed receipt and directly paired intent with complete opaque progress and process observations, including retained stdout, stderr and termination; only a complete known nonzero exited preparation for the unchanged current ordered accepted Purpose repair offers AuthorizeNewPreparation, while unknown, incomplete or different process effects offer Defer only. The separate explicit policy sm-workflow.repository-sync-purpose-preparation-intent-continuation.v1 describes an actual resultless PurposePreparing intent or a genuine retained preparation rejection and offers AuthorizeNewPreparationAcceptingUnknown plus Defer when eligible. Its affirmative choice means the actual Human independently attests that the prior invocation ended or settled and accepts its original UNKNOWN effects for this exact target; a root CLI exit alone is insufficient. Source drift remains ineligible. Original history, receipts, progress, counters and completed commits remain unchanged. Description has no workflow mutation, source mutation, validation or Git preparation effect and fabricates no failure or process receipt.
 
 ##### TYPE
 
@@ -9108,7 +9113,7 @@ RepositorySyncPurposePreparationContinuationDescriptionResult
 
 ##### DESCRIPTION
 
-Accept exactly the described target and independent actual Human evidence through input or inputResource. AuthorizeNewPreparation appends one managed mechanical purpose-preparation-continuation transition to PurposeGrouped, preserving the accepted repair, original intent/result, progress, effects, attempts and history. A distinct preparation namespace authorizes only the separate ordinary Advance; adoption executes no Git, SBT, Submit or Start. Repeated identical adoption collects its receipt without another transition; crossed or stale directions refuse. Defer is passive. Eligibility requires the current ordered accepted Purpose repair and its complete known exited nonzero preparation result, with the prior completed commit prefix and expected index authenticated against the exact native installation and intent. Source drift and UNKNOWN or incomplete execution refuse. A new actual Human direction for the exact target authorizes only a fresh preparation namespace for separate ordinary Advance.
+Accept exactly the described target and independent actual Human evidence through the same complete input or inputResource contract. The unchanged legacy v1 AuthorizeNewPreparation requires the intact current ordered accepted Purpose repair and complete known exited nonzero preparation receipt; UNKNOWN or incomplete process results remain ineligible in that policy. Under the separate explicit policy sm-workflow.repository-sync-purpose-preparation-intent-continuation.v1, AuthorizeNewPreparationAcceptingUnknown requires the actual Human's independent attestation that the prior invocation ended or settled and acceptance of its original UNKNOWN effects for the exact resultless PurposePreparing or genuine retained preparation rejection target. Source drift, crossed or stale targets refuse; completed commit prefix and expected index are authenticated against immutable native history. Either affirmative direction appends only its managed purpose-preparation-continuation adoption to PurposeGrouped with a distinct preparation namespace, preserving original history, receipts, effects, accepted plan, counters and completed commits. Repeated identical adoption collects its receipt idempotently; Defer is passive. Only separate ordinary Advance may execute the newly authorized preparation. Adoption performs no Git mutation, SBT, Submit or Start, automatically replays no effect and fabricates no failure or process receipt; no new API or DTO is introduced.
 
 ##### TYPE
 
