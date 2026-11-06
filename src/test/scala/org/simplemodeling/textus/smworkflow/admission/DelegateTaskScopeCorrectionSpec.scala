@@ -44,6 +44,28 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
     parser.parse(take(view.state.get.toJsonStringC)).toOption.get).toOption.get.as[S.State].toOption.get
 
   "Same-Session Task scope correction" should {
+    "evaluate committed delivery without requiring the later worktree to remain unchanged" in {
+      Given("a SPECIFICATION-OWNED committed repository and a later unstaged file")
+      val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/sm-workflow/work/scope-correction").toAbsolutePath), "delivery-").toRealPath()
+      _with_runtime_(root, "Equal") { (_, _, _, prepare) =>
+        prepare(_.setupC(_setup_commands_(root, "Equal").size))
+        val later = root.resolve("repository/later-work.txt")
+        Files.writeString(later, "unrelated work remains here\n")
+        When("the delivery boundary observes the retained committed snapshot")
+        prepare { call => for {
+          observed <- call.observeC()
+          initial <- S.startC(take(DelegateTask.inputC(_input)), "participant", _checks)
+          state = initial.copy(stage = "DeliveryAcceptance", commit = Some(S.Commit(observed.head, observed.head, observed.tree)))
+          payload = BoundedWorkRuntime.Payload(state, root.resolve("repository").toString, "main", observed.head,
+            unrelated = Some(Vector.empty))
+          _ <- DelegateTaskNativeRun._delivery_fresh_c(payload, call.core)
+        } yield () }
+        Then("delivery leaves later work untouched without staging it or executing checks")
+        Files.readString(later) shouldBe "unrelated work remains here\n"
+        Files.exists(root.resolve("sbt-executions.txt")) shouldBe false
+      }
+    }
+
     "add same-purpose repair inventory while retaining failed checks and the existing repair allowance" in {
       Given("a SPECIFICATION-OWNED destination with retained failed checks and an unclaimed Repair checkpoint")
       val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/sm-workflow/work/scope-correction").toAbsolutePath), "repair-").toRealPath()
@@ -489,12 +511,13 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
       Then("later obligations remain false until the actual retained closure is available.")
       reviewed.stage shouldBe "CommitReady"
       reviewed.conditionReport shouldBe pending
-      Given("a retained SPECIFICATION-OWNED selected commit and ready publication for the same source")
+      Given("a retained SPECIFICATION-OWNED selected commit and ready publication with unrelated dirty paths")
       val committed = take(S.committedC(reviewed.copy(stage = "CommitIntent"),
         S.Commit("c" * 40, candidate.head, candidate.tree)))
       val target = LocalPublication.Target("fixture-publication", _contract.componentIdentity, "sm-workflow-repository")
       val request = LocalPublication.Request(LocalPublication.Input("fixture-publication-request", target.identity), target,
-        LocalPublication.Source(committed.commit.get.identity, candidate.tree, Vector.empty), "participant",
+        LocalPublication.Source(committed.commit.get.identity, candidate.tree,
+          Vector(LocalPublication.Change("docs/phase/other.md", " ", "M"))), "participant",
         "SPECIFICATION-OWNED retained publication", None, Vector.empty)
       val publication = LocalPublication.Result("published", "SPECIFICATION-OWNED typed publication outcome", request)
       val delivered = committed.copy(stage = "DeliveryAcceptance", delivery = Some(DelegateTask.Delivery(

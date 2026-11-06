@@ -62,6 +62,12 @@ The destination retains strict logical or concrete operating-context resolution,
 repository/path/dirty-scope admission, installed validation and publication
 bindings, and genuine execution, review, commit and publication evidence.
 StandaloneFix and GoalTask retain their existing execution requirements.
+Final delivery evaluates the retained committed candidate and its matching
+successful publication. It requires neither a globally clean publication
+worktree nor an unchanged list of later worktree modifications. Unstaged work
+is preserved and is not represented as part of that committed result. Root,
+branch, committed HEAD/index tree, qualification and publication correspondence
+remain owned by their existing boundaries.
 The requester exemption adds no operation, schema, persistence, property,
 executor, permission or queue. See the [finite caller sequence and role-specific
 host bindings](native-delegate-task-caller.md) for normal prepare, Start,
