@@ -81,3 +81,29 @@ and check logs must remain exact across that readback. It retains the accepted
 Step review and requires no prior Phase review. It prepares no new Human answer
 and repeats no recovery, candidate preparation or checks; OLD setup and NEW logs
 remain retained. This stage is test evidence completion only.
+# Descendant integration after accepted repair — 2026-10-30
+
+An accepted Release repair may be followed by another owner's independently
+committed work. Normal candidate preparation observes the actual HEAD through
+typed Git/UoW and retains a bounded complete ancestry path to the immutable last
+accepted Step tip. The original Phase base, Plan, completed Step commits, repair
+directive and counters are retained. A legacy receipt without an explicit proof
+continues to require its original parent; replay never invents a proof.
+
+Pending-index ownership is checked against the proven actual parent, rather
+than treating independently committed files as pending Phase repairs. Integrated
+review retains the actual successful Step candidate diffs and permitted commit
+corrections, followed by the actual pending repair delta. Imported commits remain
+in the actual checked tree but are not presented as accepted Step changes. Fresh
+Phase checks and independent integrated review are still required. Final commits
+use the proven actual parent; normal completion retains the original base and
+Step list. No reset, amendment, Step reopening, receipt substitution or forced
+closure is involved.
+
+`NativeGoalPostRepairDescendantCliSpec`, explicitly selected against a private
+installed image, qualifies a fresh actual Compile, failing Phase Test, accepted
+repair, independent descendant commit, public readiness description, fresh
+passing Phase Test, independent fixture review and normal Final/local completion.
+It requires absolute `smworkflow.spec.installedCommand` and
+`smworkflow.spec.installations` inputs. Its fixture reviews/authority are labeled
+SPECIFICATION-OWNED and do not constitute real consumer Human decisions.

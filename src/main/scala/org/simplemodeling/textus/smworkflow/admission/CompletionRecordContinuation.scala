@@ -188,9 +188,8 @@ private[smworkflow] object CompletionRecordContinuation {
                   ThreeWorkflowExternalEvidencePorts.key(input.authorityReference.get.identity, input.authorityReference.get.revision),
                   binding(actual, source.participant, input.authorityReference.get))
                 _ <- if (admitted.nonEmpty) Consequence.unit else Consequence.securityPermissionDenied("Closure continuation requires independently admitted exact same-owner authority; target data and passive preparation grant no authority")
-                selection <- GitSelectionId.parseC(source.selection)
                 plan <- CompletionRecords.captureC(selected, current.identity.value, source.family, source.scope, source.tree,
-                  source.evidence, source.paths, source.owned, d.candidatePaths, selection, allowApplied = true)
+                  source.evidence, source.paths, source.owned, d.candidatePaths, allowApplied = true)
                 payload = Payload(actual, source, plan, input.authorityReference.get.identity, input.authorityReference.get.revision, "Prepared")
                 completed <- adapter.executeC(WorkflowTerminalClosureContinuation.Intent(native,
                   reference(input.sessionId, input.terminalRevision.get, "admitted"), ProgressionReference(source.progression),

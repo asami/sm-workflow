@@ -607,11 +607,10 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     core: ActionCall.Core): Consequence[V.StandaloneFixView] = for {
     result <- if (recordPaths(h, payload).nonEmpty && payload.records.isEmpty) for {
       _ <- freshC(payload, core)
-      selection <- GitSelectionId.parseC(wire)
       candidate <- payload.state.candidate.map(Consequence.success).getOrElse(invalid("Record preparation has no accepted candidate"))
       plan <- CompletionRecords.captureC(core, from.identity.value, wire, payload.state.input.requestIdentity, candidate.tree,
         (payload.state.receipts.map(r => "validation:" + r.identity) ++ payload.state.reviewReference.toVector.map(r => r.identity + "@" + r.revision) ++ payload.state.evidenceReferences.map(r => r.identity + "@" + r.revision)).distinct,
-        recordPaths(h, payload), payload.state.input.ownedPaths, h.paths, selection)
+        recordPaths(h, payload), payload.state.input.ownedPaths, h.paths)
       retained = payload.copy(records = Some(plan), state = payload.state.copy(stage = "RecordsReady", message = "Accepted work retained; exact completion records prepared before local closure"))
       prepared <- saveC(h, store, from, retained, core)
       result <- recordsC(h, store, prepared, retained, core)

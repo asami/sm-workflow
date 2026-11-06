@@ -137,7 +137,7 @@ private[smworkflow] object GoalPhasePostCompletionSync {
     } yield _output(completed, d, core, payload, synchronization, if (failure.isEmpty) observed._2 else None)
   } yield output
 
-  private def _committed(controller: O.State): Boolean = controller.candidate.contains(controller.tipSnapshot) &&
+  private def _committed(controller: O.State): Boolean = controller.candidate.contains(controller.candidateBase) &&
     controller.phaseReviewedCandidate.isEmpty && controller.phaseRecordingPaths.isEmpty
 
   /** A negative safety selection never stages, commits, stashes or requests a new grant. */

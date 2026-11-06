@@ -1023,6 +1023,16 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseWholePhaseCandidateRecoveryDescriptionResult] = for {
       located <- _whole_phase_candidate_recovery_source_c(identity, core)
       (source, cursor, from) = located
+      description <- if (source.current == from) for {
+        target <- GoalPhaseNativeCandidate.describeUnstartedWholePhaseC(source, d, core, from, cursor.controller,
+          cursor.documentpolicy, N.managementPaths(cursor.findings), cursor.completedCandidates)
+      } yield org.simplemodeling.textus.smworkflow.value.GoalPhaseWholePhaseCandidateRecoveryDescriptionResult(identity,
+        "ready", "Accepted release repair has no candidate preparation or unresolved effect. " +
+          "The actual repository/index and bounded descendant ancestry were checked. Use ordinary advanceGoalPhase " +
+          "to prepare the candidate, run fresh Phase checks and independent review, and close normally. " +
+          "This description grants no effect and changes no Step, base, history or repair count.",
+        core.component.get.core.instanceId.canonicalKey, target, Vector.empty, "advanceGoalPhase")
+      else for {
       policy <- GoalPhaseWholePhaseCandidateRecovery.resolvePolicyC(d, core)
       // A history-only scaffold is never returned or admitted as a repository observation.
       tip = cursor.controller.tipSnapshot
@@ -1035,16 +1045,19 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       target = prefix.copy(repository = snapshot)
       _ <- GoalPhaseWholePhaseCandidateRecovery.requirePolicyC(d, core, target)
       _ <- GoalPhaseWholePhaseCandidateRecovery.requireCleanReleaseC(core, target)
-    } yield org.simplemodeling.textus.smworkflow.value.GoalPhaseWholePhaseCandidateRecoveryDescriptionResult(identity,
+      } yield org.simplemodeling.textus.smworkflow.value.GoalPhaseWholePhaseCandidateRecoveryDescriptionResult(identity,
       "decision-required", GoalPhaseWholePhaseCandidateRecovery.message, core.component.get.core.instanceId.canonicalKey,
       GoalPhaseWholePhaseCandidateRecovery.targetRecord(target), GoalPhaseWholePhaseCandidateRecovery.choices,
       GoalPhaseWholePhaseCandidateRecovery.recoveryOperation)
+    } yield description
 
     def recoverWholePhaseCandidateC(input: org.simplemodeling.textus.smworkflow.value.GoalPhaseWholePhaseCandidateRecoveryInput,
       core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseWholePhaseCandidateRecoveryResult] = for {
       supplied <- GoalPhaseWholePhaseCandidateRecovery.targetC(input.target)
       located <- _whole_phase_candidate_recovery_source_c(input.sessionId, core)
       (source, cursor, from) = located
+      _ <- if (source.current != from) Consequence.unit
+        else F.invalid("whole-Phase candidate preparation has not started; use ordinary advanceGoalPhase, not recovery")
       policy <- GoalPhaseWholePhaseCandidateRecovery.resolvePolicyC(d, core)
       actual <- GoalPhaseWholePhaseCandidateRecovery.historicalTargetC(source, d, core, from, cursor.controller,
         cursor.documentpolicy, N.managementPaths(cursor.findings), cursor.completedCandidates, supplied.repository, policy)
@@ -1073,12 +1086,16 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       initial <- _initial_cursor_c(source)
       located <- _walk_c(source, initial, None, None, None, core, historyonly = true)
       cursor <- located match {
+        case Frontier(value) if value.controller.stage == O.Stage.PhaseInspection && value.controller.releaseRepairActive &&
+            value.controller.cursor == value.controller.plan.steps.size && value.controller.completed.size == value.controller.cursor &&
+            value.wholePhaseCandidateRecovery.isEmpty && value.candidate.isEmpty && value.validation.isEmpty &&
+            source.current == value.from => Consequence.success(value)
         case Paused(value, _, false) if value.controller.stage == O.Stage.PhaseInspection &&
             value.controller.cursor == value.controller.plan.steps.size && value.inspectionSource.nonEmpty &&
             value.wholePhaseCandidateRecovery.isEmpty && value.candidate.isEmpty && value.validation.isEmpty => Consequence.success(value)
         case _ => F.invalid("whole-Phase recovery requires the original paused all-closed whole-Phase inspection frontier")
       }
-    } yield (source, cursor, cursor.inspectionSource.get)
+    } yield (source, cursor, cursor.inspectionSource.getOrElse(cursor.from))
 
     def describeCandidateRecoveryC(identity: String, core: ActionCall.Core):
       Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseCandidateRecoveryDescriptionResult] = for {
@@ -2647,7 +2664,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           case Paused(cursor, _, true) => GoalPhaseNativeRepositoryClosure.advanceC(source, d, core,
             cursor.repositoryFrontier.getOrElse(cursor.from), cursor.controller, acknowledgement, cursor.documentpolicy, N.managementPaths(cursor.findings), cursor.metricProfiles, cursor.metricRequests, cursor.recordingCandidate.flatMap(_.payload.metrics))
             .map(NativeWorkflowOperationOutput.withFindingRecording(_, cursor.findings))
-          case Paused(cursor, _, false) if cursor.recordingCandidate.exists(s => s.payload.records.nonEmpty && s.payload.finalCandidate.isEmpty) =>
+          case Paused(cursor, _, false) if cursor.recordingCandidate.exists(s => C.resumable(s.payload)) =>
             C.advanceC(source, d, core, cursor.repositoryFrontier.getOrElse(cursor.from), cursor.controller, cursor.findings, acknowledgement, cursor.metricProfiles, cursor.metricRequests)
               .flatMap(saved => F.waitC(saved.record, "Phase records retained", "Continue missing local closure without replay"))
               .flatMap(_after_native_c(source, cursor, _, core))

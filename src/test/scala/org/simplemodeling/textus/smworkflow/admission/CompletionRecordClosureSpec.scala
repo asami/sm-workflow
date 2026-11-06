@@ -1,6 +1,6 @@
 /**
  * @since   Oct. 27, 2026
- * @version Oct. 27, 2026
+ * @version Oct. 30, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -30,6 +30,30 @@ final class CompletionRecordClosureSpec extends AnyWordSpec with Matchers with G
   private val blobs = Map("a" * 40 -> blob(before), "c" * 40 -> blob(projectedRecord))
 
   "Completion record preparation" should {
+    "derive a distinct finite ordered read selection only from configured exact record files" in {
+      val paths = Vector("docs/stage.md", "docs/phase.md")
+      val selected = take(CompletionRecords.readSelectionC(paths))
+      selected.identity.value shouldBe "completion-record-files"
+      selected.paths.map(_.value) shouldBe paths
+      selected.message shouldBe None
+      Vector(Vector.empty[String], paths ++ paths, Vector("src/main"), Vector("../outside.md"),
+        (1 to 129).map(n => "docs/record-" + n + ".md").toVector)
+        .foreach(value => CompletionRecords.readSelectionC(value).isSuccess shouldBe false)
+      CompletionRecords.readSelectionC(null).isSuccess shouldBe false
+    }
+    "select only a complete unchanged staging shape without treating that shape as execution proof" in {
+      val snapshot = GoalPhaseOrderedProgression.Snapshot("a" * 40, "b" * 40)
+      val paths = Vector("docs/stage.md", "docs/phase.md")
+      val p = GoalPhaseNativeRecordingCandidate.Payload("7", snapshot, paths, paths, paths, None, Vector.empty)
+      GoalPhaseNativeRecordingCandidate.capturePreparationPending(p) shouldBe true
+      Vector(p.copy(stagedPaths = paths.take(1)), p.copy(stagedPaths = paths.reverse),
+        p.copy(selectedPaths = paths.take(1)), p.copy(assignedPaths = paths.reverse),
+        p.copy(selectedPaths = Vector.empty, stagedPaths = Vector.empty),
+        p.copy(changedPaths = paths), p.copy(finalCandidate = Some(snapshot)), p.copy(records = Some(plan)))
+        .foreach(value => GoalPhaseNativeRecordingCandidate.capturePreparationPending(value) shouldBe false)
+      GoalPhaseNativeRecordingCandidate.resumable(p.copy(records = Some(plan))) shouldBe true
+      GoalPhaseNativeRecordingCandidate.resumable(p.copy(finalCandidate = Some(snapshot))) shouldBe false
+    }
     "select closure continuation states declared by the actual composite execution definitions" in {
       val phase = take(GoalPhaseRuntimeCatalog.loadC())
       val task = take(GoalTaskRuntimeCatalog.loadC())

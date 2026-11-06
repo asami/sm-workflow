@@ -1,5 +1,44 @@
 # Native Goal execution disposition
 
+## Complete recording staging followed by interrupted capture preparation
+
+Normal `GoalPhaseService.advanceGoalPhase` can continue a retained Phase record
+frontier whose **actual adjacent staging intent/result receipts** prove every
+selected record was successfully staged, but whose read-only completion-plan
+capture failed before its plan was saved. Restoring the missing ordinary typed
+Git read binding is configuration repair, not evidence that the earlier read
+succeeded. Completion capture passes the exact configured record paths as typed
+`GitSelectionParameters` under `completion-record-files`. CNCF narrows the
+host's independently granted repository `Tree` read into `TreeEntries` inside
+the UoW. Restore that ordinary read program/grant, alongside `BlobContent` and
+the existing managed file read permission. The host's `goal-step-N` release
+stage/check/commit paths remain unchanged, including source directories. Their
+legacy `TreeEntries` declarations are not used as a fallback. Missing `Tree`
+authority fails; a symlink, directory or gitlink record still fails the regular
+entry decoder. No extra selected-path registration or policy widening is needed.
+Advance attempts only the missing read preparation, persists its exact plan,
+then uses the existing managed File application and release/Final/Terminal route.
+It does not repeat the earlier staging loop, accepted checks or Phase review.
+
+For the existing v1 receipts this continuation is deliberately limited to a
+record-only assigned selection: the current completion-record destinations must
+equal the retained assigned/selected/staged paths in order, the latest native
+record must be the last actual staging result, and the actual index must equal
+the tree pinned by accepted review. Normal root, branch, completed-Step HEAD,
+scope and review checks still apply. This is sufficient for tracked unchanged
+records alongside already reviewed staged source repairs. It does not infer
+stage success from unchanged files or reconstruct a missing result receipt.
+
+A missing stage result, crossed or noncontiguous history, later unknown effect,
+changed policy/order/paths, changed index or repository/review facts is refused.
+Other legacy mixed recording scopes remain outside this continuation. Existing
+saved completion plans retain their existing application contract; unknown File
+and commit effects acquire no new automatic replay permission. The consumer
+owner selects the qualified installed runtime and restores only its exact
+missing read bindings, then advances its **same** Session. No new Start, accepted
+Submit replay, private-store edit, validation rerun or manually manufactured
+completion is part of this repair.
+
 [Step purpose repair](goal-phase-purpose-repair.md) extends new ReviewStep
 semantic requests and independently attested results without granting effects.
 The separate legacy batch directive uses existing native DecisionSupersession;
@@ -216,3 +255,18 @@ pending reference, then still requires independent host review preparation.
 Representation-negative submissions reuse that completed observation. Valid
 fixture observations permit ordinary native progression only. These examples
 make no claim of genuine executor provenance or installed acceptance.
+# Whole-Phase descendants after accepted Release repair — 2026-10-30
+
+Whole-Phase preparation can retain the same explicit bounded typed-Git ancestry
+proof used for selected-Step descendants. Its actual candidate parent is
+distinct from the immutable Phase base and accepted Step tip. Fresh validation,
+independent review, recording and Final closure use that captured actual parent;
+the original Plan, base, closed Steps and repair history are preserved. Step
+evidence excludes independently committed work without removing that work from
+the actual tree being checked.
+
+At an accepted repair frontier with no candidate preparation, the existing public
+whole-Phase recovery description reports `ready` and directs the caller to normal
+Advance. Partial/UNKNOWN preparation continues to require the existing applicable
+independent recovery direction. See `goal-phase-whole-phase-candidate-recovery.md`
+and `goal-phase-release-repair-candidate-recovery.md` for the exact boundaries.

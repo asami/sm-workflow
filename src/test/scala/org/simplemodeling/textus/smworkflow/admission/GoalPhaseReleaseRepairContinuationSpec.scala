@@ -20,7 +20,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Saved Phase review provenance and independently admitted direction only.
   * Actual old/new installed history and effects are qualified separately.
   * @since   Oct. 25, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 30, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -68,6 +68,44 @@ final class GoalPhaseReleaseRepairContinuationSpec extends AnyWordSpec with Matc
     "SPECIFICATION-OWNED Human directs this complete saved release blocker batch")
 
   "Captured Release repair contract" should {
+    "validate and close a proven descendant without reopening Steps or accepting the imported commit as a Step" in {
+      Given("an accepted Release repair and a separate descendant of the final closed Step")
+      val repairing = take(_phase.acceptC(O.ReviewAdmitted(_key(_phase), _phase.candidate.get,
+        _phase.checksReceipt.get, "integrated-findings", O.ReviewOutcome.Repair,
+        Some(O.RepairDirective("Original integrated blocker", Vector(_text))), true)))
+      val ready = take(repairing.acceptC(O.SemanticCompleted(_key(repairing), "Release correction submitted")))
+      val parent = O.Snapshot("e" * 40, "f" * 40)
+      val proof = O.CandidateContinuation(parent, Vector(
+        O.HistoryCommit(parent.head, parent.tree, Vector(ready.tipSnapshot.head)),
+        O.HistoryCommit(ready.tipSnapshot.head, ready.tipSnapshot.tree, Vector(_base.head))))
+      val snapshot = O.Snapshot(parent.head, "1" * 40)
+      When("the exact retained ancestry admits the actual parent before fresh Phase checks")
+      ready.acceptC(O.CandidateObserved(snapshot)).isSuccess shouldBe false
+      val observed = take(ready.acceptC(O.CandidateContinuationObserved(snapshot, proof)))
+      observed.stage shouldBe O.Stage.PhaseValidation
+      observed.checksReceipt shouldBe None
+      observed.reviewEvidence shouldBe None
+      observed.candidateBase shouldBe parent
+      observed.base shouldBe _base
+      observed.completed shouldBe ready.completed
+      observed.plan shouldBe ready.plan
+      observed.repairs shouldBe ready.repairs
+      val checked = take(observed.acceptC(O.ChecksObserved(snapshot, _plan.phaseChecks, "fresh-phase-checks", true)))
+      val reviewed = take(checked.acceptC(O.ReviewAdmitted(_key(checked), snapshot, "fresh-phase-checks",
+        "fresh-independent-phase-review", O.ReviewOutcome.Accept)))
+      reviewed.acceptC(O.ReleaseCommitObserved(O.Commit("2" * 40, ready.tipSnapshot.head, snapshot.tree))).isSuccess shouldBe false
+      val committed = take(reviewed.acceptC(O.ReleaseCommitObserved(O.Commit("2" * 40, parent.head, snapshot.tree))))
+      val closed = take(committed.acceptC(O.PhaseLocallyCompleted(committed.candidate.get,
+        ready.completed.map(_.commit), "fresh-independent-phase-review")))
+      Then("only the genuinely checked and reviewed release closes, retaining the original base and Step acceptance")
+      closed.stage shouldBe O.Stage.Closed
+      closed.base shouldBe _base
+      closed.completed shouldBe ready.completed
+      closed.repairs shouldBe ready.repairs
+      closed.releaseCommit.get.parent shouldBe parent.head
+      closed.completed.map(_.commit.identity) should not contain parent.head
+    }
+
     "keep absent legacy bytes and admit only the supported new Phase marker" in {
       Given("the original marker-absent ReviewPhase assignment and a genuinely new supported assignment")
       val marked = _request.copy(releaseRepairContract = Some(W.RELEASE_REPAIR_CONTRACT))

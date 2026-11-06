@@ -1624,7 +1624,7 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
         var reviewed = Option.empty[O.Snapshot]
         var journals = Map.empty[String, String]
         var count = 0
-        _episode(directory, initialize = true, selected = _plan(two = step)) { e =>
+        _episode(directory, initialize = true, selected = _plan(two = step), releaseRecords = !step) { e =>
           if (step) {
             id = e.start()
             e.advance(id)
@@ -1652,7 +1652,7 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
         }
 
         Given("the closed runtime reopens the same canonical SQLite Session with every declared Git capability denied and ordinary SBT grants retained")
-        _episode(directory, denygit = true) { e =>
+        _episode(directory, denygit = true, releaseRecords = !step) { e =>
           val work = issued.get
           val good = response.get
           val resumed = e.current(id)
@@ -1701,7 +1701,7 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
         }
 
         Given("the same completed Session reopens again with its ordinary typed Git and SBT grants")
-        _episode(directory) { e =>
+        _episode(directory, releaseRecords = !step) { e =>
           val work = issued.get
           val assigned = _business(work)
           val result = response.get
@@ -1785,7 +1785,7 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
     "stage only assigned Phase records and close the actual final index while retaining the independent reviewed source" in {
       Given("a fresh isolated V7 Phase with actual Step commit checks and independently scoped specification Phase review")
       val directory = _root()
-      _episode(directory, initialize = true) { e =>
+      _episode(directory, initialize = true, releaseRecords = true) { e =>
         val (id, display, review) = _phase_review(e)
         val source = _business(review).candidate.get
         val closed = _business(review).completed
@@ -1818,15 +1818,22 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
         e.observe().dirty.forall(p => Set(_hygiene, _candidates)(p.path) && p.worktree == ' ') shouldBe true
         _checks(directory) shouldBe count
         e.current(id).history.count(_.causation.value.startsWith("ordered-review-issued:")) shouldBe 2
-        When("separate specification authority admits the existing fixed local bare-origin child closure")
-        e.authority(id, waiting, child = true)
+        When("separate specification authority first closes the fixed local release then admits the bare-origin child")
+        e.authority(id, waiting)
+        val repositorywait = e.advance(id)
+        repositorywait.kind shouldBe "Wait"
+        repositorywait.authorityContext should not be empty
+        val release = e.observe()
+        e.commit(release.head).parents shouldBe Vector(source.head)
+        release.tree shouldBe candidate.payload.finalCandidate.get.tree
+        e.authority(id, repositorywait, child = true)
         val terminal = e.advance(id)
         val completion = terminal.completion.get
         Then("the ordinary child consumes the final actual tree and all retained recording outcomes survive Terminal")
         terminal.kind shouldBe "Terminal"
         completion.completed.map(_.commit.identity) shouldBe closed.map(_.commit.identity)
-        completion.reviewedCandidate.head shouldBe source.head
-        completion.reviewedCandidate.tree shouldBe source.tree
+        completion.reviewedCandidate.head shouldBe release.head
+        completion.reviewedCandidate.tree shouldBe release.tree
         completion.repository.get.tree shouldBe candidate.payload.finalCandidate.get.tree
         e.observe().tree shouldBe completion.repository.get.tree
         e.observe().head shouldBe completion.repository.get.tip
@@ -1847,7 +1854,7 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
         var index = ""
         var count = 0
         val outside = "Outside the assigned Phase recording destination.\n"
-        _episode(directory, initialize = true, interrupt = interrupted) { e =>
+        _episode(directory, initialize = true, interrupt = interrupted, releaseRecords = true) { e =>
           val (identity, display, review) = _phase_review(e)
           id = identity
           e.submit(review, Some(display), "accept", Some(R.Observations(Vector(_observation))))
@@ -1884,7 +1891,7 @@ final class GoalPhaseNativeFindingRecordingSpec extends AnyWordSpec with GivenWh
             _checks(directory) shouldBe beforecount
           }
         }
-        _episode(directory) { e =>
+        _episode(directory, releaseRecords = true) { e =>
           Given("the same real native history after reopening with normal policies")
           val text = Files.readString(directory.resolve("repository").resolve(_hygiene))
           When("ordinary Advance reconstructs that retained source twice")

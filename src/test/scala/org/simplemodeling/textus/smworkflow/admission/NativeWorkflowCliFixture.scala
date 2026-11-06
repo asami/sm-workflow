@@ -282,6 +282,30 @@ private[admission] object NativeWorkflowCliFixture {
       require(result.exitCode == 0, result.invocation.logs)
     }
 
+    /** Exact test-owned index counterexample, never a workflow staging route. */
+    def selectRecordingIndexCounterexample(changed: Boolean): Unit = {
+      require(root.getFileName.toString.startsWith("p99-recording-"), "Only the isolated recording fixture owns this input")
+      Files.writeString(Path.of(host.target.root).resolve("value.txt"), if (changed) "changed-index\n" else "expected\n")
+      val result = _run(Vector("/usr/bin/git", "-C", host.target.root, "--literal-pathspecs", "add", "--", "value.txt"))
+      require(result.exitCode == 0, result.invocation.logs)
+    }
+
+    private[NativeWorkflowCliFixture] def prepareRecordingSourceBaseline(symlinkRecord: Boolean): Unit = {
+      val repository = Path.of(host.target.root)
+      Files.createDirectories(repository.resolve("src/main/scala"))
+      Files.writeString(repository.resolve("src/main/scala/OwnedSource.scala"), "object OwnedSource\n", StandardOpenOption.CREATE_NEW)
+      val selected = Vector("src/main/scala/OwnedSource.scala") ++ (if (!symlinkRecord) Vector.empty else {
+        Files.move(repository.resolve("docs/phase.md"), repository.resolve("docs/phase-target.md"))
+        Files.createSymbolicLink(repository.resolve("docs/phase.md"), Path.of("phase-target.md"))
+        Vector("docs/phase.md", "docs/phase-target.md")
+      })
+      val prefix = Vector("/usr/bin/git", "-C", host.target.root, "-c", "user.name=Recording Fixture",
+        "-c", "user.email=recording@example.invalid", "-c", "core.hooksPath=/dev/null")
+      Vector(Vector("--literal-pathspecs", "add", "--") ++ selected,
+        Vector("commit", "--no-verify", "--no-gpg-sign", "-m", "Owned recording source and record-mode baseline"))
+        .foreach { args => val result = _run(prefix ++ args); require(result.exitCode == 0, result.invocation.logs) }
+    }
+
     def prepareCandidateBaseline(): Unit = {
       Files.writeString(Path.of(host.target.root).resolve("docs/user.md"), "Original user document\n")
       _candidate_git(Vector("add", "--", "docs/user.md"))
@@ -315,6 +339,30 @@ private[admission] object NativeWorkflowCliFixture {
     def candidateIndexDiff: String = _candidate_git(Vector("diff", "--cached", "--binary", "--"), retainWhitespace = true)
     def candidateWorktreeDiff: String = _candidate_git(Vector("diff", "--binary", "--"), retainWhitespace = true)
     def candidateStatus: String = _candidate_git(Vector("status", "--porcelain=v1", "--untracked-files=all"))
+
+    /** Independent work arrangement in this one new specification repository.
+      * The accepted repair stays unstaged; this commit is never a Step receipt.
+      */
+    def commitPostRepairDescendant(): String = {
+      require(sourceHistory && root.getFileName.toString.startsWith("p99-post-repair-descendant-"),
+        "Select only the fresh isolated post-repair descendant fixture")
+      require(candidateIndex.isEmpty, "Keep the submitted repair unstaged")
+      val path = Path.of(host.target.root).resolve("independent-owner.txt")
+      Files.writeString(path, "Independent owner's committed work; not a Phase acceptance\n", StandardOpenOption.CREATE_NEW)
+      val prefix = Vector("/usr/bin/git", "--no-optional-locks", "--no-replace-objects",
+        "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "credential.helper=",
+        "-c", "gc.auto=0", "-c", "maintenance.auto=false", "-C", host.target.root, "--literal-pathspecs",
+        "-c", "user.name=Independent Fixture Owner", "-c", "user.email=independent@example.invalid",
+        "-c", "user.useConfigOnly=true")
+      Vector(Vector("add", "--", "independent-owner.txt"),
+        Vector("commit", "--no-verify", "--no-gpg-sign", "-m", "Independent owner integration", "--", "independent-owner.txt"))
+        .foreach { command =>
+          val result = _run(prefix ++ command)
+          require(result.exitCode == 0, result.invocation.logs)
+        }
+      require(candidateIndex.isEmpty, "The repair must remain outside this independent commit")
+      candidateHead
+    }
 
     private def _release_directory_repository: Path = {
       require(sourceHistory && root.getFileName.toString.startsWith("p69-release-directory-") &&
@@ -796,6 +844,39 @@ private[admission] object NativeWorkflowCliFixture {
     Files.writeString(config, current.mapObject(_.add("sm-workflow.runtime.definition",
       Json.fromString(ThreeWorkflowRuntimeParameters.encode(host).noSpaces))
       .add("textus.subsystem.process-execution.plan", Json.fromString(processes.noSpaces))).noSpaces)
+    scenario
+  }
+
+  /** Required tracked Phase records with a distinct ordinary release owner.
+    * The caller may remove/restore a single read binding to exercise an actual
+    * capture failure; no receipt or private Workflow state is manufactured.
+    */
+  def freshPhaseRecordingCapture(name: String, executable: Path, symlinkRecord: Boolean = false): Scenario = {
+    import io.circe.generic.auto.*
+    require(executable == TypedSbtHostPlanFixture.normalExecutable, "Select normal SBT")
+    val original = fresh(name, sbtRepair = Some(executable))
+    original.prepareRecordingSourceBaseline(symlinkRecord)
+    val paths = Vector("value.txt", "src/main", "src/test", "docs/phase.md")
+    val host = original.host.copy(goal = original.host.goal.copy(candidatePaths = paths,
+      closure = original.host.goal.closure.copy(programs = Vector(
+        GoalPhaseNativeClosure.StepProgram("step-1", 1),
+        GoalPhaseNativeClosure.StepProgram(GoalPhaseNativeReleaseClosure.programIdentity, 2)))))
+    val plan = original.plan.copy(steps = original.plan.steps.map(_.copy(ownedPaths = paths)))
+    val scenario = new Scenario(original.root, host, plan, None, Some(executable), startingLogIndex = 100)
+    _host_files(scenario, Vector(scenario.root), true, Some(Vector("POST")), false, None)
+    val target = Programs.Target(Path.of(host.target.root), host.target.localBranch, host.target.remote,
+      host.target.remoteBranch, host.target.endpoint)
+    val git = TypedGitHostPlanFixture.plan(target, kinds = TypedGitHostPlanFixture.observations ++ Vector(
+      GitOperationKind.IndexTree, GitOperationKind.PendingPaths, GitOperationKind.PendingDiff, GitOperationKind.CommitMetadata),
+      goalPaths = paths, goalMessages = Vector("Complete selected Step", "Complete selected Phase records"),
+      goalSelections = Vector(paths, paths))
+    val process = TypedSbtHostPlanFixture.plan(scenario.root, executable, Vector(1), Some(git))
+    val policy = CompletionRecords.Policy(Vector(CompletionRecords.Target("phase", plan.phase, Vector("docs/phase.md"))))
+    val configfile = scenario.root.resolve(".textus/config.json")
+    val config = parse(Files.readString(configfile)).toOption.get
+    Files.writeString(configfile, config.mapObject(_.add("textus.subsystem.process-execution.plan", Json.fromString(process.noSpaces))
+      .add(CompletionRecords.declaration.name, Json.fromString(summon[io.circe.Encoder[CompletionRecords.Policy]].apply(policy).noSpaces))).noSpaces)
+    scenario.selectCompletionPolicy(GoalPhasePostCompletionSync.localPolicy)
     scenario
   }
 

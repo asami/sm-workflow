@@ -322,10 +322,9 @@ private[smworkflow] object GoalPhaseNativeClosure {
             _ <- if (progress.record == from) Consequence.unit else F.invalid("completion policy cannot be added after an existing closure attempt")
             granted <- installation.authority.isGrantedC(core, input)
             _ <- if (granted) Consequence.unit else F.invalid("completion record preparation awaits existing Step authority")
-            selection <- GitSelectionId.parseC("goal-step-" + ordinal)
             plan <- CompletionRecords.captureC(core, input.instance, "step", input.step, input.candidate.tree,
               (controller.checksReceipt.toVector ++ controller.reviewEvidence.toVector ++ controller.stepAdmission.toVector.map(_.assessment.validationReference)).distinct,
-              paths, _owned_paths, d.candidatePaths, selection)
+              paths, _owned_paths, d.candidatePaths)
             payload = Payload(input, ordinal, None, records = Some(plan))
             saved <- saveC("records-prepared", from, "Closing", payload)
           } yield Some(Saved(saved, payload, controller))
