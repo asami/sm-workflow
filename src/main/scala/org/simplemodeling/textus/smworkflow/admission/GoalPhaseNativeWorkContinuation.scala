@@ -33,6 +33,7 @@ import GoalPhaseCurrentSourceArtifactAdoption as Z
 import GoalPhaseCurrentInventoryContinuation as L
 import GoalPhaseDevelopmentReconstruction as X
 import GoalPhaseSourceHistoryAutomatic as T
+import GoalPhaseDependencyApprovalLineage as AL
 
 /** Ordered implementation, repair and review work and their provided result are installed
   * together. Canonical atomic suspension/completion owns all writes. No result
@@ -237,6 +238,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     repositoryFrontier: Option[InstanceRecord] = None,
     dependencyApprovals: Vector[GoalPhaseDependencyValidation.Approval] = Vector.empty,
     dependencyDecisions: Vector[S.DecisionContext] = Vector.empty,
+    dependencyLineage: AL.State = AL.State(),
     dependencyAdmission: Option[GoalPhaseDependencyValidation.Admission] = None,
     completedDependencies: Vector[GoalPhaseNativeValidation.Payload] = Vector.empty,
     validationRepair: Option[(GoalPhaseValidationRepairAdoption.Source, GoalPhaseValidationRepairAdoption.Direction)] = None,
@@ -1830,19 +1832,22 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                     else Consequence.unit
                   phasedeferral = answer.result.value.choice == "AdoptPlanRevision" &&
                     input.planRevision.exists(_.revisionScope.contains(GoalPhasePlanRevision.phaseAcceptanceDeferralScope))
+                  lineage <- if (answer.result.value.choice == "ApproveDependencyScope") {
+                    val step = cursor.controller.plan.steps.lift(cursor.controller.cursor).map(_.identity)
+                      .getOrElse("phase:" + cursor.controller.plan.phase)
+                    val approval = GoalPhaseDependencyValidation.Approval(step,
+                      decision.result.result.value.dependencyProposal.get, answer.resultReference)
+                    val context = S.DecisionContext(decision.result.result.value, answer.result.value.choice,
+                      answer.result.value.rationale, Some(answer.resultReference))
+                    AL.appendC(cursor.dependencyLineage, AL.Key(next.identity.value,
+                      ContextReference(cursor.controller.plan.identity, cursor.controller.plan.revision), step,
+                      answer.continuationId.value, next.revision.value), approval, context, input.work.decisionContext)
+                  } else Consequence.success(cursor.dependencyLineage)
                   resumed = cursor.copy(from = next, controller = state, documents = documents, deferredHuman = deferred,
                     developmentReconstructionAnswer = if (input.developmentReconstruction.nonEmpty)
                       Some(answer.result.value.choice -> answer.resultReference) else cursor.developmentReconstructionAnswer,
-                    dependencyApprovals = if (answer.result.value.choice == "ApproveDependencyScope")
-                      cursor.dependencyApprovals :+ GoalPhaseDependencyValidation.Approval(
-                        cursor.controller.plan.steps.lift(cursor.controller.cursor).map(_.identity)
-                          .getOrElse("phase:" + cursor.controller.plan.phase),
-                        decision.result.result.value.dependencyProposal.get, answer.resultReference)
-                      else cursor.dependencyApprovals,
-                    dependencyDecisions = if (answer.result.value.choice == "ApproveDependencyScope")
-                      cursor.dependencyDecisions :+ S.DecisionContext(decision.result.result.value,
-                        answer.result.value.choice, answer.result.value.rationale, Some(answer.resultReference))
-                      else cursor.dependencyDecisions,
+                    dependencyLineage = lineage, dependencyApprovals = lineage.approvals,
+                    dependencyDecisions = lineage.decisions,
                     inspectionSource = if (input.sourceHistoryRecovery.nonEmpty) None else cursor.inspectionSource,
                     sourceHistoryRecovery = None,
                     sourceHistoryContinuation = input.sourceHistoryRecovery.orElse(cursor.sourceHistoryContinuation),
@@ -2097,8 +2102,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           .getOrElse(F.invalid("retained inventory receipt has no eligible actual dependency Decision")))
         retained <- I.retainedC(source, core, selected).flatMap(_.map(Consequence.success)
           .getOrElse(F.invalid("inventory history has no exact retained native receipt")))
-        result <- _walk_c(source, _inventory_cursor(cursor, retained),
-          soughtwork, soughthuman, soughtrecording, core, historyonly)
+        updated <- _inventory_cursor_c(cursor, retained)
+        result <- _walk_c(source, updated, soughtwork, soughthuman, soughtrecording, core, historyonly)
       } yield result
       case O.Stage.Decision if entry.causation.value == K.causation => for {
         selected <- cursor.deferredHuman match {
@@ -3047,12 +3052,12 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     private def _inventory_source_c(cursor: Cursor): Consequence[Option[I.Source]] =
       I.selectC(cursor.from, cursor.controller, cursor.lastresult, cursor.dependencyApprovals, cursor.dependencyDecisions)
 
-    private def _inventory_cursor(cursor: Cursor, saved: I.Saved): Cursor =
-      cursor.copy(from = saved.record, controller = saved.controller, decisioncontext = Some(saved.context),
-        dependencyApprovals = cursor.dependencyApprovals.map(approval =>
-          if (approval.decision == saved.approval.decision) saved.approval else approval),
-        dependencyDecisions = cursor.dependencyDecisions.map(context =>
-          if (context.decisionReference == saved.context.decisionReference) saved.context else context))
+    private def _inventory_cursor_c(cursor: Cursor, saved: I.Saved): Consequence[Cursor] =
+      AL.inventoryC(cursor.dependencyLineage, saved).map { lineage =>
+        cursor.copy(from = saved.record, controller = saved.controller, decisioncontext = Some(saved.context),
+          dependencyLineage = lineage, dependencyApprovals = lineage.approvals,
+          dependencyDecisions = lineage.decisions)
+      }
 
     private def _semantic_frontier_c(source: F.Session, cursor: Cursor, core: ActionCall.Core):
       Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] =
