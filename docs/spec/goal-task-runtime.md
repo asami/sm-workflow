@@ -183,11 +183,28 @@ Independent integrated review, all implementation-worker exclusions and actual
 local commit obligations still apply. There is no reset, refund, new policy,
 re-Start, forced closure, accepted Submit replay, controller or file ledger.
 
-A matching repeated request or description collects the original continuation,
-including after ordinary Advance, semantic completion, later progress and physical
-reopen. It does not append or reissue. Changed target, owner, participant, direction,
-rationale or reference refuses; a force-closed or terminal Task remains terminal.
-Old payloads omit the optional typed retained direction and remain decodable.
+At each later eligible unsuspended Human stop, description returns the exact current
+frontier and business, even when an earlier direction is retained. A later
+ineligible or exhausted Human stop refuses description. Non-Human active progress
+collects the latest retained continuation. Each new stop requires separate exact
+Human evidence; prior evidence does not authorize its new target. Defer still
+writes nothing and ContinueRepair still appends only one ordinary Repair checkpoint.
+
+The compatible optional `Payload.repairContinuation` retains the latest Direction.
+Its exact opaque pre-resume `target.business` already embeds any prior Direction;
+the native history and that ancestry retain earlier episodes without another
+record/controller/store. Loading validates canonical eligible targets, the same
+component/Session/participant and frozen input, strictly decreasing frontier
+revisions and a finite bound from the existing native repair limit. Malformed,
+crossed, noncanonical and over-bound chains refuse without writes.
+
+An explicit repeated resume collects any originally admitted target in that
+ancestry only when its entire original direction matches: target, choice,
+rationale, participant and reference. This includes the earliest and latest
+episodes after ordinary Advance, Submit, later progress and physical reopen.
+Collection appends nothing and issues no work. Changed answers/references and
+stale targets that were never resumed refuse; terminal and forced-closed Tasks
+remain closed. Old payloads omit the optional field and remain decodable.
 
 Executable coverage: `GoalTaskRepairContinuationSpec` (managed public episode,
 refusals including physical source and changed-host drift, historical decoding

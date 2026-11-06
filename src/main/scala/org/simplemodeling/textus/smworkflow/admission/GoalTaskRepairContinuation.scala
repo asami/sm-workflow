@@ -16,8 +16,10 @@ import BoundedWorkRuntime.*
 import BoundedWorkRuntime.given
 import GoalTaskNativeRun as N
 
-/** One Human continuation of an actual retained trend stop. The normal native
+/** Human continuations of actual retained trend stops. The normal native
   * checkpoint transaction owns persistence; ordinary Advance owns all work.
+  * @since Nov.  5, 2026
+  * @version Nov.  5, 2026
   */
 private[smworkflow] object GoalTaskRepairContinuation {
   val purpose = "goal-task-repair-continuation"
@@ -71,14 +73,50 @@ private[smworkflow] object GoalTaskRepairContinuation {
       state.automaticCount < control.effectiveLimit && state.generation < Long.MaxValue
   }
 
-  def decodeTarget(value: Json): Either[String, Target] = for {
+  private def _decode_target(value: Json): Either[String, Target] = for {
     target <- value.as[Target].left.map(_.message)
     _ <- Either.cond(target.asJson == value &&
       Vector(target.componentInstance, target.sessionId, target.participant).forall(_exact) &&
       target.frontierRevision > 0 && target.frontier.isObject &&
-      target.participant == target.business.state.participant && target.business.repairContinuation.isEmpty && eligible(target.business),
+      target.participant == target.business.state.participant && eligible(target.business),
       (), "Task continuation target is incomplete, unsupported or not an eligible trend stop")
   } yield target
+
+  // Each exact pre-resume business already contains the previous direction.
+  // Decode this native ancestry once at the boundary, with the native allowance
+  // as its finite bound; no second episode store or reconstructed target is used.
+  private def _ancestry(target: Target, limit: Int): Either[String, Vector[(Direction, Target)]] = {
+    @scala.annotation.tailrec
+    def _walk_(current: Target, remaining: Int, collected: Vector[(Direction, Target)]): Either[String, Vector[(Direction, Target)]] =
+      current.business.repairContinuation match {
+        case None => Right(collected)
+        case Some(direction) if remaining <= 0 => Left("Task continuation ancestry exceeds its native repair limit")
+        case Some(direction) => _decode_target(direction.target) match {
+          case Left(error) => Left(error)
+          case Right(previous) =>
+            if (previous.componentInstance != target.componentInstance || previous.sessionId != target.sessionId ||
+              previous.participant != target.participant || previous.business.state.input != target.business.state.input ||
+              previous.frontierRevision >= current.frontierRevision || direction.choice != choices.head ||
+              direction.participant != target.participant || !_exact(direction.rationale) ||
+              !_exact(direction.reference.identity) || !_exact(direction.reference.revision))
+              Left("Task continuation ancestry crosses its owner, request, revision or admitted direction")
+            else _walk_(previous, remaining - 1, collected :+ (direction -> previous))
+        }
+      }
+    _walk_(target, limit, Vector.empty)
+  }
+
+  def decodeTarget(value: Json): Either[String, Target] = for {
+    target <- _decode_target(value)
+    _ <- _ancestry(target, target.business.state.repairControl.effectiveLimit - 1)
+  } yield target
+
+  private def _retained(payload: Payload, owner: String, session: String, revision: Long): Either[String, Vector[(Direction, Target)]] = {
+    // The current payload need not itself be Human. Its latest original target
+    // and all older targets must still be canonical eligible stops.
+    val current = Target(owner, session, payload.state.participant, revision, Json.obj(), payload)
+    _ancestry(current, payload.state.repairControl.effectiveLimit)
+  }
   def targetC(text: String): Consequence[Target] =
     if (text == null) N.invalid("Task continuation target is absent")
     else io.circe.parser.parse(text).left.map(_.message).flatMap(decodeTarget).fold(N.invalid(_), Consequence.success)
@@ -150,20 +188,23 @@ private[smworkflow] object GoalTaskRepairContinuation {
           _ <- if (current.definition == definition && current.lifecycle == Lifecycle.Active) Consequence.unit
             else N.invalid("Task continuation requires its exact active GoalTask definition")
           payload <- _payload_c(storage, current, selected)
+          _ <- if (!Set("Completed", "NoChange")(payload.state.stage)) Consequence.unit
+            else N.invalid("Task continuation cannot reopen a terminal Task")
           _ <- GoalPhaseParticipantAdmission.admitC(payload.state.participant, context)
-          result <- payload.repairContinuation match {
-            case Some(retained) => for {
-              target <- decodeTarget(retained.target).fold(N.invalid(_), Consequence.success)
-              _ <- if (target.componentInstance == _owner(selected) && target.sessionId == session &&
-                target.business.state.input == payload.state.input && target.participant == payload.state.participant &&
-                retained.choice == choices.head) Consequence.unit else N.invalid("Retained Task continuation crosses its owner or request")
-              _ <- input.fold(i => for {
-                expected <- targetC(i.target)
-                _ <- if (expected == target && Direction(expected.asJson, i.choice, i.rationale, i.participant,
-                  ContextReference(i.reference.identity, i.reference.revision)) == retained) Consequence.unit
-                  else N.invalid("Repeated Task continuation differs from its original admitted direction")
-              } yield (), _ => Consequence.unit)
-            } yield _output(target, "already-resumed", "Original admitted continuation retained; no work or checkpoint appended")
+          retained <- _retained(payload, _owner(selected), session, current.revision.value).fold(N.invalid(_), Consequence.success)
+          requested <- input.fold(i => targetC(i.target).map(Some(_)), _ => Consequence.success(None))
+          previous = requested.flatMap(target => retained.find(_._2 == target))
+          result <- previous match {
+            case Some((direction, target)) => input match {
+              case Left(answer) =>
+                if (Direction(target.asJson, answer.choice, answer.rationale, answer.participant,
+                  ContextReference(answer.reference.identity, answer.reference.revision)) == direction)
+                  Consequence.success(_output(target, "already-resumed", "Original admitted continuation retained; no work or checkpoint appended"))
+                else N.invalid("Repeated Task continuation differs from its original admitted direction")
+              case Right(_) => N.invalid("Task continuation collection requires its original direction")
+            }
+            case None if input.isRight && payload.state.stage != "Human" && retained.nonEmpty =>
+              Consequence.success(_output(retained.head._2, "already-resumed", "Latest admitted continuation retained; no work or checkpoint appended"))
             case None => for {
               _ <- if (current.suspension.isEmpty && eligible(payload)) Consequence.unit
                 else N.invalid("Task has pending work/effects, no retained repair-trend stop, or no remaining native allowance")
@@ -173,8 +214,7 @@ private[smworkflow] object GoalTaskRepairContinuation {
               result <- input match {
                 case Right(_) => Consequence.success(_output(target, "decision-required", "Separate exact Human admission is required"))
                 case Left(answer) => for {
-                  expected <- targetC(answer.target)
-                  _ <- if (expected == target) Consequence.unit else N.invalid("Task continuation target changed; describe and admit fresh Human direction")
+                  _ <- if (requested.contains(target)) Consequence.unit else N.invalid("Task continuation target changed; describe and admit fresh Human direction")
                   reference = ContextReference(answer.reference.identity, answer.reference.revision)
                   binding <- bindingC(_owner(selected), target, answer.choice, answer.rationale, answer.participant, reference)
                   _ <- evidence.admitC(selected, reference, binding)
