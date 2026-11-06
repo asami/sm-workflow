@@ -154,6 +154,61 @@ final class GoalPhaseNativeWorkCompatibilitySpec extends AnyWordSpec with Matche
       }
     }
 
+    "report a safe deterministic structural location for canonical v5 and v6 rejection" in {
+      Given("canonical retained requests and unrecognized secret-bearing fields at several structural depths")
+      val failure = W.PublicationFailureContext(ContextReference(_repair.instanceIdentity, "1"),
+        Vector("current.scala"), "Retained primary publication failure", PrimaryPublicationContinuationSpecificationFixture.failed,
+        testsExecuted = false)
+      val v5 = _repair.copy(operatingProfile = Some(_profile))
+      val requests = Vector(v5, v5.copy(candidate = None, checksReceipt = None, publicationFailure = Some(failure)))
+      val secretKey = "secret-unrecognized-name"
+      val secretValue = "secret-payload-value"
+      requests.foreach { request =>
+        val wire = W.inputCodec.encode(request)
+        val root = wire.mapObject(_.add(secretKey, secretValue.asJson))
+        val nested = _payload(wire)(_.mapObject(fields => fields.add("originalBase",
+          fields("originalBase").get.mapObject(_.add(secretKey, secretValue.asJson)))))
+        val array = _payload(wire)(_.mapObject(fields => fields.add("completed",
+          fields("completed").get.mapArray(items => items.updated(0,
+            items(0).mapObject(_.add(secretKey, secretValue.asJson)))))))
+        When("the unchanged codec decodes the canonical wire and each noncanonical variation")
+        W.inputCodec.decode(wire) shouldBe Right(request)
+        W.inputCodec.encode(W.inputCodec.decode(wire).toOption.get) shouldBe wire
+        val missingReceipt = _payload(wire)(_.mapObject(_.remove("checksReceipt")))
+        W.inputCodec.decode(missingReceipt) shouldBe Left(
+          "retained v5 work must preserve its exact canonical payload [path=/payload/checksReceipt; category=missing-field]")
+        W.inputCodec.decode(missingReceipt) shouldBe W.inputCodec.decode(missingReceipt)
+        val variations = Vector(root -> "/", nested -> "/payload/originalBase", array -> "/payload/completed/0")
+        Then("only rejected wires report their first known location without either secret")
+        variations.foreach { case (value, path) =>
+          val error = W.inputCodec.decode(value).swap.toOption.get
+          error shouldBe ("retained v5 work must preserve its exact canonical payload [path=" + path +
+            "; category=unexpected-field]")
+          W.inputCodec.decode(value) shouldBe Left(error)
+          error should not include secretKey
+          error should not include secretValue
+        }
+      }
+    }
+
+    "locate nested schema differences without exposing opaque map keys or values" in {
+      val expected = Json.obj("payload" -> Json.obj("selectedPlan" -> Json.obj(
+        "steps" -> Json.arr(Json.obj("checks" -> Json.arr(), "purpose" -> Json.fromString("original"))))))
+      val actual = Json.obj("payload" -> Json.obj("selectedPlan" -> Json.obj(
+        "steps" -> Json.arr(Json.obj("purpose" -> Json.fromString("original"))))))
+      W._structural_mismatch(expected, actual) shouldBe Some("/payload/selectedPlan/steps/0/checks" -> "missing-field")
+      val secret = "secret-map-key"
+      val left = Json.obj("operatingProfile" -> Json.obj("configured" -> Json.obj(
+        "controls" -> Json.obj(secret -> Json.fromString("secret-map-value")))))
+      val right = Json.obj("operatingProfile" -> Json.obj("configured" -> Json.obj(
+        "controls" -> Json.obj(secret -> Json.fromString("another-secret")))))
+      val mismatch = W._structural_mismatch(left, right)
+      mismatch shouldBe Some("/operatingProfile/configured/controls" -> "field-mismatch")
+      mismatch.toString should not include secret
+      mismatch.toString should not include "secret-map-value"
+      W._structural_mismatch(left, right) shouldBe mismatch
+    }
+
     "keep new unmarked requests and legacy v2 v3 v4 version and normalization boundaries unchanged" in {
       Given("ordinary constructors without a retained profile and existing purpose/history markers")
       val legacy = Vector(_implementation, _review, _repair)
