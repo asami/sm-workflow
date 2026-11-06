@@ -328,6 +328,14 @@ literal owned paths for the same purpose, subject to the retained host ownership
 and delegation exclusions. It replaces no original ownership, purpose, operation
 or authority.
 
+The same public route also accepts an unclaimed, unsubmitted Repair issue when
+necessary same-purpose literal inventory is missing. Supply additional owned
+paths and leave submission timing empty; Repair cannot select a new timing plan.
+The existing failed check receipts, candidate, prior results, generation, repair
+counts and selected limit stay attached. The superseded issue remains historical
+and ordinary Advance issues the successor Repair in the same Session. This does
+not permit re-Start, a new repair window, effect replay or private storage edits.
+
 Correction appends a typed native WorkOrder supersession, preserving the old
 immutable issue, base, generation, repair control and counters, prior results and
 UNKNOWN effects. An unclaimed issue does not establish that external effects did

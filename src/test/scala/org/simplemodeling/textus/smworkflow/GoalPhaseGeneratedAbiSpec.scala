@@ -14,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.value.GoalPhaseStartInput
 /**
  * @since   Oct.  6, 2026
  *  version Oct. 28, 2026
- * @version Nov.  2, 2026
+ * @version Nov.  7, 2026
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -25,6 +25,7 @@ private[smworkflow] trait GoalPhaseGeneratedAbiBehavior extends AnyWordSpec with
   private val operations: Vector[OperationDefinition] = Vector(
     SmWorkflowComponent.GoalPhaseServiceService.StartGoalPhaseOperation,
     SmWorkflowComponent.GoalPhaseServiceService.AdvanceGoalPhaseOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.ReconstructGoalPhaseDevelopmentOperation,
     SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseWorkResultOperation,
     SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseOrderedDecisionOperation,
     SmWorkflowComponent.GoalPhaseServiceService.SubmitGoalPhaseFindingRecordingOperation,
@@ -88,7 +89,8 @@ private[smworkflow] trait GoalPhaseGeneratedAbiBehavior extends AnyWordSpec with
       val advance = admission.NativeWorkflowOperationInputFixture.advance("goal-execution-1")
       val optionaltransport = Set("recoverGoalPhaseCandidate", "recoverGoalPhaseWholePhaseCandidate", "describeGoalPhaseValidationRepair",
         "adoptGoalPhaseValidationRepair", "describeGoalPhaseReleaseRepairContinuation", "recoverGoalPhaseReleaseRepairContinuation",
-        "describeGoalPhaseDependencySourceRevision", "adoptGoalPhaseDependencySourceRevision", "recoverGoalPhasePrerequisitePublication")
+        "describeGoalPhaseDependencySourceRevision", "adoptGoalPhaseDependencySourceRevision", "recoverGoalPhasePrerequisitePublication",
+        "adoptGoalPhaseSourceHistoryNormalization", "reconstructGoalPhaseDevelopment")
       When("the generated Start and Advance readers construct actions from named parameters")
       val started = operations(0).createOperationRequest(request(operations(0), start))
       val advanced = operations(1).createOperationRequest(request(operations(1), advance))
@@ -99,9 +101,9 @@ private[smworkflow] trait GoalPhaseGeneratedAbiBehavior extends AnyWordSpec with
       started.isSuccess shouldBe true
       advanced.isSuccess shouldBe true
       absent.foreach { (operation, result) => withClue(operation.specification.name) { result.isSuccess shouldBe false } }
-      And("only the nine declared optional transport operations permit inert generated request syntax without business admission")
+      And("only the eleven declared optional transport operations permit inert generated request syntax without business admission")
       optionaloperations.map(_.specification.name).toSet shouldBe optionaltransport
-      optionaloperations should have size 9
+      optionaloperations should have size 11
       optionaloperations.foreach { operation =>
         withClue(operation.specification.name) {
           operation.specification.request.parameters.map(_.name) shouldBe Vector("input", "inputResource")
@@ -128,6 +130,7 @@ private[smworkflow] trait GoalPhaseGeneratedAbiBehavior extends AnyWordSpec with
       provided.map(op => op.name -> op.inputType).toMap shouldBe Map(
         "startGoalPhase" -> Some("GoalPhaseStartInput"),
         "advanceGoalPhase" -> Some("GoalPhaseAdvanceInput"),
+        "reconstructGoalPhaseDevelopment" -> Some("GoalPhaseDevelopmentReconstructionInput"),
         "submitGoalPhaseWorkResult" -> Some("GoalPhaseWorkResult"),
         "submitGoalPhaseOrderedDecision" -> Some("GoalPhaseOrderedDecisionAnswer"),
         "submitGoalPhaseFindingRecording" -> Some("GoalPhaseFindingRecordingResult"),

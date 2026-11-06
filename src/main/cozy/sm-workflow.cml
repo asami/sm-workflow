@@ -13924,7 +13924,7 @@ Independent single-request existing-chat delegation. Reuse the shared bounded Wo
 
 ##### DESCRIPTION
 
-Describe exact additional owned paths and an optional explicit submission-condition subset for the same unclaimed initial implementation. All original conditions remain adopted. Passive description changes no Session or effect.
+Describe exact additional owned paths for the same unclaimed implementation or Repair. Only initial implementation may select an explicit submission-condition subset; Repair retains its timing plan, failed checks, history and allowance. All original conditions remain adopted. Passive description changes no Session or effect.
 
 ##### TYPE
 
@@ -13953,6 +13953,7 @@ DelegateTaskScopeCorrectionView
 ##### DESCRIPTION
 
 Admit an exact independently selected same-purpose scope correction. Retain the immutable old issue and all results, base and repair counts; retire it through managed supersession. Only ordinary Advance issues the amended work. Unknown external effects remain unknown.
+Supply exactly one of input or inputResource; the Resource form reads the complete selected correction from an authorized local file when retained check captures exceed CLI argument limits.
 
 ##### TYPE
 
@@ -13968,7 +13969,8 @@ DelegateTaskScopeCorrectionInput
 
 | name | type | multiplicity |
 |------+------|--------------|
-| input | DelegateTaskScopeCorrectionInput | 1 |
+| input | DelegateTaskScopeCorrectionInput | ? |
+| inputResource | string | ? |
 
 ##### OUTPUT
 

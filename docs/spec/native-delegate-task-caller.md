@@ -60,11 +60,16 @@ executionEvidence. A separate Advance owns checks, acceptance and commit.
 Those semantic work, validation and commit operations belong to the destination
 role. A requester never completes them on the destination's behalf.
 
-## Correct an existing unsubmitted initial issue
+## Correct an existing unsubmitted implementation or repair inventory
 
-Use the current destination Session and the actual pending Implement
+Use the current destination Session and the actual pending Implement or Repair
 `issuedWorkContext.continuationId`; do not Start again or create a repair Session.
-The initial WorkOrder must still be unclaimed and unsubmitted. The description
+An initial Implement or current Repair WorkOrder must still be unclaimed and
+unsubmitted. Repair accepts new same-purpose literal `additionalOwnedPaths` with
+an empty `submissionConditions` list, retaining the existing timing plan. Only
+initial Implement may select condition timing. Repair correction preserves the
+failed checks, candidate, prior results, generation, repair counts and limit;
+ordinary Advance issues another Repair on the same Session. The description
 operation takes a structured input because the Session, old continuation,
 additional paths and submission IDs belong to one exact target:
 
@@ -112,7 +117,10 @@ Call `NativeWorkflowPreparationService.prepareDelegateTaskScopeCorrection
 metadata must match the complete correction input. This only prepares a passive
 import; the existing host must independently admit the exact Human selection.
 Then call `DelegateTaskService.correctDelegateTaskScope --input
-<complete-correction-json>`. It returns `corrected-awaiting-advance`; repeated
+<complete-correction-json>`, or use `--inputResource <absolute-local-file-URI>`
+for the complete correction file when retained check output exceeds CLI limits.
+Select exactly one form; the existing Resource authorization and configured
+read limits apply. It returns `corrected-awaiting-advance`; repeated
 exact input returns `already-corrected`. A changed target, subset, participant,
 Session or issue is refused. A previously adopted timing plan cannot be replaced.
 

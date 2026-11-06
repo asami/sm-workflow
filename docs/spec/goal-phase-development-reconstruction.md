@@ -51,6 +51,15 @@ validation, independent review and closure obligations remain owed. Compatible
 unaccepted remaining purpose/document changes may be selected within that
 boundary. Actual protected meaning changes receive concrete Human reasons.
 
+An insertion or reorder at the current boundary may be adopted when no repair
+scope is reserved. A pending or stopped repair, a charged repair, or retained
+repair observations protect their original Step or Release boundary. Assessment
+marks a move of that boundary incompatible and does not offer adoption; the
+controller enforces the same rule on application. Plan revisions within the
+same protected boundary retain its original convergence scope and accounting.
+A pending or stopped repair reservation cannot be amended, even when its current
+boundary remains the same; assessment withholds adoption for that revision.
+
 One managed mechanical transition uses
 `session:ordered-development-reconstruction:<actualFromRevision>@1` with
 causation `ordered-development-reconstructed`. Its record contains current

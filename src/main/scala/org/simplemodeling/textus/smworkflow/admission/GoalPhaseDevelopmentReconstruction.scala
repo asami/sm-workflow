@@ -25,7 +25,7 @@ import RepositorySyncManagedGitObservation as G
   * contains business observations and assessment, never another controller or
   * an authority grant. Native history remains the sole progression source.
   * @since   Nov.  5, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  7, 2026
   */
 private[smworkflow] object GoalPhaseDevelopmentReconstruction {
   val operation = "reconstructGoalPhaseDevelopment"
@@ -174,6 +174,8 @@ private[smworkflow] object GoalPhaseDevelopmentReconstruction {
       Option.when(proposed.phase != prior.phase)("Phase identity changed"),
       Option.when(proposed.repository != prior.repository)("repository identity changed"),
       Option.when(proposed.repairLimit != prior.repairLimit)("selected repair allowance changed"),
+      Option.when(controller.reconstructionStoppedRepairReservation && proposed != prior)("stopped repair reservation cannot be amended"),
+      Option.when(controller.reconstructionMovesRepairScope(proposed))("remaining Step would move a retained repair scope"),
       Option.when(proposed.steps.take(prefix) != prior.steps.take(prefix) || proposed.steps.size < prefix)("accepted completed Step identity, order or contract diverged"),
       Option.when(!proposed.phaseOwnedPaths.forall(path => candidatePaths.exists(owner => _covers(owner, path))))("proposed inventory exceeds admitted Component candidate coverage"),
       Option.when(!proposed.steps.flatMap(_.checks).forall(checkIds.contains) ||

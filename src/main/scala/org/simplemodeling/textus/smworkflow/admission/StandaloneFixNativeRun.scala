@@ -53,7 +53,7 @@ private[smworkflow] object BoundedWorkRuntime {
   * No Phase Start, Plan, Step acceptance, commit or private command driver.
   * @since   Oct. 26, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  7, 2026
   */
 private[smworkflow] object StandaloneFixNativeRun extends BoundedWorkNativeRun(false) {
   type Host = BoundedWorkRuntime.Host
@@ -724,7 +724,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     core: ActionCall.Core): Consequence[V.StandaloneFixView] = for {
     _ <- payload.supersededWork.fold(Consequence.unit)(old =>
       GoalTaskMalformedIssuedWorkRecovery.correctionCurrentC(h, store, old, from.identity.value, core))
-    _ <- if (payload.state.stage == "Implement") implementationFreshC(payload, core)
+    _ <- if (Set("Implement", "Repair")(payload.state.stage)) implementationFreshC(payload, core)
       else if (payload.state.stage == "DeliveryAcceptance") _delivery_fresh_c(payload, core) else freshC(payload, core)
     required <- _required_c(payload.state.stage)
     work = S.Work(from.identity.value, from.revision.value.toString, payload.state.stage, payload.state)
