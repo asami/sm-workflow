@@ -246,24 +246,30 @@ private[smworkflow] object GoalPhaseNativeDependencyValidation {
     }
   }
 
+  /** The binding is supplied by admission or an authenticated capture, not a subject label. */
+  def bindingChecksC(primary: Vector[GoalPhaseNativeValidation.Check], binding: D.Binding):
+    Consequence[Vector[GoalPhaseNativeValidation.Check]] = {
+    if (!D.bindingValid(binding) || primary == null || primary.exists(c => c == null || c.dependency == null || c.dependency.nonEmpty || c.metadata == null))
+      D.invalid("dependency checks require an exact valid binding and primary checks")
+    else {
+      val dependency = binding.checks.map(_.copy(dependency = Some(binding.identity)))
+      val combined = primary ++ dependency
+      if (combined.size <= 16 && primary.forall(_.metadata.isEmpty) &&
+          GoalPhaseValidationSubjects.valid(combined, dependency)) Consequence.success(combined)
+      else D.invalid("dependency checks require unique identities and subject-local ordinals with an ordinary primary policy")
+    }
+  }
+
   def checksC(primary: Vector[GoalPhaseNativeValidation.Check], capture: Option[D.Capture],
     revised: Option[GoalPhaseDependencySourceRevision.Capture] = None):
-    Consequence[Vector[GoalPhaseNativeValidation.Check]] = if (revised.nonEmpty) {
-    val value = revised.get
-    val binding = GoalPhaseDependencySourceRevision.bindingOf(value)
-    val combined = primary ++ binding.checks.map(_.copy(dependency = Some(binding.identity)))
-    if (capture.isEmpty && GoalPhaseDependencySourceRevision.captureValid(value) && combined.size <= 16 &&
-        combined.map(_.identity).distinct.size == combined.size && combined.map(_.ordinal).distinct.size == combined.size &&
-        primary.forall(_.metadata.isEmpty)) Consequence.success(combined)
-    else D.invalid("source revision checks require a complete capture and unique fixed check bindings")
-  } else capture match {
-    case None => Consequence.success(primary)
-    case Some(value) =>
-      val combined = primary ++ value.admission.binding.checks.map(_.copy(dependency = Some(value.admission.binding.identity)))
-      if (D.captureValid(value) && combined.size <= 16 && combined.map(_.identity).distinct.size == combined.size &&
-          combined.map(_.ordinal).distinct.size == combined.size && primary.forall(_.metadata.isEmpty))
-        Consequence.success(combined)
-      else D.invalid("dependency checks require unique fixed identities/ordinals and an ordinary primary check policy")
+    Consequence[Vector[GoalPhaseNativeValidation.Check]] = (capture, revised) match {
+    case (None, None) =>
+      if (GoalPhaseValidationSubjects.valid(primary, Vector.empty)) Consequence.success(primary)
+      else D.invalid("primary checks require unique identities and ordinals")
+    case (Some(value), None) if D.captureValid(value) => bindingChecksC(primary, value.admission.binding)
+    case (None, Some(value)) if GoalPhaseDependencySourceRevision.captureValid(value) =>
+      bindingChecksC(primary, GoalPhaseDependencySourceRevision.bindingOf(value))
+    case _ => D.invalid("dependency checks require one exact valid capture")
   }
   def workspaceC(check: GoalPhaseNativeValidation.Check, capture: Option[D.Capture],
     revised: Option[GoalPhaseDependencySourceRevision.Capture] = None): Consequence[Option[String]] =

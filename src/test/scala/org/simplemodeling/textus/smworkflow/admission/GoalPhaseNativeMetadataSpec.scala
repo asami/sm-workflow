@@ -865,6 +865,32 @@ final class GoalPhaseNativeMetadataSpec extends AnyWordSpec with Matchers with G
       refused.toString should include(diagnostic.message)
     }
 
+    "require authenticated dependency subjects and subject-local uniqueness" in {
+      val primary = V.Check("primary-check", 1)
+      val dependency = V.Check("dependency-check", 1).copy(dependency = Some("captured-binding"))
+      val authenticated = Vector(dependency)
+      val selected = Vector(primary, dependency)
+      N.validateRetainedC(selected, selected, Vector.empty).isSuccess shouldBe true
+      N.validateRetainedC(selected, selected, Vector.empty, authenticated).isSuccess shouldBe true
+      N.validateRetainedC(selected, selected, Vector.empty, Vector.empty).isSuccess shouldBe false
+      N.validateRetainedC(selected, selected.reverse, Vector.empty).isSuccess shouldBe false
+      N.validateRuntimeC(selected, Vector.empty, authenticated).isSuccess shouldBe true
+      N.validateRuntimeC(selected, Vector.empty).isSuccess shouldBe false
+      val crossed = dependency.copy(dependency = Some("other-binding"))
+      N.validateRuntimeC(Vector(primary, crossed), Vector.empty, authenticated).isSuccess shouldBe false
+      val changed = dependency.copy(ordinal = 2)
+      N.validateRuntimeC(Vector(primary, changed), Vector.empty, authenticated).isSuccess shouldBe false
+      val duplicatePrimary = primary.copy(identity = "another-primary")
+      N.validateRetainedC(Vector(primary, duplicatePrimary, dependency),
+        Vector(primary, duplicatePrimary, dependency), Vector.empty).isSuccess shouldBe false
+      N.validateRuntimeC(Vector(primary, duplicatePrimary, dependency), Vector.empty, authenticated).isSuccess shouldBe false
+      val duplicateDependency = dependency.copy(identity = "another-dependency")
+      N.validateRuntimeC(Vector(primary, dependency, duplicateDependency), Vector.empty,
+        Vector(dependency, duplicateDependency)).isSuccess shouldBe false
+      val duplicateIdentity = dependency.copy(identity = primary.identity)
+      N.validateRuntimeC(Vector(primary, duplicateIdentity), Vector.empty, Vector(duplicateIdentity)).isSuccess shouldBe false
+    }
+
     "bound mixed groups to sixteen expanded checks with literal host mapping and no ordinal collisions" in {
       Given("one real two-operation metadata host binding and fourteen distinct ordinary fixed host bindings")
       val ordinary = (1 to 15).filterNot(_ == 2).toVector.map(index => V.Check("ordinary-" + index, index))

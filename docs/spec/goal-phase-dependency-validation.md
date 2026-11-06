@@ -46,6 +46,13 @@ installed runtime qualification and the caller's real Phase acceptance are separ
   repository/workspace/base/candidate/binding/check/operation, with before/after
   freshness checks. TestOnly requires verified executed suites, not merely exit 0.
   Original rejected, stopped, failed and unknown attempts remain in native history.
+- Check identities are unique across the composed selection. Ordinals are unique
+  within the primary policy and within each authenticated dependency binding;
+  equal ordinals across these subjects retain their original execution slots.
+  A dependency tag is valid only for an exact check in the retained valid capture,
+  and does not itself grant workspace, program or effect authority. Fresh dependency
+  completed ordinary and revised-source admissions preflight the composed
+  selection; active bindings are checked before candidate effects.
 - DV-06: primary and dependency results are projected separately and jointly gate
   validation success. Independent review receives actual dependency diff/results;
   review completion and closure recheck dependency freshness. No dependency commit,

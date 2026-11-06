@@ -210,7 +210,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     dependencySourceDirection: Option[GoalPhaseDependencySourceRevision.Direction] = None,
     validation: Option[GoalPhaseNativeValidation.Saved] = None,
     reviewContext: Option[GoalPhaseNativeReview.Context] = None,
-    stepReviewReason: Option[String] = None)
+    stepReviewReason: Option[String] = None,
+    consumptionDirection: Option[GoalPhaseDependencySourceRevision.Direction] = None)
   private final case class Cursor(from: InstanceRecord, controller: O.State,
     documents: Option[D.Bound], candidate: Option[GoalPhaseNativeCandidate.Saved],
     validation: Option[GoalPhaseNativeValidation.Saved],
@@ -2552,7 +2553,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       if (_is_review(input) || input.kind == "TriageStep") cursor.candidate else None, cursor.documentpolicy, cursor.findings,
       cursor.dependencyApprovals, cursor.dependencyAdmission, d.dependencyValidation, cursor.dependencyChain,
       cursor.dependencySourceDirection, validation = cursor.validation, reviewContext = context,
-      stepReviewReason = cursor.stepReviewRequest.map(_.reason))
+      stepReviewReason = cursor.stepReviewRequest.map(_.reason), consumptionDirection = cursor.consumptionDirection)
 
     private def _review_context_c(cursor: Cursor, kind: String): Consequence[Option[GoalPhaseNativeReview.Context]] = kind match {
       case "ReviewStep" | "ReviewPhase" => (cursor.candidate, cursor.validation) match {
@@ -2835,7 +2836,16 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           cursor.controller.plan.steps.lift(cursor.controller.cursor).exists(_.identity == direction.target.step))
           .fold(Consequence.success(Option.empty[GoalPhaseDependencySourceRevision.ScopeSuccessor]))(direction =>
             GoalPhaseDependencySourceRevision.scopeC(direction, cursor.dependencyApprovals, d, cursor.consumptionDirection))
-          .flatMap(scope => GoalPhaseNativeCandidate.advanceC(source, d, core, cursor.from, cursor.controller, acknowledgement,
+          .flatMap { scope =>
+            val step = cursor.controller.plan.steps.lift(cursor.controller.cursor).map(_.identity)
+            val binding = cursor.dependencySourceDirection.filter(direction => step.contains(direction.target.step))
+              .map(direction => GoalPhaseDependencySourceRevision.bindingOf(direction, scope))
+              .orElse(cursor.dependencyAdmission.filter(a => step.contains(a.binding.step)).map(_.binding))
+            val preflight = binding.fold(Consequence.unit) { value => for {
+              primary <- GoalPhaseNativeValidation.selectedChecksC(d, cursor.controller.plan, step)
+              _ <- GoalPhaseNativeDependencyValidation.bindingChecksC(primary, value)
+            } yield () }
+            preflight.flatMap(_ => GoalPhaseNativeCandidate.advanceC(source, d, core, cursor.from, cursor.controller, acknowledgement,
           runValidation = false, documentPolicy = cursor.documentpolicy,
           recordingPaths = N.managementPaths(cursor.findings), completedCandidates = cursor.completedCandidates,
           sourceHistoryRecovery = cursor.sourceHistoryContinuation, candidateObservation = cursor.candidateObservation,
@@ -2849,6 +2859,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           dependencyChain = Some(cursor.dependencyChain), dependencySourceDirection = cursor.dependencySourceDirection.filter(direction =>
             cursor.controller.plan.steps.lift(cursor.controller.cursor).exists(_.identity == direction.target.step)),
           dependencySourceScope = scope, primaryRepair = _active_primary_repair(cursor)))
+          }
           .flatMap(_after_native_c(source, cursor, _, core))
       case O.Stage.Validation | O.Stage.PhaseValidation =>
         if ((if (cursor.controller.stage == O.Stage.PhaseValidation) d.phaseValidationPolicy else d.validationPolicy).isEmpty)
@@ -3395,7 +3406,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           "Return only the assigned semantic result. Workflow owns commands, validation, Step and Phase closure.")))
     } yield Prepared(source, input, Some(intent), pending, work, controller, candidate, documentpolicy, findings,
       dependencyapprovals, dependencyadmission, d.dependencyValidation, dependencychain, dependencysourcedirection,
-      reviewContext = input.review, stepReviewReason = stepreviewreason)
+      reviewContext = input.review, stepReviewReason = stepreviewreason, consumptionDirection = consumptiondirection)
 
     private def _requirement_c(input: S.Request, required: StateMachineRequiredOperation,
       independent: Boolean): Consequence[ExecutionRequirement] = {
@@ -3434,6 +3445,17 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           _ <- _historical_freshness_c(plan, call)
           _ <- GoalPhaseOperatingProfiles.admitExecutionC(plan.input.operatingProfile, submitted.evidence)
           admission <- _dependency_admission_c(plan, submitted.result.value)
+          _ <- if (submitted.result.value.outcome == "completed" && admission.nonEmpty) for {
+            primary <- GoalPhaseNativeValidation.selectedChecksC(d, plan.input.selectedPlan, plan.input.stepIdentity)
+            _ <- GoalPhaseNativeDependencyValidation.bindingChecksC(primary, admission.get.binding)
+          } yield () else Consequence.unit
+          _ <- if (submitted.result.value.outcome == "completed" && plan.dependencySourceDirection.exists(direction =>
+              plan.input.stepIdentity.contains(direction.target.step))) for {
+            direction <- plan.dependencySourceDirection.map(Consequence.success).getOrElse(F.invalid("missing source direction"))
+            scope <- GoalPhaseDependencySourceRevision.scopeC(direction, plan.dependencyApprovals, d, plan.consumptionDirection)
+            primary <- GoalPhaseNativeValidation.selectedChecksC(d, plan.input.selectedPlan, plan.input.stepIdentity)
+            _ <- GoalPhaseNativeDependencyValidation.bindingChecksC(primary, GoalPhaseDependencySourceRevision.bindingOf(direction, scope))
+          } yield () else Consequence.unit
           mode <- NativeWorkflowIssuedWorkContext.goalModeC(plan.input.kind)
           context <- NativeWorkflowIssuedWorkContext.fromIssuedC(plan.work, mode, S.inputCodec)
           _ <- IncrementalSbtDiagnosisRepair.admitInformationC(d, call, context, plan.input, submitted.result.value.diagnosticRepair)
