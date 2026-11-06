@@ -133,9 +133,10 @@ private[admission] object TypedSbtHostPlanFixture {
   /** Enroll the actual compiled fixture in an ordinary ScalaTest sbt build.
     * Setup writes inputs only; the owning native UoW later executes testOnly.
     */
-  def buildMetadata(root: Path, fixture: Class[?] = classOf[SelectedMetadataFixtureSpec]): Unit = {
+  def buildMetadata(root: Path, fixture: Class[?] = classOf[SelectedMetadataFixtureSpec],
+    selectedClasspath: Option[Path] = None): Unit = {
     val primary = Path.of("").toAbsolutePath.normalize
-    val classpathfile = primary.resolve("target/cncf.d/runtime-classpath.txt")
+    val classpathfile = selectedClasspath.getOrElse(primary.resolve("target/cncf.d/runtime-classpath.txt"))
     require(Files.isRegularFile(classpathfile), "Prepare the official primary runtime classpath first")
     val fixtureroot = Path.of(fixture.getProtectionDomain.getCodeSource.getLocation.toURI).toRealPath()
     val entries = Files.readAllLines(classpathfile).asScala.toVector.map { value =>

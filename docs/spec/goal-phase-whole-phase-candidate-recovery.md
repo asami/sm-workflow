@@ -136,3 +136,26 @@ Completed safe append returns the identical ReviewPhase and full diff, while
 reordered original paths refuse. Each passive/refused call preserves complete
 native record and stored payload JSON, original source bytes and modification
 time, index, Compile and Test counts. All evidence belongs to the isolated fixture.
+# Unstarted accepted Release repair frontier — 2026-10-30
+
+`describeGoalPhaseWholePhaseCandidateRecovery --sessionId <existing Session>`
+also admits the exact all-closed PhaseInspection frontier after an accepted
+Release repair when candidate preparation has not started. It returns
+`outcome=ready`, no Human choices, and `recoveryOperation=advanceGoalPhase`.
+Its informational `sm-workflow.goal-phase-whole-phase-ready.v1` target retains
+the original controller, actual repository/index, bounded typed-Git descendant
+proof and actual successful Step evidence. The description changes no history
+and executes no validation, staging, source-history write or commit. IndexTree
+observation may update Git's object/index cache as in the existing description.
+
+The owner invokes ordinary `advanceGoalPhase --sessionId <same Session>`.
+Advance rechecks the current root, branch, bounded ancestry, index and selected
+ownership before persisting preparation and executing effects. Readiness is not
+a reusable authorization or a candidate acceptance. An unrelated HEAD, changed
+anchor tree, foreign staged paths, or retained candidate preparation cannot use
+this route. No prior effect is claimed UNKNOWN merely because preparation has
+not started, and `recoverGoalPhaseWholePhaseCandidate` does not accept this
+informational target as a Human recovery target.
+
+The existing partial/UNKNOWN preparation path, exact historical recovery target,
+independent Human requirement and prohibition on replay remain unchanged.

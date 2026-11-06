@@ -29,6 +29,8 @@ Adopt it incrementally against the real workflow in this order: (1) Command/Oper
 
 ## Goal
 
+Use observed operational problems to select the work for this phase. A new
+capability belongs here only when it resolves a concrete problem in supported use.
 Close the current development rollout by resolving the necessary extensions
 deferred from Phase 2 and missing functionality discovered through real use
 after Phase 6.3 integrated acceptance and during Phase 7. Phase 5 validates
@@ -163,6 +165,77 @@ optional host handoff and truthful outcome handling, including an unavailable
 host. Report actual host integration separately. Preserve the existing runtime
 and evidence owners; do not add a second workflow ledger, management hashes,
 unchanged-content proofs, a competing app-server owner or a new approval loop.
+
+### Work classification in practice — selected for Phase 8
+
+In the November 5–6 reviews, closing a prescribed rename and checking whether
+a Human choice still applies to the authorized target both appeared as re-review
+work, although they require different evidence. The bounded Task/Fix producer
+currently assigns both STANDARD complexity and SMALL footprint. Start there:
+classify a new assignment by the question it must settle, then verify the
+distinction before extending it to new GoalPhase assignments.
+
+Acceptance: a reviewer can close the rename against its finding and diff; a
+one-line authority change still receives a contract review. Distinguish diagnosis
+of an unknown failure from repair of an established cause. Keep issued Requests,
+independent review and runtime validation unchanged. Assess reopened findings
+and handoffs returned for missing evidence. Model comparisons remain in Phase 9.
+See the [work classification journal](../journal/2026/11/2026-11-06-work-classification-precision.md).
+
+Use Terra by default for ordinary implementation and repair, including
+prescribed edits. Phase 8 does not assign coding to Luna while Terra is
+available. Record whether the target, transformation and expected behavior are
+fixed so the handoff and acceptance criteria are precise. Select any required
+independent reviewer by the question to be resolved.
+
+| Acceptance case | Repair assignment | Independent review assignment |
+| --- | --- | --- |
+| Rename a specified helper at its declaration and two named call sites; preserve behavior | Terra applies the prescribed edit | A different Terra checks the finding, diff and preserved behavior |
+| Fix a known parser error where braces, indentation and extracting an expression are still viable | Terra selects and implements the fix | A different Terra checks syntax and behavior |
+| Apply an exact one-line edit affecting which target a Human may authorize | The edit is prescribed | Retain the contract review of choice and target regardless of who edits |
+
+Retain Luna for established non-coding work such as waiting for a matching
+cross-chat result. Terra unavailability does not introduce a new Luna coding
+fallback. The rename pilot is evidence for this planning choice, not a general
+model benchmark. Preserve existing mappings, review requirements and already
+issued Requests; comparative model evaluation belongs to Phase 9.
+
+When evaluating classification, distinguish a follow-up assignment or
+continuation after a validation wait from a correction prompted by a finding
+or failed check. Use existing task and validation records. If the reason for a
+resume is unknown, report it as unknown; a resume count alone is not a failure
+count. This is an observation for the classification item, not a new reporting
+subsystem. Token collection remains in Phase 13.
+
+### Review handoff between assignments
+
+In November, the reviewer of the common continuation went on to review a
+separate Resource change with roughly 400,000 input tokens on its first
+response to the new assignment. Keep the same reviewer while the same unresolved
+finding depends on earlier reasoning. For a distinct assignment, use a fresh
+independent reviewer and hand over the question, the relevant diff and finding,
+the invariants to preserve, and what remains unverified. Link the evidence
+instead of forwarding the conversation history.
+
+Acceptance: exercise both transitions. The original reviewer can follow an
+open finding to closure; the fresh reviewer can decide the separate question
+from the handoff and cited evidence without reading the previous chat. Check
+for reopened findings or missing evidence as well as input size.
+
+### Completion reports for consumers
+
+The November synchronization record retained an intermediate publication failure
+and a later successful publication and synchronization. Lead the report with
+what the consumer can use now. Distinguish source changes, validation,
+publication and consumer verification; mark a stage not checked or not
+applicable when appropriate. Name the next action and its owner, or state that
+none remains. Keep earlier failed attempts in the linked history.
+
+Acceptance: from the opening of a report for that scenario, the consumer can
+tell whether publication ultimately succeeded and whether consumer verification
+was actually performed. A publish receipt alone must not imply consumer
+acceptance. Apply this to the presentation of existing results, without adding
+a runtime stage or replaying successful work.
 
 ## Selection and execution
 

@@ -30,6 +30,17 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
     finalCandidate: Option[O.Snapshot], changedPaths: Vector[String], records: Option[CompletionRecords.Plan] = None,
     metrics: Option[GoalPhasePhaseMetrics.Summary] = None)
   final case class Saved(record: InstanceRecord, payload: Payload)
+  /** A shape selector only. Store.retainedC must first authenticate every
+    * adjacent staging intent/result; current repository facts are checked
+    * again before the missing read-only capture is attempted.
+    */
+  private[admission] def capturePreparationPending(payload: Payload): Boolean =
+    payload.records.isEmpty && payload.finalCandidate.isEmpty && payload.changedPaths.isEmpty &&
+      payload.selectedPaths.nonEmpty && payload.selectedPaths.distinct == payload.selectedPaths &&
+      payload.selectedPaths == payload.assignedPaths && payload.stagedPaths == payload.selectedPaths
+
+  private[admission] def resumable(payload: Payload): Boolean =
+    payload.finalCandidate.isEmpty && (payload.records.nonEmpty || capturePreparationPending(payload))
   private[admission] val codec = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "GoalPhaseNativeRecordingCandidateReceipt"
     def encode(value: Payload): Json = Json.obj("schemaVersion" -> Json.fromString("sm-workflow.goal-phase-recording-candidate.v1"),
@@ -65,6 +76,17 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
     prior <- store.retainedC
     saved <- prior match {
       case Some(value) if value.payload.records.nonEmpty && value.payload.finalCandidate.isEmpty => _finish_c(store, value)
+      case Some(value) if capturePreparationPending(value.payload) => for {
+        _ <- if (session.current == value.record && store.completionPaths.nonEmpty &&
+            store.completionPaths == value.payload.assignedPaths) Consequence.unit
+          else F.invalid("record capture resumption requires the actual latest complete staging prefix and unchanged record-only policy")
+        _ <- store.inspectC(value.payload.stagedPaths)
+        index <- G.indexTreeC(core)
+        _ <- if (index == store.reviewed.tree) Consequence.unit
+          else F.invalid("record capture resumption requires the index pinned by the accepted source review")
+        prepared <- _prepare_c(store, value)
+        result <- _finish_c(store, prepared)
+      } yield result
       case Some(value) => Consequence.success(value)
       case None => _inspect_c(store, profiles, requests)
     }
@@ -112,19 +134,24 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
         current.payload.copy(stagedPaths = current.payload.stagedPaths :+ path))
       _ <- store.ackC("goal-recording-candidate-recorded:" + path)
     } yield saved }
-    prepared <- if (store.completionPaths.isEmpty) Consequence.success(staged) else for {
+    prepared <- _prepare_c(store, staged)
+    result <- _finish_c(store, prepared)
+  } yield result
+
+  /** Capture reads only. Persist the plan before the existing managed File and
+    * repository closure routes can perform any effect. Never restage here.
+    */
+  private def _prepare_c(store: Store, staged: Saved): Consequence[Saved] =
+    if (store.completionPaths.isEmpty) Consequence.success(staged) else for {
       index <- G.indexTreeC(store.core)
-      selection <- org.goldenport.cncf.processexecution.GitSelectionId.parseC("goal-step-" + store.releaseOrdinal)
       plan <- CompletionRecords.captureC(store.core, store.from.identity.value, "phase", store.controller.plan.phase, index,
         (store.controller.checksReceipt.toVector ++ store.controller.reviewEvidence.toVector).distinct,
-        store.completionPaths, store.controller.plan.steps.flatMap(_.ownedPaths).distinct, store.d.candidatePaths, selection, summary = staged.payload.metrics.map(m => {
+        store.completionPaths, store.controller.plan.steps.flatMap(_.ownedPaths).distinct, store.d.candidatePaths, summary = staged.payload.metrics.map(m => {
           val rendered = GoalPhasePhaseMetrics.durableEnglish(m)
           if (rendered.length <= 32768) rendered else rendered.take(32000) + "\nCompact summary truncated; retained metrics carry full coverage limitations.\n"
         }))
       prepared <- store.saveC("completion-plan", staged.record, staged.payload.copy(records = Some(plan)))
     } yield prepared
-    result <- _finish_c(store, prepared)
-  } yield result
 
   private def _finish_c(store: Store, staged: Saved): Consequence[Saved] = for {
     _ <- staged.payload.records.fold(Consequence.unit)(CompletionRecords.applyC(store.core, _))
@@ -235,7 +262,7 @@ private[smworkflow] object GoalPhaseNativeRecordingCandidate {
       baseline <- GitObjectId.parseC(reviewed.tree)
       delta <- E.executeGitC(core, GitOperation.PendingPaths(baseline)).flatMap(_.valueC)
       _ <- if (root == d.target.root.toString && actual.branch == d.target.localBranch &&
-          actual.head == controller.tipSnapshot.head && actual.tree == controller.tipSnapshot.tree && actual.head == reviewed.head &&
+          actual.head == controller.candidateBase.head && actual.tree == controller.candidateBase.tree && actual.head == reviewed.head &&
           GoalPhaseNativeCandidateBoundary.scopedDirty(actual.dirty,
             stagedScope, false) &&
           GoalPhaseNativeCandidateBoundary.scopedDirty(actual.dirty.filterNot(p =>

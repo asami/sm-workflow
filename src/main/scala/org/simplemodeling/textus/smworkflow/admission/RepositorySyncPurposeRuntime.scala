@@ -65,6 +65,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
       store.saveC(prefix + "-" + key, "purpose-progress", from.record,
         from.payload.copy(stage = stage, purposes = Some(value),
           purposePreparation = if (value.preparationNamespace.nonEmpty) from.payload.purposePreparation else None,
+          purposePreparationIntent = if (value.preparationNamespace.nonEmpty) from.payload.purposePreparationIntent else None,
           purposeMaterialization = if (stage == "PurposePreparing") None else from.payload.purposeMaterialization.filter(direction =>
             RepositorySyncPurposeMaterializationContinuation.progress(direction.target).exists(original =>
               original.cursor == value.cursor && original.attempt == value.attempt && original.slotCursor == value.slotCursor &&
@@ -102,7 +103,16 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
         baseline <- progress.baselineTree.fold(Consequence.success(Option.empty[GitObjectId]))(value => GitObjectId.parseC(value).map(Some(_)))
         intent <- _save_("prepare-intent", "PurposePreparing", source, progress)
         result <- E.executePurposeC(store.core, GitOperation.PreparePurposeCandidate(selection.identity,
-          GitPurposeRequest(parent, tree, changes, baseline)), selection)
+          GitPurposeRequest(parent, tree, changes, baseline)), selection) match {
+          case success @ Consequence.Success(_) => success
+          case Consequence.Failure(conclusion) =>
+            // Retain only the actual boundary diagnostic. There is no process
+            // receipt and no assertion that an uncertain effect never started.
+            store.saveC(prefix + "-prepare-result", "purpose-progress", intent.record,
+              intent.payload.copy(stage = "PurposeUnfinished", purposes = Some(progress.copy(effects = progress.effects :+
+                RepositorySyncPurposePreparationIntentContinuation.admissionRejection(conclusion.show)))))
+              .flatMap(_ => Consequence.Failure(conclusion))
+        }
         output <- result.value match {
           case Some(candidate) if result.outcome == GitExecutionOutcome.Succeeded => for {
             prepared <- _save_("prepared", "PurposePrepared", intent, progress.copy(candidate = Some(P.Candidate(
@@ -441,7 +451,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
     repaired <- repairedProgressC(progress, input, result, policy)
     next <- store.saveC("purpose-" + (progress.cursor + 1) + "-repair-" + (progress.attempt + 1) + "-admitted",
       "purpose-progress", proposal, basis.validated.payload.copy(stage = "PurposeGrouped", purposes = Some(repaired),
-        purposePreparation = None, purposeMaterialization = None))
+        purposePreparation = None, purposePreparationIntent = None, purposeMaterialization = None))
   } yield next
 
   /** Native Git owns the ordinary three-way projection. Authenticate its exact

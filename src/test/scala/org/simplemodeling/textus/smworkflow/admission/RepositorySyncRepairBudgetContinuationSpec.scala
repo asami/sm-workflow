@@ -112,7 +112,7 @@ final class RepositorySyncRepairBudgetContinuationSpec extends AnyWordSpec with 
       val facts = WorkflowSbtValidation.Facts(WorkflowSbtValidation.Kind.Test, WorkflowSbtValidation.Outcome.Failed, None, None)
       val receipt = F.failed.copy(stdout = stdout, stderr = stderr, sbt = Some(facts), processObservation = Some(process))
       val opaquefacts = Json.obj("sbt" -> Json.obj("kind" -> Json.fromString("test"), "outcome" -> Json.fromString("failed"),
-        "selection" -> Json.Null, "reason" -> Json.Null))
+        "selection" -> Json.Null, "reason" -> Json.Null, "estimate" -> Json.Null))
       val snapshot = _target.purpose.get.copy(progress = _target.purpose.get.progress.copy(
         receipts = _target.purpose.get.progress.receipts.map(value => if (value.identity == receipt.identity) receipt else value),
         effects = _target.purpose.get.progress.effects :+ opaquefacts))
@@ -132,19 +132,22 @@ final class RepositorySyncRepairBudgetContinuationSpec extends AnyWordSpec with 
       wire.hcursor.downField("failedCheck").get[Json]("process") shouldBe Right(processwire)
       wire.hcursor.downField("failedCheck").downField("sbt").downField("selection").focus shouldBe None
       wire.hcursor.downField("failedCheck").downField("sbt").downField("reason").focus shouldBe None
+      wire.hcursor.downField("failedCheck").downField("sbt").downField("estimate").focus shouldBe None
       val reviewreceipt = wire.hcursor.downField("review").get[Vector[Json]]("checks").toOption.get.last
       reviewreceipt.hcursor.downField("sbt").downField("selection").focus shouldBe None
       reviewreceipt.hcursor.downField("sbt").downField("reason").focus shouldBe None
+      reviewreceipt.hcursor.downField("sbt").downField("estimate").focus shouldBe None
       wire.hcursor.downField("purpose").get[Json]("progress") shouldBe snapshot.asJson.hcursor.get[Json]("progress")
       val opaquerestored = take(restored).purpose.get.progress.effects.last
       opaquerestored.hcursor.downField("sbt").downField("selection").focus shouldBe Some(Json.Null)
       opaquerestored.hcursor.downField("sbt").downField("reason").focus shouldBe Some(Json.Null)
+      opaquerestored.hcursor.downField("sbt").downField("estimate").focus shouldBe Some(Json.Null)
       rawtarget.review.checks.last shouldBe receipt
       rawtarget.purpose.get.progress.receipts.last shouldBe receipt
       rawtarget.purpose.get.progress.request.records shouldBe _target.purpose.get.progress.request.records
 
       Given("the complete raw target with explicit null or unknown fields added at either outer receipt's typed SBT facts")
-      val malformed = Vector("selection" -> Json.Null, "reason" -> Json.Null, "unrecognizedFact" -> Json.True).flatMap {
+      val malformed = Vector("selection" -> Json.Null, "reason" -> Json.Null, "estimate" -> Json.Null, "unrecognizedFact" -> Json.True).flatMap {
         (field, value) => Vector(
           ("failedCheck.sbt." + field) -> wire.hcursor.downField("failedCheck").downField("sbt")
             .withFocus(_.mapObject(_.add(field, value))).top.get,

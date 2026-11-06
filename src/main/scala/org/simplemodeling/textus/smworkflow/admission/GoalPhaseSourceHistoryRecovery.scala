@@ -21,7 +21,8 @@ import GoalPhaseOrderedProgression as O
 /** Explicit HumanNewAttempt direction preserves an unknown historical outcome.
   * Description and authorization neither observe nor execute normalization.
   * @since   Oct. 21, 2026
-  * @version Oct. 26, 2026
+  *  version Oct. 26, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseSourceHistoryRecovery {
@@ -117,8 +118,16 @@ private[smworkflow] object GoalPhaseSourceHistoryRecovery {
   def targetC(value: Record): Consequence[RecoveryTarget] =
     if (value == null) _invalid("target is absent")
     else value.toJsonStringC.flatMap(text => io.circe.parser.parse(text)
-      .left.map(_.message).flatMap(GoalPhaseNativeMetadata.normalizePublicJson)
-      .flatMap(decodeTarget).fold(_invalid(_), Consequence.success))
+      .left.map(_.message).flatMap(decodePublicTarget).fold(_invalid(_), Consequence.success))
+  private[admission] def decodePublicTarget(value: Json): Either[String, RecoveryTarget] = for {
+    supplied <- Option(value).toRight("Public source history recovery target is absent")
+    wire <- GoalPhaseNativeMetadata.normalizePublicJson(supplied)
+    inspection <- GoalPhaseNativeCandidate.decodePublicPayload(
+      wire.hcursor.downField("inspection").focus.getOrElse(Json.Null))
+    target <- decodeTarget(wire.mapObject(_.add("inspection", inspection.asJson)))
+    _ <- GoalPhaseCandidateRecovery.exactPublicFragment(wire, target.asJson)
+  } yield target
+
   def decodeTarget(value: Json): Either[String, RecoveryTarget] = for {
     supplied <- Option(value).toRight("Source history recovery target is absent")
     target <- supplied.as[RecoveryTarget].left.map(_.message)
@@ -146,7 +155,7 @@ private[smworkflow] object GoalPhaseSourceHistoryRecovery {
     value.candidatePaths.distinct == value.candidatePaths && value.ownedPaths.distinct == value.ownedPaths &&
     value.managementPaths.distinct == value.managementPaths &&
     (value.candidatePaths ++ value.ownedPaths ++ value.managementPaths).forall(RepositorySyncNativeConflictInput.relative) &&
-    value.inspection.selectedPaths.forall(p => value.candidatePaths.contains(p) && value.ownedPaths.contains(p)) &&
+    _selected_paths_valid(value) &&
     value.intent.sourceRevision == value.sourceRevision && value.intent.step == value.step &&
     _selected(value, value.intent.path) &&
     value.intent.outcome.isEmpty && GoalPhaseNativeSourceHistory.codec.decode(GoalPhaseNativeSourceHistory.codec.encode(value.intent)).isRight &&
@@ -170,6 +179,19 @@ private[smworkflow] object GoalPhaseSourceHistoryRecovery {
             GoalPhaseNativeSourceHistory.codec.decode(GoalPhaseNativeSourceHistory.codec.encode(entry.result)).isRight &&
             WorkflowSourceHistoryRule.includesC(rule, entry.intent.path).toOption.contains(true)
         } && (value.completedPrefix.map(_.intent.path) :+ value.intent.path).distinct.size == value.intentIndex.toLong + 1)
+
+  /** Structural capture provenance never supplies an authenticated Saved fact
+    * or its excluded-dirty budget. Actual readers still use Candidate.Store. */
+  private def _selected_paths_valid(target: RecoveryTarget): Boolean =
+    target.inspection.primaryPublicationRepair != null && (target.inspection.primaryPublicationRepair match {
+      case None => target.inspection.selectedPaths.forall(path =>
+        target.candidatePaths.contains(path) && target.ownedPaths.contains(path))
+      case Some(reuse) => GoalPhaseNativeCandidate.sourceCaptureValid(target.inspection) &&
+        GoalPhasePrerequisitePrimaryRepair.reuseValid(reuse) && reuse.repair.identity == target.sessionId &&
+        BigInt(reuse.repair.revision) < BigInt(target.sourceRevision) &&
+        GoalPhasePrerequisitePrimaryRepair.repairPathsValid(target.candidatePaths, target.ownedPaths,
+          target.inspection.selectedPaths, Vector.empty)
+    })
 
   private def _history_identity(target: RecoveryTarget, kind: String, index: Int): String =
     target.sessionId + ":ordered-candidate:" + target.sourceRevision + ":source-history-" + kind + "-" + index
@@ -237,8 +259,9 @@ private[smworkflow] object GoalPhaseSourceHistoryRecovery {
   /** Only the exact unresolved native intent after a successful contiguous prefix is eligible. */
   def currentTargetC(session: F.Session, d: F.Declaration, core: ActionCall.Core, from: InstanceRecord,
     controller: O.State, documentPolicy: Option[GoalPhaseDocumentProgress.Policy], recordingPaths: Vector[String],
-    completedCandidates: Vector[GoalPhaseNativeCandidate.Payload]): Consequence[RecoveryTarget] = for {
-    target <- _target_c(session, d, core, from, controller, documentPolicy, recordingPaths, completedCandidates)
+    completedCandidates: Vector[GoalPhaseNativeCandidate.Payload],
+    primaryRepair: Option[GoalPhasePrerequisitePrimaryRepair.Saved] = None): Consequence[RecoveryTarget] = for {
+    target <- _target_c(session, d, core, from, controller, documentPolicy, recordingPaths, completedCandidates, primaryRepair)
     _ <- if (session.current.revision.value.toString == target.frontierRevision) Consequence.unit
       else F.invalid("source history recovery requires the exact unresolved current frontier")
     adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
@@ -252,8 +275,9 @@ private[smworkflow] object GoalPhaseSourceHistoryRecovery {
     */
   def historicalTargetC(session: F.Session, d: F.Declaration, core: ActionCall.Core, from: InstanceRecord,
     controller: O.State, documentPolicy: Option[GoalPhaseDocumentProgress.Policy], recordingPaths: Vector[String],
-    completedCandidates: Vector[GoalPhaseNativeCandidate.Payload]): Consequence[RecoveryTarget] = for {
-    current <- _target_c(session, d, core, from, controller, documentPolicy, recordingPaths, completedCandidates)
+    completedCandidates: Vector[GoalPhaseNativeCandidate.Payload],
+    primaryRepair: Option[GoalPhasePrerequisitePrimaryRepair.Saved] = None): Consequence[RecoveryTarget] = for {
+    current <- _target_c(session, d, core, from, controller, documentPolicy, recordingPaths, completedCandidates, primaryRepair)
     frontier <- GoalPhaseNativeHistory.prefixC(session.current, InstanceRevision(current.frontierRevision.toLong))
     identity = org.goldenport.cncf.workflow.ContinuationIdentity(frontier.identity.value + ":ordered-human:" + frontier.revision.value)
     questions <- session.storage.bindDecisionC(GoalPhaseOrderedHumanDecision.completionOperation,
@@ -287,7 +311,7 @@ private[smworkflow] object GoalPhaseSourceHistoryRecovery {
                 original <- input.sourceHistoryRecovery.map(Consequence.success).getOrElse(
                   F.invalid("completed source history Human has no captured recovery target"))
                 actual <- _captured_target_c(session, d, core, from, controller, documentPolicy,
-                  recordingPaths, completedCandidates, original)
+                  recordingPaths, completedCandidates, original, primaryRepair)
               } yield actual
             }
           } yield saved
@@ -301,20 +325,22 @@ private[smworkflow] object GoalPhaseSourceHistoryRecovery {
     */
   private def _captured_target_c(session: F.Session, d: F.Declaration, core: ActionCall.Core, from: InstanceRecord,
     controller: O.State, documentpolicy: Option[GoalPhaseDocumentProgress.Policy], recordingpaths: Vector[String],
-    completedcandidates: Vector[GoalPhaseNativeCandidate.Payload], captured: RecoveryTarget): Consequence[RecoveryTarget] = for {
+    completedcandidates: Vector[GoalPhaseNativeCandidate.Payload], captured: RecoveryTarget,
+    primaryRepair: Option[GoalPhasePrerequisitePrimaryRepair.Saved] = None): Consequence[RecoveryTarget] = for {
     _ <- if (validTarget(captured) && d.candidatePaths != null &&
         d.candidatePaths.startsWith(captured.candidatePaths) && d.candidatePaths.distinct == d.candidatePaths &&
         d.candidatePaths.forall(RepositorySyncNativeConflictInput.relative)) Consequence.unit
       else F.invalid("historical source history recovery requires an append-only candidate path declaration")
     actual <- _target_c(session, d.copy(candidatePaths = captured.candidatePaths), core, from, controller,
-      documentpolicy, recordingpaths, completedcandidates)
+      documentpolicy, recordingpaths, completedcandidates, primaryRepair)
     _ <- if (actual == captured) Consequence.unit
       else F.invalid("historical source history recovery differs from its complete captured target")
   } yield actual
 
   private[admission] def _target_c(session: F.Session, d: F.Declaration, core: ActionCall.Core, from: InstanceRecord,
     controller: O.State, documentPolicy: Option[GoalPhaseDocumentProgress.Policy], recordingPaths: Vector[String],
-    completedCandidates: Vector[GoalPhaseNativeCandidate.Payload]): Consequence[RecoveryTarget] = for {
+    completedCandidates: Vector[GoalPhaseNativeCandidate.Payload],
+    primaryRepair: Option[GoalPhasePrerequisitePrimaryRepair.Saved] = None): Consequence[RecoveryTarget] = for {
     _ <- if (controller.stage == O.Stage.InspectCandidate && controller.cursor < controller.plan.steps.size &&
         from.suspension.isEmpty && from.currentProgression.contains(ProgressionReference("phase.InspectCandidate")) &&
         from.revision.value <= Long.MaxValue - 3 && !from.causation.value.startsWith("ordered-source-history-recovery:")) Consequence.unit
@@ -322,7 +348,7 @@ private[smworkflow] object GoalPhaseSourceHistoryRecovery {
     original <- GoalPhaseNativeHistory.prefixC(session.current, from.revision)
     _ <- if (original == from) Consequence.unit else F.invalid("source history recovery original source is not its exact history prefix")
     inspection <- GoalPhaseNativeCandidate.recoveryInspectionC(session, d, core, from, controller,
-      documentPolicy, recordingPaths, completedCandidates)
+      documentPolicy, recordingPaths, completedCandidates, primaryRepair)
     inspected <- _adjacent_c(session.current, from, inspection.record, "ordered-candidate:inspection")
     stopped <- _stopped_c(session, core, from, inspected)
     selection <- WorkflowSourceHistoryParameters.resolveC(core.executionContext)
@@ -395,7 +421,8 @@ private[smworkflow] object GoalPhaseSourceHistoryRecovery {
   final case class Resumed(record: InstanceRecord, target: RecoveryTarget)
   def retainedC(session: F.Session, d: F.Declaration, core: ActionCall.Core, from: InstanceRecord,
     controller: O.State, documentPolicy: Option[GoalPhaseDocumentProgress.Policy], recordingPaths: Vector[String],
-    completedCandidates: Vector[GoalPhaseNativeCandidate.Payload]): Consequence[Option[Resumed]] = for {
+    completedCandidates: Vector[GoalPhaseNativeCandidate.Payload],
+    primaryRepair: Option[GoalPhasePrerequisitePrimaryRepair.Saved] = None): Consequence[Option[Resumed]] = for {
     adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
     retained <- adapter.loadRetainedC(_reference(from))(using core.executionContext)
     result <- retained match {
@@ -403,7 +430,7 @@ private[smworkflow] object GoalPhaseSourceHistoryRecovery {
       case Some(value) => for {
         direction <- codec.decode(codec.encode(value.receipt.payload.value)).fold(F.invalid, Consequence.success)
         actual <- _captured_target_c(session, d, core, from, controller, documentPolicy, recordingPaths,
-          completedCandidates, direction.target)
+          completedCandidates, direction.target, primaryRepair)
         _ <- if (direction.target == actual && direction.participant == session.participantIdentity) Consequence.unit
           else F.invalid("retained source history recovery crosses its exact admitted target or participant")
         intent <- GoalPhaseNativeHistory.prefixC(session.current, InstanceRevision(actual.intentRecordRevision.toLong))

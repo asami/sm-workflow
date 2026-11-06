@@ -20,7 +20,7 @@ lazy val cncfSourceSettings: Seq[Def.Setting[_]] = cncfSourceProject.toSeq.flatM
   libraryDependencies ~= (_.filterNot(m => m.organization == "org.goldenport" && m.name == "goldenport-cncf")),
   validateCncfSource := {
     require((source / organization).value == "org.goldenport" && (source / moduleName).value == "goldenport-cncf" &&
-      (source / version).value == "0.5.3-SNAPSHOT" && (source / scalaVersion).value == scalaVersion.value,
+      (source / version).value == "0.5.6-SNAPSHOT" && (source / scalaVersion).value == scalaVersion.value,
       "Selected CNCF source coordinates differ from project.yaml")
   },
   Compile / compile := ((Compile / compile) dependsOn validateCncfSource).value,
@@ -72,6 +72,15 @@ lazy val root = project
       (Compile / packageBin).value
       checkSkillBundleReproducibility.value
       ()
+    },
+    Test / compile := {
+      val compiled = (Test / compile).value
+      val classes = (Test / classDirectory).value
+      LabelledTests.writeInventory(classes +: (Test / dependencyClasspath).value.files,
+        classes, version.value, target.value / "sm-workflow" / "validation-inventory.json")
+      IO.writeLines(target.value / "sm-workflow" / "validation-classpath.txt",
+        (classes +: (Test / dependencyClasspath).value.files).map(_.getCanonicalPath))
+      compiled
     },
     labelledFullTests := LabelledTests.select((Test / fullClasspath).value.files,
       (Test / classDirectory).value, version.value, "FULL", (Test / definedTests).value),

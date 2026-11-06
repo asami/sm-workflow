@@ -111,10 +111,16 @@ private[smworkflow] object RepositorySyncNativeConvergence {
             paths = CompletionRecords.selected(store.declaration.completionRecords, "repository-sync", store.context.repositoryIdentity)
             result <- if (paths.isEmpty) Consequence.success(accepted) else for {
               _ <- authorizeC(store, authority, Effect.CommitPending)
+              // Keep the existing selected closure registration independent of
+              // the separately narrowed record read. Refuse a missing closure
+              // selection before the managed record application can write.
               selection <- org.goldenport.cncf.processexecution.GitSelectionId.parseC("repository-completion-records")
+              parent <- GitObjectId.parseC(acceptedHead(accepted))
+              checked <- E.executeGitC(store.core, GitOperation.CheckSelectedIndex(selection, parent)).flatMap(_.valueC)
+              _ <- if (checked.findingKeys.isEmpty) Consequence.unit else N.invalid("Selected completion record hygiene is unfinished")
               projected <- CompletionRecords.captureC(store.core, store.identity, "repository-sync", store.context.repositoryIdentity,
                 accepted.payload.indexTree.get, Vector(accepted.record.causation.value + "@" + accepted.record.revision.value),
-                paths, store.declaration.hygieneStagingPaths, store.declaration.hygieneStagingPaths, selection)
+                paths, store.declaration.hygieneStagingPaths, store.declaration.hygieneStagingPaths)
               saved <- store.saveC("completion-records-plan", "completion-records-prepared", accepted.record,
                 accepted.payload.copy(records = Some(projected)))
             } yield saved

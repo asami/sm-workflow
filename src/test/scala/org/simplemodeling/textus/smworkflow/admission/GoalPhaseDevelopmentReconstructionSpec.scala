@@ -133,6 +133,95 @@ final class GoalPhaseDevelopmentReconstructionSpec extends AnyWordSpec with Matc
       stopped.reconstructDevelopmentC(revised, true, None).isSuccess shouldBe false
     }
 
+    "retain exact legacy v1 bytes and require complete versioned current-prefix proof for v2" in {
+      Given("one legacy selection and a new current-source partition with distinct retained direction and failed-result references")
+      val state = _ready(_first_closed)
+      val assessment = R.Assessment(Vector.empty, Vector.empty, Vector.empty, true, false)
+      val legacy = _payload(state, state.plan, assessment)
+      val direction = ContextReference("same-session:ordered-source-history-normalization:10", "1")
+      val proof = R.PrefixSelection(R.prefixVersion, direction,
+        ContextReference(direction.identity + ":reconciliation-result", "1"), Vector("src/first.scala"),
+        Vector("src/second.scala"), state.generation, state.generation + 1)
+      val current = legacy.copy(prefixSelection = Some(proof))
+      When("the durable codec reads both generations of the common selection")
+      val oldwire = R.codec.encode(legacy)
+      val wire = R.codec.encode(current)
+      Then("v1 omits the new field and roundtrips byte-identically while v2 requires its complete exact proof")
+      oldwire.hcursor.get[String]("schemaVersion") shouldBe Right(R.schema)
+      oldwire.hcursor.downField("payload").downField("prefixSelection").focus shouldBe None
+      R.codec.decode(oldwire) shouldBe Right(legacy)
+      R.codec.encode(R.codec.decode(oldwire).toOption.get).noSpaces shouldBe oldwire.noSpaces
+      wire.hcursor.get[String]("schemaVersion") shouldBe Right(R.prefixSchema)
+      R.codec.decode(wire) shouldBe Right(current)
+      val missing = wire.hcursor.downField("payload").withFocus(_.mapObject(_.remove("prefixSelection"))).top.get
+      val absent = wire.hcursor.downField("payload").withFocus(_.mapObject(_.add("prefixSelection", Json.Null))).top.get
+      val crossed = wire.hcursor.downField("payload").downField("prefixSelection")
+        .withFocus(_.mapObject(_.add("failedResult", Json.obj("identity" -> Json.fromString("unrelated-intent"),
+          "revision" -> Json.fromString("1"))))).top.get
+      val unknown = wire.hcursor.downField("payload").downField("prefixSelection")
+        .withFocus(_.mapObject(_.add("extraProof", Json.True))).top.get
+      val nullquestion = wire.hcursor.downField("payload").downField("prefixSelection")
+        .withFocus(_.mapObject(_.add("supersededQuestion", Json.Null))).top.get
+      Vector(missing, absent, crossed, unknown, nullquestion,
+        wire.mapObject(_.add("schemaVersion", Json.fromString(R.schema))),
+        wire.hcursor.downField("payload").downField("prefixSelection")
+          .withFocus(_.mapObject(_.add("version", Json.fromString("unknown")))).top.get).foreach(value =>
+        R.codec.decode(value).isLeft shouldBe true)
+    }
+
+    "resolve only an authenticated technical inspection Decision with ordinary generation and unchanged repair accounting" in {
+      Given("an accepted first Step and an ordinary consumed repair whose completed work reached inspection")
+      val observed = _take(_ready(_first_closed).acceptC(O.CandidateObserved(O.Snapshot(_oid('d'), _oid('e')))))
+      val repair = _take(observed.acceptC(O.RepairableChecksObserved(observed.candidate.get, Vector("second-test"),
+        "retained-second-failure", O.RepairDirective("Repair current source", Vector("Original finding")))))
+      val inspected = _ready(repair)
+      val waiting = _take(inspected.reconstructDevelopmentC(inspected.plan, false, None,
+        Vector("Original normalization owner remains unresolved")))
+      val direction = ContextReference("same-session:ordered-source-history-normalization:10", "1")
+      val proof = R.PrefixSelection(R.prefixVersion, direction,
+        ContextReference(direction.identity + ":reconciliation-result", "1"), Vector.empty, Vector("src/second.scala"),
+        waiting.generation, waiting.generation + 1, Some(GoalPhaseSourceHistoryNormalization.Question(
+          "same-session:ordered-human:19", "20")))
+      val payload = _payload(waiting, waiting.plan, R.Assessment(Vector.empty, Vector.empty, Vector.empty, true, false))
+      When("the native-authenticated v2 connection selects a new subject while the unchanged default connection is also evaluated")
+      val selected = _take(R.selectedStateC(waiting, payload.copy(prefixSelection = Some(proof))))
+      val default = _take(waiting.reconstructDevelopmentC(waiting.plan, true, None))
+      Then("only the explicit technical flag resolves Decision and every accepted fact and consumed repair remains")
+      default.stage shouldBe O.Stage.Decision
+      default.generation shouldBe waiting.generation
+      default.decision shouldBe waiting.decision
+      selected.stage shouldBe O.Stage.InspectCandidate
+      selected.generation shouldBe waiting.generation + 1
+      selected.plan shouldBe waiting.plan
+      selected.base shouldBe waiting.base
+      selected.completed shouldBe waiting.completed
+      selected.repairs shouldBe waiting.repairs
+      selected.ordinaryRepairs shouldBe waiting.ordinaryRepairs
+      selected.pendingRepair shouldBe waiting.pendingRepair
+      selected.repairControl shouldBe waiting.repairControl
+      selected.repairObservations shouldBe waiting.repairObservations
+      selected.repairDirective shouldBe waiting.repairDirective
+      selected.decision shouldBe None
+      selected.decisionSource shouldBe None
+      selected.candidate shouldBe None
+      selected.checksReceipt shouldBe None
+      selected.reviewEvidence shouldBe None
+
+      Given("a business Implementation Decision and a distinct real closure intent")
+      val business = _take(_initial.reconstructDevelopmentC(_initial.plan, false, None, Vector("Human business meaning remains")))
+      val checked = _checked(_initial, 'c')
+      val accepted = _take(checked.acceptC(O.ReviewAdmitted(_key(checked), checked.candidate.get,
+        "actual-check", "independent-review", O.ReviewOutcome.Accept)))
+      val closing = _take(accepted.acceptC(O.ClosureIntentSaved(accepted.candidate.get, "unrelated-unknown-commit")))
+      When("the same technical connection is attempted outside its inspection boundary")
+      val refused = Vector(business, closing).map(state => state.reconstructDevelopmentC(state.plan, true, None,
+        technicalReassessment = true))
+      Then("neither unrelated uncertainty nor a meaningful Human question gains replay or another repair allowance")
+      refused.foreach(_.isSuccess shouldBe false)
+      business.decisionSource shouldBe Some(O.Stage.Implementation)
+      closing.closureIntent shouldBe Some("unrelated-unknown-commit")
+    }
+
     "resolve either actual document choice while keeping applicable original evidence for Keep" in {
       Given("a checked original candidate and a proposed remaining dependency clarification")
       val state = _checked(_first_closed, 'e')
@@ -685,6 +774,76 @@ final class GoalPhaseDevelopmentReconstructionSpec extends AnyWordSpec with Matc
       val closed = _take(phaseaccepted.acceptC(O.PhaseLocallyCompleted(all.tipSnapshot, all.completed.map(_.commit), "phase-review")))
       closed.stage shouldBe O.Stage.Closed
       closed.reconstructDevelopmentC(closed.plan, true, None).isSuccess shouldBe false
+    }
+  }
+}
+
+/** Inspection-subject consumption is derived native scoping, not effect or
+  * Human authority. This leaf is independently selectable without prior cases.
+  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.AdmissionTestDeclaration])
+final class GoalPhaseCurrentHistoryRecoverySubjectSpec extends AnyWordSpec with NativeGoalSourceHistoryCliFixture {
+  "Current native source-history subjects" should {
+    "retain consumed authority while allowing a different inspection to seek its own observation or Human" in {
+      Given("one already consumed actual inspection subject and a distinct later subject in the same Session")
+      val original = ContextReference("same-native-session", "25")
+      val current = ContextReference("same-native-session", "39")
+      val consumed = Set(original)
+      val records = Vector(original)
+      val plan = O.Plan("subject-plan", "1", "phase", "repository",
+        Vector(O.Step("step", "Observe the current source", Vector(sourcePath), Vector.empty, Vector("test"))), Vector("test"))
+      val state = SplitPhaseExplicitPartitionFixture.take(O.startC(plan, O.Snapshot("a" * 40, "b" * 40)))
+      When("the pure scoping helper evaluates the original and later native subjects with legacy Boolean retained or reset")
+      val old = Vector(false, true).map(value => R.sourceHistoryConsumed(value, consumed, original))
+      val next = R.sourceHistoryConsumed(true, consumed, current)
+      Then("the old subject stays blocked and the different subject is eligible only for its existing public admission")
+      old shouldBe Vector(true, true)
+      next shouldBe false
+      R.sourceHistoryConsumed(false, Set.empty, current) shouldBe false
+      consumed shouldBe Set(original)
+      records shouldBe Vector(original)
+      state.plan shouldBe plan
+      state.generation shouldBe 1L
+      state.repairs shouldBe 0
+      state.ordinaryRepairs shouldBe 0
+      state.completed shouldBe empty
+      state.pendingRepair shouldBe None
+    }
+
+    "fail closed for missing legacy provenance crossed Sessions and malformed native references" in {
+      Given("a legacy consumed flag without reconstructible target and several inadmissible context references")
+      val original = ContextReference("same-native-session", "25")
+      val current = original.copy(revision = "39")
+      val invalid = Vector(null, current.copy(identity = ""), current.copy(identity = " same-native-session"),
+        current.copy(revision = "0"), current.copy(revision = "-1"), current.copy(revision = "+39"),
+        current.copy(revision = "039"), current.copy(revision = "9223372036854775808"), current.copy(revision = null))
+      When("legacy provenance current references and consumed references are scoped")
+      val missing = R.sourceHistoryConsumed(true, Set.empty, current)
+      val crossed = R.sourceHistoryConsumed(true, Set(original), current.copy(identity = "other-session"))
+      Then("none permits a new recovery boundary and no missing identity is guessed or reset")
+      missing shouldBe true
+      crossed shouldBe true
+      R.sourceHistoryConsumed(false, null, current) shouldBe true
+      invalid.foreach(reference => R.sourceHistoryConsumed(false, Set.empty, reference) shouldBe true)
+      invalid.foreach(reference => R.sourceHistoryConsumed(false, Set(reference), current) shouldBe true)
+    }
+
+    "interpret the actual multi-class installed specification source with one managed goldenport header" in {
+      Given("the real repository specification source whose additional classes use ordinary dated labels")
+      val path = "src/test/scala/org/simplemodeling/textus/smworkflow/admission/NativeGoalDevelopmentReconstructionCliSpec.scala"
+      val text = java.nio.file.Files.readString(java.nio.file.Path.of(path), java.nio.charset.StandardCharsets.UTF_8)
+      val selected = SplitPhaseExplicitPartitionFixture.take(WorkflowSourceHistoryRule.decodeC(enabledSettings(ruleKey)))
+      When("the existing goldenport rule interprets the whole current file for its Nov6 source date")
+      val interpreted = SplitPhaseExplicitPartitionFixture.take(WorkflowSourceHistoryRule.applyC(selected,
+        WorkflowSourceHistoryRule.Input(path, text, java.time.LocalDate.of(2026, 11, 6), None, None, true)))
+      Then("the real parser accepts one managed header and preserves the additional class descriptions and dates")
+      interpreted.outcome shouldBe "unchanged"
+      interpreted.text shouldBe text
+      interpreted.providerIdentity shouldBe selected.identity
+      interpreted.text should include("Created: Nov.  6, 2026")
+      interpreted.text should include("Last revised: Nov.  6, 2026")
+      interpreted.text should include("final class NativeGoalCurrentSourceHistoryStopCliSpec")
     }
   }
 }

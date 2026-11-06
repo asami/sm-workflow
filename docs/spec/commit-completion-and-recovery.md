@@ -2,6 +2,21 @@
 
 Status: adopted target specification; implementation and qualification pending.
 Owner: sm-workflow development.
+
+### Qualified interrupted Phase record capture
+
+An actual contiguous complete recording stage prefix can precede a failed
+read-only completion-plan capture. Normal `advanceGoalPhase` now distinguishes
+this bounded preparation gap from an unknown staging effect. It authenticates
+the retained adjacent results and latest frontier, rechecks the current accepted
+repository/index and exact record-only policy, captures and saves the missing
+plan, and continues the existing File and release owners. It never reruns the
+initial staging loop or accepted validation/review. See the exact v1 compatibility
+limits in [native Goal execution](goal-phase-native-execution.md#complete-recording-staging-followed-by-interrupted-capture-preparation).
+Incomplete/crossed staging, missing results, changed scope or index, and later
+unknown effects do not qualify. Isolated installed regression coverage restores
+only a genuinely missing typed read binding after an actual capture failure;
+specification authority/review inputs are not production Human evidence.
 Plan: [Phase 6.8](../phase/phase-6.8.md).
 Acceptance: [P68 checklist](../phase/phase-6.8-checklist.md).
 
@@ -265,6 +280,18 @@ Final commit identities remain in runtime receipts rather than causing another
 tracked document update. Optional semantic English narrative still belongs to
 issued semantic work and its normal Submit; this clerical policy grants no
 independent semantic authorship after Terminal.
+
+Completion capture has its own invocation-local `completion-record-files`
+selection containing only the selected policy's exact ordered Markdown paths
+(at most 128, no duplicates). It passes typed `GitSelectionParameters` through
+the existing Git/UoW route. CNCF derives the bounded `TreeEntries` execution
+from the host's ordinary repository `Tree` read program and capability. The
+host must independently grant that read, `BlobContent` and managed File reads.
+These parameters grant no authority and permit no generic-process or fixed
+selected-program fallback. Source directory ownership and existing
+stage/check/commit declarations remain unchanged. The regular-only decoder
+continues to reject directories, symlinks and gitlinks; this is not a request
+to filter such rows from a broad release selection.
 
 Step records coalesce with the selected implementation commit. Task/delegate
 records use the existing selected commit owner and preserve the standalone FIX

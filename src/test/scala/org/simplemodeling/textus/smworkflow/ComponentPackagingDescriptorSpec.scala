@@ -137,7 +137,9 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
           "ForceCloseWorkflowInput", "WorkflowForceClosureView",
           "GoalPhaseDevelopmentReconstructionInput", "DelegateTaskScopeCorrectionDescriptionInput",
           "DelegateTaskScopeCorrectionInput", "DelegateTaskScopeCorrectionView",
-          "WorkflowDelegateTaskScopeCorrectionPreparationInput")
+          "WorkflowDelegateTaskScopeCorrectionPreparationInput",
+          "DelegateTaskCandidateContinuationDescriptionInput", "DelegateTaskCandidateContinuationInput",
+          "DelegateTaskCandidateContinuationView", "WorkflowDelegateTaskCandidateContinuationPreparationInput")
       values.foreach { name =>
         val fields = "(?m)^\\| (\\w+) \\| ([\\w.]+) \\| ([1?*+]) \\|".r.findAllMatchIn(sections(name)).map { m =>
           Json.obj("name" -> Json.fromString(m.group(1)), "type" -> Json.fromString(m.group(2)),
@@ -195,6 +197,7 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
         "prepareStandaloneReviewFixStart" -> "WorkflowStandaloneReviewFixStartPreparationInput", "prepareGoalTaskStart" -> "WorkflowGoalTaskStartPreparationInput",
         "prepareDelegateTaskStart" -> "WorkflowDelegateTaskStartPreparationInput",
         "prepareDelegateTaskScopeCorrection" -> "WorkflowDelegateTaskScopeCorrectionPreparationInput",
+        "prepareDelegateTaskCandidateContinuation" -> "WorkflowDelegateTaskCandidateContinuationPreparationInput",
         "prepareRepositoryStart" -> "WorkflowRepositoryStartPreparationInput", "prepareSplitStart" -> "WorkflowSplitStartPreparationInput",
         "prepareRepositoryEffect" -> "WorkflowRepositoryEffectPreparationInput", "prepareAuthority" -> "WorkflowAuthorityPreparationInput",
         "prepareEvidence" -> "WorkflowEvidencePreparationInput")
@@ -283,7 +286,7 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
       valueFields("GoalPhaseStepReviewDescriptionResult") shouldBe Vector("sessionId", "outcome", "message", "target", "requestOperation")
       valueFields("GoalPhaseStepReviewRequestInput") shouldBe Vector("sessionId", "target", "reason")
       valueFields("GoalPhaseStepReviewRequestResult") shouldBe Vector("sessionId", "accepted", "outcome", "message")
-      valueFields("GoalPhaseAdvanceInput") should contain theSameElementsAs Vector("sessionId")
+      valueFields("GoalPhaseAdvanceInput") should contain theSameElementsAs Vector("sessionId", "sourceHistoryObservationResource")
       valueFields("GoalPhaseReleaseRepairContinuationDescriptionInput") shouldBe Vector("sessionId")
       valueFields("GoalPhaseReleaseRepairContinuationDescriptionResult") shouldBe
         Vector("sessionId", "outcome", "message", "target", "choices", "recoveryOperation", "componentInstance")

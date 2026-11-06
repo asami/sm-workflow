@@ -754,15 +754,15 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
           withClue(identity) {
             operation.specification.request.parameters.head.name shouldBe
               (if (sessiondescriptions(operation.name)) "sessionId"
-                else if (operation.name == "requestGoalPhaseStepReview" || operation.name == "reconstructGoalPhaseDevelopment" ||
-                  Vector("start", "describe", "recover", "adopt", "admit", "continue", "resolve").exists(operation.name.startsWith)) "input"
+                else if (operation.name == "requestGoalPhaseStepReview" ||
+                  Vector("start", "describe", "recover", "adopt", "admit", "continue", "resolve", "reconstruct").exists(operation.name.startsWith)) "input"
                 else "sessionId")
             if (Set("describeGoalPhaseValidationRepair", "adoptGoalPhaseValidationRepair",
                 "recoverGoalPhaseCandidate", "recoverGoalPhaseWholePhaseCandidate", "describeGoalPhaseReleaseRepairContinuation",
                 "recoverGoalPhaseReleaseRepairContinuation", "describeGoalPhaseDependencySourceRevision",
                 "adoptGoalPhaseDependencySourceRevision", "recoverGoalPhasePrerequisitePublication",
-                "adoptRepositorySyncValidationContinuation", "reconstructGoalPhaseDevelopment",
-                "adoptGoalPhaseSourceHistoryNormalization").contains(operation.name)) {
+                "adoptRepositorySyncValidationContinuation", "adoptGoalPhaseSourceHistoryNormalization",
+                "reconstructGoalPhaseDevelopment").contains(operation.name)) {
               operation.specification.request.parameters.map(_.name) shouldBe Vector("input", "inputResource")
               operation.specification.request.parameters.map(_.domain.multiplicity) shouldBe
                 Vector(Multiplicity.ZeroOne, Multiplicity.ZeroOne)

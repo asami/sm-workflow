@@ -26,7 +26,7 @@ import RepositorySyncManagedGitObservation as G
   * @since   Oct.  6, 2026
   *  version Oct. 29, 2026
   *  version Nov.  2, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeRun {
@@ -79,7 +79,9 @@ private[smworkflow] object GoalPhaseNativeRun {
     prerequisitePublicationRecovery: Option[GoalPhasePrerequisitePublicationRecovery.Installation] = None,
     dispatchPolicy: Option[GoalPhaseDispatchPolicy.Policy] = None,
     logicalOrigin: Option[String] = None,
-    retainedObservations: Option[GoalPhaseRetainedObservations.Retained] = None)
+    retainedObservations: Option[GoalPhaseRetainedObservations.Retained] = None,
+    private[admission] val sourceHistoryInvocation: Option[GoalPhaseSourceHistoryAutomatic.Invocation] = None,
+    private[admission] val sourceHistoryObservation: Option[GoalPhaseSourceHistoryAutomatic.CallerObservation] = None)
   final case class SelectedPlan(selectionIdentity: String, participantIdentity: String,
     plan: O.Plan, documents: Option[GoalPhaseDocumentSource.Bound] = None)
   trait PlanPort {
@@ -247,6 +249,8 @@ private[smworkflow] object GoalPhaseNativeRun {
           c.subject.repositoryIdentity != d.input.repositoryIdentity || c.subject.phaseIdentity != d.input.phaseIdentity ||
           c.ownerDetailsUrl == null || !c.ownerDetailsUrl.forall(DevelopmentOperationalView.safeDetailsUrl)) ||
         d.journalPolicy.exists(_ == null) || d.evidencePolicy == null ||
+        d.sourceHistoryInvocation == null || d.sourceHistoryInvocation.exists(i => !GoalPhaseSourceHistoryAutomatic.validInvocation(i)) ||
+        d.sourceHistoryObservation == null || d.sourceHistoryObservation.exists(o => !GoalPhaseSourceHistoryAutomatic.validObservation(o)) ||
         d.sourceHistoryRecovery == null || d.sourceHistoryRecovery.exists(_ == null) ||
         d.sourceHistoryNormalization == null || d.sourceHistoryNormalization.exists(i => i == null || !i.validateC.isSuccess) ||
         d.candidateRecovery == null || d.candidateRecovery.exists(_ == null) ||

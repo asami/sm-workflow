@@ -113,6 +113,7 @@ org.simplemodeling.textus.smworkflow
 | name | type | multiplicity |
 |------+------|--------------|
 | sessionId | string | 1 |
+| sourceHistoryObservationResource | string | ? |
 
 ## GoalPhaseDiagnosticSelection
 
@@ -3693,6 +3694,11 @@ on = source-history-normalization-adopted
 ##### TRANSITION
 
 to = InspectCandidate
+on = source-history-automatic-selected
+
+##### TRANSITION
+
+to = InspectCandidate
 on = documents-selected
 
 ##### TRANSITION
@@ -7084,6 +7090,11 @@ on = purpose-progress
 to = PurposeUnfinished
 on = purpose-progress
 
+##### TRANSITION
+
+to = PurposeGrouped
+on = purpose-preparation-continuation
+
 #### PurposePrepared
 
 ##### TRANSITION
@@ -7425,6 +7436,8 @@ Advance the single execution identified by sessionId. Optional profile (standard
 
 Optional sm-workflow.source-history.style selects none (the default, with no history rule or source work) or goldenport for changed owned Scala sources before staging and checks. sm-workflow.source-history.rule supplies the external goldenport rule as a JSON object string; common configuration also accepts an object. CNCF resolves common configuration and these same-key operation properties for the current call, with operation values taking precedence. Invalid style or a missing/invalid selected rule fails before candidate inspection is recorded. These properties change no host grants, stores or business input binding.
 
+Optional sourceHistoryObservationResource is an absolute local file URI acquired by this executing Action through ordinary Resource authorization, UTF-8 decoding and finite budgets. It supplies only the closed factual caller observation for the exact described source-history normalization target and runtime-emitted invocation reference. Only exited with the exact affected v2 intent, Component, Session, operation and retained full rule admits automatic same-authority selection. Current text is read-only observable before termination and proves neither the old outcome nor termination. Live, unknown, absent, stale and crossed observations never authorize a writer or checks. Legacy v1 UNKNOWN lacks association and retains its explicit recovery/adoption APIs. Automatic selection and reconciliation retain distinct native provenance, never a Human Direction/answer; a genuine pending source-history question can be superseded unanswered. Reconciliation reads first, writes zero bytes when conformant, otherwise uses only one uniquely prescribed managed-comment correction with expected text. Its unresolved new intent is never retried automatically. The old File intent remains UNKNOWN; normal candidate/check/review routes own subsequent progress.
+
 ##### TYPE
 
 COMMAND
@@ -7441,6 +7454,7 @@ GoalPhaseAdvanceInput
 |------+------|--------------|
 | sessionId | string | 1 |
 | profile | string | ? |
+| sourceHistoryObservationResource | string | ? |
 | sm-workflow.source-history.style | string | ? |
 | sm-workflow.source-history.rule | string | ? |
 
@@ -9073,7 +9087,7 @@ RepositorySyncRepairBudgetContinuationAdoptionResult
 
 ##### DESCRIPTION
 
-Describe the actual immutable failed Purpose receipt selected by the current native frontier and its directly paired intent. Return complete opaque progress and process observations, including retained stdout, stderr and termination. Only a complete known nonzero exited preparation for the unchanged current ordered accepted Purpose repair offers AuthorizeNewPreparation. Completed earlier Purpose commits remain unchanged; only the exact failed current preparation receives a fresh namespace through separate Human adoption and ordinary Advance. Unknown, incomplete, different effects and source drift offer Defer only. This operation has no source, validation, workflow mutation or Git preparation effect.
+Describe the actual immutable preparation source selected by the current native frontier. The unchanged legacy v1 policy describes the failed receipt and directly paired intent with complete opaque progress and process observations, including retained stdout, stderr and termination; only a complete known nonzero exited preparation for the unchanged current ordered accepted Purpose repair offers AuthorizeNewPreparation, while unknown, incomplete or different process effects offer Defer only. The separate explicit policy sm-workflow.repository-sync-purpose-preparation-intent-continuation.v1 describes an actual resultless PurposePreparing intent or a genuine retained preparation rejection and offers AuthorizeNewPreparationAcceptingUnknown plus Defer when eligible. Its affirmative choice means the actual Human independently attests that the prior invocation ended or settled and accepts its original UNKNOWN effects for this exact target; a root CLI exit alone is insufficient. Source drift remains ineligible. Original history, receipts, progress, counters and completed commits remain unchanged. Description has no workflow mutation, source mutation, validation or Git preparation effect and fabricates no failure or process receipt.
 
 ##### TYPE
 
@@ -9101,7 +9115,7 @@ RepositorySyncPurposePreparationContinuationDescriptionResult
 
 ##### DESCRIPTION
 
-Accept exactly the described target and independent actual Human evidence through input or inputResource. AuthorizeNewPreparation appends one managed mechanical purpose-preparation-continuation transition to PurposeGrouped, preserving the accepted repair, original intent/result, progress, effects, attempts and history. A distinct preparation namespace authorizes only the separate ordinary Advance; adoption executes no Git, SBT, Submit or Start. Repeated identical adoption collects its receipt without another transition; crossed or stale directions refuse. Defer is passive. Eligibility requires the current ordered accepted Purpose repair and its complete known exited nonzero preparation result, with the prior completed commit prefix and expected index authenticated against the exact native installation and intent. Source drift and UNKNOWN or incomplete execution refuse. A new actual Human direction for the exact target authorizes only a fresh preparation namespace for separate ordinary Advance.
+Accept exactly the described target and independent actual Human evidence through the same complete input or inputResource contract. The unchanged legacy v1 AuthorizeNewPreparation requires the intact current ordered accepted Purpose repair and complete known exited nonzero preparation receipt; UNKNOWN or incomplete process results remain ineligible in that policy. Under the separate explicit policy sm-workflow.repository-sync-purpose-preparation-intent-continuation.v1, AuthorizeNewPreparationAcceptingUnknown requires the actual Human's independent attestation that the prior invocation ended or settled and acceptance of its original UNKNOWN effects for the exact resultless PurposePreparing or genuine retained preparation rejection target. Source drift, crossed or stale targets refuse; completed commit prefix and expected index are authenticated against immutable native history. Either affirmative direction appends only its managed purpose-preparation-continuation adoption to PurposeGrouped with a distinct preparation namespace, preserving original history, receipts, effects, accepted plan, counters and completed commits. Repeated identical adoption collects its receipt idempotently; Defer is passive. Only separate ordinary Advance may execute the newly authorized preparation. Adoption performs no Git mutation, SBT, Submit or Start, automatically replays no effect and fabricates no failure or process receipt; no new API or DTO is introduced.
 
 ##### TYPE
 
@@ -11911,6 +11925,34 @@ WorkflowDelegateTaskScopeCorrectionPreparationInput
 
 WorkflowPreparedImport
 
+#### prepareDelegateTaskCandidateContinuation
+
+##### DESCRIPTION
+
+Passively prepare the complete exact-target candidate continuation selection. Actual ExplicitHuman current-call admission remains required.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+WorkflowDelegateTaskCandidateContinuationPreparationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowDelegateTaskCandidateContinuationPreparationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowPreparedImport
+
 #### prepareGoalTaskStart
 
 ##### DESCRIPTION
@@ -13978,6 +14020,64 @@ DelegateTaskScopeCorrectionInput
 
 DelegateTaskScopeCorrectionView
 
+#### describeDelegateTaskCandidateContinuation
+
+##### DESCRIPTION
+
+Describe the exact retained CandidateIntent and current Git index/remaining ownership/configuration. This changes no Session and grants no execution.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskCandidateContinuationDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | DelegateTaskCandidateContinuationDescriptionInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskCandidateContinuationView
+
+#### recoverDelegateTaskCandidateContinuation
+
+##### DESCRIPTION
+
+Append independently selected Human authority for one new remaining candidate observation. Preserve the old intent, accepted Submit, base, history and counters. Ordinary Advance alone stages remaining changes and observes the candidate; it never replays an unknown intent.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskCandidateContinuationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | DelegateTaskCandidateContinuationInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskCandidateContinuationView
+
 #### resolveDelegateTaskDiagnosticInformation
 
 ##### DESCRIPTION
@@ -14667,6 +14767,69 @@ WorkflowForceClosureView
 # VALUE
 
 ## WorkflowDelegateTaskScopeCorrectionPreparationInput
+
+- input-kind :: COMMAND
+
+### DESCRIPTION
+
+Explicit ad hoc Task request selection metadata and absolute local file: URI reference. Supplied facts authenticate no origin and grant no effect.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | string | 1 |
+| selectionId | string | 1 |
+| participant | string | 1 |
+| origin | string | 1 |
+| idempotencyKey | string | 1 |
+| selectionCollection | string | 1 |
+
+# VALUE
+
+## DelegateTaskCandidateContinuationDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+# VALUE
+
+## DelegateTaskCandidateContinuationInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | string | 1 |
+| selectionId | string | 1 |
+| participant | string | 1 |
+| idempotencyKey | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+
+# VALUE
+
+## DelegateTaskCandidateContinuationView
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| target | string | 1 |
+
+# VALUE
+
+## WorkflowDelegateTaskCandidateContinuationPreparationInput
 
 - input-kind :: COMMAND
 

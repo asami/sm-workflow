@@ -33,4 +33,24 @@ private[smworkflow] object NativeDelegateTaskScopeCorrectionInput {
     payload <- ProfileSelectionJsonV1.encodeStorageC(selection)
   } yield Record.data("datastore" -> Vector(Record.data("collection" -> options("selection-collection"), "records" ->
     Vector(Record.data("id" -> options("selection-id"), ProfileSelectionJsonV1.storageField -> payload)))))
+  def prepareCandidateC(supplied: Map[String, String], read: String => Consequence[String]): Consequence[Record] = for {
+    options <- NativePreparationInput.optionsC(supplied,
+      Set("input", "selection-id", "participant", "origin", "idempotency-key", "selection-collection"), read)
+    _ <- if (options("origin") == "ExplicitHuman") Consequence.unit
+      else Consequence.stateConflict("Scope correction requires ExplicitHuman selection")
+    _ <- NativePreparationInput.collectionC(options("selection-collection"))
+    text <- read(options("input"))
+    record <- new RecordDecoder().json(text)
+    input <- summon[ValueReader[V.DelegateTaskCandidateContinuationInput]].readC(record)
+    _ <- if (input.selectionId == options("selection-id") && input.participant == options("participant") &&
+        input.idempotencyKey == options("idempotency-key")) Consequence.unit
+      else Consequence.stateConflict("Scope preparation metadata differs from the selected input")
+    normalized <- DelegateTaskCandidateContinuation.selectionInputC(input)
+    definition <- DelegateTaskRuntimeCatalog.loadC()
+    selection = ProfileStartAdmission.Selection(options("selection-id"), DelegateTaskCandidateContinuation.operation,
+      definition.workflowIdentity, definition.workflowRevision, options("participant"), ProfileStartAdmission.SelectionOrigin.ExplicitHuman,
+      options("idempotency-key"), None, Some(TypedValue(DelegateTaskCandidateContinuation.inputType, normalized)))
+    payload <- ProfileSelectionJsonV1.encodeStorageC(selection)
+  } yield Record.data("datastore" -> Vector(Record.data("collection" -> options("selection-collection"), "records" ->
+    Vector(Record.data("id" -> options("selection-id"), ProfileSelectionJsonV1.storageField -> payload)))))
 }

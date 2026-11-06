@@ -88,6 +88,7 @@ private[smworkflow] object WorkflowManagedProcessExecution {
     target = SbtTarget(workspace)
     operation = kind match {
       case WorkflowSbtValidation.Kind.Compile => SbtOperation.Compile
+      case WorkflowSbtValidation.Kind.TestCompile => SbtOperation.TestCompile
       case WorkflowSbtValidation.Kind.Test => SbtOperation.Test
       case WorkflowSbtValidation.Kind.TestOnly => SbtOperation.TestOnly
       case WorkflowSbtValidation.Kind.FixCheck => SbtOperation.FixCheck
@@ -116,13 +117,15 @@ private[smworkflow] object WorkflowManagedProcessExecution {
   /** Admission and uncertain execution remain distinct from observed process facts. */
   def repositoryValidationAttemptC(core: ActionCall.Core, ordinal: Int,
     kind: WorkflowSbtValidation.Kind = WorkflowSbtValidation.Kind.Test,
-    workspaceIdentity: Option[String] = None): Consequence[SbtExecutionAttempt] = for {
+    workspaceIdentity: Option[String] = None,
+    estimate: Option[SbtValidationEstimate] = None): Consequence[SbtExecutionAttempt] = for {
     _ <- if (core != null && core.executionContext != null && kind != null && ordinal > 0 && ordinal <= 16) Consequence.unit
       else Consequence.stateConflict("Workflow repository validation selection is incomplete")
     workspace <- WorkspaceId.parseC(workspaceIdentity.getOrElse("sm-workflow-repository-validation-" + ordinal))
-    target = SbtTarget(workspace)
+    target = SbtTarget(workspace, validationEstimate = estimate)
     operation = kind match {
       case WorkflowSbtValidation.Kind.Compile => SbtOperation.Compile
+      case WorkflowSbtValidation.Kind.TestCompile => SbtOperation.TestCompile
       case WorkflowSbtValidation.Kind.Test => SbtOperation.Test
       case WorkflowSbtValidation.Kind.TestOnly => SbtOperation.TestOnly
       case WorkflowSbtValidation.Kind.FixCheck => SbtOperation.FixCheck
@@ -204,6 +207,7 @@ private[smworkflow] object WorkflowManagedProcessExecution {
     // CNCF interprets its current authority and owns the managed lifecycle.
     def prepareSbt(target: SbtTarget, kind: WorkflowSbtValidation.Kind): ExecUowM[SbtExecutionResult] = kind match {
       case WorkflowSbtValidation.Kind.Compile => sbt_compile(target)
+      case WorkflowSbtValidation.Kind.TestCompile => sbt_test_compile(target)
       case WorkflowSbtValidation.Kind.Test => sbt_test(target)
       case WorkflowSbtValidation.Kind.TestOnly => sbt_test_only(target)
       case WorkflowSbtValidation.Kind.FixCheck => sbt_fix_check(target)
@@ -211,6 +215,7 @@ private[smworkflow] object WorkflowManagedProcessExecution {
     def runSbtC(program: ExecUowM[SbtExecutionResult]): Consequence[SbtExecutionResult] = executeProgram(program)
     def prepareSbtAttempt(target: SbtTarget, kind: WorkflowSbtValidation.Kind): ExecUowM[SbtExecutionAttempt] = kind match {
       case WorkflowSbtValidation.Kind.Compile => sbt_compile_attempt(target)
+      case WorkflowSbtValidation.Kind.TestCompile => sbt_test_compile_attempt(target)
       case WorkflowSbtValidation.Kind.Test => sbt_test_attempt(target)
       case WorkflowSbtValidation.Kind.TestOnly => sbt_test_only_attempt(target)
       case WorkflowSbtValidation.Kind.FixCheck => sbt_fix_check_attempt(target)

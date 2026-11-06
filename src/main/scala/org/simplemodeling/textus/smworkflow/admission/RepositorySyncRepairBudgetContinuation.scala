@@ -52,7 +52,7 @@ private[smworkflow] object RepositorySyncRepairBudgetContinuation {
   object Target {
     private def _outer_receipt(value: Json): Json = value.mapObject(fields => fields("sbt").fold(fields)(facts =>
       fields.add("sbt", facts.mapObject(_.filter {
-        case ("selection" | "reason", field) => !field.isNull
+        case ("selection" | "reason" | "estimate", field) => !field.isNull
         case _ => true
       }))))
     given Encoder[Target] = deriveEncoder[Target].mapJson(_.mapObject { fields =>

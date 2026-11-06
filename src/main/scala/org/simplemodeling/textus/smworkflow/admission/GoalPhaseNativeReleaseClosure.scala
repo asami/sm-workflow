@@ -21,7 +21,7 @@ import WorkflowManagedProcessExecution as E
   * The existing Phase authority and an explicit fixed local commit program are
   * both required. An unresolved intent is retained, never blindly replayed.
   * @since   Oct. 24, 2026
-  * @version Oct. 28, 2026
+  * @version Oct. 30, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeReleaseClosure {
@@ -68,7 +68,7 @@ private[smworkflow] object GoalPhaseNativeReleaseClosure {
       Vector(c.identity, c.parent, c.tree).forall(v => v != null && v.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")) &&
       c.parent == value.parent.head && c.identity != c.parent && c.tree == value.input.candidate.tree)
   def needed(controller: O.State): Boolean = controller.stage == O.Stage.PhaseClosing && (controller.releaseRepairActive || controller.phaseRecordingPaths.nonEmpty) &&
-    controller.candidate.exists(_.tree != controller.tipSnapshot.tree)
+    controller.candidate.exists(_.tree != controller.candidateBase.tree)
 
   /** Receipt-chain consistency only. Reconciled results additionally require the
     * owning advance's actual Git observation, authority and adjacent history.
@@ -179,7 +179,7 @@ private[smworkflow] object GoalPhaseNativeReleaseClosure {
     d: F.Declaration, core: ActionCall.Core, from: InstanceRecord, controller: O.State,
     val input: R.Input, val ordinal: Int, acknowledge: String => Consequence[Unit]) {
     val owned = controller.plan.phaseOwnedPaths
-    val initial = Payload(input, controller.tipSnapshot, ordinal)
+    val initial = Payload(input, controller.candidateBase, ordinal)
     private def _reference(role: String) = WorkflowMechanicalTransition.Reference(from.identity.value +
       ":ordered-release-closure:" + from.revision.value + ":" + role, "1")
     def loadC(role: String): Consequence[Option[Saved]] = adapter.loadRetainedC(_reference(role))(using core.executionContext).flatMap {

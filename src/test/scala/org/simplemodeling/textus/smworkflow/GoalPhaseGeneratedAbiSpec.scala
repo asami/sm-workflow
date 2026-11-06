@@ -170,6 +170,8 @@ private[smworkflow] trait GoalPhaseGeneratedAbiBehavior extends AnyWordSpec with
         "adoptGoalPhaseValidationRepair" -> Some("GoalPhaseValidationRepairAdoptionInput"))
       operations.find(_.name == "submitGoalPhaseFindingRecording").get.specification.request.parameters.map(_.name) shouldBe Vector(
         "sessionId", "result", "resultReference", "completionFacts", "executionEvidence")
+      provided.find(_.name == "reconstructGoalPhaseDevelopment").get.resultType shouldBe
+        Some("GoalPhaseAdvanceResult")
       provided.find(_.name == "submitGoalPhaseFindingRecording").get.resultType shouldBe
         Some("GoalPhaseFindingRecordingSubmissionResult")
       provided.find(_.name == "describeGoalPhaseReviewPurposeRepair").get.resultType shouldBe

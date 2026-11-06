@@ -25,7 +25,8 @@ import GoalPhasePrerequisitePublicationRecovery as P
   * the old publication result nor the accepted semantic work.
   * @since   Nov.  1, 2026
   *  version Nov.  2, 2026
-  * @version Nov.  5, 2026
+  *  version Nov.  5, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhasePrerequisitePublicationUnknownRecovery {
@@ -195,6 +196,10 @@ private[smworkflow] object GoalPhasePrerequisitePublicationUnknownRecovery {
     value.frontierRevision, value.candidateRecordRevision, value.unknown.request, bindingOf(value.candidate), value.guard)
   def bindingOf(value: C.Payload): D.Binding = value.dependencySourceCapture.map(R.bindingOf)
     .orElse(value.dependencyAdmission.map(_.binding)).get
+  def bindingC(value: C.Payload): Consequence[D.Binding] =
+    Option(value).flatMap(candidate => candidate.dependencySourceCapture.map(R.bindingOf)
+      .orElse(candidate.dependencyAdmission.map(_.binding))).map(Consequence.success)
+      .getOrElse(F.invalid("UNKNOWN prerequisite recovery requires an authenticated dependency binding; primary publication is unsupported here"))
   def targetValid(value: Target): Boolean = value != null && value.schemaVersion == schema &&
     _text(value.componentInstance) && _text(value.participant) && _text(value.sessionId) && _revision(value.frontierRevision) &&
     _revision(value.candidateRecordRevision) && BigInt(value.candidateRecordRevision) <= BigInt(value.frontierRevision) &&
@@ -278,7 +283,7 @@ private[smworkflow] object GoalPhasePrerequisitePublicationUnknownRecovery {
   private def _publication_c(source: Source, d: F.Declaration, core: ActionCall.Core):
       Consequence[(LocalPublicationRuntime.Policy, LocalPublication.Result)] = for {
     policy <- d.localPublication.map(Consequence.success).getOrElse(F.invalid("UNKNOWN prerequisite policy is absent"))
-    binding = bindingOf(source.native.candidate.payload)
+    binding <- bindingC(source.native.candidate.payload)
     target <- policy.targets.filter(t => t.beforeChecks && t.dependency.contains(binding.identity) &&
       t.workspace == binding.dependency.workspace) match {
       case Vector(value) => Consequence.success(value)

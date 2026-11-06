@@ -164,10 +164,35 @@ final class BoundedWorkNativeOutcomeSpec extends AnyWordSpec with Matchers with 
     json <- io.circe.parser.parse(text).fold(error => Consequence.stateConflict(error.message), Consequence.success)
   } yield json
 
-  "Retained Task candidate capture" should {
-    "observe complete indexes and finish only remaining staging before the final repair validation once" in {
+  "Task candidate capture and retained unknown intent" should {
+    "retain a loaded Task candidate intent without replaying staging or validation" in {
+      Given("a fixture-owned accepted repair whose candidate capture intent has no retained result")
+      val directory = root(); prepare(directory)
+      Files.writeString(directory.resolve("repository/value.txt"), "retained selected delta\n")
+      _with_runtime_(directory, "Outcome", hostParameters = parameters(directory)) { (_, _, _, project) =>
+        project(call => for {
+          before <- G.observeC(call.core)
+          h = host(directory)
+          pending = state(true, "CandidateIntent").copy(candidate = None, receipts = Vector.empty)
+          seeded <- seedC(GoalTaskNativeRun, h, "fixture-unknown-candidate",
+            Payload(pending, h.root, "main", before.head, unrelated = Some(Vector.empty)), call.core)
+          _ = When("ordinary Advance collects the old resultless intent")
+          result <- GoalTaskNativeRun.advanceC("fixture-unknown-candidate", h, seeded._1, call.core)
+          record <- currentC(seeded._2, "fixture-unknown-candidate", call.core)
+          after <- G.observeC(call.core)
+          _ = Then("the intent and history remain unchanged and no staging or check is executed")
+          _ = result.kind shouldBe "Wait"
+          _ = record shouldBe seeded._3
+          _ = after shouldBe before
+          _ = Files.exists(directory.resolve("stage-calls")) shouldBe false
+          _ = Files.exists(directory.resolve("check-calls")) shouldBe false
+        } yield ())
+      }
+    }
+
+    "observe complete indexes and stage only current unstaged paths before the final repair validation once" in {
       for (mode <- Vector("unstaged", "partial", "staged", "deletion")) {
-        Given("a specification-owned final accepted repair with interrupted capture and a " + mode + " index")
+        Given("a specification-owned final accepted repair before first capture with a " + mode + " index")
         val directory = root(); prepare(directory)
         val repository = directory.resolve("repository")
         Files.writeString(repository.resolve("second.txt"), "second baseline\n")
@@ -192,7 +217,7 @@ final class BoundedWorkNativeOutcomeSpec extends AnyWordSpec with Matchers with 
             mapping <- BoundedWorkExecutionAdmissionFixture.mappingC()
             h = host(directory).copy(paths = Vector("value.txt", "second.txt"), checks = selected.take(1),
               profiles = Some(mapping), origin = Some(BoundedWorkExecutionAdmissionFixture.origin))
-            original = state(true, "CandidateIntent")
+            original = state(true, "Inspect")
             pending = original.copy(input = original.input.copy(ownedPaths = h.paths, checks = Vector("compile"),
               kind = "documentation", repairLimit = 3), selected = h.checks, candidate = None, receipts = Vector.empty,
               automaticCount = 3, ordinaryCount = 3,
@@ -240,7 +265,7 @@ final class BoundedWorkNativeOutcomeSpec extends AnyWordSpec with Matchers with 
     }
 
     "return the actual ownership choice to Human without staging another worker's index" in {
-      Given("an interrupted Task capture and an extra staged path outside the adopted ownership")
+      Given("a first Task capture and an extra staged path outside the adopted ownership")
       val directory = root(); prepare(directory)
       Files.writeString(directory.resolve("repository/value.txt"), "accepted Task repair\n")
       Files.writeString(directory.resolve("repository/unrelated.txt"), "another worker's selected change\n")
@@ -249,7 +274,7 @@ final class BoundedWorkNativeOutcomeSpec extends AnyWordSpec with Matchers with 
         project(call => for {
           base <- G.observeC(call.core)
           h = host(directory)
-          original = state(true, "CandidateIntent")
+          original = state(true, "Inspect")
           pending = original.copy(input = original.input.copy(repairLimit = 3), candidate = None, receipts = Vector.empty,
             automaticCount = 3, ordinaryCount = 3,
             repairControl = GoalPhaseRuntimeRepairControl.Context(GoalPhaseRuntimeRepairControl.version, 3))

@@ -2,6 +2,7 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
 import io.circe.generic.auto.*
+import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
 import java.time.LocalDate
 import org.goldenport.{Consequence, ConsequenceT}
@@ -18,25 +19,106 @@ import GoalPhaseOrderedProgression as O
   * Partial history is retained by the existing candidate continuation without replay.
   * @since   Oct. 17, 2026
   *  version Oct. 23, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeSourceHistory {
   final case class Prepared private[GoalPhaseNativeSourceHistory] (
     rule: WorkflowSourceHistoryRule.Rule, sources: Vector[WorkflowSourceHistory.Source])
   final case class Payload(sourceRevision: String, step: String, path: String, style: String,
-    providerIdentity: String, updatedOn: String, dateUncertain: Boolean, outcome: Option[String])
+    providerIdentity: String, updatedOn: String, dateUncertain: Boolean, outcome: Option[String],
+    invocation: Option[GoalPhaseSourceHistoryAutomatic.Invocation] = None, historyPolicy: Option[Json] = None)
+  object Payload {
+    given io.circe.Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(fields =>
+      Vector("invocation", "historyPolicy").foldLeft(fields)((selected, key) =>
+        if (selected(key).exists(_.isNull)) selected.remove(key) else selected)))
+    given io.circe.Decoder[Payload] = deriveDecoder
+  }
+  final case class PrefixApplicability(reusable: Vector[String], fresh: Vector[String])
+
+  def validPartition(target: GoalPhaseSourceHistoryRecovery.RecoveryTarget,
+    partition: PrefixApplicability): Boolean = GoalPhaseSourceHistoryRecovery.validTarget(target) &&
+    partition != null && partition.reusable != null && partition.fresh != null && {
+      val paths = target.completedPrefix.map(_.result.path)
+      partition.reusable.distinct == partition.reusable && partition.fresh.distinct == partition.fresh &&
+        partition.reusable.intersect(partition.fresh).isEmpty &&
+        paths.filter(partition.reusable.contains) == partition.reusable &&
+        paths.filter(partition.fresh.contains) == partition.fresh &&
+        paths.size == partition.reusable.size + partition.fresh.size
+    }
+
+  /** A current-source selection observes applicability, never an old effect's outcome.
+    * Missing files are known absence; failed reads or interpretation remain failures.
+    */
+  def assessCompletedPrefixC(core: ActionCall.Core,
+    target: GoalPhaseSourceHistoryRecovery.RecoveryTarget): Consequence[PrefixApplicability] = for {
+    rule <- _prefix_rule_c(core, target)
+    workspace <- WorkspaceId.parseC("sm-workflow-repository")
+    partition <- target.completedPrefix.foldLeft(Consequence.success(PrefixApplicability(Vector.empty, Vector.empty))) {
+      (prior, entry) => for {
+        selected <- prior
+        applicable <- _prefix_entry_c(core, FileTarget(workspace), rule, entry)
+      } yield if (applicable) selected.copy(reusable = selected.reusable :+ entry.result.path)
+        else selected.copy(fresh = selected.fresh :+ entry.result.path)
+    }
+  } yield partition
+
+  /** The native reconstruction owner independently authenticates this full partition.
+    * Old callers retain full-prefix verification and its original strict errors.
+    */
+  def verifySelectedPrefixC(core: ActionCall.Core, target: GoalPhaseSourceHistoryRecovery.RecoveryTarget,
+    partition: PrefixApplicability): Consequence[Vector[String]] = for {
+    _ <- if (validPartition(target, partition)) Consequence.unit
+      else F.invalid("source history reuse selection is not the complete ordered original prefix partition")
+    rule <- _prefix_rule_c(core, target)
+    workspace <- WorkspaceId.parseC("sm-workflow-repository")
+    _ <- target.completedPrefix.filter(entry => partition.reusable.contains(entry.result.path))
+      .foldLeft(Consequence.unit) { (prior, entry) => for {
+        _ <- prior
+        applicable <- _prefix_entry_c(core, FileTarget(workspace), rule, entry)
+        _ <- if (applicable) Consequence.unit
+          else F.invalid("selected reusable source history no longer satisfies its saved rule and date")
+      } yield () }
+  } yield partition.reusable
+
+  private def _prefix_rule_c(core: ActionCall.Core,
+    target: GoalPhaseSourceHistoryRecovery.RecoveryTarget): Consequence[WorkflowSourceHistoryRule.Rule] = for {
+    _ <- if (core != null && core.executionContext != null && GoalPhaseSourceHistoryRecovery.validTarget(target))
+      Consequence.unit else F.invalid("source history applicability requires its actual call and complete recovery target")
+    selection <- WorkflowSourceHistoryParameters.resolveC(core.executionContext)
+    rule <- selection.rule.filter(rule => selection.style == "goldenport" && rule.asJson == target.historyPolicy)
+      .map(Consequence.success).getOrElse(F.invalid("source history applicability rule changed after policy direction"))
+  } yield rule
+
+  private def _prefix_entry_c(core: ActionCall.Core, workspace: FileTarget, rule: WorkflowSourceHistoryRule.Rule,
+    entry: GoalPhaseSourceHistoryRecovery.CompletedPrefix): Consequence[Boolean] = for {
+    path <- WorkspaceFilePath.parseC(entry.result.path)
+    read <- WorkflowFileExecution.readTextC(core, workspace, path)
+    applicable <- read.text match {
+      case None => Consequence.success(false)
+      case Some(text) => WorkflowSourceHistoryRule.applyC(rule, WorkflowSourceHistoryRule.Input(entry.result.path, text,
+        LocalDate.parse(entry.result.updatedOn), None, None, entry.result.dateUncertain)).map(interpreted =>
+        interpreted.outcome == "unchanged" && interpreted.text == text &&
+          interpreted.providerIdentity == entry.result.providerIdentity && interpreted.dateUncertain == entry.result.dateUncertain)
+    }
+  } yield applicable
   private val _outcomes = Set("excluded", "missing", "unchanged", "updated")
   private[admission] val codec = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "GoalPhaseNativeSourceHistoryReceipt"
     def encode(value: Payload): Json = Json.obj(
-      "schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-source-history.v1"), "payload" -> value.asJson)
+      "schemaVersion" -> Json.fromString("sm-workflow.goal-phase-native-source-history." +
+        (if (value.invocation.nonEmpty) "v2" else "v1")), "payload" -> value.asJson)
     def decode(value: Json): Either[String, Payload] = for {
       wire <- Option(value).toRight("native source history is missing")
       schema <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
-      _ <- Either.cond(schema == "sm-workflow.goal-phase-native-source-history.v1", (), "native source history schema differs")
+      _ <- Either.cond(Set("sm-workflow.goal-phase-native-source-history.v1",
+        "sm-workflow.goal-phase-native-source-history.v2")(schema), (), "native source history schema differs")
       payload <- wire.hcursor.get[Payload]("payload").left.map(_.message)
-      _ <- Either.cond(_valid_payload(payload), (), "native source history payload is invalid")
+      _ <- Either.cond(_valid_payload(payload) && (if (schema.endsWith(".v2"))
+        payload.invocation.nonEmpty && payload.historyPolicy.nonEmpty && encode(payload) == wire
+        else payload.invocation.isEmpty && payload.historyPolicy.isEmpty &&
+          !wire.hcursor.downField("payload").downField("invocation").succeeded &&
+          !wire.hcursor.downField("payload").downField("historyPolicy").succeeded), (), "native source history payload is invalid")
     } yield payload
   }
 
@@ -117,6 +199,11 @@ private[smworkflow] object GoalPhaseNativeSourceHistory {
     case None => Consequence.success(current)
     case Some(selected) => for {
       _ <- _frontier_c(session, core, source, current, controller, scopeIdentity, inspectionStage, acknowledgement)
+      _ <- if (d.sourceHistoryInvocation.forall(invocation => GoalPhaseSourceHistoryAutomatic.validInvocation(invocation) &&
+          invocation.sessionId == source.identity.value &&
+          core.component.exists(_.core.instanceId.canonicalKey == invocation.componentInstance) &&
+          core.action.request.service.contains("GoalPhaseService") && core.action.request.operation == "advanceGoalPhase"))
+        Consequence.unit else F.invalid("source history invocation crosses its actual Component, Session or Advance operation")
       _ <- if (selected != null && selected.rule != null && selected.sources != null && selected.sources.nonEmpty &&
           selected.sources.forall(s =>
             s != null && s.updatedOn != null && s.createdOn == None && s.author == None && s.dateUncertain &&
@@ -130,7 +217,8 @@ private[smworkflow] object GoalPhaseNativeSourceHistory {
         case (prior, (input, index)) => prior.flatMap { from => for {
           _ <- _frontier_c(session, core, source, from, controller, scopeIdentity, inspectionStage, acknowledgement)
           payload = Payload(source.revision.value.toString, scopeIdentity, input.path, "goldenport",
-            selected.rule.identity, input.updatedOn.toString, input.dateUncertain, None)
+            selected.rule.identity, input.updatedOn.toString, input.dateUncertain, None,
+            d.sourceHistoryInvocation, d.sourceHistoryInvocation.map(_ => selected.rule.asJson))
           intent <- _save_c(adapter, d, core, source, from, inspectionStage, "source-history-intent-" + index, payload)
           _ <- _ack_c(acknowledgement, "goal-source-history-prepared:" + input.path)
           actual <- WorkflowSourceHistory.applyC(core, FileTarget(workspace), input)
@@ -198,7 +286,15 @@ private[smworkflow] object GoalPhaseNativeSourceHistory {
     _exact(value.step) && _path(value.path) && value.style == "goldenport" &&
     _exact(value.providerIdentity) && value.updatedOn != null &&
     scala.util.Try(LocalDate.parse(value.updatedOn)).toOption.exists(_.toString == value.updatedOn) &&
-    value.outcome != null && value.outcome.forall(_outcomes)
+    value.outcome != null && value.outcome.forall(_outcomes) && value.invocation != null && value.historyPolicy != null &&
+    ((value.invocation, value.historyPolicy) match {
+      case (None, None) => true
+      case (Some(invocation), Some(policy)) => GoalPhaseSourceHistoryAutomatic.validInvocation(invocation) &&
+        WorkflowSourceHistoryRule.decodeC(policy).toOption.exists(rule => rule.asJson == policy &&
+          rule.identity == value.providerIdentity && rule.style == value.style &&
+          WorkflowSourceHistoryRule.includesC(rule, value.path).toOption.contains(true))
+      case _ => false
+    })
   private def _path(value: String): Boolean = _exact(value) &&
     WorkspaceFilePath.parseC(value).toOption.exists(_.value == value)
   private def _exact(value: String): Boolean = value != null && value.nonEmpty &&

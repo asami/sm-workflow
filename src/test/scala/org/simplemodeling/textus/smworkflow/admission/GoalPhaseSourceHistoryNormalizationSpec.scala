@@ -18,10 +18,42 @@ import GoalPhaseSourceHistoryRecovery as R
 import GoalPhaseOrderedProgression as O
 import SplitPhaseExplicitPartitionFixture.take
 
+/** Pure specification-owned data; constructing it creates no workflow or authority. */
+private[admission] object SourceHistoryNormalizationSpecificationFixture {
+  def target(sourcePath: String, historyPolicy: Json, ruleIdentity: String,
+    prefixSize: Int = 2, pending: Boolean = true): N.Target = {
+    val snapshot = O.Snapshot("a" * 40, "b" * 40)
+    val day = LocalDate.of(2026, 10, 21)
+    val paths = (0 until prefixSize).map(index => "src/main/scala/Prefix" + index + ".scala").toVector :+ sourcePath
+    def _payload_(path: String) = GoalPhaseNativeSourceHistory.Payload("50", "step-1", path, "goldenport",
+      ruleIdentity, day.toString, true, None)
+    val prefix = paths.take(prefixSize).zipWithIndex.map { (path, index) => R.CompletedPrefix(index,
+      "session:ordered-candidate:50:source-history-intent-" + index, "1", (52 + index * 2).toString,
+      "session:ordered-candidate:50:source-history-result-" + index, "1", (53 + index * 2).toString,
+      _payload_(path), _payload_(path).copy(outcome = Some("updated"))) }
+    val frontier = (52 + prefixSize * 2).toString
+    val recovery = R.RecoveryTarget("session", "plan", "2", snapshot, snapshot, "goal-phase", "1", "participant",
+      "step-1", "50", frontier, "session:ordered-candidate:50:source-history-intent-" + prefixSize, "1", frontier,
+      paths, paths, Vector.empty, historyPolicy, GoalPhaseNativeCandidate.Payload("50", "step-1", paths,
+        Vector.empty, None, Vector.empty, None), _payload_(sourcePath), prefixSize, prefix)
+    val question = "session:ordered-human:" + frontier
+    N.Target(recovery, (frontier.toLong + (if (pending) 1 else 0)).toString,
+      if (pending) question + ":issued" else "ordered-candidate:source-history-intent-" + prefixSize, N.policy,
+      if (pending) Some(N.Question(question, (frontier.toLong + 1).toString)) else None)
+  }
+
+  def nestedTarget(sourcePath: String, historyPolicy: Json, ruleIdentity: String, prefixSize: Int): N.Target = {
+    val (_, direction, _) = InitialDependencySourceRevisionSpecificationFixture.fixture
+    val selected = target(sourcePath, historyPolicy, ruleIdentity, prefixSize)
+    selected.copy(recovery = selected.recovery.copy(inspection = selected.recovery.inspection.copy(
+      dependencySourceDirection = Some(direction))))
+  }
+}
+
 /** Immutable binding and actual managed File specifications. Supplied policy
   * references and lifecycle assertions are test-owned facts, never live consent.
   * @since   Oct. 26, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -33,24 +65,8 @@ final class GoalPhaseSourceHistoryNormalizationSpec extends AnyWordSpec with Nat
   private val artifact = ContextReference("already-held-policy-direction", "1")
   private val source = WorkflowSourceHistory.Source(sourcePath, day, None, None, true)
   private def rule = take(WorkflowSourceHistoryRule.decodeC(enabledSettings(ruleKey)))
-  private def target(prefixSize: Int = 2, pending: Boolean = true): N.Target = {
-    val paths = (0 until prefixSize).map(index => "src/main/scala/Prefix" + index + ".scala").toVector :+ sourcePath
-    def payload(path: String) = GoalPhaseNativeSourceHistory.Payload("50", "step-1", path, "goldenport",
-      rule.identity, day.toString, true, None)
-    val prefix = paths.take(prefixSize).zipWithIndex.map { (path, index) => R.CompletedPrefix(index,
-      "session:ordered-candidate:50:source-history-intent-" + index, "1", (52 + index * 2).toString,
-      "session:ordered-candidate:50:source-history-result-" + index, "1", (53 + index * 2).toString,
-      payload(path), payload(path).copy(outcome = Some("updated"))) }
-    val frontier = (52 + prefixSize * 2).toString
-    val recovery = R.RecoveryTarget("session", "plan", "2", snapshot, snapshot, "goal-phase", "1", "participant",
-      "step-1", "50", frontier, "session:ordered-candidate:50:source-history-intent-" + prefixSize, "1", frontier,
-      paths, paths, Vector.empty, enabledSettings(ruleKey), GoalPhaseNativeCandidate.Payload("50", "step-1", paths,
-        Vector.empty, None, Vector.empty, None), payload(sourcePath), prefixSize, prefix)
-    val question = "session:ordered-human:" + frontier
-    N.Target(recovery, (frontier.toLong + (if (pending) 1 else 0)).toString,
-      if (pending) question + ":issued" else "ordered-candidate:source-history-intent-" + prefixSize, N.policy,
-      if (pending) Some(N.Question(question, (frontier.toLong + 1).toString)) else None)
-  }
+  private def target(prefixSize: Int = 2, pending: Boolean = true): N.Target =
+    SourceHistoryNormalizationSpecificationFixture.target(sourcePath, enabledSettings(ruleKey), rule.identity, prefixSize, pending)
   private def withSource(text: String, access: Option[String] = Some("manage"))(
     task: (java.nio.file.Path, org.goldenport.cncf.action.ActionCall.Core, FileTarget) => Unit): Unit = {
     val root = WorkflowFileRuntimeFixture.fresh()
@@ -67,6 +83,181 @@ final class GoalPhaseSourceHistoryNormalizationSpec extends AnyWordSpec with Nat
   private def _adoption_request(properties: Property*): Request = Request.of(
     component = "org.simplemodeling.textus.SmWorkflow", service = "GoalPhaseService", operation = N.adoptionOperation,
     properties = properties.toList)
+
+  private def _nested_target(prefixsize: Int): N.Target =
+    SourceHistoryNormalizationSpecificationFixture.nestedTarget(sourcePath, enabledSettings(ruleKey), rule.identity, prefixsize)
+  private def _public_json(value: Json): Json = {
+    val projected = RuntimeContext.PropertyNameContext.default.transformRecord(GoalPhaseNativeMetadata.record(value))
+    io.circe.parser.parse(take(projected.toJsonStringC)).fold(error => fail(error.message), identity)
+  }
+
+  "Current completed-prefix applicability" should {
+    "partition the full original order by saved date without weakening full-prefix verification or changing files" in {
+      Given("a complete three-entry original prefix with an unchanged old-date source a legitimate newer header and known absence")
+      val selected = target(3, pending = false).recovery
+      val root = WorkflowFileRuntimeFixture.fresh()
+      val paths = selected.completedPrefix.map(_.result.path)
+      def _normalized_(path: String, date: LocalDate): String = take(WorkflowSourceHistoryRule.applyC(rule,
+        WorkflowSourceHistoryRule.Input(path, "object PrefixSource { val value = 42 }\n", date, None, None, true))).text
+      paths.take(2).zipWithIndex.foreach { (path, index) =>
+        val file = root.resolve(path)
+        Files.createDirectories(file.getParent)
+        Files.writeString(file, _normalized_(path, if (index == 0) day else LocalDate.of(2026, 11, 6)), UTF_8)
+      }
+      val before = paths.take(2).map(path => (Files.readAllBytes(root.resolve(path)).toVector,
+        Files.getLastModifiedTime(root.resolve(path))))
+      WorkflowFileRuntimeFixture.withCore(root, workspace = "sm-workflow-repository", mapping = enabledSettings) { core =>
+        When("the source-history owner reads current applicability under the unchanged full selected rule")
+        val partition = take(GoalPhaseNativeSourceHistory.assessCompletedPrefixC(core, selected))
+        Then("saved successes remain intact and only the actual reusable subset verifies for a new candidate")
+        partition.reusable shouldBe paths.take(1)
+        partition.fresh shouldBe paths.drop(1)
+        GoalPhaseNativeSourceHistory.validPartition(selected, partition) shouldBe true
+        GoalPhaseNativeSourceHistory.validPartition(selected, partition.copy(fresh = paths.drop(1).reverse)) shouldBe false
+        GoalPhaseNativeSourceHistory.validPartition(selected, partition.copy(fresh = paths)) shouldBe false
+        GoalPhaseNativeSourceHistory.verifyCompletedPrefixC(core, selected).isSuccess shouldBe false
+        take(GoalPhaseNativeSourceHistory.verifySelectedPrefixC(core, selected, partition)) shouldBe paths.take(1)
+        paths.take(2).zip(before).foreach { (path, original) =>
+          Files.readAllBytes(root.resolve(path)).toVector shouldBe original._1
+          Files.getLastModifiedTime(root.resolve(path)) shouldBe original._2
+        }
+        Files.exists(root.resolve(paths(2))) shouldBe false
+
+        Given("the selected reusable source subsequently changes its managed header")
+        Files.writeString(root.resolve(paths.head), _normalized_(paths.head, LocalDate.of(2026, 11, 6)), UTF_8)
+        When("the saved reuse selection is rechecked before fresh candidate persistence")
+        val stale = GoalPhaseNativeSourceHistory.verifySelectedPrefixC(core, selected, partition)
+        Then("the old reusable success cannot silently qualify the changed source")
+        stale.isSuccess shouldBe false
+
+        Given("a malformed duplicate managed header rather than an applicable or inapplicable valid interpretation")
+        Files.writeString(root.resolve(paths.head), "/**\n * @version Oct. 20, 2026\n * @version Oct. 21, 2026\n */\nobject PrefixSource\n", UTF_8)
+        When("current applicability reads that semantic uncertainty")
+        val ambiguous = GoalPhaseNativeSourceHistory.assessCompletedPrefixC(core, selected)
+        Then("uncertainty remains a failure and is never classified as success known absence or nonexecution")
+        ambiguous.isSuccess shouldBe false
+      }
+      Given("the installed source-history selection differs from the captured complete goldenport rule")
+      WorkflowFileRuntimeFixture.withCore(root, workspace = "sm-workflow-repository", mapping =
+        enabledSettings.updated(styleKey, Json.fromString("none"))) { core =>
+        When("current-prefix applicability is requested under that different policy")
+        val changed = GoalPhaseNativeSourceHistory.assessCompletedPrefixC(core, selected)
+        Then("the policy mismatch refuses rather than producing a reusable or fresh classification")
+        changed.isSuccess shouldBe false
+      }
+    }
+
+    "require a real formal failed normalization result and exact ordered partition rather than a resultless writer or crossed owner" in {
+      Given("specification-owned direction and failed observation facts with an old UNKNOWN and complete successful prefix")
+      val selected = target(3, pending = false)
+      val direction = N.Direction(selected, N.choices.head, "Existing same-authority policy", "participant", artifact, true)
+      val reference = N.reference(selected)
+      val observation = N.Observation(selected, reference.identity, reference.revision,
+        selected.recovery.intentIdentity, selected.recovery.intentRevision, Some("failed"), Some("Formal normalization failure"))
+      val paths = selected.recovery.completedPrefix.map(_.result.path)
+      val proof = GoalPhaseDevelopmentReconstruction.PrefixSelection(GoalPhaseDevelopmentReconstruction.prefixVersion,
+        ContextReference(reference.identity, reference.revision), ContextReference(reference.identity + ":reconciliation-result", "1"),
+        paths.drop(1), paths.take(1), 7, 8)
+      When("the pure comparison checks already authenticated owner facts without inferring any missing old effect result")
+      def _valid_(candidate: GoalPhaseDevelopmentReconstruction.PrefixSelection, actual: N.Observation,
+        adopted: N.Direction = direction): Boolean = GoalPhaseDevelopmentReconstruction.validPrefixSource(
+        candidate, adopted, actual, 7, None)
+      Then("only the exact failed owner and full partition qualify; live unknown successful crossed and non-ended facts refuse")
+      _valid_(proof, observation) shouldBe true
+      _valid_(proof, observation.copy(outcome = None, diagnostic = None)) shouldBe false
+      _valid_(proof, observation.copy(outcome = Some("updated-current"), diagnostic = None)) shouldBe false
+      _valid_(proof, observation.copy(originalIntentIdentity = "unrelated-intent")) shouldBe false
+      _valid_(proof, observation, direction.copy(priorExecutionEnded = false)) shouldBe false
+      _valid_(proof.copy(reusable = paths.reverse), observation) shouldBe false
+      _valid_(proof.copy(fresh = Vector.empty), observation) shouldBe false
+      _valid_(proof.copy(oldGeneration = 6), observation) shouldBe false
+      selected.recovery.intent.outcome shouldBe None
+      selected.recovery.completedPrefix.foreach(_.result.outcome shouldBe Some("updated"))
+    }
+  }
+
+  "Composed public source-history targets" should {
+    "retain the complete initial-v8 lineage through every owner and leave durable bytes exact" in {
+      Given("a genuine-shaped initial-v8 Direction nested in a normalization target with three successful original intents")
+      val selected = _nested_target(3)
+      val dependency = selected.recovery.inspection.dependencySourceDirection.get
+      val oldrecovery = dependency.target.initialOrigin.get.lineage.recovery
+      val olddirection = GoalPhaseLegacyPurposeRepairContinuation.DependencySourceRevision(dependency)
+      val oldwire = GoalPhaseLegacyPurposeRepairContinuation.storageCodec.encode(olddirection)
+      val oldbytes = oldwire.noSpaces.getBytes(UTF_8).toVector
+      val oldcontroller = oldrecovery.controller.asJson.noSpaces
+      val durable = R.Direction(selected.recovery, artifact, "participant", "Retained independent direction")
+      val durablewire = R.codec.encode(durable)
+      val durablebytes = durablewire.noSpaces.getBytes(UTF_8).toVector
+      val publicwire = _public_json(selected.asJson)
+      val publicrecovery = _public_json(selected.recovery.asJson)
+      val publiccontroller = _public_json(oldrecovery.controller.asJson)
+      val controller = GoalPhaseNativeMetadata.normalizePublicJson(publiccontroller).fold(message => fail(message), identity)
+      When("the actual public Record projection enters the composed normalization and direct recovery readers")
+      val decoded = N.decodePublicTarget(publicwire)
+      val transported = N.targetC(RuntimeContext.PropertyNameContext.default.transformRecord(N.targetRecord(selected)))
+      val recovered = R.decodePublicTarget(publicrecovery)
+      val direct = R.targetC(RuntimeContext.PropertyNameContext.default.transformRecord(R.targetRecord(selected.recovery)))
+      Then("all typed lineage and prefix facts survive while old durable Controller omission remains invalid")
+      decoded shouldBe Right(selected)
+      take(transported) shouldBe selected
+      recovered shouldBe Right(selected.recovery)
+      take(direct) shouldBe selected.recovery
+      selected.recovery.completedPrefix.size shouldBe 3
+      controller.asObject.get.size shouldBe 11
+      GoalPhaseCandidateRecovery.publicController(controller) shouldBe Right(oldrecovery.controller)
+      controller.as[GoalPhaseCandidateRecovery.Controller].isLeft shouldBe true
+      oldrecovery.controller.asJson.as[GoalPhaseCandidateRecovery.Controller] shouldBe Right(oldrecovery.controller)
+      oldrecovery.controller.asJson.noSpaces shouldBe oldcontroller
+      GoalPhaseLegacyPurposeRepairContinuation.storageCodec.decode(oldwire) shouldBe Right(olddirection)
+      GoalPhaseLegacyPurposeRepairContinuation.storageCodec.encode(olddirection).noSpaces.getBytes(UTF_8).toVector shouldBe oldbytes
+      R.codec.decode(durablewire) shouldBe Right(durable)
+      R.codec.encode(durable).noSpaces.getBytes(UTF_8).toVector shouldBe durablebytes
+      oldrecovery.oldObservationOutcome shouldBe "UNKNOWN"
+      oldrecovery.oldObservationTermination shouldBe "termination-unconfirmed"
+    }
+
+    "read a semantically large complete target without reducing the successful prefix or nested lineage" in {
+      Given("a complete public target containing 1024 distinct successful source-history pairs and the actual v8 fixture Direction")
+      val selected = _nested_target(1024)
+      val publicwire = _public_json(selected.asJson)
+      When("the public JSON and actual Record entry points decode the complete business value")
+      val decoded = N.decodePublicTarget(publicwire)
+      val transported = N.targetC(N.targetRecord(selected))
+      Then("both routes retain every typed entry and the complete nested Direction without a business size ceiling")
+      publicwire.noSpaces.getBytes(UTF_8).length should be > (500 * 1024)
+      decoded shouldBe Right(selected)
+      take(transported) shouldBe selected
+      take(transported).recovery.completedPrefix.map(_.index) shouldBe (0 until 1024).toVector
+    }
+
+    "refuse unknown null missing crossed and colliding nested fragments before canonical replacement" in {
+      Given("the normal public projection of a complete nested-v8 target")
+      val selected = _nested_target(3)
+      val wire = GoalPhaseNativeMetadata.normalizePublicJson(_public_json(selected.asJson))
+        .fold(message => fail(message), identity)
+      def _lineage_(change: Json => Json): Json = wire.hcursor.downField("recovery").downField("inspection")
+        .downField("dependencySourceDirection").downField("target").downField("initialOrigin").downField("lineage")
+        .withFocus(change).top.get
+      def _controller_(change: Json => Json): Json = _lineage_(_.hcursor.downField("recovery")
+        .downField("controller").withFocus(change).top.get)
+      val malformed = Vector(
+        _controller_(_.mapObject(_.add("unknown", Json.True))),
+        _controller_(_.mapObject(_.add("candidate", Json.Null))),
+        _controller_(_.mapObject(_.remove("stage"))),
+        _controller_(_.mapObject(_.add("ordinary_repairs", Json.fromInt(0)))),
+        _lineage_(_.mapObject(_.add("revisionRecord", Json.obj("identity" -> Json.fromString("foreign-session"), "revision" -> Json.fromString("14"))))),
+        _lineage_(_.mapObject(_.add("continuation", Json.Null))),
+        _lineage_(_.mapObject(_.add("unknown", Json.True))))
+      When("both public normalization and its direct recovery owner receive the malformed nested fragments")
+      val normalized = malformed.map(N.decodePublicTarget)
+      val recovered = malformed.map(value => R.decodePublicTarget(value.hcursor.downField("recovery").focus.get))
+      Then("every malformed value refuses and the unchanged public target remains admissible")
+      normalized.foreach(_.isLeft shouldBe true)
+      recovered.foreach(_.isLeft shouldBe true)
+      N.decodePublicTarget(wire) shouldBe Right(selected)
+    }
+  }
 
   "Complete normalization adoption Resource transport" should {
     "retain the identical complete DTO inline and through the authorized owning Resource call including a large target" in {

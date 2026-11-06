@@ -32,7 +32,8 @@ import GoalPhasePrerequisitePublicationUnknownRecovery as W
   * publication. Direction appends no Git or SBT effect; Advance owns the bounded
   * effect chain and the ordinary prerequisite owner owns publication.
   * @since   Nov.  1, 2026
-  * @version Nov.  2, 2026
+  *  version Nov.  2, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhasePrerequisitePublicationRecovery {
@@ -510,7 +511,7 @@ private[smworkflow] object GoalPhasePrerequisitePublicationRecovery {
         .get[String]("schemaVersion").contains(GoalPhaseCurrentSourceArtifactAdoption.targetSchema)))
       GoalPhaseCurrentSourceArtifactAdoption.selectBinding(value)
     else if (Option(value).exists(_.hcursor.downField("prerequisitePublicationRecovery").downField("target")
-        .get[String]("schemaVersion").contains(GoalPhasePrerequisitePrimaryRepair.targetSchema)))
+        .get[String]("schemaVersion").toOption.exists(GoalPhasePrerequisitePrimaryRepair.isTargetSchema)))
       GoalPhasePrerequisitePrimaryRepair.selectBinding(value)
     else if (Option(value).exists(_.hcursor.downField("prerequisitePublicationUnknownRecovery").focus.nonEmpty))
       GoalPhasePrerequisitePublicationUnknownRecovery.selectBinding(value)
@@ -1097,7 +1098,7 @@ private[smworkflow] object GoalPhasePrerequisitePublicationRecovery {
     expected <- json.hcursor.get[String]("schemaVersion").toOption match {
       case Some(version) if version == GoalPhaseCurrentSourceArtifactAdoption.targetSchema =>
         GoalPhaseCurrentSourceArtifactAdoption.targetC(input.target).map(_ => GoalPhaseCurrentSourceArtifactAdoption.choices)
-      case Some(version) if version == GoalPhasePrerequisitePrimaryRepair.targetSchema =>
+      case Some(version) if GoalPhasePrerequisitePrimaryRepair.isTargetSchema(version) =>
         GoalPhasePrerequisitePrimaryRepair.targetC(input.target).map(GoalPhasePrerequisitePrimaryRepair.choices)
       case Some(version) if version == primarySchema => primaryTargetC(input.target).map(primaryChoices)
       case Some(version) if version == W.schema => W.targetC(input.target).map(W.choicesFor)

@@ -398,3 +398,126 @@ accept/repair/decision-needed and convergence routes retain ownership. A later
 real repair creates its own candidate and drops the old classification
 direction. This section defines source behavior; validation and installed
 qualification results are recorded separately.
+
+## Resultless Purpose preparation intent continuation
+
+The existing `describeRepositorySyncPurposePreparationContinuation` and
+`adoptRepositorySyncPurposePreparationContinuation` operations also explicitly
+dispatch `sm-workflow.repository-sync-purpose-preparation-intent-continuation.v1`.
+This is a separate contract from the original known-process-failure v1 policy.
+The original Target, Direction, process receipt and eligibility meanings remain
+readable and unchanged. An unknown policy or malformed target never falls back
+to another decoder. The complete generated adoption DTO is identical through
+inline `input` and `inputResource`; no operation or DTO is added.
+
+This branch describes an actual active, unsuspended `sync.PurposePreparing`
+frontier with its exact retained native preparation intent and no retained
+result or prepared candidate. It also describes a genuine subsequent
+`PurposeUnfinished` preparation admission rejection with the exact adjacent
+intent and retained diagnostic. It accepts an initial current-group attempt
+with `attempt=0` and no repair baseline, including a later group whose earlier
+ordered Purpose commits already completed. Current candidates, other effect
+phases, completed/cancelled/suspended Sessions, unmerged source, crossed history,
+changed source/HEAD/index/branch or changed host target do not qualify.
+
+The new public target binds the actual Component, Session, original host
+context, root, endpoint, frontier revision/cause, intent key/revision, complete
+opaque `progressSnapshot`, exact actual Git snapshot, index tree, source HEAD,
+eligibility reason and continuation policy. `originalResultStatus=UNKNOWN`
+states result absence honestly. It contains no invented failure revision,
+process receipt or exit code. For a genuine newly retained admission rejection,
+the status is `PREPARATION_REJECTED` and optional `retainedRejection` contains
+the exact retained JSON diagnostic text. The optional field is omitted when
+absent; explicit null is invalid. Opaque progress and observation strings retain
+all journal payloads, names, arrays and null facts through public Record naming
+normalization. Every original request, accepted plan, cursor, attempt,
+slot/repair counter, baseline, successful check and completed commit prefix
+remains literal. The expected index for a later group comes from its actual
+last completed installation and adjacent immutable commit intent.
+
+The choices are `AuthorizeNewPreparationAcceptingUnknown` and `Defer`. The
+affirmative choice is an explicit declaration by the actual Human that the
+prior invocation has **independently settled or ended** and that the Human
+**accepts its original UNKNOWN effects for this exact target**. A root CLI exit
+alone establishes neither the invocation lifecycle nor its effects. Result
+absence is not proof of nonexecution. Repair implementation approval does not
+supply this later public Human grant. `Defer` is passive and appends nothing.
+Ineligible observations offer only `Defer`.
+
+The existing evidence purpose
+`repository-sync-purpose-preparation-continuation` binds the full new target,
+exact choice and rationale, actual participant and artifact reference. For the
+affirmative choice its canonical answer also contains
+`priorInvocationIndependentlySettledOrEnded=true` and
+`acceptOriginalUnknownEffects=true`; both are false for `Defer`. They encode
+the meaning explicitly supplied by the named choice. Removing or changing one
+assertion invalidates the binding. The existing actual issuer, participant and
+host evidence admission checks remain authoritative. Passive
+`prepareEvidence` with RepositorySync kind `purpose-preparation-continuation`
+only encodes supplied facts. It has no lifecycle verification, Human approval,
+evidence admission or adoption authority.
+
+After independent host admission, adoption reobserves the exact native source
+and all expected original/projected worktree paths before the managed CAS. It
+appends the declared `purpose-preparation-continuation` transition from
+`PurposePreparing` (or the genuine rejected `PurposeUnfinished`) to
+`PurposeGrouped`. The new key and namespace are
+`prepare-intent-continuation-FRONTIER-adopted` and
+`prepare-intent-continuation-FRONTIER`. The payload retains the new direction in
+optional `purposePreparationIntent`, clears the old `purposePreparation`
+direction, and changes only the saved progress's `preparationNamespace`.
+Absent new provenance remains omitted and readable in native v3 payloads;
+explicit null cannot erase it. Identical adoption collects its exact native
+receipt idempotently, including after completion. A contradictory or stale
+direction refuses. Describe and adopt perform no Git mutation, product check,
+materialization, commit, resubmission or new Start.
+
+Separate ordinary Advance authenticates the immutable original intent, absence
+of its old result or exact retained rejection, adjacent adoption prefix, full
+unchanged accepted progress, actual source and host binding before creating a
+fresh preparation intent. The normal attempt prefix includes only the newly
+authorized namespace. The old intent and effects remain in their original
+history and are never relabeled successful, failed, or not started. Successful
+installation clears the namespace and new direction, so authority cannot pass
+to the next group. No materialization or commit UNKNOWN recovery is covered.
+
+For future `PreparePurposeCandidate` calls, an actual `Consequence.Failure`
+returned at the execution boundary is retained append-only as
+`PurposeUnfinished`, then returned unchanged to the caller. The effects entry
+is workflow-owned JSON with only `kind=PreparationAdmissionRejected` and the
+full actual Conclusion diagnostic string. This diagnostic is not a
+`ProcessExecutionResult`, an exit status, a successful query receipt, proof of
+nonexecution or permission to retry. Unknown effects remain unknown. Existing
+old resultless intents are never retroactively populated. Actual returned Git
+process results keep their original existing success/failure path. There is no
+catch-and-retry or automatic advancement.
+
+`RepositorySyncPurposePreparationIntentContinuationSpec` authors the strict
+public codecs, initial later-group eligibility, unchanged progress/counters,
+exact lifecycle evidence, old v1 and native v3 compatibility, and honest retained
+diagnostic contracts. The explicitly selected `@DoNotDiscover`
+`NativeRepositoryPurposePreparationIntentContinuationCliSpec` authors two
+installed-runtime episodes. Set
+`SM_WORKFLOW_SPEC_PREPARATION_INTENT_STAGE=before|after`,
+`SM_WORKFLOW_SPEC_PREPARATION_INTENT_DIRECTORY` to an existing absolute retained
+directory outside Git, and `SM_WORKFLOW_SPEC_INSTALLED_COMMAND` to the actual
+old/new installed CLI. The existing optional
+`SM_WORKFLOW_SPEC_INSTALLATIONS` selects its normal installation directory.
+The before episode must run before producer/runtime replacement: it uses the
+old installed CLI against a tiny document-only repository where a new document
+was staged, then appended in the worktree. It completes the first Purpose and
+retains the genuine second-Purpose resultless preparation. It writes
+`preparation-intent.json` with the physical fixture/Session, public invocation
+logs, read-only native observations, completed prefix and independently supplied
+fixture lifecycle attestation. It never fabricates native rows.
+
+The after episode reopens that same physical fixture and original Session,
+provisions fixture-owned independent Human evidence through passive public
+preparation, and verifies denial, stale source, Defer, inline/Resource duplicate
+adoption and successful separate ordinary preparation/review/commit/convergence.
+It preserves the original UNKNOWN intent and successful first commit prefix,
+asserts passive root HEAD/index preservation, and retains
+`preparation-intent.result.json`. Its controlled process-tree observations and
+independent fixture attestation are fixture data, not real consumer lifecycle
+or consent. These are authored scenarios; validation, independent review,
+publication and actual Session continuation remain separately owned gates.

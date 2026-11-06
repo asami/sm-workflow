@@ -1,5 +1,183 @@
 # GoalPhase prerequisite publication recovery
 
+## Primary generation repair v2 and publication recovery v5
+
+RGEN01. A distinct primary generation classification admits the observed sbt-cozy
+missing-input and INPUT-kind syntax failures before selected checks. It requires the actual failed
+`beforeChecks` primary publication, exact Session, participant, candidate source,
+request namespace, target and fixed `publish-local` program. Both typed process
+streams must be complete and untruncated, with confirmed `Exited(1)`. The only
+failed task summary is `(cozyGenerate) [sbt-cozy] cozy delegate failed (1) for ...`.
+The source-error marker must be the entire standalone `[error] Error[No input]`
+line or the exact fully qualified syntax family
+`[error] Error[org.goldenport.exception.SyntaxErrorFaultException: Operation '<identifier>' INPUT Value '<identifier>' requires input-kind=COMMAND|QUERY.]`.
+Both identifiers require a letter or underscore followed only by letters,
+digits or underscores. Prefixes, suffixes, other exception classes, OUTPUT
+errors and other input-kind messages do not qualify. The same closed source
+predicate applies to a final source-error line. The capture must also contain the
+error JSON diagnostic `GENERATION_PROVENANCE_OUTPUT_TAMPERED`, with expected
+`at least one generated Scala artifact`, actual `none`, and message
+`Generation provenance cannot describe an empty output.` The repeated diagnostic
+after the task summary is retained and accepted. A warning alone does not prove
+the failure. Arbitrary exits, missing markers, other or mixed failing tasks,
+Compile, Test, doc-only, publication success, nonstart, cancellation, timeout,
+UNKNOWN, incomplete text and truncation do not qualify.
+
+The closed failure kind is derived from the retained typed capture. Generation
+uses `sm-workflow.goal-phase-prerequisite-primary-repair.v2` for the immutable
+repair Fact and `sm-workflow.goal-phase-prerequisite-publication-recovery.v5`
+for its public Target and Direction envelope. Compile retains its exact v1 Fact
+and v3 Target/Direction bytes and classifier. Generation in a v1/v3 envelope and
+Compile in a v2/v5 envelope refuse. The v4 Target remains exclusively the
+current-source artifact adoption contract. Existing business operations and
+optional `publicationFailure` context carry these versions; no CML field or
+storage controller is added. Input recognition, independent answer binding and
+passive preparation use the same closed Target validation.
+
+Generation uses the same ordinary reservation, repair budgets, trend/limit
+decisions, current source capture, broad versus one-shot publication authority,
+fresh checks, independent review and Step closure as R4–R6. Its directive names
+generation and preserves the actual original failed capture, controller,
+candidate, accepted result, Plan, base, prefix, dependency lineage, excluded
+dirty paths and repair counters. `testsExecuted` remains false. Recollection
+neither spends another reservation nor manufactures check or publication PASS.
+
+At a retained eligible failed primary frontier, public
+`describeGoalPhasePrerequisitePublicationRecovery --sessionId <saved-session>`
+returns the v5 generation Target. A later ordinary `advanceGoalPhase` reserves
+the existing repair and then issues `RepairStep` (the reservation call may first
+return the retained failed result). The assigned worker corrects the missing
+CML INPUT and submits only that issued repair. Ordinary Advance captures a new
+candidate, runs the required publication and checks, and reaches independent
+review. The already accepted implementation is never submitted again; there is
+no new Start, counter reset or replay of an unknown effect. This describes the
+consumer continuation contract; this document does not claim it has been run
+against any consumer Session.
+
+An unsupported primary result returns an explicit structured invalid
+`Unsupported primary publication failure` diagnostic. It cannot fall through to
+dependency-only UNKNOWN recovery. That recovery also validates the optional
+dependency binding before dereferencing it and returns a structured invalid
+diagnostic when absent. Supported dependency and UNKNOWN continuations retain
+their existing behavior and authority.
+
+E14 in `GoalPhasePrerequisitePrimaryRepairSpec` covers the missing-input
+signature, strict negatives, one reservation and truthful unexecuted tests.
+Its separately selectable `GoalPhasePrerequisitePrimaryRepairCodecSpec` covers
+v2/v5 roundtrips, rejected crossed versions, unchanged Compile canonical
+serialization and independent preparation. E16 in the separately selectable
+single-case `GoalPhasePrerequisitePrimaryGenerationSyntaxSpec` covers the exact
+INPUT-kind syntax family, strict error/task/target/process/termination/capture
+negatives, and the next ordinary same-Step reservation under the original limit,
+retaining the first failure. These typed captures are specification data, never
+actual publication receipts.
+
+E15 in the explicit-only `@DoNotDiscover`
+`NativeGoalPrimaryGenerationRecoveryCliSpec` defines one paired installed
+episode on a tiny real sbt-cozy project. Select these JVM properties:
+
+- `smworkflow.spec.installedCommand`: absolute normal installed CNCF command
+  using the newest launcher.
+- `smworkflow.spec.generationLocator`: absolute caller-owned locator file;
+  absent for capture, retained unchanged for continuation.
+- `smworkflow.spec.generationMode`: exactly `capture-old`, `continue-new`,
+  `resume-current-generation` or `qualify-current`.
+- `smworkflow.spec.generationLogIndex`: optional for `continue-new`, default
+  `2000`, with `2000` or `3000` allowed. The bounded resume mode requires the
+  explicit unused value `4000`.
+- For `resume-current-generation` only,
+  `smworkflow.spec.generationFailureOutput`,
+  `smworkflow.spec.generationRepairOutput` and
+  `smworkflow.spec.generationRepairSubmitOutput` select the exact existing public
+  second-failure, first-RepairStep and accepted first-Repair Submit stdout files
+  (the retained episode's `3009.stdout.json`, `3005.stdout.json` and
+  `3008.stdout.json`). Each must be a real normalized file directly in that
+  locator's exact fixture `logs` directory and match its Session and typed result.
+
+`smworkflow.spec.installations` must be absent; this episode supplies no runtime
+image installation override. SBT resolution uses
+`TypedSbtHostPlanFixture.normalExecutable` and requires no additional property.
+
+Use the exact suite selector
+`testOnly org.simplemodeling.textus.smworkflow.admission.NativeGoalPrimaryGenerationRecoveryCliSpec`
+with optional ScalaTest filter `-- -z "E15 paired installed primary generation recovery"`.
+First run `capture-old` using the old installed runtime before producer
+publication. It makes one actual failed `publishLocal`, retains the accepted
+implementation, captures the old description's 500/`None.get`, and saves only
+caller routing plus actual public outputs in the explicit locator. After normal
+producer publication and installed selection, run `continue-new` using that
+same locator and physical fixture. The narrow reopen helper checks the exact
+root, retained host and Plan and allocates a disjoint finite log range; it scans
+no repositories and writes no native records.
+
+Continuation describes the saved failure, issues and recollects one repair,
+corrects INPUT and the supported `- input-kind :: COMMAND` property on
+`ProbeInput`, and requires real publication, Compile and focused ScalaTest
+success before the independent-review frontier. It checks unchanged original
+failure bytes, accepted result, Plan/base/prefix, repair count and original HEAD;
+repeated collection must repeat no successful effects. Every normal Git/SBT/UoW
+effect belongs to the installed runtime. No full project copy, seeded native
+state/result, fake executable, wrapper or independent SBT runner is used.
+Specification-owned fixture setup and semantic results confer no consumer
+authority. The episode stops before independent review acceptance and Step
+commit; parent-owned actual validation and installed receipts establish whether
+it qualifies. Its presence alone claims no runtime qualification.
+
+The bounded `resume-current-generation` mode continues the existing episode
+whose first accepted repair added INPUT alone and then encountered the exact
+terminated INPUT-kind syntax failure. It preserves that INPUT-only text as the
+expected current source; setup never rewrites the failed subject. The mode
+checks the explicit public artifacts, current latest syntax failure, original
+first failure, both already accepted results, complete Plan/base/prefix, source,
+original HEAD and current count one. No old semantic Submit or publication is
+replayed. Ordinary Advance retains the second failure and reserves repair two
+under the original limit two; a separate Advance issues the new RepairStep.
+Pending recollection repeats no effects. Only this new assigned repair adds the
+real `ProbeInput` input-kind bullet, leaving `ProbeResult` unchanged, and receives
+one new semantic Submit. The runtime then owns the third publication, actual
+Compile and real focused test before independent review.
+
+Success requires three actual publication attempts total, one successful
+Compile and one real focused test, immutable first and second failed bytes and
+accepted artifacts, count two without reset, and no repeated successes on
+ReviewStep recollection. Only after those observations does the fixture write
+`generation-continuation-result.json`, naming both failures, the new repair and
+real publication/check receipts. A missing work result fails with the actual
+response diagnostics. An unexpected source error remains a failed test; this
+mode is no generic repair controller and authorizes no unknown-effect retry,
+private-state edit, new Start, new Session, independent-review acceptance or
+Step commit. Parent-owned qualification remains necessary.
+
+The explicit `qualify-current` mode uses a new absent caller-owned locator and
+a new tiny fixture with canonical CAR packaging metadata:
+`packaging.kind: car`, `packaging.car.runtime.cncf.minimum: 0.5.3-SNAPSHOT`,
+`excluded: []`, and `tested: [0.5.3-SNAPSHOT]`. This metadata belongs only to
+new fixture setup. The existing episode's later terminated `cozyBuildCar`
+metadata failure remains outside the Generation classifier and retains its
+actual failed publication and exhausted two-repair history without edits or
+retries.
+
+On the current installed runtime, the first genuinely failed ordinary Advance
+already reserves repair one. Current qualification therefore skips the
+historical description call, requires actual count one under limit two, and
+saves the exact failure and locator. The same mode then reopens that same new
+physical fixture at unused log index `2000` through the existing continuation
+helper. Its first ordinary Advance must issue the already reserved RepairStep
+directly, without a second reservation or budget reset. Existing full public
+Plan/base/prefix, failure-context, pending-recollection, actual complete CML
+correction, new semantic Submit, real publication/Compile/TestOnly and pending
+independent-review assertions still apply.
+
+Current qualification neither repeats the old 500 capture nor requires a v5
+description at a Repair frontier. The historical `capture-old`/`continue-new`
+pair retains its old-500 and saved-Validation-frontier v5 checks; the separate
+resume mode retains its exact historical artifact contract. `qualify-current`
+is fresh qualification of corrected fixture inputs, with no operation on the
+earlier saved Session or replay of its successful effects. It requires the
+normal installed command and new locator, with no installations override,
+production change, new publication of the producer, native-state write or
+fabricated review/Step success. Actual qualification remains parent-owned.
+
 ## Ordinary primary Compile repair and same-scope publication v3
 
 R4. A genuine primary `beforeChecks` publication Compile failure belongs to the

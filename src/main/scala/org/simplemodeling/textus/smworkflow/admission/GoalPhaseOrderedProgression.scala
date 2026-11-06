@@ -228,7 +228,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       */
     private[admission] def reconstructDevelopmentC(proposed: Plan, changed: Boolean,
       sourceTargetGeneration: Option[Long], concerns: Vector[String] = Vector.empty,
-      adoptDecision: Boolean = false): Consequence[State] = for {
+      adoptDecision: Boolean = false, technicalReassessment: Boolean = false): Consequence[State] = for {
       _ <- validatePlanC(proposed)
       _ <- GoalPhaseAcceptanceBoundary.savedPlanC(proposed)
       _ <- if (sourceTargetGeneration != null && concerns != null && concerns.forall(text) &&
@@ -242,10 +242,15 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       _ <- if (!changed || generation < Long.MaxValue) Consequence.unit
         else invalid("development reconstruction generation is exhausted")
       stopped = reconstructionStoppedRepairReservation
+      _ <- if (!technicalReassessment || (changed && concerns.isEmpty && !adoptDecision && !stopped &&
+          candidate.isEmpty && checksReceipt.isEmpty && reviewEvidence.isEmpty && closureIntent.isEmpty &&
+          cursor < plan.steps.size && (stage == Stage.InspectCandidate ||
+            (stage == Stage.Decision && decisionSource.contains(Stage.InspectCandidate))))) Consequence.unit
+        else invalid("technical reassessment requires the exact unresolved inspection without another obligation")
       _ <- if (!stopped || proposed == plan) Consequence.unit
         else invalid("development reconstruction cannot amend a stopped repair reservation")
       uncertain = concerns.nonEmpty
-      origin = if (adoptDecision && stage == Stage.Decision) decisionSource.getOrElse(stage) else stage
+      origin = if ((adoptDecision || technicalReassessment) && stage == Stage.Decision) decisionSource.getOrElse(stage) else stage
       reserved = origin == Stage.Repair || stopped || origin == Stage.Decision
       clear = changed && !reserved && origin != Stage.Implementation && closureIntent.isEmpty
       nextstage = if (uncertain) Stage.Decision else if (clear)
@@ -265,8 +270,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     } yield new State(proposed, nextstage, cursor, nextgeneration, repairs, base, completed,
       if (clear) None else candidate, if (clear) None else checksReceipt,
       if (clear) None else reviewEvidence, closureIntent,
-      if (uncertain) Some(concerns.mkString("; ")) else if (adoptDecision) None else decision, repositoryReceipt, repairDirective,
-      if (uncertain) Some(origin) else if (adoptDecision) None else decisionSource, documentDecision, ordinaryRepairs, pendingRepair,
+      if (uncertain) Some(concerns.mkString("; ")) else if (adoptDecision || technicalReassessment) None else decision, repositoryReceipt, repairDirective,
+      if (uncertain) Some(origin) else if (adoptDecision || technicalReassessment) None else decisionSource, documentDecision, ordinaryRepairs, pendingRepair,
       if (clear) None else phaseReviewedCandidate, if (clear) Vector.empty else phaseRecordingPaths,
       if (clear) None else candidateParent, if (clear) None else stepAdmission, releaseCommit,
       repairControl, policyRepairPending, repairObservations, stepReviewRequired, repairscope)
@@ -749,9 +754,11 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           (!phaseWide || tipSnapshot.tree == value.tree || releaseRepairActive) =>
         success(if (phaseWide) Stage.PhaseValidation else Stage.Validation,
           newCandidate = Some(value))
-      case CandidateContinuationObserved(value, continuation) if stage == Stage.InspectCandidate && !phaseWide &&
+      case CandidateContinuationObserved(value, continuation) if
+          ((stage == Stage.InspectCandidate && !phaseWide) || (stage == Stage.PhaseInspection && phaseWide)) &&
           validSnapshot(value) && continuationValid(tipSnapshot, continuation) && value.head == continuation.parent.head =>
-        success(Stage.Validation, newCandidate = Some(value), newcandidateparent = Some(continuation.parent))
+        success(if (phaseWide) Stage.PhaseValidation else Stage.Validation,
+          newCandidate = Some(value), newcandidateparent = Some(continuation.parent))
       case PhaseManagementCandidateObserved(value, paths) if stage == Stage.PhaseInspection && phaseWide &&
           validSnapshot(value) && value.head == tip && paths != null && paths.nonEmpty &&
           paths.distinct == paths && paths.forall(path) &&
@@ -761,7 +768,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       case PhaseFindingRecordsObserved(reviewed, value, paths) if stage == Stage.PhaseClosing && phaseWide &&
           closureIntent.isEmpty && phaseReviewedCandidate.isEmpty && candidate.contains(reviewed) &&
           checksReceipt.nonEmpty && reviewEvidence.nonEmpty && validSnapshot(reviewed) && validSnapshot(value) &&
-          reviewed.head == tip && value.head == tip && reviewed.tree != value.tree && paths != null && paths.nonEmpty &&
+          reviewed.head == candidateBase.head && value.head == candidateBase.head && reviewed.tree != value.tree && paths != null && paths.nonEmpty &&
           paths.size <= 256 && paths.distinct == paths && paths.forall(p => path(p) && p.endsWith(".md")) &&
           plan.steps.forall(step => paths.forall(p => StandaloneFixExecution.owned(p, step.ownedPaths))) =>
         success(Stage.PhaseClosing, newCandidate = Some(value), newPhaseReviewed = Some(reviewed), newPhasePaths = paths)
@@ -876,18 +883,18 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         _close_step_c(commit)
       case PhaseLocallyCompleted(snapshot, commits, review) if stage == Stage.PhaseClosing &&
           cursor == plan.steps.size && completed.map(_.step) == plan.steps.map(_.identity) &&
-          candidate.contains(snapshot) && snapshot == tipSnapshot && phaseReviewedCandidate.isEmpty &&
+          candidate.contains(snapshot) && snapshot == candidateBase && phaseReviewedCandidate.isEmpty &&
           phaseRecordingPaths.isEmpty && checksReceipt.nonEmpty && reviewEvidence.contains(review) &&
           commits == completed.map(_.commit) => success(Stage.Closed)
       case ReleaseCommitObserved(commit) if stage == Stage.PhaseClosing && (releaseRepairActive || (phaseReviewedCandidate.nonEmpty && phaseRecordingPaths.nonEmpty)) && releaseCommit.isEmpty &&
           closureIntent.isEmpty && checksReceipt.nonEmpty && reviewEvidence.nonEmpty && validCommit(commit) &&
-          commit.parent == tipSnapshot.head && commit.identity != tipSnapshot.head &&
-          candidate.exists(c => c.head == tipSnapshot.head && c.tree == commit.tree && c.tree != tipSnapshot.tree) =>
+          commit.parent == candidateBase.head && commit.identity != candidateBase.head &&
+          candidate.exists(c => c.head == candidateBase.head && c.tree == commit.tree && c.tree != candidateBase.tree) =>
         success(Stage.PhaseClosing, newCandidate = Some(Snapshot(commit.identity, commit.tree)),
-          newPhaseReviewed = None, newPhasePaths = Vector.empty, newreleasecommit = Some(commit))
+          newPhaseReviewed = None, newPhasePaths = Vector.empty, newreleasecommit = Some(commit), newcandidateparent = None)
       case PhaseRepositoryClosed(intent, original, finalTip, commits, receipt) if
           stage == Stage.PhaseClosing && closureIntent.contains(intent) && original == base.head &&
-          finalTip == tip && commits == completed.map(_.commit) && text(receipt) =>
+          candidate.exists(_.head == finalTip) && commits == completed.map(_.commit) && text(receipt) =>
         success(Stage.Closed, newRepository = Some(receipt))
       case NativeFailure(reason) if reason != null && reason.trim.nonEmpty && stage != Stage.Closed && stage != Stage.Decision =>
         success(Stage.Decision, reason = Some(reason))

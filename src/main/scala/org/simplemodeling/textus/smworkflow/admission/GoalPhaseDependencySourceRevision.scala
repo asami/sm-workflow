@@ -34,8 +34,7 @@ import WorkflowManagedProcessExecution as E
   * Native capture/check/review/closure owners qualify the newly selected bytes.
   * @since   Oct. 26, 2026
   *  version Oct. 28, 2026
-  *  version Nov.  2, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseDependencySourceRevision {
@@ -735,14 +734,33 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
     previousDirection: Option[Direction] = None, initialLineage: Option[InitialLineage] = None)
 
   def targetRecord(value: Target): Record = GoalPhaseNativeMetadata.record(value.asJson)
-  def targetC(value: Record): Consequence[Target] = recordC[Target](value)
-  def proposalC(value: Record): Consequence[Proposal] = recordC[Proposal](value)
-  private def recordC[A: Decoder](value: Record): Consequence[A] =
+  def targetC(value: Record): Consequence[Target] =
+    if (value == null) D.invalid("dependency source revision record is absent")
+    else value.toJsonStringC.flatMap(raw => io.circe.parser.parse(raw).left.map(_.message)
+      .flatMap(decodePublicTarget).fold(D.invalid(_), Consequence.success))
+  def proposalC(value: Record): Consequence[Proposal] = _record_c[Proposal](value)
+  private def _record_c[A: Decoder](value: Record): Consequence[A] =
     if (value == null) D.invalid("dependency source revision record is absent")
     else value.toJsonStringC.flatMap(raw => io.circe.parser.parse(raw).left.map(_.message)
       .flatMap(GoalPhaseNativeMetadata.normalizePublicJson).flatMap(_initial_public_target)
       .flatMap(_.as[A].left.map(_.message))
       .fold(D.invalid(_), Consequence.success))
+
+  private[admission] def decodePublicTarget(value: Json): Either[String, Target] = for {
+    supplied <- Option(value).toRight("Public dependency source target is absent")
+    wire <- GoalPhaseNativeMetadata.normalizePublicJson(supplied)
+    canonical <- _initial_public_target(wire)
+    target <- canonical.as[Target].left.map(_.message)
+    _ <- GoalPhaseCandidateRecovery.exactPublicFragment(wire, target.asJson)
+  } yield target
+
+  private[admission] def decodePublicDirection(value: Json): Either[String, Direction] = for {
+    supplied <- Option(value).toRight("Public dependency source direction is absent")
+    wire <- GoalPhaseNativeMetadata.normalizePublicJson(supplied)
+    target <- decodePublicTarget(wire.hcursor.downField("target").focus.getOrElse(Json.Null))
+    direction <- wire.mapObject(_.add("target", target.asJson)).as[Direction].left.map(_.message)
+    _ <- GoalPhaseCandidateRecovery.exactPublicFragment(wire, direction.asJson)
+  } yield direction
 
   /** Public Record omission is interpreted by each existing fragment owner;
     * the exact durable Target decoder still checks the resulting canonical data. */
@@ -755,13 +773,13 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
       _ <- GoalPhaseCandidateRecovery.publicNonNullObject(lineage, "initial source lineage")
       rawrecovery <- lineage.hcursor.get[Json]("recovery").left.map(_.message)
       recovery <- GoalPhaseCandidateRecovery.decodePublicTarget(rawrecovery)
-      canonicalrecovery <- _exact_public_fragment(rawrecovery, recovery.asJson)
+      canonicalrecovery <- GoalPhaseCandidateRecovery.exactPublicFragment(rawrecovery, recovery.asJson)
       basechanges <- _public_stage_changes(origin.hcursor.downField("baseChanges").focus.getOrElse(Json.Null))
       continuation <- lineage.hcursor.downField("continuation").focus match {
         case None => Right(None)
         case Some(Json.Null) => Left("Public initial source continuation must be absent or non-null")
         case Some(supplied) => GoalPhaseCandidateObservationContinuation.decodePublicTarget(supplied)
-          .flatMap(target => _exact_public_fragment(supplied, target.asJson)).map(Some(_))
+          .flatMap(target => GoalPhaseCandidateRecovery.exactPublicFragment(supplied, target.asJson)).map(Some(_))
       }
       primary <- origin.hcursor.get[Json]("currentPrimary").left.map(_.message)
       _ <- GoalPhaseCandidateRecovery.publicNonNullObject(primary, "current primary observation")
@@ -785,14 +803,6 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
       canonicalorigin = origin.mapObject(_.add("lineage", canonicallineage)
         .add("currentPrimary", canonicalprimary).add("baseChanges", basechanges.asJson))
     } yield value.mapObject(_.add("initialOrigin", canonicalorigin))
-
-  private def _exact_public_fragment(supplied: Json, canonical: Json): Either[String, Json] = for {
-    raw <- GoalPhaseNativeMetadata.record(canonical).toJsonStringC.map[Either[String, String]](Right(_))
-      .fold(error => Left(error.toString), identity)
-    parsed <- io.circe.parser.parse(raw).left.map(_.message)
-    expected <- GoalPhaseNativeMetadata.normalizePublicJson(parsed)
-    _ <- Either.cond(supplied == expected, (), "Public initial source fragment has unknown or noncanonical fields")
-  } yield canonical
 
   private def _public_stage_changes(value: Json): Either[String, Vector[StageChange]] = for {
     entries <- value.as[Vector[Json]].left.map(_.message)

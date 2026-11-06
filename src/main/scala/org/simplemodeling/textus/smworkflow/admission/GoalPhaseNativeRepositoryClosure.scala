@@ -133,9 +133,9 @@ private[smworkflow] object GoalPhaseNativeRepositoryClosure {
               case true => for {
                 actual <- G.observeC(core)
                 _ <- documentPolicy.fold(Consequence.unit)(_.validateC(controller.plan, d.candidatePaths))
-                staged <- if (management.nonEmpty && input.candidate.tree != controller.tipSnapshot.tree) for {
+                staged <- if (management.nonEmpty && input.candidate.tree != controller.candidateBase.tree) for {
                   tree <- G.indexTreeC(core)
-                } yield actual.head == controller.tipSnapshot.head && actual.tree == controller.tipSnapshot.tree &&
+                } yield actual.head == controller.candidateBase.head && actual.tree == controller.candidateBase.tree &&
                   tree == input.candidate.tree && actual.dirty.nonEmpty && actual.dirty.forall(p =>
                     !p.unmerged && p.worktree == ' ' && p.index != '?' && p.index != '!' &&
                     management.contains(p.path) && p.renamedFrom.forall(management.contains))

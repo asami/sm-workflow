@@ -28,7 +28,7 @@ final class NativeWorkflowResourceInputSpec extends AnyWordSpec with Matchers wi
     component = "org.simplemodeling.textus.SmWorkflow", service = "GoalPhaseService",
     operation = "describeGoalPhaseValidationRepair", arguments = values.toList.map((n, v) => Argument(n, v)),
     switches = Nil, properties = Nil)
-  private val _input = V.GoalPhaseAdvanceInput("fixture-session")
+  private val _input = V.GoalPhaseAdvanceInput("fixture-session", None)
   private def _candidate_business_cases(valid: Json): Vector[(String, String)] = {
     val fields = valid.asObject.get
     def _key_(canonical: String): String = fields.keys.find(key =>

@@ -58,6 +58,21 @@ private[smworkflow] object CompletionRecords {
     else invalid("requires distinct explicit owner/scope and bounded Markdown destinations")
   def selected(policy: Option[Policy], family: String, scope: String): Vector[String] =
     policy.toVector.flatMap(_.targets.filter(t => t.family == family && t.scope == scope).flatMap(_.paths))
+
+  /** Read data is derived only from the configured exact record destinations.
+    * CNCF narrows the independently granted repository Tree read in the UoW;
+    * the source stage/check/commit selection and its directory ownership stay
+    * unchanged. No selected-program or generic-process fallback is used.
+    */
+  def readSelectionC(paths: Vector[String]): Consequence[GitSelectionParameters] = for {
+    _ <- if (paths != null && paths.nonEmpty && paths.size <= 128 && paths.distinct == paths && paths.forall(path))
+      Consequence.unit else invalid("record observation requires exact distinct bounded Markdown destinations")
+    id <- GitSelectionId.parseC("completion-record-files")
+    parsed <- paths.foldLeft(Consequence.success(Vector.empty[GitPath])) { (prior, value) => for {
+      values <- prior
+      parsed <- GitPath.parseC(value)
+    } yield values :+ parsed }
+  } yield GitSelectionParameters(id, parsed)
   def valid(p: Plan): Boolean = p != null && exact(p.session) && exact(p.scope) && exact(p.family) &&
     GitObjectId.parseC(p.acceptedTree).isSuccess && p.evidence != null && p.evidence.nonEmpty && p.evidence.forall(exact) &&
     p.summary != null && p.summary.forall(s => s.nonEmpty && s.length <= 65536 && !s.contains('\u0000')) &&
@@ -81,21 +96,19 @@ private[smworkflow] object CompletionRecords {
       invalid("Phase record read requires its exact registered staging destination")
     else GitSelectionId.parseC("goal-path-" + (staging.indexOf(path) + 1))
   def captureC(core: ActionCall.Core, session: String, family: String, scope: String, acceptedTree: String,
-    evidence: Vector[String], paths: Vector[String], owned: Vector[String], staging: Vector[String], selection: GitSelectionId, allowApplied: Boolean = false, summary: Option[String] = None): Consequence[Plan] = for {
-    _ <- if (paths != null && owned != null && staging != null && selection != null && evidence != null && paths.forall(p => path(p) && StandaloneFixExecution.owned(p, owned) && staging.contains(p)) && evidence.nonEmpty && evidence.forall(exact))
+    evidence: Vector[String], paths: Vector[String], owned: Vector[String], staging: Vector[String], allowApplied: Boolean = false, summary: Option[String] = None): Consequence[Plan] = for {
+    _ <- if (paths != null && owned != null && staging != null && evidence != null && paths.forall(p => path(p) && StandaloneFixExecution.owned(p, owned) && staging.contains(p)) && evidence.nonEmpty && evidence.forall(exact))
       Consequence.unit else invalid("destinations must be explicitly owned and registered for selected staging; acceptance evidence is required")
+    selection <- readSelectionC(paths)
     native <- G.inspectC(core)
     _ <- if (allowApplied || !native.observed.dirty.exists(d => paths.contains(d.path) && d.worktree != ' ')) Consequence.unit
       else invalid("affected completion record is partially staged; no record write or staging performed")
     index <- G.indexTreeC(core)
     _ <- if (index == acceptedTree || allowApplied) Consequence.unit else invalid("record preparation requires the actual accepted index")
     tree <- GitObjectId.parseC(acceptedTree)
+    entries <- E.executePurposeC(core, GitOperation.TreeEntries(tree, selection.identity), selection).flatMap(_.valueC)
     files <- paths.foldLeft(Consequence.success(Vector.empty[File])) { (prior, p) => for {
       saved <- prior
-      readSelection <- if (family == "phase") phaseReadSelectionC(p, staging) else Consequence.success(selection)
-      entries <- E.executeGitC(core, GitOperation.TreeEntries(tree, readSelection)).flatMap(_.valueC)
-      _ <- if (family != "phase" || entries.forall(_.path.value == p)) Consequence.unit
-        else invalid("Phase record read exceeded its exact destination")
       entry <- entries.find(_.path.value == p).flatMap(_.entry).filter(e => Set("100644", "100755")(e.mode))
         .map(Consequence.success).getOrElse(invalid("selected record must already be tracked regular text: " + p))
       blob <- E.executeGitC(core, GitOperation.BlobContent(entry.blob)).flatMap(_.valueC)

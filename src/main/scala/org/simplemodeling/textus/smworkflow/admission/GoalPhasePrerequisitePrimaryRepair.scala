@@ -22,16 +22,19 @@ import GoalPhaseDependencyValidation.given
 import RepositorySyncManagedGitObservation as G
 import org.simplemodeling.textus.smworkflow.value as V
 
-/** A primary Compile failure precedes every validation receipt. It reserves an
+/** A primary Compile or qualified generation failure precedes every validation receipt. It reserves an
   * ordinary repair, retaining the actual publication and dependency lineage.
   * Publication authority is evaluated again at the actual repaired candidate.
   * @since   Nov.  2, 2026
-  * @version Nov.  2, 2026
+  *  version Nov.  2, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
   val schema = "sm-workflow.goal-phase-prerequisite-primary-repair.v1"
   val targetSchema = "sm-workflow.goal-phase-prerequisite-publication-recovery.v3"
+  val generationSchema = "sm-workflow.goal-phase-prerequisite-primary-repair.v2"
+  val generationTargetSchema = "sm-workflow.goal-phase-prerequisite-publication-recovery.v5"
   val causationPrefix = "ordered-primary-publication-repair:"
   val directionPrefix = "ordered-primary-publication-authority:"
 
@@ -191,9 +194,74 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
               line.contains("published ") || line.contains("[success]") || line.contains("(Test /"))
         })
 
+  /** Generation is a distinct closed classification of the actual retained
+    * capture. It never changes the legacy Compile predicate or its wire data. */
+  def generationFailure(value: LocalPublication.Result, target: LocalPublication.Target,
+    session: String, participant: String, source: LocalPublication.Source, processPolicy: String): Boolean =
+    value != null && value.status == "failed" && value.request != null && value.request.target == target &&
+      target != null && target.beforeChecks && target.dependency.isEmpty && value.request.participant == participant &&
+      value.request.input != null && value.request.input.ownerSessionId.contains(session) &&
+      !value.request.input.explicit && value.request.input.answer.isEmpty && value.request.source == source &&
+      value.nextPreparation != null && value.nextPreparation.isEmpty && value.process != null && value.process.exists(raw =>
+        WorkflowSbtCapture.decode(raw).toOption.exists { process =>
+          val stdout = WorkflowSbtCapture.text(process.stdout)
+          val stderr = WorkflowSbtCapture.text(process.stderr)
+          val programs = io.circe.parser.parse(Option(processPolicy).getOrElse("")).toOption.flatMap(
+            _.hcursor.downField("processPlan").get[Vector[Json]]("sbtPrograms").toOption).getOrElse(Vector.empty)
+            .filter(p => p.hcursor.get[String]("target").contains(target.workspace) &&
+              p.hcursor.get[String]("operation").contains("publish-local"))
+          val text = stdout.value + "\n" + stderr.value
+          val errors = _error_lines(text)
+          val summaries = errors.filter(_.startsWith("[error] ("))
+          WorkflowSbtCapture.exitCode(process).contains(1) && stdout.textStatus == "complete" &&
+            stderr.textStatus == "complete" && !process.stdout.truncated && !process.stderr.truncated &&
+            programs.size == 1 && programs.head.hcursor.get[String]("identity").contains(process.safeProgramIdentity) &&
+            summaries.size == 1 && summaries.head.matches(
+              "\\[error\\] \\(cozyGenerate\\) \\[sbt-cozy\\] cozy delegate failed \\(1\\) for .+") &&
+            errors.exists(_generation_source_error) &&
+            errors.exists(_empty_generation_output) &&
+            errors.lastOption.exists(line => summaries.contains(line) || _generation_source_error(line) ||
+              _empty_generation_output(line)) &&
+            !text.linesIterator.exists(line => line.contains("published ") || line.contains("[success]") ||
+              line.contains("(Compile /") || line.contains("(Test /"))
+        })
+
+  private def _generation_source_error(line: String): Boolean = line == "[error] Error[No input]" || line.matches(
+    "\\[error\\] Error\\[org\\.goldenport\\.exception\\.SyntaxErrorFaultException: Operation '[A-Za-z_][A-Za-z0-9_]*' " +
+      "INPUT Value '[A-Za-z_][A-Za-z0-9_]*' requires input-kind=COMMAND\\|QUERY\\.\\]")
+
+  private def _empty_generation_output(line: String): Boolean =
+    io.circe.parser.parse(line.stripPrefix("[error] ")).toOption.flatMap(_.asArray).exists(_.exists { item =>
+      val cursor = item.hcursor
+      cursor.get[String]("code").contains("GENERATION_PROVENANCE_OUTPUT_TAMPERED") &&
+        cursor.get[String]("expected").contains("at least one generated Scala artifact") &&
+        cursor.get[String]("actual").contains("none") &&
+        cursor.get[String]("message").contains("Generation provenance cannot describe an empty output.")
+    })
+
+  enum FailureKind {
+    case Compile, Generation
+  }
+  def failureKind(value: Failure): Option[FailureKind] =
+    if (value == null || value.failed == null || value.failed.request == null) None
+    else {
+      val failed = value.failed
+      if (compileFailure(failed, failed.request.target, value.sessionId, value.participant,
+          failed.request.source, value.processPolicy)) Some(FailureKind.Compile)
+      else Option.when(generationFailure(failed, failed.request.target, value.sessionId, value.participant,
+        failed.request.source, value.processPolicy))(FailureKind.Generation)
+    }
+  def factSchema(value: Failure): String = if (failureKind(value).contains(FailureKind.Generation)) generationSchema else schema
+  def publicationSchema(value: Failure): String =
+    if (failureKind(value).contains(FailureKind.Generation)) generationTargetSchema else targetSchema
+  def isTargetSchema(value: String): Boolean = value == targetSchema || value == generationTargetSchema
+
   def directive(value: Failure): O.RepairDirective = O.RepairDirective(
-    "Repair the actual primary publication Compile failure within the selected Step; tests were not executed",
-    Vector("PRIMARY-PUBLICATION-COMPILE: " + value.failed.request.target.identity) ++
+    if (failureKind(value).contains(FailureKind.Generation))
+      "Repair the actual primary publication generation failure within the selected Step; tests were not executed"
+    else "Repair the actual primary publication Compile failure within the selected Step; tests were not executed",
+    Vector((if (failureKind(value).contains(FailureKind.Generation)) "PRIMARY-PUBLICATION-GENERATION: "
+      else "PRIMARY-PUBLICATION-COMPILE: ") + value.failed.request.target.identity) ++
       value.failed.process.flatMap(WorkflowSbtCapture.decode(_).toOption)
         .toVector.flatMap(p => _error_lines(WorkflowSbtCapture.text(p.stdout).value + "\n" + WorkflowSbtCapture.text(p.stderr).value)).take(127))
   private def _candidate_request(failed: LocalPublication.Result, session: String, candidate: C.Payload): Boolean =
@@ -228,7 +296,7 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
     _json(value.publicationPolicy) && _json(value.processPolicy) &&
     _policy_targets(value).contains(value.targets) &&
     value.candidate.candidate.exists(c => c.head == value.failed.request.source.head && c.tree == value.failed.request.source.tree) &&
-    compileFailure(value.failed, value.failed.request.target, value.sessionId, value.participant, value.failed.request.source, value.processPolicy) &&
+    failureKind(value).nonEmpty &&
     value.artifactAdoption != null && value.primaryDirections != null && value.primaryDirections.forall(f => B.primaryFactValid(f) &&
       f.target.componentInstance == value.componentInstance && f.target.participant == value.participant &&
       f.target.sessionId == value.sessionId && f.target.plan == value.plan && f.target.base == value.base &&
@@ -242,14 +310,14 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
         controller.get[Vector[O.ClosedStep]]("completed").contains(value.completed) &&
         controller.get[Int]("cursor").contains(value.completed.size)
     }
-  def factValid(value: Fact): Boolean = value != null && value.schemaVersion == schema && failureValid(value.failure) &&
+  def factValid(value: Fact): Boolean = value != null && failureValid(value.failure) && value.schemaVersion == factSchema(value.failure) &&
     value.directive == directive(value.failure) && _json(value.successorController)
   def narrowed(value: Failure): Boolean = value.primaryDirections.nonEmpty ||
     value.candidate.dependencySourceCapture.exists(_.direction.target.primaryFailureOrigin.nonEmpty)
   def choices(value: Target): Vector[String] = if (value.repair.isEmpty)
     Vector("RepairPrimarySource", "RepairPrimarySourceAndContinuePublication", "Defer")
     else Vector("AuthorizePrimaryPublicationOnce", "AuthorizePrimaryPublicationAndSameScopeRepairs", "Defer")
-  def targetValid(value: Target): Boolean = value != null && value.schemaVersion == targetSchema && failureValid(value.failure) &&
+  def targetValid(value: Target): Boolean = value != null && failureValid(value.failure) && value.schemaVersion == publicationSchema(value.failure) &&
     value.componentInstance == value.failure.componentInstance && value.participant == value.failure.participant &&
     value.sessionId == value.failure.sessionId && _revision(value.frontierRevision) && _revision(value.candidateRecordRevision) &&
     _json(value.controller) && value.scope == scope(value.failure) && value.candidate != null && value.candidate.candidate.nonEmpty &&
@@ -284,7 +352,7 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
 
   private val _fact_codec = new WorkflowResultJsonV1.PayloadCodec[Fact] {
     val typeIdentity = "GoalPhasePrerequisitePrimaryRepairFact"
-    def encode(value: Fact): Json = Json.obj("schemaVersion" -> schema.asJson, "payload" -> value.asJson)
+    def encode(value: Fact): Json = Json.obj("schemaVersion" -> value.schemaVersion.asJson, "payload" -> value.asJson)
     def decode(value: Json): Either[String, Fact] = value.hcursor.get[Fact]("payload").left.map(_.message).flatMap(f =>
       Either.cond(encode(f) == value, f, "Primary repair envelope is noncanonical"))
   }
@@ -405,7 +473,7 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
     if (kind != "RepairStep" || !currentCauseAt(fact, controller)) Consequence.success(None)
     else if (factValid(fact)) Consequence.success(Some(GoalPhaseNativeWork.PublicationFailureContext(reference,
       fact.failure.candidate.changedPaths, fact.failure.candidate.diff.get, fact.failure.failed, testsExecuted = false)))
-    else F.invalid("Primary repair lost its retained actual Compile failure")
+    else F.invalid("Primary repair lost its retained actual classified publication failure")
 
   enum PublicationRoute {
     case MissingAuthority, FirstFailureSuccessor, OrdinaryPrerequisite
@@ -506,7 +574,7 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
       n.controller.generation, n.controller.completed, GoalPhaseRepairProgress.snapshot(n.controller),
       n.candidate.record.revision.value.toString, n.candidate.payload, source.requestingResult, targets,
       B.publicationPolicy(policy), process, failed, source.artifactAdoption, source.primaryDirections, exclusions)
-    _ <- if (failureValid(failure)) Consequence.unit else F.invalid("Primary repair requires an eligible exact current Compile failure")
+    _ <- if (failureValid(failure)) Consequence.unit else F.invalid("Primary repair requires an eligible exact current Compile or generation failure")
     _ <- if (targets.filter(_.dependency.isEmpty) == Vector(failed.request.target) &&
         n.candidate.payload.dependencySourceCapture.forall(c =>
           failed.request.target.component == c.direction.target.binding.requester.identity &&
@@ -529,8 +597,10 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
         case Vector(target) => (!targets.exists(_.dependency.nonEmpty) || candidate.dependencySourceCapture.exists(R.captureValid)) &&
           _candidate_request(failed, source.native.session.current.identity.value, candidate) && candidate.candidate.exists(c =>
             c.head == failed.request.source.head && c.tree == failed.request.source.tree) &&
-          compileFailure(failed, target, source.native.session.current.identity.value,
-            source.native.session.participantIdentity, failed.request.source, process)
+          (compileFailure(failed, target, source.native.session.current.identity.value,
+            source.native.session.participantIdentity, failed.request.source, process) ||
+            generationFailure(failed, target, source.native.session.current.identity.value,
+              source.native.session.participantIdentity, failed.request.source, process))
         case _ => false
       }
     }
@@ -545,8 +615,8 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
     next <- stateC(source.native.controller, failure)
     _ <- if (domain.statemachine.GoalPhaseRunLifecycle.permits("Validation",
         if (next.stage == O.Stage.Repair) "checks-repair-required" else "checks-failed", next.stage.toString)) Consequence.unit
-      else F.invalid("Primary Compile repair has no existing native lifecycle edge")
-    fact = Fact(schema, failure, directive(failure), _sorted(B.controller(next)))
+      else F.invalid("Primary publication repair has no existing native lifecycle edge")
+    fact = Fact(factSchema(failure), failure, directive(failure), _sorted(B.controller(next)))
     adapter <- source.native.session.storage.bindMechanicalC(F.advanceOperation, codec)
     saved <- adapter.executeC(WorkflowMechanicalTransition.Intent(d.configuration, _reference(source.native.from, causationPrefix),
       source.native.from, source.native.from.revision, F.history(source.native.from, "phase." + next.stage.toString,
@@ -575,7 +645,7 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
   } yield saved -> next
 
   def targetC(value: Record): Consequence[Target] = W.jsonC(value).flatMap(_.as[Target].left.map(_.message).fold(F.invalid, Consequence.success))
-  def isTargetC(value: Record): Consequence[Boolean] = W.jsonC(value).map(_.hcursor.get[String]("schemaVersion").contains(targetSchema))
+  def isTargetC(value: Record): Consequence[Boolean] = W.jsonC(value).map(_.hcursor.get[String]("schemaVersion").toOption.exists(isTargetSchema))
   def bindingC(component: String, target: Target, choice: String, rationale: String,
     participant: String, reference: ContextReference): Consequence[Json] =
     if (targetValid(target) && target.componentInstance == component && target.participant == participant &&
@@ -614,7 +684,7 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
       if (native.candidate.payload.candidate.exists(c => c.head == current.head && c.tree == current.tree)) Consequence.unit
       else F.invalid("Publication authority requires the actual current primary candidate")
     } else Consequence.unit
-    target = Target(targetSchema, failure.componentInstance, failure.participant, failure.sessionId,
+    target = Target(publicationSchema(failure), failure.componentInstance, failure.participant, failure.sessionId,
       native.from.revision.value.toString, _sorted(B.controller(native.controller)), native.controller.generation,
       native.candidate.record.revision.value.toString, native.candidate.payload, failure, repair.map(_.reference),
       scope(failure), if (repair.isEmpty) "primary-source-repair" else "new-primary-publication")
@@ -623,13 +693,15 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
 
   def description(target: Target): V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult =
     V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult(target.sessionId, "direction-required",
-      if (target.repair.isEmpty) "The retained primary Compile failure can issue ordinary in-scope RepairStep. Tests were not executed. A one-shot source/publication direction does not cover a new candidate."
+      if (target.repair.isEmpty && failureKind(target.failure).contains(FailureKind.Generation))
+        "The retained primary generation failure can issue ordinary in-scope RepairStep. Tests were not executed. A one-shot source/publication direction does not cover a new candidate."
+      else if (target.repair.isEmpty) "The retained primary Compile failure can issue ordinary in-scope RepairStep. Tests were not executed. A one-shot source/publication direction does not cover a new candidate."
       else "The actual repaired primary candidate needs publication authority. AuthorizePrimaryPublicationOnce covers this candidate only; AuthorizePrimaryPublicationAndSameScopeRepairs covers necessary publication after further owned source repairs under this exact Component, Step, acceptance, programs, targets and destination.",
       target.componentInstance, GoalPhaseNativeMetadata.record(target.asJson), choices(target), B.recoveryOperation)
 
   private val _direction_codec = new WorkflowResultJsonV1.PayloadCodec[Direction] {
     val typeIdentity = "GoalPhasePrerequisitePrimaryPublicationDirection"
-    def encode(value: Direction): Json = Json.obj("schemaVersion" -> targetSchema.asJson, "payload" -> value.asJson)
+    def encode(value: Direction): Json = Json.obj("schemaVersion" -> value.target.schemaVersion.asJson, "payload" -> value.asJson)
     def decode(value: Json): Either[String, Direction] = value.hcursor.get[Direction]("payload").left.map(_.message).flatMap(d =>
       Either.cond(encode(d) == value, d, "Primary publication Direction envelope is noncanonical"))
   }

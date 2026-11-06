@@ -20,6 +20,7 @@ import RepositorySyncManagedGitObservation as G
 import RepositorySyncNativeProgressStore as N
 import RepositorySyncPurpose as P
 import RepositorySyncPurpose.given
+import RepositorySyncPurposePreparationIntentContinuation as Intent
 
 /** Read the actual failed Git receipt; a separate Human direction appends a
   * fresh preparation namespace without resubmitting the accepted repair.
@@ -114,7 +115,32 @@ private[smworkflow] object RepositorySyncPurposePreparationContinuation {
       "repositoryPurposePreparationContinuation" -> Json.obj("target" -> target.asJson,
         "answer" -> Json.obj("choice" -> choice.asJson, "rationale" -> rationale.asJson,
           "participant" -> participant.asJson, "reference" -> reference.asJson))))
+  def publicTargetPolicy(value: Json): Either[String, String] =
+    GoalPhaseNativeMetadata.normalizePublicJson(value).flatMap(_.hcursor.get[String]("continuationPolicy").left.map(_.message))
+      .flatMap(selected => Either.cond(Set(policy, Intent.policy)(selected), selected, "Unknown preparation continuation policy"))
+  def targetPolicyC(value: Record): Consequence[String] = if (value == null) N.invalid("preparation target is absent")
+    else value.toJsonStringC.flatMap(raw => io.circe.parser.parse(raw).left.map(_.message).flatMap(publicTargetPolicy)
+      .fold(N.invalid, Consequence.success))
+  def validatePublicTarget(value: Json): Either[String, Unit] = publicTargetPolicy(value).flatMap {
+    case selected if selected == policy => decodePublicTarget(value).map(_ => ())
+    case selected if selected == Intent.policy => Intent.decodePublicTarget(value).map(_ => ())
+    case _ => Left("Unknown preparation continuation policy")
+  }
+  def validatePublicAnswer(target: Json, value: Json): Either[String, Unit] = publicTargetPolicy(target).flatMap {
+    case selected if selected == policy => decodePublicAnswer(value).map(_ => ())
+    case selected if selected == Intent.policy => Intent.decodePublicAnswer(value).map(_ => ())
+    case _ => Left("Unknown preparation continuation policy")
+  }
   def selectBinding(value: Json): Either[String, Json] = for {
+    target <- value.hcursor.downField("repositoryPurposePreparationContinuation").get[Json]("target").left.map(_.message)
+    selected <- target.hcursor.get[String]("continuationPolicy").left.map(_.message)
+    binding <- selected match {
+      case selected if selected == policy => _select_v1_binding(value)
+      case selected if selected == Intent.policy => Intent.selectBinding(value)
+      case _ => Left("Unknown preparation continuation binding policy")
+    }
+  } yield binding
+  private def _select_v1_binding(value: Json): Either[String, Json] = for {
     component <- value.hcursor.get[String]("componentInstance").left.map(_.message)
     rawtarget <- value.hcursor.downField("repositoryPurposePreparationContinuation").get[Json]("target").left.map(_.message)
     target <- decodeTarget(rawtarget)
@@ -287,6 +313,7 @@ private[smworkflow] object RepositorySyncPurposePreparationContinuation {
   /** Authenticate the actual adoption and unchanged source again immediately
     * before the normal runtime writes a fresh preparation intent. */
   def authenticateC(store: N.Store, source: N.Stage): Consequence[Unit] = {
+    if (source.payload.purposePreparationIntent.nonEmpty) return Intent.authenticateC(store, source)
     val p = source.payload.purposes.get
     p.preparationNamespace match {
       case None => if (source.payload.purposePreparation.isEmpty) Consequence.unit
@@ -349,12 +376,13 @@ private[smworkflow] object RepositorySyncPurposePreparationContinuation {
       else N.invalid("preparation adoption requires the complete exact input")
     _ <- if (json.hcursor.downField("directionReference").focus.exists(_.asObject.exists(_.keys.toSet == Set("identity", "revision")))) Consequence.unit
       else N.invalid("preparation direction reference requires exact identity and revision")
-    _ <- decodeAnswer(Json.obj("choice" -> json.hcursor.downField("choice").focus.getOrElse(Json.Null),
+    rawtarget <- json.hcursor.get[Json]("target").left.map(_.message).fold(N.invalid, Consequence.success)
+    _ <- validatePublicTarget(rawtarget).fold(N.invalid, _ => Consequence.unit)
+    _ <- validatePublicAnswer(rawtarget, Json.obj("choice" -> json.hcursor.downField("choice").focus.getOrElse(Json.Null),
       "rationale" -> json.hcursor.downField("rationale").focus.getOrElse(Json.Null))).fold(N.invalid, _ => Consequence.unit)
     value <- V.RepositorySyncPurposePreparationContinuationAdoptionInput.createC(record)
     _ <- if (exact(value.sessionId) && value.directionReference != null && value.executionEvidence != null) Consequence.unit
       else N.invalid("preparation adoption lacks its Session, direction reference or execution")
-    _ <- targetC(value.target)
   } yield value
   private final class Operation(describe: Boolean, d: F.Declaration, definition: DefinitionBinding,
     installation: Installation, acknowledge: String => Consequence[Unit]) extends spec.OperationDefinition {
@@ -378,12 +406,19 @@ private[smworkflow] object RepositorySyncPurposePreparationContinuation {
           context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(sessionid))
           selected = core.copy(executionContext = context)
           result <- value match {
-            case None => _observe_c(sessionid, d, definition, selected, acknowledge).map(observed =>
+            case None => Intent.selectedC(sessionid, d, definition, selected, acknowledge).flatMap {
+              case true => Intent.describeC(sessionid, d, definition, selected, acknowledge)
+              case false => _observe_c(sessionid, d, definition, selected, acknowledge).map(observed =>
               NativeWorkflowOperationOutput.response(V.RepositorySyncPurposePreparationContinuationDescriptionResult(sessionid,
                 if (observed.target.eligibilityReason.isEmpty) "adoption-required" else "ineligible",
                 if (observed.target.eligibilityReason.isEmpty) message else observed.target.eligibilityReason,
                 observed.target.componentInstance, targetRecord(observed.target), targetChoices(observed.target), adoptionOperation)))
-            case Some(supplied) => _adopt_c(supplied, d, definition, installation, selected, acknowledge)
+            }
+            case Some(supplied) => targetPolicyC(supplied.target).flatMap {
+              case version if version == Intent.policy => Intent.adoptC(supplied, d, definition, installation, selected, acknowledge)
+              case version if version == policy => _adopt_c(supplied, d, definition, installation, selected, acknowledge)
+              case _ => N.invalid("unknown preparation continuation policy")
+            }
           }
         } yield result
       }

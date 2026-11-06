@@ -924,6 +924,27 @@
           "kind": "COMMAND",
           "input": "DelegateTaskScopeCorrectionInput",
           "output": "DelegateTaskScopeCorrectionView"
+        },
+        {
+          "service": "NativeWorkflowPreparationService",
+          "name": "prepareDelegateTaskCandidateContinuation",
+          "kind": "COMMAND",
+          "input": "WorkflowDelegateTaskCandidateContinuationPreparationInput",
+          "output": "WorkflowPreparedImport"
+        },
+        {
+          "service": "DelegateTaskService",
+          "name": "describeDelegateTaskCandidateContinuation",
+          "kind": "COMMAND",
+          "input": "DelegateTaskCandidateContinuationDescriptionInput",
+          "output": "DelegateTaskCandidateContinuationView"
+        },
+        {
+          "service": "DelegateTaskService",
+          "name": "recoverDelegateTaskCandidateContinuation",
+          "kind": "COMMAND",
+          "input": "DelegateTaskCandidateContinuationInput",
+          "output": "DelegateTaskCandidateContinuationView"
         }
       ],
       "types": [
@@ -1344,6 +1365,12 @@
               "type": "string",
               "multiplicity": "1",
               "required": true
+            },
+            {
+              "name": "sourceHistoryObservationResource",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },
@@ -8429,6 +8456,132 @@
         },
         {
           "name": "WorkflowDelegateTaskScopeCorrectionPreparationInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "input",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "origin",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionCollection",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskCandidateContinuationDescriptionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskCandidateContinuationInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskCandidateContinuationView",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowDelegateTaskCandidateContinuationPreparationInput",
           "kind": "value",
           "fields": [
             {
