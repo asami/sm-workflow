@@ -86,6 +86,58 @@ final class GoalPhaseNativeWorkCompatibilitySpec extends AnyWordSpec with Matche
   }
 
   "Retained GoalPhase operating profile compatibility" should {
+    "preserve historical estimate presence inside a retained check failure WorkOrder" in {
+      Given("a specification-owned v5 RepairStep with a failed typed SBT receipt")
+      val check = GoalPhaseNativeValidation.Check("focused", 1, WorkflowSbtValidation.Kind.Test)
+      val receipt = RepositorySyncNativeMergeValidation.Receipt("focused", "exited", Some(1),
+        "Specification-owned failed test", "", Some(WorkflowSbtValidation.Facts(
+          WorkflowSbtValidation.Kind.Test, WorkflowSbtValidation.Outcome.Failed, None, None)))
+      val validation = GoalPhaseNativeValidation.Payload("12", _repair.stepIdentity.get,
+        O.Snapshot("a" * 40, "b" * 40), Vector(check), Vector(receipt), Some("repair-required"))
+      val failure = take(W.checkFailureContextC(Vector("current.scala"), "Specification-owned source diff", validation))
+      val request = _repair.copy(operatingProfile = Some(_profile), checkFailure = Some(failure))
+      def changeSbt(wire: Json)(change: Json => Json): Json = _payload(wire)(payload =>
+        payload.mapObject(p => p.add("checkFailure", p("checkFailure").get.mapObject(f =>
+          f.add("validation", f("validation").get.mapObject(v =>
+            v.add("receipts", v("receipts").get.mapArray(rs => rs.updated(0,
+              rs(0).mapObject(r => r.add("sbt", change(r("sbt").get))))))))))))
+      val absent = W.inputCodec.encode(request)
+      val explicit = changeSbt(absent)(_.mapObject(_.add("estimate", Json.Null)))
+      val publication = W.PublicationFailureContext(ContextReference(_repair.instanceIdentity, "1"),
+        Vector("current.scala"), "Retained primary publication failure", PrimaryPublicationContinuationSpecificationFixture.failed,
+        testsExecuted = false)
+      val invalidV6 = W.inputCodec.encode(request.copy(candidate = None, checksReceipt = None,
+        publicationFailure = Some(publication)))
+      W.inputCodec.decode(invalidV6).isLeft shouldBe true
+      When("both historical representations pass the exact input and shared WorkOrder codecs")
+      Vector(absent, explicit).foreach { wire =>
+        val restored = W.inputCodec.decode(wire).toOption.get
+        val order = _frame(restored)
+        val encoded = take(WorkflowWorkOrderJsonV1.encodeC(order, W.inputCodec))
+        val decoded = take(WorkflowWorkOrderJsonV1.decodeC(encoded, W.inputCodec))
+        Then("the representation and original stored bytes remain unchanged on a fresh read")
+        W.inputCodec.encode(restored) shouldBe wire
+        take(WorkflowWorkOrderJsonV1.encodeC(decoded, W.inputCodec)) shouldBe encoded
+        W.inputCodec.decode(changeSbt(wire)(_.mapObject(_.add("estimateFieldPresent", Json.True)))).isLeft shouldBe true
+        W.inputCodec.decode(changeSbt(wire)(_.mapObject(_.add("unexpected", Json.True)))).isLeft shouldBe true
+        val root = Files.createTempDirectory("retained-sbt-estimate-")
+        try {
+          take(new IssuedWorkOrderPersistence.LocalJson(root, W.inputCodec).putIfAbsentC(order))
+          val paths = Files.list(root)
+          val file = try paths.iterator().asScala.toVector.head finally paths.close()
+          val before = Files.readAllBytes(file).toVector
+          new String(before.toArray, StandardCharsets.UTF_8) shouldBe encoded
+          val loaded = take(new IssuedWorkOrderPersistence.LocalJson(root, W.inputCodec)
+            .loadC(ContinuationIdentity("retained-continuation"))).get
+          take(WorkflowWorkOrderJsonV1.encodeC(loaded, W.inputCodec)) shouldBe encoded
+          Files.readAllBytes(file).toVector shouldBe before
+        } finally {
+          val paths = Files.list(root)
+          try paths.iterator().asScala.foreach(path => Files.deleteIfExists(path)) finally paths.close()
+          Files.deleteIfExists(root)
+        }
+      }
+    }
     "losslessly preserve implementation review and repair payloads with their original history decisions and counters" in {
       Given("small semantic fixtures with a committed prefix, retained progress and an explicit finite v5 profile")
       val requests = Vector(_implementation.copy(operatingProfile = Some(_profile)),
