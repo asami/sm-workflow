@@ -1,7 +1,7 @@
 # Phase 6.11: Runtime-Owned Directory-List RepositorySync
 
 Date: 2026-10-31
-Status: planned; no implementation or acceptance claimed.
+Status: in progress; B1 implementation authored; validation and Phase acceptance pending.
 Owner: sm-workflow development; adoption by sm-workflow-dev after Phase 6.10.
 Sequence: Phase 6.9 -> Phase 6.10 -> Phase 6.11 -> Phase 6.12 -> Phase 7.
 Specification: [directory-list synchronization](../spec/repository-sync-directory-list.md).

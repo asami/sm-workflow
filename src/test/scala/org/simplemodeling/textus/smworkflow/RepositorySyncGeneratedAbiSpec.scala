@@ -15,7 +15,7 @@ import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseNativeMetadata, 
 /**
  * @since   Oct.  6, 2026
  *  version Oct. 28, 2026
- * @version Nov.  4, 2026
+ * @version Nov.  6, 2026
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -38,7 +38,9 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
     SmWorkflowComponent.RepositorySyncServiceService.DescribeRepositorySyncRepairBudgetContinuationOperation,
     SmWorkflowComponent.RepositorySyncServiceService.AdoptRepositorySyncRepairBudgetContinuationOperation,
     SmWorkflowComponent.RepositorySyncServiceService.DescribeRepositorySyncPushContinuationOperation,
-    SmWorkflowComponent.RepositorySyncServiceService.AdoptRepositorySyncPushContinuationOperation)
+    SmWorkflowComponent.RepositorySyncServiceService.AdoptRepositorySyncPushContinuationOperation,
+    SmWorkflowComponent.RepositorySyncServiceService.SyncRepositoryDirectoriesOperation,
+    SmWorkflowComponent.RepositorySyncServiceService.ReadRepositoryDirectoryResultOperation)
   private def _request(operation: OperationDefinition, properties: List[Property]): Request =
     Request.of(component = SmWorkflowComponent.componentId.name, service = "RepositorySyncService",
       operation = operation.specification.name, arguments = Nil, switches = Nil,
@@ -109,7 +111,25 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
         "describeRepositorySyncRepairBudgetContinuation" -> Some("RepositorySyncRepairBudgetContinuationDescriptionInput"),
         "adoptRepositorySyncRepairBudgetContinuation" -> Some("RepositorySyncRepairBudgetContinuationAdoptionInput"),
         "describeRepositorySyncPushContinuation" -> Some("RepositorySyncPushContinuationDescriptionInput"),
-        "adoptRepositorySyncPushContinuation" -> Some("RepositorySyncPushContinuationAdoptionInput"))
+        "adoptRepositorySyncPushContinuation" -> Some("RepositorySyncPushContinuationAdoptionInput"),
+        "syncRepositoryDirectories" -> Some("RepositoryDirectorySyncInput"),
+        "readRepositoryDirectoryResult" -> Some("RepositoryDirectoryResultReadInput"))
+    }
+
+    "require the retained directory result's named session and revision through its declared input" in {
+      Given("the generated read Operation and its retained-result address")
+      val operation = SmWorkflowComponent.RepositorySyncServiceService.ReadRepositoryDirectoryResultOperation
+      val session = Property("sessionId", "directory-execution-1", None)
+      val revision = Property("revision", "7", None)
+      When("the caller provides both address fields or omits one")
+      val complete = operation.createOperationRequest(_request(operation, List(session, revision)))
+      val missingSession = operation.createOperationRequest(_request(operation, List(revision)))
+      val missingRevision = operation.createOperationRequest(_request(operation, List(session)))
+      Then("the named complete input is accepted and incomplete addresses are refused before execution")
+      operation.specification.request.parameters.map(_.name).toVector shouldBe Vector("sessionId", "revision")
+      complete.isSuccess shouldBe true
+      missingSession.isSuccess shouldBe false
+      missingRevision.isSuccess shouldBe false
     }
 
     "expose only the session description and typed adoption transports for finite repair budget direction" in {

@@ -14,8 +14,8 @@ import org.goldenport.record.{Record, RecordPresentable}
   * Git boundary still admits the workspace, actor, capability and arguments.
   * Explicit legacy compositions do not install this data and keep their fixed
   * programs. Nothing is written to a file or cached across calls.
-  * @since Oct. 27, 2026
-  * @version Oct. 27, 2026
+  * @since   Oct. 27, 2026
+  * @version Nov.  6, 2026
   */
 private[smworkflow] object RuntimeGitSelections {
   private val key = "sm-workflow.runtime-git-data"
@@ -41,10 +41,10 @@ private[smworkflow] object RuntimeGitSelections {
       ("conflict-" + (index + 1), Vector(path), Option.empty[String])))
 
   def boundedC(service: spec.ServiceDefinition, paths: Vector[String], requestIdentity: String,
-    objective: String): Consequence[spec.ServiceDefinition] =
+    objective: String, selectionIdentity: String = "goal-task"): Consequence[spec.ServiceDefinition] =
     bindC(service, paths.zipWithIndex.map((path, index) =>
       ("goal-path-" + (index + 1), Vector(path), Option.empty[String])) :+
-      ("goal-task", paths, Some(requestIdentity + ": " + objective.take(200))))
+      (selectionIdentity, paths, Some(requestIdentity + ": " + objective.take(200))))
 
   private def bindC(service: spec.ServiceDefinition, rows: Vector[(String, Vector[String], Option[String])]): Consequence[spec.ServiceDefinition] =
     rows.foldLeft(Consequence.success(Map.empty[String, GitSelectionParameters])) { case (prior, (name, paths, message)) => for {

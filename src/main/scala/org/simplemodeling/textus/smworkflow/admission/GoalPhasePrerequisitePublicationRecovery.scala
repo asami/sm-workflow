@@ -32,7 +32,7 @@ import GoalPhasePrerequisitePublicationUnknownRecovery as W
   * publication. Direction appends no Git or SBT effect; Advance owns the bounded
   * effect chain and the ordinary prerequisite owner owns publication.
   * @since   Nov.  1, 2026
-  * @version Nov.  2, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhasePrerequisitePublicationRecovery {
@@ -510,7 +510,7 @@ private[smworkflow] object GoalPhasePrerequisitePublicationRecovery {
         .get[String]("schemaVersion").contains(GoalPhaseCurrentSourceArtifactAdoption.targetSchema)))
       GoalPhaseCurrentSourceArtifactAdoption.selectBinding(value)
     else if (Option(value).exists(_.hcursor.downField("prerequisitePublicationRecovery").downField("target")
-        .get[String]("schemaVersion").contains(GoalPhasePrerequisitePrimaryRepair.targetSchema)))
+        .get[String]("schemaVersion").toOption.exists(GoalPhasePrerequisitePrimaryRepair.isTargetSchema)))
       GoalPhasePrerequisitePrimaryRepair.selectBinding(value)
     else if (Option(value).exists(_.hcursor.downField("prerequisitePublicationUnknownRecovery").focus.nonEmpty))
       GoalPhasePrerequisitePublicationUnknownRecovery.selectBinding(value)
@@ -1027,7 +1027,7 @@ private[smworkflow] object GoalPhasePrerequisitePublicationRecovery {
         selected = core.copy(executionContext = context)
         result <- port.describePrerequisitePublicationRecoveryC(sessionId, selected).map(NativeWorkflowOperationOutput.response(_))
       } yield result else for {
-        record <- NativeWorkflowResourceInput.readC(recovery.get, reference => read_resource_text(reference,
+        record <- NativeWorkflowResourceInput.readC(recovery.get, reference => WorkflowArtifactBudget.readTextC(core, reference,
           Some(java.nio.charset.StandardCharsets.UTF_8)).flatMap(validateBusinessTextC))
         input <- businessRecordC[V.GoalPhasePrerequisitePublicationRecoveryInput](record, Set("sessionId", "target", "choice", "rationale", "reference"))
         _ <- recoveryInputC(input)
@@ -1097,7 +1097,7 @@ private[smworkflow] object GoalPhasePrerequisitePublicationRecovery {
     expected <- json.hcursor.get[String]("schemaVersion").toOption match {
       case Some(version) if version == GoalPhaseCurrentSourceArtifactAdoption.targetSchema =>
         GoalPhaseCurrentSourceArtifactAdoption.targetC(input.target).map(_ => GoalPhaseCurrentSourceArtifactAdoption.choices)
-      case Some(version) if version == GoalPhasePrerequisitePrimaryRepair.targetSchema =>
+      case Some(version) if GoalPhasePrerequisitePrimaryRepair.isTargetSchema(version) =>
         GoalPhasePrerequisitePrimaryRepair.targetC(input.target).map(GoalPhasePrerequisitePrimaryRepair.choices)
       case Some(version) if version == primarySchema => primaryTargetC(input.target).map(primaryChoices)
       case Some(version) if version == W.schema => W.targetC(input.target).map(W.choicesFor)

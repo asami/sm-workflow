@@ -34,7 +34,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * and host provisioning are SPECIFICATION-OWNED. No consumer store is read or
   * seeded, and no full sm-workflow source tree is copied.
   * @since   Nov.  1, 2026
-  * @version Nov.  2, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.scalatest.DoNotDiscover
@@ -2246,7 +2246,7 @@ final class NativeGoalPrerequisitePublicationRecoveryCliSpec extends AnyWordSpec
     sourcetarget.waitOrigin.get.observation.flatMap(_.qualification) shouldBe None
     U.qualified(sourcetarget.waitOrigin.get) shouldBe false
     sourcetarget.waitOrigin.get.guard shouldBe before.retainedGuard.get
-    sourcetarget.predecessorGuard shouldBe before.retainedGuard.get
+    sourcetarget.predecessorGuard shouldBe before.retainedGuard
     sourcetarget.preStageGuard shouldBe before.guard
     sourcetarget.plan shouldBe original.plan
     sourcetarget.primaryBase shouldBe original.base

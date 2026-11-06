@@ -24,7 +24,8 @@ import GoalPhaseSliceValidationPlan as L
 /** Private configuration and retained selection codecs. CNCF owns discovery,
   * metadata interpretation, query semantics and exact operation binding.
   * @since   Oct. 18, 2026
-  * @version Oct. 20, 2026
+  *  version Oct. 20, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeMetadata {
@@ -340,6 +341,19 @@ private[smworkflow] object GoalPhaseNativeMetadata {
   private def _parameter_path(path: Vector[String]): Boolean =
     path == Vector("plan", "executionParameters") || path == Vector("plan", "additionalOperations", "parameters")
 
+  private def _logical_role_path(path: Vector[String]): Boolean =
+    path == Vector("dispatch", "edges") || path.endsWith(Vector("operatingProfile", "dispatch", "edges"))
+
+  private def _normalize_role_edges(value: Json): Either[String, Json] =
+    value.asObject.toRight("Public logical dispatch edges require a string-valued role object").flatMap { fields =>
+      fields.toVector.foldLeft[Either[String, Vector[(String, Json)]]](Right(Vector.empty)) { case (result, (key, nested)) => for {
+        accumulated <- result
+        _ <- Either.cond(nested.asString.nonEmpty, (), "Public logical dispatch edge values must be strings")
+        canonical = if (Set("sol-medium", "sol_medium", "solMedium")(key)) "sol-medium" else key
+        _ <- Either.cond(!accumulated.exists(_._1 == canonical), (), "Ambiguous public logical dispatch role: " + canonical)
+      } yield accumulated :+ (canonical -> nested) }.map(fields => Json.obj(fields*))
+    }
+
   private def _normalize_parameters(value: Json): Either[String, Json] = value.asObject match {
     case Some(_) => Right(value)
     case None => value.asArray match {
@@ -360,7 +374,9 @@ private[smworkflow] object GoalPhaseNativeMetadata {
   }
 
   private def _normalize_public_json(value: Json, path: Vector[String] = Vector.empty): Either[String, Json] =
-    if (_parameter_path(path)) _normalize_parameters(value) else value.asObject match {
+    if (_parameter_path(path)) _normalize_parameters(value)
+    else if (_logical_role_path(path)) _normalize_role_edges(value)
+    else value.asObject match {
     case Some(fields) =>
       val names = fields.toVector.map { (key, nested) =>
         (key, RuntimeContext.PropertyNameContext.default.normalizeInputName(key), nested)

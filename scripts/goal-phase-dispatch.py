@@ -86,7 +86,9 @@ def prepare(request, mapping, capabilities, root=None, repository=None, request_
         if set(concrete) != {'model', 'effort'} or not all(isinstance(x, str) and x for x in concrete.values()):
             raise ValueError('Malformed concrete model/effort assignment')
     role = {'ImplementStep': 'implementation', 'RepairStep': 'repair',
-            'ReviewStep': 'review', 'ReviewPhase': 'review', 'TriageStep': 'analysis'}.get(work['kind'])
+            'ReviewStep': 'review', 'ReviewPhase': 'review', 'TriageStep': 'analysis',
+            'Implement': 'implementation', 'Repair': 'repair', 'Review': 'review',
+            'DeliveryAcceptance': 'implementation'}.get(work['kind'])
     if role is None:
         raise ValueError('Unsupported semantic role')
     root = Path(root) if root else Path(__file__).resolve().parents[1]

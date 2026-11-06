@@ -8,7 +8,8 @@ import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseFindingRecording
 
 /** Finite wire names for supplied Human questions; native scopes own projection.
   * @since   Oct. 15, 2026
-  * @version Oct. 26, 2026
+  *  version Oct. 26, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeHumanDecisionQuestionWire {
@@ -28,7 +29,7 @@ private[smworkflow] object NativeHumanDecisionQuestionWire {
       case Node.Question => Vector("runId", "continuationId", "requiredOperation", "inputType", "resultType",
         "handle", "operation", "completionOperation", "source")
       case Node.Handle => Vector("componentIdentity", "workflowIdentity", "workflowRevision", "instanceIdentity", "protocolVersion")
-      case Node.GoalSource => Vector("requestingResult", "assignment", "repairProgress", "planRevision", "sourceHistoryRecovery", "result")
+      case Node.GoalSource => Vector("requestingResult", "assignment", "repairProgress", "planRevision", "sourceHistoryRecovery", "developmentReconstruction", "result")
       case Node.GoalResult => Vector("reviewObservations", "dependencyProposal")
       case Node.GoalAssignment => Vector("instanceIdentity", "sourceRevision", "kind", "stepIdentity", "generation",
         "selectedPlan", "originalBase", "candidate", "checksReceipt", "repairProgress")
@@ -41,14 +42,14 @@ private[smworkflow] object NativeHumanDecisionQuestionWire {
     val named = keys.foldLeft(original) { (fields, name) =>
       val supplied = PropertyNameContext.default.aliases(name).flatMap(original.apply).map { value =>
         if (name == "repairProgress") _node(value, Node.Progress, purpose)
-        else if (name == "sourceHistoryRecovery") GoalPhaseNativeMetadata.normalizePublicJson(value).getOrElse(Json.Null)
+        else if (name == "sourceHistoryRecovery" || name == "developmentReconstruction") GoalPhaseNativeMetadata.normalizePublicJson(value).getOrElse(Json.Null)
         else if (name == "planRevision" || name == "dependencyProposal") GoalPhasePlanRevision.normalizeJsonC(value).toOption.getOrElse(Json.Null)
         else if (name == "reviewObservations") GoalPhaseFindingRecording.normalizeObservations(value).getOrElse(Json.Null)
         else value
       }
       val retained = if (node == Node.Progress || node == Node.GoalResult) PropertyNameContext.default.aliases(name)
         .filterNot(_ == name).foldLeft(fields)((selected, alias) => selected.remove(alias)) else fields
-      if (((name == "planRevision" || name == "reviewObservations" || name == "dependencyProposal" || name == "sourceHistoryRecovery") && supplied.size > 1) ||
+      if (((name == "planRevision" || name == "reviewObservations" || name == "dependencyProposal" || name == "sourceHistoryRecovery" || name == "developmentReconstruction") && supplied.size > 1) ||
           ((node == Node.Progress || name == "repairProgress") && supplied.distinct.size > 1)) retained.add(name, Json.Null)
       else supplied.headOption.fold(retained)(selected => retained.add(name, selected))
     }

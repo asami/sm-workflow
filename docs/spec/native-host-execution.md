@@ -1488,10 +1488,11 @@ completion observer. Missing/crossed observations refuse before progression;
 Submit and next Advance remain separate. No execution success or installed
 provider/all-family/two-chat acceptance is claimed by authoring these examples.
 
-### Forward GoalPhase logical dispatch
+### Forward GoalPhase and bounded Task logical dispatch
 
 An explicit `sm-workflow.goal-phase.dispatch-policy=standard-2026-11-01`
-selection affects only new missing-issued-row GoalPhase work. The retained
+selection affects only new missing-issued-row GoalPhase, GoalTask and destination
+DelegateTask semantic work. The retained
 `operatingProfile.dispatch` carries logical role, disposition and finite candidate
 identities; the versioned product caller adapter supplies concrete model/effort
 assignments. The legacy caller harness refuses these captures rather than
@@ -1545,6 +1546,57 @@ bound to actual retained native work and accepted commits, persisted once in the
 completion metrics and reused by recollection. They do not authorize an effect,
 change native outcomes or replace independent evidence preparation. Missing or
 crossed attribution stays unavailable; metrics never trigger workflow repair.
+
+GoalTask and destination DelegateTask Start preflight both implementation/repair
+and possible independent Review through the same pure operating-profile capture
+used by GoalPhase. A destination requires a valid actual logical origin with the
+standard dispatch policy, or the existing complete concrete mapping/origin pair.
+Invalid logical origins, partial concrete pairs and contradictory contexts refuse
+before Start effects. Component initialization through
+`ThreeWorkflowRuntimeParameters` remains the configuration owner. Logical
+GoalTask and destination DelegateTask support both the configured
+`sm-workflow.runtime.definition` host/declaration route and the deferred
+`StandardWorkflowRuntime` route without a runtime definition. Both logical
+routes require the actual typed configured origin and standard dispatch policy;
+the deferred route also retains its existing concrete execution path.
+
+Fresh bounded `Implement`, `Repair`, `Review` and `DeliveryAcceptance` Work retains the optional
+`operatingProfile` capture together with its resolved native requirement before
+suspension. Code uses CODING, documentation uses DESIGN and Review uses REVIEW,
+with STANDARD/PROGRAMMING/SMALL classification. Review is isolated.
+DeliveryAcceptance uses the implementation capability class for read-only
+post-delivery judgment after actual checks, required independent review, commit
+and selected publication. It is separate from independent Review and owns no
+delivery effects. The finite
+caller maps those names to the deployed implementation, repair and review roles
+using the same unchanged Request, policy and actual tool observations as Phase
+work. It owns no validation, commit, publication or retry progression.
+Before each fresh missing-row bounded issuance, the actual input and host repeat
+destination preflight. Removing the logical origin or standard policy after
+Start refuses first Advance before issuing a row or changing the native frontier
+or history.
+
+The dispatch-only DelegateTask requester validates its admitted owners, complete
+input and profile consistency without needing the destination's execution
+mapping. It issues transport work and performs no local semantic implementation.
+Actual bounded Submit compares the public `issuedWorkContext` with the stored
+assignment and admits completion evidence against that assignment's retained
+candidate chain, plus native state, ownership, worker and independent-review
+evidence requirements. A delayed context or outside-chain result refuses. Pending
+work is recollected unchanged after live host configuration changes.
+The public issued context projects the same saved operating capture. Logical
+completion requires a nonempty actual worker identity equal to its observed
+executor context identity; independent Review then compares that consistent
+identity with the retained implementers and repairers. Historical and concrete
+captures retain their existing identity rules.
+
+Historical bounded Work with no capture decodes as absent and re-encodes without
+the field; present null or malformed captures refuse. Historical absent captures
+retain their original concrete checks. Standalone FIX semantic work continues
+through its concrete binder, and validation-only FIX remains check-only. The
+legacy concrete caller harness and public Operation signatures are unchanged.
+These source routes do not establish private D2 delivery or installed
+qualification; those remain separate publication and qualification obligations.
 
 ## Repository repair scope and complete result transport
 

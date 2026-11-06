@@ -13,7 +13,8 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Immutable specification inputs are not production Human consent.
   * @since   Oct. 21, 2026
-  * @version Oct. 24, 2026
+  *  version Oct. 24, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -205,6 +206,77 @@ final class GoalPhaseSourceHistoryRecoverySpec extends AnyWordSpec with NativeGo
       Then("only inert own-purpose import data is returned; mismatched Human provenance refuses")
       take(prepared).recordIdentity should startWith(R.purpose + ":")
       crossed.isSuccess shouldBe false
+    }
+  }
+}
+
+/** Structural primary capture inputs never manufacture Saved admission or
+  * native history. Introduced and updated Nov. 6, 2026 by ASAMI, Tomoharu. */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
+final class GoalPhasePrimaryRepairHistoryTargetSpec extends AnyWordSpec with NativeGoalSourceHistoryCliFixture {
+  private val _snapshot = O.Snapshot("a" * 40, "b" * 40)
+  private def _legacy: R.RecoveryTarget = R.RecoveryTarget("session", "plan", "2", _snapshot, _snapshot,
+    "goal-phase", "1", "participant", "step-1", "50", "52",
+    "session:ordered-candidate:50:source-history-intent-0", "1", "52", Vector(sourcePath), Vector(sourcePath),
+    Vector.empty, enabledSettings(ruleKey), GoalPhaseNativeCandidate.Payload("50", "step-1", Vector(sourcePath),
+      Vector.empty, None, Vector.empty, None), GoalPhaseNativeSourceHistory.Payload("50", "step-1", sourcePath,
+      "goldenport", "native-cli-external-goldenport-v1", "2026-10-21", true, None))
+  private val _reuse = GoalPhasePrerequisitePrimaryRepair.CaptureReuse(ContextReference("session", "47"), "46", "44", 1L)
+  private def _primary: R.RecoveryTarget = _legacy.copy(candidatePaths = Vector("src/main"), ownedPaths = Vector("src/main"),
+    inspection = _legacy.inspection.copy(primaryPublicationRepair = Some(_reuse)))
+
+  "R5-SH01 primary repair history target" should {
+    "retain concrete directory-covered capture through public Record without changing the original nonprimary wire" in {
+      Given("immutable typed primary reuse with a concrete selected file below declared and owned src/main")
+      val target = _primary
+      val legacy = _legacy
+      val originalwire = Json.obj("sessionId" -> legacy.sessionId.asJson, "planIdentity" -> legacy.planIdentity.asJson,
+        "planRevision" -> legacy.planRevision.asJson, "base" -> legacy.base.asJson, "controllerTip" -> legacy.controllerTip.asJson,
+        "definitionIdentity" -> legacy.definitionIdentity.asJson, "definitionRevision" -> legacy.definitionRevision.asJson,
+        "participant" -> legacy.participant.asJson, "step" -> legacy.step.asJson, "sourceRevision" -> legacy.sourceRevision.asJson,
+        "frontierRevision" -> legacy.frontierRevision.asJson, "intentIdentity" -> legacy.intentIdentity.asJson,
+        "intentRevision" -> legacy.intentRevision.asJson, "intentRecordRevision" -> legacy.intentRecordRevision.asJson,
+        "candidatePaths" -> legacy.candidatePaths.asJson, "ownedPaths" -> legacy.ownedPaths.asJson,
+        "managementPaths" -> legacy.managementPaths.asJson, "historyPolicy" -> legacy.historyPolicy,
+        "inspection" -> legacy.inspection.asJson, "intent" -> legacy.intent.asJson)
+      When("closed target decoding and public property naming interpret only structure")
+      val publicrecord = RuntimeContext.PropertyNameContext.default.transformRecord(R.targetRecord(target))
+      Then("typed capture survives and legacy bytes retain every original field with no prefix extension")
+      GoalPhaseNativeCandidate.sourceCaptureValid(target.inspection) shouldBe true
+      R.decodeTarget(target.asJson) shouldBe Right(target)
+      take(R.targetC(publicrecord)) shouldBe target
+      legacy.asJson.noSpaces shouldBe originalwire.noSpaces
+      R.decodeTarget(originalwire).map(_.asJson.noSpaces) shouldBe Right(originalwire.noSpaces)
+      target.asJson.hcursor.downField("primaryRepair").focus shouldBe None
+    }
+
+    "refuse covered files without capture and crossed malformed source ownership intent Step or prefix" in {
+      Given("a structurally complete primary target with no authenticated native Saved supplied by these pure inputs")
+      val target = _primary
+      val reused = Vector(_reuse.copy(repair = ContextReference("other-session", "47")),
+        _reuse.copy(repair = ContextReference("session", "50")), _reuse.copy(repair = ContextReference("session", "51")),
+        _reuse.copy(repair = ContextReference("session", "not-a-revision")), _reuse.copy(candidateRecordRevision = "47"),
+        _reuse.copy(sourceRevision = "46"), _reuse.copy(generation = 0L))
+      val invalid = reused.map(reuse => target.copy(inspection = target.inspection.copy(primaryPublicationRepair = Some(reuse)))) ++ Vector(
+        target.copy(inspection = target.inspection.copy(primaryPublicationRepair = None)),
+        target.copy(candidatePaths = Vector("src/other")), target.copy(ownedPaths = Vector("docs")),
+        target.copy(inspection = target.inspection.copy(selectedPaths = Vector("src/main/../foreign.scala"))),
+        target.copy(inspection = target.inspection.copy(selectedPaths = Vector.empty)),
+        target.copy(inspection = target.inspection.copy(sourceRevision = "49")),
+        target.copy(inspection = target.inspection.copy(step = "another-step")),
+        target.copy(intent = target.intent.copy(sourceRevision = "49")), target.copy(intent = target.intent.copy(step = "another-step")),
+        target.copy(intent = target.intent.copy(path = "src/main/scala/Other.scala")),
+        target.copy(intent = target.intent.copy(providerIdentity = "other-provider")),
+        target.copy(intentIdentity = "missing-intent"), target.copy(intentRecordRevision = "53"),
+        target.copy(intentIndex = 1))
+      When("each crossed structure is decoded before an actual owner or evidence provider can be consulted")
+      val refused = invalid.map(value => R.decodeTarget(value.asJson))
+      Then("neither path coverage nor caller metadata grants missing source provenance or any effect")
+      refused.foreach(_.isLeft shouldBe true)
+      R.validTarget(target.copy(completedPrefix = null)) shouldBe false
+      Vector("inspection", "intent", "sourceRevision", "step")
+        .foreach(name => R.decodeTarget(target.asJson.mapObject(_.remove(name))).isLeft shouldBe true)
     }
   }
 }

@@ -10,7 +10,7 @@ import NativeExternalEvidence.Purpose
   * Native completion owns live state, result type and CAS.
   * @since   Oct.  8, 2026
   *  version Oct. 23, 2026
-  * @version Nov.  3, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeHumanDecisionScope {
@@ -83,6 +83,16 @@ private[smworkflow] object NativeHumanDecisionScope {
       case Some(value) => GoalPhaseSourceHistoryRecovery.decodeTarget(value)
         .map(value => Some(summon[io.circe.Encoder[GoalPhaseSourceHistoryRecovery.RecoveryTarget]].apply(value)))
     }
+    reconstruction <- input("developmentReconstruction") match {
+      case None => Right(None)
+      case Some(value) => for {
+        decoded <- GoalPhaseDevelopmentReconstruction.decodeContext(value)
+        _ <- Either.cond(decoded.sessionId == fields("instanceIdentity").flatMap(_.asString).getOrElse("") &&
+          decoded.semanticResult.exists(selected => reference.hcursor.get[String]("identity").contains(selected.identity) &&
+            reference.hcursor.get[String]("revision").contains(selected.revision)) &&
+          recovery.isEmpty && revision.isEmpty, (), "Human reconstruction crosses its actual Session/result source")
+      } yield Some(GoalPhaseDevelopmentReconstruction.codec.encode(decoded))
+    }
     assigned = fields.add("stepIdentity", step.map(Json.fromString).getOrElse(Json.Null))
       .add("generation", Json.fromLong(generation)).add("selectedPlan", Json.fromJsonObject(plan))
       .add("originalBase", base).add("candidate", candidate)
@@ -93,7 +103,8 @@ private[smworkflow] object NativeHumanDecisionScope {
     val progress = currentprogress.fold(fields)(value => fields.add("repairProgress", value))
     val revised = revision.fold(progress)(value => progress.add("planRevision", value))
     val recovered = recovery.fold(revised)(value => revised.add("sourceHistoryRecovery", value))
-    observations.fold(recovered)(value => recovered.add("result", value))
+    val reconstructed = reconstruction.fold(recovered)(value => recovered.add("developmentReconstruction", value))
+    observations.fold(reconstructed)(value => reconstructed.add("result", value))
   }
 
   private def repositorySource(input: JsonObject): Either[String, Json] = for {

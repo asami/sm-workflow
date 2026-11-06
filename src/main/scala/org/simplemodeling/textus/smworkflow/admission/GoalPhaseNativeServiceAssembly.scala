@@ -16,7 +16,7 @@ import GoalPhaseNativeRun as F
   * The saved complete plan drives progress; the client never dispatches stages.
   * @since   Oct.  6, 2026
   *  version Oct. 29, 2026
-  * @version Nov.  2, 2026
+  * @version Nov.  6, 2026
   */
 private[smworkflow] object GoalPhaseNativeServiceAssembly {
   def bindC(params: ComponentCreate, d: F.Declaration, plans: F.PlanPort,
@@ -48,6 +48,7 @@ private[smworkflow] object GoalPhaseNativeServiceAssembly {
       GoalPhaseValidationRepairAdoption.operations(port) ++
       GoalPhaseFailedPhaseRepairAdoption.operations(port) ++ GoalPhaseCompletionPolicyAdoption.operations(port) ++
       GoalPhaseStepReviewRequest.operations(port) ++
+      GoalPhaseDevelopmentReconstruction.operations(port) ++
       GoalPhaseRepairPolicyAdoption.operations(port))))
 
   /** Normal input composition. Independent review/closure/process grants still
@@ -72,7 +73,7 @@ private[smworkflow] object GoalPhaseNativeServiceAssembly {
       selection: ProfileStartAdmission.Selection): Consequence[OperationRequest] = input match {
       case NativeWorkflowStartInput.Goal(value) => GoalPhaseOperatingProfiles.forStartC(request, d).map { execution =>
         Action(request, Some(value -> selection), None,
-          d.copy(invocationOperatingProfile = Some(execution.selection)), definition, plans, port)
+          d.copy(invocationOperatingProfile = Some(execution.selection)), definition, plans, port, acknowledgement)
       }
       case _ => F.invalid("GoalPhase Start requires its own business input")
     }
@@ -82,7 +83,7 @@ private[smworkflow] object GoalPhaseNativeServiceAssembly {
         selected <- GoalPhaseOperatingProfiles.invocationC(request)
         current = d.copy(invocationOperatingProfile = selected)
         currentport <- GoalPhaseNativeWorkContinuation.bindC(current, definition, acknowledgement)
-      } yield Action(request, None, Some(identity), current, definition, plans, currentport)
+      } yield Action(request, None, Some(identity), current, definition, plans, currentport, acknowledgement)
       case _ => F.invalid("GoalPhase advance requires its own selected target")
     }
     def createOperationRequest(request: Request): Consequence[OperationRequest] =
@@ -90,14 +91,21 @@ private[smworkflow] object GoalPhaseNativeServiceAssembly {
   }
   private final case class Action(request: Request, start: Option[(GoalPhaseStartInput, ProfileStartAdmission.Selection)], identity: Option[String],
     d: F.Declaration, definition: DefinitionBinding,
-    plans: F.PlanPort, port: GoalPhaseNativeWorkContinuation.Port) extends CommandAction {
+    plans: F.PlanPort, port: GoalPhaseNativeWorkContinuation.Port,
+    acknowledgement: String => Consequence[Unit]) extends CommandAction {
     override def commandExecutionMode = CommandExecutionMode.Sync
     def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
       val core = c
       def execute(): Consequence[OperationResponse] = start match {
         case Some((input, selected)) => F.startC(input, selected, d, definition, plans, core)
           .map(NativeWorkflowOperationOutput.response(_))
-        case None => port.advanceC(identity.get, core).map(NativeWorkflowOperationOutput.response(_))
+        case None => for {
+          invocation <- GoalPhaseSourceHistoryAutomatic.invocationForCallC(core, identity.get)
+          observation <- GoalPhaseSourceHistoryAutomatic.inputForCallC(Action.this.request, core)
+          current = d.copy(sourceHistoryInvocation = Some(invocation), sourceHistoryObservation = observation)
+          currentport <- GoalPhaseNativeWorkContinuation.bindC(current, definition, acknowledgement)
+          result <- currentport.advanceC(identity.get, core)
+        } yield NativeWorkflowOperationOutput.response(result)
       }
     }
   }

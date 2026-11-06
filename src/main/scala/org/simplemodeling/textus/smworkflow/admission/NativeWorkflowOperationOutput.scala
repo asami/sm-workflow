@@ -15,7 +15,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * outcome. No extra store read, result verifier or transport envelope.
   * @since   Oct. 12, 2026
   *  version Oct. 29, 2026
-  * @version Nov.  3, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationOutput {
@@ -102,7 +102,9 @@ private[smworkflow] object NativeWorkflowOperationOutput {
       Some("GoalPhaseOrderedDecisionAnswer"), None, None, None,
       Some(V.GoalPhaseHumanQuestion(goalWork(value.work), _goal_result(value.result), value.reason,
         choices, Some(context), GoalPhasePlanRevision.publicCaptured(value.planRevision),
-        value.sourceHistoryRecovery.map(GoalPhaseSourceHistoryRecovery.targetRecord))), None, None, None, None, None, None, None, None, progress, None, None)
+        value.sourceHistoryRecovery.map(GoalPhaseSourceHistoryRecovery.targetRecord),
+        value.developmentReconstruction.map(context => GoalPhaseNativeMetadata.record(
+          GoalPhaseDevelopmentReconstruction.codec.encode(context))))), None, None, None, None, None, None, None, None, progress, None, None)
 
   def goalWait(session: String, message: String, condition: String): V.GoalPhaseAdvanceResult =
     V.GoalPhaseAdvanceResult(session, "Wait", message, None, None, None, Some(condition), None,

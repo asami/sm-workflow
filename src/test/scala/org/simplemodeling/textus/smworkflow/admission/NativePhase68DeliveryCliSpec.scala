@@ -17,7 +17,7 @@ import NativeWorkflowCliFixture as F
   * Sessions only. No publication, semantic execution, genuine chat delivery or
   * historical user-Session recovery is simulated by these assertions.
   * @since   Oct. 27, 2026
-  * @version Oct. 27, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
@@ -198,7 +198,7 @@ final class NativePhase68DeliveryCliSpec extends AnyWordSpec with Matchers with 
         None, Vector.empty, "No destination execution or activation is claimed by this isolated fixture")
       val input = V.DelegateTaskInput(task.repositoryIdentity, "installed-phase68-delegate", task.objective,
         task.ownedPaths, task.checks, task.conditions, task.sourceReferences, task.reviewRequired, task.kind, task.scalaLint,
-        task.repairLimit, task.sourceKind, task.dependencies, contract)
+        task.repairLimit, task.sourceKind, task.dependencies, contract, Vector.empty)
       _prepare(scenario, "prepareDelegateTaskStart", V.WorkflowDelegateTaskStartPreparationInput(
         _file(scenario, "delegate-input", input), "delegate-selection", "participant", "ExplicitHuman", "delegate-start",
         "entity:smworkflow.cli.goal_selection"))

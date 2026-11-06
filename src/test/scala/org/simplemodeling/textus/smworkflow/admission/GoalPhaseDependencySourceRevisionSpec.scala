@@ -8,6 +8,7 @@ import org.goldenport.cncf.workflow.ContextReference
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import org.simplemodeling.textus.smworkflow.value as V
 import GoalPhaseDependencySourceRevision as R
 import SplitPhaseExplicitPartitionFixture.take
 
@@ -29,16 +30,260 @@ private[admission] object DependencySourceRevisionSpecificationFixture {
   val target = R.Target(R.schema, "same-session", "fixture-source-question", "18", "19", F.plan,
     F.binding.step, 1, F.primaryBase, Vector.empty,
     GoalPhaseRepairProgress.Snapshot(0, 0, F.plan.repairLimit), ContextReference("fixture-request", "1"),
-    F.admission, Vector.empty, proposal, binding, old, before)
+    F.admission, Vector.empty, proposal, binding, Some(old), before)
   val direction = R.Direction(target, ContextReference("fixture-independent-direction", "1"), "participant", "Fixture migration")
   val capture = R.Capture(R.schema, "same-session", ContextReference(F.plan.identity, F.plan.revision), binding.step,
     2, "25", F.primaryBase, direction, before, Vector.empty, before)
 }
 
+private[admission] object InitialDependencySourceRevisionSpecificationFixture {
+  def fixture: (R.Target, R.Direction, R.Capture) = {
+    import DependencyValidationSpecificationFixture as F
+    import GoalPhaseOrderedProgression as O
+    import GoalPhaseCandidateRecovery as C
+    val started = take(O.startC(F.plan, F.primaryBase))
+    val controller = take(started.acceptC(O.SemanticCompleted(started.next.asInstanceOf[O.Semantic].key, "Fixture completion")))
+    val inspection = GoalPhaseNativeCandidate.Payload("10", F.binding.step, Vector("screen.scala"), Vector.empty,
+      None, Vector.empty, None, dependencyAdmission = Some(F.admission))
+    def _ref_(key: String) = "same-session:ordered-candidate:10:" + key
+    val old = C.RecoveryTarget("same-session", C.controllerSnapshot(controller), "goal-phase", "1", "participant",
+      "10", "13", "/specification/workspaces/primary", "main", F.plan.steps.head.ownedPaths, Vector.empty,
+      _ref_("inspection"), "1", "11", inspection, WorkflowSourceHistoryRule.Selection("none", None), Vector.empty,
+      Vector(C.StagePair(0, _ref_("stage-intent-0"), "1", "12", _ref_("stage-result-0"), "1", "13",
+        inspection, inspection.copy(stagedPaths = inspection.selectedPaths))), "UNKNOWN", "termination-unconfirmed")
+    val lineage = R.InitialLineage(old, None, ContextReference("genuine-retained-revise-work", "1"), ContextReference("same-session", "14"))
+    val observedprimary = R.CurrentPrimaryObservation("current-at-description",
+      GoalPhaseCandidateObservationContinuation.RepositorySnapshot(old.root, old.branch, F.primaryBase.head,
+        F.primaryBase.tree, Vector(GoalPhaseCandidateObservationContinuation.Dirty("M", " ", "screen.scala", None)), "8" * 40),
+      inspection.selectedPaths, F.plan.steps.head.ownedPaths, old.candidatePaths,
+      Vector(R.StageChange("100644", "100644", Some("1" * 40), Some("2" * 40), "M", "screen.scala")),
+      """diff --git a/screen.scala b/screen.scala
+        |index 1111111..2222222 100644
+        |--- a/screen.scala
+        |+++ b/screen.scala
+        |@@ -1 +1 @@
+        |-old
+        |+current
+        |""".stripMargin, Vector(R.fileIdentity("screen.scala", Some("current\n".getBytes.toVector))),
+      old.historySelection, R.completedEffects(lineage), "{}")
+    val fixture = DependencySourceRevisionSpecificationFixture
+    val binding = fixture.binding
+    val proposal = fixture.proposal.copy(schemaVersion = R.sourceSchema, mode = "selected-changes",
+      consumption = R.Consumption(F.requester.workspace, binding.root, fixture.proposal.excludedPaths,
+        binding.paths.map(R.ExpectedMode(_, "100644")), fixture.proposal.consumption.programs))
+    val primarypolicy = GoalPhaseNativeValidation.Policy("fixture-primary-checks", 1,
+      Vector(GoalPhaseNativeValidation.Check("primary-test", 1, WorkflowSbtValidation.Kind.Test)))
+    val routes = proposal.consumption.programs ++ binding.checks.map(check =>
+      R.CheckProgram(check.identity, binding.dependency.workspace, check.kind.wire, "fixture-dependency-compile"))
+    val process = Json.obj("validation" -> primarypolicy.asJson, "processPlan" -> Json.obj(
+      "sbtPrograms" -> routes.map(route => Json.obj("target" -> route.workspace.asJson,
+        "operation" -> route.kind.asJson, "identity" -> route.program.asJson, "capability" -> route.program.asJson)).asJson,
+      "workspaces" -> routes.map(route => Json.obj("identity" -> route.workspace.asJson,
+        "root" -> (if (route.check == "primary-test") old.root else binding.root).asJson)).asJson,
+      "workspaceGrants" -> routes.map(route => Json.obj("componentId" -> org.simplemodeling.textus.smworkflow.SmWorkflowComponent.componentId.name.asJson,
+        "workspaceId" -> route.workspace.asJson, "access" -> "manage".asJson)).asJson,
+      "grants" -> Json.arr(Json.obj("componentId" -> org.simplemodeling.textus.smworkflow.SmWorkflowComponent.componentId.name.asJson,
+        "capabilities" -> routes.map(_.program).asJson))))
+    val primary = observedprimary.copy(processPolicy = process.noSpaces)
+    val origin = R.InitialOrigin(R.initialGuardUnavailable, lineage, primary,
+      Vector(O.HistoryCommit(binding.base.head, binding.base.tree, Vector(F.binding.base.head)),
+        O.HistoryCommit(F.binding.base.head, F.binding.base.tree, Vector.empty)),
+      Vector(R.StageChange("000000", "100644", None, Some("3" * 40), "A", "docs/unrelated-commit.md")))
+    val target = fixture.target.copy(schemaVersion = R.initialSchema, predecessorGuard = None,
+      generation = controller.generation + 1, proposal = proposal, initialOrigin = Some(origin))
+    val direction = R.Direction(target, ContextReference("independent-current-target-human", "1"), "participant",
+      "SPECIFICATION-OWNED current candidate and successor selection accepting unresolved effects", Some(R.initialChoice))
+    val capture = R.Capture(R.initialCaptureSchema, target.sessionId, ContextReference(F.plan.identity, F.plan.revision),
+      target.step, target.generation + 1, "25", F.primaryBase, direction, target.preStageGuard,
+      binding.paths, target.preStageGuard)
+    (target, direction, capture)
+  }
+}
+
+/** Initial source succession examples do not claim actual Human evidence.
+  * Created: Nov.  5, 2026
+  * Last revised: Nov.  6, 2026
+  * @author  ASAMI, Tomoharu
+  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
+final class GoalPhaseInitialDependencySourceRevisionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  private def _initial_fixture: (R.Target, R.Direction, R.Capture) =
+    InitialDependencySourceRevisionSpecificationFixture.fixture
+
+  "Common reconstructed Plan capture provenance" should {
+    "retain legacy wire meaning and describe a newer Plan only through explicit common provenance data" in {
+      Given("a valid older source Direction and its unchanged ordinary capture")
+      val old = DependencySourceRevisionSpecificationFixture.capture
+      val oldwire = old.asJson
+      val selected = old.copy(schemaVersion = R.developmentCaptureSchema,
+        plan = old.plan.copy(revision = "current-development"),
+        planSelection = Some(ContextReference(old.sessionId + ":ordered-development-reconstruction:20", "1")))
+      When("the legacy and common provenance variants are encoded and decoded")
+      val result = selected.asJson.as[R.Capture]
+      Then("old records omit the optional field and new records retain the unchanged original Direction")
+      oldwire.hcursor.downField("planSelection").focus shouldBe None
+      oldwire.as[R.Capture] shouldBe Right(old)
+      R.captureValid(old.copy(plan = selected.plan)) shouldBe false
+      R.captureValid(selected) shouldBe true
+      result shouldBe Right(selected)
+      selected.direction shouldBe old.direction
+      selected.direction.asJson shouldBe old.direction.asJson
+      selected.preStageGuard shouldBe old.preStageGuard
+      selected.postStageGuard shouldBe old.postStageGuard
+    }
+
+    "reject mismatched versions crossed references unknown fields and explicit null metadata" in {
+      Given("a shaped common reconstructed Plan capture whose native authenticity is not asserted by this pure spec")
+      val old = DependencySourceRevisionSpecificationFixture.capture
+      val selected = old.copy(schemaVersion = R.developmentCaptureSchema,
+        plan = old.plan.copy(revision = "current-development"),
+        planSelection = Some(ContextReference(old.sessionId + ":ordered-development-reconstruction:20", "1")))
+      val invalid = Vector(selected.copy(schemaVersion = old.schemaVersion), selected.copy(planSelection = None),
+        selected.copy(plan = selected.plan.copy(identity = "another-plan")),
+        selected.copy(planSelection = Some(ContextReference("another-session:ordered-development-reconstruction:20", "1"))),
+        selected.copy(planSelection = Some(ContextReference(old.sessionId + ":ordered-development-reconstruction:25", "1"))),
+        selected.copy(planSelection = Some(ContextReference(old.sessionId + ":ordered-development-reconstruction:20", "2"))),
+        selected.copy(sourceRevision = "not-a-revision"))
+      When("capture shape/version admission is applied before native chain authentication")
+      val result = invalid.map(R.captureValid)
+      Then("only shaped provenance survives and no JSON field can impersonate actual retained native selection")
+      result shouldBe Vector.fill(invalid.size)(false)
+      selected.asJson.mapObject(_.add("planSelection", Json.Null)).as[R.Capture].isLeft shouldBe true
+      selected.asJson.mapObject(_.add("unknown", Json.True)).as[R.Capture].isLeft shouldBe true
+      old.asJson.mapObject(_.add("planSelection", Json.Null)).as[R.Capture].isLeft shouldBe true
+    }
+  }
+
+  "Initial pre-capture dependency source succession v8" should afterWord(
+    "in spec:goal-phase-dependency-source-revision, example:I1,I2,I3, rules:I1,I2,I3") {
+    "compose public Target and Direction reads through the initial lineage owner without changing durable data" in {
+      Given("the existing valid initial-v8 target and Direction with absent recovery Controller options")
+      val (target, direction, _) = _initial_fixture
+      val durable = direction.asJson.noSpaces
+      val projected = org.goldenport.cncf.context.RuntimeContext.PropertyNameContext.default.transformRecord(
+        GoalPhaseNativeMetadata.record(direction.asJson))
+      val publicwire = io.circe.parser.parse(take(projected.toJsonStringC)).fold(error => fail(error.message), identity)
+      When("the public Direction reader composes its typed Target and existing initial-fragment readers")
+      val decoded = R.decodePublicDirection(publicwire)
+      val transported = R.targetC(R.targetRecord(target))
+      Then("both reads retain the exact typed values and the durable Direction stays byte compatible")
+      decoded shouldBe Right(direction)
+      take(transported) shouldBe target
+      direction.asJson.noSpaces shouldBe durable
+      direction.asJson.as[R.Direction] shouldBe Right(direction)
+    }
+
+    "I1 retain absent old Guard, actual current observation and completed effect provenance in closed v8 records" in {
+      Given("a genuine-shaped direct ReviseWork prefix with no dependency effect and a distinct current-primary observation")
+      val (target, direction, capture) = _initial_fixture
+      When("the target, explicit Direction and fresh source capture are transported")
+      val disposition = GoalPhaseLegacyPurposeRepairContinuation.DependencySourceRevision(direction)
+      val stored = GoalPhaseLegacyPurposeRepairContinuation.storageCodec.encode(disposition)
+      Then("v8 keeps uncertainty and exposes no fabricated old Guard or old-content acceptance")
+      R.targetValid(target) shouldBe true
+      target.asJson.as[R.Target] shouldBe Right(target)
+      take(R.targetC(R.targetRecord(target))) shouldBe target
+      direction.asJson.as[R.Direction] shouldBe Right(direction)
+      capture.asJson.as[R.Capture] shouldBe Right(capture)
+      R.captureValid(capture) shouldBe true
+      GoalPhaseLegacyPurposeRepairContinuation.storageCodec.decode(stored) shouldBe Right(disposition)
+      target.asJson.hcursor.downField("predecessorGuard").focus shouldBe None
+      target.initialOrigin.get.currentPrimary.observed shouldBe "current-at-description"
+      target.initialOrigin.get.lineage.recovery.oldObservationOutcome shouldBe "UNKNOWN"
+      R.choicesFor(target) shouldBe Vector(R.initialChoice, "Defer")
+      R.messageFor(target) should include("CURRENT observed primary candidate")
+      R.directionValid(direction.copy(choice = None)) shouldBe false
+      R.directionValid(direction.copy(choice = Some("AdoptDependencySourceRevision"))) shouldBe false
+      R.directionValid(direction.copy(participant = "another-human")) shouldBe false
+      R.captureValid(capture.copy(schemaVersion = R.sourceCaptureSchema)) shouldBe false
+    }
+
+    "I2 reject crossed origins, legacy schema reinterpretation, fake Guards and overlapping committed source changes" in {
+      Given("the exact initial source target and its authentic historical effect references")
+      val (target, _, _) = _initial_fixture
+      val origin = target.initialOrigin.get
+      val foreignlineage = origin.lineage.copy(revisionRecord = ContextReference("foreign", "14"))
+      val overlap = origin.baseChanges.map(_.copy(path = target.binding.paths.head))
+      val recovery = origin.lineage.recovery
+      val dependencyintent = GoalPhaseCandidateRecovery.DependencyFact("dependency-stage-intent-0",
+        recovery.sessionId + ":ordered-candidate:" + recovery.sourceRevision + ":dependency-stage-intent-0", "1",
+        (recovery.frontierRevision.toLong + 1).toString, recovery.stagingPrefix.last.result)
+      val prefixed = recovery.copy(frontierRevision = dependencyintent.recordRevision, dependencyPrefix = Vector(dependencyintent))
+      val prefixedlineage = origin.lineage.copy(recovery = prefixed,
+        revisionRecord = ContextReference(target.sessionId, (dependencyintent.recordRevision.toLong + 1).toString))
+      val recoveryselection = recovery.asJson.hcursor.downField("historySelection").focus.get
+        .mapObject(_.add("unknownSelectionField", Json.True))
+      val unknownrecovery = recovery.asJson.mapObject(_.add("historySelection", recoveryselection))
+      val unknownlineage = origin.lineage.asJson.mapObject(_.add("recovery", unknownrecovery))
+      val unknownorigin = origin.asJson.mapObject(_.add("lineage", unknownlineage))
+      val unknownrecord = GoalPhaseNativeMetadata.record(target.asJson.mapObject(_.add("initialOrigin", unknownorigin)))
+      When("transport or a caller crosses a closed lineage, guard or approved input boundary")
+      val crossed = Vector(target.copy(predecessorGuard = Some(DependencySourceRevisionSpecificationFixture.old)),
+        target.copy(initialOrigin = None), target.copy(schemaVersion = R.sourceSchema),
+        target.copy(initialOrigin = Some(origin.copy(predecessorGuardAvailability = "invented-guard"))),
+        target.copy(initialOrigin = Some(origin.copy(lineage = foreignlineage))),
+        target.copy(initialOrigin = Some(origin.copy(currentPrimary = origin.currentPrimary.copy(completedEffects = Vector.empty)))),
+        target.copy(initialOrigin = Some(origin.copy(baseChanges = overlap))),
+        target.copy(initialOrigin = Some(origin.copy(lineage = prefixedlineage))),
+        target.copy(binding = target.binding.copy(checks = Vector.empty)),
+        target.copy(proposal = target.proposal.copy(coverage = Vector.empty)),
+        target.copy(proposal = target.proposal.copy(mode = "committed")))
+      Then("every crossed shape refuses without weakening the old required-Guard contract")
+      crossed.foreach(value => value.asJson.as[R.Target].isLeft shouldBe true)
+      R.targetC(unknownrecord).isSuccess shouldBe false
+      GoalPhaseCandidateRecovery.validTarget(prefixed) shouldBe true
+      target.asJson.mapObject(_.add("predecessorGuard", Json.Null)).as[R.Target].isLeft shouldBe true
+      target.asJson.mapObject(_.add("initialOrigin", Json.Null)).as[R.Target].isLeft shouldBe true
+      target.asJson.mapObject(_.add("inventedField", Json.True)).as[R.Target].isLeft shouldBe true
+      val old = DependencySourceRevisionSpecificationFixture.target
+      old.asJson.hcursor.get[R.Guard]("predecessorGuard") shouldBe Right(DependencySourceRevisionSpecificationFixture.old)
+      old.asJson.as[R.Target] shouldBe Right(old)
+      old.asJson.mapObject(_.remove("predecessorGuard")).as[R.Target].isLeft shouldBe true
+      old.asJson.mapObject(_.add("predecessorGuard", Json.Null)).as[R.Target].isLeft shouldBe true
+      old.asJson.mapObject(_.add("initialOrigin", origin.asJson)).as[R.Target].isLeft shouldBe true
+    }
+
+    "I3 record fresh current observation separately from reused effects and require exact passive Human preparation" in {
+      Given("v8 explicitly selects currently staged primary bytes and unresolved historical effects")
+      val (target, direction, _) = _initial_fixture
+      val origin = target.initialOrigin.get
+      val old = origin.lineage.recovery
+      val reference = V.WorkflowArtifactReference(direction.directive.identity, direction.directive.revision)
+      val description = org.simplemodeling.textus.smworkflow.value.GoalPhaseDependencySourceRevisionDescriptionResult(
+        target.sessionId, "direction-required", R.messageFor(target), "fixture-component", R.targetRecord(target),
+        R.choicesFor(target), R.adoptionOperation)
+      val input = org.simplemodeling.textus.smworkflow.value.GoalPhaseDependencySourceRevisionAdoptionInput(target.sessionId,
+        description.target, R.initialChoice, direction.rationale, reference)
+      val execution = org.simplemodeling.textus.smworkflow.value.WorkflowExecutionEvidence(Vector(reference), Some("participant"), None, None)
+      val last = old.stagingPrefix.last
+      val candidate = last.result.copy(sourceRevision = "25", dependencyAdmission = None,
+        dependencySourceDirection = Some(direction), initialSourceEffects = Some(ContextReference(last.resultIdentity, last.resultRevision)))
+      When("passive evidence and the distinct new candidate provenance are encoded")
+      val prepared = org.simplemodeling.textus.smworkflow.preparation.NativeDependencySourceRevisionPreparation.prepareC(
+        description, input, reference, execution, "participant", "fixture-host", java.time.Instant.parse("2026-11-05T00:00:00Z"))
+      Then("only the exact current-target choice prepares, and provenance never creates another old-stage success")
+      withClue(prepared) {
+        prepared.isSuccess shouldBe true
+      }
+      R.candidateValid(candidate) shouldBe true
+      GoalPhaseNativeCandidate.codec.decode(GoalPhaseNativeCandidate.codec.encode(candidate)) shouldBe Right(candidate)
+      R.candidateValid(candidate.copy(initialSourceEffects = Some(ContextReference("invented-effect", "1")))) shouldBe false
+      R.candidateValid(candidate.copy(stagedPaths = Vector.empty)) shouldBe false
+      R.candidateValid(candidate.copy(diff = Some("substituted diff"))) shouldBe false
+      org.simplemodeling.textus.smworkflow.preparation.NativeDependencySourceRevisionPreparation.prepareC(
+        description, input.copy(choice = "AdoptDependencySourceRevision"), reference, execution,
+        "participant", "fixture-host", java.time.Instant.parse("2026-11-05T00:00:00Z")).isSuccess shouldBe false
+      R.sourceSuccessorValid(direction, direction, Vector.empty) shouldBe false
+    }
+  }
+
+}
+
 /** Fresh pure source-selection fixtures do not claim actual Human evidence.
   * @since   Oct. 26, 2026
   *  version Oct. 27, 2026
-  * @version Nov.  2, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -213,7 +458,7 @@ final class GoalPhaseDependencySourceRevisionSpec extends AnyWordSpec with Match
         F.approvals.map(a => R.Coverage(a.decision, a.proposal.acceptance, binding.checks.map(_.identity))), consumption)
       val target = R.Target(R.waitSchema, "same-session", "", "25", "25", F.plan, F.binding.step, 1,
         F.primaryBase, Vector.empty, origin.repairProgress, origin.requestingResult, F.admission, Vector.empty,
-        proposal, binding, old, before, waitOrigin = Some(origin))
+        proposal, binding, Some(old), before, waitOrigin = Some(origin))
       val direction = R.Direction(target, ContextReference("actual-source-human", "1"), "participant", "SPECIFICATION-OWNED Wait source")
       val after = before.copy(indexTree = "9" * 40, dirty = before.dirty.map(_.copy(worktree = " ")),
         selectedEntries = before.selectedEntries.updated(0, before.selectedEntries.head.copy(blob = "2" * 40)))
@@ -244,7 +489,7 @@ final class GoalPhaseDependencySourceRevisionSpec extends AnyWordSpec with Match
       R.targetValid(target.copy(schemaVersion = R.sourceSchema)) shouldBe false
       R.targetValid(target.copy(questionIdentity = "fabricated-question")) shouldBe false
       R.targetValid(target.copy(waitOrigin = None)) shouldBe false
-      R.targetValid(target.copy(predecessorGuard = before)) shouldBe false
+      R.targetValid(target.copy(predecessorGuard = Some(before))) shouldBe false
       R.targetValid(target.copy(waitOrigin = Some(origin.copy(guard = before)))) shouldBe false
       target.asJson.mapObject(_.add("waitOrigin", Json.Null)).as[R.Target].isLeft shouldBe true
       target.asJson.mapObject(_.add("invented", Json.True)).as[R.Target].isLeft shouldBe true
@@ -1082,7 +1327,7 @@ final class GoalPhaseDependencySourceRevisionSpec extends AnyWordSpec with Match
       val (original, next, scope, _) = _runtime_fixture_()
       val runtime = next.target.runtime.get
       val target = next.target
-      val differentindex = (if (target.predecessorGuard.indexTree.head == 'e') "f" else "e") * target.predecessorGuard.indexTree.length
+      val differentindex = (if (target.predecessorGuard.get.indexTree.head == 'e') "f" else "e") * target.predecessorGuard.get.indexTree.length
       When("a successor changes the retained parent, fixed fields or actual approval coverage")
       val crossed = Vector(
         next.copy(target = target.copy(runtime = Some(runtime.copy(parent = ContextReference("other-parent", "1"))))),
@@ -1093,7 +1338,7 @@ final class GoalPhaseDependencySourceRevisionSpec extends AnyWordSpec with Match
           programs = scope.consumption.programs.map(_.copy(program = "other-program")))))),
         next.copy(target = target.copy(proposal = target.proposal.copy(consumption = _legacy(scope.consumption).copy(
           manifestReference = ContextReference("cncf-installed-runtime:other-image", "1"))))),
-        next.copy(target = target.copy(predecessorGuard = target.predecessorGuard.copy(indexTree = differentindex))),
+        next.copy(target = target.copy(predecessorGuard = target.predecessorGuard.map(_.copy(indexTree = differentindex)))),
         next.copy(participant = "another-participant"), next.copy(directive = original.directive))
       val allowed = crossed.map(R.runtimeSuccessorValid(original, _, scope.approvals))
       val inventedapproval = scope.approvals.head.copy(decision = ContextReference("invented-other-decision", "1"))

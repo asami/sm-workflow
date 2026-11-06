@@ -17,7 +17,7 @@ import NativeExternalEvidence.Purpose
   * actor, dummy verifier, success default or reply-decoded authority is used.
   * @since   Oct.  7, 2026
   *  version Oct. 27, 2026
-  * @version Nov.  3, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: NativeExternalEvidence.Reader) {
@@ -270,6 +270,9 @@ private[smworkflow] object ThreeWorkflowExternalEvidencePorts {
         val input = decision.request.input.get.value
         val work = input.work
         if (!GoalPhaseRepairProgress.validateOptionC(input.repairProgress).isSuccess ||
+            input.developmentReconstruction == null || input.developmentReconstruction.exists(value =>
+              !GoalPhaseDevelopmentReconstruction.valid(value) || !value.semanticResult.contains(input.requestingResult) ||
+                value.sessionId != work.instanceIdentity || input.sourceHistoryRecovery.nonEmpty || input.planRevision.nonEmpty) ||
             input.sourceHistoryRecovery == null || input.sourceHistoryRecovery.exists(target => !GoalPhaseSourceHistoryRecovery.validTarget(target)) ||
             input.result == null || !GoalPhaseFindingRecording.admitObservationsC(work.kind, input.result.reviewObservations).isSuccess ||
             !GoalPhaseDependencyScope.admitResultC(work.kind, input.result.outcome, input.result.dependencyProposal).isSuccess ||
@@ -296,10 +299,12 @@ private[smworkflow] object ThreeWorkflowExternalEvidencePorts {
             val progress = input.repairProgress.fold(fields)(value => fields.add("repairProgress", value.asJson))
             val revision = input.planRevision.fold(progress)(value => progress.add("planRevision", value.asJson))
             val recovery = input.sourceHistoryRecovery.fold(revision)(value => revision.add("sourceHistoryRecovery", value.asJson))
+            val reconstruction = input.developmentReconstruction.fold(recovery)(value =>
+              recovery.add("developmentReconstruction", GoalPhaseDevelopmentReconstruction.codec.encode(value)))
             val observations = input.result.reviewObservations.fold(io.circe.JsonObject.empty)(value =>
               io.circe.JsonObject("reviewObservations" -> value.asJson))
             val result = input.result.dependencyProposal.fold(observations)(value => observations.add("dependencyProposal", value.asJson))
-            if (result.isEmpty) recovery else recovery.add("result", Json.fromJsonObject(result))
+            if (result.isEmpty) reconstruction else reconstruction.add("result", Json.fromJsonObject(result))
           })
       case _ => Consequence.stateConflict("Ordered Human evidence has no actual assigned-work question")
     }

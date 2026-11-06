@@ -255,6 +255,20 @@
         },
         {
           "service": "RepositorySyncService",
+          "name": "syncRepositoryDirectories",
+          "kind": "COMMAND",
+          "output": "RepositoryDirectoryBatchResult",
+          "input": "RepositoryDirectorySyncInput"
+        },
+        {
+          "service": "RepositorySyncService",
+          "name": "readRepositoryDirectoryResult",
+          "kind": "COMMAND",
+          "output": "RepositoryDirectoryBatchResult",
+          "input": "RepositoryDirectoryResultReadInput"
+        },
+        {
+          "service": "RepositorySyncService",
           "name": "startRepositorySync",
           "kind": "COMMAND",
           "output": "RepositorySyncStartResult",
@@ -1302,6 +1316,12 @@
               "type": "string",
               "multiplicity": "1",
               "required": true
+            },
+            {
+              "name": "sourceHistoryObservationResource",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },

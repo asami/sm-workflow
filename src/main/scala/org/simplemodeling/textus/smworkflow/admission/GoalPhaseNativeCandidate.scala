@@ -25,7 +25,7 @@ import GoalPhaseDependencyValidation.given
   * An intent without its actual recorded result is retained, never replayed.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  2, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeCandidate {
@@ -43,7 +43,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     dependencySourceCapture: Option[GoalPhaseDependencySourceRevision.Capture] = None,
     dependencySourceScope: Option[GoalPhaseDependencySourceRevision.ScopeSuccessor] = None,
     hygiene: Option[CommitHygiene.Record] = None,
-    primaryPublicationRepair: Option[GoalPhasePrerequisitePrimaryRepair.CaptureReuse] = None)
+    primaryPublicationRepair: Option[GoalPhasePrerequisitePrimaryRepair.CaptureReuse] = None,
+    initialSourceEffects: Option[ContextReference] = None)
   final case class StepEvidence(step: String, candidate: O.Snapshot, changedPaths: Vector[String], diff: String,
     commit: O.Commit, eofCorrections: Vector[String], partialCompletion: Option[O.StepCommitChain] = None)
   object StepEvidence {
@@ -60,7 +61,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
   object Payload {
     given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
       case ("continuation" | "stepEvidence" | "dependencyAdmission" | "dependency" | "dependencyOrigin" |
-          "dependencySourceDirection" | "dependencySourceGuard" | "dependencySourceCapture" | "dependencySourceScope" | "hygiene" | "primaryPublicationRepair", value) => !value.isNull
+          "dependencySourceDirection" | "dependencySourceGuard" | "dependencySourceCapture" | "dependencySourceScope" | "hygiene" | "primaryPublicationRepair" | "initialSourceEffects", value) => !value.isNull
       case ("dependencyStaged" | "dependencySourceStages", value) => !value.asArray.exists(_.isEmpty)
       case _ => true
     }))
@@ -74,8 +75,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
       val valid = cursor.value.asObject.exists(_.keys.forall(Set("sourceRevision", "step", "selectedPaths",
         "stagedPaths", "candidate", "changedPaths", "diff", "continuation", "stepEvidence", "dependencyAdmission",
         "dependencyStaged", "dependency", "dependencyOrigin", "dependencySourceDirection", "dependencySourceGuard",
-        "dependencySourceStages", "dependencySourceCapture", "dependencySourceScope", "hygiene", "primaryPublicationRepair"))) && !Vector("continuation", "stepEvidence", "dependencyAdmission", "dependency", "dependencyOrigin",
-          "dependencySourceDirection", "dependencySourceGuard", "dependencySourceCapture", "dependencySourceScope", "hygiene", "primaryPublicationRepair").exists(name => cursor.downField(name).focus.exists(_.isNull)) &&
+        "dependencySourceStages", "dependencySourceCapture", "dependencySourceScope", "hygiene", "primaryPublicationRepair", "initialSourceEffects"))) && !Vector("continuation", "stepEvidence", "dependencyAdmission", "dependency", "dependencyOrigin",
+          "dependencySourceDirection", "dependencySourceGuard", "dependencySourceCapture", "dependencySourceScope", "hygiene", "primaryPublicationRepair", "initialSourceEffects").exists(name => cursor.downField(name).focus.exists(_.isNull)) &&
         value.hygiene != null && value.hygiene.forall(CommitHygiene.valid) &&
         cursor.downField("hygiene").focus.forall(_candidate_hygiene_valid) &&
         sourceCaptureValid(value) &&
@@ -102,6 +103,21 @@ private[smworkflow] object GoalPhaseNativeCandidate {
       })
     })
   }
+  /** Public nesting delegates to the Direction owner; persisted Payload decoding
+    * remains the unchanged strict domain reader. */
+  private[admission] def decodePublicPayload(value: Json): Either[String, Payload] = for {
+    supplied <- Option(value).toRight("Public candidate payload is absent")
+    wire <- GoalPhaseNativeMetadata.normalizePublicJson(supplied)
+    _ <- GoalPhaseCandidateRecovery.publicNonNullObject(wire, "candidate payload")
+    canonical <- wire.hcursor.downField("dependencySourceDirection").focus match {
+      case None => Right(wire)
+      case Some(direction) => GoalPhaseDependencySourceRevision.decodePublicDirection(direction)
+        .map(decoded => wire.mapObject(_.add("dependencySourceDirection", decoded.asJson)))
+    }
+    payload <- canonical.as[Payload].left.map(_.message)
+    _ <- GoalPhaseCandidateRecovery.exactPublicFragment(wire, payload.asJson)
+  } yield payload
+
   private[admission] def sourceCaptureValid(value: Payload): Boolean = value != null &&
     value.primaryPublicationRepair != null && (value.primaryPublicationRepair match {
       case None => GoalPhaseDependencySourceRevision.candidateValid(value)
@@ -215,25 +231,35 @@ private[smworkflow] object GoalPhaseNativeCandidate {
   private[admission] val codec = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "GoalPhaseNativeCandidateReceipt"
     def encode(value: Payload): Json = Json.obj("schemaVersion" -> Json.fromString(
-      if (value.primaryPublicationRepair.nonEmpty) "sm-workflow.goal-phase-native-candidate.v4"
+      if (value.initialSourceEffects.nonEmpty) "sm-workflow.goal-phase-native-candidate.v5"
+      else if (value.primaryPublicationRepair.nonEmpty) "sm-workflow.goal-phase-native-candidate.v4"
       else if (value.dependencySourceScope.nonEmpty) "sm-workflow.goal-phase-native-candidate.v3" else "sm-workflow.goal-phase-native-candidate.v2"),
       "payload" -> value.asJson)
     def decode(value: Json): Either[String, Payload] = for {
       wire <- Option(value).toRight("ordered candidate is missing")
       schema <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
-      _ <- Either.cond(Set("sm-workflow.goal-phase-native-candidate.v2", "sm-workflow.goal-phase-native-candidate.v3", "sm-workflow.goal-phase-native-candidate.v4")(schema), (), "ordered candidate schema differs")
+      _ <- Either.cond(Set("sm-workflow.goal-phase-native-candidate.v2", "sm-workflow.goal-phase-native-candidate.v3", "sm-workflow.goal-phase-native-candidate.v4", "sm-workflow.goal-phase-native-candidate.v5")(schema), (), "ordered candidate schema differs")
       _ <- Either.cond(schema != "sm-workflow.goal-phase-native-candidate.v3" ||
         wire.asObject.exists(_.keys.toSet == Set("schemaVersion", "payload")), (), "ordered candidate scope envelope has unknown fields")
       payload <- wire.hcursor.get[Payload]("payload").left.map(_.message)
-      _ <- Either.cond((schema == "sm-workflow.goal-phase-native-candidate.v4") == payload.primaryPublicationRepair.nonEmpty &&
-        (schema == "sm-workflow.goal-phase-native-candidate.v4" ||
+      _ <- Either.cond((schema == "sm-workflow.goal-phase-native-candidate.v5") == payload.initialSourceEffects.nonEmpty &&
+        (schema == "sm-workflow.goal-phase-native-candidate.v4") == payload.primaryPublicationRepair.nonEmpty &&
+        (Set("sm-workflow.goal-phase-native-candidate.v4", "sm-workflow.goal-phase-native-candidate.v5")(schema) ||
           (schema == "sm-workflow.goal-phase-native-candidate.v3") == payload.dependencySourceScope.nonEmpty),
         (), "ordered candidate scope version differs")
-      _ <- Either.cond(schema != "sm-workflow.goal-phase-native-candidate.v4" || encode(payload) == wire,
+      _ <- Either.cond(!Set("sm-workflow.goal-phase-native-candidate.v4", "sm-workflow.goal-phase-native-candidate.v5")(schema) || encode(payload) == wire,
         (), "Primary repair candidate envelope is noncanonical")
     } yield payload
   }
   final case class Saved(record: InstanceRecord, payload: Payload)
+
+  /** Current typed status proves staging has no remaining selected worktree
+    * content to add. A staged deletion is already indexed as well.
+    */
+  private[admission] def alreadyIndexed(path: String, dirty: Vector[G.DirtyPath]): Boolean =
+    path != null && dirty != null && dirty.filter(entry => _covers(path, entry.path) ||
+      entry.renamedFrom.exists(_covers(path, _))).forall(entry =>
+      entry.worktree == ' ' && entry.index != '?' && !entry.unmerged)
 
   def ownershipC(session: F.Session, d: F.Declaration, core: ActionCall.Core, controller: O.State): Consequence[Unit] = for {
     actual <- G.observeC(core)
@@ -280,15 +306,18 @@ private[smworkflow] object GoalPhaseNativeCandidate {
   /** Load the original inspection through the same path/ownership admission as candidates. */
   def recoveryInspectionC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     from: InstanceRecord, controller: O.State, documentPolicy: Option[GoalPhaseDocumentProgress.Policy],
-    recordingPaths: Vector[String], completedCandidates: Vector[Payload]): Consequence[Saved] = for {
+    recordingPaths: Vector[String], completedCandidates: Vector[Payload],
+    primaryRepair: Option[GoalPhasePrerequisitePrimaryRepair.Saved] = None): Consequence[Saved] = for {
     _ <- if (controller.stage == O.Stage.InspectCandidate && controller.cursor < controller.plan.steps.size &&
-        controller.plan.steps(controller.cursor).ownedPaths.forall(d.candidatePaths.contains)) Consequence.unit
+        controller.plan.steps(controller.cursor).ownedPaths.forall(path =>
+          if (primaryRepair.nonEmpty) d.candidatePaths.exists(B.covers(_, path)) else d.candidatePaths.contains(path)) &&
+        primaryRepair.forall(GoalPhasePrerequisitePrimaryRepair.reusableAt(_, controller))) Consequence.unit
       else F.invalid("source history recovery requires the selected Step inspection and unchanged path policy")
     _ <- documentPolicy.fold(Consequence.unit)(_.validateC(controller.plan, d.candidatePaths))
     _ <- GoalPhaseNativeFindingRecording.validatePathsC(recordingPaths, controller.plan, d.candidatePaths)
     adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
     store = new Store(adapter, session, from, controller, d, core, _ => Consequence.unit,
-      documentPolicy, recordingPaths, completedCandidates)
+      documentPolicy, recordingPaths, completedCandidates, primaryRepair = primaryRepair)
     inspection <- store.loadC("inspection").flatMap(_.map(Consequence.success)
       .getOrElse(F.invalid("source history recovery has no exact saved original inspection")))
     candidate <- store.loadC("candidate")
@@ -297,7 +326,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     _ <- if (candidate.isEmpty && stageintent.isEmpty && stageresult.isEmpty &&
         inspection.payload.stagedPaths.isEmpty && inspection.payload.candidate.isEmpty &&
         inspection.payload.changedPaths.isEmpty && inspection.payload.diff.isEmpty &&
-        inspection.payload.stepEvidence.isEmpty) Consequence.unit
+        inspection.payload.stepEvidence.isEmpty &&
+        inspection.payload.primaryPublicationRepair == primaryRepair.map(_.reuse)) Consequence.unit
       else F.invalid("source history recovery cannot cross any candidate or staging fact")
   } yield inspection
 
@@ -316,7 +346,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     sourceHistoryNormalization: Option[GoalPhaseSourceHistoryNormalization.Target] = None,
     dependencySourceDirection: Option[GoalPhaseDependencySourceRevision.Direction] = None,
     dependencySourceScope: Option[GoalPhaseDependencySourceRevision.ScopeSuccessor] = None,
-    primaryRepair: Option[GoalPhasePrerequisitePrimaryRepair.Saved] = None): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
+    primaryRepair: Option[GoalPhasePrerequisitePrimaryRepair.Saved] = None,
+    reconstructionPrefixReuse: Option[GoalPhaseDevelopmentReconstruction.PrefixReuse] = None): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
     whole <- Consequence.success(controller.cursor == controller.plan.steps.size)
     inspection = if (whole) "PhaseInspection" else "InspectCandidate"
     _ <- if (controller.stage.toString == inspection &&
@@ -332,11 +363,13 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     store = new Store(adapter, session, from, controller, d, core, acknowledgement, documentPolicy, recordingPaths, completedCandidates,
       sourceHistoryRecovery, dependencyAdmission = dependencyAdmission, dependencyChain = dependencyChain,
       sourceHistoryNormalization = sourceHistoryNormalization, dependencySourceDirection = dependencySourceDirection,
-      dependencySourceScope = dependencySourceScope, primaryRepair = primaryRepair)
+      dependencySourceScope = dependencySourceScope, primaryRepair = primaryRepair,
+      reconstructionPrefixReuse = reconstructionPrefixReuse)
     complete <- store.loadC("candidate")
     selected <- complete match {
       case Some(value) => store.completedC(value)
       case None if wholePhaseCandidateRecovery.nonEmpty => _recover_whole_observation_c(store, wholePhaseCandidateRecovery.get)
+      case None if store.initialSourceOrigin.nonEmpty => _initial_source_candidate_c(store)
       case None => candidateObservation match {
         case Some(target) => _recover_observation_c(store, target, candidateObservationContinuation)
         case None => _inspect_c(store)
@@ -355,6 +388,42 @@ private[smworkflow] object GoalPhaseNativeCandidate {
       else selected.payload.hygiene.map(h => "Commit hygiene mode=" + h.mode + ": " + h.diagnostic).getOrElse(
         "A native candidate effect has no recorded completed candidate. Its uncertainty is retained; no automatic replay is granted."))
   } yield wire
+
+  /** An exact new Human target selects the current index. This records a
+    * provenance relation, not new successes for old normalization/staging. */
+  private def _initial_source_candidate_c(store: Store): Consequence[Saved] = for {
+    direction <- store.dependencySourceDirection.map(Consequence.success).getOrElse(F.invalid("missing initial source direction"))
+    origin <- store.initialSourceOrigin.map(Consequence.success).getOrElse(F.invalid("initial source effects are no longer reusable"))
+    _ <- if (!store.whole && store.dependencyAdmission.isEmpty && store.dependencySourceScope.isEmpty &&
+        store.primaryRepair.isEmpty && store.controller.plan == direction.target.plan &&
+        store.controller.base == direction.target.primaryBase && store.controller.completed == direction.target.completed &&
+        GoalPhaseRepairProgress.snapshot(store.controller) == direction.target.repairProgress &&
+        store.scopeIdentity == direction.target.step && store.session.participantIdentity == direction.participant &&
+        store.from.revision.value > direction.target.pendingRevision.toLong) Consequence.unit
+      else F.invalid("initial source effects cross their exact first candidate generation or native context")
+    _ <- GoalPhaseDependencySourceRevision.initialApplicableC(store.core, store.d, direction)
+    _ <- GoalPhaseDependencySourceRevision.preflightC(store.core, direction, None)
+    existing <- store.loadC("initial-source-primary-effects")
+    _ <- if (existing.isEmpty) Consequence.unit else F.invalid("initial source candidate has retained progress; unknown effects are never replayed")
+    old = origin.lineage.recovery
+    last = old.stagingPrefix.last
+    payload = last.result.copy(sourceRevision = store.from.revision.value.toString,
+      dependencyAdmission = None, dependencyStaged = Vector.empty, dependency = None, dependencyOrigin = None,
+      dependencySourceDirection = Some(direction), dependencySourceGuard = None, dependencySourceStages = Vector.empty,
+      dependencySourceCapture = None, dependencySourceScope = None,
+      initialSourceEffects = Some(ContextReference(last.resultIdentity, last.resultRevision)))
+    _ <- if (GoalPhaseDependencySourceRevision.candidateValid(payload)) Consequence.unit
+      else F.invalid("initial source effect provenance differs from its authenticated original prefix")
+    linked <- store.saveC("initial-source-primary-effects", store.from, payload)
+    captured <- GoalPhaseDependencySourceRevision.captureC(store.core, store.controller, linked,
+      store.loadC, store.saveC, store.acknowledgeC)
+    actual <- GoalPhaseDependencySourceRevision.currentPrimaryC(store.core, store.d, origin.lineage)
+    _ <- if (actual == origin.currentPrimary) Consequence.unit
+      else F.invalid("current primary drifted after initial source capture")
+    parent <- B.parentC(store.base, payload.continuation)
+    result <- _observe_c(store, captured, parent, Some(origin.currentPrimary.repository.indexTree),
+      Some(origin.currentPrimary.repository))
+  } yield result
 
   private def _inspect_c(store: Store): Consequence[Saved] = for {
     historical <- store.primaryRepair.fold(Consequence.success(false)) { saved =>
@@ -415,7 +484,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
           observed <- store.inspectPinnedC(parent)
           prepared <- store.saveC("stage-intent-" + index, current.record, current.payload)
           _ <- store.acknowledgeC("goal-candidate-prepared:" + path)
-          _ <- if (store.primaryRepair.exists(saved => GoalPhasePrerequisitePrimaryRepair.stagedRemovalObserved(
+          _ <- if (alreadyIndexed(path, observed.dirty) || store.primaryRepair.exists(saved => GoalPhasePrerequisitePrimaryRepair.stagedRemovalObserved(
             store.d.candidatePaths, store.ownedPaths, current.payload.selectedPaths, observed.dirty,
             saved.fact.failure.excludedDirty, path))) store.acknowledgeC("goal-candidate-observed:" + path)
             else for {
@@ -439,7 +508,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
         store.loadC, store.saveC, store.acknowledgeC, store.dependencyChain)
     dependency <- if (historical) Consequence.success(legacyDependency)
       else GoalPhaseDependencySourceRevision.captureC(store.core, store.controller, legacyDependency,
-        store.loadC, store.saveC, store.acknowledgeC)
+        store.loadC, store.saveC, store.acknowledgeC, store.dependencyChain)
     prepared <- if (store.whole && store.controller.releaseRepairActive) _release_hygiene_c(store, dependency, parent)
       else Consequence.success(dependency)
     candidate <- if (prepared.payload.hygiene.exists(h => Set("diagnostic", "remaining-findings")(h.outcome)))
@@ -724,7 +793,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     val sourceHistoryNormalization: Option[GoalPhaseSourceHistoryNormalization.Target] = None,
     val dependencySourceDirection: Option[GoalPhaseDependencySourceRevision.Direction] = None,
     val dependencySourceScope: Option[GoalPhaseDependencySourceRevision.ScopeSuccessor] = None,
-    val primaryRepair: Option[GoalPhasePrerequisitePrimaryRepair.Saved] = None) {
+    val primaryRepair: Option[GoalPhasePrerequisitePrimaryRepair.Saved] = None,
+    val reconstructionPrefixReuse: Option[GoalPhaseDevelopmentReconstruction.PrefixReuse] = None) {
     val plan = controller.plan
     val whole = controller.cursor == plan.steps.size
     val scopeIdentity = if (whole) "phase:" + plan.phase else plan.steps(controller.cursor).identity
@@ -734,9 +804,14 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     val base = controller.tipSnapshot
     val managementPaths = (documentPolicy.toVector.flatMap(_.paths) ++ recordingPaths).distinct
     val stagingPaths = if (whole && !controller.releaseRepairActive) managementPaths else ownedPaths
-    def scopedDirty(dirty: Vector[G.DirtyPath], staged: Boolean): Boolean = primaryRepair.fold(
-      B.scopedDirty(dirty, stagingPaths, staged))(saved =>
-      primaryRepairDirtyValid(dirty, stagingPaths, saved.fact.failure.excludedDirty, staged))
+    val initialSourceOrigin = dependencySourceDirection.filter(direction => !whole &&
+      controller.generation == direction.target.generation + 1).flatMap(_.target.initialOrigin)
+    def scopedDirty(dirty: Vector[G.DirtyPath], staged: Boolean): Boolean = initialSourceOrigin match {
+      case Some(origin) => dirty.map(p => GoalPhaseCandidateObservationContinuation.Dirty(
+        p.index.toString, p.worktree.toString, p.path, p.renamedFrom)) == origin.currentPrimary.repository.dirty
+      case None => primaryRepair.fold(B.scopedDirty(dirty, stagingPaths, staged))(saved =>
+        primaryRepairDirtyValid(dirty, stagingPaths, saved.fact.failure.excludedDirty, staged))
+    }
     def indexPathsOwned(paths: Vector[String]): Boolean = B.pathsOwned(paths, stagingPaths) && pathsOwned(paths) &&
       primaryRepair.forall(saved => GoalPhasePrerequisitePrimaryRepair.repairPathsValid(d.candidatePaths,
         ownedPaths, paths, saved.fact.failure.excludedDirty))
@@ -761,7 +836,31 @@ private[smworkflow] object GoalPhaseNativeCandidate {
         case _ => F.invalid("normalization continuation has no matching admitted original source")
       }
     } yield (prefix ++ affected).distinct
-    private def _reuse_prefix_c: Consequence[Vector[String]] = sourceHistoryRecovery match {
+    private def _reuse_prefix_c: Consequence[Vector[String]] = reconstructionPrefixReuse match {
+      case Some(reuse) =>
+        val target = reuse.target
+        if (!whole && reuse.plan == plan && reuse.generation == controller.generation && reuse.base == controller.base &&
+            reuse.selection.newGeneration == controller.generation && GoalPhaseDevelopmentReconstruction.validPrefixSelection(reuse.selection) &&
+            target.sessionId == from.identity.value && target.definitionIdentity == from.definition.workflowIdentity.value &&
+            target.definitionRevision == from.definition.workflowRevision.value && target.participant == session.participantIdentity &&
+            target.planIdentity == plan.identity && target.step == scopeIdentity && target.controllerTip == base &&
+            target.base == session.started.receipt.payload.value.base && target.candidatePaths == d.candidatePaths &&
+            target.ownedPaths == ownedPaths &&
+            from.revision.value > target.frontierRevision.toLong)
+          for {
+            original <- GoalPhaseNativeSourceHistory.verifySelectedPrefixC(core, target,
+              GoalPhaseNativeSourceHistory.PrefixApplicability(reuse.selection.reusable, reuse.selection.fresh))
+            _ <- if (sourceHistoryRecovery.forall(current => current != null &&
+                current.sourceRevision.toLongOption.exists(_ > target.frontierRevision.toLong))) Consequence.unit
+              else F.invalid("current source-history recovery is not a later native inspection than the original prefix")
+            current <- _recovery_prefix_c
+            _ <- if (original.intersect(current).isEmpty) Consequence.unit
+              else F.invalid("original reusable and current successful source-history prefixes claim the same path")
+          } yield original ++ current
+        else F.invalid("current-source prefix reuse crosses its exact new generation, Step, base or ownership")
+      case None => _recovery_prefix_c
+    }
+    private def _recovery_prefix_c: Consequence[Vector[String]] = sourceHistoryRecovery match {
       case None => Consequence.success(Vector.empty)
       case Some(target) if !whole && GoalPhaseSourceHistoryRecovery.validTarget(target) &&
           target.sessionId == from.identity.value && target.definitionIdentity == from.definition.workflowIdentity.value &&
@@ -839,6 +938,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
       if (value.record.currentProgression.contains(ProgressionReference("phase." + validationStage)) &&
           value.payload.candidate.exists(snapshot => B.parentC(base, value.payload.continuation).toOption.exists(_.head == snapshot.head)) && value.payload.diff.nonEmpty &&
           value.payload.stagedPaths == value.payload.selectedPaths && pathsOwned(value.payload.changedPaths))
+        _retained_initial_effects_c(value).flatMap(_ =>
         (if (value.payload.primaryPublicationRepair.nonEmpty) reusedCaptureC(value.payload).flatMap { _ =>
           if (primaryRepair.exists(saved => GoalPhasePrerequisitePrimaryRepair.currentSourceSuccessorValid(
               saved.fact.failure.candidate, value.payload)))
@@ -847,8 +947,25 @@ private[smworkflow] object GoalPhaseNativeCandidate {
         }
           else GoalPhaseNativeDependencyValidation.retainedC(value, loadC, Some(loadSourceC)).flatMap(_ =>
             GoalPhaseDependencySourceRevision.retainedCaptureC(value, loadC))).flatMap(_ =>
-          observedStateC(controller, value.payload, documentPolicy, recordingPaths)).map(_ => value)
+          observedStateC(controller, value.payload, documentPolicy, recordingPaths)).map(_ => value))
       else F.invalid("retained candidate is not its actual native Validation successor")
+    private def _retained_initial_effects_c(value: Saved): Consequence[Unit] = value.payload.initialSourceEffects match {
+      case None => Consequence.unit
+      case Some(reference) => for {
+        linked <- loadC("initial-source-primary-effects").flatMap(_.map(Consequence.success)
+          .getOrElse(F.invalid("initial source candidate lost its actual effect-provenance relation")))
+        inspected <- loadC("dependency-source-inspection").flatMap(_.map(Consequence.success)
+          .getOrElse(F.invalid("initial source candidate lost its distinct fresh dependency inspection")))
+        _ <- if (linked.payload.initialSourceEffects.contains(reference) &&
+            linked.payload.dependencySourceDirection == value.payload.dependencySourceDirection &&
+            linked.payload.candidate.isEmpty && linked.payload.dependencySourceCapture.isEmpty &&
+            linked.record.revision == from.revision.next && linked.record.history.dropRight(1) == from.history &&
+            inspected.record.revision == linked.record.revision.next &&
+            inspected.record.history.dropRight(1) == linked.record.history &&
+            GoalPhaseDependencySourceRevision.candidateValid(value.payload)) Consequence.unit
+          else F.invalid("initial source candidate effect provenance crosses its native append-only lineage")
+      } yield ()
+    }
     def inspectC: Consequence[G.Observed] = for {
       root <- G.rootC(core)
       actual <- G.observeC(core)

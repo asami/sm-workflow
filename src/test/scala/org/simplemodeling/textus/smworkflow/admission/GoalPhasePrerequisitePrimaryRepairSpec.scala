@@ -35,6 +35,14 @@ private[admission] object PrimaryPublicationRepairSpecificationFixture {
   val program = "primary-publication-program"
   val output = "[info] compiling 1 Scala source\n[error] src/primary.scala:1: missing primaryApi\n" +
     "[error] (Compile / compileIncremental) Compilation failed\n"
+  val generationDiagnostic = "[error] [{\"code\":\"GENERATION_PROVENANCE_OUTPUT_TAMPERED\"," +
+    "\"source\":\"/specification/target/sbt-cozy/delegate-work/run-0\"," +
+    "\"expected\":\"at least one generated Scala artifact\",\"actual\":\"none\"," +
+    "\"message\":\"Generation provenance cannot describe an empty output.\"," +
+    "\"correctiveAction\":\"Complete Scala source generation before writing provenance.\"}]\n"
+  val generationSummary = "[error] (cozyGenerate) [sbt-cozy] cozy delegate failed (1) for /specification/src/main/cozy/product.cml\n"
+  val generationOutput = "[error] Error[No input]\n" + generationDiagnostic + generationSummary +
+    "[error] Error[No input]\n" + generationDiagnostic
   def process(text: String = output, termination: ProcessExecutionTermination = ProcessExecutionTermination.Exited(1),
     truncated: Boolean = false, identity: String = program): Json = {
     val bytes = text.getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector
@@ -68,6 +76,13 @@ private[admission] object PrimaryPublicationRepairSpecificationFixture {
     result(), None, Vector.empty, excluded)
   val repair = take(A.stateC(controller, failure))
   val fact = A.Fact(A.schema, failure, A.directive(failure), sorted(B.controller(repair)))
+  val generationFailure = failure.copy(failed = failure.failed.copy(reason = "Specification terminated generation failure",
+    process = Some(process(generationOutput))))
+  val generationRepair = take(A.stateC(controller, generationFailure))
+  val generationFact = A.Fact(A.generationSchema, generationFailure, A.directive(generationFailure), sorted(B.controller(generationRepair)))
+  def originalTarget(failure: A.Failure): A.Target = A.Target(A.publicationSchema(failure), failure.componentInstance,
+    failure.participant, failure.sessionId, failure.frontierRevision, failure.controller, failure.generation,
+    failure.candidateRecordRevision, failure.candidate, failure, None, A.scope(failure), "primary-source-repair")
   val reuse = A.CaptureReuse(ContextReference("primary-session", "13"), "12", "10", 1L)
   val repairedCandidate = candidate.copy(sourceRevision = "15", candidate = Some(snapshot.copy(tree = "d" * 40)),
     diff = Some("Actual corrected primary diff"), primaryPublicationRepair = Some(reuse))
@@ -258,13 +273,94 @@ private[admission] object PrimaryPublicationRepairSpecificationFixture {
 
 /** Primary publication repair authority, attribution and retained capture contracts.
   * @since   Nov.  2, 2026
-  * @version Nov.  2, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhasePrerequisitePrimaryRepairSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import PrimaryPublicationRepairSpecificationFixture as F
+
+  "E14 primary publication generation repair" should afterWord(
+    "in spec:goal-phase-prerequisite-publication-recovery, example:E14, rules:RGEN01, phase:6.11") {
+    "classify only the exact terminated missing INPUT and empty generated-output failure" in {
+      Given("a pure complete typed publication capture with the retained cozyGenerate summary and both required diagnostics")
+      val failed = F.generationFailure.failed
+      val before = failed.asJson
+      When("the distinct generation and legacy Compile classifiers inspect the same retained process")
+      val generation = A.generationFailure(failed, F.target, "primary-session", "primary-participant", F.source, F.processPolicy(F.target))
+      val compile = A.compileFailure(failed, F.target, "primary-session", "primary-participant", F.source, F.processPolicy(F.target))
+      Then("generation qualifies without becoming Compile or changing a retained byte")
+      generation shouldBe true
+      compile shouldBe false
+      A.failureKind(F.generationFailure) shouldBe Some(A.FailureKind.Generation)
+      A.failureValid(F.generationFailure) shouldBe true
+      failed.asJson shouldBe before
+      GoalPhasePrerequisitePublicationUnknownRecovery.bindingC(F.candidate).isSuccess shouldBe false
+    }
+
+    "refuse other tasks partial captures unknown outcomes and crossed publication bindings" in {
+      Given("the exact generation signature crossed with other task summaries effects and typed termination states")
+      val failed = F.generationFailure.failed
+      val outputs = Vector(F.output, "[error] (Compile / doc) Scaladoc generation failed\n",
+        F.generationOutput.replace("Error[No input]", "Error[Other input]"),
+        F.generationOutput.replace("\"actual\":\"none\"", "\"actual\":\"changed artifact\""),
+        F.generationOutput.replace(F.generationSummary, ""),
+        F.generationOutput + "[error] (Test / test) Tests unsuccessful\n",
+        F.generationOutput + "[error] (Compile / compileIncremental) Compilation failed\n",
+        F.generationOutput + "[error] (publishLocal) Publication failed\n",
+        F.generationOutput + "[info] published artifact\n", F.generationOutput + "[success] complete\n",
+        F.generationOutput + "[error] unexpected later failure\n")
+      val terminations = Vector(ProcessExecutionTermination.NotStarted, ProcessExecutionTermination.TerminationUnconfirmed,
+        ProcessExecutionTermination.TimedOut, ProcessExecutionTermination.Cancelled, ProcessExecutionTermination.Exited(0),
+        ProcessExecutionTermination.Exited(2))
+      val captured = WorkflowSbtCapture.decode(F.process(F.generationOutput)).toOption.get
+      val invalid = outputs.map(text => failed.copy(process = Some(F.process(text)))) ++
+        terminations.map(termination => failed.copy(process = Some(F.process(F.generationOutput, termination)))) ++ Vector(
+          failed.copy(status = "uncertain"), failed.copy(status = "published"), failed.copy(process = None),
+          failed.copy(process = Some(F.process(F.generationOutput, truncated = true))),
+          failed.copy(process = Some(WorkflowSbtCapture.encode(captured.copy(
+            stderr = ProcessExecutionCapture(Vector(0xc3.toByte), 1L, false))))),
+          failed.copy(process = Some(F.process(F.generationOutput, identity = "other-program"))),
+          failed.copy(request = failed.request.copy(participant = "other-participant")),
+          failed.copy(request = failed.request.copy(input = failed.request.input.copy(ownerSessionId = Some("other-session")))),
+          failed.copy(request = failed.request.copy(source = F.source.copy(tree = "e" * 40))),
+          failed.copy(request = failed.request.copy(input = failed.request.input.copy(explicit = true))))
+      val targets = Vector(F.target.copy(identity = "other-target"), F.target.copy(component = "other-component"),
+        F.target.copy(workspace = "other-workspace"), F.target.copy(dependency = Some("dependency")), F.target.copy(beforeChecks = false))
+      When("the classifier requires the complete original request source participant target and fixed program")
+      val classifications = invalid.map(A.generationFailure(_, F.target, "primary-session", "primary-participant", F.source, F.processPolicy(F.target))) ++
+        targets.map(A.generationFailure(failed, _, "primary-session", "primary-participant", F.source, F.processPolicy(F.target))) ++
+        Vector(A.generationFailure(failed, F.target, "primary-session", "primary-participant", F.source,
+          F.processPolicy(F.target).replace("publish-local", "test")))
+      Then("none grants a source repair or publication retry")
+      classifications shouldBe Vector.fill(classifications.size)(false)
+      A.failureValid(F.generationFailure.copy(candidate = F.candidate.copy(sourceRevision = "9"))) shouldBe false
+    }
+
+    "reserve one ordinary generation repair with truthful unexecuted tests and immutable source provenance" in {
+      Given("one original Validation controller and the exact generation failure preceding every check")
+      val wire = A.codec.encode(F.generationFact)
+      val before = F.generationFailure.asJson
+      When("recollection reconstructs the same repair and issues its actual publication context")
+      val restored = Vector.fill(3)(A.codec.decode(wire).toOption.get).map(fact => take(A.stateC(F.controller, fact.failure)))
+      val context = take(A.workContextC(F.generationFact, F.reuse.repair, F.generationRepair, "RepairStep")).get
+      val request = F.request.copy(repairDirective = Some(F.generationFact.directive), publicationFailure = Some(context))
+      Then("one reservation carries generation diagnostics without a test PASS or an accepted implementation replay")
+      restored.map(state => (state.generation, state.repairs, state.ordinaryRepairs)) shouldBe Vector.fill(3)((2L, 1, 1))
+      F.controller.repairs shouldBe 0
+      F.generationFact.directive.reason should include("generation failure")
+      F.generationFact.directive.findings.head should startWith("PRIMARY-PUBLICATION-GENERATION:")
+      context.testsExecuted shouldBe false
+      context.publication shouldBe F.generationFailure.failed
+      context.changedPaths shouldBe F.candidate.changedPaths
+      W.inputCodec.decode(W.inputCodec.encode(request)) shouldBe Right(request)
+      request.checkFailure shouldBe None
+      request.review shouldBe None
+      restored.foreach { state => state.checksReceipt shouldBe None; state.reviewEvidence shouldBe None }
+      F.generationFailure.asJson shouldBe before
+    }
+  }
 
   "Retained failed checks after dependency source adoption" should {
     "recognize the admitted v7 source failure without inventing independent review or successor success" in {
@@ -1242,6 +1338,215 @@ final class GoalPhasePrerequisitePrimaryRepairSpec extends AnyWordSpec with Matc
       sourcechild.identity shouldBe take(GitSelectionId.parseC("goal-path-2"))
       sourcechild.paths.map(_.value) shouldBe Vector("src/extra.scala")
       refused shouldBe Vector(false, false, false)
+    }
+  }
+}
+
+
+/** Independently selectable primary publication repair codec regression.
+  * Introduced and updated Nov. 6, 2026 by ASAMI, Tomoharu.
+  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
+final class GoalPhasePrerequisitePrimaryRepairCodecSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  import PrimaryPublicationRepairSpecificationFixture as F
+
+  "E14 primary publication generation repair" should afterWord(
+    "in spec:goal-phase-prerequisite-publication-recovery, example:E14, rules:RGEN01, phase:6.11") {
+    "roundtrip generation v2 and v5 while preserving legacy Compile v1 and v3 bytes" in {
+      Given("separate pure generation and Compile facts with exact original public targets")
+      val target = F.originalTarget(F.generationFailure)
+      val compiletarget = F.originalTarget(F.failure)
+      val wire = A.codec.encode(F.generationFact)
+      val compilewire = Json.obj("schemaVersion" -> "sm-workflow.goal-phase-prerequisite-primary-repair.v1".asJson,
+        "payload" -> Json.obj("schemaVersion" -> "sm-workflow.goal-phase-prerequisite-primary-repair.v1".asJson,
+          "failure" -> F.failure.asJson, "directive" -> O.RepairDirective(
+            "Repair the actual primary publication Compile failure within the selected Step; tests were not executed",
+            Vector("PRIMARY-PUBLICATION-COMPILE: " + F.target.identity) ++ F.output.linesIterator
+              .filter(_.startsWith("[error]")).toVector).asJson,
+          "successorController" -> F.sorted(B.controller(F.repair)).asJson))
+      val oldtarget = Json.obj("schemaVersion" -> "sm-workflow.goal-phase-prerequisite-publication-recovery.v3".asJson,
+        "componentInstance" -> F.failure.componentInstance.asJson, "participant" -> F.failure.participant.asJson,
+        "sessionId" -> F.failure.sessionId.asJson, "frontierRevision" -> F.failure.frontierRevision.asJson,
+        "controller" -> F.failure.controller.asJson, "generation" -> F.failure.generation.asJson,
+        "candidateRecordRevision" -> F.failure.candidateRecordRevision.asJson, "candidate" -> F.candidate.asJson,
+        "failure" -> F.failure.asJson, "scope" -> A.scope(F.failure).asJson, "missingAuthority" -> "primary-source-repair".asJson)
+        .deepDropNullValues // Historical public Target encoding recursively omits optional nulls, including inside Scope.
+      val direction = A.Direction(target, "RepairPrimarySourceAndContinuePublication", "SPECIFICATION-OWNED generation correction",
+        ContextReference("generation-human", "1"))
+      val binding = take(A.bindingC(target.componentInstance, target, direction.choice, direction.rationale, target.participant, direction.reference))
+      val description = A.description(target)
+      val reference = org.simplemodeling.textus.smworkflow.value.WorkflowArtifactReference(direction.reference.identity, direction.reference.revision)
+      val input = org.simplemodeling.textus.smworkflow.value.GoalPhasePrerequisitePublicationRecoveryInput(target.sessionId,
+        description.target, direction.choice, direction.rationale, reference)
+      When("the closed codecs recognizers input binding and passive Human preparation consume each version")
+      val prepared = org.simplemodeling.textus.smworkflow.preparation.NativePrerequisitePublicationRecoveryPreparation.prepareC(
+        description, input, reference, org.simplemodeling.textus.smworkflow.value.WorkflowExecutionEvidence(
+          Vector(reference), Some(target.participant), None, None), target.participant, "specification-host", java.time.Instant.now())
+      Then("generation uses only the new versions and old Compile serialization remains canonical")
+      wire.hcursor.get[String]("schemaVersion") shouldBe Right(A.generationSchema)
+      A.codec.decode(wire) shouldBe Right(F.generationFact)
+      A.codec.encode(A.codec.decode(wire).toOption.get) shouldBe wire
+      A.codec.decode(wire.mapObject(_.add("schemaVersion", A.schema.asJson))).isLeft shouldBe true
+      F.generationFact.copy(schemaVersion = A.schema).asJson.as[A.Fact].isLeft shouldBe true
+      target.asJson.as[A.Target] shouldBe Right(target)
+      target.schemaVersion shouldBe A.generationTargetSchema
+      target.copy(schemaVersion = A.targetSchema).asJson.as[A.Target].isLeft shouldBe true
+      F.fact.copy(schemaVersion = A.generationSchema).asJson.as[A.Fact].isLeft shouldBe true
+      compiletarget.copy(schemaVersion = A.generationTargetSchema).asJson.as[A.Target].isLeft shouldBe true
+      A.codec.encode(F.fact).noSpaces shouldBe compilewire.noSpaces
+      A.codec.decode(compilewire) shouldBe Right(F.fact)
+      compiletarget.schemaVersion shouldBe A.targetSchema
+      compiletarget.asJson.noSpaces shouldBe oldtarget.noSpaces
+      oldtarget.as[A.Target].map(_.asJson.noSpaces) shouldBe Right(oldtarget.noSpaces)
+      F.fact.directive.reason shouldBe "Repair the actual primary publication Compile failure within the selected Step; tests were not executed"
+      A.directionValid(direction) shouldBe true
+      take(A.isTargetC(description.target)) shouldBe true
+      B.selectBinding(binding) shouldBe Right(binding)
+      B.recoveryInputC(input).isSuccess shouldBe true
+      prepared.isSuccess shouldBe true
+    }
+  }
+}
+
+/** One independently selectable regression for the observed INPUT-kind source
+  * error. Captures and references here are pure specification data.
+  * Introduced and updated Nov. 6, 2026 by ASAMI, Tomoharu.
+  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
+final class GoalPhasePrerequisitePrimaryGenerationSyntaxSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  import PrimaryPublicationRepairSpecificationFixture as F
+
+  "E16 primary generation syntax recovery" should afterWord(
+    "in spec:goal-phase-prerequisite-publication-recovery, example:E16, rules:RGEN01, phase:6.11") {
+    "admit only the observed INPUT-kind syntax family and reserve the next same-Step source repair" in {
+      Given("the exact complete typed cozyGenerate INPUT-kind source diagnostic following one retained missing-input repair")
+      val marker = "[error] Error[org.goldenport.exception.SyntaxErrorFaultException: Operation 'echo' INPUT Value 'ProbeInput' requires input-kind=COMMAND|QUERY.]"
+      val text = F.generationOutput.replace("[error] Error[No input]", marker)
+      val initial = F.validation(F.plan.copy(repairLimit = 2))
+      val first = F.failureAt(initial, "12")
+      val original = first.copy(failed = first.failed.copy(reason = "SPECIFICATION-OWNED missing-input failure",
+        process = Some(F.process(F.generationOutput))))
+      val firstrepair = take(A.stateC(initial, original))
+      val originalfact = A.Fact(A.generationSchema, original, A.directive(original), F.sorted(B.controller(firstrepair)))
+      val originalbytes = A.codec.encode(originalfact)
+      val controller = F.nextValidation(firstrepair, F.snapshot.copy(tree = "d" * 40))
+      val selected = F.failureAt(controller, "18")
+      val failure = selected.copy(candidate = selected.candidate.copy(primaryPublicationRepair = Some(F.reuse)),
+        failed = selected.failed.copy(reason = "SPECIFICATION-OWNED INPUT-kind syntax failure", process = Some(F.process(text))))
+      val failed = failure.failed
+      val captured = WorkflowSbtCapture.decode(failed.process.get).toOption.get
+      When("the closed generation classifier inspects that actual-shaped syntax capture and its crossed variants")
+      val classified = A.generationFailure(failed, F.target, "primary-session", "primary-participant",
+        failed.request.source, F.processPolicy(F.target))
+      val badmarkers = Vector(marker.replace("SyntaxErrorFaultException", "RuntimeException"),
+        marker.replace("org.goldenport.exception.", ""), marker.replace("Operation 'echo'", "Operation ''"),
+        marker.replace("Operation 'echo'", "Operation 'echo-other'"), marker.replace("'ProbeInput'", "'Probe.Input'"),
+        marker.replace("INPUT Value", "OUTPUT Value"), marker.replace("COMMAND|QUERY", "QUERY|COMMAND"),
+        marker.replace("COMMAND|QUERY", "COMMAND"), marker.stripSuffix(".]"), marker + " trailing error", "prefix " + marker)
+      val badtexts = badmarkers.map(value => text.replace(marker, value)) ++ Vector(
+        text.replace(F.generationDiagnostic, ""), text.replace(F.generationSummary, ""),
+        text + "[error] (Compile / compileIncremental) Compilation failed\n",
+        text + "[error] (Compile / doc) Scaladoc generation failed\n",
+        text + "[error] (Test / test) Tests unsuccessful\n", text + "[error] (publishLocal) repository failed\n",
+        text + "[info] published artifact\n", text + "[success] completed\n")
+      val terminations = Vector(ProcessExecutionTermination.NotStarted, ProcessExecutionTermination.Cancelled,
+        ProcessExecutionTermination.TimedOut, ProcessExecutionTermination.TerminationUnconfirmed,
+        ProcessExecutionTermination.Exited(0), ProcessExecutionTermination.Exited(2))
+      val invalid = badtexts.map(value => failed.copy(process = Some(F.process(value)))) ++
+        terminations.map(value => failed.copy(process = Some(F.process(text, value)))) ++ Vector(
+          failed.copy(status = "uncertain"), failed.copy(status = "published"), failed.copy(process = None),
+          failed.copy(process = Some(F.process(text, truncated = true))),
+          failed.copy(process = Some(F.process(text, identity = "other-program"))),
+          failed.copy(process = Some(WorkflowSbtCapture.encode(captured.copy(stderr = captured.stderr.copy(truncated = true))))),
+          failed.copy(process = Some(WorkflowSbtCapture.encode(captured.copy(stderr = ProcessExecutionCapture(Vector(0xc3.toByte), 1L, false))))),
+          failed.copy(request = failed.request.copy(participant = "other-participant")),
+          failed.copy(request = failed.request.copy(input = failed.request.input.copy(ownerSessionId = Some("other-session")))),
+          failed.copy(request = failed.request.copy(input = failed.request.input.copy(explicit = true))))
+      val targets = Vector(F.target.copy(identity = "other-target"), F.target.copy(component = "other-component"),
+        F.target.copy(workspace = "other-workspace"), F.target.copy(beforeChecks = false), F.target.copy(dependency = Some("dependency")))
+      val rejected = invalid.map(A.generationFailure(_, F.target, "primary-session", "primary-participant",
+        failed.request.source, F.processPolicy(F.target))) ++ targets.map(A.generationFailure(failed, _,
+          "primary-session", "primary-participant", failed.request.source, F.processPolicy(F.target))) ++ Vector(
+        A.generationFailure(failed, F.target, "other-session", "primary-participant", failed.request.source, F.processPolicy(F.target)),
+        A.generationFailure(failed, F.target, "primary-session", "primary-participant", F.source, F.processPolicy(F.target)),
+        A.generationFailure(failed, F.target, "primary-session", "primary-participant", failed.request.source,
+          F.processPolicy(F.target).replace("publish-local", "test")))
+      Then("only the bound terminated source family is Generation and none of the failures becomes Compile or success")
+      classified shouldBe true
+      rejected shouldBe Vector.fill(rejected.size)(false)
+      A.compileFailure(failed, F.target, "primary-session", "primary-participant", failed.request.source, F.processPolicy(F.target)) shouldBe false
+      A.failureKind(failure) shouldBe Some(A.FailureKind.Generation)
+      A.failureValid(failure) shouldBe true
+
+      When("the second failure derives its own v2 fact and ordinary same-Step repair under the original limit")
+      val repair = take(A.stateC(controller, failure))
+      val fact = A.Fact(A.generationSchema, failure, A.directive(failure), F.sorted(B.controller(repair)))
+      val wire = A.codec.encode(fact)
+      val context = take(A.workContextC(fact, ContextReference("primary-session", "19"), repair, "RepairStep")).get
+      Then("two genuine source failures consume two ordinary reservations without rewriting the first failure or granting a check receipt")
+      (repair.generation, repair.repairs, repair.ordinaryRepairs) shouldBe (3L, 2, 2)
+      repair.plan.repairLimit shouldBe 2
+      repair.plan shouldBe original.plan
+      repair.base shouldBe original.base
+      repair.completed shouldBe original.completed
+      repair.stage shouldBe O.Stage.Repair
+      repair.checksReceipt shouldBe None
+      repair.reviewEvidence shouldBe None
+      A.codec.decode(wire) shouldBe Right(fact)
+      wire should not be originalbytes
+      wire.hcursor.get[String]("schemaVersion") shouldBe Right(A.generationSchema)
+      A.publicationSchema(failure) shouldBe A.generationTargetSchema
+      context.publication shouldBe failed
+      context.testsExecuted shouldBe false
+      context.publication should not be original.failed
+      A.codec.encode(originalfact) shouldBe originalbytes
+      originalfact.failure.failed.process shouldBe Some(F.process(F.generationOutput))
+    }
+  }
+}
+
+/** Pure authored-file conformance, introduced and updated Nov. 6, 2026 by
+  * ASAMI, Tomoharu. Literal fixture data and executable declarations are input. */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
+final class GoalPhasePrimaryRepairHistoryConformanceSpec extends AnyWordSpec with NativeGoalSourceHistoryCliFixture {
+  "R5-SH02/R5-SH03 authored primary repair history" should {
+    "interpret both explicit authored files idempotently without changing fixture or declaration bodies" in {
+      Given("the existing external goldenport rule and exactly two authored source inputs from the repository cwd")
+      val inputs = Vector(
+        "src/test/scala/org/simplemodeling/textus/smworkflow/admission/GoalPhasePrerequisitePrimaryRepairSpec.scala" ->
+          "/** Primary publication repair authority, attribution and retained capture contracts.",
+        "src/test/scala/org/simplemodeling/textus/smworkflow/admission/NativeGoalPrimaryGenerationRecoveryCliSpec.scala" ->
+          "/** Paired installed-only qualification of one real tiny sbt-cozy failure.")
+      val rule = take(WorkflowSourceHistoryRule.decodeC(enabledSettings(ruleKey)))
+      rule.sourceRoots shouldBe Vector("src/main/scala", "src/test/scala")
+      val date = java.time.LocalDate.parse("2026-11-06")
+      inputs.foreach { (path, marker) =>
+        val original = java.nio.file.Files.readString(java.nio.file.Path.of(path))
+        def _outside_header_(text: String): (String, String) = {
+          val start = text.indexOf(marker)
+          start should be >= 0
+          val end = text.indexOf("*/", start) + 2
+          end should be > start
+          (text.take(start), text.drop(end))
+        }
+        When("the pure interpreter performs the first canonical header normalization and repeats the same date for " + path)
+        val first = take(WorkflowSourceHistoryRule.applyC(rule,
+          WorkflowSourceHistoryRule.Input(path, original, date, None, None, true)))
+        val second = take(WorkflowSourceHistoryRule.applyC(rule,
+          WorkflowSourceHistoryRule.Input(path, first.text, date, None, None, true)))
+        Then("all fixture strings and declarations remain exact outside the sole file header and the second interpretation is unchanged")
+        Set("updated", "unchanged")(first.outcome) shouldBe true
+        _outside_header_(first.text) shouldBe _outside_header_(original)
+        second.outcome shouldBe "unchanged"
+        second.text shouldBe first.text
+        if (path.endsWith("NativeGoalPrimaryGenerationRecoveryCliSpec.scala")) {
+          original should include("|/** @since Nov. 6, 2026")
+          first.text should include("|/** @since Nov. 6, 2026")
+        }
+      }
     }
   }
 }

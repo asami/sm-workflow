@@ -22,8 +22,8 @@ import RepositorySyncPurpose as P
 
 /** Explicit finite Human allowance over the original cumulative repair history.
   * Adoption is passive; ordinary Advance owns the next paired repair issue.
-  * @since Nov. 4, 2026
-  * @version Nov. 4, 2026
+  * @since   Nov.  4, 2026
+  * @version Nov.  6, 2026
   */
 private[smworkflow] object RepositorySyncRepairBudgetContinuation {
   val purpose = "repository-sync-repair-budget-continuation"
@@ -395,7 +395,7 @@ private[smworkflow] object RepositorySyncRepairBudgetContinuation {
     final class Reader extends ProcedureActionCall {
       val core = call
       def readSessionC: Consequence[String] = _adoption_source_c(suppliedRequest).flatMap(source =>
-        NativeWorkflowResourceInput.readC(source, reference => read_resource_text(reference,
+        NativeWorkflowResourceInput.readC(source, reference => WorkflowArtifactBudget.readTextC(core, reference,
           Some(java.nio.charset.StandardCharsets.UTF_8))).flatMap(_adoption_input_c).map(_.sessionId))
       def execute(): Consequence[OperationResponse] = N.invalid("repair budget Session reader is not an Operation")
     }
@@ -421,7 +421,7 @@ private[smworkflow] object RepositorySyncRepairBudgetContinuation {
           _ <- installation.validateC
           value <- input match {
             case None => Consequence.success(Option.empty[V.RepositorySyncRepairBudgetContinuationAdoptionInput])
-            case Some(source) => NativeWorkflowResourceInput.readC(source, reference => read_resource_text(reference,
+            case Some(source) => NativeWorkflowResourceInput.readC(source, reference => WorkflowArtifactBudget.readTextC(core, reference,
               Some(java.nio.charset.StandardCharsets.UTF_8))).flatMap(_adoption_input_c).map(Some(_))
           }
           session = value.map(_.sessionId).orElse(identity).get

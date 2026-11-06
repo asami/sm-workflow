@@ -14,8 +14,7 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
   * Parameter data selects storage/targets/policies, never independent authority ports.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  *  version Nov.  2, 2026
-  * @version Nov.  3, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowLauncherAssembly {
@@ -57,6 +56,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     "EvidenceService.manageEvidenceRetention", "EvidenceService.findDueEvidence",
     "JournalService.readJournalEntry",
     "GoalPhaseService.startGoalPhase", "GoalPhaseService.advanceGoalPhase", "GoalPhaseService.submitGoalPhaseWorkResult",
+    "GoalPhaseService.reconstructGoalPhaseDevelopment",
     "GoalPhaseService.submitGoalPhaseOrderedDecision",
     "GoalPhaseService.submitGoalPhaseFindingRecording",
     "GoalPhaseService.describeGoalPhasePrerequisitePublicationRecovery", "GoalPhaseService.recoverGoalPhasePrerequisitePublication",
@@ -75,6 +75,9 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitNativeMergeRepair")
 
   private val _standard_operations = publishedMcpOperations ++ Set(
+    "GoalPhaseService." + GoalPhaseSourceHistoryNormalization.describeOperation,
+    "GoalPhaseService." + GoalPhaseSourceHistoryNormalization.adoptionOperation,
+    "RepositorySyncService.syncRepositoryDirectories", "RepositorySyncService.readRepositoryDirectoryResult",
     "RepositorySyncService." + RepositorySyncPushContinuation.describeOperation,
     "RepositorySyncService." + RepositorySyncPushContinuation.adoptionOperation,
     "RepositorySyncService." + RepositorySyncPurposePreparationContinuation.describeOperation,

@@ -7,12 +7,33 @@ import org.goldenport.cncf.workspace.*
 /** External history convention composed with the owning call's current File UoW.
   * The caller supplies provenance and owns any durable intent and continuation.
   * @since   Oct. 17, 2026
-  * @version Oct. 26, 2026
+  *  version Oct. 26, 2026
+  * @version Nov.  6, 2026
   */
 private[smworkflow] object GoldenportSourceHistoryDriver {
   import WorkflowSourceHistory.{Source, Result}
 
   final case class Normalization(outcome: String, diagnostic: Option[String])
+
+  /** Current text is observable before terminal transport evidence. This read
+    * proves neither the old writer's outcome nor its termination. */
+  def observeC(core: ActionCall.Core, target: FileTarget,
+    rule: WorkflowSourceHistoryRule.Rule, source: Source): Consequence[Normalization] = {
+    val observed = for {
+      included <- WorkflowSourceHistoryRule.includesC(rule, source.path)
+      _ <- if (included) Consequence.unit else Consequence.stateConflict("Observation path is outside the retained rule")
+      path <- WorkspaceFilePath.parseC(source.path)
+      read <- WorkflowFileExecution.readTextC(core, target, path)
+      text <- read.text.map(Consequence.success).getOrElse(Consequence.stateConflict("Observation source is missing"))
+      interpreted <- WorkflowSourceHistoryRule.applyC(rule, WorkflowSourceHistoryRule.Input(
+        source.path, text, source.updatedOn, source.createdOn, source.author, source.dateUncertain))
+      _ <- if (interpreted.providerIdentity == rule.identity && interpreted.dateUncertain == source.dateUncertain &&
+          Set("updated", "unchanged")(interpreted.outcome)) Consequence.unit
+        else Consequence.stateConflict("Observation has no unique correction under the retained rule and date")
+    } yield Normalization(if (interpreted.outcome == "unchanged") "observed-current-postcondition" else "correction-required", None)
+    observed.map[Consequence[Normalization]](Consequence.success).fold(
+      error => Consequence.success(Normalization("failed", Some(error.toString.take(8192)))), identity)
+  }
 
   /** Read/interpret failures are known to precede writes. Only a dispatched
     * replacement failure can remain unknown to its durable intent owner. */

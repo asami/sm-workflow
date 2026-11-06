@@ -1,6 +1,6 @@
 /**
  * @since   Oct. 27, 2026
- * @version Oct. 27, 2026
+ * @version Nov.  6, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -23,11 +23,14 @@ import org.simplemodeling.textus.smworkflow.{SmWorkflowComponent, value as V}
 private[smworkflow] object DelegateTaskDeliveryService {
   private val N = DelegateTaskNativeRun
   private val declared = SmWorkflowComponent.DelegateTaskDeliveryServiceService
-  def bindC(creation: ComponentCreate, d: GoalPhaseNativeRun.Declaration): Consequence[spec.ServiceDefinition] = for {
+  def bindC(creation: ComponentCreate, d: GoalPhaseNativeRun.Declaration): Consequence[spec.ServiceDefinition] =
+    bindC(creation, BoundedWorkRuntime.host(d))
+
+  def bindC(creation: ComponentCreate, h: BoundedWorkRuntime.Host): Consequence[spec.ServiceDefinition] = for {
     definition <- DelegateTaskRuntimeCatalog.loadC()
-    evidence <- NativeExternalEvidence.bindBoundedC(creation.configuration, BoundedWorkRuntime.host(d))
+    evidence <- NativeExternalEvidence.bindBoundedC(creation.configuration, h)
   } yield NativeWorkflowDescriptionMetadata.service(declared, spec.OperationDefinitionGroup(NonEmptyVector.of(
-    new Operation(false, BoundedWorkRuntime.host(d), definition, evidence), new Operation(true, BoundedWorkRuntime.host(d), definition, evidence))))
+    new Operation(false, h, definition, evidence), new Operation(true, h, definition, evidence))))
 
   private def targetC(core: ActionCall.Core, current: InstanceRecord, state: StandaloneFixExecution.State): Consequence[DelegateTask.AdoptionTarget] = for {
     delivery <- state.delivery.map(Consequence.success).getOrElse(N.invalid("No requester result is retained"))

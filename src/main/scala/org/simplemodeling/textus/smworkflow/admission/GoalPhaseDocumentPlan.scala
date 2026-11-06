@@ -6,7 +6,7 @@ import GoalPhaseOrderedProgression as O
 
 /** Explicit document data only; source selection and execution belong to the host.
   * @since   Oct. 17, 2026
-  * @version Oct. 17, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseDocumentPlan {
@@ -37,7 +37,26 @@ private[smworkflow] object GoalPhaseDocumentPlan {
     decoded.fold(reason => Consequence.configurationInvalid("GoalPhase document plan: " + reason), Consequence.success)
   }
 
-  private def _selected_block(document: String): Either[String, String] = {
+  /** Reuse the owning checklist grammar without interpreting checked marks as acceptance. */
+  private[admission] def checklistItemsC(document: String): Consequence[Vector[Item]] =
+    if (document == null) Consequence.configurationInvalid("GoalPhase checklist document is null")
+    else _checklist(document).fold(Consequence.configurationInvalid(_), Consequence.success)
+
+  /** A plain prose Phase has no selected block; malformed selected blocks still refuse. */
+  private[admission] def selectedPlanPresentC(document: String): Consequence[Boolean] =
+    if (document == null) Consequence.configurationInvalid("GoalPhase document is null")
+    else _selected_blocks(document).flatMap(blocks =>
+      _require(blocks.size <= 1, "duplicate top-level sm-workflow-plan blocks").map(_ => blocks.nonEmpty))
+      .fold(Consequence.configurationInvalid(_), Consequence.success)
+
+  private def _selected_block(document: String): Either[String, String] =
+    _selected_blocks(document).flatMap { blocks =>
+      if (blocks.isEmpty) Left("exactly one top-level sm-workflow-plan block is required; none found")
+      else if (blocks.size != 1) Left("duplicate top-level sm-workflow-plan blocks")
+      else Right(blocks.head)
+    }
+
+  private def _selected_blocks(document: String): Either[String, Vector[String]] = {
     var fence = Option.empty[(Char, Int)]
     var selected = false
     var blocks = Vector.empty[String]
@@ -57,9 +76,7 @@ private[smworkflow] object GoalPhaseDocumentPlan {
       }
     }
     if (selected) Left("selected sm-workflow-plan block is unclosed")
-    else if (blocks.isEmpty) Left("exactly one top-level sm-workflow-plan block is required; none found")
-    else if (blocks.size != 1) Left("duplicate top-level sm-workflow-plan blocks")
-    else Right(blocks.head)
+    else Right(blocks)
   }
 
   private def _opening(line: String): Option[(Char, Int)] = line match {

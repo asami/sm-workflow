@@ -1,6 +1,6 @@
 /**
  * @since   Oct. 27, 2026
- * @version Oct. 27, 2026
+ * @version Nov.  6, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -16,7 +16,7 @@ import org.goldenport.record.Record
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.GivenWhenThen
 import org.simplemodeling.textus.smworkflow.{SmWorkflowComponent, value as V}
-import org.simplemodeling.textus.smworkflow.preparation.{NativeDelegateTaskStartInput, NativeDelegateTaskAdoptionPreparation}
+import org.simplemodeling.textus.smworkflow.preparation.{NativeDelegateTaskStartInput, NativeDelegateTaskAdoptionPreparation, NativeReviewPreparation}
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms as Programs
 import StandaloneFixExecution as S
 import StandaloneFixExecution.given
@@ -48,7 +48,7 @@ final class DelegateTaskWorkflowSpec extends AnyWordSpec with GivenWhenThen with
       "direct-instruction", Vector.empty, V.DelegateTaskContract(c.requesterIdentity, c.destinationIdentity, c.returnDestination,
         c.componentIdentity, c.role, c.validationScope, NonEmptyVector.fromVectorUnsafe(c.permittedOperations), c.exclusions,
         NonEmptyVector.of(V.WorkflowArtifactReference(c.authorizationReferences.head.identity, c.authorizationReferences.head.revision)),
-        c.publicationTarget, c.artifactCoordinates, c.consumerInstructions))
+        c.publicationTarget, c.artifactCoordinates, c.consumerInstructions), Vector("behavior"))
   }
   private def _state(v: V.DelegateTaskView): S.State = {
     val raw = take(v.state.get.toJsonStringC)
@@ -105,6 +105,259 @@ final class DelegateTaskWorkflowSpec extends AnyWordSpec with GivenWhenThen with
   }
 
   "Independent delegated delivery" should {
+    "retain explicit initial evaluation timing while preserving complete reports and historical absent timing" in {
+      Given("one complete public request with behavior validation commit and publication obligations")
+      val publicinput = _input("destination", "initial-timing").copy(
+        conditions = NonEmptyVector.of("behavior", "validation", "commit", "publication"), submissionConditions = Vector.empty)
+      When("the new public default is admitted without a separate timing selection")
+      val deferred = take(DelegateTask.inputC(publicinput))
+      val state = take(S.startC(deferred, "participant", _checks))
+      val report = deferred.conditions.map(id => S.Condition(id, false, "Actual runtime checks and delivery are not yet established"))
+      val result = S.Result("completed", "Bounded implementation supplied for actual later verification", Vector.empty, report,
+        Vector.empty, None, None)
+      val work = S.Work("initial-timing", "2", "Implement", state)
+      Then("empty timing is explicit and successful implementation still reports every later condition false")
+      deferred.submissionConditions shouldBe Some(Vector.empty)
+      S.admitResultC(work, result).isSuccess shouldBe true
+      S.admitResultC(work, result.copy(conditions = report.dropRight(1))).isSuccess shouldBe false
+      S.admitResultC(work, result.copy(conditions = report.map(_.copy(satisfied = true)))).isSuccess shouldBe false
+      S.admitResultC(work, result.copy(conditions = report.updated(1, report(1).copy(satisfied = true)))).isSuccess shouldBe false
+      When("an ordered subset or all original IDs is explicitly declared at initial admission")
+      Vector(Vector("behavior"), Vector("behavior", "validation"), deferred.conditions).foreach { ids =>
+        val input = take(DelegateTask.inputC(publicinput.copy(submissionConditions = ids)))
+        val selectedstate = take(S.startC(input, "participant", _checks))
+        val selectedreport = report.map(c => c.copy(satisfied = ids.contains(c.identity)))
+        Then("exactly those IDs are evaluated at submission and both roles retain identical timing")
+        S.admitResultC(work.copy(state = selectedstate), result.copy(conditions = selectedreport)).isSuccess shouldBe true
+        val requester = take(DelegateTask.inputC(publicinput.copy(submissionConditions = ids,
+          delegation = publicinput.delegation.copy(role = "requester"))))
+        take(DelegateTask.startRequesterC(requester, "participant")).input.submissionConditions shouldBe Some(ids)
+      }
+      Vector(Vector("validation", "behavior"), Vector("behavior", "behavior"), Vector("foreign")).foreach { ids =>
+        DelegateTask.inputC(publicinput.copy(submissionConditions = ids)).isSuccess shouldBe false
+      }
+      Given("an original durable input with no timing field")
+      val legacy = deferred.copy(submissionConditions = None)
+      val wire = legacy.asJson
+      When("the original input codec decodes and re-encodes that retained input")
+      val decoded = wire.as[S.Input].toOption.get
+      Then("absence stays absent and continues to require every submission condition true")
+      wire.hcursor.downField("submissionConditions").focus shouldBe None
+      decoded shouldBe legacy
+      decoded.asJson shouldBe wire
+      val legacystate = take(S.startC(legacy, "participant", _checks))
+      S.admitResultC(work.copy(state = legacystate), result).isSuccess shouldBe false
+      S.admitResultC(work.copy(state = legacystate), result.copy(conditions = report.map(_.copy(satisfied = true)))).isSuccess shouldBe true
+      S.inputC(deferred.copy(delegation = None)).isSuccess shouldBe false
+      S.inputC(deferred.copy(delegation = None, task = None)).isSuccess shouldBe false
+    }
+
+    "classify final delivery judgment with implementation capability and its actual code or documentation class" in {
+      Given("a delegated destination with original conditions to evaluate after actual effects")
+      Vector("code", "documentation").foreach { kind =>
+        val input = take(DelegateTask.inputC(_input("destination", "delivery-class"))).copy(kind = kind,
+          delegation = Some(_contract("destination").copy(validationScope = if (kind == "code") "localized" else "documentation")))
+        When("the bounded owner captures DeliveryAcceptance")
+        val requirement = take(DelegateTaskNativeRun.executionRequirementC(input, "DeliveryAcceptance"))
+        val classification = take(DelegateTaskNativeRun._classification_c(input, "DeliveryAcceptance"))
+        val (resolved, capture) = take(GoalPhaseOperatingProfiles.captureFreshC(
+          BoundedWorkExecutionAdmissionFixture.logicalContext, "DeliveryAcceptance", Some(classification), requirement, None, false))
+        Then("the read-only judgment uses implementation intent without claiming independent Review")
+        requirement.capabilities shouldBe Vector(WorkflowProtocolV1.CapabilityRequirement("delegate-task-implementation-capability"))
+        requirement.reasoningClass.map(_.value) shouldBe Some(if (kind == "code") "CodingProgrammingStandard" else "DesignStandard")
+        requirement.reviewRequired shouldBe false
+        resolved.disposition.get.independence shouldBe WorkflowProtocolV1.ExecutionIndependence.Optional
+        capture.dispatch.get.candidates shouldBe Vector("ordinary", "difficult", "hardest")
+      }
+    }
+
+    "start a logical requester without destination mappings and retain actual Implement Review and Repair admission" in {
+      Given("the real managed repository fixture, an admitted logical caller and no concrete model mapping")
+      val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/sm-workflow/work/delegate-logical").toAbsolutePath), "episode-").toRealPath()
+      val original = ThreeWorkflowNormalHostFixture.definition(root)
+      val host = original.copy(goal = original.goal.copy(candidatePaths = Vector("src/test/scala", "docs/delegate.md"),
+        stepValidation = original.goal.stepValidation.copy(checks = _checks)))
+      val parameters = (_parameters -- Vector(WorkflowExecutionProfileParameters.declaration.name, GoalPhaseNativeExecution.declaration.name)) ++
+        BoundedWorkExecutionAdmissionFixture.logicalParameters
+      _with_runtime_(root, "DelegateLogical", Some(host), parameters) { (owner, component, actor, prepare) =>
+        prepare(_.setupC(_setup_commands_(root, "DelegateLogical").size))
+        def _invoke_(operation: String, properties: List[Property]) = owner.executeOperationResponseInContext(Request.of(
+          component = component.name, service = "DelegateTaskService", operation = operation, properties = properties), actor)
+        def _advance_(id: String) = read_value[V.DelegateTaskView](take(_invoke_("advanceDelegateTask", List(Property("sessionId", id, None)))))
+        def _start_(role: String): V.DelegateTaskView = {
+          val input = _input(role, "logical-request", publish = false).copy(reviewRequired = true)
+          val selection = "logical-" + role
+          val key = "logical-start-" + role
+          val prepared = take(NativeDelegateTaskStartInput.prepareC(Map("input" -> "selected.json", "selection-id" -> selection,
+            "participant" -> "participant", "origin" -> "ExplicitHuman", "idempotency-key" -> key,
+            "selection-collection" -> "entity:smworkflow.cli.goal_selection"), _ => input.toRecord().toJsonStringC))
+          prepare { call =>
+            val row = prepared.getVector("datastore").get.head.asInstanceOf[Record].getVector("records").get.head.asInstanceOf[Record]
+            call.createC("goal_selection", row.getString("id").get, row.removeKeys(Set("id")))
+          }
+          read_value[V.DelegateTaskView](take(_invoke_("startDelegateTask", List(Property("input", input, None),
+            Property("selectionId", selection, None), Property("participant", "participant", None), Property("idempotencyKey", key, None)))))
+        }
+        def _captured_(view: V.DelegateTaskView, kind: String): S.Work = {
+          val publicworkjson = _json(view.work.get)
+          val contextjson = _json(view.issuedWorkContext.get.context)
+          val publicclue = "SPECIFICATION-OWNED logical DelegateTask capture: actualPublicWorkJSON=" + publicworkjson.noSpaces +
+            "; issuedContextJSON=" + contextjson.noSpaces
+          val normalizedjson = GoalPhaseNativeMetadata.normalizePublicJson(publicworkjson).fold(
+            reason => fail(publicclue + "; normalizationFailure=" + reason), identity)
+          val decodeclue = publicclue + "; normalizedJSON=" + normalizedjson.noSpaces
+          val work = normalizedjson.as[S.Work].fold(
+            failure => fail(decodeclue + "; decodingFailure=" + failure.message), identity)
+          val captureclue = decodeclue + "; existingCapture=" + work.operatingProfile
+          work.kind shouldBe kind
+          withClue(captureclue) { work.operatingProfile should not be empty }
+          val capture = work.operatingProfile.get
+          withClue(captureclue + "; actualCapture=" + capture) { capture.dispatch should not be empty }
+          val publiccapture = GoalPhaseNativeMetadata.normalizePublicJson(contextjson).toOption.get
+            .hcursor.get[GoalPhaseOperatingProfiles.Capture]("operatingProfile").toOption.get
+          publiccapture shouldBe capture
+          capture.dispatch.get.candidates shouldBe Vector("ordinary", "difficult", "hardest")
+          capture.configured shouldBe None
+          capture.selected shouldBe None
+          capture.reasoningClass shouldBe Some(if (kind == "Review") "ReviewStandard" else "CodingProgrammingStandard")
+          view.issuedWorkContext.get.executionRequirement.getRecord("disposition").get.getString("placement") shouldBe Some("DELEGATED")
+          if (kind == "Review") view.issuedWorkContext.get.executionRequirement.getRecord("disposition").get.getString("independence") shouldBe Some("REQUIRED")
+          work
+        }
+        def _evidence_(worker: String, reference: V.WorkflowArtifactReference, candidate: String = "ordinary", executor: Option[String] = None) =
+          V.WorkflowExecutionEvidence(Vector(reference), Some(worker), None,
+            Some(V.WorkflowExecutionObservation("DELEGATED", "bounded-spec-caller", executor.getOrElse(worker), candidate)))
+        def _submit_(view: V.DelegateTaskView, result: V.DelegateTaskWorkResult, worker: String,
+          reference: V.WorkflowArtifactReference, candidate: String = "ordinary", context: Option[V.WorkflowIssuedWorkContext] = None,
+          executor: Option[String] = None) =
+          _invoke_("submitDelegateTaskWorkResult", List(Property("sessionId", view.sessionId, None), Property("result", result, None),
+            Property("issuedWorkContext", context.getOrElse(view.issuedWorkContext.get), None), Property("resultReference", reference, None),
+            Property("executionEvidence", _evidence_(worker, reference, candidate, executor), None)))
+        def _review_evidence_(view: V.DelegateTaskView, result: V.DelegateTaskWorkResult, worker: String,
+          reference: V.WorkflowArtifactReference, executor: Option[String] = None): Unit = prepare { call => for {
+          prepared <- NativeReviewPreparation.delegateC(view.reviewContext.get, result, reference, _evidence_(worker, reference, executor = executor),
+            "normal-development-host", call.executionContext.clock.instant().minusSeconds(1))
+          _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)
+        } yield () }
+        When("the requester starts and advances with only transport responsibility")
+        val requester = _start_("requester")
+        val dispatch = _advance_(requester.sessionId)
+        Then("dispatch needs no destination execution mapping and produces no semantic WorkOrder")
+        dispatch.kind shouldBe "Dispatch"
+        dispatch.issuedWorkContext shouldBe None
+        When("the destination starts and advances its actual implementation assignment")
+        val destination = _start_("destination")
+        val implement = _advance_(destination.sessionId)
+        Then("the implementation has its retained captured route")
+        _captured_(implement, "Implement")
+        val path = root.resolve("repository").resolve(_test)
+        Files.createDirectories(path.getParent)
+        Files.writeString(path, """package org.simplemodeling.textus.smworkflow.p62authored
+          |import org.scalatest.wordspec.AnyWordSpec
+          |import org.scalatest.matchers.should.Matchers
+          |import org.scalatest.GivenWhenThen
+          |final class LineWriterSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+          |  "LineWriter" should { "retain the text and append one terminator" in {
+          |    Given("nonempty and empty text")
+          |    val text = "expected"
+          |    val empty = ""
+          |    When("LineWriter renders each text")
+          |    val rendered = LineWriter.render(text)
+          |    val blank = LineWriter.render(empty)
+          |    Then("each result preserves its text and appends one terminator")
+          |    rendered shouldBe "expected\n"
+          |    blank shouldBe "\n"
+          |  }}
+          |}
+          |""".stripMargin)
+        val completed = V.DelegateTaskWorkResult("completed", "Specification-owned bounded implementation", Vector.empty,
+          NonEmptyVector.of(V.DelegateTaskCondition("behavior", true, "Adopted behavior covered")), Vector.empty, None, None)
+        val implementationreference = V.WorkflowArtifactReference("logical-implementation", "1")
+        When("the actual destination Submit checks its stored capture and public context")
+        val outside = _submit_(implement, completed, "spec-implementer", implementationreference, "outside-chain")
+        val crossedcontext = _submit_(implement, completed, "spec-implementer", implementationreference,
+          context = Some(implement.issuedWorkContext.get.copy(expectedRevision = "999")))
+        Then("both an outside-chain candidate and a crossed native context refuse")
+        outside.isSuccess shouldBe false
+        crossedcontext.isSuccess shouldBe false
+        When("the retained implementation candidate submits its actual result")
+        val implemented = _submit_(implement, completed, "spec-implementer", implementationreference, "difficult")
+        Then("the captured implementation is admitted")
+        take(implemented)
+        When("the destination advances after implementation")
+        val review = _advance_(destination.sessionId)
+        Then("independent Review retains its own captured route")
+        _captured_(review, "Review")
+        val finding = completed.copy(outcome = "repair", summary = "Specification-owned scoped finding",
+          findings = Vector("finding-1: explain the focused coverage"),
+          conditions = NonEmptyVector.of(V.DelegateTaskCondition("behavior", false, "Scoped clarification required")))
+        val reusedworker = V.WorkflowArtifactReference("logical-reused-reviewer", "1")
+        _review_evidence_(review, finding, "spec-implementer", reusedworker)
+        When("the retained implementer submits the Review result with matching host evidence")
+        val reused = _submit_(review, finding, "spec-implementer", reusedworker)
+        Then("a candidate-chain member and independent host evidence cannot replace a genuinely different review worker")
+        reused.isSuccess shouldBe false
+        val crossedworker = V.WorkflowArtifactReference("logical-crossed-reviewer", "1")
+        Given("independent host evidence matching a fresh reviewer label with the implementer's actual executor context")
+        _review_evidence_(review, finding, "spec-fresh-reviewer", crossedworker, Some("spec-implementer"))
+        When("that different worker label is submitted with the retained implementer executor")
+        val crossed = _submit_(review, finding, "spec-fresh-reviewer", crossedworker, executor = Some("spec-implementer"))
+        Then("the contradictory worker and executor identities refuse despite matching host review evidence")
+        crossed.isSuccess shouldBe false
+        val reviewreference = V.WorkflowArtifactReference("logical-independent-review", "1")
+        When("an honest independent reviewer submits before independent host evidence is prepared")
+        val missing = _submit_(review, finding, "spec-reviewer", reviewreference)
+        Then("missing host evidence still refuses")
+        missing.isSuccess shouldBe false
+        Given("matching host evidence for an honest distinct worker and executor identity")
+        _review_evidence_(review, finding, "spec-reviewer", reviewreference)
+        When("the honest reviewer submits the actual assigned result")
+        val reviewed = _submit_(review, finding, "spec-reviewer", reviewreference)
+        Then("the independent result is admitted")
+        reviewed.isSuccess shouldBe true
+        take(reviewed)
+        When("the destination advances the admitted independent finding")
+        val repair = _advance_(destination.sessionId)
+        Then("Repair retains its own captured route")
+        _captured_(repair, "Repair")
+        val repairreference = V.WorkflowArtifactReference("logical-repair", "1")
+        When("a delayed review context is supplied for the actual fresh Repair")
+        val delayed = _submit_(repair, completed, "spec-repairer", repairreference, context = review.issuedWorkContext)
+        Then("the delayed context refuses before the current Repair can complete")
+        delayed.isSuccess shouldBe false
+        When("the retained Repair candidate submits its actual current result")
+        val repaired = _submit_(repair, completed, "spec-repairer", repairreference, "hardest")
+        Then("the captured Repair is admitted")
+        take(repaired)
+        When("the destination advances after the current Repair")
+        val rereview = _advance_(destination.sessionId)
+        Then("fresh Repair and subsequent independent Review keep their own captured assignment and native context")
+        _captured_(rereview, "Review")
+        rereview.issuedWorkContext.get.continuationId should not be review.issuedWorkContext.get.continuationId
+        val repairworker = V.WorkflowArtifactReference("logical-repairer-review", "1")
+        val accept = completed.copy(outcome = "accept", summary = "Specification-owned integrated review")
+        _review_evidence_(rereview, accept, "spec-repairer", repairworker)
+        When("the retained repair worker attempts the subsequent Review")
+        val repairreview = _submit_(rereview, accept, "spec-repairer", repairworker)
+        Then("the same repair worker still cannot supply independent Review")
+        repairreview.isSuccess shouldBe false
+      }
+    }
+
+    "admit dispatch-only requester input without requiring a destination mapping and still refuse contradictory contexts" in {
+      Given("one admitted requester contract and an explicit host with no execution mapping")
+      val input = take(DelegateTask.inputC(_input("requester", "requester-preflight", publish = false)))
+      val host = BoundedWorkRuntime.Host(_configuration_, _collection_("instances"), _collection_("continuations"), "sm-workflow",
+        "unused-before-preflight", "main", Vector("src/test/scala", "docs/delegate.md"), _checks, None, None, None, None, None)
+      When("only the dispatcher's admitted identities input and operating-profile consistency are checked")
+      DelegateTaskNativeRun._preflight_execution_c(input, host).isSuccess shouldBe true
+      Then("the same missing execution routes refuse destination work and malformed requester context still refuses")
+      DelegateTaskNativeRun._preflight_execution_c(input.copy(delegation = input.delegation.map(_.copy(role = "destination"))), host).isSuccess shouldBe false
+      DelegateTaskNativeRun._preflight_execution_c(input, host.copy(operatingContext = Some(
+        GoalPhaseOperatingProfiles.Context(logicalOrigin = Some(" "))))).isSuccess shouldBe false
+      DelegateTaskNativeRun._preflight_execution_c(input.copy(delegation = input.delegation.map(c => c.copy(destinationIdentity = c.requesterIdentity))), host).isSuccess shouldBe false
+    }
+
     "use public native work focused checks local commit publication return and separate requester adoption without duplicate effects" in {
       val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/sm-workflow/work/delegate-task").toAbsolutePath), "episode-").toRealPath()
       val original = ThreeWorkflowNormalHostFixture.definition(root)
@@ -324,6 +577,12 @@ final class DelegateTaskWorkflowSpec extends AnyWordSpec with GivenWhenThen with
       take(DelegateTask.selectChecksC(input, full)) shouldBe _checks
       DelegateTask.selectChecksC(broad, _checks).isSuccess shouldBe false
       take(S.startC(broad.copy(checks = full.map(_.identity)), "participant", full)).selected shouldBe full
+      Given("the admitted destination request and its requester role carry the same requirements")
+      val requester = input.copy(delegation = input.delegation.map(_.copy(role = "requester")))
+      When("fresh admission has no concrete execution mapping or origin")
+      val requesteradmission = DelegateTaskNativeRun.preflightExecutionC(requester, None, None)
+      Then("requester metadata is admitted while destination execution still requires its mapping")
+      requesteradmission.isSuccess shouldBe true
       DelegateTaskNativeRun.preflightExecutionC(input, None, None).isSuccess shouldBe false
       val mapping = take(BoundedWorkExecutionAdmissionFixture.mappingC())
       take(DelegateTaskNativeRun.preflightExecutionC(input, Some(mapping), Some(BoundedWorkExecutionAdmissionFixture.origin)))

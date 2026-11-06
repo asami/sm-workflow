@@ -13,7 +13,7 @@ import org.goldenport.protocol.Request
   * Standard borrows the existing mapping. Opt-in mappings are host declarations,
   * never a model table, observed availability or permission to execute.
   * @since   Oct. 29, 2026
-  * @version Nov.  2, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseOperatingProfiles {
@@ -36,6 +36,30 @@ private[smworkflow] object GoalPhaseOperatingProfiles {
   }
   final case class Execution(selection: Selection, profiles: Option[WorkflowExecutionProfileMapping],
     origin: Option[GoalPhaseNativeExecution.Origin])
+  /** Call-local configuration, never a persisted capture or executor observation. */
+  final case class Context(operatingProfile: Option[String] = None,
+    operatingMappings: Map[String, WorkflowExecutionProfileMapping] = Map.empty,
+    executionProfiles: Option[WorkflowExecutionProfileMapping] = None,
+    executionOrigin: Option[GoalPhaseNativeExecution.Origin] = None,
+    invocationOperatingProfile: Option[Selection] = None,
+    logicalOrigin: Option[String] = None, dispatchPolicy: Option[GoalPhaseDispatchPolicy.Policy] = None)
+
+  def context(d: GoalPhaseNativeRun.Declaration): Context = Context(d.operatingProfile, d.operatingMappings,
+    d.executionProfiles, d.executionOrigin, d.invocationOperatingProfile, d.logicalOrigin, d.dispatchPolicy)
+
+  def validateContextC(d: Context): Consequence[Unit] =
+    if (d == null || d.operatingProfile == null || d.operatingMappings == null ||
+        d.operatingMappings.exists((name, mapping) => !optInNames(name) || mapping == null) ||
+        d.invocationOperatingProfile == null || !d.invocationOperatingProfile.forall(selectionValid) ||
+        d.logicalOrigin == null || !d.logicalOrigin.forall(GoalPhaseNativeExecution.contextValid) ||
+        d.dispatchPolicy == null || !d.dispatchPolicy.forall(GoalPhaseDispatchPolicy.policyValid))
+      invalid("operating context is invalid")
+    else for {
+      _ <- resolveC(None, d.operatingProfile)
+      _ <- GoalPhaseNativeExecution.validatePairC(d.executionProfiles, d.executionOrigin)
+      _ <- if (!d.logicalOrigin.exists(value => d.executionOrigin.exists(_.current.contextIdentity != value))) Consequence.unit
+        else invalid("logical origin differs from the actual concrete origin context")
+    } yield ()
 
   val declaration: ComponentParameterKey[String] = ComponentParameterKey.optional(
     "sm-workflow.goal-phase.profile", ComponentParameterDecoder {
@@ -97,14 +121,22 @@ private[smworkflow] object GoalPhaseOperatingProfiles {
   /** A saved explicit invocation remains intent until an explicit resume
     * parameter supersedes it for new work. Config is read only for fresh work.
     */
-  def forIssueC(d: GoalPhaseNativeRun.Declaration, start: Option[Selection]): Consequence[Execution] = for {
+  def forIssueC(d: GoalPhaseNativeRun.Declaration, start: Option[Selection]): Consequence[Execution] =
+    forIssueC(context(d), start)
+
+  def forIssueC(d: Context, start: Option[Selection]): Consequence[Execution] = for {
+    _ <- validateContextC(d)
     _ <- if (start != null && start.forall(selectionValid)) Consequence.unit else invalid("saved Start profile is invalid")
     selected <- d.invocationOperatingProfile.orElse(start.filter(_.source == "explicit"))
       .map(Consequence.success).getOrElse(resolveC(None, d.operatingProfile))
     execution <- executionC(selected, d)
   } yield execution
 
-  def executionC(selected: Selection, d: GoalPhaseNativeRun.Declaration): Consequence[Execution] = for {
+  def executionC(selected: Selection, d: GoalPhaseNativeRun.Declaration): Consequence[Execution] =
+    executionC(selected, context(d))
+
+  def executionC(selected: Selection, d: Context): Consequence[Execution] = for {
+    _ <- validateContextC(d)
     _ <- if (selectionValid(selected)) Consequence.unit else invalid("logical selection is invalid")
     _ <- GoalPhaseNativeExecution.validatePairC(d.executionProfiles, d.executionOrigin)
     _ <- if (d.logicalOrigin != null && d.logicalOrigin.forall(GoalPhaseNativeExecution.contextValid) &&
@@ -131,41 +163,52 @@ private[smworkflow] object GoalPhaseOperatingProfiles {
     input <- order.request.input.map(value => Consequence.success(value.value)).getOrElse(invalid("issued business input is absent"))
     _ <- if (input.operatingProfile.isEmpty && order.requirement.disposition.isEmpty) Consequence.unit
       else invalid("already issued work must retain its profile and disposition")
+    resolved <- captureFreshC(context(d), input.kind, GoalPhaseDispatchPolicy.classification(input),
+      order.requirement, start, isolateContext)
+    captured = input.copy(operatingProfile = Some(resolved._2))
+  } yield work.copy(current = order.copy(requirement = resolved._1,
+    request = order.request.copy(input = order.request.input.map(_.copy(value = captured)))))
+
+  /** Pure fresh selection shared by Phase and bounded Task issuance/preflight. */
+  def captureFreshC(d: Context, kind: String, classification: Option[GoalPhaseWorkClassification.Classification],
+    requirement: ExecutionRequirement, start: Option[Selection], isolateContext: Boolean = false):
+    Consequence[(ExecutionRequirement, Capture)] = for {
+    _ <- if (requirement == null || classification == null) invalid("fresh execution intent is absent")
+      else requirement.validateC.map(_ => ())
+    _ <- if (requirement.disposition.isEmpty) Consequence.unit else invalid("already issued work must retain its disposition")
     execution <- forIssueC(d, start)
     configured <- if (d.dispatchPolicy.nonEmpty && execution.selection.identity == standard)
       Consequence.success(Option.empty[WorkflowConcreteExecutionProfile]) else execution.profiles match {
       case None => Consequence.success(Option.empty[WorkflowConcreteExecutionProfile])
-      case Some(mapping) => order.requirement.reasoningClass.map(mapping.resolveClassC).getOrElse(
+      case Some(mapping) => requirement.reasoningClass.map(mapping.resolveClassC).getOrElse(
         invalid("profile selection requires a semantic reasoning class")).map(Some(_))
     }
     logical <- if (d.dispatchPolicy.nonEmpty && execution.selection.identity == standard)
-      GoalPhaseDispatchPolicy.captureC(input.kind, GoalPhaseDispatchPolicy.classification(input), order.requirement, isolateContext, d.dispatchPolicy.get).map(Some(_))
+      GoalPhaseDispatchPolicy.captureC(kind, classification, requirement, isolateContext, d.dispatchPolicy.get).map(Some(_))
       else Consequence.success(Option.empty[GoalPhaseDispatchPolicy.Capture])
     _ <- if (logical.exists(_.placement == "RUNTIME")) invalid("Deterministic work belongs to its existing runtime operation, not a semantic worker") else Consequence.unit
     resolved <- if (logical.nonEmpty) d.logicalOrigin.orElse(execution.origin.map(_.current.contextIdentity)).map { origin =>
       val placement = if (logical.get.placement == "INLINE") ExecutionPlacement.Inline else ExecutionPlacement.Delegated
-      val independence = if (order.requirement.reviewRequired || isolateContext) ExecutionIndependence.Required else ExecutionIndependence.Optional
-      Consequence.success((order.requirement.copy(disposition = Some(ExecutionDisposition(placement, independence, origin))), Option.empty[WorkflowConcreteExecutionProfile]))
+      val independence = if (requirement.reviewRequired || isolateContext) ExecutionIndependence.Required else ExecutionIndependence.Optional
+      Consequence.success((requirement.copy(disposition = Some(ExecutionDisposition(placement, independence, origin))), Option.empty[WorkflowConcreteExecutionProfile]))
     }.getOrElse(invalid("Logical dispatch requires the actual origin context")) else (execution.profiles, execution.origin) match {
-      case (Some(mapping), Some(origin)) => mapping.resolveC(order.requirement, origin.current,
+      case (Some(mapping), Some(origin)) => mapping.resolveC(requirement, origin.current,
         if (isolateContext) origin.preference.copy(isolateContext = true) else origin.preference).flatMap { selected =>
         if (execution.selection.identity != standard && !configured.exists(_.matches(selected.profile)))
           invalid("profile unavailable: forced inline selection differs from requested mapping; no fallback selected")
         else Consequence.success((selected.requirement, Some(selected.profile)))
       }
-      case _ => Consequence.success((order.requirement, Option.empty[WorkflowConcreteExecutionProfile]))
+      case _ => Consequence.success((requirement, Option.empty[WorkflowConcreteExecutionProfile]))
     }
     fallback <- if (logical.isEmpty && execution.selection.identity == standard &&
         resolved._1.disposition.exists(_.placement == ExecutionPlacement.Delegated)) execution.profiles match {
-      case Some(mapping) => order.requirement.reasoningClass.map(mapping.fallbackClassC).getOrElse(Consequence.success(None))
+      case Some(mapping) => requirement.reasoningClass.map(mapping.fallbackClassC).getOrElse(Consequence.success(None))
       case None => Consequence.success(Option.empty[WorkflowConcreteExecutionProfile])
     } else Consequence.success(Option.empty[WorkflowConcreteExecutionProfile])
-    capture = Capture(execution.selection, order.requirement.reasoningClass.map(_.value),
+    capture = Capture(execution.selection, requirement.reasoningClass.map(_.value),
       if (logical.nonEmpty) Some("caller-standard") else execution.profiles.map(_.identity),
       logical.map(_.revision).orElse(execution.profiles.map(_.revision)), configured.map(_concrete), resolved._2.map(_concrete), fallback.map(_concrete), logical)
-    captured = input.copy(operatingProfile = Some(capture))
-  } yield work.copy(current = order.copy(requirement = resolved._1,
-    request = order.request.copy(input = order.request.input.map(_.copy(value = captured)))))
+  } yield resolved._1 -> capture
 
   // Logical dispatch preserves optional classification; concrete mappings require it.
   def captureValid(value: Capture): Boolean = value != null && selectionValid(value.selection) &&

@@ -7,12 +7,14 @@ import org.goldenport.record.Record
 import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseOrderedHumanDecision, NativeExternalEvidence,
   NativeHumanDecisionScope, NativeSplitAnswerScope, RepositorySyncHumanConflict, SplitPhaseNativeHumanDirection,
   SplitPhaseReasoningHumanDirection, SplitPhaseHumanDirectionAnswerContract, ThreeWorkflowExternalEvidencePorts}
+import org.simplemodeling.textus.smworkflow.admission.GoalPhaseDevelopmentReconstruction as X
 import org.simplemodeling.textus.smworkflow.value as V
 
 /** Passive preparation of supplied Human direction using the existing v7 codec.
   * Native completion owns admission; the independent issuer owns provenance and provisioning.
   * @since   Oct. 14, 2026
-  * @version Oct. 23, 2026
+  *  version Oct. 23, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 object NativeHumanDecisionPreparation {
@@ -86,9 +88,20 @@ object NativeHumanDecisionPreparation {
       else {
         val recovery = question.hcursor.downField("source").downField("sourceHistoryRecovery").focus.nonEmpty
         val choice = direction.hcursor.get[String]("choice").toOption
-        if (choice.exists(value => if (recovery) Set("AuthorizeNewAttempt", "Defer")(value)
-            else value != "AuthorizeNewAttempt")) Consequence.unit
-        else Consequence.stateConflict("Goal Human direction differs from its recovery question")
+        for {
+          _ <- if (choice.exists(value => if (recovery) Set("AuthorizeNewAttempt", "Defer")(value)
+              else value != "AuthorizeNewAttempt")) Consequence.unit
+            else Consequence.stateConflict("Goal Human direction differs from its recovery question")
+          _ <- question.hcursor.downField("source").downField("developmentReconstruction").focus match {
+            case Some(value) => X.codec.decode(value).fold(Consequence.stateConflict(_), Consequence.success).flatMap { payload =>
+              if (choice.exists(X.choicesFor(payload).contains)) Consequence.unit
+              else Consequence.stateConflict("Goal Human direction differs from its reconstruction question")
+            }
+            case None => if (choice.exists(Set("AdoptDevelopmentReconstruction", "KeepCurrentRequirements")))
+              Consequence.stateConflict("Goal Human reconstruction direction requires its actual reconstruction question")
+            else Consequence.unit
+          }
+        } yield ()
       }
     _ <- if (question.hcursor.get[String]("inputType").toOption.exists(inputs) &&
         question.hcursor.get[String]("resultType").toOption.contains(resultType) &&
