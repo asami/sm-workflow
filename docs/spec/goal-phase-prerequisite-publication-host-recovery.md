@@ -153,3 +153,23 @@ The real consumer owner must inspect and supply its own correction observation
 and Human direction on its retained Session. Fixture consent is never consumer
 consent. Separate source integration obligations remain with that owner; this
 recovery does not edit, reset or operate any consumer.
+
+## Published dependency adoption and v2
+
+When a successful dependency's inputs were subsequently repaired and normally
+published elsewhere, [published dependency adoption](goal-phase-published-dependency-source-adoption.md)
+first records the exact source Direction/capture and a separate recollected
+artifact fact. Host target `sm-workflow.goal-phase-prerequisite-publication-host-recovery.v2`
+then includes nonempty `publishedDependencyAdoptions`. The original successful
+`dependencyPrefix` and failed primary requests keep their actual old source
+revisions. The new candidate/capture and external publication provenance are
+explicit additional facts; they do not impersonate a consumer publication.
+
+Unselected dependencies retain ordinary original-result/latest/current-source
+checks. The selected dependency requires its actual source capture, post-stage
+freshness, original retained prefix and independently admitted external result.
+No dependency ensure/execute is called. The primary still requires its exact
+original failure/latest/source, genuine host correction, independent concrete
+Human direction and one ordinary successor. V1 encoding and all UNKNOWN
+contracts remain unchanged. Selecting the new explicit installed suite never
+reruns the earlier host-only episode.

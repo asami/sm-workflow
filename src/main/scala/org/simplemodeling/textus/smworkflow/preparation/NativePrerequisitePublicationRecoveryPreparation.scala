@@ -8,6 +8,7 @@ import org.simplemodeling.textus.smworkflow.admission.{GoalPhasePrerequisitePubl
   GoalPhaseCurrentSourceArtifactAdoption as A,
   GoalPhasePrerequisitePrimaryRepair as P,
   GoalPhasePrerequisitePublicationHostRecovery as H,
+  GoalPhasePublishedDependencySourceAdoption as Published,
   GoalPhasePrerequisitePublicationUnknownRecovery as U, NativeExternalEvidence,
   ThreeWorkflowExternalEvidencePorts}
 import org.simplemodeling.textus.smworkflow.value as V
@@ -35,6 +36,7 @@ object NativePrerequisitePublicationRecoveryPreparation {
     repair <- P.isTargetC(description.target)
     artifact <- A.isTargetC(description.target)
     host <- H.isTargetC(description.target)
+    published <- Published.isArtifactTargetC(description.target)
     _ <- if (host || input.hostCorrection != null && input.hostCorrection.isEmpty) Consequence.unit
       else Consequence.stateConflict("Host correction cannot be supplied to a legacy recovery target")
     binding <- if (host) for {
@@ -50,6 +52,19 @@ object NativePrerequisitePublicationRecoveryPreparation {
         else Consequence.stateConflict("Host recovery preparation crosses its target, participant or actual Human/correction references")
       binding <- H.bindingC(description.componentInstance, target, input.choice, input.rationale, participant,
         ContextReference(reference.identity, reference.revision), correction)
+    } yield binding else if (published) for {
+      target <- Published.artifactTargetC(description.target)
+      supplied <- Published.artifactTargetC(input.target)
+      observation = target.publication
+      _ <- if (target == supplied && description.choices == Published.artifactChoices && target.sessionId == input.sessionId &&
+          target.participant == participant && target.componentInstance == description.componentInstance &&
+          description.outcome == "direction-required" && execution.references != null && execution.references.contains(reference) &&
+          execution.references.contains(V.WorkflowArtifactReference(observation.recollectionReference.identity, observation.recollectionReference.revision)) &&
+          execution.references.contains(V.WorkflowArtifactReference(observation.artifact.identity, observation.artifact.revision)) &&
+          !Instant.parse(observation.observedAt).isAfter(occurredAt)) Consequence.unit
+        else Consequence.stateConflict("Published artifact preparation requires its whole target, actual Human and normal recollection references")
+      binding <- Published.bindingC(description.componentInstance, target, input.choice, input.rationale, participant,
+        ContextReference(reference.identity, reference.revision))
     } yield binding else if (artifact) for {
       target <- A.targetC(description.target)
       supplied <- A.targetC(input.target)

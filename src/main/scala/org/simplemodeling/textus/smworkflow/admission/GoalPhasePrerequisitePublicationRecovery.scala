@@ -507,8 +507,11 @@ private[smworkflow] object GoalPhasePrerequisitePublicationRecovery {
 
   def selectBinding(value: Json): Either[String, Json] =
     if (Option(value).exists(_.hcursor.downField("prerequisitePublicationRecovery").downField("target")
-        .get[String]("schemaVersion").contains(GoalPhasePrerequisitePublicationHostRecovery.schema)))
+        .get[String]("schemaVersion").toOption.exists(GoalPhasePrerequisitePublicationHostRecovery.isTargetSchema)))
       GoalPhasePrerequisitePublicationHostRecovery.selectBinding(value)
+    else if (Option(value).exists(_.hcursor.downField("prerequisitePublicationRecovery").downField("target")
+        .get[String]("schemaVersion").contains(GoalPhasePublishedDependencySourceAdoption.artifactSchema)))
+      GoalPhasePublishedDependencySourceAdoption.selectBinding(value)
     else if (Option(value).exists(_.hcursor.downField("prerequisitePublicationRecovery").downField("target")
         .get[String]("schemaVersion").contains(GoalPhaseCurrentSourceArtifactAdoption.targetSchema)))
       GoalPhaseCurrentSourceArtifactAdoption.selectBinding(value)
@@ -1097,13 +1100,15 @@ private[smworkflow] object GoalPhasePrerequisitePublicationRecovery {
     _ <- if (input != null && input.reference != null && _exact(input.reference.identity) && _exact(input.reference.revision) &&
         _rationale(input.rationale)) Consequence.unit else F.invalid("Recovery input requires its independent reference and rationale")
     json <- W.jsonC(input.target)
-    host = json.hcursor.get[String]("schemaVersion").contains(GoalPhasePrerequisitePublicationHostRecovery.schema)
+    host = json.hcursor.get[String]("schemaVersion").toOption.exists(GoalPhasePrerequisitePublicationHostRecovery.isTargetSchema)
     _ <- if (host) GoalPhasePrerequisitePublicationHostRecovery.inputC(input)
       else if (input.hostCorrection != null && input.hostCorrection.isEmpty) Consequence.unit
       else F.invalid("Host correction is not a field of this legacy recovery target")
     expected <- json.hcursor.get[String]("schemaVersion").toOption match {
-      case Some(version) if version == GoalPhasePrerequisitePublicationHostRecovery.schema =>
+      case Some(version) if GoalPhasePrerequisitePublicationHostRecovery.isTargetSchema(version) =>
         GoalPhasePrerequisitePublicationHostRecovery.targetC(input.target).map(_ => GoalPhasePrerequisitePublicationHostRecovery.choices)
+      case Some(version) if version == GoalPhasePublishedDependencySourceAdoption.artifactSchema =>
+        GoalPhasePublishedDependencySourceAdoption.artifactTargetC(input.target).map(_ => GoalPhasePublishedDependencySourceAdoption.artifactChoices)
       case Some(version) if version == GoalPhaseCurrentSourceArtifactAdoption.targetSchema =>
         GoalPhaseCurrentSourceArtifactAdoption.targetC(input.target).map(_ => GoalPhaseCurrentSourceArtifactAdoption.choices)
       case Some(version) if GoalPhasePrerequisitePrimaryRepair.isTargetSchema(version) =>

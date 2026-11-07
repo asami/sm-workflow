@@ -8,7 +8,7 @@ import java.nio.file.{Files, Path, StandardOpenOption}
 import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.cncf.datastore.DataStore
-import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation, GitOperationKind, GitPath, GitSelectionId, GitSelectionParameters, ProcessExecutionResult, SbtExecutionAttempt, SbtOperation}
+import org.goldenport.cncf.processexecution.{GitDiffParameters, GitObjectId, GitOperation, GitOperationKind, GitPath, GitSelectionId, GitSelectionParameters, ProcessExecutionResult, SbtExecutionAttempt, SbtOperation}
 import org.goldenport.cncf.workflow.{ContextReference, WorkflowInstanceRecordJsonV1, WorkflowMechanicalReceiptLimits, WorkflowMechanicalReceiptParameters, WorkflowMechanicalTransition, WorkflowMechanicalTransitionJsonV1}
 import org.goldenport.protocol.Request
 import org.goldenport.record.RecordPresentable
@@ -29,6 +29,7 @@ import GoalPhaseDependencySourceRevision as S
 import GoalPhaseOrderedProgression as O
 import RepositorySyncManagedGitObservation as G
 import NativeWorkflowCliFixture as F
+import GoalPhasePublishedDependencySourceAdoption as Published
 import NativeCallerExecutionFixture.json
 import SplitPhaseExplicitPartitionFixture.take
 
@@ -45,6 +46,7 @@ import SplitPhaseExplicitPartitionFixture.take
 abstract class NativeGoalPrerequisitePublicationRecoveryCliSpecification extends AnyWordSpec with Matchers with GivenWhenThen
     with ThreeWorkflowManagedRepositoryFixture {
   protected def host_recovery_only: Boolean
+  protected def published_dependency_only: Boolean = false
   private val _source = "src/main/scala/RecoveryMarker.scala"
   private val _consumer = "src/test/scala/ProductCheck.scala"
   private val _primary_source = "src/main/scala/PrimaryProduct.scala"
@@ -3068,16 +3070,17 @@ abstract class NativeGoalPrerequisitePublicationRecoveryCliSpecification extends
 
   }
 
-  if (host_recovery_only) {
-    "Installed primary publication host recovery" must afterWord(
-      "in spec:goal-phase-prerequisite-publication-host-recovery, example:E7, rules:one-successor,no-dependency-replay,same-session, phase:6.11") {
+  if (host_recovery_only || published_dependency_only) {
+    (if (published_dependency_only) "Installed published dependency source adoption" else "Installed primary publication host recovery") must afterWord(
+      (if (published_dependency_only) "in spec:goal-phase-published-dependency-source-adoption, example:E1, rules:R1,R2,R3,R4, phase:6.11"
+       else "in spec:goal-phase-prerequisite-publication-host-recovery, example:E7, rules:one-successor,no-dependency-replay,same-session, phase:6.11")) {
       "prepare and resume the same retained tiny host through public Human recovery and ordinary Advance" in {
         Given("R5: an explicitly selected installed CLI, phase and absolute handoff; all consent and artifacts are specification-owned")
-        val phase = sys.props.getOrElse("smworkflow.spec.hostRecoveryPhase",
-          cancel("Select smworkflow.spec.hostRecoveryPhase=prepare or resume"))
+        val phaseproperty = if (published_dependency_only) "smworkflow.spec.publishedDependencyPhase" else "smworkflow.spec.hostRecoveryPhase"
+        val handoffproperty = if (published_dependency_only) "smworkflow.spec.publishedDependencyHandoff" else "smworkflow.spec.hostRecoveryHandoff"
+        val phase = sys.props.getOrElse(phaseproperty, cancel("Select " + phaseproperty + "=prepare or resume"))
         Set("prepare", "resume") should contain (phase)
-        val handoff = Path.of(sys.props.getOrElse("smworkflow.spec.hostRecoveryHandoff",
-          cancel("Select an absolute smworkflow.spec.hostRecoveryHandoff")))
+        val handoff = Path.of(sys.props.getOrElse(handoffproperty, cancel("Select an absolute " + handoffproperty)))
         handoff.isAbsolute shouldBe true
         handoff.normalize shouldBe handoff
         val executable = Path.of(sys.props.getOrElse("smworkflow.spec.installedCommand",
@@ -3086,10 +3089,11 @@ abstract class NativeGoalPrerequisitePublicationRecoveryCliSpecification extends
         sys.props.get("smworkflow.spec.installations") shouldBe None
         if (phase == "prepare") {
           Files.exists(handoff) shouldBe false
-          val scenario = F.freshDependency("primary-host-publication-recovery", bindingTransform = binding =>
+          val scenario = F.freshDependency(if (published_dependency_only) "published-dependency-source-adoption" else "primary-host-publication-recovery", bindingTransform = binding =>
             binding.copy(paths = Vector("build.sbt", _source, "value.txt")))
           val binding = scenario.host.goal.dependencyValidation.get
-          val dependency = _configure(scenario, binding.identity, primaryfailure = true)
+          val configured = _configure(scenario, binding.identity, primaryfailure = true)
+          val dependency = if (published_dependency_only) configured.copy(component = binding.dependency.identity) else configured
           _prepare_primary_project(scenario)
           _enable_primary_publication(scenario, dependency, binding.requester.identity)
           val repository = Path.of(scenario.host.target.root)
@@ -3202,27 +3206,110 @@ abstract class NativeGoalPrerequisitePublicationRecoveryCliSpecification extends
           failed.outcome shouldBe Some("failed")
           val old = take(U.jsonC(failed.localPublication.get)).as[LocalPublication.Result].toOption.get
           WorkflowSbtCapture.decode(old.process.get).toOption.flatMap(WorkflowSbtCapture.exitCode) shouldBe Some(1)
+          val published = if (!published_dependency_only) Json.obj() else {
+            val originaloutput = scenario.callInstalled(executable, "LocalPublicationService", "collectLatestLocalPublication",
+              Vector("--input", json(V.LocalPublicationLatestCollectionInput(dependency.identity, started.sessionId).toRecord()).noSpaces))
+            val originaldto = originaloutput.business[V.LocalPublicationResult]
+            originaldto.status shouldBe "published"
+            val original = take(U.jsonC(originaldto.publication.get)).as[LocalPublication.Result].toOption.get
+            val originalartifact = _published_dependency_jar(original)
+            _lines(dependencycount).size shouldBe 1
+            _lines(primarycount).size shouldBe 1
+            // Repair only the dependency after its genuine first publication.
+            // The primary source and old consumer request remain untouched.
+            Files.writeString(producer.resolve(_source), "package fixture\nclass RecoveryMarker { " +
+              "def value: String = \"second-published-value\"; def correctedApi: String = \"qualified-primary-api\"; " +
+              "def adoptedApi: String = \"second-published-api\" }\n")
+            val publisher = F.freshDependency("published-dependency-external-owner")
+            val publisherfile = publisher.root.resolve(".textus/config.json")
+            val publisherconfig = parse(Files.readString(publisherfile)).toOption.get
+            val consumerconfig = parse(Files.readString(file)).toOption.get
+            val exactprocess = consumerconfig.hcursor.get[String]("textus.subsystem.process-execution.plan").toOption.get
+            val externalpolicy = parse(consumerconfig.hcursor.get[String](LocalPublicationRuntime.declaration.name).toOption.get)
+              .toOption.get.mapObject(_.add("targets", Vector(dependency).asJson))
+            val consumerstorage = parse(consumerconfig.hcursor.get[String]("textus.subsystem.storage.plan").toOption.get).toOption.get
+            val publisherstorage = parse(publisherconfig.hcursor.get[String]("textus.subsystem.storage.plan").toOption.get).toOption.get
+            val publicationstore = externalpolicy.hcursor.get[String]("storeName").toOption.get
+            val publicationcollection = externalpolicy.hcursor.get[String]("collection").toOption.get
+            val publicationrecords = _array(consumerstorage, "records").filter(record =>
+              record.hcursor.get[String]("componentId").contains(SmWorkflowComponent.componentId.name) &&
+                record.hcursor.get[String]("storeName").contains(publicationstore) &&
+                record.hcursor.get[String]("collection").contains(publicationcollection)).distinct
+            publicationrecords.size shouldBe 1
+            val publisherrecords = _array(publisherstorage, "records")
+            val selectedstorage = publisherstorage.mapObject(_.add("records",
+              (publisherrecords ++ publicationrecords.filterNot(publisherrecords.contains)).asJson))
+            Files.writeString(publisherfile, publisherconfig.mapObject(_.add("textus.subsystem.process-execution.plan", exactprocess.asJson)
+              .add(LocalPublicationRuntime.declaration.name, externalpolicy.noSpaces.asJson)
+              .add("textus.subsystem.storage.plan", selectedstorage.noSpaces.asJson)).noSpaces)
+            val request = V.LocalPublicationInput("specification-external-published-dependency", dependency.identity, None, true, None)
+            val publishedoutput = publisher.callInstalled(executable, "LocalPublicationService", "ensureLocalPublication",
+              Vector("--input", json(request.toRecord()).noSpaces))
+            publishedoutput.business[V.LocalPublicationResult].status shouldBe "published"
+            val collectinput = V.LocalPublicationCollectionInput(request.requestIdentity, request.targetIdentity, None, true)
+            val collectedoutput = publisher.callInstalled(executable, "LocalPublicationService", "collectLocalPublication",
+              Vector("--input", json(collectinput.toRecord()).noSpaces))
+            val collected = collectedoutput.business[V.LocalPublicationResult]
+            collected.status shouldBe "published"
+            val result = take(U.jsonC(collected.publication.get)).as[LocalPublication.Result].toOption.get
+            val externalartifact = _published_dependency_jar(result)
+            val publisherpolicy = _native_fixture(publisher)(core => GitDiffParameters.resolveC(core.executionContext).map(maximum =>
+              io.circe.Printer.noSpaces.copy(sortKeys = true).print(Json.obj("processPlan" -> parse(exactprocess).toOption.get,
+                "maximumDiffBytes" -> maximum.asJson, "validation" -> publisher.host.goal.stepValidation.asJson))))
+            val observation = Published.PublicationObservation(Published.CollectionResult(collected.status, collected.reason, result),
+              Published.collectOperation, ContextReference(collectedoutput.invocation.stdout.toUri.toASCIIString, "1"),
+              publisher.root.toUri.toASCIIString, Instant.now().toString, publisherpolicy,
+              externalartifact.getParent.getParent.toUri.toASCIIString,
+              ContextReference(externalartifact.toUri.toASCIIString, externalartifact.getParent.getParent.getFileName.toString))
+            Published.observationValid(observation) shouldBe true
+            val higher = binding.copy(revision = binding.revision + 1)
+            val consumption = S.Consumption(binding.requester.workspace, binding.root, Vector.empty,
+              binding.paths.map(S.ExpectedMode(_, "100644")), _primary_checks.map(check => S.CheckProgram(check.identity,
+                "sm-workflow-repository-validation-" + check.ordinal, check.kind.wire, "sm-workflow-repository-validation-" + check.ordinal)) ++
+                binding.checks.map(check => S.CheckProgram(check.identity, binding.dependency.workspace, check.kind.wire,
+                  binding.dependency.workspace + "-" + check.kind.wire)))
+            val sourceproposal = S.Proposal(S.sourceSchema, ContextReference(higher.identity, higher.revision.toString),
+              "selected-changes", Vector.empty, Vector(S.Coverage(ContextReference(approval.identity, approval.revision),
+                proposal.acceptance, binding.checks.map(_.identity))), consumption)
+            val actualhost = take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(parse(
+              consumerconfig.hcursor.get[String]("sm-workflow.runtime.definition").toOption.get).toOption.get))
+            val successorhost = actualhost.copy(goal = actualhost.goal.copy(dependencySourceRevisions = Vector(higher),
+              dependencySourceConsumptions = Vector(consumption)))
+            Files.writeString(file, consumerconfig.mapObject(_.add("sm-workflow.runtime.definition",
+              ThreeWorkflowRuntimeParameters.encode(successorhost).noSpaces.asJson)).noSpaces)
+            Json.obj("publishedProposal" -> Published.SourceProposal(Published.proposalSchema, sourceproposal, observation).asJson,
+              "externalCollectOutput" -> collectedoutput.invocation.stdout.toString.asJson,
+              "externalCollectBytes" -> Files.readString(collectedoutput.invocation.stdout).asJson,
+              "publisherRoot" -> publisher.root.toString.asJson,
+              "originalDependencyResult" -> original.asJson,
+              "originalArtifact" -> originalartifact.toString.asJson,
+              "externalArtifact" -> externalartifact.toString.asJson)
+          }
           val refused = scenario.call("command", R.describeOperation, Vector("--sessionId", started.sessionId))
           Then("the old 409 and complete public failure remain exact while only one primary packaging task and one dependency publication occurred")
           refused.exitCode should not be 0
           Files.readString(refused.invocation.stderr) should include ("409")
           _lines(primarycount).size shouldBe 1
-          _lines(dependencycount).size shouldBe 1
+          _lines(dependencycount).size shouldBe (if (published_dependency_only) 2 else 1)
           Files.exists(scenario.root.resolve("primary-real-check-passed.txt")) shouldBe false
           Files.createDirectories(handoff.getParent)
-          Files.writeString(handoff, Json.obj("schemaVersion" -> "specification.host-publication-handoff.v1".asJson,
+          val handoffhost = take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(parse(parse(Files.readString(file)).toOption.get
+            .hcursor.get[String]("sm-workflow.runtime.definition").toOption.get).toOption.get))
+          Files.writeString(handoff, Json.obj("schemaVersion" ->
+            (if (published_dependency_only) "specification.published-dependency-handoff.v1" else "specification.host-publication-handoff.v1").asJson,
             "provenance" -> "SPECIFICATION-OWNED installed old-to-new episode; no consumer consent".asJson,
             "root" -> scenario.root.toString.asJson, "task" -> task.toString.asJson, "sessionId" -> started.sessionId.asJson,
-            "host" -> ThreeWorkflowRuntimeParameters.encode(host), "plan" -> plan.asJson,
+            "host" -> ThreeWorkflowRuntimeParameters.encode(handoffhost), "plan" -> plan.asJson,
             "oldFailedOutput" -> failedoutput.invocation.stdout.toString.asJson,
             "oldRefusalOutput" -> refused.invocation.stderr.toString.asJson,
             "oldFailedBytes" -> Files.readString(failedoutput.invocation.stdout).asJson,
             "oldRefusalBytes" -> Files.readString(refused.invocation.stderr).asJson,
-            "failed" -> old.asJson, "primaryCount" -> 1.asJson, "dependencyCount" -> 1.asJson,
-            "correctionMarker" -> marker.toString.asJson).noSpaces, StandardOpenOption.CREATE_NEW)
+            "failed" -> old.asJson, "primaryCount" -> 1.asJson, "dependencyCount" -> (if (published_dependency_only) 2 else 1).asJson,
+            "correctionMarker" -> marker.toString.asJson).deepMerge(published).noSpaces, StandardOpenOption.CREATE_NEW)
         } else {
           val retained = parse(Files.readString(handoff)).toOption.get
-          retained.hcursor.get[String]("schemaVersion").toOption.get shouldBe "specification.host-publication-handoff.v1"
+          retained.hcursor.get[String]("schemaVersion").toOption.get shouldBe
+            (if (published_dependency_only) "specification.published-dependency-handoff.v1" else "specification.host-publication-handoff.v1")
           val root = Path.of(retained.hcursor.get[String]("root").toOption.get)
           val host = take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(retained.hcursor.get[Json]("host").toOption.get))
           val plan = retained.hcursor.get[O.Plan]("plan").toOption.get
@@ -3245,6 +3332,7 @@ abstract class NativeGoalPrerequisitePublicationRecoveryCliSpecification extends
           val dependencycount = root.resolve("dependency-publish-task-count.txt")
           _lines(primarycount).size shouldBe retained.hcursor.get[Int]("primaryCount").toOption.get
           _lines(dependencycount).size shouldBe retained.hcursor.get[Int]("dependencyCount").toOption.get
+          if (published_dependency_only) _resume_published_source(scenario, executable, task, session, retained)
           When("the normally installed new CLI describes the SAME retained Session before any host correction")
           val describedoutput = scenario.call("command", R.describeOperation, Vector("--sessionId", session))
           val described = describedoutput.business[V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult]
@@ -3281,7 +3369,7 @@ abstract class NativeGoalPrerequisitePublicationRecoveryCliSpecification extends
           When("independent specification-owned evidence provisions the exact Human answer and correction attestation")
           _recover_(answer, "host-recovery-authorized-answer").business[V.GoalPhasePrerequisitePublicationRecoveryResult].accepted shouldBe true
           _lines(primarycount).size shouldBe 1
-          _lines(dependencycount).size shouldBe 1
+          _lines(dependencycount).size shouldBe (if (published_dependency_only) 2 else 1)
           _refused(_recover_(answer, "host-recovery-duplicate-answer"))
           _refused(scenario.call("command", R.describeOperation, Vector("--sessionId", session)))
           When("separate ordinary Advance executes the one primary successor and the real selected checks")
@@ -3294,19 +3382,148 @@ abstract class NativeGoalPrerequisitePublicationRecoveryCliSpecification extends
           review.work.get.completed.map(_.step) shouldBe before.completed.map(_.step)
           review.repairProgress shouldBe Some(GoalPhaseRepairProgress.publicSnapshot(before.repairProgress))
           _lines(primarycount).size shouldBe 2
-          _lines(dependencycount).size shouldBe 1
+          _lines(dependencycount).size shouldBe (if (published_dependency_only) 2 else 1)
           Files.readString(root.resolve("primary-real-check-passed.txt")) shouldBe "qualified-primary-api\n"
           When("ordinary Advance recollects the pending ReviewStep without another publication")
           val repeated = scenario.advance(task).business[V.GoalPhaseAdvanceResult]
           Then("normal ReviewStep handback remains with the existing workflow and every original public failure/refusal output is byte-for-byte preserved")
           repeated.work.get.kind shouldBe "ReviewStep"
           _lines(primarycount).size shouldBe 2
-          _lines(dependencycount).size shouldBe 1
+          _lines(dependencycount).size shouldBe (if (published_dependency_only) 2 else 1)
           Files.readString(oldoutput) shouldBe retained.hcursor.get[String]("oldFailedBytes").toOption.get
           Files.readString(oldrefusal) shouldBe retained.hcursor.get[String]("oldRefusalBytes").toOption.get
         }
       }
     }
+  }
+
+  /** Installed callers provision specification-owned independent evidence through
+    * the existing normal preparation/import owner; no record is seeded here. */
+  private def _resume_published_source(scenario: F.Scenario, executable: Path, task: Path,
+    session: String, retained: Json): Unit = {
+    val logindex = sys.props.getOrElse("smworkflow.spec.hostRecoveryStartingLogIndex", "1000")
+    def _save_resume_(label: String, value: String): String = _save(scenario, logindex + "-" + label, value)
+    val proposal = retained.hcursor.get[Published.SourceProposal]("publishedProposal").toOption.get
+    val artifactlocation = _published_dependency_jar(proposal.publication.result.publication)
+    artifactlocation shouldBe Path.of(retained.hcursor.get[String]("externalArtifact").toOption.get)
+    proposal.publication.artifact.identity shouldBe artifactlocation.toUri.toASCIIString
+    val collection = Path.of(retained.hcursor.get[String]("externalCollectOutput").toOption.get)
+    Files.readString(collection) shouldBe retained.hcursor.get[String]("externalCollectBytes").toOption.get
+    val describedinput = V.GoalPhaseDependencySourceRevisionDescriptionInput(session, GoalPhaseNativeMetadata.record(proposal.asJson))
+    val describedoutput = scenario.callInstalled(executable, "GoalPhaseService", S.describeOperation,
+      Vector("--inputResource", _save_resume_("published-source-description", json(describedinput.toRecord()).noSpaces)))
+    val described = describedoutput.business[V.GoalPhaseDependencySourceRevisionDescriptionResult]
+    val target = take(S.targetC(described.target))
+    val historical = target.publishedOrigin.get.historical
+    historical.failed shouldBe retained.hcursor.get[LocalPublication.Result]("failed").toOption.get
+    historical.dependencyPrefix.head.status shouldBe "published"
+    historical.dependencyPrefix shouldBe Vector(retained.hcursor.get[LocalPublication.Result]("originalDependencyResult").toOption.get)
+    historical.lineage.unknown shouldBe None
+    target.predecessorGuard shouldBe None
+    target.preStageGuard.selectedFiles.map(_.path) shouldBe target.binding.paths
+    val sourcehuman = V.WorkflowArtifactReference("fixture-published-source-human", "1")
+    val sourceanswer = V.GoalPhaseDependencySourceRevisionAdoptionInput(session, described.target, Published.sourceChoice,
+      "SPECIFICATION-OWNED select exact declared repaired dependency source and authentic normal recollection", sourcehuman)
+    def _source_answer_(input: V.GoalPhaseDependencySourceRevisionAdoptionInput, label: String): F.Result =
+      scenario.callInstalled(executable, "GoalPhaseService", S.adoptionOperation,
+        Vector("--inputResource", _save_resume_(label, json(input.toRecord()).noSpaces)))
+    def _evidence_(output: F.Result, answer: RecordPresentable, human: V.WorkflowArtifactReference,
+      purpose: String, label: String): Unit = {
+      val observation = proposal.publication
+      val execution = V.WorkflowExecutionEvidence(Vector(human,
+        V.WorkflowArtifactReference(observation.recollectionReference.identity, observation.recollectionReference.revision),
+        V.WorkflowArtifactReference(observation.artifact.identity, observation.artifact.revision)), Some("participant"), None, None)
+      val input = V.WorkflowEvidencePreparationInput("GoalPhase", purpose, output.invocation.stdout.toUri.toASCIIString,
+        _save_resume_(label + "-answer", json(answer.toRecord()).noSpaces),
+        _save_resume_(label + "-reference", json(human.toRecord()).noSpaces),
+        _save_resume_(label + "-execution", json(execution.toRecord()).noSpaces),
+        "normal-development-host", Instant.now().toString, "entity:smworkflow.cli.host_evidence", Some("participant"))
+      val prepared = scenario.prepareHostInput("prepareEvidence", input.toRecord())
+      prepared.exitCode shouldBe 0
+      scenario.selectPreparedImport(prepared)
+    }
+    When("the source caller supplies exact target JSON without the independent Human binding")
+    _refused(_source_answer_(sourceanswer, "published-source-missing-evidence"))
+    Then("neither the consumer nor publisher runs another publication")
+    _lines(scenario.root.resolve("dependency-publish-task-count.txt")).size shouldBe 2
+    _lines(scenario.root.resolve("primary-publish-task-count.txt")).size shouldBe 1
+    _evidence_(describedoutput, sourceanswer, sourcehuman, "dependency-source-revision", "published-source-evidence")
+    When("independent specification evidence admits only the complete concrete source selection")
+    val adopted = _source_answer_(sourceanswer, "published-source-adopted").business[V.GoalPhaseDependencySourceRevisionAdoptionResult]
+    Then("one source Direction is retained without artifact adoption or execution")
+    adopted.accepted shouldBe true
+    _refused(_source_answer_(sourceanswer, "published-source-duplicate"))
+    _lines(scenario.root.resolve("dependency-publish-task-count.txt")).size shouldBe 2
+    When("a separate normal Advance performs only the selected typed source capture")
+    scenario.advance(task).exitCode shouldBe 0
+    val artifactoutput = scenario.callInstalled(executable, "GoalPhaseService", R.describeOperation, Vector("--sessionId", session))
+    val artifactdescription = artifactoutput.business[V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult]
+    val artifact = take(Published.artifactTargetC(artifactdescription.target))
+    val capture = artifact.candidate.dependencySourceCapture.get
+    Then("the actual post-stage guard accounts for the original published pre-stage input and increments generation once")
+    capture.preStageGuard shouldBe target.preStageGuard
+    capture.generation shouldBe historical.generation + 1
+    capture.primaryBase shouldBe historical.base
+    artifact.publication shouldBe proposal.publication
+    artifact.publication.result.publication.request.source shouldBe Published.sourceOf(capture.preStageGuard)
+    artifact.candidate.candidate shouldBe historical.candidate.candidate
+    artifact.candidate.diff shouldBe historical.candidate.diff
+    artifact.candidate.changedPaths shouldBe historical.candidate.changedPaths
+    val repeatedcapture = scenario.advance(task)
+    repeatedcapture.exitCode shouldBe 0
+    val recollected = scenario.callInstalled(executable, "GoalPhaseService", R.describeOperation, Vector("--sessionId", session))
+      .business[V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult]
+    take(Published.artifactTargetC(recollected.target)) shouldBe artifact
+    val artifacthuman = V.WorkflowArtifactReference("fixture-published-artifact-human", "1")
+    val artifactanswer = V.GoalPhasePrerequisitePublicationRecoveryInput(session, artifactdescription.target, Published.artifactChoice,
+      "SPECIFICATION-OWNED adopt only the real external publication without replaying dependency publication", artifacthuman, None)
+    def _artifact_answer_(input: V.GoalPhasePrerequisitePublicationRecoveryInput, label: String): F.Result =
+      scenario.callInstalled(executable, "GoalPhaseService", R.recoveryOperation,
+        Vector("--inputResource", _save_resume_(label, json(input.toRecord()).noSpaces)))
+    When("the artifact caller lacks independent evidence or crosses the exact process policy")
+    _refused(_artifact_answer_(artifactanswer, "published-artifact-missing-evidence"))
+    val crossed = artifact.copy(processPolicy = "{}")
+    _refused(_artifact_answer_(artifactanswer.copy(target = GoalPhaseNativeMetadata.record(crossed.asJson)), "published-artifact-crossed"))
+    _evidence_(artifactoutput, artifactanswer, artifacthuman, R.purpose, "published-artifact-evidence")
+    When("the independently provisioned artifact choice records its own adjacent fact")
+    _artifact_answer_(artifactanswer, "published-artifact-adopted").business[V.GoalPhasePrerequisitePublicationRecoveryResult].accepted shouldBe true
+    Then("source and artifact decisions remain distinct and neither re-executes dependency publication")
+    _refused(_artifact_answer_(artifactanswer, "published-artifact-duplicate"))
+    _refused(_source_answer_(sourceanswer, "published-source-stale-after-artifact"))
+    _lines(scenario.root.resolve("dependency-publish-task-count.txt")).size shouldBe 2
+    _lines(scenario.root.resolve("primary-publish-task-count.txt")).size shouldBe 1
+    val hostoutput = scenario.callInstalled(executable, "GoalPhaseService", R.describeOperation, Vector("--sessionId", session))
+      .business[V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult]
+    val host = take(H.targetC(hostoutput.target))
+    host.schemaVersion shouldBe H.schemaV2
+    host.failed shouldBe historical.failed
+    host.dependencyPrefix shouldBe historical.dependencyPrefix
+    host.publishedDependencyAdoptions.map(_.direction.target) shouldBe Vector(artifact)
+    host.generation shouldBe historical.generation + 1
+    host.repairProgress shouldBe historical.repairProgress
+    host.plan shouldBe historical.plan
+    host.base shouldBe historical.base
+    host.completed shouldBe historical.completed
+    Files.readString(collection) shouldBe retained.hcursor.get[String]("externalCollectBytes").toOption.get
+  }
+
+  /** Inspect the actual normal publishLocal location and ordinary JAR metadata.
+    * Native results preserve history; no copied artifact or byte seal is used. */
+  private def _published_dependency_jar(result: LocalPublication.Result): Path = {
+    val process = WorkflowSbtCapture.decode(result.process.get).toOption.get
+    WorkflowSbtCapture.exitCode(process) shouldBe Some(0)
+    val output = WorkflowSbtCapture.text(process.stdout).value.replaceAll("\u001b\\[[0-9;]*m", "")
+    val prefix = "published host-recovery-producer_2.12 to "
+    val locations = output.linesIterator.map(_.trim.stripPrefix("[info] ").trim).filter(line =>
+      line.startsWith(prefix) && line.endsWith("/jars/host-recovery-producer_2.12.jar")).map(line =>
+      Path.of(line.stripPrefix(prefix)).toAbsolutePath.normalize).toVector.distinct
+    locations.size shouldBe 1
+    val jar = locations.head
+    Files.isRegularFile(jar) shouldBe true
+    val archive = new java.util.jar.JarFile(jar.toFile)
+    try archive.getJarEntry("fixture/RecoveryMarker.class") should not be null finally archive.close()
+    Files.size(jar) should be > 0L
+    jar
   }
 
   private object ConsequenceFailure {
@@ -3326,4 +3543,17 @@ final class NativeGoalPrerequisitePublicationRecoveryCliSpec extends NativeGoalP
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.DependencyValidationTestDeclaration])
 final class NativeGoalPrerequisitePublicationHostRecoveryCliSpec extends NativeGoalPrerequisitePublicationRecoveryCliSpecification {
   override protected def host_recovery_only: Boolean = true
+}
+
+/** Explicit prepare/resume qualification of the unique published-source episode.
+  * @since   Nov.  7, 2026
+  * @version Nov.  7, 2026
+  * @author  ASAMI, Tomoharu
+  */
+@org.scalatest.DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.DependencyValidationTestDeclaration])
+final class NativeGoalPublishedDependencySourceAdoptionCliSpec extends NativeGoalPrerequisitePublicationRecoveryCliSpecification {
+  override protected def host_recovery_only: Boolean = true
+  override protected def published_dependency_only: Boolean = true
 }

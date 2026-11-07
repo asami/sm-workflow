@@ -34,7 +34,7 @@ import WorkflowManagedProcessExecution as E
   * Native capture/check/review/closure owners qualify the newly selected bytes.
   * @since   Oct. 26, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  7, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseDependencySourceRevision {
@@ -61,6 +61,8 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
   val initialSchema = "sm-workflow.goal-phase-dependency-source-revision.v8"
   val initialCaptureSchema = "sm-workflow.goal-phase-dependency-source-capture.v8"
   val developmentCaptureSchema = "sm-workflow.goal-phase-dependency-source-capture.v9"
+  val publishedSchema = "sm-workflow.goal-phase-dependency-source-revision.v9"
+  val publishedCaptureSchema = "sm-workflow.goal-phase-dependency-source-capture.v10"
   val initialChoice = "AdoptInitialDependencySourceRevisionAcceptingUnknownEffects"
   val initialGuardUnavailable = "not-recorded-before-first-dependency-capture"
   val combinedPrimaryChoice = "AdoptDependencySourceRevisionAndContinuePublicationWithUnknownEffects"
@@ -69,7 +71,8 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
   val committedInventorySelection = "goal-source-committed-inventory"
   val origin = "dependency-source-revision"
   val choices = Vector("AdoptDependencySourceRevision", "Defer")
-  def choicesFor(target: Target): Vector[String] = if (target.initialOrigin.nonEmpty) Vector(initialChoice, "Defer")
+  def choicesFor(target: Target): Vector[String] = if (target.publishedOrigin.nonEmpty) GoalPhasePublishedDependencySourceAdoption.sourceChoices
+    else if (target.initialOrigin.nonEmpty) Vector(initialChoice, "Defer")
     else if (target.primaryFailureOrigin.nonEmpty)
     Vector("AdoptDependencySourceRevisionWithUnknownEffects", combinedPrimaryChoice, "Defer")
     else if (target.waitOrigin.isEmpty) choices else
@@ -220,7 +223,8 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
     committedBaseSuccession: Option[CommittedBaseSuccession] = None, sourceSuccession: Option[SourceSuccession] = None,
     waitOrigin: Option[GoalPhasePrerequisitePublicationUnknownRecovery.Target] = None,
     primaryFailureOrigin: Option[GoalPhasePrerequisitePublicationRecovery.PrimaryTarget] = None,
-    initialOrigin: Option[InitialOrigin] = None)
+    initialOrigin: Option[InitialOrigin] = None,
+    publishedOrigin: Option[GoalPhasePublishedDependencySourceAdoption.SourceOrigin] = None)
 
   /** Native traversal supplies this relation from the decoded ReviseWork Direction.
     * It is historical effect provenance, not historical primary byte evidence. */
@@ -332,15 +336,15 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
   object Target {
     import D.given
     given Encoder[Target] = deriveEncoder[Target].mapJson(_.mapObject(_.filter {
-      case ("runtime" | "exclusionSuccession" | "committedBaseSuccession" | "sourceSuccession" | "waitOrigin" | "primaryFailureOrigin" | "initialOrigin" | "predecessorGuard", value) => !value.isNull
+      case ("runtime" | "exclusionSuccession" | "committedBaseSuccession" | "sourceSuccession" | "waitOrigin" | "primaryFailureOrigin" | "initialOrigin" | "publishedOrigin" | "predecessorGuard", value) => !value.isNull
       case _ => true
     }))
     private val _decoder: Decoder[Target] = closed(Set("schemaVersion", "sessionId", "questionIdentity", "sourceRevision",
       "pendingRevision", "plan", "step", "generation", "primaryBase", "completed", "repairProgress",
-      "requestingResult", "predecessor", "ancestors", "proposal", "binding", "predecessorGuard", "preStageGuard", "runtime", "exclusionSuccession", "committedBaseSuccession", "sourceSuccession", "waitOrigin", "primaryFailureOrigin", "initialOrigin"),
-      deriveDecoder, targetValid, optional = Set("predecessorGuard", "runtime", "exclusionSuccession", "committedBaseSuccession", "sourceSuccession", "waitOrigin", "primaryFailureOrigin", "initialOrigin"))
+      "requestingResult", "predecessor", "ancestors", "proposal", "binding", "predecessorGuard", "preStageGuard", "runtime", "exclusionSuccession", "committedBaseSuccession", "sourceSuccession", "waitOrigin", "primaryFailureOrigin", "initialOrigin", "publishedOrigin"),
+      deriveDecoder, targetValid, optional = Set("predecessorGuard", "runtime", "exclusionSuccession", "committedBaseSuccession", "sourceSuccession", "waitOrigin", "primaryFailureOrigin", "initialOrigin", "publishedOrigin"))
     given Decoder[Target] = Decoder.instance { cursor =>
-      if (Vector("predecessorGuard", "runtime", "exclusionSuccession", "committedBaseSuccession", "sourceSuccession", "waitOrigin", "primaryFailureOrigin", "initialOrigin").exists(key => cursor.downField(key).focus.contains(Json.Null)))
+      if (Vector("predecessorGuard", "runtime", "exclusionSuccession", "committedBaseSuccession", "sourceSuccession", "waitOrigin", "primaryFailureOrigin", "initialOrigin", "publishedOrigin").exists(key => cursor.downField(key).focus.contains(Json.Null)))
         Left(DecodingFailure("runtime must be absent or a closed installed consumption succession", cursor.history))
       else _decoder(cursor)
     }
@@ -408,7 +412,8 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
     else if (direction.nonEmpty) runtimeScopeSchema else scopeSchema
 
   private def _capture_schema(direction: Direction, scope: Option[ScopeSuccessor]): String =
-    if (direction != null && direction.target != null && direction.target.schemaVersion == initialSchema) initialCaptureSchema
+    if (direction != null && direction.target != null && direction.target.schemaVersion == publishedSchema) publishedCaptureSchema
+    else if (direction != null && direction.target != null && direction.target.schemaVersion == initialSchema) initialCaptureSchema
     else if (direction != null && direction.target != null && direction.target.schemaVersion == primarySchema) primaryCaptureSchema
     else if (direction != null && direction.target != null && direction.target.schemaVersion == waitSchema) waitCaptureSchema
     else if (direction != null && direction.target != null && (direction.target.schemaVersion == sourceSchema ||
@@ -683,7 +688,7 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
     value.oldBlob.map(_.value), value.newBlob.map(_.value), value.status, value.path.value)
   def stagingPaths(direction: Direction, scope: Option[ScopeSuccessor], guard: Guard): Vector[String] =
     if (modeOf(direction, scope) == "committed") Vector.empty
-    else if (Set(waitSchema, primarySchema)(direction.target.schemaVersion)) bindingOf(direction, scope).paths.filter(path =>
+    else if (Set(waitSchema, primarySchema, publishedSchema)(direction.target.schemaVersion)) bindingOf(direction, scope).paths.filter(path =>
       guard.dirty.exists(d => d.path == path && d.worktree != " "))
     else bindingOf(direction, scope).paths
 
@@ -815,7 +820,8 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
 
   def bindingC(component: String, target: Target, choice: String, rationale: String,
     participant: String, reference: ContextReference): Consequence[Json] =
-    if (text(component) && targetValid(target) && target.initialOrigin.forall(_.lineage.recovery.participant == participant) && target.primaryFailureOrigin.forall(o =>
+    if (text(component) && targetValid(target) && target.publishedOrigin.forall(o =>
+        o.historical.componentInstance == component && o.historical.participant == participant) && target.initialOrigin.forall(_.lineage.recovery.participant == participant) && target.primaryFailureOrigin.forall(o =>
         o.componentInstance == component && o.participant == participant) && target.waitOrigin.forall(o =>
         o.componentInstance == component && o.participant == participant) && choicesFor(target).contains(choice) && text(rationale) &&
         text(participant) && referenceValid(reference))
@@ -1020,7 +1026,9 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
           Some(java.nio.charset.StandardCharsets.UTF_8)).flatMap(GoalPhasePrerequisitePublicationRecovery.validateBusinessTextC))
         result <- if (describe) for {
           input <- GoalPhasePrerequisitePublicationRecovery.businessRecordC[V.GoalPhaseDependencySourceRevisionDescriptionInput](record, Set("sessionId", "proposal"))
-          _ <- proposalC(input.proposal)
+          published <- GoalPhasePublishedDependencySourceAdoption.isProposalC(input.proposal)
+          _ <- if (published) GoalPhasePublishedDependencySourceAdoption.proposalC(input.proposal).map(_ => ())
+            else proposalC(input.proposal).map(_ => ())
           context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(input.sessionId))
           value <- port.describeDependencySourceRevisionC(input, core.copy(executionContext = context))
         } yield NativeWorkflowOperationOutput.response(value)
@@ -1259,9 +1267,14 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
     parsed.contains(true)
   }
 
-  def targetValid(value: Target): Boolean = value != null && value.initialOrigin != null && value.predecessorGuard != null && value.primaryFailureOrigin != null && value.waitOrigin != null && value.runtime != null && value.sourceSuccession != null && value.exclusionSuccession != null &&
+  def targetValid(value: Target): Boolean = value != null && value.publishedOrigin != null && value.initialOrigin != null && value.predecessorGuard != null && value.primaryFailureOrigin != null && value.waitOrigin != null && value.runtime != null && value.sourceSuccession != null && value.exclusionSuccession != null &&
     value.committedBaseSuccession != null && value.proposal != null &&
-    (if (value.schemaVersion == initialSchema) _initial_target_valid(value)
+    (if (value.schemaVersion == publishedSchema) value.publishedOrigin.nonEmpty && value.initialOrigin.isEmpty &&
+      value.waitOrigin.isEmpty && value.primaryFailureOrigin.isEmpty && value.runtime.isEmpty &&
+      value.sourceSuccession.isEmpty && value.exclusionSuccession.isEmpty && value.proposal.schemaVersion == sourceSchema &&
+      GoalPhasePublishedDependencySourceAdoption.sourceTargetValid(value)
+    else if (value.publishedOrigin.nonEmpty) false
+    else if (value.schemaVersion == initialSchema) _initial_target_valid(value)
     else if (value.initialOrigin.nonEmpty || value.predecessorGuard.isEmpty) false
     else if (value.schemaVersion == primarySchema) value.primaryFailureOrigin.exists(GoalPhasePrerequisitePublicationRecovery.primaryTargetValid) &&
       value.waitOrigin.isEmpty && value.runtime.isEmpty && value.sourceSuccession.isEmpty && value.exclusionSuccession.isEmpty &&
@@ -1281,9 +1294,9 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
     value.runtime.forall(r => r != null && referenceValid(r.parent) && unique(r.approvals, 16)(D.approvalValid) &&
       r.approvals.nonEmpty && r.approvals.map(_.decision).distinct.size == r.approvals.size &&
       runtimeMatches(r.installation, value.proposal.consumption)) &&
-    text(value.sessionId) && (if (Set(waitSchema, primarySchema)(value.schemaVersion)) value.questionIdentity == "" else text(value.questionIdentity)) &&
+    text(value.sessionId) && (if (Set(waitSchema, primarySchema, publishedSchema)(value.schemaVersion)) value.questionIdentity == "" else text(value.questionIdentity)) &&
     revision(value.sourceRevision) && revision(value.pendingRevision) &&
-    (if (Set(waitSchema, primarySchema)(value.schemaVersion)) value.pendingRevision == value.sourceRevision
+    (if (Set(waitSchema, primarySchema, publishedSchema)(value.schemaVersion)) value.pendingRevision == value.sourceRevision
       else BigInt(value.pendingRevision) > BigInt(value.sourceRevision)) && value.plan != null && O.validatePlanC(value.plan).isSuccess &&
     text(value.step) && value.plan.steps.exists(_.identity == value.step) && value.generation > 0 &&
     value.primaryBase != null && oid(value.primaryBase.head) && oid(value.primaryBase.tree) &&
@@ -1323,7 +1336,8 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
     (value.proposal.mode != "committed" || !value.preStageGuard.dirty.exists(d => value.binding.paths.contains(d.path))) &&
     value.committedBaseSuccession.forall(s => committedBaseValid(s) && value.proposal.mode == "committed" &&
       (value.runtime.exists(_.parent == s.parent) || value.sourceSuccession.exists(_.parent == s.parent) ||
-        value.waitOrigin.exists(_.requestingResult == s.parent) || value.primaryFailureOrigin.exists(_.requestingResult == s.parent)) && s.nextBase == value.binding.base &&
+        value.waitOrigin.exists(_.requestingResult == s.parent) || value.primaryFailureOrigin.exists(_.requestingResult == s.parent) ||
+        value.publishedOrigin.exists(_.historical.requestingResult == s.parent)) && s.nextBase == value.binding.base &&
       s.committedEntries.map(_.path) == value.binding.paths &&
       s.committedEntries.zip(value.proposal.consumption.expectedModes).forall((entry, mode) =>
         entry.path == mode.path && entry.entry.map(_.mode).getOrElse("000000") == mode.mode) &&
@@ -1389,13 +1403,16 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
   def directionValid(value: Direction): Boolean = value != null && targetValid(value.target) &&
     referenceValid(value.directive) && text(value.participant) && text(value.rationale) && value.choice != null &&
     value.target.initialOrigin.forall(_.lineage.recovery.participant == value.participant) &&
+    value.target.publishedOrigin.forall(o => o.historical.participant == value.participant &&
+      value.choice.contains(GoalPhasePublishedDependencySourceAdoption.sourceChoice)) &&
     (value.target.initialOrigin.isEmpty || value.choice.contains(initialChoice)) &&
     value.target.waitOrigin.forall(_.participant == value.participant) && value.target.primaryFailureOrigin.forall(_.participant == value.participant) &&
     (value.target.primaryFailureOrigin.isEmpty || value.choice.exists(choicesFor(value.target).filterNot(_ == "Defer").contains)) &&
     value.choice.fold(true)(choice =>
         choice == "AdoptDependencySourceRevisionWithUnknownEffects" && (value.target.waitOrigin.nonEmpty || value.target.primaryFailureOrigin.nonEmpty) ||
           choice == combinedPrimaryChoice && value.target.primaryFailureOrigin.nonEmpty ||
-          choice == initialChoice && value.target.initialOrigin.nonEmpty)
+          choice == initialChoice && value.target.initialOrigin.nonEmpty ||
+          choice == GoalPhasePublishedDependencySourceAdoption.sourceChoice && value.target.publishedOrigin.nonEmpty)
   def captureValid(value: Capture): Boolean = value != null && value.scope != null && value.planSelection != null &&
     value.schemaVersion == (if (value.planSelection.nonEmpty) developmentCaptureSchema else _capture_schema(value.direction, value.scope)) &&
     value.scope.forall(scopeValid(value.direction, _)) &&
@@ -1441,6 +1458,7 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
     (value.dependencySourceDirection match {
       case None => value.dependencySourceScope.isEmpty && value.dependencySourceGuard.isEmpty && value.dependencySourceStages.isEmpty && value.dependencySourceCapture.isEmpty
       case Some(direction) => directionValid(direction) && value.dependencySourceScope.forall(scopeValid(direction, _)) &&
+        direction.target.publishedOrigin.forall(GoalPhasePublishedDependencySourceAdoption.candidatePreserved(_, value)) &&
         direction.target.primaryFailureOrigin.forall(original => value.sourceRevision.toLongOption.exists(_ > original.frontierRevision.toLong + 1L) ||
           value.copy(sourceRevision = original.candidate.sourceRevision,
           dependencyAdmission = original.candidate.dependencyAdmission, dependencyStaged = original.candidate.dependencyStaged,

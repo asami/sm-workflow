@@ -19,6 +19,7 @@ import GoalPhaseNativeCandidate as C
 import GoalPhaseNativeRun as F
 import GoalPhaseOrderedProgression as O
 import GoalPhasePrerequisitePublicationRecovery as P
+import GoalPhasePublishedDependencySourceAdoption as Published
 
 /** Distinct native continuation of an actual UNKNOWN prerequisite. Independent
   * lifecycle facts and Human direction are separate inputs. Neither replaces
@@ -82,7 +83,8 @@ private[smworkflow] object GoalPhasePrerequisitePublicationUnknownRecovery {
     def observeC(core: ActionCall.Core, scope: Scope): Consequence[Option[Observation]]
   }
   final case class Source(native: P.Source, requestingResult: ContextReference,
-    recovery: Option[P.Progress], approvals: Vector[D.Approval], primaryOrigin: Option[P.PrimaryTarget] = None)
+    recovery: Option[P.Progress], approvals: Vector[D.Approval], primaryOrigin: Option[P.PrimaryTarget] = None,
+    hostSource: Option[GoalPhasePrerequisitePublicationHostRecovery.Source] = None)
   final case class Target(schemaVersion: String, componentInstance: String, participant: String,
     sessionId: String, frontierRevision: String, controller: String, plan: O.Plan, base: O.Snapshot,
     generation: Long, completed: Vector[O.ClosedStep], repairProgress: GoalPhaseRepairProgress.Snapshot,
@@ -412,8 +414,25 @@ private[smworkflow] object GoalPhasePrerequisitePublicationUnknownRecovery {
         (), "Primary source fact has mixed version or fields")
     } yield direction
   }
+  val publishedSourceCodec: WorkflowResultJsonV1.PayloadCodec[R.Direction] = new WorkflowResultJsonV1.PayloadCodec[R.Direction] {
+    val typeIdentity = "GoalPhasePublishedDependencySourceDirection"
+    def encode(value: R.Direction): Json = Json.obj("schemaVersion" -> R.publishedSchema.asJson, "payload" -> value.asJson)
+    def decode(value: Json): Either[String, R.Direction] = for {
+      direction <- value.hcursor.get[R.Direction]("payload").left.map(_.message)
+      _ <- Either.cond(direction.target.schemaVersion == R.publishedSchema && direction.target.publishedOrigin.nonEmpty &&
+        encode(direction) == value, (), "Published source fact has mixed schema or fields")
+    } yield direction
+  }
   private def _source_prefix(direction: R.Direction): String =
-    if (direction.target.primaryFailureOrigin.nonEmpty) primarySourceCausationPrefix else sourceCausationPrefix
+    if (direction.target.publishedOrigin.nonEmpty) Published.sourceCausationPrefix
+    else if (direction.target.primaryFailureOrigin.nonEmpty) primarySourceCausationPrefix else sourceCausationPrefix
+  def savePublishedSourceC(source: Source, d: F.Declaration, core: ActionCall.Core, direction: R.Direction): Consequence[Unit] = for {
+    _ <- if (R.directionValid(direction) && direction.target.publishedOrigin.nonEmpty) Consequence.unit
+      else F.invalid("Published source Direction is invalid")
+    existing <- _load_c(source, core, publishedSourceCodec, Published.sourceCausationPrefix, "direction")
+    _ <- if (existing.isEmpty) Consequence.unit else F.invalid("Published source Direction already exists")
+    _ <- _save_c(source, d, core, publishedSourceCodec, Published.sourceCausationPrefix, "direction", source.native.from, direction)
+  } yield ()
   private def _transition_reference(from: InstanceRecord, prefix: String, key: String): WorkflowMechanicalTransition.Reference =
     WorkflowMechanicalTransition.Reference(from.identity.value + ":" + prefix + from.revision.value + ":" + key, "1")
   private def _cause(from: InstanceRecord, prefix: String, key: String): String = prefix + from.revision.value +
@@ -571,7 +590,9 @@ private[smworkflow] object GoalPhasePrerequisitePublicationUnknownRecovery {
     _ <- if (R.targetValid(target)) Consequence.unit else F.invalid("Wait source proposal crosses inherited source, scope or coverage")
   } yield target
   def describeSourceC(source: Source, d: F.Declaration, core: ActionCall.Core, raw: Record):
-      Consequence[V.GoalPhaseDependencySourceRevisionDescriptionResult] = for {
+      Consequence[V.GoalPhaseDependencySourceRevisionDescriptionResult] = Published.isProposalC(raw).flatMap {
+    case true => Published.describeSourceC(source, d, core, raw)
+    case false => for {
     proposal <- R.proposalC(raw)
     target <- sourceTargetC(source, d, core, proposal)
   } yield V.GoalPhaseDependencySourceRevisionDescriptionResult(target.sessionId, "direction-required",
@@ -580,8 +601,11 @@ private[smworkflow] object GoalPhasePrerequisitePublicationUnknownRecovery {
     else R.message + " Selecting a source authorizes no publication, artifact adoption or validation; a separate Human publication " +
       "or artifact choice is required afterward. The old effects remain unresolved. " + messageFor(target.waitOrigin.get)),
     target.primaryFailureOrigin.map(_.componentInstance).getOrElse(target.waitOrigin.get.componentInstance), R.targetRecord(target), R.choicesFor(target), R.adoptionOperation)
+  }
   def adoptSourceC(source: Source, d: F.Declaration, core: ActionCall.Core,
-    input: V.GoalPhaseDependencySourceRevisionAdoptionInput): Consequence[V.GoalPhaseDependencySourceRevisionAdoptionResult] = for {
+    input: V.GoalPhaseDependencySourceRevisionAdoptionInput): Consequence[V.GoalPhaseDependencySourceRevisionAdoptionResult] =
+    R.targetC(input.target).flatMap { target => if (target.publishedOrigin.nonEmpty) Published.adoptSourceC(source, d, core, input)
+    else for {
     supplied <- R.targetC(input.target)
     actual <- sourceTargetC(source, d, core, supplied.proposal)
     _ <- if (supplied == actual && input.sessionId == actual.sessionId && input.reference != null &&
@@ -602,24 +626,28 @@ private[smworkflow] object GoalPhasePrerequisitePublicationUnknownRecovery {
     } yield ()
   } yield V.GoalPhaseDependencySourceRevisionAdoptionResult(input.sessionId, input.choice != "Defer",
     if (input.choice == "Defer") "deferred" else "dependency-source-revision-adopted", R.message)
+  }
 
   private def _source_candidate(direction: R.Direction, revision: String): C.Payload = direction.target.primaryFailureOrigin
-    .map(_.candidate).getOrElse(direction.target.waitOrigin.get.candidate).copy(
+    .map(_.candidate).orElse(direction.target.publishedOrigin.map(_.historical.candidate))
+    .getOrElse(direction.target.waitOrigin.get.candidate).copy(
     sourceRevision = revision, dependencyAdmission = None, dependencyStaged = Vector.empty, dependency = None, dependencyOrigin = None,
     dependencySourceDirection = Some(direction), dependencySourceGuard = None, dependencySourceStages = Vector.empty,
     dependencySourceCapture = None, dependencySourceScope = None)
   def retainedSourceC(source: Source, d: F.Declaration, core: ActionCall.Core,
-    primarySource: Option[P.PrimarySource] = None): Consequence[SourceProgress] = for {
-    prefix <- Consequence.success(if (primarySource.nonEmpty) primarySourceCausationPrefix else sourceCausationPrefix)
-    pair <- _load_c(source, core, if (primarySource.nonEmpty) primarySourceCodec else sourceCodec, prefix, "direction").flatMap(_.map(Consequence.success)
+    primarySource: Option[P.PrimarySource] = None, published: Boolean = false): Consequence[SourceProgress] = for {
+    prefix <- Consequence.success(if (published) Published.sourceCausationPrefix else if (primarySource.nonEmpty) primarySourceCausationPrefix else sourceCausationPrefix)
+    pair <- _load_c(source, core, if (published) publishedSourceCodec else if (primarySource.nonEmpty) primarySourceCodec else sourceCodec, prefix, "direction").flatMap(_.map(Consequence.success)
       .getOrElse(F.invalid("Wait source history omitted its native Direction")))
     (record, direction) = pair
     _ <- _adjacent_c(source, source.native.from, record, prefix, "direction")
-    _ <- if (R.directionValid(direction) && (direction.target.waitOrigin.nonEmpty || direction.target.primaryFailureOrigin.nonEmpty) &&
+    _ <- if (R.directionValid(direction) && (direction.target.waitOrigin.nonEmpty || direction.target.primaryFailureOrigin.nonEmpty ||
+        published && direction.target.publishedOrigin.nonEmpty) &&
         direction.participant == source.native.session.participantIdentity) Consequence.unit else F.invalid("Wait source Direction is crossed")
-    _ <- if (primarySource.nonEmpty) P.checkPrimaryOriginC(primarySource.get, d, core, direction.target.primaryFailureOrigin.get)
+    _ <- if (published) Published.historicalSourceC(source, d, core, direction.target)
+      else if (primarySource.nonEmpty) P.checkPrimaryOriginC(primarySource.get, d, core, direction.target.primaryFailureOrigin.get)
       else _historical_c(source, d, core, direction.target.waitOrigin.get)
-    _ <- if (primarySource.nonEmpty || _retained_guard(source).contains(direction.target.waitOrigin.get.guard) &&
+    _ <- if (published || primarySource.nonEmpty || _retained_guard(source).contains(direction.target.waitOrigin.get.guard) &&
         direction.target.waitOrigin.get.retainedGuard == _retained_guard(source)) Consequence.unit
       else F.invalid("Wait source origin differs from its actual retained source guard")
     initial = SourceProgress(source.copy(primaryOrigin = direction.target.primaryFailureOrigin), SourceSaved(record, direction), None, false, false)

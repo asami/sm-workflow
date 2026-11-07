@@ -483,3 +483,27 @@ actual new unstaged changes, using their original ordinals. Completed original
 stages remain historical. Committed selection stages zero paths. UNKNOWN new
 intents never replay. Source adoption grants no publication; the old UNKNOWN
 remains the gate until its separate qualified-successor Human Direction.
+
+# Successfully published dependency source revision (v9)
+
+The same structured describe/adopt operations accept the closed
+`sm-workflow.goal-phase-published-dependency-source-proposal.v1` wrapper described
+in [published dependency adoption](goal-phase-published-dependency-source-adoption.md).
+Its `source` is the ordinary v5 source-only Proposal. Its `publication` is the
+complete actual normal collect response and independently attested provenance.
+The runtime constructs `publishedOrigin` from native history. V1–v8 reject this
+origin; their historic encodings and Guard requirements are unchanged.
+
+`AdoptPublishedDependencySourceRevision` admits one independently provisioned
+Human binding and saves one source Direction. Defer writes nothing. A separate
+ordinary Advance uses the existing typed capture/staging engine with the
+published-source causation and v10 capture schema. Generation increases once;
+primary work, Plan/base/completed prefix and repair accounting remain literal.
+An incomplete intent remains UNKNOWN without automatic replay. Publication and
+artifact adoption require their own concrete admitted facts afterward.
+
+The new origin may omit `predecessorGuard` only for an actual historical legacy
+dependency capture whose snapshot exactly matches the original successful
+publication source. It never synthesizes historical file hashes. The selected
+new binding retains old paths and acceptance; an explicit added-path delta is
+covered by the new exact source Human selection, without inventing old approval.
