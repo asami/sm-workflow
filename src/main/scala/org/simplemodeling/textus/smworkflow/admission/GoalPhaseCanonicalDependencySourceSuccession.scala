@@ -425,7 +425,17 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
   } yield V.GoalPhaseDependencySourceRevisionDescriptionResult(target.sessionId, "direction-required", R.message,
     core.component.get.core.instanceId.canonicalKey, R.targetRecord(target), choicesFor(target), R.adoptionOperation)
 
-  def currentC(direction: R.Direction, d: F.Declaration, core: ActionCall.Core): Consequence[Unit] = for {
+  def currentC(direction: R.Direction, d: F.Declaration, core: ActionCall.Core): Consequence[Unit] =
+    _current_c(direction, d, core, None)
+  /** The caller supplies an actual native-walked host Direction. This relation
+    * carries source-policy compatibility through later ordinary review/closure;
+    * it grants no further publication and never compares a closed primary HEAD.
+    */
+  private[admission] def currentC(direction: R.Direction, d: F.Declaration, core: ActionCall.Core,
+    host: GoalPhasePrerequisitePublicationHostRecovery.Saved): Consequence[Unit] =
+    _current_c(direction, d, core, Some(host))
+  private def _current_c(direction: R.Direction, d: F.Declaration, core: ActionCall.Core,
+    host: Option[GoalPhasePrerequisitePublicationHostRecovery.Saved]): Consequence[Unit] = for {
     _ <- _check(R.directionValid(direction) && direction.target.canonicalOrigin.nonEmpty,
       "canonical freshness requires its actual retained direction")
     target = direction.target
@@ -433,7 +443,21 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
       d.dependencySourceConsumptions.contains(target.proposal.consumption), "canonical host binding changed")
     guard <- observeC(core, target.binding, target.proposal.excludedPaths)
     process <- GoalPhasePrerequisitePublicationRecovery.processPolicyC(d, core)
-    _ <- _check(guard == target.preStageGuard && process == target.canonicalOrigin.get.processPolicy,
+    expected <- host match {
+      case None => Consequence.success(target.canonicalOrigin.get.processPolicy)
+      case Some(saved) =>
+        val recovery = saved.direction.target
+        val correction = recovery.canonicalProgramCorrection
+        _check(saved.record != null && saved.direction.choice == GoalPhasePrerequisitePublicationHostRecovery.authorize &&
+          recovery.schemaVersion == GoalPhasePrerequisitePublicationHostRecovery.schemaV3 &&
+          GoalPhasePrerequisitePublicationHostRecovery.directionValid(saved.direction) &&
+          recovery.candidate.dependencySourceCapture.exists(_.direction == direction) &&
+          correction.exists(c => c.oldProcessPolicy == target.canonicalOrigin.get.processPolicy &&
+            GoalPhaseCanonicalPublicationProgramCorrection.matches(c, recovery.candidate, recovery.failed.request.target)),
+          "canonical source policy correction lacks its exact native host Direction relation")
+          .map(_ => correction.get.correctedProcessPolicy)
+    }
+    _ <- _check(guard == target.preStageGuard && process == expected,
       "canonical source or actual consumption policy changed")
   } yield ()
 

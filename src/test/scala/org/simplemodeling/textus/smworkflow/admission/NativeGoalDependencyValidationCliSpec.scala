@@ -415,9 +415,9 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
   private final case class PrefixStep(selected: Selected, first: D.Capture, firstReview: F.Result,
     current: V.GoalPhaseAdvanceResult, binding: D.Binding)
   private def _accepted_prefix(name: String, overlap: Boolean, legacySuccessor: Boolean = false,
-    sourceRevisionFixture: Boolean = false): PrefixStep = {
+    sourceRevisionFixture: Boolean = false, beforestart: F.Scenario => Unit = _ => ()): PrefixStep = {
     val selected = _selected(name, bindingtransform = _.copy(paths = Vector("value.txt", "inherited.txt")),
-      legacysuccessor = legacySuccessor, sourcerevisionfixture = sourceRevisionFixture)
+      legacysuccessor = legacySuccessor, sourcerevisionfixture = sourceRevisionFixture, beforestart = beforestart)
     val binding = selected.scenario.host.goal.dependencyValidation.get
     _select_binding(selected, binding)
     Files.writeString(Path.of(binding.root).resolve("inherited.txt"), "accepted first-Step input\n")
@@ -1031,6 +1031,465 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
   /** One explicit old-product/current-product episode over the existing tiny
     * accepted-prefix and checked-Repair operation fixtures. All evidence is
     * specification-owned; no real consumer artifact adoption is performed. */
+  /** Two independently directed committed source choices are intentional here:
+    * the first establishes the actual old-root Direction, the second selects
+    * the new root while leaving only the fixed primary publisher at the old one.
+    * No supplied JSON or storage seeding manufactures that native lineage.
+    */
+  def qualifyCanonicalPrimaryHostCorrection(reporter: GivenWhenThen): Path = {
+    import io.circe.generic.auto.*
+    import scala.jdk.CollectionConverters.*
+    import GoalPhaseCanonicalDependencySourceSuccession as C
+    import GoalPhaseDependencySourceRevision as R
+    import GoalPhasePublishedDependencySourceAdoption as P
+    import GoalPhasePrerequisitePublicationHostRecovery as H
+    import GoalPhaseCanonicalPublicationProgramCorrection as K
+    import GoalPhaseOrderedProgression as O
+    import org.goldenport.cncf.processexecution.SbtOperation
+    import org.goldenport.convert.ValueReader
+    import org.goldenport.record.io.RecordDecoder
+    import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
+    val mode = sys.props.getOrElse("smworkflow.spec.canonicalHostCorrectionMode", cancel("Select PREPARE_OLD or RESUME_CURRENT"))
+    require(Set("PREPARE_OLD", "RESUME_CURRENT")(mode), "Select an explicit canonical host correction stage")
+    val pendingroot = sys.props.get("smworkflow.spec.canonicalHostCorrectionPendingRoot").map(Path.of(_))
+    require(pendingroot.isEmpty || mode == "PREPARE_OLD", "A retained preparation suffix belongs only to PREPARE_OLD")
+    val episode = Path.of(sys.props.getOrElse("smworkflow.spec.canonicalHostCorrectionEpisode",
+      cancel("Select the absolute test-owned canonicalHostCorrectionEpisode locator")))
+    require(episode.isAbsolute && episode.normalize == episode, "Select one exact absolute episode path")
+    val executable = Path.of(sys.props.getOrElse("smworkflow.spec.installedCommand", cancel("Select the normally installed CLI")))
+    val component = sys.props.getOrElse("smworkflow.spec.componentFile", cancel("Select the normally published component CAR"))
+    require(executable.isAbsolute, "Select the absolute normal installed command")
+    val selector = "TEXTUS_CNCF_SOURCE_ROOT" // Fixture-owned name; production derives its key from captured routes.
+    val publicationidentity = "specification-canonical-primary-publisher"
+    def _array_(value: Json, key: String): Vector[Json] = value.hcursor.get[Vector[Json]](key).toOption.get
+    def _host_(root: Path): ThreeWorkflowRuntimeParameters.Definition = SplitPhaseExplicitPartitionFixture.take(
+      ThreeWorkflowRuntimeParameters.decodeDefinitionC(parse(parse(Files.readString(root.resolve(".textus/config.json")))
+        .toOption.get.hcursor.get[String]("sm-workflow.runtime.definition").toOption.get).toOption.get))
+    def _advance_(value: Json): V.GoalPhaseAdvanceResult = SplitPhaseExplicitPartitionFixture.take(
+      summon[ValueReader[V.GoalPhaseAdvanceResult]].readC(SplitPhaseExplicitPartitionFixture.take(new RecordDecoder().json(value.noSpaces))))
+    def _setup_(repository: Path, arguments: String*): Unit = SplitPhaseExplicitPartitionFixture.take(_run_setup_command_(
+      Vector("--no-optional-locks", "--no-replace-objects", "-C", repository.toString,
+        "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "gc.auto=0",
+        "-c", "user.name=Canonical Publisher Specification", "-c", "user.email=canonical-publisher@example.invalid") ++ arguments))
+    def _save_once_(path: Path, value: Json): Unit = {
+      if (Files.exists(path)) parse(Files.readString(path)).toOption.get shouldBe value
+      else Files.writeString(path, value.noSpaces, StandardOpenOption.CREATE_NEW)
+    }
+    def _counts_(root: Path): Vector[String] = {
+      val path = root.resolve("publication-count.txt")
+      if (Files.exists(path)) Files.readString(path).linesIterator.toVector else Vector.empty
+    }
+    def _register_(scenario: F.Scenario, binding: D.Binding, stage: String): LocalPublication.Target = {
+      val file = scenario.root.resolve(".textus/config.json")
+      val config = parse(Files.readString(file)).toOption.get
+      val process = parse(config.hcursor.get[String]("textus.subsystem.process-execution.plan").toOption.get).toOption.get
+      val producer = LocalPublication.Target("specification-canonical-" + stage + "-producer", binding.dependency.identity,
+        binding.dependency.workspace)
+      val primary = LocalPublication.Target(publicationidentity, binding.requester.identity, binding.requester.workspace,
+        beforeChecks = true)
+      val template = _array_(TypedSbtHostPlanFixture.plan(scenario.root, TypedSbtHostPlanFixture.normalExecutable,
+        Vector(1), operation = SbtOperation.PublishLocal, stdoutBytes = 1048576, stderrBytes = 131072), "sbtPrograms").head
+      val publisher = template.mapObject(fields => fields.add("identity", publicationidentity.asJson)
+        .add("target", primary.workspace.asJson).add("capability", publicationidentity.asJson)
+        .add("environment", fields("environment").get.mapObject(_.add(selector,
+          scenario.root.resolve("dependency/repository").toRealPath().toString.asJson))))
+      val producerprogram = template.mapObject(_.add("identity", (producer.identity + "-program").asJson)
+        .add("target", producer.workspace.asJson).add("capability", (producer.identity + "-program").asJson))
+      val sbt = _array_(process, "sbtPrograms") ++ Option.when(!_array_(process, "sbtPrograms").exists(
+        _.hcursor.get[String]("identity").contains(publicationidentity)))(publisher).toVector :+ producerprogram
+      val processes = process.mapObject(_.add("sbtPrograms", sbt.asJson).add("grants", Json.arr(Json.obj(
+        "componentId" -> SmWorkflowComponent.componentId.name.asJson,
+        "capabilities" -> (_array_(process, "gitPrograms") ++ sbt).map(_.hcursor.get[String]("capability").toOption.get).distinct.asJson))))
+      val collection = ThreeWorkflowNormalHostFixture.collection("canonical_primary_publication")
+      val storage = parse(config.hcursor.get[String]("textus.subsystem.storage.plan").toOption.get).toOption.get
+      val storageplan = storage.mapObject(_.add("records", (_array_(storage, "records") :+ Json.obj(
+        "componentId" -> SmWorkflowComponent.componentId.name.asJson, "storeName" -> "workflow".asJson,
+        "collection" -> collection.asJson)).distinct.asJson))
+      val existing = config.hcursor.get[String](LocalPublicationRuntime.declaration.name).toOption
+        .flatMap(raw => parse(raw).toOption).map(_array_(_, "targets")).getOrElse(Vector.empty)
+      val policy = Json.obj("storeName" -> "workflow".asJson, "collection" -> collection.asJson,
+        "targets" -> (existing.filterNot(_.hcursor.get[String]("identity").contains(publicationidentity)) :+
+          producer.asJson :+ primary.asJson).asJson)
+      Files.writeString(file, config.mapObject(_.add("textus.subsystem.process-execution.plan", processes.noSpaces.asJson)
+        .add("textus.subsystem.storage.plan", storageplan.noSpaces.asJson)
+        .add(LocalPublicationRuntime.declaration.name, policy.noSpaces.asJson)).noSpaces)
+      producer
+    }
+    def _producer_(scenario: F.Scenario, binding: D.Binding, stage: String, module: String): P.PublicationObservation = {
+      val target = _register_(scenario, binding, stage)
+      val input = V.LocalPublicationInput("specification-canonical-" + stage + "-publication", target.identity, None, true, None)
+      scenario.callInstalled(executable, "LocalPublicationService", "ensureLocalPublication",
+        Vector("--input", json(input.toRecord()).noSpaces), assemblyDescriptor = Some(scenario.root.resolve(".textus/assembly.yaml")))
+        .business[V.LocalPublicationResult].status shouldBe "published"
+      val collected = scenario.callInstalled(executable, "LocalPublicationService", "collectLocalPublication",
+        Vector("--input", json(V.LocalPublicationCollectionInput(input.requestIdentity, target.identity, None, true).toRecord()).noSpaces),
+        assemblyDescriptor = Some(scenario.root.resolve(".textus/assembly.yaml")))
+      val result = collected.business[V.LocalPublicationResult]
+      result.status shouldBe "published"
+      val publication = SplitPhaseExplicitPartitionFixture.take(GoalPhasePrerequisitePublicationUnknownRecovery.jsonC(result.publication.get))
+        .as[LocalPublication.Result].toOption.get
+      val stdout = WorkflowSbtCapture.text(WorkflowSbtCapture.decode(publication.process.get).toOption.get.stdout).value
+        .replaceAll("\u001b\\[[0-9;]*m", "")
+      val prefix = "published " + module + "_2.12 to "
+      val artifacts = stdout.linesIterator.map(_.trim.stripPrefix("[info] ").trim).filter(line =>
+        line.startsWith(prefix) && line.endsWith("/jars/" + module + "_2.12.jar"))
+        .map(line => Path.of(line.stripPrefix(prefix)).toAbsolutePath.normalize).toVector.distinct
+      artifacts should have size 1
+      Files.isRegularFile(artifacts.head) shouldBe true
+      val config = parse(Files.readString(scenario.root.resolve(".textus/config.json"))).toOption.get
+      val processes = parse(config.hcursor.get[String]("textus.subsystem.process-execution.plan").toOption.get).toOption.get
+      val processpolicy = _native_fixture(scenario) { core => org.goldenport.cncf.processexecution.GitDiffParameters.resolveC(core.executionContext)
+        .map(maximum => io.circe.Printer.noSpaces.copy(sortKeys = true).print(Json.obj("processPlan" -> processes,
+          "maximumDiffBytes" -> maximum.asJson, "validation" -> _host_(scenario.root).goal.stepValidation.asJson))) }
+      P.PublicationObservation(P.CollectionResult(result.status, result.reason, publication), P.collectOperation,
+        ContextReference(collected.invocation.stdout.toUri.toASCIIString, "1"), scenario.root.toUri.toASCIIString,
+        Instant.now().toString, processpolicy, artifacts.head.getParent.getParent.toUri.toASCIIString,
+        ContextReference(artifacts.head.toUri.toASCIIString, "0.0.1-SNAPSHOT"))
+    }
+    def _adopt_(selected: Selected, binding: D.Binding, consumption: R.Consumption,
+      observation: P.PublicationObservation, stage: String): V.GoalPhaseAdvanceResult = {
+      val scenario = selected.scenario
+      val source = R.Proposal(R.sourceSchema, ContextReference(binding.identity, binding.revision.toString), "committed", Vector.empty,
+        Vector(R.Coverage(ContextReference("specification-dependency-approval", "1"),
+          Vector("Validate the exact dependency candidate"), binding.checks.map(_.identity)),
+          R.Coverage(ContextReference("specification-approval-step-2", "1"),
+            Vector("Integrate with the genuinely accepted predecessor"), binding.checks.map(_.identity))), consumption)
+      val delivery = ContextReference(episode.toUri.toASCIIString + "#" + stage, "1")
+      val proposal = C.Proposal(C.proposalSchema, source, observation, delivery, Some(C.WorkerLifecycle(true, true)))
+      val described = scenario.call("command", R.describeOperation, Vector("--input", json(
+        V.GoalPhaseDependencySourceRevisionDescriptionInput(selected.original.sessionId,
+          GoalPhaseNativeMetadata.record(proposal.asJson)).toRecord()).noSpaces))
+      val description = described.business[V.GoalPhaseDependencySourceRevisionDescriptionResult]
+      val reference = V.WorkflowArtifactReference("specification-canonical-" + stage + "-source-human", "1")
+      val input = V.GoalPhaseDependencySourceRevisionAdoptionInput(selected.original.sessionId, description.target, C.pendingChoice,
+        "SPECIFICATION-ONLY prior worker ended; select the exact committed " + stage + " source accepting prior unknown effects", reference)
+      val execution = V.WorkflowExecutionEvidence(Vector(reference,
+        V.WorkflowArtifactReference(observation.recollectionReference.identity, observation.recollectionReference.revision),
+        V.WorkflowArtifactReference(observation.artifact.identity, observation.artifact.revision),
+        V.WorkflowArtifactReference(delivery.identity, delivery.revision)), Some("participant"), None, None)
+      val evidence = V.WorkflowEvidencePreparationInput("GoalPhase", "dependency-source-revision", described.invocation.stdout.toUri.toASCIIString,
+        _save(scenario, stage + "-source-answer", json(input.toRecord()).noSpaces),
+        _save(scenario, stage + "-source-reference", json(reference.toRecord()).noSpaces),
+        _save(scenario, stage + "-source-execution", json(execution.toRecord()).noSpaces), "normal-development-host",
+        Instant.now().toString, "entity:smworkflow.cli.host_evidence", Some("participant"))
+      val prepared = scenario.prepareHostInput("prepareEvidence", evidence.toRecord())
+      prepared.exitCode shouldBe 0
+      scenario.selectPreparedImport(prepared)
+      scenario.call("command", R.adoptionOperation, Vector("--input", json(input.toRecord()).noSpaces))
+        .business[V.GoalPhaseDependencySourceRevisionAdoptionResult].accepted shouldBe true
+      scenario.advance(selected.task).business[V.GoalPhaseAdvanceResult]
+    }
+    if (mode == "PREPARE_OLD") {
+      require(!Files.exists(episode), "Retain an existing episode and collect its suffix; never repeat PREPARE effects")
+      reporter.Given("R6: a tiny ordinary primary and dependency with actual accepted Step1 and retained Step2 failed Repair")
+      val (selected, oldrepair, initialbinding, firstcapture) = pendingroot match {
+        case None =>
+          val prefix = _accepted_prefix("canonical-primary-host-correction", overlap = true, sourceRevisionFixture = true, beforestart = scenario => {
+            val primary = Path.of(scenario.host.target.root)
+            Files.writeString(primary.resolve("build.sbt"), s"""
+              |lazy val validateCanonicalPublisherSource = taskKey[Unit]("Specification-only exact publisher source selection")
+              |validateCanonicalPublisherSource := {
+              |  IO.append(file(${scenario.root.resolve("primary-publication-count.txt").toString.asJson.noSpaces}), "attempt\\n")
+              |  val expected = IO.read(file(${scenario.root.resolve("expected-canonical-source-root.txt").toString.asJson.noSpaces})).trim
+              |  require(sys.env.get("$selector").contains(expected), "fixed primary publisher selected the previous source root")
+              |}
+              |publishLocal := publishLocal.dependsOn(validateCanonicalPublisherSource).value
+              |""".stripMargin, StandardOpenOption.APPEND)
+            _setup_(primary, "add", "--", "build.sbt")
+            _setup_(primary, "commit", "--no-verify", "--no-gpg-sign", "-m", "Declare specification-only publisher source guard")
+          })
+          val selected = _adopt_prefix(prefix)
+          _complete_prefix(selected, overlap = true, failCheck = true)
+          val repair = selected.scenario.advance(selected.task).business[V.GoalPhaseAdvanceResult]
+          (selected, repair, prefix.binding, prefix.first)
+        case Some(root) =>
+          val retainedroot = Path.of("").toAbsolutePath.normalize.resolve(
+            "target/sm-workflow/work/native-cli/canonical-primary-host-correction-9937187872082694368")
+          require(root.isAbsolute && root.normalize == root && root == retainedroot && root.toRealPath() == root,
+            "Select only the explicitly retained canonical primary preparation root")
+          def _retained_(index: Int): V.GoalPhaseAdvanceResult =
+            _advance_(parse(Files.readString(root.resolve("logs/" + index + ".stdout.json"))).toOption.get)
+          val original = _retained_(101)
+          val resumed = _retained_(118)
+          val repair = _retained_(120)
+          val first = _capture(_retained_(108))
+          val currentcapture = GoalPhaseNativeMetadata.normalizePublicJson(json(
+            repair.work.get.checkFailure.get.validation.dependencyValidation.get))
+            .flatMap(_.hcursor.get[D.Capture]("capture").left.map(_.message)).fold(fail(_), identity)
+          val binding = currentcapture.admission.binding
+          val selection = D.Selection(ContextReference(binding.identity, binding.revision.toString),
+            currentcapture.admission.approvals.map(approval => D.ApprovalReference(
+              ContextReference(approval.proposal.identity, approval.proposal.revision), approval.decision)))
+          val task = root.resolve("target/sm-workflow/tasks/dependency-validation")
+          val route = parse(Files.readString(task.resolve("workflow-session.json"))).toOption.get
+          route.hcursor.get[String]("family").toOption shouldBe Some("GoalPhase")
+          route.hcursor.get[String]("sessionId").toOption shouldBe Some(repair.sessionId)
+          original.sessionId shouldBe repair.sessionId
+          resumed.sessionId shouldBe repair.sessionId
+          first.session shouldBe repair.sessionId
+          currentcapture.session shouldBe repair.sessionId
+          repair.work.get.kind shouldBe "RepairStep"
+          repair.work.get.stepIdentity shouldBe Some("step-2")
+          repair.work.get.completed.map(_.step) shouldBe Vector("step-1")
+          repair.work.get.originalBase shouldBe original.work.get.originalBase
+          repair.work.get.originalBase shouldBe resumed.work.get.originalBase
+          repair.work.get.selectedPlan shouldBe original.work.get.selectedPlan
+          repair.work.get.selectedPlan shouldBe resumed.work.get.selectedPlan
+          val configfile = root.resolve(".textus/config.json")
+          val config = parse(Files.readString(configfile)).toOption.get
+          def _shorten_(value: Json): Json = value.fold(Json.Null, Json.fromBoolean, Json.fromJsonNumber,
+            text => Json.fromString(if (text == "specification-committed-old-source" ||
+                text.startsWith("specification-committed-old-source-"))
+              "canonical-old-source" + text.stripPrefix("specification-committed-old-source") else text),
+            values => Json.fromValues(values.map(_shorten_)), fields => Json.fromJsonObject(fields.mapValues(_shorten_)))
+          val shortened = Vector("sm-workflow.runtime.definition", "textus.subsystem.process-execution.plan")
+            .foldLeft(config) { (previous, key) =>
+              val declared = parse(previous.hcursor.get[String](key).toOption.get).toOption.get
+              previous.mapObject(_.add(key, _shorten_(declared).noSpaces.asJson))
+            }
+          Files.writeString(configfile, shortened.noSpaces)
+          val host = _host_(root)
+          val plan = parse(Files.readString(root.resolve("goal-plan.json"))).toOption.get.as[O.Plan].toOption.get
+          repair.work.get.selectedPlan shouldBe F.publicPlan(plan)
+          val entries = Files.list(root.resolve("logs"))
+          val index = try entries.iterator.asScala.map(_.getFileName.toString.takeWhile(_.isDigit)).flatMap(_.toIntOption)
+            .foldLeft(0)(math.max) + 1 finally entries.close()
+          val scenario = F.reopenCanonicalSource(root, host, plan, index)
+          (Selected(scenario, task, original, resumed, selection), repair, binding, first)
+      }
+      oldrepair.work.get.kind shouldBe "RepairStep"
+      oldrepair.work.get.completed.map(_.step) shouldBe Vector("step-1")
+      val scenario = selected.scenario
+      val oldroot = Path.of(initialbinding.root)
+      val orderedpaths = (firstcapture.changedPaths ++ initialbinding.paths).distinct
+      val oldmodule = "canonical-host-old-" + scenario.root.getFileName.toString
+      if (pendingroot.isEmpty) {
+        Files.writeString(oldroot.resolve("value.txt"), "expected\n")
+        oldroot.resolve("value.txt").toFile.setExecutable(false, false) shouldBe true
+        Files.createDirectories(oldroot.resolve("src/main/scala"))
+        Files.writeString(oldroot.resolve("src/main/scala/SourceRevisionMarker.scala"),
+          "object SourceRevisionMarker { def source: String = " + oldroot.toRealPath().toString.asJson.noSpaces + " }\n")
+        Files.writeString(oldroot.resolve("build.sbt"), "\norganization := \"org.example.smworkflow.specification\"\n" +
+          "name := " + oldmodule.asJson.noSpaces + "\nversion := \"0.0.1-SNAPSHOT\"\n" +
+          "lazy val root = project.in(file(\".\"))\n" +
+          "publishLocal := { val result = publishLocal.value; IO.append(baseDirectory.value.getParentFile / \"publication-count.txt\", \"published\\n\"); result }\n",
+          StandardOpenOption.APPEND)
+        _setup_(oldroot, "add", "--", "build.sbt", "value.txt", "current.txt", "inherited.txt", "src/main/scala/SourceRevisionMarker.scala")
+        _setup_(oldroot, "commit", "--no-verify", "--no-gpg-sign", "-m", "Commit specification-only old-root qualification source")
+      } else {
+        oldroot.toRealPath() shouldBe scenario.root.resolve("dependency/repository").toRealPath()
+        Files.readString(oldroot.resolve("value.txt")) shouldBe "expected\n"
+        Files.isExecutable(oldroot.resolve("value.txt")) shouldBe false
+        Files.readString(oldroot.resolve("src/main/scala/SourceRevisionMarker.scala")) shouldBe
+          "object SourceRevisionMarker { def source: String = " + oldroot.toRealPath().toString.asJson.noSpaces + " }\n"
+        Files.readString(oldroot.resolve("build.sbt")) should include("name := " + oldmodule.asJson.noSpaces)
+        Files.readString(oldroot.resolve("build.sbt")) should include("version := \"0.0.1-SNAPSHOT\"")
+        _counts_(scenario.root.resolve("dependency")) shouldBe empty
+      }
+      val provisionalold = initialbinding.copy(revision = initialbinding.revision + 1, paths = orderedpaths,
+        dependency = initialbinding.dependency.copy(workspace = "canonical-old-source"))
+      _configure_source_host(scenario, provisionalold, _initial_consumption(provisionalold))
+      val oldnative = _native_fixture(scenario)(RepositorySyncManagedGitObservation.observeInWorkspaceC(_, provisionalold.dependency.workspace))
+      oldnative.dirty shouldBe empty
+      val oldbinding = provisionalold.copy(base = O.Snapshot(oldnative.head, oldnative.tree))
+      _configure_source_host(scenario, oldbinding, _initial_consumption(oldbinding))
+      val oldobservation = _producer_(scenario, oldbinding, "old", oldmodule)
+      reporter.When("the old installed product independently adopts committed old-root source, then new-root source in the same pending Step")
+      val oldwork = _adopt_(selected, oldbinding, _initial_consumption(oldbinding), oldobservation, "old")
+      oldwork.work.get.kind shouldBe "RepairStep"
+      val canonical = Files.createDirectories(scenario.root.resolve("canonical-dependency"))
+      val newroot = canonical.resolve("repository")
+      _setup_(scenario.root, "clone", "--no-local", "--", oldroot.toString, newroot.toString)
+      _setup_(newroot, "checkout", "-b", "canonical")
+      Files.writeString(newroot.resolve("src/main/scala/SourceRevisionMarker.scala"),
+        "object SourceRevisionMarker { def source: String = " + newroot.toRealPath().toString.asJson.noSpaces + " }\n")
+      val newmodule = "canonical-host-new-" + scenario.root.getFileName.toString
+      Files.writeString(newroot.resolve("build.sbt"), "\nname := " + newmodule.asJson.noSpaces + "\n", StandardOpenOption.APPEND)
+      _setup_(newroot, "add", "--", "build.sbt", "src/main/scala/SourceRevisionMarker.scala")
+      _setup_(newroot, "commit", "--no-verify", "--no-gpg-sign", "-m", "Commit specification-only canonical successor source")
+      val provisional = oldbinding.copy(revision = oldbinding.revision + 1, root = newroot.toRealPath().toString, branch = "canonical",
+        dependency = oldbinding.dependency.copy(workspace = "canonical-new-source"))
+      _configure_source_host(scenario, provisional, _initial_consumption(provisional))
+      val native = _native_fixture(scenario)(RepositorySyncManagedGitObservation.observeInWorkspaceC(_, provisional.dependency.workspace))
+      val binding = provisional.copy(base = O.Snapshot(native.head, native.tree))
+      val consumption = _initial_consumption(binding)
+      _configure_source_host(scenario, binding, consumption)
+      val observation = _producer_(scenario, binding, "new", newmodule)
+      val current = _adopt_(selected, binding, consumption, observation, "new")
+      current.work.get.kind shouldBe "RepairStep"
+      current.work.get.completed shouldBe oldrepair.work.get.completed
+      current.repairProgress shouldBe oldrepair.repairProgress
+      Files.writeString(scenario.root.resolve("expected-canonical-source-root.txt"), binding.root + "\n", StandardOpenOption.CREATE_NEW)
+      val dispositions = current.work.get.issues.toVector.flatMap(_.issues).filter(_.status != "RESOLVED").map(issue =>
+        V.GoalPhaseIssueDisposition(issue.identity, "FIXED", "SPECIFICATION-ONLY committed canonical source", None))
+      _submit(scenario, current, Json.obj("outcome" -> "completed".asJson, "summary" -> "SPECIFICATION-ONLY canonical repair".asJson,
+        "findings" -> Json.arr(), "issueReport" -> json(V.GoalPhaseIssueReport(dispositions).toRecord())),
+        V.WorkflowArtifactReference("specification-canonical-primary-completion", "1"))
+        .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+      val failedoutput = scenario.advance(selected.task)
+      val failed = failedoutput.business[V.GoalPhaseAdvanceResult]
+      failed.kind shouldBe "Wait"
+      val publication = SplitPhaseExplicitPartitionFixture.take(GoalPhasePrerequisitePublicationUnknownRecovery.jsonC(failed.localPublication.get))
+        .as[LocalPublication.Result].toOption.get
+      publication.status shouldBe "failed"
+      WorkflowSbtCapture.exitCode(WorkflowSbtCapture.decode(publication.process.get).toOption.get) shouldBe Some(1)
+      val refusal = scenario.call("command", "describeGoalPhasePrerequisitePublicationRecovery", Vector("--sessionId", current.sessionId))
+      val retained = Json.obj("schemaVersion" -> "specification.canonical-primary-host-correction.v1".asJson,
+        "root" -> scenario.root.toString.asJson, "task" -> selected.task.toString.asJson,
+        "original" -> json(selected.original.toRecord()), "resumed" -> json(selected.resumed.toRecord()), "selection" -> selected.selection.asJson,
+        "oldRepair" -> json(oldrepair.toRecord()), "currentWork" -> json(current.toRecord()), "failed" -> publication.asJson,
+        "failedOutput" -> failedoutput.invocation.stdout.toString.asJson, "oldRefusalStdout" -> refusal.invocation.stdout.toString.asJson,
+        "oldRefusalStderr" -> refusal.invocation.stderr.toString.asJson, "oldRefusalBytes" -> Files.readString(refusal.invocation.stderr).asJson,
+        "oldPrimaryExecutions" -> _executions(scenario.root).asJson,
+        "oldDependencyExecutions" -> _executions(scenario.root.resolve("dependency")).asJson,
+        "newDependencyExecutions" -> _executions(canonical).asJson,
+        "oldProducerCount" -> _counts_(scenario.root.resolve("dependency")).asJson,
+        "newProducerCount" -> _counts_(canonical).asJson,
+        "oldComponent" -> component.asJson)
+      _save_once_(episode, retained)
+      reporter.Then("the exact old formal failure and public 409 remain with the physical native Session for later product replacement")
+      _refused(refusal, "Unsupported primary publication failure")
+      _counts_(scenario.root.resolve("dependency")) shouldBe Vector("published")
+      _counts_(canonical) shouldBe Vector("published")
+    } else {
+      reporter.Given("R6: the exact physical PREPARE_OLD Session, retained failure, accepted prefix and actual old/new source Directions")
+      val saved = parse(Files.readString(episode)).toOption.get
+      saved.hcursor.get[String]("schemaVersion").toOption.get shouldBe "specification.canonical-primary-host-correction.v1"
+      val root = Path.of(saved.hcursor.get[String]("root").toOption.get)
+      val configfile = root.resolve(".textus/config.json")
+      val config = parse(Files.readString(configfile)).toOption.get
+      val host = _host_(root)
+      val plan = parse(Files.readString(root.resolve("goal-plan.json"))).toOption.get.as[O.Plan].toOption.get
+      val entries = Files.list(root.resolve("logs"))
+      val index = try entries.iterator.asScala.map(_.getFileName.toString.takeWhile(_.isDigit)).flatMap(_.toIntOption)
+        .foldLeft(0)(math.max) + 1 finally entries.close()
+      val scenario = F.reopenCanonicalSource(root, host, plan, index)
+      Files.writeString(configfile, config.mapObject(_.add("textus.component.file", component.asJson)
+        .add("textus.resource.read.max-bytes", "16777216".asJson)).noSpaces)
+      val original = _advance_(saved.hcursor.get[Json]("original").toOption.get)
+      val current = _advance_(saved.hcursor.get[Json]("currentWork").toOption.get)
+      val selected = Selected(scenario, Path.of(saved.hcursor.get[String]("task").toOption.get), original,
+        _advance_(saved.hcursor.get[Json]("resumed").toOption.get), saved.hcursor.get[D.Selection]("selection").toOption.get)
+      val failed = saved.hcursor.get[LocalPublication.Result]("failed").toOption.get
+      val directedpath = episode.resolveSibling(episode.getFileName.toString + ".directed.json")
+      val reviewedpath = episode.resolveSibling(episode.getFileName.toString + ".review.json")
+      val closedpath = episode.resolveSibling(episode.getFileName.toString + ".closed.json")
+      if (!Files.exists(directedpath) && !Files.exists(reviewedpath) && !Files.exists(closedpath)) {
+        reporter.When("the new product describes v3 before the external host owner changes only its one declared publisher value")
+        val described = scenario.call("command", "describeGoalPhasePrerequisitePublicationRecovery", Vector("--sessionId", current.sessionId))
+        val description = described.business[V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult]
+        val target = SplitPhaseExplicitPartitionFixture.take(H.targetC(description.target))
+        target.schemaVersion shouldBe H.schemaV3
+        target.failed shouldBe failed
+        target.completed.map(_.step) shouldBe Vector("step-1")
+        val correction = target.canonicalProgramCorrection.get
+        K.matches(correction, target.candidate, failed.request.target) shouldBe true
+        val deferreference = V.WorkflowArtifactReference("specification-canonical-primary-host-defer-" + index, "1")
+        val deferinput = V.GoalPhasePrerequisitePublicationRecoveryInput(current.sessionId, description.target, "Defer",
+          "SPECIFICATION-ONLY retain the old host declaration without any publication grant", deferreference, None)
+        val deferexecution = V.WorkflowExecutionEvidence(Vector(deferreference), Some("participant"), None, None)
+        val deferevidence = V.WorkflowEvidencePreparationInput("GoalPhase", GoalPhasePrerequisitePublicationRecovery.purpose,
+          described.invocation.stdout.toUri.toASCIIString,
+          _save(scenario, index + "-canonical-host-defer-answer", json(deferinput.toRecord()).noSpaces),
+          _save(scenario, index + "-canonical-host-defer-reference", json(deferreference.toRecord()).noSpaces),
+          _save(scenario, index + "-canonical-host-defer-execution", json(deferexecution.toRecord()).noSpaces),
+          "normal-development-host", Instant.now().toString, "entity:smworkflow.cli.host_evidence", Some("participant"))
+        val deferprepared = scenario.prepareHostInput("prepareEvidence", deferevidence.toRecord())
+        deferprepared.exitCode shouldBe 0
+        scenario.selectPreparedImport(deferprepared)
+        scenario.call("command", GoalPhasePrerequisitePublicationRecovery.recoveryOperation,
+          Vector("--inputResource", deferevidence.result)).business[V.GoalPhasePrerequisitePublicationRecoveryResult].accepted shouldBe false
+        val deferred = scenario.call("command", "describeGoalPhasePrerequisitePublicationRecovery", Vector("--sessionId", current.sessionId))
+        SplitPhaseExplicitPartitionFixture.take(H.targetC(deferred.business[V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult].target)) shouldBe target
+        Files.readString(root.resolve("primary-publication-count.txt")).linesIterator.toVector shouldBe Vector("attempt")
+        val before = parse(Files.readString(configfile)).toOption.get
+        val beforepolicy = _native_fixture(scenario) { core => org.goldenport.cncf.processexecution.GitDiffParameters.resolveC(core.executionContext)
+          .map(maximum => io.circe.Printer.noSpaces.copy(sortKeys = true).print(Json.obj("processPlan" -> parse(before.hcursor
+            .get[String]("textus.subsystem.process-execution.plan").toOption.get).toOption.get,
+            "maximumDiffBytes" -> maximum.asJson, "validation" -> _host_(root).goal.stepValidation.asJson))) }
+        Set(correction.oldProcessPolicy, correction.correctedProcessPolicy) should contain (beforepolicy)
+        val correctedplan = parse(correction.correctedProcessPolicy).toOption.get.hcursor.get[Json]("processPlan").toOption.get
+        Files.writeString(configfile, before.mapObject(_.add("textus.subsystem.process-execution.plan", correctedplan.noSpaces.asJson)).noSpaces)
+        val afterdescription = scenario.call("command", "describeGoalPhasePrerequisitePublicationRecovery", Vector("--sessionId", current.sessionId))
+        SplitPhaseExplicitPartitionFixture.take(H.targetC(afterdescription.business[V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult].target)) shouldBe target
+        val reference = V.WorkflowArtifactReference("specification-canonical-primary-host-human", "1")
+        val observation = V.WorkflowArtifactReference("specification-canonical-primary-host-correction", "1")
+        val input = V.GoalPhasePrerequisitePublicationRecoveryInput(current.sessionId, description.target, H.authorize,
+          "SPECIFICATION-ONLY authorize exactly one corrected whole-primary successor accepting possible partial old effects", reference,
+          Some(V.GoalPhasePublicationHostCorrection(failed.request.input.requestIdentity, correction.programIdentity, observation,
+            Instant.now().minusSeconds(1).toString, "SPECIFICATION-ONLY external host owner corrected only the described publisher source value")))
+        scenario.call("command", GoalPhasePrerequisitePublicationRecovery.recoveryOperation,
+          Vector("--inputResource", _save(scenario, index + "-canonical-host-unauthorized-answer", json(input.toRecord()).noSpaces)))
+          .exitCode should not be 0
+        val execution = V.WorkflowExecutionEvidence(Vector(reference, observation), Some("participant"), None, None)
+        val evidence = V.WorkflowEvidencePreparationInput("GoalPhase", GoalPhasePrerequisitePublicationRecovery.purpose, described.invocation.stdout.toUri.toASCIIString,
+          _save(scenario, index + "-canonical-host-answer", json(input.toRecord()).noSpaces),
+          _save(scenario, index + "-canonical-host-reference", json(reference.toRecord()).noSpaces),
+          _save(scenario, index + "-canonical-host-execution", json(execution.toRecord()).noSpaces), "normal-development-host",
+          Instant.now().toString, "entity:smworkflow.cli.host_evidence", Some("participant"))
+        val prepared = scenario.prepareHostInput("prepareEvidence", evidence.toRecord())
+        prepared.exitCode shouldBe 0
+        scenario.selectPreparedImport(prepared)
+        val recovered = scenario.call("command", GoalPhasePrerequisitePublicationRecovery.recoveryOperation,
+          Vector("--inputResource", evidence.result))
+        val recovery = recovered.business[V.GoalPhasePrerequisitePublicationRecoveryResult]
+        _save_once_(directedpath, Json.obj("target" -> target.asJson, "recovered" -> json(recovery.toRecord())))
+        recovery.accepted shouldBe true
+        Files.readString(root.resolve("primary-publication-count.txt")).linesIterator.toVector shouldBe Vector("attempt")
+      }
+      if (!Files.exists(reviewedpath) && !Files.exists(closedpath)) {
+        reporter.When("a separate ordinary Advance executes one corrected successor and real selected checks")
+        val reviewoutput = scenario.advance(selected.task)
+        val review = reviewoutput.business[V.GoalPhaseAdvanceResult]
+        _save_once_(reviewedpath, Json.obj("review" -> json(review.toRecord()), "stdout" -> reviewoutput.invocation.stdout.toString.asJson,
+          "stderr" -> reviewoutput.invocation.stderr.toString.asJson, "argv" -> reviewoutput.invocation.argv.asJson,
+          "pid" -> reviewoutput.invocation.pid.asJson, "exitCode" -> reviewoutput.exitCode.asJson))
+        reporter.Then("ordinary ReviewStep retains Plan, base, prefix, original failure and accounting with no dependency replay")
+        review.work.get.kind shouldBe "ReviewStep"
+        review.validation.get.outcome shouldBe Some("passed")
+        review.work.get.selectedPlan shouldBe current.work.get.selectedPlan
+        review.work.get.originalBase shouldBe current.work.get.originalBase
+        review.work.get.completed shouldBe current.work.get.completed
+        review.repairProgress shouldBe current.repairProgress
+        Files.readString(root.resolve("primary-publication-count.txt")).linesIterator.toVector shouldBe Vector("attempt", "attempt")
+        val primaryruns = _executions(root)
+        val dependencyruns = _executions(root.resolve("canonical-dependency"))
+        scenario.advance(selected.task).business[V.GoalPhaseAdvanceResult].issuedWorkContext shouldBe review.issuedWorkContext
+        _executions(root) shouldBe primaryruns
+        _executions(root.resolve("canonical-dependency")) shouldBe dependencyruns
+        Files.readString(root.resolve("primary-publication-count.txt")).linesIterator.toVector shouldBe Vector("attempt", "attempt")
+      }
+      if (!Files.exists(closedpath)) {
+        reporter.When("independent specification review and ordinary Step2 closure continue under the saved one-value policy relation")
+        val review = parse(Files.readString(reviewedpath)).toOption.get
+        val reviewoutput = F.Result(review.hcursor.get[Int]("exitCode").toOption.get,
+          F.Invocation(review.hcursor.get[Vector[String]]("argv").toOption.get, review.hcursor.get[Long]("pid").toOption.get,
+            Path.of(review.hcursor.get[String]("stdout").toOption.get), Path.of(review.hcursor.get[String]("stderr").toOption.get)))
+        val closed = _close_step(selected, reviewoutput, "canonical-primary-host-current").business[V.GoalPhaseAdvanceResult]
+        _save_once_(closedpath, json(closed.toRecord()))
+      }
+      val closed = _advance_(parse(Files.readString(closedpath)).toOption.get)
+      reporter.Then("the same Session has two committed Steps and subsequent ReviewPhase; no terminal Phase or real consumer consent is claimed")
+      closed.sessionId shouldBe current.sessionId
+      closed.work.get.kind shouldBe "ReviewPhase"
+      closed.work.get.completed.map(_.step) shouldBe Vector("step-1", "step-2")
+      closed.work.get.originalBase shouldBe current.work.get.originalBase
+      _counts_(root.resolve("dependency")) shouldBe saved.hcursor.get[Vector[String]]("oldProducerCount").toOption.get
+      _counts_(root.resolve("canonical-dependency")) shouldBe saved.hcursor.get[Vector[String]]("newProducerCount").toOption.get
+      _executions(root.resolve("dependency")) shouldBe saved.hcursor.get[Vector[String]]("oldDependencyExecutions").toOption.get
+      Files.readString(Path.of(saved.hcursor.get[String]("oldRefusalStderr").toOption.get)) shouldBe
+        saved.hcursor.get[String]("oldRefusalBytes").toOption.get
+      val retainedfailure = scenario.callInstalled(executable, "LocalPublicationService", "collectLocalPublication", Vector("--input", json(
+        V.LocalPublicationCollectionInput(failed.request.input.requestIdentity, failed.request.target.identity,
+          failed.request.input.ownerSessionId, failed.request.input.explicit).toRecord()).noSpaces),
+        assemblyDescriptor = Some(root.resolve(".textus/assembly.yaml")))
+      val retained = retainedfailure.business[V.LocalPublicationResult]
+      SplitPhaseExplicitPartitionFixture.take(GoalPhasePrerequisitePublicationUnknownRecovery.jsonC(retained.publication.get))
+        .as[LocalPublication.Result].toOption.get shouldBe failed
+    }
+    episode
+  }
+
   def qualifyCanonicalSource(reporter: GivenWhenThen): Path = {
     import io.circe.generic.auto.*
     import GoalPhaseCanonicalDependencySourceSuccession as C
