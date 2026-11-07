@@ -545,6 +545,31 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
       val returned = take(DelegateTask.returnedC(expected, accepted.asJson))
       Then("only the final report and evidence append change; return still checks source and qualification.")
       returned.stage shouldBe "ReturnReady"
+      Given("a same-purpose producer inventory extension carrying its retained correction reference")
+      val correction = ContextReference("SPECIFICATION-OWNED-correction", "1")
+      val expanded = accepted.copy(input = accepted.input.copy(
+        ownedPaths = accepted.input.ownedPaths ++ Vector("docs/extra.md", "docs/second.md"),
+        sourceReferences = accepted.input.sourceReferences :+ correction))
+      When("the public intake compares it with the original requester and receives crossed variants")
+      val extension = DelegateTask.returnedC(expected, expanded.asJson)
+      val expandedInput = expanded.input
+      val crossed = Vector(
+        expandedInput.copy(sourceReferences = expected.sourceReferences),
+        expandedInput.copy(ownedPaths = expandedInput.ownedPaths.reverse),
+        expandedInput.copy(ownedPaths = expandedInput.ownedPaths.drop(1)),
+        expandedInput.copy(sourceReferences = expandedInput.sourceReferences.reverse),
+        expandedInput.copy(sourceReferences = expandedInput.sourceReferences :+ correction),
+        expandedInput.copy(objective = "Crossed purpose"),
+        expandedInput.copy(checks = Vector("other")),
+        expandedInput.copy(conditions = Vector("other")),
+        expandedInput.copy(delegation = expandedInput.delegation.map(_.copy(requesterIdentity = "other-requester"))),
+        expandedInput.copy(delegation = expandedInput.delegation.map(_.copy(authorizationReferences = Vector(ContextReference("other-authority", "1"))))),
+        expandedInput.copy(delegation = expandedInput.delegation.map(_.copy(permittedOperations = expandedInput.delegation.get.permittedOperations.filterNot(_ == "publishLocal")))),
+        expandedInput.copy(delegation = expandedInput.delegation.map(_.copy(exclusions = Vector("docs")))))
+      val refusals = crossed.map(input => DelegateTask.returnedC(expected, expanded.copy(input = input).asJson))
+      Then("only the exact order-preserving extension is admitted; its reference is not storage authentication")
+      extension.isSuccess shouldBe true
+      refusals.foreach(_.isSuccess shouldBe false)
       accepted.copy(stage = delivered.stage, conditionReport = delivered.conditionReport,
         evidenceReferences = delivered.evidenceReferences, message = delivered.message) shouldBe delivered
       accepted.priorReview shouldBe delivered.priorReview

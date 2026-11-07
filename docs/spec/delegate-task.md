@@ -390,3 +390,14 @@ Final result transport and repeated collection must retain those effects
 without duplication. Human, worker and transport judgments in this fixture are
 specification-owned. Source authorship of this case is not an installed result,
 actual consumer consent, independent product review or consumer activation.
+
+## Returned inventory continuation — 2026-11-07
+
+Requester intake accepts the original producer input and an order-preserving
+extension of its owned paths and source references. Added paths must be valid,
+unique, permitted by the unchanged exclusions, and accompanied by an added
+source reference. Existing paths and references remain exact prefixes; all other
+request and delegation fields retain their original comparison, including owners,
+purpose, checks, conditions, operations and authority. The retained source
+reference identifies the producer's correction but does not authenticate another
+runtime's storage. The caller and existing effect boundary retain attribution.

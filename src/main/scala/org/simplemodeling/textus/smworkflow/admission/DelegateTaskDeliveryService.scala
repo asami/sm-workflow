@@ -46,9 +46,10 @@ private[smworkflow] object DelegateTaskDeliveryService {
     val specification = NativeWorkflowDescriptionMetadata.operation(if (describe) declared.DescribeDelegateTaskAdoptionOperation
       else declared.ObserveDelegateTaskDeliveryOperation)
     def createOperationRequest(incoming: Request): Consequence[OperationRequest] = for {
-      input <- if (describe) Consequence.success(Option.empty[V.DelegateTaskObservationInput])
-        else NativeWorkflowOperationInput.valueC[V.DelegateTaskObservationInput](incoming, "input").map(Some(_))
-      session <- input.map(v => Consequence.success(v.sessionId)).getOrElse(NativeWorkflowOperationInput.textC(incoming, "sessionId"))
+      input <- if (describe) Consequence.success(Option.empty[NativeWorkflowResourceInput.Source[V.DelegateTaskObservationInput]])
+        else NativeWorkflowResourceInput.selectC[V.DelegateTaskObservationInput](incoming).map(Some(_))
+      describedSession <- if (describe) NativeWorkflowOperationInput.textC(incoming, "sessionId").map(Some(_))
+        else Consequence.success(Option.empty[String])
     } yield new CommandAction {
       val request = incoming
       override def commandExecutionMode = CommandExecutionMode.Sync
@@ -57,6 +58,10 @@ private[smworkflow] object DelegateTaskDeliveryService {
         private def jsonC(record: org.goldenport.record.Record): Consequence[Json] =
           record.toJsonStringC.flatMap(raw => io.circe.parser.parse(raw).fold(e => N.invalid(e.message), Consequence.success))
         def execute(): Consequence[OperationResponse] = for {
+          value <- input.fold(Consequence.success(Option.empty[V.DelegateTaskObservationInput]))(source =>
+            NativeWorkflowResourceInput.readC(source, reference => read_resource_text(reference, Some(java.nio.charset.StandardCharsets.UTF_8))).map(Some(_)))
+          session <- value.map(v => Consequence.success(v.sessionId)).orElse(describedSession.map(Consequence.success))
+            .getOrElse(N.invalid("No delivery Session was supplied"))
           context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(session))
           selected = core.copy(executionContext = context)
           storage <- N.storageC(h, definition, selected)
@@ -71,7 +76,7 @@ private[smworkflow] object DelegateTaskDeliveryService {
             raw <- { import io.circe.syntax.*; N.recordC(summon[io.circe.Encoder[DelegateTask.AdoptionTarget]].apply(target)) }
           } yield NativeWorkflowOperationOutput.response(V.DelegateTaskAdoptionContext(target.componentInstance, target.sessionId, target.sourceRevision, raw))
           else for {
-            value <- input.map(Consequence.success).getOrElse(N.invalid("No delivery observation was supplied"))
+            value <- value.map(Consequence.success).getOrElse(N.invalid("No delivery observation was supplied"))
             result <- value.result.fold(Consequence.success(Option.empty[Json]))(record => jsonC(record).map(Some(_)))
             selection <- value.artifactSelection.fold(Consequence.success(Option.empty[Json]))(record => jsonC(record).map(Some(_)))
             observation = DelegateTask.Observation(value.event, ContextReference(value.sourceReference.identity, value.sourceReference.revision),

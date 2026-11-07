@@ -161,7 +161,9 @@ private[smworkflow] object DelegateTask {
     _ <- S.inputC(state.input)
     contract <- state.input.delegation.map(Consequence.success).getOrElse(invalid("returned result is not delegation"))
     _ <- if (state.stage == "ReturnReady" || state.stage == "Returned") Consequence.unit else invalid("producer delivery is unfinished")
-    _ <- if (state.input.copy(delegation = expected.delegation, submissionConditions = expected.submissionConditions) == expected &&
+    _ <- if (returnedInventoryValid(expected, state.input) &&
+      state.input.copy(ownedPaths = expected.ownedPaths, sourceReferences = expected.sourceReferences,
+        delegation = expected.delegation, submissionConditions = expected.submissionConditions) == expected &&
       expected.delegation.exists(c => c.copy(role = "destination") == contract)) Consequence.unit
       else invalid("returned request, owners, scope or authorization differs")
     _ <- if (state.input.submissionConditions == expected.submissionConditions || expected.submissionConditions.isEmpty)
@@ -176,6 +178,18 @@ private[smworkflow] object DelegateTask {
           p.request.source.head == state.commit.get.identity))) Consequence.unit
       else invalid("returned result lacks accepted conditions, local commit or required actual publication")
   } yield state
+
+  /** The retained reference identifies a correction; it does not authenticate
+    * another runtime's storage. The caller/effect boundary owns attribution. */
+  private def returnedInventoryValid(expected: S.Input, actual: S.Input): Boolean = {
+    val paths = actual.ownedPaths
+    val refs = actual.sourceReferences
+    val added = paths.drop(expected.ownedPaths.size)
+    val addedRefs = refs.drop(expected.sourceReferences.size)
+    paths.startsWith(expected.ownedPaths) && refs.startsWith(expected.sourceReferences) &&
+      addedRefs.distinct == addedRefs && !addedRefs.exists(expected.sourceReferences.contains) &&
+      added.forall(path => S.permitted(path, actual)) && (added.isEmpty || addedRefs.nonEmpty)
+  }
 
   def observeC(state: S.State, observation: Observation): Consequence[S.State] = for {
     c <- state.input.delegation.filter(valid).map(Consequence.success).getOrElse(invalid("observation has no admitted delegation"))

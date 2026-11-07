@@ -14479,7 +14479,7 @@ DelegateTaskAdoptionContext
 
 ##### DESCRIPTION
 
-Observe actual dispatch, result receipt or return, and requester adoption of an attributable artifact selection. Re-entry reuses the same observation; crossed owners, destination Session or changed delivered source refuse. Transport acknowledgements never become successful development evidence.
+Observe actual dispatch, result receipt or return, and requester adoption of an attributable artifact selection. Supply exactly one of input or inputResource; the latter is an absolute local file URI containing the same complete observation DTO, read through normal finite authorized Resource access. Re-entry reuses the same observation; crossed owners, destination Session or changed delivered source refuse. Transport acknowledgements never become successful development evidence.
 
 ##### TYPE
 
@@ -14495,7 +14495,8 @@ DelegateTaskObservationInput
 
 | name | type | multiplicity |
 |------+------|--------------|
-| input | DelegateTaskObservationInput | 1 |
+| input | DelegateTaskObservationInput | ? |
+| inputResource | string | ? |
 
 ##### OUTPUT
 
