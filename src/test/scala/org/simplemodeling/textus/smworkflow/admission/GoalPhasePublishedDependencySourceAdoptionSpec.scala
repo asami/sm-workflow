@@ -26,7 +26,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Every process, file and Human reference below is specification-owned data.
   * These pure model examples establish no actual execution or consumer consent.
   * @since   Nov.  7, 2026
-  * @version Nov.  7, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object PublishedDependencySourceSpecificationFixture {
@@ -91,13 +91,42 @@ private[admission] object PublishedDependencySourceSpecificationFixture {
 
 /** Closed new authority contracts retain the old v1 and UNKNOWN meanings.
   * @since   Nov.  7, 2026
-  * @version Nov.  7, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhasePublishedDependencySourceAdoptionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import PublishedDependencySourceSpecificationFixture as F
+  "E5 Canonical producer publication provenance" must afterWord(
+    "in spec:goal-phase-published-dependency-source-adoption, example:E5, rules:R5, phase:6.11") {
+    "accept the actual producer primary target while rejecting crossed component root commit or program" in {
+      Given("docs/spec/goal-phase-published-dependency-source-adoption.md R5 E5; specification-only producer-primary publication")
+      val canonical = CanonicalDependencySourceSpecificationFixture
+      val observation = canonical.publication
+      val publication = observation.result.publication
+      def _request_(request: LocalPublication.Request): P.PublicationObservation = observation.copy(
+        result = observation.result.copy(publication = publication.copy(request = request)))
+      val wrongcomponent = _request_(publication.request.copy(target = publication.request.target.copy(component = "crossed")))
+      val wrongcommit = _request_(publication.request.copy(source = publication.request.source.copy(head = "9" * 40)))
+      val wrongroot = observation.copy(publisherProcessPolicy = observation.publisherProcessPolicy.replace(canonical.binding.root, "/crossed"))
+      val wrongprogram = observation.copy(publisherProcessPolicy = observation.publisherProcessPolicy.replace(
+        "specification-dependency-publication", "crossed-program"))
+      When("canonical qualification uses the producer's real target and source")
+      val qualified = GoalPhaseCanonicalDependencySourceSuccession.publicationMatches(observation, canonical.binding)
+      val crossed = Vector(wrongcomponent, wrongcommit, wrongroot, wrongprogram).map(value =>
+        GoalPhaseCanonicalDependencySourceSuccession.publicationMatches(value, canonical.binding))
+      val legacyoriginvalid = P.originValid(F.origin.copy(publication = observation))
+      val legacyoriginfield = F.target.asJson.hcursor.downField("canonicalOrigin").focus
+      Then("the producer owner and request stay literal; old host-failure origin remains strict")
+      qualified shouldBe true
+      observation.result.publication.request.target.dependency shouldBe None
+      observation.result.publication.request.participant shouldBe "external-publisher"
+      crossed.foreach(_ shouldBe false)
+      legacyoriginvalid shouldBe false
+      legacyoriginfield shouldBe None
+    }
+  }
   "Published dependency adoption" should {
     "retain source, artifact and host contracts separately" which {
       "round trip the complete closed source proposal, capture, artifact and v2 host target" in {

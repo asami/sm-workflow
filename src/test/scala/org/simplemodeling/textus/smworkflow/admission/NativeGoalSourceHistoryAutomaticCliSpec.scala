@@ -19,7 +19,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * fixtures. Every termination fact comes from the returned owned process;
   * persisted state is read-only evidence and is never seeded or edited.
   * @since   Nov.  6, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
@@ -177,6 +177,54 @@ final class NativeGoalSourceHistoryAutomaticCliSpec extends NativeGoalSourceHist
       executions(fixture.scenario) shouldBe executionsbefore
       Files.getLastModifiedTime(fixture.source) shouldBe modified
       _history_facts(fixture) shouldBe historyfacts
+
+      Given("P611-HISTORY-APPEND-01: an accepted automatic selection and its retained independent Review under the original ordered host inventory")
+      val config = parse(Files.readString(fixture.scenario.root.resolve(".textus/config.json"))).toOption.get
+      val key = "sm-workflow.runtime.definition"
+      val definition = take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(parse(config.hcursor.get[String](key).toOption.get).toOption.get))
+      val candidatepaths = definition.goal.candidatePaths
+      val extendedpaths = candidatepaths :+ "src/main/scala/RetainedAutomaticUnused.scala"
+      val payloads = _stored_json(fixture).sorted
+      val bytes = fileBytes(fixture.source)
+      val index = indexBytes(fixture.scenario)
+      val reconciliation = _automatic_result(fixture, target)
+      target.recovery.candidatePaths shouldBe candidatepaths
+      When("the host appends one unrelated valid candidate path and ordinary Advance reopens saved automatic history")
+      configure(fixture.scenario, enabledSettings.updated(key, Json.fromString(ThreeWorkflowRuntimeParameters.encode(
+        definition.copy(goal = definition.goal.copy(candidatePaths = extendedpaths))).noSpaces)))
+      val extended = _advance(fixture).business[V.GoalPhaseAdvanceResult]
+      Then("the original complete automatic target and UNKNOWN reconstruct unchanged without another effect or check")
+      extended shouldBe review
+      _current(fixture) shouldBe current
+      _stored_json(fixture).sorted shouldBe payloads
+      _receipt(fixture, A.reference(target), A.codec) shouldBe selected
+      _automatic_result(fixture, target) shouldBe reconciliation
+      _old_unknown(fixture, target)
+      fileBytes(fixture.source) shouldBe bytes
+      Files.getLastModifiedTime(fixture.source) shouldBe modified
+      indexBytes(fixture.scenario) shouldBe index
+      executions(fixture.scenario) shouldBe executionsbefore
+      prefix.foreach { (path, originalbytes, time) =>
+        fileBytes(path) shouldBe originalbytes
+        Files.getLastModifiedTime(path) shouldBe time
+      }
+
+      Vector(candidatepaths.tail :+ extendedpaths.last,
+        extendedpaths.updated(0, candidatepaths(1)).updated(1, candidatepaths(0))).foreach { invalidpaths =>
+        Given("the saved automatic selection still binds every original ordered inventory entry")
+        When("the current host removes or reorders an original prefix entry")
+        configure(fixture.scenario, enabledSettings.updated(key, Json.fromString(ThreeWorkflowRuntimeParameters.encode(
+          definition.copy(goal = definition.goal.copy(candidatePaths = invalidpaths))).noSpaces)))
+        val refused = _advance(fixture)
+        Then("replay refuses without changing native history source index or completed checks")
+        if (refused.exitCode == 0) refused.business[V.GoalPhaseAdvanceResult].kind shouldBe "Wait"
+        _current(fixture) shouldBe current
+        _stored_json(fixture).sorted shouldBe payloads
+        fileBytes(fixture.source) shouldBe bytes
+        Files.getLastModifiedTime(fixture.source) shouldBe modified
+        indexBytes(fixture.scenario) shouldBe index
+        executions(fixture.scenario) shouldBe executionsbefore
+      }
     }
   }
 

@@ -36,6 +36,7 @@ import GoalPhaseCurrentInventoryContinuation as L
 import GoalPhaseDevelopmentReconstruction as X
 import GoalPhaseSourceHistoryAutomatic as T
 import GoalPhaseDependencyApprovalLineage as AL
+import GoalPhaseCanonicalDependencySourceSuccession as CanonicalSource
 
 /** Ordered implementation, repair and review work and their provided result are installed
   * together. Canonical atomic suspension/completion owns all writes. No result
@@ -44,7 +45,7 @@ import GoalPhaseDependencyApprovalLineage as AL
   *  version Oct. 28, 2026
   *  version Oct. 31, 2026
   *  version Oct. 29, 2026
-  * @version Nov.  7, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWorkContinuation {
@@ -55,11 +56,17 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     failure: S.CheckFailureContext): Boolean =
     S.admitCheckFailureContextC(failure).isSuccess && failure.validation.step == direction.target.step &&
       (failure.validation.dependency.exists(capture => capture.admission == direction.target.predecessor &&
-        capture.session == direction.target.sessionId && capture.plan == ContextReference(direction.target.plan.identity,
-          direction.target.plan.revision) && capture.primaryBase == direction.target.primaryBase) ||
+        capture.session == direction.target.sessionId && (capture.plan == ContextReference(direction.target.plan.identity,
+          direction.target.plan.revision) || direction.target.canonicalOrigin.exists(o =>
+          o.originalDirection.exists(d => capture.plan == ContextReference(d.target.plan.identity, d.target.plan.revision)) ||
+            direction.target.predecessor.acceptedPrefix.exists(_.plan == capture.plan))) && capture.primaryBase == direction.target.primaryBase) ||
         failure.validation.dependencySource.exists(capture => GoalPhaseDependencySourceRevision.captureValid(capture) &&
-          capture.direction == direction && capture.sessionId == direction.target.sessionId &&
+          (capture.direction == direction || direction.target.canonicalOrigin.exists(o =>
+            o.previousDirection.orElse(o.originalDirection).contains(capture.direction))) &&
+          capture.sessionId == direction.target.sessionId &&
           (capture.plan == ContextReference(direction.target.plan.identity, direction.target.plan.revision) ||
+            direction.target.canonicalOrigin.exists(o => o.previousDirection.orElse(o.originalDirection).exists(d =>
+              capture.plan == ContextReference(d.target.plan.identity, d.target.plan.revision))) ||
             capture.planSelection.nonEmpty) &&
           capture.primaryBase == direction.target.primaryBase && capture.step == direction.target.step))
 
@@ -164,6 +171,16 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     } yield ()
     def sourceC(direction: GoalPhaseDependencySourceRevision.Direction): Consequence[Unit] = {
       if (!GoalPhaseDependencySourceRevision.directionValid(direction)) V.invalid("invalid dependency source direction")
+      else if (direction.target.canonicalOrigin.nonEmpty) {
+        val target = direction.target
+        val original = target.canonicalOrigin.get.originalDirection
+        original.map(sourceC).getOrElse(resolveC(target.predecessor)).flatMap { _ =>
+          if (target.ancestors == accepted.map(a => GoalPhaseDependencySourceRevision.Ancestor(a.capture, a.closureRevision)) &&
+              original.forall(d => d.target.predecessor == target.predecessor && d.target.ancestors == target.ancestors))
+            Consequence.unit
+          else V.invalid("canonical source crosses its retained original dependency lineage")
+        }
+      }
       else {
         val target = direction.target
         resolveC(target.predecessor).flatMap { _ =>
@@ -975,7 +992,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
 
     def describeDependencySourceRevisionC(input: org.simplemodeling.textus.smworkflow.value.GoalPhaseDependencySourceRevisionDescriptionInput,
       core: ActionCall.Core): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseDependencySourceRevisionDescriptionResult] =
-      _source_revision_dispatch_c(input.sessionId, core)(
+      if (CanonicalSource.isProposal(input.proposal)) _canonical_source_c(input.sessionId, core)
+        .flatMap(CanonicalSource.describeC(_, d, core, input.proposal))
+      else _source_revision_dispatch_c(input.sessionId, core)(
         _dependency_source_revision_source_c(input.sessionId, core).flatMap(
           GoalPhaseDependencySourceRevision.describeC(_, d, core, input.proposal)),
         source => W.describeSourceC(source, d, core, input.proposal))
@@ -985,30 +1004,117 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       _ <- if (input != null && input.reference != null) Consequence.unit
         else F.invalid("Source revision adoption requires its exact supplied Human reference")
       supplied <- GoalPhaseDependencySourceRevision.targetC(input.target)
-      retained <- if (supplied.initialOrigin.isEmpty) Consequence.success(Option.empty[GoalPhaseDependencySourceRevision.Direction])
+      retained <- if (supplied.initialOrigin.isEmpty && supplied.canonicalOrigin.isEmpty) Consequence.success(Option.empty[GoalPhaseDependencySourceRevision.Direction])
         else for {
           source <- F.retainedSessionC(input.sessionId, d, definition, core)
           initial <- _initial_cursor_c(source)
           located <- _walk_c(source, initial, None, None, None, core, historyonly = true)
-          cursor = located match {
-            case Human(_, _, value) => Some(value)
-            case Frontier(value) => Some(value)
-            case Paused(value, _, _) => Some(value)
+          direction = located match {
+            case Human(_, _, value) => value.dependencySourceDirection
+            case Frontier(value) => value.dependencySourceDirection
+            case Paused(value, _, _) => value.dependencySourceDirection
+            case Work(value) => value.dependencySourceDirection
             case _ => None
           }
-        } yield cursor.flatMap(_.dependencySourceDirection).filter(direction => direction.target == supplied &&
+        } yield direction.filter(direction => direction.target == supplied &&
           direction.directive == ContextReference(input.reference.identity, input.reference.revision) &&
           direction.participant == source.participantIdentity && direction.rationale == input.rationale &&
           direction.choice.contains(input.choice))
       result <- retained match {
-        case Some(direction) => Consequence.success(org.simplemodeling.textus.smworkflow.value.GoalPhaseDependencySourceRevisionAdoptionResult(
+        case Some(direction) => (if (direction.target.canonicalOrigin.nonEmpty) CanonicalSource.currentC(direction, d, core)
+          else Consequence.unit).map(_ => org.simplemodeling.textus.smworkflow.value.GoalPhaseDependencySourceRevisionAdoptionResult(
           input.sessionId, true, "dependency-source-revision-adopted", GoalPhaseDependencySourceRevision.messageFor(direction.target)))
+        case None if supplied.canonicalOrigin.nonEmpty => _canonical_source_c(input.sessionId, core)
+          .flatMap(CanonicalSource.adoptC(_, d, core, input))
         case None => _source_revision_dispatch_c(input.sessionId, core)(
         _dependency_source_revision_source_c(input.sessionId, core).flatMap(
           GoalPhaseDependencySourceRevision.adoptC(_, d, core, input)),
         source => W.adoptSourceC(source, d, core, input))
       }
     } yield result
+
+    /** Only actual native traversal constructs a source for this variant. A
+      * pending original issue remains historical after guarded supersession. */
+    private def _canonical_native_source_c(source: F.Session, cursor: Cursor, from: InstanceRecord,
+      controller: O.State, pending: Option[CanonicalSource.Pending], core: ActionCall.Core): Consequence[CanonicalSource.Source] = for {
+      _ <- if (cursor.recordingCandidate.isEmpty &&
+          cursor.repositoryFrontier.isEmpty && cursor.legacyClosure.isEmpty) Consequence.unit
+        else F.invalid("canonical source requires no active recording or repository closure")
+      _ <- controller.adoptCanonicalDependencySourceC(ContextReference("canonical-native-eligibility", "1"))
+      failure <- if (cursor.candidate.isEmpty && cursor.validation.isEmpty)
+        Consequence.success(Option.empty[CanonicalSource.HistoricalFailure])
+        else if (controller.stage != O.Stage.Repair) F.invalid("canonical source refuses an active candidate or validation projection")
+        else for {
+          context <- _check_failure_context_c(cursor.copy(controller = controller), "RepairStep")
+            .flatMap(_.map(Consequence.success).getOrElse(F.invalid("canonical Repair has no admitted historical check failure")))
+          _ <- S.admitCheckFailureContextC(context)
+          candidate <- cursor.candidate.map(Consequence.success).getOrElse(F.invalid("historical Repair candidate is absent"))
+          validation <- cursor.validation.map(Consequence.success).getOrElse(F.invalid("historical Repair validation is absent"))
+          _ <- if (context.validation == validation.payload && candidate.payload.candidate.contains(validation.payload.candidate) &&
+              context.changedPaths == candidate.payload.changedPaths && candidate.payload.diff.contains(context.diff) &&
+              validation.payload.outcome.exists(Set("repair-required", "repair-limit-reached")) &&
+              validation.payload.sourceRevision.toLongOption.exists(_ < from.revision.value) &&
+              candidate.record.identity == from.identity && validation.record.identity == from.identity &&
+              candidate.record.revision.value < validation.record.revision.value && validation.record.revision.value <= from.revision.value &&
+              (pending.isEmpty || validation.record.revision.value < from.revision.value) &&
+              pending.forall(_.request.checkFailure.contains(context))) Consequence.unit
+            else F.invalid("canonical Repair historical failure is incomplete, unmatched, current or crossed")
+        } yield Some(CanonicalSource.HistoricalFailure(
+          ContextReference(from.identity.value, candidate.record.revision.value.toString),
+          ContextReference(from.identity.value, validation.record.revision.value.toString), context))
+      predecessor <- cursor.dependencySourceDirection.map(_.target.predecessor).orElse(cursor.dependencyAdmission)
+        .map(Consequence.success).getOrElse(F.invalid("canonical source has no actual standing dependency admission"))
+      _ <- cursor.dependencySourceDirection.map(cursor.dependencyChain.sourceC)
+        .getOrElse(cursor.dependencyChain.resolveC(predecessor))
+      requesting <- cursor.lastresult.map(_._2.resultReference).map(Consequence.success)
+        .getOrElse(F.invalid("canonical source has no actual requesting semantic result"))
+    } yield CanonicalSource.Source(source, from, controller, predecessor,
+      cursor.dependencyChain.accepted.map(a => GoalPhaseDependencySourceRevision.Ancestor(a.capture, a.closureRevision)),
+      cursor.dependencyApprovals, cursor.dependencySourceDirection, cursor.consumptionDirection, requesting, pending, failure)
+
+    private def _canonical_pending_source_c(source: F.Session, cursor: Cursor, prepared: Prepared,
+      core: ActionCall.Core, historical: Option[CanonicalSource.Pending] = None): Consequence[CanonicalSource.Source] = for {
+      _ <- if (Set("ImplementStep", "RepairStep")(prepared.input.kind)) Consequence.unit
+        else F.invalid("canonical source never supersedes Review or another semantic stage")
+      identity <- prepared.pending.suspension.map(s => Consequence.success(ContinuationIdentity(s.continuationIdentity.value)))
+        .getOrElse(F.invalid("canonical pending source has no actual suspension"))
+      pending <- historical match {
+        case Some(value) => if (value.request == prepared.input &&
+            value.continuation == ContextReference(identity.value, prepared.pending.revision.value.toString))
+          Consequence.success(value) else F.invalid("canonical historical pending request crossed its actual native issue")
+        case None => for {
+          adapter <- source.storage.bindWorkOrderSupersessionC(F.completionOperation, S.inputCodec, CanonicalSource.codec)
+          observed <- adapter.inspectC(identity, source.current.identity)(using core.executionContext)
+            .flatMap(_.map(Consequence.success).getOrElse(F.invalid("canonical pending source is absent")))
+          _ <- if (observed.current == prepared.pending && observed.current == source.current &&
+              observed.issued == prepared.work && observed.continuation.status == ContinuationRuntimePersistence.Status.Available &&
+              observed.continuation.claimId.isEmpty) Consequence.unit
+            else F.invalid("canonical source refuses live, claimed, changed or crossed pending work")
+        } yield CanonicalSource.Pending(ContextReference(identity.value, prepared.pending.revision.value.toString),
+          observed.entityRevision.value.toString, prepared.input)
+      }
+      selected <- _canonical_native_source_c(source, cursor, prepared.pending, prepared.controller, Some(pending), core)
+    } yield selected
+
+    private def _canonical_source_c(identity: String, core: ActionCall.Core): Consequence[CanonicalSource.Source] = for {
+      source <- F.retainedSessionC(identity, d, definition, core)
+      initial <- _initial_cursor_c(source)
+      located <- _walk_c(source, initial, None, None, None, core, historyonly = true)
+      selected <- located match {
+        case Frontier(cursor) if cursor.from == source.current =>
+          _canonical_native_source_c(source, cursor, cursor.from, cursor.controller, None, core)
+        case Work(prepared) => for {
+          before <- GoalPhaseNativeHistory.prefixC(source.current, InstanceRevision(prepared.input.sourceRevision.toLong))
+          replay <- _walk_c(source.copy(current = before), initial, None, None, None, core, historyonly = true)
+          cursor <- replay match {
+            case Frontier(value) => Consequence.success(value)
+            case _ => F.invalid("canonical pending source has no actual unissued predecessor")
+          }
+          selected <- _canonical_pending_source_c(source, cursor, prepared, core)
+        } yield selected
+        case _ => F.invalid("canonical source requires the actual current Implementation or Repair; Human remains with its owning operation")
+      }
+    } yield selected
 
     private def _source_revision_dispatch_c[A](identity: String, core: ActionCall.Core)(human: => Consequence[A],
       wait: W.Source => Consequence[A]): Consequence[A] = for {
@@ -1949,7 +2055,20 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
               .map(state => cursor.copy(controller = state)) else Consequence.success(cursor)
             prepared <- _retained_work_c(source, issuecursor, pending, core)
             identity = ContinuationIdentity(boundary.continuationIdentity.value)
-            result <- if (soughtwork.contains(identity)) Consequence.success[Located](Work(prepared))
+            canonicaladapter <- source.storage.bindWorkOrderSupersessionC(F.completionOperation, S.inputCodec, CanonicalSource.codec)
+            canonical <- canonicaladapter.loadRetainedC(identity, source.current.identity)(using core.executionContext)
+            result <- if (canonical.nonEmpty) for {
+              old <- canonical.get.receipt.payload.direction.target.canonicalOrigin.flatMap(_.pending)
+                .map(Consequence.success).getOrElse(F.invalid("canonical pending receipt lost its original native request"))
+              selected <- _canonical_pending_source_c(source, issuecursor, prepared, core, Some(old))
+              retained <- CanonicalSource.retainedC(selected, d, core)
+                .flatMap(_.map(Consequence.success).getOrElse(F.invalid("canonical pending succession receipt is absent")))
+              result <- _walk_c(source, cursor.copy(from = retained.record, controller = retained.state,
+                dependencySourceDirection = Some(retained.direction), consumptionDirection = None,
+                dependencyAdmission = None, candidate = None, validation = None),
+                soughtwork, soughthuman, soughtrecording, core, historyonly)
+            } yield result
+            else if (soughtwork.contains(identity)) Consequence.success[Located](Work(prepared))
               else for {
                 native <- _native_c(source.storage)
                 retained <- native.loadRetainedC(identity)(using core.executionContext)
@@ -2041,6 +2160,15 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       soughtwork: Option[ContinuationIdentity], soughthuman: Option[ContinuationIdentity],
       soughtrecording: Option[ContinuationIdentity],
       core: ActionCall.Core, historyonly: Boolean): Consequence[Located] = cursor.controller.stage match {
+      case O.Stage.Implementation | O.Stage.Repair if entry.causation.value.startsWith(CanonicalSource.causation) => for {
+        selected <- _canonical_native_source_c(source, cursor, cursor.from, cursor.controller, None, core)
+        retained <- CanonicalSource.retainedC(selected, d, core)
+          .flatMap(_.map(Consequence.success).getOrElse(F.invalid("canonical source transition has no retained native Direction")))
+        result <- _walk_c(source, cursor.copy(from = retained.record, controller = retained.state,
+          dependencySourceDirection = Some(retained.direction), consumptionDirection = None,
+          dependencyAdmission = None, candidate = None, validation = None),
+          soughtwork, soughthuman, soughtrecording, core, historyonly)
+      } yield result
       case O.Stage.Validation if entry.causation.value.startsWith(PublishedDependency.sourceCausationPrefix) => for {
         selected <- _unknown_prerequisite_source_c(source, cursor)
         host <- _host_publication_source_c(source, cursor)
@@ -2731,7 +2859,12 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       * source or supply a current candidate. Explicit ReviseWork instead issues
       * ordinary implementation work through the existing candidate owner.
       */
-    private def _source_check_failure(cursor: Cursor): Option[S.CheckFailureContext] = for {
+    private def _source_check_failure(cursor: Cursor): Option[S.CheckFailureContext] = {
+      val canonical = cursor.dependencySourceDirection.flatMap(direction => direction.target.canonicalOrigin
+        .flatMap(o => o.historicalFailure.map(_.context).orElse(o.pending.filter(_.request.kind == "RepairStep").flatMap(_.request.checkFailure)))
+        .filter(failure => cursor.candidate.isEmpty && cursor.validation.isEmpty &&
+          cursor.controller.stage == O.Stage.Repair && sourceCheckFailureMatches(direction, failure)))
+      canonical.orElse(for {
       direction <- cursor.dependencySourceDirection
       if cursor.candidate.isEmpty && cursor.validation.isEmpty && !cursor.controller.releaseRepairActive &&
         (cursor.controller.plan == direction.target.plan || cursor.dependencyChain.developmentSelectionC(
@@ -2747,7 +2880,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         input.stepIdentity.contains(direction.target.step)
       failure <- input.checkFailure
       if sourceCheckFailureMatches(direction, failure)
-    } yield failure
+    } yield failure)
+    }
 
     private def _initial_phase_provenance(cursor: Cursor): Option[J.Saved] =
       cursor.initialPhaseRepair.filter(_ => !cursor.priorReviews.exists(_.kind == "ReviewPhase"))
@@ -3194,6 +3328,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       if (Set(O.Stage.Review, O.Stage.PhaseReview)(cursor.controller.stage) && d.reviewInstallation.isEmpty)
         _wait_cursor_c(cursor, "Actual native checks are retained; independent review installation remains unavailable.")
       else for {
+        _ <- cursor.dependencySourceDirection.filter(_.target.canonicalOrigin.nonEmpty)
+          .fold(Consequence.unit)(CanonicalSource.currentC(_, d, core))
         semantic <- cursor.controller.next match {
           case value: O.Semantic => Consequence.success(value)
           case _ => F.invalid("current frontier has no assigned semantic work")

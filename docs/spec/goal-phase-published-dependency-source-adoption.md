@@ -108,6 +108,26 @@ successor. Ordinary selected checks and ReviewStep use the new dependency
 capture. Missing source/artifact/host authority permits no fresh check, commit
 or publication. Repeated Advance collects successful effects.
 
+## R5 — Canonical producer provenance
+
+The distinct canonical source proposal may retain an actual producer-primary
+publication (`target.dependency=None`) with a different target identity and
+workspace from the host's old dependency target. It still requires the target
+Component to identify the selected dependency, the producer workspace root to
+equal the canonical binding root, and clean source HEAD/tree to equal that exact
+binding. Keep the actual publication owner, request, participant and safe program;
+never manufacture consumer or Textus publication evidence. Normal collect must
+be published/ready with complete logs and Exited(0) from the exact declared
+producer publish-local program.
+
+This is the canonical v10 source/v11 capture discriminator described in
+[dependency source revision](goal-phase-dependency-source-revision.md). The older
+v9 host-failure origin continues to require its actual old dependency target;
+canonical qualification does not relax that validator. A canonical source Human
+also binds the actual adopted delivery and recollection/artifact references.
+The saved source Direction does not adopt an artifact, grant publication or
+complete semantic work. Real consumer adoption remains a separate action.
+
 ## Executable evidence
 
 `GoalPhasePublishedDependencySourceAdoptionSpec` supplies clearly labeled pure

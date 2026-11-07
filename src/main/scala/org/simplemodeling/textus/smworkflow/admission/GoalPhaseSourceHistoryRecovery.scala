@@ -22,7 +22,7 @@ import GoalPhaseOrderedProgression as O
   * Description and authorization neither observe nor execute normalization.
   * @since   Oct. 21, 2026
   *  version Oct. 26, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseSourceHistoryRecovery {
@@ -323,7 +323,7 @@ private[smworkflow] object GoalPhaseSourceHistoryRecovery {
   /** Only immutable accepted history may supply this policy snapshot. New and
     * pending authority continues to use the complete current declaration.
     */
-  private def _captured_target_c(session: F.Session, d: F.Declaration, core: ActionCall.Core, from: InstanceRecord,
+  private[admission] def _captured_target_c(session: F.Session, d: F.Declaration, core: ActionCall.Core, from: InstanceRecord,
     controller: O.State, documentpolicy: Option[GoalPhaseDocumentProgress.Policy], recordingpaths: Vector[String],
     completedcandidates: Vector[GoalPhaseNativeCandidate.Payload], captured: RecoveryTarget,
     primaryRepair: Option[GoalPhasePrerequisitePrimaryRepair.Saved] = None): Consequence[RecoveryTarget] = for {

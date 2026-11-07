@@ -13,7 +13,7 @@ import GoalPhaseRuntimeRepairControl as R
   * Semantic replies carry no stage, cursor, command or closure receipt.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  7, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseOrderedProgression {
@@ -275,6 +275,23 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       if (clear) None else phaseReviewedCandidate, if (clear) Vector.empty else phaseRecordingPaths,
       if (clear) None else candidateParent, if (clear) None else stepAdmission, releaseCommit,
       repairControl, policyRepairPending, repairObservations, stepReviewRequired, repairscope)
+
+    /** The native walker authenticates the exact canonical Direction. Source
+      * selection keeps the semantic stage and every repair reservation intact.
+      */
+    private[admission] def adoptCanonicalDependencySourceC(direction: ContextReference): Consequence[State] =
+      if (Set(Stage.Implementation, Stage.Repair)(stage) && cursor == completed.size && cursor < plan.steps.size &&
+          candidate.isEmpty && checksReceipt.isEmpty && reviewEvidence.isEmpty && closureIntent.isEmpty &&
+          decision.isEmpty && decisionSource.isEmpty && repositoryReceipt.isEmpty && releaseCommit.isEmpty &&
+          phaseReviewedCandidate.isEmpty && phaseRecordingPaths.isEmpty && candidateParent.isEmpty &&
+          stepAdmission.isEmpty && generation < Long.MaxValue && direction != null &&
+          text(direction.identity) && text(direction.revision))
+        Consequence.success(new State(plan, stage, cursor, generation + 1, repairs, base, completed,
+          candidate, checksReceipt, reviewEvidence, closureIntent, decision, repositoryReceipt, repairDirective,
+          decisionSource, documentDecision, ordinaryRepairs, pendingRepair, phaseReviewedCandidate,
+          phaseRecordingPaths, candidateParent, stepAdmission, releaseCommit, repairControl,
+          policyRepairPending, repairObservations, stepReviewRequired, _reconstruction_repair_scope))
+      else invalid("canonical source continuation requires an unstarted current Implementation or Repair")
 
     /** Native prerequisite source adoption preserves the already accepted work.
       * The native walker authenticates the Direction before calling this pure

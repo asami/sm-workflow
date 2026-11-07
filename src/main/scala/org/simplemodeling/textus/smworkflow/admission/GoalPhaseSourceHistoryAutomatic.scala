@@ -24,7 +24,7 @@ import GoalPhaseSourceHistoryRecovery as R
 /** Same-authority mechanical selection has its own provenance. A caller's
   * finite transport observation is a fact, never a Human answer or File result.
   * @since   Nov.  6, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseSourceHistoryAutomatic {
@@ -194,7 +194,8 @@ private[smworkflow] object GoalPhaseSourceHistoryAutomatic {
       case None => Consequence.success(Option.empty[Saved])
       case Some((next, payload)) => for {
         selected <- codec.decode(codec.encode(payload)).fold(F.invalid, Consequence.success)
-        recovery <- R._target_c(session, d, core, original, controller, documentpolicy, recordingpaths, completedcandidates, primaryRepair)
+        recovery <- R._captured_target_c(session, d, core, original, controller, documentpolicy, recordingpaths,
+          completedcandidates, selected.target.recovery, primaryRepair)
         previous <- GoalPhaseNativeHistory.prefixC(session.current, InstanceRevision(selected.target.frontierRevision.toLong))
         expected = N.Target(recovery, previous.revision.value.toString, previous.causation.value, N.policy,
           human.map(question => N.Question(H.identity(question).value, previous.revision.value.toString)))

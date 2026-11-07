@@ -8,7 +8,8 @@ import org.simplemodeling.textus.smworkflow.admission.{ValidationTestPolicy, Com
 /** Java-only handback for the Scala 2 SBT build, using the Scala 3 CNCF producer.
   * This adapter owns no suite catalog, annotation interpreter or metadata merge.
   * @since   Oct. 24, 2026
-  * @version Oct. 31, 2026
+  *  version Oct. 31, 2026
+  * @version Nov.  8, 2026
   */
 object LabelledTestSelection {
   def inventory(root: String, revision: String): String = {
@@ -25,7 +26,8 @@ object LabelledTestSelection {
     val scope = D.DiscoveryScope("sm-workflow-tests", "1", Vector(D.ArtifactScope(
       "component:sm-workflow", "sm-workflow-tests", revision, "working-tree",
       Path.of(root).toRealPath(), "org.simplemodeling.textus.smworkflow")))
-    val inventory = D.discoverC(scope, loader).fold(
+    val inventory = D.discoverC(scope, loader,
+      if (Set("EXPLICIT", "FOCUSED")(purpose)) explicitSuites.toSet else Set.empty[String]).fold(
       failure => throw new IllegalStateException(s"Canonical CNCF test discovery failed: $failure"), identity)
     // DoNotDiscover excludes automatic purpose discovery, not a caller's actual
     // explicit suite selection. Metadata and nonempty-operation admission still

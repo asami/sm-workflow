@@ -1,5 +1,48 @@
 # Source-history recovery through the ordinary Human Decision
 
+## R5-SH04 — Current Wait normalization and retained declaration append
+
+`NativeGoalSourceHistoryAppendContinuationCliSpec` is a separate explicit-only
+`@DoNotDiscover` Runtime executable specification. Its one leaf calls
+`qualifyCurrentWaitAppend` on the existing tiny normalization fixture. Ordinary
+current Advance exposes the genuine unsuspended `Wait` after a later unresolved
+File intent; public normalization description has no `pendingQuestion`. The nine
+legacy Human normalization cases retain their original source meaning and their
+failed/unqualified status. The current qualifier neither revives an old image nor
+manufactures a Human to make those cases reachable.
+
+The episode accepts its real first Step, completes four source-history updates,
+and retains the later original UNKNOWN. Independently prepared specification-only
+held-policy direction attests the actual ended old invocation. Public adoption
+is passive: source bytes, index, completed-Step facts and actual check count stay
+unchanged. After an ordinary malformed-comment correction, separate Advance
+reconciles through the existing File owner, runs the actual selected SBT check,
+and issues independent `ReviewStep` with the accepted prefix, base, Plan and repair
+counters retained.
+
+The qualifier then appends one unrelated safe path only to the current host's
+`candidatePaths` declaration. The same normal Advance must return the identical
+retained Review, direction and reconciliation. Native history/payloads, old UNKNOWN,
+source/prefix bytes and modification times, index and check counts remain exact.
+Removing or reordering an original declaration path must refuse without effects.
+The original host declaration is restored in `finally`, and another ordinary
+Advance must still recollect that same Review. No native row or successful effect
+is manufactured or replayed.
+
+With `smworkflow.spec.installedCommand`, only this new qualifier uses the normal
+Scenario `callInstalled` route and its actual `.textus/assembly.yaml`, selecting
+the published CAR through `smworkflow.spec.componentFile` and the standard
+`textus.component.file` host binding. It introduces no runtime-root, image or
+installation override. Without an installed command it supports the current
+normal source fixture route. Existing legacy installed branches are unchanged.
+The episode writes a specification-only result URI in its own fixture directory;
+authoring it claims neither a test PASS nor live consumer authority.
+
+The normal labelled-test bridge forwards the actual explicit suite names to
+CNCF discovery only for EXPLICIT/FOCUSED selection. Ordinary inventory and automatic
+purpose discovery continue to exclude `@DoNotDiscover`; no manual suite catalog
+or alternate discovery implementation is introduced.
+
 ## R5-SH01 — Primary repair source-history context
 
 A selected-Step candidate captured during primary publication repair retains
@@ -683,6 +726,36 @@ read-only replay does not change the current-target or append functions and
 does not admit an old target for a new direction or effect.
 
 ## Executable coverage and qualification
+
+`P611-HISTORY-APPEND-01` applies the same captured-target reconstruction to an
+actually retained automatic selection and an actually adopted explicit
+normalization direction. After decoding that saved selection, replay requires a
+valid complete captured recovery target and the current candidate declaration
+to retain its exact original ordered prefix. Only valid distinct paths may be
+appended. Reconstruction uses the captured candidate paths and must equal the
+complete saved target; all rule, successful-prefix, invocation, owner,
+correlation and adjacent-native-history checks still apply. Removing or
+reordering an original entry refuses. Original UNKNOWN outcomes, schema bytes
+and receipts remain unchanged.
+
+This historical rule supplies no path registration for a new or pending
+description, adoption, current-Plan inventory proposal or effect. Those owners
+continue to apply the current declaration and their independent registration
+and authority checks. The existing fixed-host missing-literal-capability
+episode in `NativeGoalCurrentInventoryCliSpec` and explicit registration episode
+in `NativeGoalPartialCommitClosureCliSpec` retain that separate contract.
+
+The accepted automatic E5 episode in
+`NativeGoalSourceHistoryAutomaticCliSpec` and the accepted legacy-question
+adoption episode in `NativeGoalSourceHistoryNormalizationCliSpec` append one
+innocuous host candidate path after independent Review is pending. Ordinary
+Advance must reopen the identical Review, native record and retained payloads
+without changing source or prefix bytes and modification times, index or real
+check count. Each episode then removes and reorders original prefix entries
+and requires refusal without effects. Existing live, stale and crossed
+observation refusals remain in place. These tiny isolated CLI examples use
+actual normal selections and read native storage only; parent-owned validation
+and independent review must qualify the authored regressions.
 
 `P116-CONT-01-RETAINED` extends the existing ordinary completed-Human descendant
 example and canonical mechanical-direction example with an unrelated safe

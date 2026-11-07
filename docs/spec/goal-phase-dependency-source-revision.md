@@ -1,5 +1,114 @@
 # GoalPhase dependency source revision
 
+## Canonical committed source continuation (v10 target, v11 capture)
+
+R10. The existing describe/adopt source Operations accept the distinct closed
+`sm-workflow.goal-phase-canonical-dependency-source-proposal.v1`. Its fields are
+`schemaVersion`, `source` (the unchanged v5 Proposal), `publication` (the actual
+qualified normal collect observation), `adoptedDelivery` (an actual reference),
+and optional `workerLifecycle`. The source mode must be `committed`. Pending
+work requires both `priorWorkerEnded=true` and
+`acceptsUnknownExternalEffects=true`; the whole exact assertion is independently
+admitted Human evidence. Availability alone never establishes nonexecution.
+Unknown, null and mixed-version fields refuse. Legacy wire encodings omit every
+new optional field and retain their existing validators.
+
+The native walker constructs the v10 Target's `canonicalOrigin` from the actual
+component, participant, Session, current controller/Plan, approvals, old original
+Direction and effective previous consumption Direction, predecessor admission,
+accepted ancestors, current frontier/requesting result and exact pending native
+request/entity revision where applicable. Native owner codecs retain opaque
+snapshot text so public Record omission cannot rewrite historical Option fields.
+The original Direction's Plan remains literal when the current native Plan has
+an admitted one-path current-Step append. Supplied JSON creates no lineage proof.
+
+R11. The source is the exact independently declared binding identity/revision.
+It advances the effective previous binding revision while keeping logical
+dependency Component/repository, requester, Step, checks, usage and acceptance.
+Allowed source changes are root, branch, base, dependency workspace and explicit
+fixed check programs. Existing ordered paths remain a prefix; additional paths
+must come from actual retained same-dependency approvals. Actual host workspace
+roots, manage grants, capabilities and resolved check programs must cover the
+primary and dependency checks. Missing, ambiguous or crossed registrations refuse.
+
+The canonical Guard's optional `committedInventory` contains ordered `selected`
+and `excluded` CommittedEntry vectors. FileIdentity and changed Entry vectors are
+empty. Observe Root, branch, HEAD, CommitMetadata, IndexTree, status and the fixed
+`goal-source-committed-inventory` TreeEntries selection over exactly selected paths
+followed by exclusions. The worktree and index must be clean, with committed,
+HEAD and index trees equal. Native modes/blobs or explicit absence match declared
+modes. CommitMetadata ancestry proves descent from the effective previous native
+base and both exact commit/tree pairs. Canonical control performs no managed
+file-byte read, application digest or duplicate full-byte proof.
+Canonical structural validation adds no application count limit for selected or
+excluded committed inventories, retained approvals or ancestors. Resource budgets
+remain with CNCF; literal path safety, uniqueness and native authority stay required.
+
+R12. Eligibility is actual current Implementation or Repair, at an unissued
+frontier or an AVAILABLE UNCLAIMED original ImplementStep/RepairStep WorkOrder.
+Review, active candidate/check/File/staging/closure intent, claimed or changed
+work and unadmitted lifecycle uncertainty refuse. An unanswered Plan Human stays
+with its Plan owner. Use RemainingPlan to adopt that Plan before ordinary Repair
+can select canonical source.
+
+A normal checked Repair can retain historical candidate/validation projections
+after its pure controller has cleared active intent. Only the existing native
+failed-check owner may admit these: its exact terminal repairable validation,
+matching saved candidate and native references precede the pending Repair, and
+the actual Repair request contains that same admitted CheckFailureContext.
+An unissued Repair uses the same derived context. Canonical origin retains the
+exact historical native references and full context for guidance. Incomplete,
+unmatched, active or passed-review projections refuse. Selection clears only
+these obsolete cursor projections and never removes their receipts or history.
+
+Unissued work offers `AdoptCanonicalDependencySourceRevision` and Defer. Pending
+work offers `AdoptCanonicalDependencySourceRevisionAcceptingUnknownEffects` and
+Defer. Adoption rebuilds the actual target, admits the existing independent
+DependencySourceRevision provider and appends only the native Direction. Pending
+supersession uses WorkflowComponentStorage.bindWorkOrderSupersessionC with actual
+typed request, instance and entity revisions. Unissued continuation uses the
+existing mechanical transition. No private datastore write or parallel controller
+supplies authority. Exact repeated adoption recollects the selected Direction;
+changed source/policy, stale targets or crossed references refuse.
+
+R13. The native pure continuation preserves semantic stage, Plan, original base,
+accepted prefix, pending repair, directives, repair scope, observations and every
+counter; generation advances once. Separate ordinary Advance issues the same
+semantic stage using the selected source. Its real result returns to existing
+candidate capture, fresh checks, independent review and closure. Canonical v11
+capture has zero dependency staging paths and equal clean pre/post guards.
+Old failures, UNKNOWN outcomes, requests and successful effects remain history.
+
+Publication and adopted delivery are provenance only. Passive
+`dependency-source-revision` preparation requires actual direction, recollection,
+artifact and adopted-delivery execution references at a valid evidence time.
+Preserve the producer's actual owner/program/source. Source choice grants no
+artifact adoption or primary-publication choice; normal runtime may ask those
+separate concrete questions. Successful publication is not rerun to describe
+source, and no consumer operation is performed by this continuation.
+
+Pure examples are in `GoalPhaseCanonicalDependencySourceSuccessionSpec`.
+The explicit-only installed fixture selects
+`smworkflow.spec.canonicalSourceMode=PREPARE_OLD|RESUME_CURRENT` and
+`smworkflow.spec.canonicalSourceFixture` as an absolute test-owned episode JSON
+file, using
+the normal `smworkflow.spec.installedCommand` and `smworkflow.spec.componentFile`.
+Prepare must run before product replacement; resume reuses the same physical
+native SQLite/Session. Fixture evidence is specification-only, and authoring the
+fixture establishes no execution or consumer adoption claim.
+
+`NativeGoalCanonicalDependencySourceSuccessionCliSpec` calls the bounded
+`qualifyCanonicalSource` fixture entry. Prepare uses the old installed product
+to accept Step1, obtain the real Step2 failed-check Repair, and normally publish
+and collect a separately committed canonical dependency. The episode records
+actual public outputs and the original Session/task, then stops before source
+choice. Resume independently selects the declared binding and source Human,
+uses public describe/adopt and a separate Advance, submits genuine fixture
+semantic work, and requires a v11 capture, fresh checks, independent fixture
+review and ordinary Step closure. Old check counts remain unchanged and the
+obsolete original WorkOrder result refuses. No native record is seeded and no
+consumer artifact adoption is claimed.
+
 ## Primary-failure source-only origin v7
 
 R1. `sm-workflow.goal-phase-dependency-source-revision.v7` requires the distinct

@@ -27,7 +27,7 @@ import GoalPhaseSourceHistoryRecovery as R
 /** Append-only adoption of existing comment authority. Neither description nor
   * adoption answers the old Human question or performs a File effect.
   * @since   Oct. 26, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseSourceHistoryNormalization {
@@ -324,7 +324,8 @@ private[smworkflow] object GoalPhaseSourceHistoryNormalization {
     payload: Direction, human: Option[H.Source],
     primaryRepair: Option[GoalPhasePrerequisitePrimaryRepair.Saved] = None): Consequence[Saved] = for {
     direction <- codec.decode(codec.encode(payload)).fold(F.invalid, Consequence.success)
-    recovery <- R._target_c(session, d, core, original, controller, documentPolicy, recordingPaths, completedCandidates, primaryRepair)
+    recovery <- R._captured_target_c(session, d, core, original, controller, documentPolicy, recordingPaths,
+      completedCandidates, direction.target.recovery, primaryRepair)
     captured = direction.target
     _ <- requireQuestionC(session, core, captured, human)
     _ <- if (captured.recovery == recovery && captured.frontierRevision == previous.revision.value.toString &&

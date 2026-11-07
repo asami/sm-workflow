@@ -102,7 +102,7 @@ private[admission] object InitialDependencySourceRevisionSpecificationFixture {
 
 /** Initial source succession examples do not claim actual Human evidence.
   * @since   Nov.  5, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -283,12 +283,34 @@ final class GoalPhaseInitialDependencySourceRevisionSpec extends AnyWordSpec wit
 /** Fresh pure source-selection fixtures do not claim actual Human evidence.
   * @since   Oct. 26, 2026
   *  version Oct. 27, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseDependencySourceRevisionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  "E10 Legacy source wire compatibility" must afterWord(
+    "in spec:goal-phase-dependency-source-revision, example:E10, rules:R10,R11, phase:6.11") {
+    "omit canonical fields and refuse their use under legacy discriminators" in {
+      Given("docs/spec/goal-phase-dependency-source-revision.md R10,R11 E10; the unchanged specification-owned v1 source")
+      val old = DependencySourceRevisionSpecificationFixture.target
+      When("canonical inventory or origin is inserted into the old version")
+      val wire = old.asJson
+      val originfield = wire.hcursor.downField("canonicalOrigin").focus
+      val inventoryfield = old.preStageGuard.asJson.hcursor.downField("committedInventory").focus
+      val decoded = wire.as[R.Target]
+      val explicitnull = wire.mapObject(_.add("canonicalOrigin", Json.Null)).as[R.Target]
+      val mixedvalid = R.targetValid(old.copy(preStageGuard = CanonicalDependencySourceSpecificationFixture.guard))
+      val capture = DependencySourceRevisionSpecificationFixture.capture.asJson.as[R.Capture]
+      Then("the legacy wire remains unchanged and mixed representations refuse")
+      originfield shouldBe None
+      inventoryfield shouldBe None
+      decoded shouldBe Right(old)
+      explicitnull.isLeft shouldBe true
+      mixedvalid shouldBe false
+      capture shouldBe Right(DependencySourceRevisionSpecificationFixture.capture)
+    }
+  }
   "Primary-failure source revision v7" should afterWord(
     "in spec:goal-phase-dependency-source-revision, example:E1,E2,E3,E4, rules:R1,R2,R3, phase:M3-PRIMARY-CONTINUATION-409") {
     "E1 preserve a distinct closed source-only origin and reject legacy schema reinterpretation" in {

@@ -5,13 +5,13 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.ContextReference
 import org.goldenport.record.Record
 import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseDependencySourceRevision as R,
-  GoalPhasePublishedDependencySourceAdoption as P, NativeExternalEvidence, ThreeWorkflowExternalEvidencePorts}
+  GoalPhasePublishedDependencySourceAdoption as P, GoalPhaseCanonicalDependencySourceSuccession as C,
+  NativeExternalEvidence, ThreeWorkflowExternalEvidencePorts}
 import org.simplemodeling.textus.smworkflow.value as V
 
 /** Passive conversion of independently supplied direction; no Workflow mutation.
   * @since   Oct. 26, 2026
-  *  version Nov.  2, 2026
-  * @version Nov.  7, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 object NativeDependencySourceRevisionPreparation {
@@ -42,6 +42,15 @@ object NativeDependencySourceRevisionPreparation {
           execution.references.contains(V.WorkflowArtifactReference(observation.artifact.identity, observation.artifact.revision)) &&
           P.observationValid(observation) && !Instant.parse(observation.observedAt).isAfter(occurredAt)
       }) Consequence.unit else Consequence.stateConflict("Published source requires actual Human, recollection and artifact references at the evidence time")
+    _ <- if (target.canonicalOrigin.forall { origin =>
+        val observation = origin.selection.publication
+        origin.componentInstance == description.componentInstance && origin.participant == participant &&
+          execution.references != null && execution.references.contains(reference) &&
+          execution.references.contains(V.WorkflowArtifactReference(observation.recollectionReference.identity, observation.recollectionReference.revision)) &&
+          execution.references.contains(V.WorkflowArtifactReference(observation.artifact.identity, observation.artifact.revision)) &&
+          execution.references.contains(V.WorkflowArtifactReference(origin.selection.adoptedDelivery.identity, origin.selection.adoptedDelivery.revision)) &&
+          C.publicationMatches(observation, target.binding) && !Instant.parse(observation.observedAt).isAfter(occurredAt)
+      }) Consequence.unit else Consequence.stateConflict("Canonical source requires actual direction, publication, artifact and adopted delivery evidence at the evidence time")
     binding <- R.bindingC(description.componentInstance, target, input.choice, input.rationale, participant,
       ContextReference(reference.identity, reference.revision))
     purpose = NativeExternalEvidence.Purpose.DependencySourceRevision
