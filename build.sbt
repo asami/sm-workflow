@@ -20,7 +20,7 @@ lazy val cncfSourceSettings: Seq[Def.Setting[_]] = cncfSourceProject.toSeq.flatM
   libraryDependencies ~= (_.filterNot(m => m.organization == "org.goldenport" && m.name == "goldenport-cncf")),
   validateCncfSource := {
     require((source / organization).value == "org.goldenport" && (source / moduleName).value == "goldenport-cncf" &&
-      (source / version).value == "0.5.3-SNAPSHOT" && (source / scalaVersion).value == scalaVersion.value,
+      (source / version).value == "0.5.6-SNAPSHOT" && (source / scalaVersion).value == scalaVersion.value,
       "Selected CNCF source coordinates differ from project.yaml")
   },
   Compile / compile := ((Compile / compile) dependsOn validateCncfSource).value,

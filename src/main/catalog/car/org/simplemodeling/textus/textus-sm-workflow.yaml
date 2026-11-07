@@ -1,25 +1,24 @@
-# Source candidate: 0.1.1-SNAPSHOT. Publication updates this catalog only after actual publication.
 schemaVersion: 2
 kind: car
 namespace: org.simplemodeling.textus
 id: SmWorkflow
 artifactId: textus-sm-workflow
-latestSnapshot: 0.1.0-SNAPSHOT
+latestSnapshot: 0.1.1-SNAPSHOT
 status: active
 aliases: []
 tags:
   - development-observation
 terms: []
 versions:
-  - version: 0.1.0-SNAPSHOT
+  - version: 0.1.1-SNAPSHOT
     channel: snapshot
     status: active
     component: org.simplemodeling.textus.SmWorkflow
-    publishedAt: 2026-11-06T07:55:14.172928+09:00
-    file: repository/car/org/simplemodeling/textus/textus-sm-workflow/0.1.0-SNAPSHOT/textus-sm-workflow-0.1.0-SNAPSHOT.car
+    publishedAt: 2026-11-07T08:43:39.786165+09:00
+    file: repository/car/org/simplemodeling/textus/textus-sm-workflow/0.1.1-SNAPSHOT/textus-sm-workflow-0.1.1-SNAPSHOT.car
     runtime:
       cncf:
-        minimum: 0.5.3-SNAPSHOT
+        minimum: 0.5.6-SNAPSHOT
         excluded: []
         tested:
-          - 0.5.3-SNAPSHOT
+          - 0.5.6-SNAPSHOT

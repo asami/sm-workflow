@@ -1,5 +1,13 @@
 # sm-workflow incremental-use roadmap
 
+Context compaction coordination allocated 2026-11-07:
+[Phase 8](phase-8.md#context-compaction-coordination-framework-2026-11-07) owns
+meaningful-boundary selection, concise continuation information, optional host
+handoff and truthful outcome handling. Actual desktop-host automatic compaction
+is a best-effort integration goal, not a Phase completion gate. Preserve active
+Sessions, accepted work and existing authority; unavailable compaction must not
+stop ordinary supported work. This allocation starts no Phase or implementation.
+
 Shared Scala lint profiles allocated 2026-11-01:
 [Phase 6.12](phase-6.12.md) follows 6.11 and precedes 7. Reuse Phase 6.5 Q3
 for baseline/team/project settings: `sm-workflow.source.style=goldenport` selects

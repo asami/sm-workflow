@@ -125,6 +125,47 @@ initial delivery and its six SimpleModeler acceptance scenarios belong to
 Phase 7. Record only optional later expansion here; do not defer core publication,
 selection, native operation integration or consumer verification to Phase 8.
 
+## Context compaction coordination framework (2026-11-07)
+
+Selected bounded enhancement: long-running development chats should be able to
+prepare context compaction at meaningful workflow boundaries. Phase 8 owns the
+coordination framework. Automatic compaction through the actual desktop host is
+a best-effort integration goal, not a Phase 8 completion prerequisite.
+
+The framework has the following bounded responsibilities:
+
+1. Identify a suitable boundary after accepted work, such as an accepted Step
+   result, a settled investigation/design decision, or Phase completion. Consider
+   accumulated context and expected next work; do not require compaction after
+   every Step or introduce a mandatory workflow gate.
+2. Prepare concise continuation information: the current objective and user
+   constraints, owning workflow Session and next action, accepted work, owned
+   dirty paths, relevant decisions, and references to actual validation/review
+   results. Retain outstanding command/agent identities and uncertain effects
+   when present; preparing a summary does not establish their completion.
+3. Expose an optional host compaction request associated with that boundary and
+   target chat. The host owns its supported execution route and scheduling after
+   the current AI turn completes. A summary or request acknowledgement is not
+   evidence that compaction finished.
+4. Distinguish unsupported/deferred requests from actual host completion,
+   failure, or unknown outcome. Continue ordinary supported work when compaction
+   is unavailable or deferred. Preserve the existing Session, authority,
+   accepted results and pending work; compaction does not re-Start a workflow,
+   repeat completed validation/approval, or replay uncertain external effects.
+
+Codex App Server documents `thread/compact/start` and completion through the
+`contextCompaction` item lifecycle. The installed Codex
+`0.166.0-alpha.6` schema includes that method, but this chat currently exposes no
+direct compaction tool. Connection to the desktop-owned chat and actual
+automatic execution remain unverified. These are discovery facts, not a promise
+of a supported host adapter. See the [official host API](https://learn.chatgpt.com/docs/app-server#trigger-thread-compaction).
+
+Framework acceptance covers boundary selection, usable continuation information,
+optional host handoff and truthful outcome handling, including an unavailable
+host. Report actual host integration separately. Preserve the existing runtime
+and evidence owners; do not add a second workflow ledger, management hashes,
+unchanged-content proofs, a competing app-server owner or a new approval loop.
+
 ### Work classification in practice — selected for Phase 8
 
 In the November 5–6 reviews, closing a prescribed rename and checking whether
@@ -232,6 +273,9 @@ scenarios and retains its owning project's responsibilities.
 - [ ] Independent review has no unresolved blockers for the supported scope;
       known supported-use failures are not relabeled optional to claim closure.
 - [ ] Real-use instructions match the available normal entry routes and outcomes.
+- [ ] The context compaction coordination framework covers the selected
+      boundary/continuation/handoff/outcome behavior. Actual automatic desktop
+      compaction is reported separately as best effort and does not block closure.
 - [ ] Normal closing work for the delivered scope is complete, with history
       retained and no claim that unimplemented optional features were delivered.
 

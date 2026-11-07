@@ -23,7 +23,7 @@ import org.simplemodeling.textus.smworkflow.value.{GoalPhaseDevelopmentReconstru
   * only when its Operation executes, within that call's ordinary storage/UoW.
   * @since   Oct. 27, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  7, 2026
   */
 private[smworkflow] object StandardWorkflowRuntime {
   private final case class Shared(persistence: GoalPhaseRuntimeParameters.Persistence,
@@ -365,7 +365,7 @@ private[smworkflow] object StandardWorkflowRuntime {
     definition <- if (delegation) DelegateTaskRuntimeCatalog.loadC() else if (task) GoalTaskRuntimeCatalog.loadC() else StandaloneFixRuntimeCatalog.loadC()
     input <- if (request.operation.startsWith("start")) NativeWorkflowOperationInput.recordC(request, "input").map(DevelopmentOperationalView.json)
       else for {
-        session <- _bounded_session_c(request)
+        session <- _bounded_session_c(request, core)
         storage <- WorkflowComponentStorage.bindC(creation, SmWorkflowComponent.componentId, shared.persistence.configuration,
           Vector(definition), shared.persistence.instances, shared.persistence.continuations)
         retained <- native.retainedInputC(storage, session, core)
@@ -393,8 +393,9 @@ private[smworkflow] object StandardWorkflowRuntime {
       else RuntimeGitSelections.boundedC(service, paths, requestIdentity, objective)
   } yield selected
 
-  private def _bounded_session_c(request: Request): Consequence[String] =
-    NativeWorkflowOperationInput.optionalTextC(request, "sessionId").flatMap {
+  private def _bounded_session_c(request: Request, core: ActionCall.Core): Consequence[String] =
+    if (request.operation == "correctDelegateTaskScope") DelegateTaskScopeCorrection.inputForCallC(request, core).map(_.sessionId)
+    else NativeWorkflowOperationInput.optionalTextC(request, "sessionId").flatMap {
       case Some(value) => Consequence.success(value)
       case None => NativeWorkflowOperationInput.recordC(request, "input").flatMap(record =>
         record.getString("sessionId").map(Consequence.success).getOrElse(invalid("Bounded input requires its actual sessionId")))

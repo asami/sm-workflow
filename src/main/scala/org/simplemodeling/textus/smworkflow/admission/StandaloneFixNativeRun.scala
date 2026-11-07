@@ -59,7 +59,7 @@ private[smworkflow] object BoundedWorkRuntime {
   * No Phase Start, Plan, Step acceptance, commit or private command driver.
   * @since   Oct. 26, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  7, 2026
   */
 private[smworkflow] object StandaloneFixNativeRun extends BoundedWorkNativeRun(false) {
   type Host = BoundedWorkRuntime.Host
@@ -596,9 +596,8 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     current <- G.observeC(core)
     tree <- G.indexTreeC(core)
     _ <- if (root == payload.root && current.branch == payload.branch &&
-      payload.state.commit.exists(c => c.identity == current.head && c.tree == tree) &&
-      current.dirty == payload.unrelated.getOrElse(Vector.empty)) Consequence.unit
-      else invalid("Delivery acceptance changed committed source or unrelated work")
+      payload.state.commit.exists(c => c.identity == current.head && c.tree == tree)) Consequence.unit
+      else invalid("Delivery acceptance changed committed source")
   } yield ()
 
   private def dirtyCovers(payload: Payload, dirty: Vector[G.DirtyPath]): Boolean = {
@@ -734,7 +733,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     core: ActionCall.Core): Consequence[V.StandaloneFixView] = for {
     contract <- payload.state.input.delegation.filter(DelegateTask.valid).map(Consequence.success).getOrElse(invalid("Delivery has no admitted contract"))
     observed <- G.observeC(core)
-    _ <- if (observed.branch == payload.branch && observed.dirty == payload.unrelated.getOrElse(Vector.empty) &&
+    _ <- if (observed.branch == payload.branch &&
       payload.state.commit.fold(observed.head == payload.baseHead)(_.identity == observed.head)) Consequence.unit
       else invalid("Delivery source changed after accepted local closure")
     existing <- G.commitC(core, observed.head)
@@ -778,7 +777,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     core: ActionCall.Core): Consequence[V.StandaloneFixView] = for {
     _ <- payload.supersededWork.fold(Consequence.unit)(old =>
       GoalTaskMalformedIssuedWorkRecovery.correctionCurrentC(h, store, old, from.identity.value, core))
-    _ <- if (payload.state.stage == "Implement") implementationFreshC(payload, core)
+    _ <- if (Set("Implement", "Repair")(payload.state.stage)) implementationFreshC(payload, core)
       else if (payload.state.stage == "DeliveryAcceptance") _delivery_fresh_c(payload, core) else freshC(payload, core)
     required <- _required_c(payload.state.stage)
     work = S.Work(from.identity.value, from.revision.value.toString, payload.state.stage, payload.state)

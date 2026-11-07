@@ -1,9 +1,10 @@
 /**
  * @since   Oct. 30, 2026
- * @version Nov.  5, 2026
+ * @version Nov.  7, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
+import java.nio.charset.StandardCharsets.UTF_8
 import io.circe.{Decoder, Encoder, Json}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
@@ -21,7 +22,8 @@ import BoundedWorkRuntime.given
 import StandaloneFixExecution as S
 import DelegateTaskNativeRun as N
 
-/** Same-purpose intake correction, before native acceptance of implementation.
+/** Same-purpose inventory correction for pending implementation or repair work.
+  * Condition timing remains an initial-implementation selection only.
   * The managed supersession retires an immutable issue; only ordinary Advance
   * issues its successor. Neither retirement nor an unclaimed issue establishes
   * that external effects did not occur.
@@ -73,6 +75,20 @@ private[smworkflow] object DelegateTaskScopeCorrection {
     "target" -> input.target.asJson, "participant" -> input.participant.asJson,
     "reference" -> Json.obj("identity" -> input.reference.identity.asJson, "revision" -> input.reference.revision.asJson))
 
+  /** Use the ordinary authorized Resource reader for retained Repair targets
+    * whose actual check captures do not fit in a command-line argument. */
+  def inputForCallC(incoming: Request, call: ActionCall.Core): Consequence[V.DelegateTaskScopeCorrectionInput] = {
+    final class Reader extends ProcedureActionCall {
+      val core = call
+      def readC: Consequence[V.DelegateTaskScopeCorrectionInput] = for {
+        source <- NativeWorkflowResourceInput.selectC[V.DelegateTaskScopeCorrectionInput](incoming)
+        input <- NativeWorkflowResourceInput.readC(source, reference => read_resource_text(reference, Some(UTF_8)))
+      } yield input
+      def execute(): Consequence[OperationResponse] = N.invalid("Scope correction input reader is not an Operation")
+    }
+    new Reader().readC
+  }
+
   private final case class Observation(target: Target, current: InstanceRecord,
     entityrevision: org.simplemodeling.model.datatype.EntityRevision)
   private def _observe_c(h: Host, storage: WorkflowComponentStorage, definition: DefinitionBinding,
@@ -84,17 +100,19 @@ private[smworkflow] object DelegateTaskScopeCorrection {
       Consequence.unit else N.invalid("Scope correction crosses the native definition or lifecycle")
     order <- pending.issued.current match {
       case value: WorkflowContinuation.WorkOrder[S.Work] => Consequence.success(value)
-      case _ => N.invalid("Scope correction requires an actual pending implementation WorkOrder")
+      case _ => N.invalid("Scope correction requires an actual pending implementation or repair WorkOrder")
     }
     work <- order.request.input.map(x => Consequence.success(x.value)).getOrElse(N.invalid("Actual business input is absent"))
     revision <- scala.util.Try(work.sourceRevision.toLong).toOption.map(Consequence.success)
       .getOrElse(N.invalid("Work source revision is invalid"))
     payload <- N.loadPayloadC(storage, session, revision, core)
     _ <- GoalPhaseParticipantAdmission.admitC(payload.state.participant, core.executionContext)
-    _ <- if (work.session == session && work.kind == "Implement" && payload.state.stage == "Implement" &&
+    implementation = work.kind == "Implement" && payload.state.stage == "Implement"
+    repair = work.kind == "Repair" && payload.state.stage == "Repair" && additional.nonEmpty && submission.isEmpty
+    _ <- if (work.session == session && (implementation || repair) &&
         work.state == payload.state && order.request.completionOperation == N.completionOperation &&
         payload.root == h.root && payload.branch == h.branch && payload.state.input.repositoryIdentity == h.repository)
-      Consequence.unit else N.invalid("Scope correction is limited to the same retained initial implementation")
+      Consequence.unit else N.invalid("Scope correction requires the same pending implementation or a repair inventory addition without condition timing changes")
     _ <- correctedInputC(payload.state.input, additional, submission)
     _ <- if (additional.forall(h.paths.contains)) Consequence.unit
       else N.invalid("Added paths exceed the configured host ownership")
@@ -155,7 +173,7 @@ private[smworkflow] object DelegateTaskScopeCorrection {
       def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
         val core = c
         def execute(): Consequence[OperationResponse] = for {
-          input <- if (correct) NativeWorkflowOperationInput.valueC[V.DelegateTaskScopeCorrectionInput](incoming, "input")
+          input <- if (correct) inputForCallC(incoming, core)
             .map[Either[V.DelegateTaskScopeCorrectionInput, V.DelegateTaskScopeCorrectionDescriptionInput]](Left(_))
             else NativeWorkflowOperationInput.valueC[V.DelegateTaskScopeCorrectionDescriptionInput](incoming, "input")
               .map[Either[V.DelegateTaskScopeCorrectionInput, V.DelegateTaskScopeCorrectionDescriptionInput]](Right(_))

@@ -20,7 +20,7 @@ import S.given
 /** Public native operations and real managed persistence, without launching SBT.
   * Authority is specification-owned; this does not claim an actual Human event.
   * @since Oct. 30, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  7, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -44,6 +44,123 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
     parser.parse(take(view.state.get.toJsonStringC)).toOption.get).toOption.get.as[S.State].toOption.get
 
   "Same-Session Task scope correction" should {
+    "evaluate committed delivery without requiring the later worktree to remain unchanged" in {
+      Given("a SPECIFICATION-OWNED committed repository and a later unstaged file")
+      val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/sm-workflow/work/scope-correction").toAbsolutePath), "delivery-").toRealPath()
+      _with_runtime_(root, "Equal") { (_, _, _, prepare) =>
+        prepare(_.setupC(_setup_commands_(root, "Equal").size))
+        val later = root.resolve("repository/later-work.txt")
+        Files.writeString(later, "unrelated work remains here\n")
+        When("the delivery boundary observes the retained committed snapshot")
+        prepare { call => for {
+          observed <- call.observeC()
+          initial <- S.startC(take(DelegateTask.inputC(_input)), "participant", _checks)
+          state = initial.copy(stage = "DeliveryAcceptance", commit = Some(S.Commit(observed.head, observed.head, observed.tree)))
+          payload = BoundedWorkRuntime.Payload(state, root.resolve("repository").toString, "main", observed.head,
+            unrelated = Some(Vector.empty))
+          _ <- DelegateTaskNativeRun._delivery_fresh_c(payload, call.core)
+        } yield () }
+        Then("delivery leaves later work untouched without staging it or executing checks")
+        Files.readString(later) shouldBe "unrelated work remains here\n"
+        Files.exists(root.resolve("sbt-executions.txt")) shouldBe false
+      }
+    }
+
+    "add same-purpose repair inventory while retaining failed checks and the existing repair allowance" in {
+      Given("a SPECIFICATION-OWNED destination with retained failed checks and an unclaimed Repair checkpoint")
+      val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/sm-workflow/work/scope-correction").toAbsolutePath), "repair-").toRealPath()
+      val original = ThreeWorkflowNormalHostFixture.definition(root)
+      val host = original.copy(goal = original.goal.copy(candidatePaths = _input.ownedPaths.toVector ++ _added,
+        stepValidation = original.goal.stepValidation.copy(checks = _checks)))
+      _with_runtime_(root, "Equal", Some(host), BoundedWorkExecutionAdmissionFixture.parameters ++
+        Map("textus.resource.url.file.roots" -> root.toString)) { (owner, component, actor, prepare) =>
+        prepare(_.setupC(_setup_commands_(root, "Equal").size))
+        def _call_(operation: String, properties: List[Property]): Consequence[OperationResponse] =
+          owner.executeOperationResponseInContext(Request.of(component = component.name, service = "DelegateTaskService",
+            operation = operation, properties = properties), actor)
+        def _value_[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A =
+          read_value[A](take(_call_(operation, properties)))
+        def _import_selection_(prepared: Record): Unit = prepare { setup =>
+          val row = prepared.getVector("datastore").get.head.asInstanceOf[Record].getVector("records").get.head.asInstanceOf[Record]
+          setup.createC("goal_selection", row.getString("id").get, row.removeKeys(Set("id")))
+        }
+        val options = Map("input" -> "input.json", "selection-id" -> "repair-initial", "participant" -> "participant",
+          "origin" -> "ExplicitHuman", "idempotency-key" -> "repair-initial-key", "selection-collection" -> "entity:smworkflow.cli.goal_selection")
+        _import_selection_(take(NativeDelegateTaskStartInput.prepareC(options, _ => _input.toRecord().toJsonStringC)))
+        val started = _value_[V.DelegateTaskView]("startDelegateTask", List(Property("input", _input, None),
+          Property("selectionId", "repair-initial", None), Property("participant", "participant", None), Property("idempotencyKey", "repair-initial-key", None)))
+        // This is fixture preparation through the native checkpoint owner, not
+        // an observation of real SBT or a mutation of any consumer Session.
+        prepare { call => for {
+          definition <- DelegateTaskRuntimeCatalog.loadC()
+          h = BoundedWorkRuntime.Host(_configuration_, _collection_("instances"), _collection_("continuations"),
+            "sm-workflow", root.resolve("repository").toString, "main", host.goal.candidatePaths, _checks,
+            None, None, None, None, None)
+          store <- DelegateTaskNativeRun.storageC(h, definition, call.core)
+          instances <- store.bindInstancesC()(using call.core.executionContext)
+          current <- instances.loadC(org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceIdentity(started.sessionId))(using call.core.executionContext)
+            .flatMap(_.map(Consequence.success).getOrElse(Consequence.stateConflict("Fixture Start is absent")))
+          payload <- DelegateTaskNativeRun.loadPayloadC(store, started.sessionId, current.revision.value, call.core)
+          observed <- call.observeC()
+          failed = org.simplemodeling.textus.smworkflow.admission.RepositorySyncNativeMergeValidation.Receipt(
+            "focused", "exited", Some(1), "SPECIFICATION-OWNED retained check failure", "")
+          repair = payload.state.copy(stage = "Repair", generation = 3, automaticCount = 2, ordinaryCount = 1,
+            candidate = Some(S.Candidate(observed.head, observed.tree, Vector("src/test/scala/Repair.scala"), "fixture candidate")),
+            receipts = Vector(failed), semanticReference = Some(ContextReference("retained-implementation", "1")),
+            findings = Vector("check:focused:failed"), repairControl = payload.state.repairControl.observe(
+              "fixture-repair", "retained-failure", Vector("check:focused:failed")))
+          _ <- DelegateTaskNativeRun.saveC(h, store, current, payload.copy(state = repair), call.core)
+        } yield () }
+        val partial = root.resolve("repository/src/test/scala/Repair.scala")
+        Files.createDirectories(partial.getParent)
+        Files.writeString(partial, "// retained same-purpose repair in progress\n")
+        def _advance_() = _value_[V.DelegateTaskView]("advanceDelegateTask", List(Property("sessionId", started.sessionId, None)))
+        val old = _advance_()
+        val before = _state(old)
+        val continuation = old.issuedWorkContext.get.continuationId
+        When("the same pending Repair is described with necessary additional literal paths")
+        val description = _value_[V.DelegateTaskScopeCorrectionView]("describeDelegateTaskScopeCorrection",
+          List(Property("input", V.DelegateTaskScopeCorrectionDescriptionInput(started.sessionId, continuation, _added, Vector.empty), None)))
+        Then("the public description is available while the repair and all its facts remain pending")
+        old.work.get.getString("kind") shouldBe Some("Repair")
+        description.outcome shouldBe "decision-required"
+        _advance_().issuedWorkContext shouldBe old.issuedWorkContext
+        When("a condition timing change is proposed through the Repair inventory route")
+        val timing = _call_("describeDelegateTaskScopeCorrection", List(Property("input",
+          V.DelegateTaskScopeCorrectionDescriptionInput(started.sessionId, continuation, _added, Vector("behavior")), None)))
+        Then("inventory permission does not expand to changing the initial condition timing")
+        timing.isSuccess shouldBe false
+        Given("the exact correction selected independently by the fixture Human")
+        val correction = V.DelegateTaskScopeCorrectionInput(started.sessionId, continuation, description.target,
+          "repair-inventory", "participant", "repair-inventory-key", V.WorkflowArtifactReference("fixture-repair-inventory-human", "1"))
+        _import_selection_(take(NativeDelegateTaskScopeCorrectionInput.prepareC(options ++ Map(
+          "selection-id" -> correction.selectionId, "idempotency-key" -> correction.idempotencyKey),
+          _ => correction.toRecord().toJsonStringC)))
+        val correctionfile = root.resolve("repair-inventory.json")
+        Files.writeString(correctionfile, take(correction.toRecord().toJsonStringC))
+        When("the correction is applied and normal Advance issues the successor Repair")
+        val corrected = _value_[V.DelegateTaskScopeCorrectionView]("correctDelegateTaskScope",
+          List(Property("inputResource", correctionfile.toUri.toASCIIString, None)))
+        val next = _advance_()
+        val after = _state(next)
+        Then("the same Session preserves its original repair state and adds only the selected inventory and provenance")
+        corrected.outcome shouldBe "corrected-awaiting-advance"
+        next.sessionId shouldBe old.sessionId
+        next.work.get.getString("kind") shouldBe Some("Repair")
+        next.issuedWorkContext.get.continuationId should not be continuation
+        after.input.ownedPaths shouldBe before.input.ownedPaths ++ _added
+        after.input.conditions shouldBe before.input.conditions
+        after.input.submissionConditions shouldBe before.input.submissionConditions
+        after.input.sourceReferences should contain(ContextReference(correction.reference.identity, correction.reference.revision))
+        after.copy(input = before.input) shouldBe before
+        after.automaticCount shouldBe 2
+        after.ordinaryCount shouldBe 1
+        after.repairControl.selectedLimit shouldBe 10
+        Files.readString(partial) shouldBe "// retained same-purpose repair in progress\n"
+        Files.exists(root.resolve("sbt-executions.txt")) shouldBe false
+      }
+    }
+
     "retain immutable issued work and partial source, admit the exact correction, and continue without executing checks" in {
       Given("an isolated native destination with an unclaimed initial implementation.")
       val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/sm-workflow/work/scope-correction").toAbsolutePath), "episode-").toRealPath()
@@ -394,12 +511,13 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
       Then("later obligations remain false until the actual retained closure is available.")
       reviewed.stage shouldBe "CommitReady"
       reviewed.conditionReport shouldBe pending
-      Given("a retained SPECIFICATION-OWNED selected commit and ready publication for the same source")
+      Given("a retained SPECIFICATION-OWNED selected commit and ready publication with unrelated dirty paths")
       val committed = take(S.committedC(reviewed.copy(stage = "CommitIntent"),
         S.Commit("c" * 40, candidate.head, candidate.tree)))
       val target = LocalPublication.Target("fixture-publication", _contract.componentIdentity, "sm-workflow-repository")
       val request = LocalPublication.Request(LocalPublication.Input("fixture-publication-request", target.identity), target,
-        LocalPublication.Source(committed.commit.get.identity, candidate.tree, Vector.empty), "participant",
+        LocalPublication.Source(committed.commit.get.identity, candidate.tree,
+          Vector(LocalPublication.Change("docs/phase/other.md", " ", "M"))), "participant",
         "SPECIFICATION-OWNED retained publication", None, Vector.empty)
       val publication = LocalPublication.Result("published", "SPECIFICATION-OWNED typed publication outcome", request)
       val delivered = committed.copy(stage = "DeliveryAcceptance", delivery = Some(DelegateTask.Delivery(

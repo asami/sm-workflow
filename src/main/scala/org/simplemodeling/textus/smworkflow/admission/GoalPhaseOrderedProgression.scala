@@ -13,7 +13,7 @@ import GoalPhaseRuntimeRepairControl as R
   * Semantic replies carry no stage, cursor, command or closure receipt.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  7, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseOrderedProgression {
@@ -209,6 +209,19 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     private val _reconstruction_repair_scope: Option[String] = None) {
     def selectedRepairLimit: Int = repairControl.map(_.selectedLimit).getOrElse(plan.repairLimit)
     def effectiveRepairLimit: Int = repairControl.map(_.effectiveLimit).getOrElse(plan.repairLimit)
+    private[admission] def reconstructionStoppedRepairReservation: Boolean =
+      pendingRepair.nonEmpty || policyRepairPending || repairControl.flatMap(_.stop).nonEmpty
+    /** A scope is reserved only by actual repair activity or a retained reservation. */
+    private def _has_repair_scope: Boolean = repairs > 0 || ordinaryRepairs > 0 ||
+      repairObservations.nonEmpty || reconstructionStoppedRepairReservation || stage == Stage.Repair ||
+      (stage == Stage.Decision && decisionSource.contains(Stage.Repair))
+
+    private[admission] def reconstructionMovesRepairScope(proposed: Plan): Boolean = {
+      val current = if (cursor == plan.steps.size) ("Release", plan.phase) else ("Step", plan.steps(cursor).identity)
+      val next = if (cursor == proposed.steps.size) ("Release", proposed.phase)
+        else if (cursor < proposed.steps.size) ("Step", proposed.steps(cursor).identity) else ("Invalid", "")
+      _has_repair_scope && current != next
+    }
     /** The native reconstruction owner authenticates documents, source facts and
       * any actual Human answer. This pure connection never grants effects or
       * creates another repair window. Existing repair context remains reserved.
@@ -228,7 +241,7 @@ private[smworkflow] object GoalPhaseOrderedProgression {
         Consequence.unit else invalid("development reconstruction must preserve its live accepted prefix, identity, base and repair policy")
       _ <- if (!changed || generation < Long.MaxValue) Consequence.unit
         else invalid("development reconstruction generation is exhausted")
-      stopped = pendingRepair.nonEmpty || policyRepairPending || repairControl.flatMap(_.stop).nonEmpty
+      stopped = reconstructionStoppedRepairReservation
       _ <- if (!technicalReassessment || (changed && concerns.isEmpty && !adoptDecision && !stopped &&
           candidate.isEmpty && checksReceipt.isEmpty && reviewEvidence.isEmpty && closureIntent.isEmpty &&
           cursor < plan.steps.size && (stage == Stage.InspectCandidate ||
@@ -243,8 +256,10 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       nextstage = if (uncertain) Stage.Decision else if (clear)
         (if (cursor == proposed.steps.size) Stage.PhaseInspection else Stage.InspectCandidate) else origin
       nextgeneration = if (clear) generation + 1 else generation
-      repairscope = if (proposed.revision != plan.revision)
+      repairscope = if (!_has_repair_scope) None else if (proposed.revision != plan.revision)
         _reconstruction_repair_scope.orElse(Some(_repair_scope)) else _reconstruction_repair_scope
+      _ <- if (!reconstructionMovesRepairScope(proposed)) Consequence.unit
+        else invalid("common reconstruction cannot move the retained repair scope across an unclosed semantic boundary")
       _ <- if (repairscope.forall(scope => io.circe.parser.parse(scope).toOption.flatMap(_.as[Vector[String]].toOption)
           .exists(fields => fields.size == 4 && fields.head == proposed.identity &&
             fields(2) == (if (cursor == proposed.steps.size) "Release" else "Step") &&

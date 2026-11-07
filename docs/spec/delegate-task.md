@@ -62,6 +62,12 @@ The destination retains strict logical or concrete operating-context resolution,
 repository/path/dirty-scope admission, installed validation and publication
 bindings, and genuine execution, review, commit and publication evidence.
 StandaloneFix and GoalTask retain their existing execution requirements.
+Final delivery evaluates the retained committed candidate and its matching
+successful publication. It requires neither a globally clean publication
+worktree nor an unchanged list of later worktree modifications. Unstaged work
+is preserved and is not represented as part of that committed result. Root,
+branch, committed HEAD/index tree, qualification and publication correspondence
+remain owned by their existing boundaries.
 The requester exemption adds no operation, schema, persistence, property,
 executor, permission or queue. See the [finite caller sequence and role-specific
 host bindings](native-delegate-task-caller.md) for normal prepare, Start,
@@ -327,6 +333,14 @@ not supply that choice. The same published correction also supports additional
 literal owned paths for the same purpose, subject to the retained host ownership
 and delegation exclusions. It replaces no original ownership, purpose, operation
 or authority.
+
+The same public route also accepts an unclaimed, unsubmitted Repair issue when
+necessary same-purpose literal inventory is missing. Supply additional owned
+paths and leave submission timing empty; Repair cannot select a new timing plan.
+The existing failed check receipts, candidate, prior results, generation, repair
+counts and selected limit stay attached. The superseded issue remains historical
+and ordinary Advance issues the successor Repair in the same Session. This does
+not permit re-Start, a new repair window, effect replay or private storage edits.
 
 Correction appends a typed native WorkOrder supersession, preserving the old
 immutable issue, base, generation, repair control and counters, prior results and

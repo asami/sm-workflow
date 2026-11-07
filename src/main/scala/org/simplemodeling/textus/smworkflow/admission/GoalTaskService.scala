@@ -18,7 +18,7 @@ import StandaloneFixExecution as S
 /** Ordinary public operations around the canonical CNCF continuation engine.
   * @since   Oct. 26, 2026
   *  version Oct. 27, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  7, 2026
   */
 private[smworkflow] object GoalTaskService {
   def bindC(creation: ComponentCreate, declaration: GoalPhaseNativeRun.Declaration): Consequence[spec.ServiceDefinition] =
@@ -188,15 +188,15 @@ private[admission] final class BoundedTaskService(N: BoundedWorkNativeRun) {
           _ <- S.admitResultC(work, submitted.result.value)
           _ <- if (submitted.evidence.workerIdentity.exists(_.nonEmpty)) Consequence.unit
             else N.invalid("Actual semantic completion requires its worker identity, without inventing execution placement")
-          observation <- RepositorySyncManagedGitObservation.observeC(call)
-          root <- RepositorySyncManagedGitObservation.rootC(call)
-          _ <- if (root == payload.root && observation.branch == payload.branch &&
-            (if (work.kind == "DeliveryAcceptance") payload.state.commit.exists(_.identity == observation.head) else observation.head == payload.baseHead) &&
-            observation.dirty.filterNot(d => S.owned(d.path, payload.state.input.ownedPaths)) == payload.unrelated.getOrElse(Vector.empty) &&
-            observation.dirty.filter(d => S.owned(d.path, payload.state.input.ownedPaths)).forall(d =>
-              !d.unmerged && S.permitted(d.path, payload.state.input) && d.renamedFrom.forall(S.permitted(_, payload.state.input))))
-            Consequence.unit else N.invalid("Semantic completion changed HEAD or exceeded ownership")
-          _ <- if (work.kind == "DeliveryAcceptance") N._delivery_fresh_c(payload, call) else Consequence.unit
+          _ <- if (work.kind == "DeliveryAcceptance") N._delivery_fresh_c(payload, call) else for {
+            observation <- RepositorySyncManagedGitObservation.observeC(call)
+            root <- RepositorySyncManagedGitObservation.rootC(call)
+            _ <- if (root == payload.root && observation.branch == payload.branch && observation.head == payload.baseHead &&
+              observation.dirty.filterNot(d => S.owned(d.path, payload.state.input.ownedPaths)) == payload.unrelated.getOrElse(Vector.empty) &&
+              observation.dirty.filter(d => S.owned(d.path, payload.state.input.ownedPaths)).forall(d =>
+                !d.unmerged && S.permitted(d.path, payload.state.input) && d.renamedFrom.forall(S.permitted(_, payload.state.input))))
+              Consequence.unit else N.invalid("Semantic completion changed HEAD or exceeded ownership")
+          } yield ()
           _ <- if (work.kind == "Review") for {
             _ <- N.freshC(payload, call)
             _ <- h.review.map(_.admitStandaloneC(call, work, submitted)).getOrElse(N.invalid("Independent review evidence installation is absent"))

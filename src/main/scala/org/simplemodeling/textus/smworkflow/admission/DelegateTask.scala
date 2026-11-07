@@ -1,6 +1,6 @@
 /**
  * @since   Oct. 27, 2026
- * @version Nov.  5, 2026
+ * @version Nov.  7, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -173,7 +173,7 @@ private[smworkflow] object DelegateTask {
       (!state.input.reviewRequired || state.reviewReference.nonEmpty) && state.delivery.exists(d =>
         contract.publicationTarget.isEmpty || d.publication.exists(p => p.ready &&
           p.request.target.identity == contract.publicationTarget.get && p.request.target.component == contract.componentIdentity &&
-          p.request.source.head == state.commit.get.identity && p.request.source.clean))) Consequence.unit
+          p.request.source.head == state.commit.get.identity))) Consequence.unit
       else invalid("returned result lacks accepted conditions, local commit or required actual publication")
   } yield state
 

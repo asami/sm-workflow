@@ -12,7 +12,7 @@ import GoalPhaseDevelopmentReconstruction as R
 /** Pure reconstruction examples describe controller and business-data contracts;
   * only the native CLI specification supplies actual effects and Human evidence.
   * @since   Nov.  5, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  7, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.AdmissionTestDeclaration])
@@ -59,6 +59,80 @@ final class GoalPhaseDevelopmentReconstructionSpec extends AnyWordSpec with Matc
   }
 
   "Common development reconstruction" should {
+    "apply an adopted remaining insertion with no repair reservation and retain the accepted prefix" in {
+      Given("an accepted first Step and an ordinary unclosed second Step")
+      val state = _first_closed
+      val inserted = O.Step("preparation", "Prepare remaining work", Vector("src/second.scala"),
+        Vector("first"), Vector("second-test"))
+      val proposed = state.plan.copy(revision = "inserted", steps =
+        Vector(state.plan.steps.head, inserted, state.plan.steps(1)))
+      val assessment = _assessment(state, proposed, _observation(state, state.tipSnapshot.tree))
+      val payload = _payload(state, proposed, assessment)
+      val waiting = _take(R.selectedStateC(state, payload))
+      val answer = ContextReference("actual-insertion-answer", "1")
+      When("the actual offered Human direction is applied through the retained selection")
+      R.choicesFor(payload) should contain("AdoptDevelopmentReconstruction")
+      val selected = _take(R.selectedStateC(waiting, payload.copy(humanAnswer = Some(answer)),
+        Some("AdoptDevelopmentReconstruction" -> answer)))
+      Then("the inserted Step is next and the accepted evidence and accounting remain intact")
+      selected.plan shouldBe proposed
+      selected.completed shouldBe state.completed
+      selected.base shouldBe state.base
+      selected.repairs shouldBe state.repairs
+      selected.repairObservations shouldBe state.repairObservations
+      selected.next.asInstanceOf[O.Semantic].key.step shouldBe Some("preparation")
+    }
+
+    "withhold adoption and reject moving an actual repair scope" in {
+      Given("a failed second Step with a charged repair and retained observation")
+      val observed = _take(_ready(_first_closed).acceptC(O.CandidateObserved(O.Snapshot(_oid('d'), _oid('e')))))
+      val repair = _take(observed.acceptC(O.RepairableChecksObserved(observed.candidate.get, Vector("second-test"),
+        "failed-second", O.RepairDirective("Fix failure", Vector("actual failure")))))
+      val state = _ready(repair)
+      val inserted = O.Step("preparation", "Prepare remaining work", Vector("src/second.scala"),
+        Vector("first"), Vector("second-test"))
+      val proposed = state.plan.copy(revision = "inserted", steps = Vector(state.plan.steps.head, inserted, state.plan.steps(1)))
+      When("assessment and application encounter the same changed semantic boundary")
+      val assessment = _assessment(state, proposed, _observation(state, state.tipSnapshot.tree))
+      val payload = _payload(state, proposed, assessment)
+      Then("the actual repair history prevents offering or applying the move")
+      assessment.incompatible should contain("remaining Step would move a retained repair scope")
+      R.choicesFor(payload) should not contain "AdoptDevelopmentReconstruction"
+      state.reconstructDevelopmentC(proposed, true, None).isSuccess shouldBe false
+      state.repairs should be > 0
+      state.repairObservations should not be empty
+    }
+
+    "protect a pending repair after its available batch has been charged" in {
+      Given("a failed current Step with one available repair batch")
+      val plan = _plan.copy(repairLimit = 1)
+      val initial = _take(O.startC(plan, _base, Some(GoalPhaseRuntimeRepairControl.version)))
+      val observed = _take(_ready(initial).acceptC(O.CandidateObserved(O.Snapshot(_base.head, _oid('c')))))
+      val repair = _take(observed.acceptC(O.RepairableChecksObserved(observed.candidate.get, Vector("first-test"),
+        "failed-first", O.RepairDirective("Fix failure", Vector("actual failure")))))
+      val retried = _take(_ready(repair).acceptC(O.CandidateObserved(O.Snapshot(_base.head, _oid('e')))))
+      val stopped = _take(retried.acceptC(O.RepairableChecksObserved(retried.candidate.get, Vector("first-test"),
+        "failed-again", O.RepairDirective("Fix failure", Vector("actual failure")))))
+      val inserted = O.Step("preparation", "Prepare first work", Vector("src/first.scala"), Vector.empty, Vector("first-test"))
+      val proposed = plan.copy(revision = "inserted", steps = inserted +: plan.steps)
+      When("the stopped boundary is assessed for an insertion")
+      val assessment = _assessment(stopped, proposed, _observation(stopped, stopped.tipSnapshot.tree))
+      Then("the proposal is incompatible and direct application refuses it")
+      stopped.stage shouldBe O.Stage.Decision
+      stopped.pendingRepair should not be empty
+      assessment.incompatible should contain("remaining Step would move a retained repair scope")
+      R.choicesFor(_payload(stopped, proposed, assessment)) should not contain "AdoptDevelopmentReconstruction"
+      stopped.reconstructDevelopmentC(proposed, true, None).isSuccess shouldBe false
+
+      When("a revised proposal leaves the stopped Step identity unchanged")
+      val revised = plan.copy(revision = "same-step-revision")
+      val revisedAssessment = _assessment(stopped, revised, _observation(stopped, stopped.tipSnapshot.tree))
+      Then("assessment and application both refuse amendment of the stopped reservation")
+      revisedAssessment.incompatible should contain("stopped repair reservation cannot be amended")
+      R.choicesFor(_payload(stopped, revised, revisedAssessment)) should not contain "AdoptDevelopmentReconstruction"
+      stopped.reconstructDevelopmentC(revised, true, None).isSuccess shouldBe false
+    }
+
     "retain exact legacy v1 bytes and require complete versioned current-prefix proof for v2" in {
       Given("one legacy selection and a new current-source partition with distinct retained direction and failed-result references")
       val state = _ready(_first_closed)

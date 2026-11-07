@@ -17,7 +17,7 @@ build:
   cozyVersion: "0.3.3-SNAPSHOT"
   dependencies:
     compile:
-      - "org.goldenport::goldenport-cncf:0.5.3-SNAPSHOT"
+      - "org.goldenport::goldenport-cncf:0.5.6-SNAPSHOT"
       - "org.scalatest::scalatest:3.2.19"
     test:
       - "org.scalatest::scalatest:3.2.19"
@@ -39,10 +39,10 @@ packaging:
       domain: "software-development"
     runtime:
       cncf:
-        minimum: "0.5.3-SNAPSHOT"
+        minimum: "0.5.6-SNAPSHOT"
         excluded: []
         tested:
-          - "0.5.3-SNAPSHOT"
+          - "0.5.6-SNAPSHOT"
 
 warehouse:
   repository_artifacts:
