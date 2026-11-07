@@ -22,7 +22,7 @@ private[smworkflow] object NativeReviewScope {
       input <- at(body, "target")
       target <- if (purpose == Purpose.StandaloneReview) {
         Json.fromJsonObject(input).as[StandaloneFixExecution.Work].left.map(_.message).flatMap(work =>
-          Either.cond(work.kind == "Review", work.asJson, "Standalone scope is not actual review work"))
+          Either.cond(work.kind == "Review", _standalone(work).asJson, "Standalone scope is not actual review work"))
       } else if (purpose == Purpose.GoalReview) goal(input) else repository(input)
       result <- at(body, "result").flatMap(resultTarget(_, purpose))
       _ <- if (purpose != Purpose.GoalReview) Right(()) else {
@@ -108,10 +108,19 @@ private[smworkflow] object NativeReviewScope {
     exit <- receipt("exitCode").flatMap(_.asNumber).flatMap(_.toInt).toRight("Review exitCode must be an integer")
     sbt <- receipt("sbt") match {
       case None => Right(None)
-      case Some(value) => value.as[WorkflowSbtValidation.Facts].left.map(_.message).map(facts => Some(facts.asJson))
+      case Some(value) => value.as[WorkflowSbtValidation.Facts].left.map(_.message).map(facts => Some(_facts(facts).asJson))
     }
     selected = fields.add("exitCode", Json.fromInt(exit))
   } yield Json.fromJsonObject(sbt.fold(selected)(facts => selected.add("sbt", facts)))
+
+  // Facts retains historical field presence for storage. Review compares typed
+  // meaning instead: only an absent estimate loses its encoding history here.
+  private def _facts(facts: WorkflowSbtValidation.Facts): WorkflowSbtValidation.Facts =
+    WorkflowSbtValidation.Facts(facts.kind, facts.outcome, facts.selection, facts.reason, facts.estimate)
+
+  private def _standalone(work: StandaloneFixExecution.Work): StandaloneFixExecution.Work =
+    work.copy(state = work.state.copy(receipts = work.state.receipts.map(receipt =>
+      receipt.copy(sbt = receipt.sbt.map(_facts)))))
 
   private def resultTarget(input: JsonObject, purpose: Purpose): Either[String, Json] = for {
     fields <- strings(input, Vector("runId", "continuationId", "typeIdentity", "worker"))
