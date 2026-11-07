@@ -32,8 +32,7 @@ import GoalPhasePrerequisitePublicationUnknownRecovery as W
   * publication. Direction appends no Git or SBT effect; Advance owns the bounded
   * effect chain and the ordinary prerequisite owner owns publication.
   * @since   Nov.  1, 2026
-  *  version Nov.  2, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  7, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhasePrerequisitePublicationRecovery {
@@ -508,6 +507,9 @@ private[smworkflow] object GoalPhasePrerequisitePublicationRecovery {
 
   def selectBinding(value: Json): Either[String, Json] =
     if (Option(value).exists(_.hcursor.downField("prerequisitePublicationRecovery").downField("target")
+        .get[String]("schemaVersion").contains(GoalPhasePrerequisitePublicationHostRecovery.schema)))
+      GoalPhasePrerequisitePublicationHostRecovery.selectBinding(value)
+    else if (Option(value).exists(_.hcursor.downField("prerequisitePublicationRecovery").downField("target")
         .get[String]("schemaVersion").contains(GoalPhaseCurrentSourceArtifactAdoption.targetSchema)))
       GoalPhaseCurrentSourceArtifactAdoption.selectBinding(value)
     else if (Option(value).exists(_.hcursor.downField("prerequisitePublicationRecovery").downField("target")
@@ -1030,7 +1032,7 @@ private[smworkflow] object GoalPhasePrerequisitePublicationRecovery {
       } yield result else for {
         record <- NativeWorkflowResourceInput.readC(recovery.get, reference => read_resource_text(reference,
           Some(java.nio.charset.StandardCharsets.UTF_8)).flatMap(validateBusinessTextC))
-        input <- businessRecordC[V.GoalPhasePrerequisitePublicationRecoveryInput](record, Set("sessionId", "target", "choice", "rationale", "reference"))
+        input <- recoveryRecordC(record)
         _ <- recoveryInputC(input)
         context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(input.sessionId))
         result <- port.recoverPrerequisitePublicationC(input, core.copy(executionContext = context)).map(NativeWorkflowOperationOutput.response(_))
@@ -1095,7 +1097,13 @@ private[smworkflow] object GoalPhasePrerequisitePublicationRecovery {
     _ <- if (input != null && input.reference != null && _exact(input.reference.identity) && _exact(input.reference.revision) &&
         _rationale(input.rationale)) Consequence.unit else F.invalid("Recovery input requires its independent reference and rationale")
     json <- W.jsonC(input.target)
+    host = json.hcursor.get[String]("schemaVersion").contains(GoalPhasePrerequisitePublicationHostRecovery.schema)
+    _ <- if (host) GoalPhasePrerequisitePublicationHostRecovery.inputC(input)
+      else if (input.hostCorrection != null && input.hostCorrection.isEmpty) Consequence.unit
+      else F.invalid("Host correction is not a field of this legacy recovery target")
     expected <- json.hcursor.get[String]("schemaVersion").toOption match {
+      case Some(version) if version == GoalPhasePrerequisitePublicationHostRecovery.schema =>
+        GoalPhasePrerequisitePublicationHostRecovery.targetC(input.target).map(_ => GoalPhasePrerequisitePublicationHostRecovery.choices)
       case Some(version) if version == GoalPhaseCurrentSourceArtifactAdoption.targetSchema =>
         GoalPhaseCurrentSourceArtifactAdoption.targetC(input.target).map(_ => GoalPhaseCurrentSourceArtifactAdoption.choices)
       case Some(version) if GoalPhasePrerequisitePrimaryRepair.isTargetSchema(version) =>
@@ -1107,4 +1115,28 @@ private[smworkflow] object GoalPhasePrerequisitePublicationRecovery {
     }
     _ <- if (expected.contains(input.choice)) Consequence.unit else F.invalid("Recovery choice is not available at this exact phase")
   } yield ()
+
+  /** Optional correction is local to this Action; other exact business records
+    * keep their existing required-field contract. Explicit null is refused. */
+  private[admission] def recoveryRecordC(record: Record): Consequence[V.GoalPhasePrerequisitePublicationRecoveryInput] = for {
+    _ <- if (record != null && DevelopmentOperationalView.uniqueFields(record)) Consequence.unit
+      else F.invalid("Recovery business input is absent or has duplicate fields")
+    raw <- record.toJsonStringC
+    json <- io.circe.parser.parse(raw).left.map(_.message).flatMap(GoalPhaseNativeMetadata.normalizePublicJson)
+      .fold(F.invalid, Consequence.success)
+    required = Set("sessionId", "target", "choice", "rationale", "reference")
+    keys <- json.asObject.map(o => Consequence.success(o.keys.toSet)).getOrElse(F.invalid("Recovery input requires an object"))
+    _ <- if (keys == required || keys == required + "hostCorrection") Consequence.unit
+      else F.invalid("Recovery input has missing or undeclared fields")
+    _ <- json.hcursor.get[Option[Json]]("hostCorrection").toOption.flatten match {
+      case None if !keys("hostCorrection") => Consequence.unit
+      case Some(correction) if correction.asObject.exists(fields => fields.keys.toSet == Set(
+          "failedRequestIdentity", "programIdentity", "observationReference", "observedAt", "summary") &&
+          fields.values.forall(!_.isNull)) && correction.hcursor.downField("observationReference").focus.exists(
+            _.asObject.exists(fields => fields.keys.toSet == Set("identity", "revision") &&
+              fields.values.forall(_.asString.exists(_exact)))) => Consequence.unit
+      case _ => F.invalid("Host correction requires exactly its declared non-null fields")
+    }
+    value <- businessRecordC[V.GoalPhasePrerequisitePublicationRecoveryInput](record, keys)
+  } yield value
 }

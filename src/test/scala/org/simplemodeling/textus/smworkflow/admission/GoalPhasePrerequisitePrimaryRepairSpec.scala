@@ -273,8 +273,7 @@ private[admission] object PrimaryPublicationRepairSpecificationFixture {
 
 /** Primary publication repair authority, attribution and retained capture contracts.
   * @since   Nov.  2, 2026
-  *  version Nov.  2, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  7, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -1379,7 +1378,7 @@ final class GoalPhasePrerequisitePrimaryRepairCodecSpec extends AnyWordSpec with
       val description = A.description(target)
       val reference = org.simplemodeling.textus.smworkflow.value.WorkflowArtifactReference(direction.reference.identity, direction.reference.revision)
       val input = org.simplemodeling.textus.smworkflow.value.GoalPhasePrerequisitePublicationRecoveryInput(target.sessionId,
-        description.target, direction.choice, direction.rationale, reference)
+        description.target, direction.choice, direction.rationale, reference, None)
       When("the closed codecs recognizers input binding and passive Human preparation consume each version")
       val prepared = org.simplemodeling.textus.smworkflow.preparation.NativePrerequisitePublicationRecoveryPreparation.prepareC(
         description, input, reference, org.simplemodeling.textus.smworkflow.value.WorkflowExecutionEvidence(

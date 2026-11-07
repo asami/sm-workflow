@@ -27,7 +27,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Small typed business fixtures do not provision Human evidence, fabricate
   * native acceptance or qualify installed effects. E11 owns that qualification.
   * @since   Nov.  2, 2026
-  * @version Nov.  2, 2026
+  * @version Nov.  7, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -269,7 +269,7 @@ final class GoalPhaseCurrentSourceArtifactAdoptionSpec extends AnyWordSpec with 
       val description = A.description(_target)
       val reference = V.WorkflowArtifactReference(_reference.identity, _reference.revision)
       val input = V.GoalPhasePrerequisitePublicationRecoveryInput(_target.sessionId, description.target,
-        A.choices.head, _direction.rationale, reference)
+        A.choices.head, _direction.rationale, reference, None)
       val execution = V.WorkflowExecutionEvidence(Vector(reference), Some(_target.participant), None, None)
       def _prepare_(described: V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult = description,
         supplied: V.GoalPhasePrerequisitePublicationRecoveryInput = input, evidence: V.WorkflowExecutionEvidence = execution) =

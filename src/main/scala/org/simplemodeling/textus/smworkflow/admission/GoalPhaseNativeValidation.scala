@@ -28,7 +28,7 @@ import org.goldenport.cncf.validation.ValidationDiscoveryV1 as D
   * commits precede each external effect. Unknown results are not replayed.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  2, 2026
+  * @version Nov.  7, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeValidation {
@@ -254,15 +254,16 @@ private[smworkflow] object GoalPhaseNativeValidation {
     prerequisiteWait: Option[LocalPublication.Result] = None,
     existingArtifactAdoption: Option[GoalPhasePrerequisitePublicationUnknownRecovery.ExistingArtifactAdoption] = None,
     confirmedFailureSuccessor: Option[LocalPublication.ConfirmedFailureSuccessor] = None,
-    primaryRepairPublication: Option[LocalPublication.ConfirmedFailureSuccessor] = None):
+    primaryRepairPublication: Option[LocalPublication.ConfirmedFailureSuccessor] = None,
+    hostRecovery: Option[GoalPhasePrerequisitePublicationHostRecovery.Permit] = None):
       Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
     store <- _store_c(session, d, core, candidate, controller, acknowledgement, from, documentPolicy, recordingPaths, dependencyChain)
     retained <- store.loadC("validation")
     existingintent <- store.loadC("check-intent-0")
-    _ <- if ((prerequisiteRecovery || qualifiedSuccessor.nonEmpty || existingArtifactAdoption.nonEmpty || confirmedFailureSuccessor.nonEmpty || primaryRepairPublication.nonEmpty) &&
+    _ <- if ((prerequisiteRecovery || qualifiedSuccessor.nonEmpty || existingArtifactAdoption.nonEmpty || confirmedFailureSuccessor.nonEmpty || primaryRepairPublication.nonEmpty || hostRecovery.nonEmpty) &&
         retained.isEmpty && existingintent.isEmpty) store.preconditionsC else Consequence.unit
     prerequisite <- if (retained.isEmpty && existingintent.isEmpty) LocalPublicationRuntime.beforeChecksC(session, d, core, candidate,
-      qualifiedSuccessor, prerequisiteWait, existingArtifactAdoption, confirmedFailureSuccessor, primaryRepairPublication)
+      qualifiedSuccessor, prerequisiteWait, existingArtifactAdoption, confirmedFailureSuccessor, primaryRepairPublication, hostRecovery)
       else Consequence.success(None)
     response <- prerequisite match {
       case Some(waiting) => Consequence.success(waiting)

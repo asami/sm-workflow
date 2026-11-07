@@ -7,6 +7,7 @@ import org.goldenport.record.Record
 import org.simplemodeling.textus.smworkflow.admission.{GoalPhasePrerequisitePublicationRecovery as R,
   GoalPhaseCurrentSourceArtifactAdoption as A,
   GoalPhasePrerequisitePrimaryRepair as P,
+  GoalPhasePrerequisitePublicationHostRecovery as H,
   GoalPhasePrerequisitePublicationUnknownRecovery as U, NativeExternalEvidence,
   ThreeWorkflowExternalEvidencePorts}
 import org.simplemodeling.textus.smworkflow.value as V
@@ -14,8 +15,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Passive conversion of an independently supplied answer. Provisioning and
   * guarded recovery remain with their normal owners.
   * @since   Nov.  1, 2026
-  *  version Nov.  1, 2026
-  * @version Nov.  2, 2026
+  * @version Nov.  7, 2026
   * @author  ASAMI, Tomoharu
   */
 object NativePrerequisitePublicationRecoveryPreparation {
@@ -34,7 +34,23 @@ object NativePrerequisitePublicationRecoveryPreparation {
     primary <- R.isPrimaryTargetC(description.target)
     repair <- P.isTargetC(description.target)
     artifact <- A.isTargetC(description.target)
-    binding <- if (artifact) for {
+    host <- H.isTargetC(description.target)
+    _ <- if (host || input.hostCorrection != null && input.hostCorrection.isEmpty) Consequence.unit
+      else Consequence.stateConflict("Host correction cannot be supplied to a legacy recovery target")
+    binding <- if (host) for {
+      target <- H.targetC(description.target)
+      supplied <- H.targetC(input.target)
+      correction <- H.correctionC(input.hostCorrection)
+      _ <- if (target == supplied && description.choices == H.choices && target.sessionId == input.sessionId &&
+          target.participant == participant && target.componentInstance == description.componentInstance &&
+          description.outcome == "direction-required" && execution.references != null &&
+          execution.references.contains(reference) && correction.forall(c => execution.references.contains(
+            V.WorkflowArtifactReference(c.observationReference.identity, c.observationReference.revision)) &&
+            !Instant.parse(c.observedAt).isAfter(occurredAt))) Consequence.unit
+        else Consequence.stateConflict("Host recovery preparation crosses its target, participant or actual Human/correction references")
+      binding <- H.bindingC(description.componentInstance, target, input.choice, input.rationale, participant,
+        ContextReference(reference.identity, reference.revision), correction)
+    } yield binding else if (artifact) for {
       target <- A.targetC(description.target)
       supplied <- A.targetC(input.target)
       _ <- if (target == supplied && description.choices == A.choices && target.sessionId == input.sessionId &&

@@ -786,6 +786,19 @@ OperationResult
 | choice | string | 1 |
 | rationale | string | 1 |
 | reference | WorkflowArtifactReference | 1 |
+| hostCorrection | GoalPhasePublicationHostCorrection | ? |
+
+## GoalPhasePublicationHostCorrection
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| failedRequestIdentity | string | 1 |
+| programIdentity | string | 1 |
+| observationReference | WorkflowArtifactReference | 1 |
+| observedAt | string | 1 |
+| summary | string | 1 |
 
 ## GoalPhasePrerequisitePublicationRecoveryResult
 

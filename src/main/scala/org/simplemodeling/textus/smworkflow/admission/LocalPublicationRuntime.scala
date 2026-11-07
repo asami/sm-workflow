@@ -19,7 +19,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * There is no shell, external AI execution runner or caller-selected argv here.
   * @since   Oct. 26, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  2, 2026
+  * @version Nov.  7, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object LocalPublicationRuntime {
@@ -181,10 +181,11 @@ private[smworkflow] object LocalPublicationRuntime {
     prerequisiteWait: Option[LocalPublication.Result] = None,
     existingArtifactAdoption: Option[GoalPhasePrerequisitePublicationUnknownRecovery.ExistingArtifactAdoption] = None,
     confirmedFailureSuccessor: Option[LocalPublication.ConfirmedFailureSuccessor] = None,
-    primaryRepairPublication: Option[LocalPublication.ConfirmedFailureSuccessor] = None):
+    primaryRepairPublication: Option[LocalPublication.ConfirmedFailureSuccessor] = None,
+    hostRecovery: Option[GoalPhasePrerequisitePublicationHostRecovery.Permit] = None):
       Consequence[Option[V.GoalPhaseAdvanceResult]] =
     d.localPublication match {
-      case None if existingArtifactAdoption.nonEmpty || primaryRepairPublication.nonEmpty =>
+      case None if existingArtifactAdoption.nonEmpty || primaryRepairPublication.nonEmpty || hostRecovery.nonEmpty =>
         Consequence.stateConflict("Artifact adoption or primary repair publication requires its publication policy")
       case None => Consequence.success(None)
       case Some(policy) =>
@@ -193,6 +194,16 @@ private[smworkflow] object LocalPublicationRuntime {
         val targets = policy.targets.filter(t => t.beforeChecks && t.dependency.forall(dependency.contains))
         for {
         _ <- validateC(policy)
+        _ <- hostRecovery.fold(Consequence.unit) { permit => for {
+          _ <- if (qualifiedSuccessor.isEmpty && prerequisiteWait.isEmpty && existingArtifactAdoption.isEmpty &&
+              confirmedFailureSuccessor.isEmpty && primaryRepairPublication.isEmpty &&
+              candidate.payload == permit.target.candidate && candidate.record.revision.value.toString == permit.target.candidateRecordRevision &&
+              session.current.identity.value == permit.target.sessionId && session.participantIdentity == permit.target.participant &&
+              targets == permit.target.targets) Consequence.unit
+            else Consequence.stateConflict("Host recovery permit crosses its candidate or another publication permit")
+          _ <- GoalPhasePrerequisitePublicationHostRecovery.currentC(permit.target, d, core)
+          _ <- GoalPhasePrerequisitePublicationHostRecovery.latestC(permit, _port(core, policy))
+        } yield () }
         _ <- if (primaryRepairPublication.forall(p => confirmedFailureSuccessor.isEmpty && qualifiedSuccessor.isEmpty &&
             candidate.payload.primaryPublicationRepair.nonEmpty && targets.filter(_.dependency.isEmpty) == Vector(p.previous.request.target) &&
             p.sourceCapture == org.goldenport.cncf.workflow.ContextReference(session.current.identity.value,
@@ -207,7 +218,19 @@ private[smworkflow] object LocalPublicationRuntime {
         result <- targets.foldLeft(Consequence.success(Option.empty[V.GoalPhaseAdvanceResult])) { (prior, target) => prior.flatMap {
           case some @ Some(_) => Consequence.success(some)
           case None =>
-            existingArtifactAdoption.filter(_.previous.request.target == target) match {
+            hostRecovery match {
+            case Some(permit) if target.dependency.nonEmpty =>
+              // The complete prefix was collected above. This branch has no ensure/execute call.
+              Consequence.success(Option.empty[V.GoalPhaseAdvanceResult])
+            case Some(permit) => for {
+              _ <- GoalPhasePrerequisitePublicationHostRecovery.currentC(permit.target, d, core)
+              _ <- GoalPhasePrerequisitePublicationHostRecovery.latestC(permit, _port(core, policy))
+              result <- LocalPublication.ensureConfirmedFailureSuccessorC(GoalPhasePrerequisitePublicationHostRecovery.input(permit),
+                target, session.participantIdentity, permit.successor, _port(core, policy))
+            } yield Option.unless(result.ready)(NativeWorkflowOperationOutput.goalWait(session.current.identity.value,
+              "Runtime-owned local publication: " + result.reason, "local-publication").copy(
+                outcome = Some(result.status), localPublication = Some(GoalPhaseNativeMetadata.record(result.asJson))))
+            case None => existingArtifactAdoption.filter(_.previous.request.target == target) match {
             case Some(adoption) =>
               val binding = GoalPhasePrerequisitePublicationUnknownRecovery.bindingOf(candidate.payload)
               for {
@@ -257,6 +280,7 @@ private[smworkflow] object LocalPublicationRuntime {
               Option.unless(result.ready)(NativeWorkflowOperationOutput.goalWait(session.current.identity.value,
                 "Runtime-owned local publication: " + result.reason, "local-publication").copy(
                 outcome = Some(result.status), localPublication = Some(GoalPhaseNativeMetadata.record(result.asJson))))
+            }
             }
             }
         }}

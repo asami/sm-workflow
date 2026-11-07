@@ -93,8 +93,7 @@ private[admission] object PrimaryPublicationContinuationSpecificationFixture {
 /** Pure bounded contract evidence; supplied _process observations and byte
   * identities are specification data. Installed qualification is separate.
   * @since   Nov.  1, 2026
-  *  version Nov.  2, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  7, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -407,7 +406,7 @@ final class GoalPhasePrerequisitePublicationRecoverySpec extends AnyWordSpec wit
       val target = P.artifactTarget
       val reference = V.WorkflowArtifactReference("fresh-artifact-human", "1")
       val input = V.GoalPhasePrerequisitePublicationRecoveryInput(target.sessionId, R.primaryTargetRecord(target),
-        "AcceptExistingArtifactsWithUnknownEffects", "SPECIFICATION-OWNED exact artifact answer", reference)
+        "AcceptExistingArtifactsWithUnknownEffects", "SPECIFICATION-OWNED exact artifact answer", reference, None)
       val description = V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult(target.sessionId, "direction-required",
         R.primaryMessage(target), target.componentInstance, R.primaryTargetRecord(target), R.primaryChoices(target), R.recoveryOperation)
       def _prepare_(value: V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult) =
@@ -438,7 +437,7 @@ final class GoalPhasePrerequisitePublicationRecoverySpec extends AnyWordSpec wit
         val largeproposal = P.proposal.copy(binding = ContextReference("explicit-large-binding-" + ("x" * 280000), "2"))
         val inputs = Vector(
           R.recoveryOperation -> V.GoalPhasePrerequisitePublicationRecoveryInput(P.sourceRequired.sessionId,
-            R.primaryTargetRecord(target), "Defer", "SPECIFICATION-OWNED transport only", V.WorkflowArtifactReference("fixture", "1")).toRecord(),
+            R.primaryTargetRecord(target), "Defer", "SPECIFICATION-OWNED transport only", V.WorkflowArtifactReference("fixture", "1"), None).toRecord(),
           S.describeOperation -> V.GoalPhaseDependencySourceRevisionDescriptionInput(P.sourceRequired.sessionId,
             GoalPhaseNativeMetadata.record(largeproposal.asJson)).toRecord(),
           S.adoptionOperation -> V.GoalPhaseDependencySourceRevisionAdoptionInput(P.sourceRequired.sessionId,
@@ -515,7 +514,7 @@ final class GoalPhasePrerequisitePublicationRecoverySpec extends AnyWordSpec wit
       val target = _retained_unknown_origin.copy(processPolicy = policy)
       val reference = V.WorkflowArtifactReference("fixture-large-policy-human", "1")
       val input = V.GoalPhasePrerequisitePublicationRecoveryInput(target.sessionId, U.targetRecord(target), "AcceptExistingArtifactsWithUnknownEffects",
-        "SPECIFICATION-OWNED independent answer", reference)
+        "SPECIFICATION-OWNED independent answer", reference, None)
       val description = V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult(target.sessionId, "direction-required",
         U.messageFor(target), target.componentInstance, U.targetRecord(target), U.choicesFor(target), R.recoveryOperation)
       When("the complete policy passes strict codecs, generated public Records and passive evidence preparation")
@@ -735,7 +734,7 @@ final class GoalPhasePrerequisitePublicationRecoverySpec extends AnyWordSpec wit
       val reference = V.WorkflowArtifactReference("independent-unknown-successor-human", "1")
       val rationale = "独立した判断理由" * 12000
       val input = V.GoalPhasePrerequisitePublicationRecoveryInput(target.sessionId, publictarget, U.choices.head,
-        rationale, reference)
+        rationale, reference, None)
       val converted = take(summon[ValueReader[V.GoalPhasePrerequisitePublicationRecoveryInput]].readC(input.toRecord()))
       Then("only exact qualified data can form a legacy Direction; neither its type nor Human prose supplies missing lifecycle facts")
       U.targetValid(target) shouldBe true
@@ -876,7 +875,7 @@ final class GoalPhasePrerequisitePublicationRecoverySpec extends AnyWordSpec wit
       def _prepare_(choice: String, selected: V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult = description,
         evidence: V.WorkflowExecutionEvidence = execution) =
         org.simplemodeling.textus.smworkflow.preparation.NativePrerequisitePublicationRecoveryPreparation.prepareC(selected,
-          V.GoalPhasePrerequisitePublicationRecoveryInput(target.sessionId, U.targetRecord(target), choice, "Independent decision", reference),
+          V.GoalPhasePrerequisitePublicationRecoveryInput(target.sessionId, U.targetRecord(target), choice, "Independent decision", reference, None),
           reference, evidence, target.participant, "independent-host", java.time.Instant.parse("2026-11-01T00:00:00Z"))
       When("passive preparation binds the exact choice and the independent participant")
       val prepared = (choices :+ "Defer").map(choice => choice -> take(_prepare_(choice)))
@@ -994,7 +993,7 @@ final class GoalPhasePrerequisitePublicationRecoverySpec extends AnyWordSpec wit
         "direction-required", R.message, _selected.componentInstance, publictarget, R.choices, R.recoveryOperation)
       val rationale = "独立した判断理由" * 12000
       val answer = V.GoalPhasePrerequisitePublicationRecoveryInput(_selected.sessionId, publictarget, R.choices.head,
-        rationale, answerreference)
+        rationale, answerreference, None)
       When("generated ValueReaders and normal evidence preparation convert the public Records")
       val supplied = take(summon[ValueReader[V.GoalPhasePrerequisitePublicationRecoveryInput]].readC(answer.toRecord()))
       val described = take(summon[ValueReader[V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult]].readC(description.toRecord()))
@@ -1480,7 +1479,7 @@ final class GoalPhasePrerequisitePublicationRecoverySpec extends AnyWordSpec wit
       val description = A.description(target)
       val reference = V.WorkflowArtifactReference("independent-primary-scope-answer", "1")
       val input = V.GoalPhasePrerequisitePublicationRecoveryInput(failure.sessionId, description.target,
-        "AuthorizePrimaryPublicationAndSameScopeRepairs", "SPECIFICATION-OWNED same Component Step programs and destination", reference)
+        "AuthorizePrimaryPublicationAndSameScopeRepairs", "SPECIFICATION-OWNED same Component Step programs and destination", reference, None)
       val execution = V.WorkflowExecutionEvidence(Vector(reference), Some(failure.participant), None, None)
       When("normal passive preparation validates the complete answer and closed v3 target")
       val prepared = org.simplemodeling.textus.smworkflow.preparation.NativePrerequisitePublicationRecoveryPreparation.prepareC(

@@ -24,9 +24,7 @@ import GoalPhasePrerequisitePublicationRecovery as P
   * lifecycle facts and Human direction are separate inputs. Neither replaces
   * the old publication result nor the accepted semantic work.
   * @since   Nov.  1, 2026
-  *  version Nov.  2, 2026
-  *  version Nov.  5, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  7, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhasePrerequisitePublicationUnknownRecovery {
@@ -402,7 +400,7 @@ private[smworkflow] object GoalPhasePrerequisitePublicationUnknownRecovery {
         _ <- Either.cond(version == schema && encode(payload) == value, (), "UNKNOWN fact has mixed schema or fields")
       } yield payload
     }
-  val codec = _payload_codec[Direction]("GoalPhasePrerequisitePublicationUnknownDirection")
+  lazy val codec = _payload_codec[Direction]("GoalPhasePrerequisitePublicationUnknownDirection")
   val sourceCodec = _payload_codec[R.Direction]("GoalPhasePrerequisiteWaitSourceDirection")
   val primarySourceCodec: WorkflowResultJsonV1.PayloadCodec[R.Direction] = new WorkflowResultJsonV1.PayloadCodec[R.Direction] {
     val typeIdentity = "GoalPhasePrerequisitePrimarySourceDirection"
