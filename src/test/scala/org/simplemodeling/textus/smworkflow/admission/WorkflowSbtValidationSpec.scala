@@ -31,6 +31,26 @@ final class WorkflowSbtValidationSpec extends AnyWordSpec with Matchers with Giv
       Vector.empty, 7L, "selected-sbt"), selection)
 
   "Actual typed SBT receipts" should {
+    "retain only estimate field presence as nonsemantic wire provenance" in {
+      Given("historical omitted and explicit-null estimates and a populated valid estimate")
+      val fresh = Facts(Kind.TestOnly, Outcome.Incomplete, None, None)
+      val absent = fresh.asJson
+      val explicit = absent.mapObject(_.add("estimate", Json.Null))
+      val estimate = SbtValidationEstimate("changed leaf", "candidate-tree",
+        Vector(SbtValidationEstimate.Leaf("fixture.ExampleSpec", "selected", 1000000000L, true)),
+        SbtValidationEstimate.Preparation(1000000000L, 0L, 0L, 1000000000L), BigDecimal("1.5"))
+      val populated = fresh.copy(estimate = Some(estimate)).asJson
+      When("each representation is decoded and copied")
+      val decoded = Vector(absent, explicit, populated).map(_.as[Facts].toOption.get)
+      Then("the exact representation survives while equivalent business facts retain equality and hash equality")
+      decoded.map(_.asJson) shouldBe Vector(absent, explicit, populated)
+      decoded.map(_.copy().asJson) shouldBe Vector(absent, explicit, populated)
+      decoded(0) shouldBe decoded(1)
+      decoded(0).hashCode shouldBe decoded(1).hashCode
+      decoded(2).estimate shouldBe Some(estimate)
+      decoded.foreach(_.validateC.isSuccess shouldBe true)
+      Facts(Kind.Compile, Outcome.Incomplete, None, None, Some(estimate)).validateC.isSuccess shouldBe false
+    }
     "retain confirmed nonexecution for every selected kind without a product result or repair" in {
       Given("actual-shaped typed NotStarted results for Compile, Test and TestOnly with no process captures")
       val kinds = Vector(Kind.Compile -> SbtOperation.Compile, Kind.Test -> SbtOperation.Test,

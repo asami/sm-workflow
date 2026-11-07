@@ -17,7 +17,7 @@ import IncrementalSbtDiagnosisRepair.given
   * only after their actual native predecessor has been connected.
   * @since   Oct.  6, 2026
   *  version Oct. 29, 2026
-  * @version Nov.  2, 2026
+  * @version Nov.  7, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWork {
@@ -369,6 +369,35 @@ private[smworkflow] object GoalPhaseNativeWork {
     !value.contains('\u0000')
   private def _context_text(value: String): Boolean = value != null && value.trim.nonEmpty && !value.contains('\u0000')
 
+  // Encoder-produced object fields are schema names except inside opaque maps
+  // and retained JSON. Never copy an actual-only key into a diagnostic.
+  private val _diagnostic_opaque_fields = Set("controls", "edges", "properties", "environment", "metadata", "process")
+  private[smworkflow] def _structural_mismatch(expected: Json, actual: Json, path: String = ""): Option[(String, String)] = {
+    def location = if (path.isEmpty) "/" else path
+    def child(key: String) = path + "/" + key.replace("~", "~0").replace("/", "~1")
+    if (expected == actual) None
+    else (expected.asObject, actual.asObject, expected.asArray, actual.asArray) match {
+      case (Some(left), Some(right), _, _) =>
+        val keys = (left.keys.toSet ++ right.keys.toSet).toVector.sorted
+        keys.iterator.flatMap { key =>
+          (left(key), right(key)) match {
+            case (None, Some(_)) => Some(location -> "unexpected-field")
+            case (Some(_), None) => Some(child(key) -> "missing-field")
+            case (Some(a), Some(b)) if a != b && _diagnostic_opaque_fields(key) =>
+              Some(child(key) -> "field-mismatch")
+            case (Some(a), Some(b)) if a != b => _structural_mismatch(a, b, child(key))
+            case _ => None
+          }
+        }.take(1).toVector.headOption
+      case (_, _, Some(left), Some(right)) =>
+        val common = math.min(left.size, right.size)
+        (0 until common).iterator.flatMap(index =>
+          _structural_mismatch(left(index), right(index), path + "/" + index)).take(1).toVector.headOption
+          .orElse(Option.when(left.size != right.size)((path + "/" + common) -> "array-length"))
+      case _ => Some(location -> "value-or-type-mismatch")
+    }
+  }
+
   private class Codec[A](val typeIdentity: String, schema: String)(using Encoder[A], Decoder[A])
       extends WorkflowResultJsonV1.PayloadCodec[A] {
     def encode(value: A) = Json.obj("schemaVersion" -> Json.fromString(schema), "payload" -> value.asJson)
@@ -416,8 +445,11 @@ private[smworkflow] object GoalPhaseNativeWork {
           (version == "sm-workflow.goal-phase-native-work-request.v5" && profile))) ||
           (version == "sm-workflow.goal-phase-native-work-request.v6" && publication), (), "native ordered request version or purpose contract differs")
         parsed <- wire.hcursor.get[Request]("payload").left.map(_.message)
-        _ <- Either.cond(!Set("sm-workflow.goal-phase-native-work-request.v5", "sm-workflow.goal-phase-native-work-request.v6")(version) || encode(parsed) == wire,
-          (), "retained v5 work must preserve its exact canonical payload")
+        _ <- if (!Set("sm-workflow.goal-phase-native-work-request.v5", "sm-workflow.goal-phase-native-work-request.v6")(version) || encode(parsed) == wire)
+          Right(()) else Left("retained v5 work must preserve its exact canonical payload" +
+            _structural_mismatch(encode(parsed), wire).fold("") { case (path, category) =>
+              " [path=" + path + "; category=" + category + "]"
+            })
       } yield parsed
     }
   val resultCodec: WorkflowResultJsonV1.PayloadCodec[Result] =

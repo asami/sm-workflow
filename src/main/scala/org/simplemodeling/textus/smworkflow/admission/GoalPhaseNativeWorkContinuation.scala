@@ -33,6 +33,7 @@ import GoalPhaseCurrentSourceArtifactAdoption as Z
 import GoalPhaseCurrentInventoryContinuation as L
 import GoalPhaseDevelopmentReconstruction as X
 import GoalPhaseSourceHistoryAutomatic as T
+import GoalPhaseDependencyApprovalLineage as AL
 
 /** Ordered implementation, repair and review work and their provided result are installed
   * together. Canonical atomic suspension/completion owns all writes. No result
@@ -209,7 +210,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     dependencySourceDirection: Option[GoalPhaseDependencySourceRevision.Direction] = None,
     validation: Option[GoalPhaseNativeValidation.Saved] = None,
     reviewContext: Option[GoalPhaseNativeReview.Context] = None,
-    stepReviewReason: Option[String] = None)
+    stepReviewReason: Option[String] = None,
+    consumptionDirection: Option[GoalPhaseDependencySourceRevision.Direction] = None)
   private final case class Cursor(from: InstanceRecord, controller: O.State,
     documents: Option[D.Bound], candidate: Option[GoalPhaseNativeCandidate.Saved],
     validation: Option[GoalPhaseNativeValidation.Saved],
@@ -237,6 +239,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     repositoryFrontier: Option[InstanceRecord] = None,
     dependencyApprovals: Vector[GoalPhaseDependencyValidation.Approval] = Vector.empty,
     dependencyDecisions: Vector[S.DecisionContext] = Vector.empty,
+    dependencyLineage: AL.State = AL.State(),
     dependencyAdmission: Option[GoalPhaseDependencyValidation.Admission] = None,
     completedDependencies: Vector[GoalPhaseNativeValidation.Payload] = Vector.empty,
     validationRepair: Option[(GoalPhaseValidationRepairAdoption.Source, GoalPhaseValidationRepairAdoption.Direction)] = None,
@@ -1830,19 +1833,22 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                     else Consequence.unit
                   phasedeferral = answer.result.value.choice == "AdoptPlanRevision" &&
                     input.planRevision.exists(_.revisionScope.contains(GoalPhasePlanRevision.phaseAcceptanceDeferralScope))
+                  lineage <- if (answer.result.value.choice == "ApproveDependencyScope") {
+                    val step = cursor.controller.plan.steps.lift(cursor.controller.cursor).map(_.identity)
+                      .getOrElse("phase:" + cursor.controller.plan.phase)
+                    val approval = GoalPhaseDependencyValidation.Approval(step,
+                      decision.result.result.value.dependencyProposal.get, answer.resultReference)
+                    val context = S.DecisionContext(decision.result.result.value, answer.result.value.choice,
+                      answer.result.value.rationale, Some(answer.resultReference))
+                    AL.appendC(cursor.dependencyLineage, AL.Key(next.identity.value,
+                      ContextReference(cursor.controller.plan.identity, cursor.controller.plan.revision), step,
+                      answer.continuationId.value, next.revision.value), approval, context, input.work.decisionContext)
+                  } else Consequence.success(cursor.dependencyLineage)
                   resumed = cursor.copy(from = next, controller = state, documents = documents, deferredHuman = deferred,
                     developmentReconstructionAnswer = if (input.developmentReconstruction.nonEmpty)
                       Some(answer.result.value.choice -> answer.resultReference) else cursor.developmentReconstructionAnswer,
-                    dependencyApprovals = if (answer.result.value.choice == "ApproveDependencyScope")
-                      cursor.dependencyApprovals :+ GoalPhaseDependencyValidation.Approval(
-                        cursor.controller.plan.steps.lift(cursor.controller.cursor).map(_.identity)
-                          .getOrElse("phase:" + cursor.controller.plan.phase),
-                        decision.result.result.value.dependencyProposal.get, answer.resultReference)
-                      else cursor.dependencyApprovals,
-                    dependencyDecisions = if (answer.result.value.choice == "ApproveDependencyScope")
-                      cursor.dependencyDecisions :+ S.DecisionContext(decision.result.result.value,
-                        answer.result.value.choice, answer.result.value.rationale, Some(answer.resultReference))
-                      else cursor.dependencyDecisions,
+                    dependencyLineage = lineage, dependencyApprovals = lineage.approvals,
+                    dependencyDecisions = lineage.decisions,
                     inspectionSource = if (input.sourceHistoryRecovery.nonEmpty) None else cursor.inspectionSource,
                     sourceHistoryRecovery = None,
                     sourceHistoryContinuation = input.sourceHistoryRecovery.orElse(cursor.sourceHistoryContinuation),
@@ -2097,8 +2103,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           .getOrElse(F.invalid("retained inventory receipt has no eligible actual dependency Decision")))
         retained <- I.retainedC(source, core, selected).flatMap(_.map(Consequence.success)
           .getOrElse(F.invalid("inventory history has no exact retained native receipt")))
-        result <- _walk_c(source, _inventory_cursor(cursor, retained),
-          soughtwork, soughthuman, soughtrecording, core, historyonly)
+        updated <- _inventory_cursor_c(cursor, retained)
+        result <- _walk_c(source, updated, soughtwork, soughthuman, soughtrecording, core, historyonly)
       } yield result
       case O.Stage.Decision if entry.causation.value == K.causation => for {
         selected <- cursor.deferredHuman match {
@@ -2547,7 +2553,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       if (_is_review(input) || input.kind == "TriageStep") cursor.candidate else None, cursor.documentpolicy, cursor.findings,
       cursor.dependencyApprovals, cursor.dependencyAdmission, d.dependencyValidation, cursor.dependencyChain,
       cursor.dependencySourceDirection, validation = cursor.validation, reviewContext = context,
-      stepReviewReason = cursor.stepReviewRequest.map(_.reason))
+      stepReviewReason = cursor.stepReviewRequest.map(_.reason), consumptionDirection = cursor.consumptionDirection)
 
     private def _review_context_c(cursor: Cursor, kind: String): Consequence[Option[GoalPhaseNativeReview.Context]] = kind match {
       case "ReviewStep" | "ReviewPhase" => (cursor.candidate, cursor.validation) match {
@@ -2830,7 +2836,16 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           cursor.controller.plan.steps.lift(cursor.controller.cursor).exists(_.identity == direction.target.step))
           .fold(Consequence.success(Option.empty[GoalPhaseDependencySourceRevision.ScopeSuccessor]))(direction =>
             GoalPhaseDependencySourceRevision.scopeC(direction, cursor.dependencyApprovals, d, cursor.consumptionDirection))
-          .flatMap(scope => GoalPhaseNativeCandidate.advanceC(source, d, core, cursor.from, cursor.controller, acknowledgement,
+          .flatMap { scope =>
+            val step = cursor.controller.plan.steps.lift(cursor.controller.cursor).map(_.identity)
+            val binding = cursor.dependencySourceDirection.filter(direction => step.contains(direction.target.step))
+              .map(direction => GoalPhaseDependencySourceRevision.bindingOf(direction, scope))
+              .orElse(cursor.dependencyAdmission.filter(a => step.contains(a.binding.step)).map(_.binding))
+            val preflight = binding.fold(Consequence.unit) { value => for {
+              primary <- GoalPhaseNativeValidation.selectedChecksC(d, cursor.controller.plan, step)
+              _ <- GoalPhaseNativeDependencyValidation.bindingChecksC(primary, value)
+            } yield () }
+            preflight.flatMap(_ => GoalPhaseNativeCandidate.advanceC(source, d, core, cursor.from, cursor.controller, acknowledgement,
           runValidation = false, documentPolicy = cursor.documentpolicy,
           recordingPaths = N.managementPaths(cursor.findings), completedCandidates = cursor.completedCandidates,
           sourceHistoryRecovery = cursor.sourceHistoryContinuation, candidateObservation = cursor.candidateObservation,
@@ -2844,6 +2859,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           dependencyChain = Some(cursor.dependencyChain), dependencySourceDirection = cursor.dependencySourceDirection.filter(direction =>
             cursor.controller.plan.steps.lift(cursor.controller.cursor).exists(_.identity == direction.target.step)),
           dependencySourceScope = scope, primaryRepair = _active_primary_repair(cursor)))
+          }
           .flatMap(_after_native_c(source, cursor, _, core))
       case O.Stage.Validation | O.Stage.PhaseValidation =>
         if ((if (cursor.controller.stage == O.Stage.PhaseValidation) d.phaseValidationPolicy else d.validationPolicy).isEmpty)
@@ -3047,12 +3063,12 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     private def _inventory_source_c(cursor: Cursor): Consequence[Option[I.Source]] =
       I.selectC(cursor.from, cursor.controller, cursor.lastresult, cursor.dependencyApprovals, cursor.dependencyDecisions)
 
-    private def _inventory_cursor(cursor: Cursor, saved: I.Saved): Cursor =
-      cursor.copy(from = saved.record, controller = saved.controller, decisioncontext = Some(saved.context),
-        dependencyApprovals = cursor.dependencyApprovals.map(approval =>
-          if (approval.decision == saved.approval.decision) saved.approval else approval),
-        dependencyDecisions = cursor.dependencyDecisions.map(context =>
-          if (context.decisionReference == saved.context.decisionReference) saved.context else context))
+    private def _inventory_cursor_c(cursor: Cursor, saved: I.Saved): Consequence[Cursor] =
+      AL.inventoryC(cursor.dependencyLineage, saved).map { lineage =>
+        cursor.copy(from = saved.record, controller = saved.controller, decisioncontext = Some(saved.context),
+          dependencyLineage = lineage, dependencyApprovals = lineage.approvals,
+          dependencyDecisions = lineage.decisions)
+      }
 
     private def _semantic_frontier_c(source: F.Session, cursor: Cursor, core: ActionCall.Core):
       Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] =
@@ -3390,7 +3406,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           "Return only the assigned semantic result. Workflow owns commands, validation, Step and Phase closure.")))
     } yield Prepared(source, input, Some(intent), pending, work, controller, candidate, documentpolicy, findings,
       dependencyapprovals, dependencyadmission, d.dependencyValidation, dependencychain, dependencysourcedirection,
-      reviewContext = input.review, stepReviewReason = stepreviewreason)
+      reviewContext = input.review, stepReviewReason = stepreviewreason, consumptionDirection = consumptiondirection)
 
     private def _requirement_c(input: S.Request, required: StateMachineRequiredOperation,
       independent: Boolean): Consequence[ExecutionRequirement] = {
@@ -3429,6 +3445,17 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           _ <- _historical_freshness_c(plan, call)
           _ <- GoalPhaseOperatingProfiles.admitExecutionC(plan.input.operatingProfile, submitted.evidence)
           admission <- _dependency_admission_c(plan, submitted.result.value)
+          _ <- if (submitted.result.value.outcome == "completed" && admission.nonEmpty) for {
+            primary <- GoalPhaseNativeValidation.selectedChecksC(d, plan.input.selectedPlan, plan.input.stepIdentity)
+            _ <- GoalPhaseNativeDependencyValidation.bindingChecksC(primary, admission.get.binding)
+          } yield () else Consequence.unit
+          _ <- if (submitted.result.value.outcome == "completed" && plan.dependencySourceDirection.exists(direction =>
+              plan.input.stepIdentity.contains(direction.target.step))) for {
+            direction <- plan.dependencySourceDirection.map(Consequence.success).getOrElse(F.invalid("missing source direction"))
+            scope <- GoalPhaseDependencySourceRevision.scopeC(direction, plan.dependencyApprovals, d, plan.consumptionDirection)
+            primary <- GoalPhaseNativeValidation.selectedChecksC(d, plan.input.selectedPlan, plan.input.stepIdentity)
+            _ <- GoalPhaseNativeDependencyValidation.bindingChecksC(primary, GoalPhaseDependencySourceRevision.bindingOf(direction, scope))
+          } yield () else Consequence.unit
           mode <- NativeWorkflowIssuedWorkContext.goalModeC(plan.input.kind)
           context <- NativeWorkflowIssuedWorkContext.fromIssuedC(plan.work, mode, S.inputCodec)
           _ <- IncrementalSbtDiagnosisRepair.admitInformationC(d, call, context, plan.input, submitted.result.value.diagnosticRepair)

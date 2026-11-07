@@ -276,13 +276,14 @@ private[smworkflow] object GoalPhaseNativeMetadata {
       }
     }}.flatMap { case (checks, batches) => validateRetainedC(requested, checks, batches).map(_ => (checks, batches)) }
 
-  /** Pure exact re-selection and binding; no loader or artifact access on resume. */
+  /** Pure structural re-selection; this does not authenticate dependency labels. */
   def validateRetainedC(requested: Vector[Check], selected: Vector[Check], batches: Vector[Batch]): Consequence[Unit] =
     if (requested == null || requested.isEmpty || requested.size > 16 || requested.exists(c => c == null ||
         !hostIdentityValid(c.identity) || c.kind == null || c.ordinal < 1 || c.ordinal > 16 ||
         c.metadata == null || c.hostIdentity == null || c.operation == null || c.hostIdentity.nonEmpty || c.operation.nonEmpty ||
         c.metadata.exists(p => c.kind != WorkflowSbtValidation.Kind.TestOnly || !profileValid(p))) ||
-        requested.map(_.identity).distinct.size != requested.size || requested.map(_.ordinal).distinct.size != requested.size ||
+        !GoalPhaseValidationSubjects.structurallyValid(requested) ||
+        requested.exists(c => c.dependency.nonEmpty && c.metadata.nonEmpty) ||
         selected == null || selected.isEmpty || selected.size > 16 || batches == null ||
         selected.exists(c => c == null || !runtimeIdentityValid(c.identity)) ||
         selected.map(_.identity).distinct.size != selected.size ||
@@ -298,7 +299,16 @@ private[smworkflow] object GoalPhaseNativeMetadata {
       }
     }}.flatMap(expected => if (expected == selected) Consequence.unit else _invalid("Retained metadata expanded checks differ from exact selected operations"))
 
-  def validateRuntimeC(selected: Vector[Check], batches: Vector[Batch]): Consequence[Unit] =
+  /** Authentication must be supplied by the capture-owning boundary. */
+  def validateRetainedC(requested: Vector[Check], selected: Vector[Check], batches: Vector[Batch],
+    authenticated: Vector[Check]): Consequence[Unit] =
+    validateRetainedC(requested, selected, batches).flatMap { _ =>
+      if (GoalPhaseValidationSubjects.valid(requested, authenticated)) Consequence.unit
+      else _invalid("Native metadata dependency checks lack exact authenticated bindings")
+    }
+
+  def validateRuntimeC(selected: Vector[Check], batches: Vector[Batch],
+    authenticated: Vector[Check] = Vector.empty): Consequence[Unit] =
     if (selected == null || batches == null || selected.exists(c => c == null || c.metadata == null ||
         c.hostIdentity == null || c.operation == null || c.metadata.nonEmpty) || batches.contains(null))
       _invalid("Native metadata runtime fields are incomplete")
@@ -308,7 +318,7 @@ private[smworkflow] object GoalPhaseNativeMetadata {
         case Some(host) => batches.find(_.checkIdentity == host).map(batch =>
           Check(host, batch.ordinal, WorkflowSbtValidation.Kind.TestOnly, Some(batch.profile))).getOrElse(check)
       }}.distinct
-      validateRetainedC(requested, selected, batches)
+      validateRetainedC(requested, selected, batches, authenticated)
     }
 
   def operationC(check: Check, batches: Vector[Batch]): Consequence[B.BoundOperation] = for {

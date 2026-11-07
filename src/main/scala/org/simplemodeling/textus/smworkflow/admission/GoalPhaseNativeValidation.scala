@@ -648,7 +648,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
           _same_attempt_facts(saved.payload, prefix.payload) && saved.payload.outcome.isEmpty)
         Consequence.unit else F.invalid("Retained native metadata selection crosses its Validation frontier")
       _ <- _adjacent_record_c(prefix.record, saved.record, "ordered-validation:selection", frontier.currentProgression)
-      _ <- N.validateRetainedC(requested, saved.payload.selected, saved.payload.metadata)
+      _ <- N.validateRetainedC(requested, saved.payload.selected, saved.payload.metadata, _authenticated_checks(saved.payload))
     } yield new Store(adapter, session, d, core, candidate, frontier, controller, requested,
       saved.payload, Some(saved.record), acknowledgement, documentPolicy, recordingPaths, dependencyChain)
     def prepareSelectionC: Consequence[(Store, Saved)] =
@@ -1231,11 +1231,20 @@ private[smworkflow] object GoalPhaseNativeValidation {
     }
   }
 
+  private def _authenticated_checks(payload: Payload): Vector[Check] = {
+    if (payload == null || payload.dependency == null || payload.dependencySource == null ||
+        payload.dependency.exists(c => !GoalPhaseDependencyValidation.captureValid(c)) ||
+        payload.dependencySource.exists(c => !GoalPhaseDependencySourceRevision.captureValid(c)) ||
+        (payload.dependency.nonEmpty && payload.dependencySource.nonEmpty)) Vector.empty
+    else GoalPhaseDependencySourceRevision.binding(payload.dependency, payload.dependencySource).toVector
+      .flatMap(b => b.checks.map(_.copy(dependency = Some(b.identity))))
+  }
+
   private def _valid_payload(payload: Payload): Boolean = payload != null && _text(payload.sourceRevision) &&
     _text(payload.step) && payload.candidate != null &&
     Vector(payload.candidate.head, payload.candidate.tree).forall(value => value != null && value.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")) &&
     payload.selected != null && payload.selected.nonEmpty && payload.selected.size <= 16 &&
-    N.validateRuntimeC(payload.selected, payload.metadata).isSuccess &&
+    N.validateRuntimeC(payload.selected, payload.metadata, _authenticated_checks(payload)).isSuccess &&
     payload.receipts != null && payload.stopped != null &&
     payload.dependency != null && payload.dependency.forall(GoalPhaseDependencyValidation.captureValid) &&
     payload.dependencySource != null && payload.dependencySource.forall(GoalPhaseDependencySourceRevision.captureValid) &&

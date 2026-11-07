@@ -252,6 +252,24 @@ final class GoalPhaseNativeDependencyValidationSpec extends AnyWordSpec with Mat
     }
   }
 
+  "Authenticated validation subjects" should {
+    "admit equal ordinals only across the exact captured binding" in {
+      val primary = F.check.copy(identity = "primary-compile", dependency = None)
+      val selected = take(N.checksC(Vector(primary), Some(F.capture)))
+      selected.map(_.ordinal) shouldBe Vector(primary.ordinal, F.check.ordinal)
+      GoalPhaseNativeMetadata.validateRuntimeC(selected, Vector.empty, Vector(_check)).isSuccess shouldBe true
+      GoalPhaseNativeMetadata.validateRuntimeC(selected, Vector.empty).isSuccess shouldBe false
+      val crossed = selected.updated(1, selected(1).copy(dependency = Some("other-binding")))
+      GoalPhaseNativeMetadata.validateRuntimeC(crossed, Vector.empty, Vector(_check)).isSuccess shouldBe false
+      N.workspaceC(crossed(1), Some(F.capture)).isSuccess shouldBe false
+      N.checksC(Vector(primary, primary.copy(identity = "other-primary")), Some(F.capture)).isSuccess shouldBe false
+      N.checksC(Vector(primary.copy(identity = F.check.identity)), Some(F.capture)).isSuccess shouldBe false
+      val invalid = F.capture.copy(admission = F.admission.copy(binding = F.binding.copy(
+        checks = Vector(F.check, F.check.copy(identity = "duplicate-ordinal")))))
+      N.checksC(Vector(primary), Some(invalid)).isSuccess shouldBe false
+    }
+  }
+
   "DV-05 typed dependency attempt attribution" should {
     "refuse decoded legacy and prefixed admissions when no native owner chain is supplied" in {
       Given("a codec-valid legacy admission and a separately codec-valid caller-authored prefix")

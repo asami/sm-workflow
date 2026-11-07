@@ -46,6 +46,13 @@ installed runtime qualification and the caller's real Phase acceptance are separ
   repository/workspace/base/candidate/binding/check/operation, with before/after
   freshness checks. TestOnly requires verified executed suites, not merely exit 0.
   Original rejected, stopped, failed and unknown attempts remain in native history.
+- Check identities are unique across the composed selection. Ordinals are unique
+  within the primary policy and within each authenticated dependency binding;
+  equal ordinals across these subjects retain their original execution slots.
+  A dependency tag is valid only for an exact check in the retained valid capture,
+  and does not itself grant workspace, program or effect authority. Fresh dependency
+  completed ordinary and revised-source admissions preflight the composed
+  selection; active bindings are checked before candidate effects.
 - DV-06: primary and dependency results are projected separately and jointly gate
   validation success. Independent review receives actual dependency diff/results;
   review completion and closure recheck dependency freshness. No dependency commit,
@@ -195,3 +202,17 @@ Session request/result. There is no public prefix parameter, storage migration,
 replacement Session, base rebasing, dependency commit or automatic publication.
 The isolated authored specifications establish no installed or live Phase result
 until their normal validation and independent review have actually completed.
+
+### Native approval lineage and historical prefixes
+
+The native walker reconstructs the effective approval union from authenticated
+Human completions in their actual history order. A separately approved scope
+update supersedes only its uniquely proved earlier effective parent for later
+selection; original answers and aliased source evidence remain intact. Proof
+uses the issued DecisionContext and scope-update link together with the same
+Session, Plan, Step and compatible bounded dependency contract. A retained
+historical admission uses its own earlier prefix, not the later projection.
+Unlinked duplicate evidence references continue to fail the existing selection
+and admission uniqueness requirements. A mechanical inventory receipt is
+attributed to one exact completion and cannot rewrite every matching external
+reference. This projection grants no new execution or publication authority.

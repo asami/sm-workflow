@@ -62,7 +62,13 @@ private[smworkflow] object WorkflowSbtValidation {
     } yield value)
   }
   final case class Facts(kind: Kind, outcome: Outcome, selection: Option[Selection], reason: Option[String],
-    estimate: Option[SbtValidationEstimate] = None) {
+    estimate: Option[SbtValidationEstimate] = None, private val estimateFieldPresent: Boolean = false) {
+    override def equals(other: Any): Boolean = other match {
+      case that: Facts => kind == that.kind && outcome == that.outcome && selection == that.selection &&
+        reason == that.reason && estimate == that.estimate
+      case _ => false
+    }
+    override def hashCode: Int = (kind, outcome, selection, reason, estimate).hashCode
     def valid: Boolean = kind != null && outcome != null && selection != null && reason != null &&
       estimate != null && estimate.forall(e => e != null && kind == Kind.TestOnly && e.timeoutMillisC.isSuccess) &&
       (outcome match {
@@ -75,16 +81,21 @@ private[smworkflow] object WorkflowSbtValidation {
       else Consequence.stateConflict("Invalid typed SBT validation facts")
   }
   object Facts {
-    given Encoder[Facts] = Encoder.instance(value => Json.obj("kind" -> value.kind.asJson,
+    given Encoder[Facts] = Encoder.instance { value =>
+      val base = Json.obj("kind" -> value.kind.asJson,
       "outcome" -> value.outcome.asJson, "selection" -> value.selection.asJson, "reason" -> value.reason.asJson,
-      "estimate" -> value.estimate.asJson))
+      )
+      if (value.estimate.nonEmpty || value.estimateFieldPresent)
+        base.mapObject(_.add("estimate", value.estimate.asJson))
+      else base
+    }
     given Decoder[Facts] = Decoder.instance(cursor => for {
       kind <- cursor.get[Kind]("kind")
       outcome <- cursor.get[Outcome]("outcome")
       selection <- cursor.get[Option[Selection]]("selection")
       reason <- cursor.get[Option[String]]("reason")
       estimate <- cursor.get[Option[SbtValidationEstimate]]("estimate")
-      value = Facts(kind, outcome, selection, reason, estimate)
+      value = Facts(kind, outcome, selection, reason, estimate, cursor.keys.exists(_.exists(_ == "estimate")))
       _ <- Either.cond(value.valid, (), DecodingFailure("Invalid typed SBT validation facts", cursor.history))
     } yield value)
   }
