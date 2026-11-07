@@ -58,8 +58,8 @@ private[smworkflow] object GoalPhaseNativeValidation {
   }
   final case class Policy(identity: String, revision: Int, checks: Vector[Check]) {
     def validateC: Consequence[Unit] =
-      if (id(identity) && revision > 0 && checks != null && checks.nonEmpty && checks.size <= 16 &&
-          checks.forall(c => c != null && id(c.identity) && c.kind != null && c.ordinal > 0 && c.ordinal <= 16 &&
+      if (id(identity) && revision > 0 && checks != null && checks.nonEmpty &&
+          checks.forall(c => c != null && id(c.identity) && c.kind != null && c.ordinal > 0 &&
             c.metadata != null && c.hostIdentity != null && c.operation != null && c.dependency != null && c.dependency.isEmpty && c.hostIdentity.isEmpty && c.operation.isEmpty &&
             c.metadata.forall(p => c.kind == WorkflowSbtValidation.Kind.TestOnly && N.profileValid(p))) &&
           checks.map(_.identity).distinct.size == checks.size && checks.map(_.ordinal).distinct.size == checks.size)
@@ -207,7 +207,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
     _store_c(session, d, core, candidate, controller, _ => Consequence.unit, from, documentPolicy, recordingPaths,
       dependencyChain).flatMap(_.preconditionsC)
 
-  /** Passive admission for the failed prerequisite frontier. Load every bounded
+  /** Passive admission for the failed prerequisite frontier. Load every selected
     * original intent namespace, including metadata selection, before direction.
     * Freshness is deliberately checked after the corrected capture, not against
     * the old failed dependency bytes. */
@@ -219,11 +219,13 @@ private[smworkflow] object GoalPhaseNativeValidation {
       else F.invalid("Prerequisite recovery requires the original ordinary candidate frontier")
     store <- _store_c(session, d, core, candidate, controller, _ => Consequence.unit, Some(from),
       documentPolicy, recordingPaths, Some(dependencyChain))
-    _ <- requireUnstartedPrerequisiteC(key => store.loadC(key).map(_.nonEmpty))
+    _ <- requireUnstartedPrerequisiteC(key => store.loadC(key).map(_.nonEmpty), store.requested.size)
   } yield ()
 
-  private[admission] def requireUnstartedPrerequisiteC(present: String => Consequence[Boolean]): Consequence[Unit] = {
-    val keys = Vector("selection", "validation") ++ (0 until 16).toVector.flatMap(index =>
+  // Default preserves legacy fixture callers only; production must supply the actual selected count.
+  private[admission] def requireUnstartedPrerequisiteC(present: String => Consequence[Boolean], checkCount: Int = 16): Consequence[Unit] = {
+    if (checkCount <= 0) return F.invalid("Prerequisite recovery requires a positive selected check count")
+    val keys = Vector("selection", "validation") ++ (0 until checkCount).toVector.flatMap(index =>
       Vector("check-intent-", "check-result-", "check-recovery-").map(_ + index))
     keys.foldLeft(Consequence.unit)((prior, key) => prior.flatMap(_ => present(key).flatMap(value =>
       if (!value) Consequence.unit else F.invalid("Prerequisite recovery refuses an already started check or selection"))))
@@ -239,7 +241,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
       F.invalid("Primary publication repair has no unstarted current Validation frontier")
     else _store_c(session, d, core, candidate, controller, _ => Consequence.unit, Some(from),
       documentPolicy, recordingPaths, Some(dependencyChain)).flatMap(store =>
-        requireUnstartedPrerequisiteC(key => store.loadC(key).map(_.nonEmpty)))
+        requireUnstartedPrerequisiteC(key => store.loadC(key).map(_.nonEmpty), store.requested.size))
 
   def advanceC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, acknowledgement: String => Consequence[Unit],
@@ -1243,7 +1245,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
   private def _valid_payload(payload: Payload): Boolean = payload != null && _text(payload.sourceRevision) &&
     _text(payload.step) && payload.candidate != null &&
     Vector(payload.candidate.head, payload.candidate.tree).forall(value => value != null && value.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")) &&
-    payload.selected != null && payload.selected.nonEmpty && payload.selected.size <= 16 &&
+    payload.selected != null && payload.selected.nonEmpty &&
     N.validateRuntimeC(payload.selected, payload.metadata, _authenticated_checks(payload)).isSuccess &&
     payload.receipts != null && payload.stopped != null &&
     payload.dependency != null && payload.dependency.forall(GoalPhaseDependencyValidation.captureValid) &&

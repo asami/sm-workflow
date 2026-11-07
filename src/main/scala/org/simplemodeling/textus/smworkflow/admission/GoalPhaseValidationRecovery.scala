@@ -135,7 +135,7 @@ private[smworkflow] object GoalPhaseValidationRecovery {
   def validTarget(value: RecoveryTarget): Boolean = value != null &&
     value.dependency != null && value.dependency.forall(GoalPhaseDependencyValidation.recoveryValid) &&
     Vector(value.sessionId, value.planIdentity, value.planRevision, value.step, value.checkIdentity).forall(exact) &&
-    snapshot(value.base) && snapshot(value.candidate) && value.checkOrdinal > 0 && value.checkOrdinal <= 16 &&
+    snapshot(value.base) && snapshot(value.candidate) && value.checkOrdinal > 0 &&
     value.attempt >= 0 && value.attempt < Int.MaxValue &&
     Vector(value.sourceRevision, value.frontierRevision, value.intentRevision).forall(revision) &&
     value.sourceRevision.toLong < value.intentRevision.toLong && value.intentRevision.toLong <= value.frontierRevision.toLong &&

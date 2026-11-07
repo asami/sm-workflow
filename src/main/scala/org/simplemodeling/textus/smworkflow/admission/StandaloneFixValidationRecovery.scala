@@ -200,7 +200,7 @@ private[smworkflow] object StandaloneFixValidationRecovery {
     !target.originalInput.reviewRequired && target.stateConditions != null && target.stateConditions.isObject &&
     target.candidate != null && S.validCandidate(S.Candidate(target.candidate.head, target.candidate.tree, target.candidate.paths, "")) &&
     target.baseHead == target.candidate.head && target.candidate.paths.forall(S.owned(_, target.originalInput.ownedPaths)) &&
-    target.check != null && target.check.ordinal > 0 && target.check.ordinal <= 16 &&
+    target.check != null && target.check.ordinal > 0 &&
     target.check.kind == WorkflowSbtValidation.Kind.TestOnly && target.check.dependency.isEmpty &&
     target.pendingCheck == target.check.identity && target.originalInput.checks == Vector(target.check.identity) &&
     evidenceValid(target.evidence) && target.evidence.observation.check == target.check.identity &&

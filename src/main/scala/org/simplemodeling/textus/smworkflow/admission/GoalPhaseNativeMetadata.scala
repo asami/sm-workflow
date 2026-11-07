@@ -218,7 +218,7 @@ private[smworkflow] object GoalPhaseNativeMetadata {
   def declaredIdentities(checks: Vector[Check]): Vector[String] = checks.map(c => c.hostIdentity.getOrElse(c.identity)).distinct
   private def _workspace_c(ordinal: Int): Consequence[WorkspaceId] = WorkspaceId.parseC("sm-workflow-repository-validation-" + ordinal)
   private def _request_c(profile: Profile, ordinal: Int, plan: Option[L.Plan]): Consequence[F.Request] =
-    if (!profileValid(profile) || ordinal < 1 || ordinal > 16 || plan == null)
+    if (!profileValid(profile) || ordinal < 1 || plan == null)
       _invalid("Invalid native metadata profile, ordinal or Slice plan")
     else (profile.source, plan) match {
       case (None, None) => _workspace_c(ordinal).map(F.Request(profile.scope, profile.query, profile.supplemental, _))
@@ -278,13 +278,13 @@ private[smworkflow] object GoalPhaseNativeMetadata {
 
   /** Pure structural re-selection; this does not authenticate dependency labels. */
   def validateRetainedC(requested: Vector[Check], selected: Vector[Check], batches: Vector[Batch]): Consequence[Unit] =
-    if (requested == null || requested.isEmpty || requested.size > 16 || requested.exists(c => c == null ||
-        !hostIdentityValid(c.identity) || c.kind == null || c.ordinal < 1 || c.ordinal > 16 ||
+    if (requested == null || requested.isEmpty || requested.exists(c => c == null ||
+        !hostIdentityValid(c.identity) || c.kind == null || c.ordinal < 1 ||
         c.metadata == null || c.hostIdentity == null || c.operation == null || c.hostIdentity.nonEmpty || c.operation.nonEmpty ||
         c.metadata.exists(p => c.kind != WorkflowSbtValidation.Kind.TestOnly || !profileValid(p))) ||
         !GoalPhaseValidationSubjects.structurallyValid(requested) ||
         requested.exists(c => c.dependency.nonEmpty && c.metadata.nonEmpty) ||
-        selected == null || selected.isEmpty || selected.size > 16 || batches == null ||
+        selected == null || selected.isEmpty || batches == null ||
         selected.exists(c => c == null || !runtimeIdentityValid(c.identity)) ||
         selected.map(_.identity).distinct.size != selected.size ||
         batches.map(b => Option(b).map(_.checkIdentity)) != requested.filter(_.metadata.nonEmpty).map(c => Some(c.identity)))

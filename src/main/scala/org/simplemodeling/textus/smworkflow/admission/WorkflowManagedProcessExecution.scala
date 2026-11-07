@@ -82,7 +82,7 @@ private[smworkflow] object WorkflowManagedProcessExecution {
     */
   def repositoryValidationC(core: ActionCall.Core, ordinal: Int,
     kind: WorkflowSbtValidation.Kind = WorkflowSbtValidation.Kind.Test): Consequence[SbtExecutionResult] = for {
-    _ <- if (core != null && core.executionContext != null && kind != null && ordinal > 0 && ordinal <= 16) Consequence.unit
+    _ <- if (core != null && core.executionContext != null && kind != null && ordinal > 0) Consequence.unit
       else Consequence.stateConflict("Workflow repository validation selection is incomplete")
     workspace <- WorkspaceId.parseC("sm-workflow-repository-validation-" + ordinal)
     target = SbtTarget(workspace)
@@ -119,7 +119,7 @@ private[smworkflow] object WorkflowManagedProcessExecution {
     kind: WorkflowSbtValidation.Kind = WorkflowSbtValidation.Kind.Test,
     workspaceIdentity: Option[String] = None,
     estimate: Option[SbtValidationEstimate] = None): Consequence[SbtExecutionAttempt] = for {
-    _ <- if (core != null && core.executionContext != null && kind != null && ordinal > 0 && ordinal <= 16) Consequence.unit
+    _ <- if (core != null && core.executionContext != null && kind != null && ordinal > 0) Consequence.unit
       else Consequence.stateConflict("Workflow repository validation selection is incomplete")
     workspace <- WorkspaceId.parseC(workspaceIdentity.getOrElse("sm-workflow-repository-validation-" + ordinal))
     target = SbtTarget(workspace, validationEstimate = estimate)

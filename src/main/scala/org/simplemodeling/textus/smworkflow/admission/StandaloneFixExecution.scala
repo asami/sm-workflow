@@ -102,7 +102,7 @@ private[smworkflow] object StandaloneFixExecution {
 
   def inputC(input: Input): Consequence[Unit] = {
     val valid = try input != null && Vector(input.repositoryIdentity, input.requestIdentity, input.objective).forall(text) &&
-      paths(input.ownedPaths) && strings(input.checks, true) && input.checks.size <= 16 &&
+      paths(input.ownedPaths) && strings(input.checks, true) &&
       strings(input.conditions, true) && input.conditions.size <= 64 && input.sourceReferences != null &&
       input.sourceReferences.nonEmpty && input.sourceReferences.size <= 128 && input.sourceReferences.forall(r => r != null && text(r.identity) && text(r.revision)) &&
       Set("code", "documentation", "validation")(input.kind) && Set("off", "required")(input.scalaLint) &&
@@ -132,7 +132,7 @@ private[smworkflow] object StandaloneFixExecution {
     _ <- inputC(input)
     _ <- input.delegation.fold(Consequence.unit)(_ => DelegateTask.checksC(input, selected))
     _ <- if (text(participant) && selected != null && selected.forall(_ != null) && (if (input.delegation.nonEmpty) DelegateTask.selectedChecksValid(input, selected) else selected.map(_.identity) == input.checks) &&
-      selected.forall(c => c != null && c.ordinal > 0 && c.ordinal <= 16 && c.dependency.isEmpty)) Consequence.unit
+      selected.forall(c => c != null && c.ordinal > 0 && c.dependency.isEmpty)) Consequence.unit
       else invalid("checks must resolve exactly to the admitted host bindings")
   } yield State(input, participant, if (input.task.nonEmpty) "Implement" else "Inspect", 1, selected, None, Vector.empty, 0, 0,
     R.Context(R.version, input.repairLimit))

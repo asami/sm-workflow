@@ -78,7 +78,7 @@ guards. This is scoped normal-route qualification; Step and Phase acceptance
 remain open.
 
 `WorkflowManagedProcessExecution.repositoryValidationC(core, ordinal, kind)` accepts
-only ordinals 1–16 and constructs the logical
+positive Int ordinals and constructs the logical
 `SbtTarget(WorkspaceId("sm-workflow-repository-validation-" + ordinal))`.
 Its ProcedureActionCall composes protected `sbt_compile`, `sbt_test` or
 `sbt_test_only` for the selected Compile, Test or TestOnly kind as thin typed

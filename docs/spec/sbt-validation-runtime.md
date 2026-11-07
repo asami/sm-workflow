@@ -12,7 +12,7 @@ qualify their historical adapter only.
 ## Host selection and owning UoW execution
 
 RepositorySync and GoalPhase select `sm-workflow-repository-validation-N`
-(ordinal 1–16) from their saved host validation policy. Public Advance and
+(positive Int ordinal) from their saved host validation policy. Public Advance and
 semantic completion inputs cannot select an executable, task or directory.
 `WorkflowManagedProcessExecution.repositoryValidationC` constructs protected
 `sbt_test` or `sbt_test_only` intent from the trusted closed Check kind for the logical workspace and returns the typed

@@ -366,7 +366,7 @@ private[smworkflow] object GoalPhaseValidationRepairAdoption {
           cursor.downField(key).focus.contains(snapshot.asJson) &&
             Vector(snapshot.head, snapshot.tree).forall(oid => oid != null && oid.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")))) &&
         cursor.get[String]("outcome").toOption.contains("incomplete") && cursor.get[String]("stream").toOption.exists(Set("stdout", "stderr")) &&
-        cursor.get[Int]("checkOrdinal").toOption.exists(n => n > 0 && n <= 16) && cursor.get[Int]("attempt").toOption.exists(_ >= 0)) &&
+        cursor.get[Int]("checkOrdinal").toOption.exists(n => n > 0) && cursor.get[Int]("attempt").toOption.exists(_ >= 0)) &&
       (if (_historical(value)) Set("intent") else Set("intent", "result", "validation")).forall(key =>
         cursor.get[ReceiptRef](key).toOption.exists(r => r.asJson == cursor.downField(key).focus.get && _exact(r.identity) && _revision(r.revision)))
   }

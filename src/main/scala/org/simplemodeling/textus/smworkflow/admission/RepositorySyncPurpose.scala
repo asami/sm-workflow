@@ -152,7 +152,7 @@ private[smworkflow] object RepositorySyncPurpose {
       value.sources.distinct == value.sources && value.sources.forall(source => source != null &&
         Set("Task", "Step", "Finding", "Journal")(source.kind) && _text(source.identity) && _text(source.revision)) &&
       value.slots.forall(slot => slot != null && org.goldenport.cncf.workspace.WorkspaceId.parseC(slot.workspace).isSuccess &&
-        slot.checks != null && slot.checks.size <= 16 && slot.checks.map(_.identity).distinct.size == slot.checks.size &&
+        slot.checks != null && slot.checks.map(_.identity).distinct.size == slot.checks.size &&
         slot.actionPolicy != null && GoalPhaseStepAssessment.validatePurposePolicyC(slot.actionPolicy).isSuccess &&
         slot.checkWorkspaces != null && slot.checkWorkspaces.keys.forall(id => slot.checks.exists(_.identity == id)) &&
         slot.checkWorkspaces.values.forall(value => WorkspaceId.parseC(value).isSuccess)) && value.slots.map(_.workspace).distinct.size == value.slots.size

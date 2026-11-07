@@ -254,7 +254,7 @@ private[smworkflow] object GoalPhaseNativeDependencyValidation {
     else {
       val dependency = binding.checks.map(_.copy(dependency = Some(binding.identity)))
       val combined = primary ++ dependency
-      if (combined.size <= 16 && primary.forall(_.metadata.isEmpty) &&
+      if (primary.forall(_.metadata.isEmpty) &&
           GoalPhaseValidationSubjects.valid(combined, dependency)) Consequence.success(combined)
       else D.invalid("dependency checks require unique identities and subject-local ordinals with an ordinary primary policy")
     }

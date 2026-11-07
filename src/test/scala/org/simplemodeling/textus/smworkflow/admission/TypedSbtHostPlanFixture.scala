@@ -89,8 +89,8 @@ private[admission] object TypedSbtHostPlanFixture {
       case SbtOperation.FixCheck => "fix-check"
       case SbtOperation.PublishLocal => "publish-local"
     }
-    require(ordinals.nonEmpty && ordinals.forall(value => value >= 1 && value <= 16) &&
-      ordinals.distinct == ordinals, "Only distinct selected SBT ordinals 1..16 are admitted")
+    require(ordinals.nonEmpty && ordinals.forall(value => value >= 1) &&
+      ordinals.distinct == ordinals, "Only distinct positive SBT ordinals are admitted")
     require(executionTimeoutMillis > 0L, "The finite SBT execution timeout must be positive")
     val owner = Json.fromString(SmWorkflowComponent.componentId.name)
     val targets = ordinals.map(ordinal => "sm-workflow-repository-validation-" + ordinal)

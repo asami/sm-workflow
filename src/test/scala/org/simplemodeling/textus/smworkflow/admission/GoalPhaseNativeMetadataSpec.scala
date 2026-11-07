@@ -891,22 +891,23 @@ final class GoalPhaseNativeMetadataSpec extends AnyWordSpec with Matchers with G
       N.validateRuntimeC(Vector(primary, duplicateIdentity), Vector.empty, Vector(duplicateIdentity)).isSuccess shouldBe false
     }
 
-    "bound mixed groups to sixteen expanded checks with literal host mapping and no ordinal collisions" in {
+    "retain more than sixteen expanded checks with literal host mapping and no ordinal collisions" in {
       Given("one real two-operation metadata host binding and fourteen distinct ordinary fixed host bindings")
       val ordinary = (1 to 15).filterNot(_ == 2).toVector.map(index => V.Check("ordinary-" + index, index))
       val requested = ordinary.take(1) ++ Vector(check) ++ ordinary.drop(1)
-      When("the mixed selection ordinary-only selection and crossed or oversized selections are prepared")
+      When("the mixed selection ordinary-only selection and crossed or larger selections are prepared")
       val (mixed, batches) = take(N.prepareC(requested, loader))
       val plain = take(N.prepareC(ordinary, loader))
-      val toomany = N.prepareC(requested :+ V.Check("seventeenth-expanded", 16), loader)
+      val (larger, largerBatches) = take(N.prepareC(requested :+ V.Check("seventeenth-expanded", 16), loader))
       val collided = N.prepareC(Vector(check, V.Check("other-host", 2)), loader)
       val otherprofile = N.prepareC(Vector(check, check.copy(identity = "other-profile")), loader)
-      Then("only sixteen distinct exact checks are admitted and original declared controller ids stay unchanged")
+      Then("distinct exact checks are admitted and original declared controller ids stay unchanged")
       mixed.size shouldBe 16
       N.declaredIdentities(mixed) shouldBe requested.map(_.identity)
       N.validateRuntimeC(mixed, batches).isSuccess shouldBe true
       plain shouldBe ((ordinary, Vector.empty))
-      toomany.isSuccess shouldBe false
+      larger.size shouldBe 17
+      N.validateRuntimeC(larger, largerBatches).isSuccess shouldBe true
       collided.isSuccess shouldBe false
       otherprofile.isSuccess shouldBe false
       N.logicalIdentity("a", D.OperationReference("bc", "d", "e")) should not be

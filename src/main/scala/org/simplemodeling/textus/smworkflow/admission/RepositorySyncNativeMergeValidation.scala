@@ -41,9 +41,9 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
     assessment: Option[RepositorySyncMergeAssessment.Policy] = None,
     impact: Option[RepositorySyncProgramImpact.Policy] = None) {
     def validateC: Consequence[Unit] = if (id(identity) && revision > 0 && reason != null &&
-        reason.trim.nonEmpty && checks != null && checks.size <= 16 &&
+        reason.trim.nonEmpty && checks != null &&
         checks.forall(c => c != null && id(c.identity) && !Set("index-local", "index-remote")(c.identity) &&
-          c.kind != null && c.ordinal > 0 && c.ordinal <= 16) && checks.map(_.identity).distinct.size == checks.size &&
+          c.kind != null && c.ordinal > 0) && checks.map(_.identity).distinct.size == checks.size &&
         checks.map(_.ordinal).distinct.size == checks.size &&
         assessment != null && impact != null &&
         ((mode == "explicit-no-product-tests" && checks.isEmpty) || (mode == "required" && checks.nonEmpty)))

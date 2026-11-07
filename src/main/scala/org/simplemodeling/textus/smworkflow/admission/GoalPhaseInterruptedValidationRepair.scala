@@ -89,7 +89,7 @@ private[smworkflow] object GoalPhaseInterruptedValidationRepair {
     Vector(value.base.head, value.base.tree, value.candidate.head, value.candidate.tree).forall(v =>
       v != null && v.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")) &&
     Vector(value.sourceRevision, value.decisionRevision).forall(_revision) &&
-    value.checkOrdinal > 0 && value.checkOrdinal <= 16 && value.attempt >= 0 && value.attempt < Int.MaxValue &&
+    value.checkOrdinal > 0 && value.attempt >= 0 && value.attempt < Int.MaxValue &&
     Vector(value.intent, value.result, value.validation).forall(r => r != null && _exact(r.identity) && _revision(r.revision)) && {
       val prefix = value.sessionId + ":ordered-validation:" + value.sourceRevision + ":"
       val suffix = if (value.attempt == 0) "" else "-retry-" + value.attempt
