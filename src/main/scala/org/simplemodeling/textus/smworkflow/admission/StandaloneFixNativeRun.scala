@@ -41,7 +41,8 @@ private[smworkflow] object BoundedWorkRuntime {
     records: Option[CompletionRecords.Plan] = None,
     validationCompilations: Option[Vector[EstimatedValidationExecution.Compilation]] = None,
     candidateContinuation: Option[DelegateTaskCandidateContinuation.Checkpoint] = None,
-    repairContinuation: Option[GoalTaskRepairContinuation.Direction] = None)
+    repairContinuation: Option[GoalTaskRepairContinuation.Direction] = None,
+    validationContinuation: Option[GoalTaskValidationContinuation.Direction] = None)
   private given Encoder[DelegateTaskCandidateContinuation.Checkpoint] = deriveEncoder
   private given Decoder[DelegateTaskCandidateContinuation.Checkpoint] = deriveDecoder
   private given Encoder[EstimatedValidationExecution.Compilation] = deriveEncoder
@@ -49,7 +50,7 @@ private[smworkflow] object BoundedWorkRuntime {
   private given Encoder[G.DirtyPath] = deriveEncoder
   private given Decoder[G.DirtyPath] = deriveDecoder
   given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
-    case ("unrelated" | "implementationWorkers" | "supersededWork" | "hygiene" | "records" | "validationCompilations" | "candidateContinuation" | "repairContinuation", value) => !value.isNull
+    case ("unrelated" | "implementationWorkers" | "supersededWork" | "hygiene" | "records" | "validationCompilations" | "candidateContinuation" | "repairContinuation" | "validationContinuation", value) => !value.isNull
     case _ => true
   }))
   given Decoder[Payload] = deriveDecoder
@@ -402,6 +403,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
         else Consequence.success(current)
         payload <- loadPayloadC(storage, id, state.revision.value, core)
         _ <- GoalPhaseParticipantAdmission.admitC(payload.state.participant, core.executionContext)
+        _ <- if (task && !delegation) GoalTaskValidationContinuation.retainedC(payload, core.component.get.core.instanceId.canonicalKey, id, state.revision.value) else Consequence.unit
         response <- _progress_c(h, definition, storage, state, payload, core, 0)
       } yield response
     }

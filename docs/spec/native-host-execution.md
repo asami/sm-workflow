@@ -1746,3 +1746,5 @@ acquisition and UTF-8 decoding before unchanged semantic/current-assignment
 admission. The `submit-repository-repair` caller forwards the URI unread with
 unchanged result reference, facts and execution evidence, as conflict Submit
 already does. No other helper action gains Resource result transport.
+
+A GoalTask supplemental validation direction does not grant or preflight SBT execution. Configure the derived additional ordinal workspaces and fixed typed programs; normal CNCF admission occurs at the separate Advance. See [GoalTask supplemental validation continuation](goal-task-validation-continuation.md).

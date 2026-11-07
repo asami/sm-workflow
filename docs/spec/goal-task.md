@@ -120,3 +120,5 @@ Task to bypass its obligations, re-Start, resubmit accepted work, mutate private
 runtime storage or rerun successful checks solely to install this capability.
 Existing evidence retains its original attribution. Recovery success remains
 separate from cause resolution under the common recovery-observation contract.
+
+For a retained historical successful batch that predates current code validation admission, see [GoalTask supplemental validation continuation](goal-task-validation-continuation.md). This is an explicit same-Session correction and preserves the original typed checks and results.

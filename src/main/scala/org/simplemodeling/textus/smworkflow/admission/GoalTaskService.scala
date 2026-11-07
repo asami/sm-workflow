@@ -52,7 +52,8 @@ private[admission] final class BoundedTaskService(N: BoundedWorkNativeRun) {
     recovery = if (N.delegation) (DelegateTaskScopeCorrection.operations(h, definition, selections) ++ DelegateTaskCandidateContinuation.operations(h, definition, selections)) else GoalTaskMalformedIssuedWorkRecovery.operations(h, definition,
       new ThreeWorkflowExternalEvidencePorts(reader).goalTaskMalformedIssuedWorkRecovery)
     continuation = if (N.delegation) Vector.empty else GoalTaskRepairContinuation.operations(h, definition,
-      new ThreeWorkflowExternalEvidencePorts(reader).goalTaskRepairContinuation)
+      new ThreeWorkflowExternalEvidencePorts(reader).goalTaskRepairContinuation) ++ GoalTaskValidationContinuation.operations(h, definition,
+      new ThreeWorkflowExternalEvidencePorts(reader).goalTaskValidationContinuation)
     completion <- _completion_c(h, definition, storage, None, None)
     wrapped = CallScopedOperationBinding.wrapResult(completion, (core, submitted) =>
       N.storageC(h, definition, core).flatMap(storage => _completion_c(h, definition, storage, Some(core), Some(submitted))))

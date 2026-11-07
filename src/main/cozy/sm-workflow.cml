@@ -13130,6 +13130,14 @@ operation = GoalTaskService.describeGoalTaskRepairContinuation
 
 operation = GoalTaskService.resumeGoalTaskRepair
 
+#### describeGoalTaskValidationContinuation
+
+operation = GoalTaskService.describeGoalTaskValidationContinuation
+
+#### adoptGoalTaskValidationContinuation
+
+operation = GoalTaskService.adoptGoalTaskValidationContinuation
+
 #### describeGoalTaskMalformedIssuedWorkRecovery
 
 operation = GoalTaskService.describeGoalTaskMalformedIssuedWorkRecovery
@@ -13230,6 +13238,63 @@ GoalTaskRepairContinuationInput
 ###### TYPE
 
 GoalTaskRepairContinuationDescriptionResult
+
+#### describeGoalTaskValidationContinuation
+
+##### DESCRIPTION
+
+Describe an exact eligible legacy GoalTask validation frontier and its missing required typed checks. No SBT, staging, commit or repair is performed. Binding admission remains with CNCF at the separate ordinary Advance.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalTaskValidationContinuationDescriptionInput
+
+###### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalTaskValidationContinuationDescriptionResult
+
+#### adoptGoalTaskValidationContinuation
+
+##### DESCRIPTION
+
+Supply exactly input or inputResource and an independently evidenced Human direction for the exact described target. AuthorizeMissingChecks retains only the missing typed checks and the original successful prefix; Defer writes nothing. The separate ordinary Advance owns CNCF typed binding admission and execution.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalTaskValidationContinuationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalTaskValidationContinuationInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalTaskValidationContinuationDescriptionResult
 
 #### describeGoalTaskMalformedIssuedWorkRecovery
 
@@ -14849,6 +14914,45 @@ Explicit ad hoc Task request selection metadata and absolute local file: URI ref
 | selectionCollection | string | 1 |
 
 # VALUE
+
+## GoalTaskValidationContinuationDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+## GoalTaskValidationContinuationInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | string | 1 |
+| choice | string | 1 |
+| rationale | string | 1 |
+| participant | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+
+## GoalTaskValidationContinuationDescriptionResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| componentInstance | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| target | string | 1 |
+| choices | string | * |
+| resumeOperation | string | 1 |
 
 ## GoalTaskRepairContinuationDescriptionInput
 

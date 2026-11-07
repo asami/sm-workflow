@@ -37,6 +37,7 @@ private[smworkflow] object NativeExternalEvidence {
     case StandaloneValidationRecovery extends Purpose("standalone-fix-validation-recovery")
     case GoalTaskMalformedIssuedWorkRecovery extends Purpose("goal-task-malformed-issued-work-recovery")
     case GoalTaskMalformedIssuedWorkNonexecution extends Purpose("goal-task-malformed-issued-work-nonexecution")
+    case GoalTaskValidationContinuation extends Purpose("goal-task-validation-continuation")
     case GoalTaskRepairContinuation extends Purpose("goal-task-repair-continuation")
     case InventoryAuthority extends Purpose(GoalPhaseInventoryAuthority.purpose)
     case GoalReview extends Purpose("goal-phase-independent-review")
@@ -277,6 +278,12 @@ private[smworkflow] object NativeExternalEvidence {
           answer.downField("reference").get[String]("identity").contains(value.reference) &&
           answer.downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
       else Consequence.securityPermissionDenied("Standalone recovery Human evidence crosses its participant or reference")
+    } else if (purpose == Purpose.GoalTaskValidationContinuation) {
+      val answer = selected.hcursor.downField("goalTaskValidationContinuation").downField("answer")
+      if (answer.get[String]("participant").contains(value.participant) &&
+          answer.downField("reference").get[String]("identity").contains(value.reference) &&
+          answer.downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
+      else Consequence.securityPermissionDenied("Task validation continuation Human evidence crosses its participant or reference")
     } else if (purpose == Purpose.GoalTaskRepairContinuation) {
       val answer = selected.hcursor.downField("goalTaskRepairContinuation").downField("answer")
       if (answer.get[String]("participant").contains(value.participant) &&
@@ -340,6 +347,7 @@ private[smworkflow] object NativeExternalEvidence {
     .map(Consequence.success).getOrElse(Consequence.stateConflict("Native host evidence purpose is unsupported"))
   private def selectedC(purpose: Purpose, value: Json): Consequence[Json] = {
     val selected = purpose match {
+      case Purpose.GoalTaskValidationContinuation => GoalTaskValidationContinuation.selectBinding(value)
       case Purpose.GoalTaskRepairContinuation => GoalTaskRepairContinuation.selectBinding(value)
       case Purpose.GoalTaskMalformedIssuedWorkRecovery => GoalTaskMalformedIssuedWorkRecovery.selectBinding(value)
       case Purpose.StandaloneValidationRecovery => StandaloneFixValidationRecovery.selectBinding(value)

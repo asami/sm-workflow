@@ -45,11 +45,11 @@ private[smworkflow] object NativeExternalEvidenceInput {
           Set("repair-continuation", "completion-record-closure", "adoption", "malformed-issued-work-recovery", "review", "human", "validation-continuation", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "source-history-normalization", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "dependency-source-revision", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption", "standalone-fix-validation-recovery")(options("kind")) &&
           (options("family") != "DelegateTask" || Set("review", "adoption", "completion-record-closure")(options("kind"))) &&
           (options("kind") != "adoption" || options("family") == "DelegateTask") &&
-          (options("family") != "GoalTask" || Set("repair-continuation", "review", "malformed-issued-work-recovery", "completion-record-closure")(options("kind"))) &&
+          (options("family") != "GoalTask" || Set("repair-continuation", "validation-continuation", "review", "malformed-issued-work-recovery", "completion-record-closure")(options("kind"))) &&
           (options("kind") != "malformed-issued-work-recovery" || options("family") == "GoalTask") &&
           (options("kind") != "repair-continuation" || options("family") == "GoalTask") &&
           (options("kind") != "standalone-fix-validation-recovery" || options("family") == "StandaloneFix") &&
-          (options("kind") != "validation-continuation" || options("family") == "RepositorySync") &&
+          (options("kind") != "validation-continuation" || Set("RepositorySync", "GoalTask")(options("family"))) &&
           !(options("family") == "SplitPhase" && options("kind") == "review") &&
           (!Set("release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "source-history-normalization", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "dependency-source-revision", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption")(options("kind")) || options("family") == "GoalPhase") &&
           (if (Set("repair-continuation", "completion-record-closure", "malformed-issued-work-recovery", "human", "validation-continuation", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "source-history-normalization", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "dependency-source-revision", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption", "standalone-fix-validation-recovery")(options("kind"))) options.contains("participant")
@@ -346,6 +346,12 @@ private[smworkflow] object NativeExternalEvidenceInput {
         context <- _one_c(output.reviewContext.toVector)
         answer <- summon[ValueReader[V.GoalTaskWorkResult]].readC(result)
         prepared <- NativeReviewPreparation.taskC(context, answer, reference, execution, issuer, occurred)
+      } yield (prepared.recordIdentity, prepared.record)
+      case "GoalTask" if options("kind") == "validation-continuation" => for {
+        description <- summon[ValueReader[V.GoalTaskValidationContinuationDescriptionResult]].readC(request)
+        answer <- summon[ValueReader[V.GoalTaskValidationContinuationInput]].readC(result)
+        prepared <- NativeReviewPreparation.taskValidationContinuationC(description, answer, reference, execution,
+          participant, issuer, occurred)
       } yield (prepared.recordIdentity, prepared.record)
       case "GoalTask" if options("kind") == "repair-continuation" => for {
         description <- summon[ValueReader[V.GoalTaskRepairContinuationDescriptionResult]].readC(request)
