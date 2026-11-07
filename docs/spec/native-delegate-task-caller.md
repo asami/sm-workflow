@@ -264,3 +264,16 @@ Start, Advance, redelivery and observation to `AwaitResult`, with premature
 adoption refused and no execution or caller Git effects. It retains invocation
 stdout/stderr paths in its `requester-result-paths.json`. These observations are
 SPECIFICATION-OWNED; they prove no real chat delivery or destination execution.
+
+## Large delivery observation — 2026-11-07
+
+`observeDelegateTaskDelivery` accepts exactly one of `input` or `inputResource`.
+The latter is an absolute local file URI containing the same complete
+`DelegateTaskObservationInput`, read by the executing action through its normal
+finite, authorized Resource policy. Configure that policy to admit the full
+observation; a denied or failed read does not fall back or truncate the value.
+A result receipt may carry the producer State with order-preserving same-purpose
+inventory and source-reference additions as described in
+[delegated development and delivery](delegate-task.md#returned-inventory-continuation--2026-11-07).
+A retained reference does not authenticate another runtime's storage. Attachment
+and consumer adoption remain distinct.

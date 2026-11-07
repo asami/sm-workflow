@@ -204,19 +204,20 @@ private[smworkflow] object GoalPhaseNativeWork {
   }
 
   def admitCheckFailureContextC(value: CheckFailureContext): Consequence[Unit] = {
-    val structural = value != null && value.changedPaths != null && value.changedPaths.nonEmpty &&
-      value.changedPaths.forall(_bounded_text) && _context_text(value.diff) &&
+    val structural = value != null && value.changedPaths != null && value.changedPaths.distinct == value.changedPaths &&
+      value.changedPaths.forall(_bounded_text) && value.diff != null &&
+      (if (value.changedPaths.isEmpty) value.diff.isEmpty else _context_text(value.diff)) &&
       value.validation != null && value.validation.outcome != null &&
       value.initialPhaseRepair != null && value.stepTestReportRepair != null
     val valid = structural && {
       val ordinary = value.initialPhaseRepair.isEmpty && value.stepTestReportRepair.isEmpty &&
         value.validation.outcome.exists(Set("repair-required", "repair-limit-reached")) &&
         GoalPhaseNativeValidation.repairable(value.validation)
-      val phase = value.stepTestReportRepair.isEmpty && value.initialPhaseRepair.exists(_initial_phase_reference) &&
+      val phase = value.changedPaths.nonEmpty && value.stepTestReportRepair.isEmpty && value.initialPhaseRepair.exists(_initial_phase_reference) &&
         (GoalPhaseInitialPhaseCheckRepair.terminalFailureValid(value.validation) ||
           value.validation.outcome.exists(Set("repair-required", "repair-limit-reached")) &&
             GoalPhaseInitialPhaseCheckRepair.repairContextValid(value.validation))
-      val report = value.initialPhaseRepair.isEmpty && value.stepTestReportRepair.nonEmpty &&
+      val report = value.changedPaths.nonEmpty && value.initialPhaseRepair.isEmpty && value.stepTestReportRepair.nonEmpty &&
         value.stepTestReportRepair.forall(GoalPhaseStepTestReportRepair.validReference) &&
         GoalPhaseStepTestReportRepair.reportRepairFailureValid(value.validation)
       ordinary || phase || report
