@@ -329,8 +329,10 @@ private[smworkflow] object GoalPhaseNativeWork {
 
   private def _repair_source(request: Request): Boolean = if (request.review == null || request.checkFailure == null || request.publicationFailure == null) false
     else {
-      val validreview = request.review.exists(value => value != null && value.changedPaths != null && value.changedPaths.nonEmpty &&
-        value.changedPaths.forall(_bounded_text) && _context_text(value.diff) && value.checks != null &&
+      val validreview = request.review.exists(value => value != null && value.changedPaths != null &&
+        value.changedPaths.forall(_bounded_text) && value.diff != null &&
+        (if (value.changedPaths.isEmpty) request.stepIdentity != null && request.stepIdentity.nonEmpty && value.diff.isEmpty
+         else _context_text(value.diff)) && value.checks != null &&
         value.checks.forall(_ != null))
       (request.review.isEmpty && request.checkFailure.isEmpty && request.publicationFailure.exists(value =>
         publicationFailureValid(value) && value.repair.identity == request.instanceIdentity &&

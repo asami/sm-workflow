@@ -9,6 +9,8 @@ import GoalPhaseNativeValidation as N
 import GoalPhaseNativeWork as W
 import WorkflowSbtValidation as T
 import RepositorySyncNativeMergeValidation as V
+import GoalPhaseFixIssues as I
+import SplitPhaseExplicitPartitionFixture.take
 
 /** Specification-owned retained selected-check facts.
   * @since Nov. 7, 2026
@@ -53,6 +55,73 @@ final class GoalPhaseNoChangeValidationContinuationSpec extends AnyWordSpec with
       roundtrip shouldBe Right(request)
       matching.isSuccess shouldBe true
       crossed.isSuccess shouldBe false
+    }
+  }
+
+  "An unchanged candidate's original-purpose review repair" should {
+    "admit the issued Step repair with its original findings and retained v5 context" in {
+      Given("an unchanged reviewed Step with satisfied required conditions and one typed original-purpose defect")
+      val before = GoalPhasePurposeRepairFixture.controller
+      val review = GoalPhasePurposeRepairFixture.request.copy(review =
+        GoalPhasePurposeRepairFixture.request.review.map(_.copy(changedPaths = Vector.empty, diff = "")))
+      val finding = GoalPhasePurposeRepairFixture.result
+      val evidence = "specification-owned-independent-review"
+      When("the review creates its ordinary RepairStep and that repair returns its exact finding disposition")
+      val after = take(GoalPhaseNativeReview.completedRequestC(review, finding, evidence, before, review.review))
+      val semantic = after.next.asInstanceOf[O.Semantic]
+      val issues = take(I.completedC(review, finding, evidence))
+      val prior = GoalPhaseNativeReview.Prior("ReviewStep", review.stepIdentity, review.generation,
+        review.candidate.get, review.checksReceipt.get, evidence, "1", finding)
+      val profile = GoalPhaseOperatingProfiles.Capture(
+        GoalPhaseOperatingProfiles.Selection("standard", "1", "default"),
+        Some("CodingEngineeringDeep"), None, None, None, None)
+      val repair = W.Request(review.instanceIdentity, "20", semantic.key.kind.toString, semantic.key.step,
+        after.generation, semantic.purpose, semantic.selectedPlan, semantic.originalBase, semantic.completed,
+        semantic.candidate, semantic.checksReceipt, semantic.repairDirective,
+        review = review.review.map(_.copy(priorReviews = Vector(prior))), issues = issues,
+        repairProgress = Some(GoalPhaseRepairProgress.snapshot(after)), operatingProfile = Some(profile))
+      val report = I.Report(I.assigned(repair).map(issue =>
+        I.Disposition(issue.identity, "FIXED", "Corrected the original-purpose defect", None)))
+      val result = W.Result("completed", "Original-purpose repair completed", Vector.empty,
+        acceptance = Some(GoalPhasePurposeRepairFixture.report), issueReport = Some(report))
+      val admitted = W.admitSemanticResultC(repair, result)
+      val wire = W.inputCodec.encode(repair)
+      val restored = W.inputCodec.decode(wire)
+      Then("the same Step and history reach repair admission without inventing a diff or changing codec projections")
+      after.stage shouldBe O.Stage.Repair
+      after.plan shouldBe before.plan
+      after.base shouldBe before.base
+      after.completed shouldBe before.completed
+      after.repairs shouldBe before.repairs + 1
+      after.ordinaryRepairs shouldBe before.ordinaryRepairs + 1
+      repair.kind shouldBe "RepairStep"
+      repair.stepIdentity shouldBe review.stepIdentity
+      repair.review.get.changedPaths shouldBe empty
+      repair.review.get.diff shouldBe ""
+      repair.review.get.priorReviews shouldBe Vector(prior)
+      I.assigned(repair).map(_.summary) shouldBe finding.findings
+      admitted.isSuccess shouldBe true
+      wire.hcursor.get[String]("schemaVersion") shouldBe Right("sm-workflow.goal-phase-native-work-request.v5")
+      restored shouldBe Right(repair)
+      W.inputCodec.encode(restored.toOption.get) shouldBe wire
+
+      Given("the same issued repair with an unpaired source, crossed Step or incomplete result")
+      val context = repair.review.get
+      val crossed = Vector(
+        repair.copy(review = Some(context.copy(diff = "Invented source diff"))),
+        repair.copy(review = Some(context.copy(changedPaths = Vector("current.scala")))),
+        repair.copy(review = None), repair.copy(stepIdentity = None),
+        repair.copy(stepIdentity = Some("first")))
+      val unsatisfied = result.copy(acceptance = Some(GoalPhasePurposeRepairFixture.report.copy(
+        conditions = GoalPhasePurposeRepairFixture.report.conditions.map(_.copy(status = "unsatisfied")))))
+      When("ordinary admission evaluates these inconsistent sources and unchanged issue/acceptance boundaries")
+      val rejected = crossed.map(request => W.admitSemanticResultC(request, result))
+      val missingmapping = W.admitSemanticResultC(repair, result.copy(issueReport = None))
+      val failedquality = W.admitSemanticResultC(repair, unsatisfied)
+      Then("the paired empty source grants no escape from source shape, finding attribution or required quality")
+      rejected.foreach(_.isSuccess shouldBe false)
+      missingmapping.isSuccess shouldBe false
+      failedquality.isSuccess shouldBe false
     }
   }
 }
