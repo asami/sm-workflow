@@ -64,6 +64,32 @@ origin/main and non-main targets, contradictory/missing targets, absent remote r
 and authentication failures, normal configured validation, truly missing settings
 and same-Session resume. Existing 6.10 work and reported live Sessions remain untouched.
 
+## Blank-line commit preparation follow-up — 2026-11-08
+
+Add the [EOF-only blank-line follow-up](../journal/2026/11/2026-11-08-commit-blank-line-whitespace-follow-up.md)
+to B3's shared commit preparation and B5's installed qualification. The user
+limits this work to the end of the file: remove extra terminal blank lines,
+including space/tab-only terminal lines, retaining one final LF and every byte
+before the suffix. Preserve existing eligible file types and exclusions.
+
+Interior blank lines and content-line trailing spaces are outside this work.
+The November 7 generated Scala test case was an interior-line finding; its
+generator correction is already present and remains separate. It does not
+authorize whole-file normalization or adding Scala/test files to hygiene scope.
+
+Use the existing hygiene mode and managed File/typed Git owners. Preserve
+literal/data/snapshot bytes, unrelated work and partial staging. Unsupported
+findings remain precise no-write diagnostics; add no general formatter,
+source parser or caller-side Git repair engine.
+
+Prove the supported finding is corrected and committed once within ordinary
+Advance, without a product FIX or failed-effect recovery cycle and without
+another Human/AI round trip. Preserve actual historical counters, failed/UNKNOWN
+results and accepted checks; the reported incident's counter increment is not
+established. Exercise the affected shared-owner callers and counter observations,
+not only the pure text correction. This is a planned delta for normal owner
+adoption, not a live Session/Plan mutation or an implementation acceptance claim.
+
 ## Verification and completion
 
 Use controlled local repositories and remotes through the installed public route.
