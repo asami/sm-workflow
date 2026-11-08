@@ -449,7 +449,7 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
         val recovery = saved.direction.target
         val correction = recovery.canonicalProgramCorrection
         _check(saved.record != null && saved.direction.choice == GoalPhasePrerequisitePublicationHostRecovery.authorize &&
-          recovery.schemaVersion == GoalPhasePrerequisitePublicationHostRecovery.schemaV3 &&
+          GoalPhasePrerequisitePublicationHostRecovery.isCanonicalTargetSchema(recovery.schemaVersion) &&
           GoalPhasePrerequisitePublicationHostRecovery.directionValid(saved.direction) &&
           recovery.candidate.dependencySourceCapture.exists(_.direction == direction) &&
           correction.exists(c => c.oldProcessPolicy == target.canonicalOrigin.get.processPolicy &&

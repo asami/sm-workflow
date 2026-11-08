@@ -116,6 +116,18 @@ private[smworkflow] object GoalPhaseCanonicalPublicationProgramCorrection {
   def matches(value: Correction, candidate: C.Payload, target: LocalPublication.Target): Boolean =
     valid(value) && derive(candidate, target).contains(value)
 
+  /** The complete typed old Direction must occur in the immutable canonical
+    * ancestry. References alone and unrelated retained Directions are no proof.
+    * Native capture authentication remains the caller's separate obligation.
+    */
+  def hasHistoricalAncestor(capture: R.Capture, historical: R.Direction): Boolean = {
+    def _contains_(direction: R.Direction): Boolean = direction.target.canonicalOrigin.exists(origin =>
+      Vector(origin.originalDirection, origin.previousDirection).flatten.exists(previous =>
+        previous == historical || _contains_(previous)))
+    capture != null && capture.schemaVersion == R.canonicalCaptureSchema && R.captureValid(capture) &&
+      R.directionValid(historical) && _contains_(capture.direction)
+  }
+
   /** No output-text classifier supplies source or retry authority. This must be
     * the base prerequisite's first retained formal failure, never a successor.
     */

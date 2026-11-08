@@ -66,6 +66,69 @@ private[admission] object CanonicalPublicationProgramCorrectionSpecificationFixt
     processPolicy = correction.correctedProcessPolicy, failed = failed, canonicalProgramCorrection = Some(correction))
   val hostcorrection = F.correction.copy(failedRequestIdentity = failed.request.input.requestIdentity)
   val answer = F.direction.copy(target = target, participant = target.participant, hostCorrection = Some(hostcorrection))
+
+  /** Pure factory only: old Plan1 published facts followed by a separately
+    * selected canonical Plan2 capture. No native history is asserted here. */
+  def historicalTarget: H.Target = {
+    val published = PublishedDependencySourceSpecificationFixture
+    val repaired = take(published.adoptedController.acceptC(O.RepairableChecksObserved(
+      published.adoptedController.candidate.get, Vector("primary-test"), "specification-old-check-failure",
+      O.RepairDirective("SPECIFICATION-ONLY actual-shaped check failure", Vector("repair current input")))))
+    val decision = take(repaired.acceptC(O.NativeFailure("SPECIFICATION-ONLY current inventory amendment")))
+    val plan = repaired.plan.copy(revision = "2", steps = repaired.plan.steps.updated(0,
+      repaired.plan.steps.head.copy(ownedPaths = repaired.plan.steps.head.ownedPaths :+ "current-history.scala")))
+    val amended = take(decision.adoptCurrentInventoryRevisionC(plan, "specification-inventory-human"))
+    val binding = published.target.binding.copy(revision = published.target.binding.revision + 1,
+      root = C.binding.root, branch = C.binding.branch, base = C.binding.base,
+      dependency = published.target.binding.dependency.copy(workspace = C.binding.dependency.workspace))
+    val consumption = C.consumption.copy(nonInputExclusions = published.proposal.excludedPaths,
+      expectedModes = binding.paths.map(R.ExpectedMode(_, "100644")))
+    val source = published.proposal.copy(mode = "committed", binding = ContextReference(binding.identity, binding.revision.toString),
+      consumption = consumption)
+    val proposal = C.proposal.copy(source = source)
+    val guard = C.guard.copy(committedInventory = Some(R.CommittedInventory(
+      binding.paths.map(p => R.CommittedEntry(p, Some(R.CommittedObject("100644", "7" * 40)))),
+      source.excludedPaths.map(R.CommittedEntry(_, None)))))
+    val policy = io.circe.parser.parse(oldpolicy).toOption.get
+    val processplan = policy.hcursor.get[Json]("processPlan").toOption.get
+    val programs = processplan.hcursor.get[Vector[Json]]("sbtPrograms").toOption.get.map(program =>
+      if (program.hcursor.get[String]("identity").contains(P.program)) program.mapObject(fields =>
+        fields.add("environment", fields("environment").get.mapObject(_.add(key, published.target.binding.root.asJson)))) else program)
+    val oldprocess = P.sorted(policy.mapObject(_.add("processPlan", processplan.mapObject(_.add("sbtPrograms", programs.asJson)))))
+    val origin = C.origin.copy(componentInstance = published.historical.componentInstance,
+      controller = GoalPhaseCandidateRecovery.controllerSnapshot(amended), approvals = published.target.predecessor.approvals,
+      originalDirection = Some(published.direction), previousDirection = None, selection = proposal, processPolicy = oldprocess,
+      baseLineage = Vector(O.HistoryCommit(binding.base.head, binding.base.tree, Vector(published.target.binding.base.head)),
+        O.HistoryCommit(published.target.binding.base.head, published.target.binding.base.tree, Vector.empty)))
+    val sourcetarget = published.target.copy(schemaVersion = R.canonicalSchema, sourceRevision = "40", pendingRevision = "40",
+      plan = plan, generation = amended.generation, repairProgress = GoalPhaseRepairProgress.snapshot(amended),
+      proposal = source, binding = binding, preStageGuard = guard, publishedOrigin = None, canonicalOrigin = Some(origin))
+    val direction = C.direction.copy(target = sourcetarget)
+    val selected = take(amended.adoptCanonicalDependencySourceC(direction.directive))
+    val implemented = take(selected.acceptC(O.SemanticCompleted(selected.next.asInstanceOf[O.Semantic].key,
+      "SPECIFICATION-ONLY canonical history repair")))
+    val snapshot = O.Snapshot(implemented.tipSnapshot.head, "6" * 40)
+    val controller = take(implemented.acceptC(O.CandidateObserved(snapshot)))
+    val capture = C.capture.copy(plan = ContextReference(plan.identity, plan.revision), step = sourcetarget.step,
+      generation = selected.generation, sourceRevision = "41", direction = direction, preStageGuard = guard, postStageGuard = guard)
+    val candidate = published.candidate.copy(sourceRevision = capture.sourceRevision, candidate = Some(snapshot),
+      changedPaths = Vector(plan.steps.head.ownedPaths.head), dependencySourceDirection = Some(direction),
+      dependencySourceGuard = Some(capture.preStageGuard), dependencySourceStages = Vector.empty,
+      dependencySourceCapture = Some(capture))
+    val correction = K.derive(candidate, primary).get
+    val failed = P.result(candidate, primary, P.source.copy(head = snapshot.head, tree = snapshot.tree))
+    val dependency = published.old.request.target.copy(workspace = C.binding.dependency.workspace)
+    val prefix = published.old.copy(request = published.old.request.copy(target = dependency,
+      input = K.firstInput(capture.sessionId, candidate, dependency),
+      source = LocalPublication.Source(C.binding.base.head, C.binding.base.tree, Vector.empty)))
+    published.host.copy(schemaVersion = H.schemaV4, frontierRevision = "44", candidateRecordRevision = "43",
+      controller = P.sorted(GoalPhasePrerequisitePublicationRecovery.controller(controller)), plan = plan,
+      generation = controller.generation, repairProgress = GoalPhaseRepairProgress.snapshot(controller), candidate = candidate,
+      targets = Vector(dependency, primary), publicationPolicy = P.publicationPolicy(Vector(dependency, primary)),
+      processPolicy = correction.correctedProcessPolicy, failed = failed.copy(request = failed.request.copy(
+        input = K.firstInput(capture.sessionId, candidate, primary), participant = direction.participant)),
+      dependencyPrefix = Vector(prefix), canonicalProgramCorrection = Some(correction))
+  }
 }
 
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

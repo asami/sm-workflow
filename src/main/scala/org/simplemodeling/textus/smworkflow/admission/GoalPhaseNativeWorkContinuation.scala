@@ -189,7 +189,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           (target.predecessor.acceptedPrefix.nonEmpty || _legacy.exists(e => e.admission == target.predecessor && e.session == target.sessionId &&
             e.plan == ContextReference(target.plan.identity, target.plan.revision) && e.step == target.step &&
             e.primaryBase == target.primaryBase && e.completionRevision <= target.sourceRevision.toLong)) &&
-          acceptedSources.forall(previous => previous.capture.direction == direction ||
+          acceptedSources.filter(previous => BigInt(previous.closureRevision) <= BigInt(target.sourceRevision))
+            .forall(previous => previous.capture.direction == direction ||
             target.publishedOrigin.exists(_.historical.candidate.dependencySourceCapture.exists(old =>
               previous.capture.direction == old.direction)))) Consequence.unit
       else V.invalid("revised dependency has no actual retained predecessor and accepted native lineage")
@@ -3335,7 +3336,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         _ <- cursor.dependencySourceDirection.filter(_.target.canonicalOrigin.nonEmpty)
           .fold(Consequence.unit) { direction =>
             cursor.hostPublicationDirections.reverse.find(saved =>
-              saved.direction.target.schemaVersion == HostPublication.schemaV3 &&
+              HostPublication.isCanonicalTargetSchema(saved.direction.target.schemaVersion) &&
                 saved.direction.target.candidate.dependencySourceCapture.exists(_.direction == direction)) match {
               case Some(saved) => CanonicalSource.currentC(direction, d, core, saved)
               case None => CanonicalSource.currentC(direction, d, core)

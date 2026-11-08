@@ -265,3 +265,66 @@ selected checks, independent fixture review and Step commit. Counters and
 retained outputs demonstrate no successful dependency/producer replay or
 duplicate successor. Qualification stops at subsequent review work and claims
 no terminal Phase or real consumer acceptance.
+
+## R7 — Canonical continuation with literal historical adoptions and v4
+
+The closed `sm-workflow.goal-phase-prerequisite-publication-host-recovery.v4`
+target combines `canonicalProgramCorrection` with nonempty
+`historicalPublishedDependencyAdoptions`. It never contains the v2 wire field
+`publishedDependencyAdoptions`. V1, v2 and v3 retain their literal wire and
+meaning; v3 continues to exclude historical facts. Missing, null, unknown,
+ambiguous aliases and mixed-version fields refuse.
+
+Historical facts come only from the actual native retained-artifact traversal.
+Every fact must be valid, uniquely referenced, ordered, and belong to the same
+Component, participant and physical Session. Its record precedes the current
+capture, candidate and frontier. Its published source capture and source
+reference remain exact. The entire old typed source Direction must occur in
+the current valid canonical capture's original/previous Direction ancestry.
+Logical binding, dependency Component and repository stay the same; root and
+revision changes are governed by the existing canonical scope and ancestry.
+Old Plan, controller, generation, candidate and policies remain old facts;
+they need not equal the current ones. Native authentication and exact target
+reconstruction remain separate from structural JSON validity.
+
+The v4 `dependencyPrefix` is collected from each current applicable target's
+ordinary prerequisite namespace for the current candidate source revision.
+It must be an actual ready `published` result with `Exited(0)`, exact target,
+Session, participant and request namespace. Immutable collection, current
+latest result and current source equality must all still hold. An old prefix,
+external producer qualification or historical artifact cannot substitute for
+this current readiness. Description and recovery never ensure or execute a
+dependency. Old prefixes remain literal inside the historical fact wire.
+
+The failed primary is exclusively R6's current first formal prerequisite
+failure, with the exact current canonical capture, Plan, controller, root and
+fixed program. An old capacity failure or host successor supplies no new grant.
+The existing independent Human and host-correction evidence must bind the
+complete new v4 target. `Defer` is passive. Recovery only appends the existing
+Direction; separate Advance owns one existing finite primary successor and
+all immediate source/policy/latest checks. The saved v4 Direction provides
+the same narrowly scoped canonical policy compatibility as v3 for that exact
+canonical Direction during ordinary review and Step closure. It grants no
+global retry or future publication authority.
+
+Reconstruction of an older source Direction evaluates accepted-source
+predecessors at that Direction's actual original frontier, using only closure
+revisions supplied by admitted native traversal. Earlier accepted sources keep
+their existing equality checks. A later canonical Step closure remains a later
+fact and is not required to equal the older Direction.
+
+Boolean validity and description diagnostics use one ordered lazy predicate
+path. Refusals expose only the first failed clause name, never payload or path
+contents. Read guards distinguish missing immutable results, changed latest
+results, changed source and fixed policy mismatch. Description remains passive.
+
+`GoalPhaseCanonicalPublicationHistorySpec` E15–E20 supplies pure specification
+data for old Plan1/current Plan2, strict wire, ancestry, current-prefix reads,
+independent evidence and one finite successor. Installed qualification uses the
+existing tiny Session and normal installed public operations. It preserves
+actual v9 source/artifact/v2 capacity facts and same-Step Repair, then requires
+prospective canonical succession, a fresh current dependency prefix, one
+primary successor and normal Step closure. Supplied Human, host-correction and
+review data are specification-only. Qualification remains pending until actual
+retained results establish these steps. No whole-Phase success or real consumer
+Human consent is claimed.

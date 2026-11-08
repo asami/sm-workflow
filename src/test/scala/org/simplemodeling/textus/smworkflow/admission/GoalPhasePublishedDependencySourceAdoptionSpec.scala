@@ -66,8 +66,9 @@ private[admission] object PublishedDependencySourceSpecificationFixture {
     "SPECIFICATION-OWNED exact repaired source selection", Some(P.sourceChoice))
   val capture = U.capture.copy(schemaVersion = R.publishedCaptureSchema, direction = direction, sourceRevision = "26")
   val candidate = U.currentCandidate.copy(sourceRevision = "26", dependencySourceDirection = Some(direction), dependencySourceCapture = Some(capture))
+  def adoptedController: O.State = take(controller.adoptPrerequisiteSourceRevisionC(direction.directive))
   val artifact = P.ArtifactTarget(P.artifactSchema, historical.componentInstance, historical.participant, historical.sessionId,
-    "33", sorted(B.controller(take(controller.adoptPrerequisiteSourceRevisionC(direction.directive)))), "33", candidate,
+    "33", sorted(B.controller(adoptedController)), "33", candidate,
     ContextReference("same-session", "26"), origin, observation, capture.postStageGuard, processPolicy, historical.publicationPolicy)
   val artifactDirection = P.ArtifactDirection(artifact, P.artifactChoice, "SPECIFICATION-OWNED adopt exact recollection",
     "participant", ContextReference("specification-artifact-human", "1"))
