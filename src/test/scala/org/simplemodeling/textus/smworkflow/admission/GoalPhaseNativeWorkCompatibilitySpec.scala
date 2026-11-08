@@ -21,7 +21,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Synthetic retained work exercises read compatibility without a consumer
   * store, execution grant, new issue or native Human evidence.
   * @since   Nov.  1, 2026
-  * @version Nov.  2, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -86,6 +86,58 @@ final class GoalPhaseNativeWorkCompatibilitySpec extends AnyWordSpec with Matche
   }
 
   "Retained GoalPhase operating profile compatibility" should {
+    "preserve historical estimate presence inside a retained check failure WorkOrder" in {
+      Given("a specification-owned v5 RepairStep with a failed typed SBT receipt")
+      val check = GoalPhaseNativeValidation.Check("focused", 1, WorkflowSbtValidation.Kind.Test)
+      val receipt = RepositorySyncNativeMergeValidation.Receipt("focused", "exited", Some(1),
+        "Specification-owned failed test", "", Some(WorkflowSbtValidation.Facts(
+          WorkflowSbtValidation.Kind.Test, WorkflowSbtValidation.Outcome.Failed, None, None)))
+      val validation = GoalPhaseNativeValidation.Payload("12", _repair.stepIdentity.get,
+        O.Snapshot("a" * 40, "b" * 40), Vector(check), Vector(receipt), Some("repair-required"))
+      val failure = take(W.checkFailureContextC(Vector("current.scala"), "Specification-owned source diff", validation))
+      val request = _repair.copy(operatingProfile = Some(_profile), checkFailure = Some(failure))
+      def changeSbt(wire: Json)(change: Json => Json): Json = _payload(wire)(payload =>
+        payload.mapObject(p => p.add("checkFailure", p("checkFailure").get.mapObject(f =>
+          f.add("validation", f("validation").get.mapObject(v =>
+            v.add("receipts", v("receipts").get.mapArray(rs => rs.updated(0,
+              rs(0).mapObject(r => r.add("sbt", change(r("sbt").get))))))))))))
+      val absent = W.inputCodec.encode(request)
+      val explicit = changeSbt(absent)(_.mapObject(_.add("estimate", Json.Null)))
+      val publication = W.PublicationFailureContext(ContextReference(_repair.instanceIdentity, "1"),
+        Vector("current.scala"), "Retained primary publication failure", PrimaryPublicationContinuationSpecificationFixture.failed,
+        testsExecuted = false)
+      val invalidV6 = W.inputCodec.encode(request.copy(candidate = None, checksReceipt = None,
+        publicationFailure = Some(publication)))
+      W.inputCodec.decode(invalidV6).isLeft shouldBe true
+      When("both historical representations pass the exact input and shared WorkOrder codecs")
+      Vector(absent, explicit).foreach { wire =>
+        val restored = W.inputCodec.decode(wire).toOption.get
+        val order = _frame(restored)
+        val encoded = take(WorkflowWorkOrderJsonV1.encodeC(order, W.inputCodec))
+        val decoded = take(WorkflowWorkOrderJsonV1.decodeC(encoded, W.inputCodec))
+        Then("the representation and original stored bytes remain unchanged on a fresh read")
+        W.inputCodec.encode(restored) shouldBe wire
+        take(WorkflowWorkOrderJsonV1.encodeC(decoded, W.inputCodec)) shouldBe encoded
+        W.inputCodec.decode(changeSbt(wire)(_.mapObject(_.add("estimateFieldPresent", Json.True)))).isLeft shouldBe true
+        W.inputCodec.decode(changeSbt(wire)(_.mapObject(_.add("unexpected", Json.True)))).isLeft shouldBe true
+        val root = Files.createTempDirectory("retained-sbt-estimate-")
+        try {
+          take(new IssuedWorkOrderPersistence.LocalJson(root, W.inputCodec).putIfAbsentC(order))
+          val paths = Files.list(root)
+          val file = try paths.iterator().asScala.toVector.head finally paths.close()
+          val before = Files.readAllBytes(file).toVector
+          new String(before.toArray, StandardCharsets.UTF_8) shouldBe encoded
+          val loaded = take(new IssuedWorkOrderPersistence.LocalJson(root, W.inputCodec)
+            .loadC(ContinuationIdentity("retained-continuation"))).get
+          take(WorkflowWorkOrderJsonV1.encodeC(loaded, W.inputCodec)) shouldBe encoded
+          Files.readAllBytes(file).toVector shouldBe before
+        } finally {
+          val paths = Files.list(root)
+          try paths.iterator().asScala.foreach(path => Files.deleteIfExists(path)) finally paths.close()
+          Files.deleteIfExists(root)
+        }
+      }
+    }
     "losslessly preserve implementation review and repair payloads with their original history decisions and counters" in {
       Given("small semantic fixtures with a committed prefix, retained progress and an explicit finite v5 profile")
       val requests = Vector(_implementation.copy(operatingProfile = Some(_profile)),
@@ -152,6 +204,61 @@ final class GoalPhaseNativeWorkCompatibilitySpec extends AnyWordSpec with Matche
           W.inputCodec.decode(_version(wire, if (version == "v5") "v6" else "v5")).isLeft shouldBe true
         }
       }
+    }
+
+    "report a safe deterministic structural location for canonical v5 and v6 rejection" in {
+      Given("canonical retained requests and unrecognized secret-bearing fields at several structural depths")
+      val failure = W.PublicationFailureContext(ContextReference(_repair.instanceIdentity, "1"),
+        Vector("current.scala"), "Retained primary publication failure", PrimaryPublicationContinuationSpecificationFixture.failed,
+        testsExecuted = false)
+      val v5 = _repair.copy(operatingProfile = Some(_profile))
+      val requests = Vector(v5, v5.copy(candidate = None, checksReceipt = None, publicationFailure = Some(failure)))
+      val secretKey = "secret-unrecognized-name"
+      val secretValue = "secret-payload-value"
+      requests.foreach { request =>
+        val wire = W.inputCodec.encode(request)
+        val root = wire.mapObject(_.add(secretKey, secretValue.asJson))
+        val nested = _payload(wire)(_.mapObject(fields => fields.add("originalBase",
+          fields("originalBase").get.mapObject(_.add(secretKey, secretValue.asJson)))))
+        val array = _payload(wire)(_.mapObject(fields => fields.add("completed",
+          fields("completed").get.mapArray(items => items.updated(0,
+            items(0).mapObject(_.add(secretKey, secretValue.asJson)))))))
+        When("the unchanged codec decodes the canonical wire and each noncanonical variation")
+        W.inputCodec.decode(wire) shouldBe Right(request)
+        W.inputCodec.encode(W.inputCodec.decode(wire).toOption.get) shouldBe wire
+        val missingReceipt = _payload(wire)(_.mapObject(_.remove("checksReceipt")))
+        W.inputCodec.decode(missingReceipt) shouldBe Left(
+          "retained v5 work must preserve its exact canonical payload [path=/payload/checksReceipt; category=missing-field]")
+        W.inputCodec.decode(missingReceipt) shouldBe W.inputCodec.decode(missingReceipt)
+        val variations = Vector(root -> "/", nested -> "/payload/originalBase", array -> "/payload/completed/0")
+        Then("only rejected wires report their first known location without either secret")
+        variations.foreach { case (value, path) =>
+          val error = W.inputCodec.decode(value).swap.toOption.get
+          error shouldBe ("retained v5 work must preserve its exact canonical payload [path=" + path +
+            "; category=unexpected-field]")
+          W.inputCodec.decode(value) shouldBe Left(error)
+          error should not include secretKey
+          error should not include secretValue
+        }
+      }
+    }
+
+    "locate nested schema differences without exposing opaque map keys or values" in {
+      val expected = Json.obj("payload" -> Json.obj("selectedPlan" -> Json.obj(
+        "steps" -> Json.arr(Json.obj("checks" -> Json.arr(), "purpose" -> Json.fromString("original"))))))
+      val actual = Json.obj("payload" -> Json.obj("selectedPlan" -> Json.obj(
+        "steps" -> Json.arr(Json.obj("purpose" -> Json.fromString("original"))))))
+      W._structural_mismatch(expected, actual) shouldBe Some("/payload/selectedPlan/steps/0/checks" -> "missing-field")
+      val secret = "secret-map-key"
+      val left = Json.obj("operatingProfile" -> Json.obj("configured" -> Json.obj(
+        "controls" -> Json.obj(secret -> Json.fromString("secret-map-value")))))
+      val right = Json.obj("operatingProfile" -> Json.obj("configured" -> Json.obj(
+        "controls" -> Json.obj(secret -> Json.fromString("another-secret")))))
+      val mismatch = W._structural_mismatch(left, right)
+      mismatch shouldBe Some("/operatingProfile/configured/controls" -> "field-mismatch")
+      mismatch.toString should not include secret
+      mismatch.toString should not include "secret-map-value"
+      W._structural_mismatch(left, right) shouldBe mismatch
     }
 
     "keep new unmarked requests and legacy v2 v3 v4 version and normalization boundaries unchanged" in {

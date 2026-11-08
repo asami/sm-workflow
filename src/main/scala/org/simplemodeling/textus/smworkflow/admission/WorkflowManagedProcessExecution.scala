@@ -15,7 +15,7 @@ import org.goldenport.protocol.operation.OperationResponse
   * uncertain effects before considering a later invocation.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowManagedProcessExecution {
@@ -114,6 +114,23 @@ private[smworkflow] object WorkflowManagedProcessExecution {
       Consequence.unit else Consequence.stateConflict("Workflow metadata validation result differs from its exact selected target or operation")
   } yield result
 
+  def discoveryBuildAttemptC(core: ActionCall.Core, workspaceIdentity: String): Consequence[SbtExecutionAttempt] = for {
+    workspace <- WorkspaceId.parseC(workspaceIdentity)
+    target = SbtTarget(workspace, validationDiscovery = true)
+    execution = new Execution(core)
+    result <- execution.runSbtAttemptC(execution.prepareDiscovery(target))
+    _ <- _attempt_target_c(result, target, SbtOperation.TestCompile)
+  } yield result
+
+  def validationBatchAttemptC(core: ActionCall.Core, workspaceIdentity: String,
+    cases: Vector[SbtValidationMode.Case]): Consequence[SbtExecutionAttempt] = for {
+    workspace <- WorkspaceId.parseC(workspaceIdentity)
+    target = SbtTarget(workspace, validationBatch = cases)
+    execution = new Execution(core)
+    result <- execution.runSbtAttemptC(execution.prepareSbtAttempt(target, WorkflowSbtValidation.Kind.TestOnly))
+    _ <- _attempt_target_c(result, target, SbtOperation.TestOnly)
+  } yield result
+
   /** Admission and uncertain execution remain distinct from observed process facts. */
   def repositoryValidationAttemptC(core: ActionCall.Core, ordinal: Int,
     kind: WorkflowSbtValidation.Kind = WorkflowSbtValidation.Kind.Test,
@@ -200,6 +217,7 @@ private[smworkflow] object WorkflowManagedProcessExecution {
   } yield value
 
   private final class Execution(val core: ActionCall.Core) extends ProcedureActionCall {
+    def prepareDiscovery(target: SbtTarget): ExecUowM[SbtExecutionAttempt] = sbt_test_compile_attempt(target)
     def preparePublication(target: SbtTarget): ExecUowM[SbtExecutionAttempt] = sbt_publish_local_attempt(target)
     // Typed constructors and executeProgram borrow the actual owning UoW.
     // CNCF interprets its current authority and owns the managed lifecycle.

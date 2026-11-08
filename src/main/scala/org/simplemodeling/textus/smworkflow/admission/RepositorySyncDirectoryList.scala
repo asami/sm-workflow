@@ -31,7 +31,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * Only small business relations are retained here; sources and execution
   * captures remain with their existing owners.
   * @since   Nov.  5, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  8, 2026
   */
 private[smworkflow] object RepositorySyncDirectoryList {
   val syncOperation = "syncRepositoryDirectories"
@@ -56,12 +56,15 @@ private[smworkflow] object RepositorySyncDirectoryList {
   }
   final case class Result(repositoryIdentity: String, workspace: String, sessionId: String,
     kind: String, outcome: String, condition: Option[String], revision: Option[String],
-    tip: Option[String], tree: Option[String])
+    tip: Option[String], tree: Option[String], diagnostic: Option[String] = None)
   final case class Payload(participant: String, members: Vector[Member], results: Vector[Result],
     stage: String, attempting: Option[String])
   private given Encoder[Member] = deriveEncoder
   private given Decoder[Member] = deriveDecoder
-  private given Encoder[Result] = deriveEncoder
+  private given Encoder[Result] = deriveEncoder[Result].mapJson(_.mapObject(_.filter {
+    case ("diagnostic", value) => !value.isNull
+    case _ => true
+  }))
   private given Decoder[Result] = deriveDecoder
   private given Encoder[Payload] = deriveEncoder
   private given Decoder[Payload] = deriveDecoder
@@ -231,7 +234,8 @@ private[smworkflow] object RepositorySyncDirectoryList {
           result = observed match {
             case Right(value) => Result(member.repositoryIdentity, member.workspace, member.sessionId, value.kind,
               value.outcome.getOrElse(if (value.kind == "Terminal") "completed" else "unfinished"), value.condition,
-              child.map(_.revision.value.toString), value.convergence.map(_.tip), value.convergence.map(_.tree))
+              child.map(_.revision.value.toString), value.convergence.map(_.tip), value.convergence.map(_.tree),
+              if (value.condition.contains("ValidationSetupRequired")) Some(value.message) else None)
             case Left(diagnostic) => Result(member.repositoryIdentity, member.workspace, member.sessionId, "Indeterminate", "indeterminate",
               Some("Native call returned no observed business result; inspect its owning Session before continuation. " + diagnostic),
               child.map(_.revision.value.toString), None, None)
@@ -309,7 +313,7 @@ private[smworkflow] object RepositorySyncDirectoryList {
       V.RepositoryDirectoryResultReference("RepositorySyncWorkflow", identity,
         _reference(identity, revision).identity, revision, readOperation),
       payload.results.map(result => V.RepositoryDirectorySummary(result.repositoryIdentity, result.workspace,
-        result.sessionId, result.kind, result.outcome, result.condition, result.revision, result.tip, result.tree)),
+        result.sessionId, result.kind, result.outcome, result.condition, result.revision, result.tip, result.tree, result.diagnostic)),
       payload.members.drop(payload.results.size).filterNot(member => payload.attempting.contains(member.sessionId))
         .map(_.repositoryIdentity), payload.attempting))
   private def _one_c(values: Vector[Json], reason: String): Consequence[Json] =

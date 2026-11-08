@@ -195,3 +195,17 @@ Session request/result. There is no public prefix parameter, storage migration,
 replacement Session, base rebasing, dependency commit or automatic publication.
 The isolated authored specifications establish no installed or live Phase result
 until their normal validation and independent review have actually completed.
+
+### Native approval lineage and historical prefixes
+
+The native walker reconstructs the effective approval union from authenticated
+Human completions in their actual history order. A separately approved scope
+update supersedes only its uniquely proved earlier effective parent for later
+selection; original answers and aliased source evidence remain intact. Proof
+uses the issued DecisionContext and scope-update link together with the same
+Session, Plan, Step and compatible bounded dependency contract. A retained
+historical admission uses its own earlier prefix, not the later projection.
+Unlinked duplicate evidence references continue to fail the existing selection
+and admission uniqueness requirements. A mechanical inventory receipt is
+attributed to one exact completion and cannot rewrite every matching external
+reference. This projection grants no new execution or publication authority.

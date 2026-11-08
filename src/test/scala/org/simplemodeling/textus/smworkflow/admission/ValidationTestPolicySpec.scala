@@ -1,10 +1,13 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import java.nio.file.Path
-import org.goldenport.cncf.validation.{ValidationDiscoveryV1 as D, ValidationMetadataV1 as M}
+import org.goldenport.cncf.validation.{ValidationDiscoveryV1 as D, ValidationMetadataV1 as M,
+  ValidationDeclarationProvider, ValidationInputsV1 as I, ValidationExecutionModeV1 as E}
+import org.goldenport.cncf.processexecution.SbtScenarioParameters.Value
+import org.goldenport.cncf.config.OperationMode
 import org.goldenport.cncf.validation.annotation.ValidationSpecification
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
-import org.scalatest.{Args, GivenWhenThen, Reporter}
+import org.scalatest.{Args, ConfigMap, DoNotDiscover, GivenWhenThen, Outcome, Reporter}
 import org.scalatest.events.{Event, TestFailed, TestSucceeded}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -13,7 +16,8 @@ import org.simplemodeling.textus.smworkflow.testing.metafixture.explicit.Explici
 
 /** Metadata-driven discovery, exclusion and explicit selection without executing HEAVY bodies.
   * @since   Oct. 24, 2026
-  * @version Oct. 31, 2026
+  *  version Oct. 31, 2026
+  * @version Nov.  8, 2026
   */
 @ValidationSpecification(declaration = classOf[LocalTestDeclaration])
 final class ValidationTestPolicySpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -69,6 +73,57 @@ final class ValidationTestPolicySpec extends AnyWordSpec with Matchers with Give
       Then("local resource use does not create an invented external-service restriction")
       result.toOption shouldBe Some(())
       ValidationTestPolicy.requiresRuntime(local) shouldBe false
+    }
+  }
+
+  "Managed ConfigMap compatibility through the real build bridge" should {
+    "validate the selected source mode and schema before the actual ScalaTest fixture consumes them" in {
+      Given("an explicit source-declared test variant with one canonical integer input")
+      val root = Path.of(getClass.getProtectionDomain.getCodeSource.getLocation.toURI).toRealPath().toString
+      val fixture = new AdapterModeInputFixtureSpec
+      val suite = fixture.getClass.getName
+      val leaf = fixture.testNames.head
+      val properties = Array("-Dcncf.validation.mode=test", "-Dcncf.validation.provider=fixture", "-Dcncf.validation.input.count=3")
+      When("the existing bridge selects the exact operation with shared framework properties")
+      val selected = LabelledTestSelection.select(root, "test", "EXPLICIT", Array(suite), Array(leaf),
+        Array.empty[String], Array(suite), properties)
+      val events = scala.collection.mutable.ArrayBuffer.empty[Event]
+      val reporter = new Reporter { def apply(event: Event): Unit = { events += event; () } }
+      val status = fixture.run(Some(leaf), Args(reporter, configMap = ConfigMap(
+        E.modeKey -> "test", E.providerKey -> "fixture", "cncf.validation.input.count" -> "3")))
+      status.waitUntilCompleted()
+      Then("selection stays suite-local and real ConfigMap consumption validates the typed source inputs")
+      selected.map(row => row(0) -> row(1)).toSet shouldBe Set(suite -> leaf)
+      status.succeeds() shouldBe true
+      events.collect { case event: TestSucceeded => event.testName }.toVector shouldBe Vector(leaf)
+    }
+
+    "refuse unsupported property channels, mode conflicts and undeclared or malformed source inputs" in {
+      Given("the same exact operation and its shared source declaration")
+      val root = Path.of(getClass.getProtectionDomain.getCodeSource.getLocation.toURI).toRealPath().toString
+      val suite = classOf[AdapterModeInputFixtureSpec].getName
+      val base = Array("-Dcncf.validation.mode=test", "-Dcncf.validation.provider=fixture", "-Dcncf.validation.input.count=3")
+      val properties = Vector(base :+ "-Djava.home=/other", base :+ "-Dcncf.validation.input.unknown=4",
+        base.updated(2, "-Dcncf.validation.input.count=3.5"), base.updated(0, "-Dcncf.validation.mode=production"),
+        base :+ "-Dcncf.validation.mode=test")
+      When("the actual bridge admits each argument projection before any body dispatch")
+      val rejected = properties.map(values => scala.util.Try(LabelledTestSelection.select(root, "test", "EXPLICIT", Array(suite),
+        Array.empty[String], Array.empty[String], Array(suite), values)))
+      Then("each incompatible request fails instead of being dropped or converted to an environment override")
+      rejected.foreach(_.isFailure shouldBe true)
+    }
+
+    "exclude standard Slow from ordinary FULL while retaining exact focused selection" in {
+      Given("a harmless standard Slow suite and an ordinary local suite")
+      val root = Path.of(getClass.getProtectionDomain.getCodeSource.getLocation.toURI).toRealPath().toString
+      val slow = classOf[AdapterSlowFixtureSpec].getName
+      val local = getClass.getName
+      When("FULL and an actually named focused request pass through the same bridge")
+      val full = LabelledTestSelection.select(root, "test", "FULL", Array(local, slow), Array.empty[String], Array.empty[String], Array(slow))
+      val focused = LabelledTestSelection.select(root, "test", "FOCUSED", Array(slow), Array.empty[String], Array.empty[String], Array(slow))
+      Then("routine FULL excludes Slow and explicit focused scope retains it")
+      full.map(_(0)).toSet shouldBe Set(local)
+      focused.map(_(0)).toSet shouldBe Set(slow)
     }
   }
 
@@ -230,4 +285,32 @@ final class ValidationTestPolicySpec extends AnyWordSpec with Matchers with Give
       emptyresult.failed.get shouldBe a[IllegalArgumentException]
     }
   }
+}
+
+
+/** Source-only fixture used by the actual build bridge compatibility specification.
+  * Introduced Nov. 6, 2026; updated Nov. 6, 2026.
+  */
+class AdapterModeInputDeclaration extends ValidationDeclarationProvider {
+  def declaration: M.Declaration = M.Declaration(purposes = Some(Set(M.Purpose.FULL, M.Purpose.FOCUSED)),
+    requiredSemantics = Set("executionModes", "inputSchema"), executionModes = Some(Set("test")),
+    inputSchema = Some(Vector(I.Parameter("count", I.Kind.Integer))))
+}
+
+@DoNotDiscover
+@ValidationSpecification(declaration = classOf[AdapterModeInputDeclaration])
+class AdapterModeInputFixtureSpec extends AnyWordSpec with Matchers {
+  "Adapter input" should { "retain the selected variant" in { 1 + 2 shouldBe 3 } }
+  override protected def withFixture(test: NoArgTest): Outcome = {
+    I.fromConfigMapC(new AdapterModeInputDeclaration().declaration.inputSchema.get, test.configMap.toMap)
+      .toOption.get shouldBe Map("count" -> Value.Integer(3L))
+    E.consumeC(test.configMap.toMap, getClass.getName, test.name, OperationMode.Test, "fixture").isSuccess shouldBe true
+    super.withFixture(test)
+  }
+}
+
+@org.scalatest.tags.Slow
+@ValidationSpecification(declaration = classOf[LocalTestDeclaration])
+class AdapterSlowFixtureSpec extends AnyWordSpec with Matchers {
+  "Explicit Slow fixture" should { "retain harmless focused scope" in { 2 + 3 shouldBe 5 } }
 }

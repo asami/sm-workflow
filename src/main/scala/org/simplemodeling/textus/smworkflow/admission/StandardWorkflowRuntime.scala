@@ -23,7 +23,7 @@ import org.simplemodeling.textus.smworkflow.value.{GoalPhaseDevelopmentReconstru
   * only when its Operation executes, within that call's ordinary storage/UoW.
   * @since   Oct. 27, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  8, 2026
   */
 private[smworkflow] object StandardWorkflowRuntime {
   private final case class Shared(persistence: GoalPhaseRuntimeParameters.Persistence,
@@ -206,13 +206,39 @@ private[smworkflow] object StandardWorkflowRuntime {
     input = selectedInput._1
     classifications <- RepositorySyncNativeExecution.resolveC(parameters)
     documentInputs <- RepositorySyncDocumentInputs.resolveC(parameters)
-    programInputs <- RepositorySyncProgramImpact.resolveC(parameters)
+    ordinaryPlan <- GoalPhaseInputRecordReadPolicy.storedValue(creation.configuration.configuration.values,
+      CncfConfigurationParameterCatalog.SUBSYSTEM_PROCESS_EXECUTION_PLAN_KEY) match {
+      case Some(ConfigurationValue.StringValue(value)) => io.circe.parser.parse(value).fold(e => invalid(e.message), Consequence.success)
+      case _ => Consequence.success(Json.Null)
+    }
+    declaredProgramInputs <- RepositorySyncProgramImpact.resolveC(parameters)
+    programInputs <- declaredProgramInputs.map(value => Consequence.success(Some(value)))
+      .getOrElse(RepositorySyncProgramImpact.ordinaryPolicyC(parameters, target.root.toString, ordinaryPlan))
     purposePolicy <- RepositorySyncPurpose.resolveC(parameters)
     publication = shared.publication
-    validation = if (selectedInput._2) programInputs.fold(documentValidation)(p => documentValidation.copy(
-      identity = "impact-repository-sync", mode = "required", reason = p.reason, checks = p.checks, impact = Some(p),
-      assessment = documentValidation.assessment.map(_.copy(
-        lintReason = p.reason)))) else repositoryValidation
+    validation <- if (!selectedInput._2) Consequence.success(repositoryValidation)
+      else programInputs match {
+        case None => Consequence.success(documentValidation.copy(setupRequired = Some(
+          "ValidationSetupRequired: ordinary project impact coverage/FULL classification is unavailable. " +
+          "A declared Test executable alone establishes neither FULL selection nor required mode/provider qualification. " +
+          "The pending candidate is retained; no product check, merge commit or push is authorized by this gap.")))
+        case Some(policy) => for {
+          plan <- GoalPhaseInputRecordReadPolicy.storedValue(creation.configuration.configuration.values,
+            CncfConfigurationParameterCatalog.SUBSYSTEM_PROCESS_EXECUTION_PLAN_KEY) match {
+            case Some(ConfigurationValue.StringValue(value)) => io.circe.parser.parse(value)
+              .fold(e => invalid(e.message), Consequence.success)
+            case _ => invalid("No ordinary project process plan is configured")
+          }
+          resolved <- RepositorySyncProgramImpact.bindOrdinaryC(policy, plan, target.root.toString)
+            .map[Either[String, RepositorySyncProgramImpact.Policy]](Right(_))
+            .recoverWith(conclusion => Consequence.success(Left(conclusion.show)))
+        } yield resolved match {
+          case Right(p) => documentValidation.copy(identity = "impact-repository-sync", mode = "required",
+            reason = p.reason, checks = p.checks, impact = Some(p),
+            assessment = documentValidation.assessment.map(_.copy(lintReason = p.reason)))
+          case Left(reason) => documentValidation.copy(setupRequired = Some(reason))
+        }
+      }
     goalDefinition <- GoalPhaseRuntimeCatalog.loadC()
     evidenceStorage <- WorkflowComponentStorage.bindC(creation, SmWorkflowComponent.componentId, p.configuration,
       Vector(goalDefinition.definition), p.instances, p.continuations)

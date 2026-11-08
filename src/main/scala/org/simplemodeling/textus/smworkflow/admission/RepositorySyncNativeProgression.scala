@@ -14,8 +14,7 @@ import RepositorySyncNativeProgressStore.*
   * caller, selects this installed route. A nonterminal result is not convergence.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  *  version Nov.  3, 2026
-  * @version Nov.  4, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeProgression {
@@ -313,6 +312,11 @@ private[smworkflow] object RepositorySyncNativeProgression {
       pending.payload.stage)) else validation match {
     case Some(policy) if policy.assessment.nonEmpty => for {
       checked <- RepositorySyncNativeMergeValidation.advanceC(store, pending, policy, namespace)
+      setup <- if (checked.payload.validation.exists(_.groups.values.exists(_.refusal.nonEmpty)))
+        Consequence.success(checked.payload.validation.toVector.flatMap(_.groups.values.flatMap(_.refusal)).headOption.map("ValidationSetupRequired: " + _))
+        else if (checked.payload.stage == "PendingMergePrepared" && store.declaration.runtimeCleanSync)
+        RepositorySyncDocumentInputs.captureC(store, pending).map(RepositorySyncNativeMergeValidation.setupReason(policy, _))
+        else Consequence.success(Option.empty[String])
       assessed <- if (checked.payload.stage == "MergeValidated")
         RepositorySyncMergeAssessment.admitC(store, checked, policy, namespace)
         else Consequence.success(checked)
@@ -329,9 +333,10 @@ private[smworkflow] object RepositorySyncNativeProgression {
         else Consequence.success(NativeWorkflowOperationOutput.repositoryWait(store.identity,
           if (assessed.payload.stage == "MergeAdmitted") "Actual merge admitted; current host convergence authority is required."
           else if (assessed.payload.stage == "MergeValidated") "Actual merge uncertainty or selected required review needs the installed independent semantic route."
+          else if (setup.nonEmpty) setup.get
           else if (assessed.payload.stage == "ValidationPreparationRejected") RepositorySyncMergeCheckContinuation.preparationMessage
           else "Failed, missing or indeterminate selected checks remain retained; no check replay or merge admission.",
-          assessed.payload.stage))
+          if (setup.nonEmpty) "ValidationSetupRequired" else assessed.payload.stage))
     } yield wire
     case _ => RepositorySyncNativeMergeValidation.waitC(store, pending, validation, review, namespace)
   }

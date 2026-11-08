@@ -900,6 +900,72 @@
       ],
       "types": [
         {
+          "name": "RepositoryDirectorySummary",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "repositoryIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "workspace",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "kind",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "condition",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "nativeRevision",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "tip",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "tree",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "diagnostic",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
           "name": "GoalPhaseReleaseRepairContinuationDescriptionInput",
           "kind": "value",
           "fields": [

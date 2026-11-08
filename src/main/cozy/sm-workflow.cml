@@ -2892,6 +2892,7 @@ OperationResult
 | nativeRevision | string | ? |
 | tip | string | ? |
 | tree | string | ? |
+| diagnostic | string | ? |
 
 ## RepositoryDirectoryBatchResult
 

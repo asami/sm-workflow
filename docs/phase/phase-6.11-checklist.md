@@ -44,3 +44,44 @@ Contract: [directory-list synchronization](../spec/repository-sync-directory-lis
 - [ ] P611-27: (B5): Ordinary installed CLI stdout, in text and `--json` modes, returns concise actual business/control outcomes and retained identity/revision references; rendering does not expand sources, logs, snapshots, historical targets or Base64 bodies, and the default works without caller-authored output redirection/truncation.
 - [ ] P611-28: (B4/B5): Raw child stdout/stderr remains in its admitted retained capture/Evidence owner; progress and diagnostics stay compact without moving large bodies to stderr; actual termination, exit semantics, failure reasons and storage availability remain distinguishable, with no invented Evidence references or duplicate archival.
 - [ ] P611-29: (B5): Measure actual stdout/stderr bytes for text/JSON success, failure and resumed work using the 37.5 MB incident and growing retained payloads; prove default control output omits full bodies, fresh-process reference retrieval and explicit authorized selected-content detail work under the artifact budget, and changed CLI schemas retain qualified consumer compatibility without successful-effect replay.
+
+## B2 source handoff status — 2026-11-06
+
+All boxes remain pending. The consumer now authors root-matched ordinary typed
+SBT binding, exact workspace result/refusal checks, document structural checks
+and bounded setup diagnostics, with executable merge/failure/timeout scenarios.
+No checks were run by the semantic implementation assignment. General ordinary
+FULL discovery and effective child mode/provider evidence remain unresolved;
+B2 requires the recorded dependency decision and subsequent native validation.
+B3, B4 and B5 work is not completed by these source changes.
+
+## B2 source return limitation — 2026-11-06
+
+Mode/provider and standard framework selection source connections and bounded
+executable specifications have been authored in the admitted isolated trees.
+No validation was executed by the semantic implementation assignment. P611-04,
+P611-05 and P611-15 remain pending: a shared ordinary build-result projection of
+actual compiled test artifact/classpath/source applicability is still required
+for the fetched-merge route. Synthetic current-tree metadata fixtures and
+unavailable-configuration waits do not close those conditions. Installed managed
+child/forked propagation, independent review and runtime effects remain with
+the owning workflow. Existing completed history and all Phase conditions remain
+unchanged.
+
+The subsequent source continuation authors the missing B2 ordinary managed
+TestCompile -> exported products/classpath -> standard discovery -> complete
+mode-batch route. More than sixteen operations remain within one logical check;
+connected normal/forked, explicit demo/production and missing-live-prerequisite
+specifications are authored. No acceptance checkbox changes: actual native
+qualification, review and effect admission are still pending. B4 retains broader
+configuration/UNKNOWN continuation adoption; B2 retains resultless group intents
+without replay. Per-test durations are unknown, with real batch elapsed times
+preserved and no VM-05 nightly matrix added.
+
+The existing custom SBT adapter compatibility source now forwards and validates
+shared ConfigMap arguments, preserves actual explicit-suite scope, and applies
+standard Slow exclusion. The real-SBT fixture checks the build-JVM/test-JVM PID
+relationship. The custom adapter explicitly refuses fork=true; the ordinary SBT
+owner retains the supported fork path. Real integration cases are Slow and exact
+focused selection remains available. No qualification or acceptance checkbox is
+changed by this source-only continuation.

@@ -14,7 +14,7 @@ object SmWorkflowCncfDevelopmentBuild {
   def runtimeClasspath(classpath: Seq[Attributed[File]], classes: File, archive: File,
     organization: String, moduleName: String, binaryVersion: String, version: String): Seq[Attributed[File]] = {
     val artifactName = moduleName + "_" + binaryVersion
-    require(organization == "org.goldenport" && artifactName == "goldenport-cncf_3" && version == "0.5.3-SNAPSHOT",
+    require(organization == "org.goldenport" && artifactName == "goldenport-cncf_3" && version == "0.5.6-SNAPSHOT",
       "Selected source runtime identity differs from the declared CNCF dependency")
     require(archive.isFile && archive.getName == artifactName + "-" + version + ".jar",
       "Selected CNCF packageBin must be the ordinary cross-published JAR")

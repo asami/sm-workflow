@@ -163,3 +163,82 @@ validation. B2–B5 continuation, broader response reference connections and
 installed output qualification remain separate unfinished Steps. The old
 checkout and old Session were not edited; no historical result or execution
 receipt is adopted by this document.
+
+## B2 ordinary binding implementation and remaining producer boundary — 2026-11-06
+
+The issued B2 Request belongs to Session
+`3585e04191dce0bc0f70e394b6745767`, continuation
+`3585e04191dce0bc0f70e394b6745767:ordered-implementation:1785`, expected
+revision `1786`, under the same Plan revision `1`. B1's accepted local commit is
+`d6f76e04a339e62718ff4310de091700693fc070`. This section records authored
+consumer work, not a validation receipt or B2/Phase acceptance.
+
+`RepositorySyncProgramImpact.bindOrdinaryC` resolves already declared checks
+against the ordinary process plan's SBT programs and workspace root. An existing
+exact ordinal binding is retained only when it belongs to this selected checkout.
+Otherwise one ordinary workspace for the required operation is necessary;
+missing or ambiguous destinations remain setup gaps. This does not install a
+program, change its executable/JVM/environment/limits, create a workspace grant,
+or confer execution authority. The existing typed attempt owner enforces current
+admission. A private Check carries an optional resolved workspace; historical
+checks omit the field and retain their original ordinal meaning and encoding.
+Actual result/refusal admission checks that exact selected workspace.
+
+The existing declared impact policy still selects bounded focused checks versus
+its explicitly declared broad FULL checks. Unselected missing bindings do not
+prevent an otherwise covered selection. Applicable native prior-evidence rules
+remain in their existing owner; these changes manufacture no reusable receipt.
+The ordinary SBT program keeps its own finite limits and JVM settings. This
+connection alone does not add metadata-derived estimates or certify that an
+arbitrary Test task implements canonical FULL/HEAVY/Slow filtering.
+
+A bare available Test program does not establish FULL coverage. If ordinary
+impact/FULL classification cannot be established, or a selected required binding
+is missing or ambiguous, native Advance returns `ValidationSetupRequired` before
+product dispatch, merge commit or push. The actual pending merge remains with
+its original native owner. Declared non-consumed document-only changes continue
+through the existing structural checks. Actual executed failures, admission
+refusals, incomplete execution and resultless intents retain their distinct
+existing behavior. Same-Session supplementation/aggregate resumption remains B4.
+
+`RepositoryDirectorySummary.diagnostic` is optional and used for this bounded
+setup diagnostic. The aggregate retains the actual child's message, Session and
+native revision rather than losing the missing check/root/coverage information.
+Completed summaries and historical retained Result records omit the field.
+No source, log, snapshot or process capture is copied into this diagnostic.
+The CML declaration and explicit output-summary ABI entry describe that shape;
+normal generation/compilation remain the parent workflow's responsibility.
+
+`RepositorySyncDirectoryListMergeSpec` authors controlled real Git/typed SBT
+cases for bounded source impact, declared broad build impact, an unselected
+missing compile binding under FULL, non-consumed documents, missing required
+binding, missing coverage, actual product failure and actual finite timeout.
+It asserts pending-merge preservation and same-result collection without replay.
+The fixture deliberately declares its product coverage; it supplies no genuine
+live-provider or child-mode acceptance and does not qualify other projects'
+FULL adapters. No test or validation command was executed by this assignment.
+
+Two required connections remain unavailable rather than silently defaulted:
+
+- The standard composition exposes no ordinary general project coverage/FULL
+  discovery profile independent of the existing sync impact policy and the
+  GoalPhase-specific metadata profile. An available Test executable alone
+  cannot supply this missing semantic declaration. Consequently absent coverage
+  returns setup rather than inventing a FULL selection or adding a second
+  project registry.
+- The inspected CNCF `SbtTarget` has workspace, optional scenario and estimate;
+  `SbtExecutionResult` has target, operation, raw process and optional test
+  selection. `ValidationMetadataV1.Metadata` and
+  `ValidationOperationBindingV1.bindC` do not convey required/effective target
+  mode or actual fixture/live attribution. The latter binds an exact TestOnly
+  selector but no mode. A host profile, environment map or successful process
+  cannot prove what a forked target consumed. VM-01/03/04 therefore require a
+  producer-owned typed mode/default/observed-attribution contract and its normal
+  build connection; this consumer does not parse arbitrary stdout or introduce
+  a launcher. No CNCF or Cozy source was edited.
+
+The semantic return must remain decision-needed while that required boundary is
+unresolved. The Phase's 29 acceptance conditions, B3 dirty-purpose work, B4
+recovery/reference work and B5 installed qualification remain unchanged and
+pending. No original checkout, old Session, counters or accepted workflow
+results were edited.

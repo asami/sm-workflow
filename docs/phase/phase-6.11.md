@@ -149,3 +149,109 @@ the existing owners and keep progress/diagnostics compact, including stderr.
 Explicit authorized detail retrieval remains available under the artifact budget.
 Qualify actual stdout/stderr byte sizes, exit semantics and existing-consumer
 compatibility without caller redirection/truncation as a substitute. All are pending.
+
+## B2 authored consumer handoff — 2026-11-06
+
+The current B2 implementation connects declared impact checks to the selected
+checkout's existing ordinary typed SBT workspaces. Missing selected bindings or
+unestablished coverage return a bounded `ValidationSetupRequired` diagnostic
+with the pending native candidate preserved; non-consumed documents retain
+structural validation. Optional aggregate diagnostics expose the actual setup
+gap without including execution bodies. Authored executable cases cover program,
+build and document merges, setup gaps, real failure, finite timeout and retained
+result collection. No validation or installed qualification is claimed here.
+
+B2 is not complete: general ordinary FULL/coverage discovery without an existing
+impact declaration and producer-owned effective child mode/provider attribution
+remain unresolved. A bare Test binding is not a FULL or live-mode certificate.
+The exact consumer/source limitations are recorded in the
+[response inventory](../design/phase-6.11-response-inventory.md#b2-ordinary-binding-implementation-and-remaining-producer-boundary--2026-11-06).
+Required VM-01/03/04 behavior is retained, and a typed dependency decision is
+needed before any cross-Component implementation. B3–B5 and all acceptance
+conditions remain unchanged.
+
+### B2 bounded mode and standard-selection source connection — 2026-11-06
+
+The isolated CNCF producer change authors optional canonical execution-mode
+requirements, shared CML normalization, exact required variants, host-bound
+ConfigMap transport and actual child mode/provider observation decoding. The
+ordinary discovery owner retains ScalaTest tags and excludes DoNotDiscover
+before construction. Legacy absent declarations and retained records gain no
+fabricated mode or framework facts.
+
+The consumer authors an ordinary runtime-definition repository validation
+connection, exact TestOnly/mode bindings and retained requested-versus-observed
+mode/provider facts. Existing applicable impact policies remain available.
+Authored specifications distinguish real fixture ConfigMap consumption from
+synthetic inventories and controlled process-profile observations. None of
+these specifications has been executed in this semantic assignment.
+
+B2 remains incomplete: ordinary fetched-merge -> build -> discovered applicable
+artifact/classpath -> selected validation lacks a shared producer build-result
+projection. ValidationDiscoveryV1 still requires supplied roots/revisions and a
+loader; SbtExecutionResult exposes process/test observations without that actual
+build artifact view. The current consumer refuses stale/foreign supplied
+candidate scopes. A caller-prepared current-tree fixture or a setup wait is not
+proof of the required automatic normal route. The next producer connection
+belongs to typed SBT build result/discovery and the existing retained candidate
+validation owner. No new registry, provenance certificate, Git/SBT fallback,
+validation receipt, publication, acceptance or B3-B5 completion is asserted.
+
+### B2 ordinary build/discovery continuation authored — 2026-11-06
+
+The same unsubmitted source assignment now connects the missing normal producer
+build result: an opted-in existing TestCompile occurrence reports actual test
+products and full classpath through fixed SBT exports. A separately declared
+TestOnly capability and mode/provider policy remain mandatory. The repository
+owner derives its discovery scope from that actual build between native pending
+candidate observations; no caller-prepared current-tree inventory or GoalPhase
+Session is needed for this route.
+
+One logical check retains all selected required variants and bounded exact
+batches, preserving the existing sixteen-logical-check boundary. The connected
+executable specification authors a fetched program merge, twenty operations in
+two modes plus small explicit demo/production overrides, ordinary and forked
+children, standard Slow/DoNotDiscover exclusions, failure without push, and a
+required-live production variant whose missing credential refuses before test
+launch. Individual test durations remain unknown; actual batch elapsed time is
+retained. VM-05 nightly expansion is not selected here.
+
+This is source authorship, with no compiler/test/lint/review or runtime effect
+performed by the semantic worker. The exact export profile and installed normal
+and forked paths still need native qualification. The supported artifact view
+currently requires one product root for one declared artifact identity;
+unsupported/ambiguous projections remain unavailable. Resultless group intents
+are retained as UNKNOWN and never replayed. Broader configuration-corrected or
+UNKNOWN group continuation adoption belongs to B4 and remains unfinished; that
+is distinct from the now-authored B2 main build/discovery route.
+
+Proposal revision 3 appends the two producer discovery owner/specification paths
+to the unchanged purpose-based boundary and original acceptance. No concrete
+29-path native inventory receipt, dependency validation, publication, acceptance
+or Phase completion is asserted. The separate approval-reference compatibility
+repair remains with its actual owner.
+
+### Existing SBT adapter compatibility authored — 2026-11-06
+
+The existing LabelledTests adapter now transports the shared bounded ScalaTest
+ConfigMap mode/provider/input properties through its normal framework runner.
+The existing Scala 3 selection bridge validates selected source modes and input
+schemas, passes genuine named-suite scope to pre-construction discovery, and
+applies standard Slow exclusions to automatic FULL/ADMISSION. Legacy purpose
+queries and public bridge overloads remain supported during this bounded
+integration; no catalogue-wide relabeling is claimed.
+
+Real-SBT merge cases are marked standard Slow and remain available through the
+owning Step's exact focused suite selection. Ordinary short selection/bridge
+specifications remain in normal regression. The connected fixture authors a
+managed batch through the actual existing adapter source and checks typed text
+input transport, including a value containing a space.
+
+Fork evidence is strengthened in source: the child build supplies its actual
+SBT-JVM PID through normal Tests.Argument/testOptions; the executed fixture
+compares it with its own ProcessHandle PID. Ordinary execution requires equal
+PIDs and ordinary SBT forked execution requires different PIDs. The custom
+LabelledTests runner currently supports in-process execution only, so fork=true
+now fails explicitly before framework dispatch, with a controlled real-adapter
+failure specification. No alternate fork engine or production certificate is
+introduced. All these cases remain authored and unexecuted in this assignment.

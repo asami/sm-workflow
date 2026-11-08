@@ -116,6 +116,25 @@ effective grant. An older cumulative grant that is absent from this issued
 direction is stale for this update. Runtime does not guess the latest grant,
 scan for a similar Component, remove historical grants or infer revocation.
 
+A completed Human answer has its own native identity: Session, Plan, Step,
+continuation and actual completion revision. Its external result reference is
+retained as evidence and need not be unique among separately completed answers.
+A later Human boundary adoption inherits an earlier effective approval only when
+its actual issued work context and explicit scope-update link select one earlier
+native completion in the same history prefix. Requester, dependency, Usage,
+purpose, acceptance, dependent work and necessary earlier paths must match. The
+new actual Human answer can adopt changed operations or restrictions under that
+purpose. If the earlier proposal has no explicit boundary, its own proposal
+identity and revision are the required purpose reference for the new boundary;
+the earlier proposal remains unmodified. Missing, crossed, duplicate or ambiguous native ancestry is refused;
+a shared evidence reference alone neither identifies a parent nor forms a cycle.
+A separately accepted different-purpose answer with a distinct source reference
+remains an independent approval; it does not supersede its earlier parent. An
+aliased crossed-purpose answer cannot become a unique inherited approval. The
+original answers and evidence remain unchanged, and a historical capture
+uses the approval projection available at its own prefix. Subsequent inventory
+receipts change only the uniquely attributed effective completion.
+
 An unchanged boundary appends one Unit-effect managed mechanical transition on
 ordinary Advance, schema `sm-workflow.dependency-inventory-continuation.v1`, at
 `session:ordered-dependency-inventory:DecisionRevision@1`. Its canonical causation

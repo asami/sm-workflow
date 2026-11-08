@@ -20,7 +20,8 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Specification-owned native-shaped data exercises proof, never genuine Human
   * consent, installed execution, persistence effects or independent acceptance.
   * @since   Oct. 26, 2026
-  * @version Oct. 27, 2026
+  *  version Oct. 27, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -279,4 +280,27 @@ final class GoalPhaseDependencyInventoryContinuationSpec extends AnyWordSpec wit
         .foreach(binding => I.bindingC(request, Some(binding), Some(old)).isSuccess shouldBe false)
     }
   }
+  "Native inventory lineage attribution" should {
+    "update only the active native completion and reject ambiguous attribution" in {
+      val native = _native()
+      val payload = I.payload(take(native.selectC).get)
+      val current = _context.copy(inventoryContinuation = Some(I.InventoryContext(
+        ContextReference("fixture-inventory", "1"), _approval.decision, _updated)))
+      val saved = I.Saved(native.from, payload, native.controller, current)
+      val key = GoalPhaseDependencyApprovalLineage.Key("fixture-session", ContextReference("fixture-plan", "1"),
+        _approval.step, "fixture-human-1", 10)
+      val original = GoalPhaseDependencyApprovalLineage.Entry(key, _approval, _context, _approval, _context, active = false)
+      val successor = original.copy(key = key.copy(continuation = "fixture-human-2", revision = 20), active = true)
+      val state = GoalPhaseDependencyApprovalLineage.State(Vector(original, successor))
+      val updated = take(GoalPhaseDependencyApprovalLineage.inventoryC(state, saved))
+      updated.entries.head shouldBe original
+      updated.entries(1).original shouldBe _approval
+      updated.entries(1).effective shouldBe _approval.copy(proposal = _updated)
+      updated.entries(1).effectiveContext shouldBe current
+      GoalPhaseDependencyApprovalLineage.inventoryC(state.copy(entries = Vector(original.copy(active = true), successor)), saved)
+        .isSuccess shouldBe false
+      GoalPhaseDependencyApprovalLineage.inventoryC(GoalPhaseDependencyApprovalLineage.State(), saved).isSuccess shouldBe false
+    }
+  }
+
 }
