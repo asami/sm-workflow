@@ -378,11 +378,14 @@ private[smworkflow] object RepositorySyncPurposePreparationContinuation {
           context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(sessionid))
           selected = core.copy(executionContext = context)
           result <- value match {
-            case None => _observe_c(sessionid, d, definition, selected, acknowledge).map(observed =>
-              NativeWorkflowOperationOutput.response(V.RepositorySyncPurposePreparationContinuationDescriptionResult(sessionid,
+            case None => _observe_c(sessionid, d, definition, selected, acknowledge).flatMap { observed => for {
+              target <- WorkflowRetainedSnapshot.compactC(targetRecord(observed.target), Vector(
+                "progressSnapshot" -> WorkflowRetainedSnapshot.reference(observed.store, observed.source,
+                  observed.target.failureKey, "purpose-repair-progress")), selected)
+            } yield NativeWorkflowOperationOutput.response(V.RepositorySyncPurposePreparationContinuationDescriptionResult(sessionid,
                 if (observed.target.eligibilityReason.isEmpty) "adoption-required" else "ineligible",
                 if (observed.target.eligibilityReason.isEmpty) message else observed.target.eligibilityReason,
-                observed.target.componentInstance, targetRecord(observed.target), targetChoices(observed.target), adoptionOperation)))
+                observed.target.componentInstance, target, targetChoices(observed.target), adoptionOperation)) }
             case Some(supplied) => _adopt_c(supplied, d, definition, installation, selected, acknowledge)
           }
         } yield result

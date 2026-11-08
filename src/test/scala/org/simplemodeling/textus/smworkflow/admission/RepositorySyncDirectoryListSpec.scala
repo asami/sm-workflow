@@ -16,7 +16,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Executable directory-list intake and clean native-batch contract. These
   * authored fixtures are not installed qualification or an execution receipt.
   * @since   Nov.  5, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  8, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -42,10 +42,12 @@ final class RepositorySyncDirectoryListSpec extends AnyWordSpec with Matchers wi
     val workspacegrants = _scenarios.indices.map(ordinal => Json.obj(
       "componentId" -> Json.fromString("org.simplemodeling.textus.SmWorkflow"),
       "workspaceId" -> Json.fromString(_workspace(ordinal)), "access" -> Json.fromString("manage"))).toVector
-    template.mapObject(fields => fields.add("gitRepositories", Json.fromValues(repositories))
+    val selected = if (scenario == "MissingTarget") repositories.drop(1) else repositories
+    template.mapObject(fields => fields.add("gitRepositories", Json.fromValues(selected))
       .add("workspaces", Json.fromValues(workspaces)).add("workspaceGrants", Json.fromValues(workspacegrants))
       .add("grants", Json.arr(Json.obj("componentId" -> Json.fromString("org.simplemodeling.textus.SmWorkflow"),
-        "capabilities" -> Json.fromValues(_scenarios.indices.map(ordinal => Json.fromString("batch-git-" + ordinal)))))))
+        "capabilities" -> Json.fromValues(_scenarios.indices.filter(ordinal => scenario != "MissingTarget" || ordinal != 0)
+          .map(ordinal => Json.fromString("batch-git-" + ordinal)))))))
   }
 
   private def _plan: Json = Json.obj("workspaces" -> Json.arr(
@@ -134,6 +136,51 @@ final class RepositorySyncDirectoryListSpec extends AnyWordSpec with Matchers wi
       failed.toString should include("remote-tip")
       failed.toString should not include "no matching advertised branch"
       unproven.toString should not include "no matching advertised branch"
+    }
+
+    "retain missing target setup before any child effect and resolve the captured selection in the same Session" in {
+      val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/directory-list-sync").toAbsolutePath), "target-setup-")
+      val directories = _scenarios.indices.map(ordinal => _directory(root, ordinal)).toVector
+      directories.foreach(path => Files.createDirectories(Path.of(path)))
+      val parameters = Map(RepositorySyncDirectoryList.declaration.name -> Json.fromValues(directories.map(Json.fromString)).noSpaces)
+      var original = Json.Null
+      var session = ""
+      var revision = ""
+      Given("an admitted directory selection whose first checkout has no configured Git destination")
+      _with_runtime_(root, "MissingTarget", hostParameters = parameters) { (owner, component, actor, _) =>
+        val response = take(owner.executeOperationResponseInContext(Request.of(component = component.name,
+          service = "RepositorySyncService", operation = RepositorySyncDirectoryList.syncOperation,
+          properties = List(Property("input", Record.data("syncMode" -> "FULL_STATE"), None))), actor))
+        original = _json(response)
+        session = original.hcursor.get[String]("sessionId").toOption.get
+        revision = original.hcursor.downField("resultReference").get[String]("revision").toOption.get
+        Then("setup is retained without a destination guess, child Start or Git observation")
+        original.hcursor.get[String]("outcome").toOption shouldBe Some("ConfigurationRequired")
+        original.hcursor.get[Vector[Json]]("repositories").toOption.get shouldBe empty
+        original.hcursor.downField("configuration").get[Vector[String]]("directories").toOption shouldBe Some(directories)
+        directories.foreach(path => Files.exists(Path.of(path).resolve(".git")) shouldBe false)
+      }
+      When("the normal target binding is supplied and the same aggregate revision is explicitly refreshed")
+      _with_runtime_(root, "Equal", hostParameters = parameters) { (owner, component, actor, prepare) =>
+        prepare(_ => _scenarios.zipWithIndex.foldLeft(Consequence.unit) { case (prior, (scenario, ordinal)) =>
+          val commands = _setup_commands_(_root(root, ordinal), scenario).map(command => command.map {
+            case "--initial-branch=main" => if (command.contains("--bare")) "--initial-branch=release" else "--initial-branch=work-batch"
+            case argument => argument.replace("refs/heads/main", "refs/heads/release")
+          })
+          commands.foldLeft(prior)((previous, command) => previous.flatMap(_ => _run_setup_command_(command)))
+        })
+        val resumed = _json(take(owner.executeOperationResponseInContext(Request.of(component = component.name,
+          service = "RepositorySyncService", operation = RepositorySyncDirectoryList.refreshOperation,
+          properties = List(Property("sessionId", session, None), Property("revision", revision, None))), actor)))
+        Then("native execution starts only the originally selected checkout members and preserves the original setup revision")
+        resumed.hcursor.get[String]("sessionId").toOption shouldBe Some(session)
+        resumed.hcursor.get[String]("outcome").toOption shouldBe Some("Completed")
+        resumed.hcursor.get[Vector[Json]]("repositories").toOption.get.size shouldBe 3
+        val historical = _json(take(owner.executeOperationResponseInContext(Request.of(component = component.name,
+          service = "RepositorySyncService", operation = RepositorySyncDirectoryList.readOperation,
+          properties = List(Property("sessionId", session, None), Property("revision", revision, None))), actor)))
+        historical shouldBe original
+      }
     }
 
     "finish a mixed clean batch in one normal operation and recollect exact retained results without replay" in {

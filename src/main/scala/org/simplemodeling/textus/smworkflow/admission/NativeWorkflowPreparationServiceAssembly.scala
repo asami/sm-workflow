@@ -18,7 +18,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Passive normal Operations borrow only the current executing call's resource context.
   * @since   Oct. 15, 2026
   *  version Oct. 27, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowPreparationServiceAssembly {
@@ -152,6 +152,7 @@ private[smworkflow] object NativeWorkflowPreparationServiceAssembly {
     private def _read_c(value: String): Consequence[String] =
       if (!NativePreparationInput.exact(value))
         Consequence.stateConflict("Workflow preparation requires an exact nonempty resource reference")
+      else if (value.startsWith(WorkflowRetainedWork.resourcePrefix)) WorkflowRetainedWork.readResourceC(value, core)
       else ResourceReference.parseC(value).flatMap {
         case reference: ResourceReference.Url if reference.scheme == "file" =>
           WorkflowArtifactBudget.readTextC(core, reference, Some(UTF_8))

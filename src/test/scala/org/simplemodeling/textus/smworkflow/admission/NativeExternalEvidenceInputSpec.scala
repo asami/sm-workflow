@@ -19,7 +19,8 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Typed finite tool input fixture; files contain only specification facts.
   * @since   Oct. 14, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 25, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeExternalEvidenceToolFixture {
@@ -75,9 +76,6 @@ private[admission] object NativeExternalEvidenceToolFixture {
 
 /** Passive input specifications execute only during parent-selected validation.
   * Fixture success is not genuine independent review, Human consent or task completion.
-  * @since   Oct. 14, 2026
-  * @version Oct. 25, 2026
-  * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -349,7 +347,7 @@ final class NativeExternalEvidenceInputSpec extends AnyWordSpec with Matchers wi
     "refuse Split review and unassigned outputs while managed Direct consumers exercise both full public Human outputs" in {
       Given("Split has Human preparation but no review kind, and an ordinary unassigned Wait output")
       val wait = V.SplitPhaseAdvanceResult("fixture-session", "Wait", "No assigned input", None, None, None,
-        Some("waiting"), None, None, None, None, None, None, None, None, None, None)
+        Some("waiting"), None, None, None, None, None, None, None, None, None, None, None, None, Vector.empty)
       When("the tool receives unsupported review or a Human request without an assigned context")
       val review = _tool.prepareRecord("SplitPhase", "review", wait, splitAnswer())
       val absent = _tool.prepareRecord("SplitPhase", "human", wait, splitAnswer())

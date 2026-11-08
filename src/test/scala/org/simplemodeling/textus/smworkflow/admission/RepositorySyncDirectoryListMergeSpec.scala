@@ -10,6 +10,7 @@ import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.wordspec.AnyWordSpec
+import org.simplemodeling.textus.smworkflow.value as V
 import RepositorySyncNativeMergeValidation as C
 import RepositorySyncProgramImpact as P
 import SplitPhaseExplicitPartitionFixture.take
@@ -400,12 +401,14 @@ final class RepositorySyncDirectoryListMergeSpec extends AnyWordSpec with GivenW
     for (scenario <- Vector("MissingBinding", "MissingCoverage")) {
       s"retain the actual candidate and report bounded setup for $scenario without a test failure or push" in {
         val directory = root(scenario)
+        var outstanding = Option.empty[V.RepositoryDirectoryBatchResult]
         Given("a real program merge whose required ordinary binding or coverage cannot be established")
         _with_runtime_(directory, scenario, hostParameters = parameters(directory, scenario != "MissingCoverage")) {
           (owner, component, actor, prepare) =>
           prepare(_.setupC(_setup_commands_(directory, scenario).size, scenario = scenario))
           When("the normal directory-list owner resolves validation before product effects")
           val result = json(take(owner.executeOperationResponseInContext(request(component.name), actor)))
+          outstanding = Some(take(V.RepositoryDirectoryBatchResult.createC(GoalPhaseNativeMetadata.record(result))))
           Then("the owning Session remains unfinished with its original pending merge and precise setup reason")
           result.hcursor.get[String]("outcome").toOption shouldBe Some("AttentionRequired")
           val child = result.hcursor.get[Vector[Json]]("repositories").toOption.get.head
@@ -419,6 +422,28 @@ final class RepositorySyncDirectoryListMergeSpec extends AnyWordSpec with GivenW
           val collected = json(take(owner.executeOperationResponseInContext(request(component.name,
             result.hcursor.get[String]("sessionId").toOption), actor)))
           collected shouldBe result
+        }
+        When("normal host configuration is corrected and its exact same aggregate revision is explicitly refreshed")
+        _with_runtime_(directory, "Program", hostParameters = parameters(directory)) { (owner, component, actor, _) =>
+          val previous = outstanding.get
+          def refresh(revision: String) = owner.executeOperationResponseInContext(Request.of(component = component.name,
+            service = "RepositorySyncService", operation = RepositorySyncDirectoryList.refreshOperation, properties = List(
+              Property("sessionId", previous.sessionId, None), Property("revision", revision, None))), actor)
+          refresh((previous.resultReference.revision.toLong - 1).toString).isSuccess shouldBe false
+          val resumed = read_control_value[V.RepositoryDirectoryBatchResult](take(refresh(previous.resultReference.revision)))
+          Then("only unfinished native validation resumes and both historical and completed aggregate results remain attributable")
+          resumed.sessionId shouldBe previous.sessionId
+          resumed.repositories.map(_.sessionId) shouldBe previous.repositories.map(_.sessionId)
+          resumed.outcome shouldBe "Completed"
+          val checks = Files.readString(directory.resolve("sbt-executions.txt"))
+          val collected = read_control_value[V.RepositoryDirectoryBatchResult](take(owner.executeOperationResponseInContext(
+            request(component.name, Some(previous.sessionId)), actor)))
+          collected shouldBe resumed
+          Files.readString(directory.resolve("sbt-executions.txt")) shouldBe checks
+          val historical = read_control_value[V.RepositoryDirectoryBatchResult](take(owner.executeOperationResponseInContext(
+            Request.of(component = component.name, service = "RepositorySyncService", operation = RepositorySyncDirectoryList.readOperation,
+              properties = List(Property("sessionId", previous.sessionId, None), Property("revision", previous.resultReference.revision, None))), actor)))
+          historical shouldBe previous
         }
       }
     }

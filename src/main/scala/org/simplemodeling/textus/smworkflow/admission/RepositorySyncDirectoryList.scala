@@ -36,7 +36,8 @@ import org.simplemodeling.textus.smworkflow.value as V
 private[smworkflow] object RepositorySyncDirectoryList {
   val syncOperation = "syncRepositoryDirectories"
   val readOperation = "readRepositoryDirectoryResult"
-  val operations = Set(syncOperation, readOperation)
+  val refreshOperation = "refreshRepositoryDirectoryConfiguration"
+  val operations = Set(syncOperation, readOperation, refreshOperation)
   val declaration: ComponentParameterKey[Vector[String]] = ComponentParameterKey.optional(
     "sm-workflow.repository-sync.directories", ComponentParameterDecoder {
       case ConfigurationValue.ListValue(values) => values.foldLeft(Consequence.success(Vector.empty[String])) {
@@ -60,8 +61,11 @@ private[smworkflow] object RepositorySyncDirectoryList {
   final case class Result(repositoryIdentity: String, workspace: String, sessionId: String,
     kind: String, outcome: String, condition: Option[String], revision: Option[String],
     tip: Option[String], tree: Option[String], diagnostic: Option[String] = None, work: Option[Work] = None)
+  final case class Setup(directories: Vector[String], diagnostic: String)
+  private given Encoder[Setup] = deriveEncoder
+  private given Decoder[Setup] = deriveDecoder
   final case class Payload(participant: String, members: Vector[Member], results: Vector[Result],
-    stage: String, attempting: Option[String])
+    stage: String, attempting: Option[String], setup: Option[Setup] = None)
   private given Encoder[Member] = deriveEncoder
   private given Decoder[Member] = deriveDecoder
   private given Encoder[Result] = deriveEncoder[Result].mapJson(_.mapObject(_.filter {
@@ -69,7 +73,10 @@ private[smworkflow] object RepositorySyncDirectoryList {
     case _ => true
   }))
   private given Decoder[Result] = deriveDecoder
-  private given Encoder[Payload] = deriveEncoder
+  private given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
+    case ("setup", value) => !value.isNull
+    case _ => true
+  }))
   private given Decoder[Payload] = deriveDecoder
 
   // This typed invocation-local marker is constructed only from a resolved host
@@ -142,27 +149,29 @@ private[smworkflow] object RepositorySyncDirectoryList {
     persistence: GoalPhaseRuntimeParameters.Persistence, repository: BindRepository): spec.ServiceDefinition =
     NativeWorkflowDescriptionMetadata.service(SmWorkflowComponent.RepositorySyncServiceService,
       spec.OperationDefinitionGroup(NonEmptyVector.of(new Operation(false, creation, parameters, persistence, repository),
-        new Operation(true, creation, parameters, persistence, repository))))
+        new Operation(true, creation, parameters, persistence, repository),
+        new Operation(false, creation, parameters, persistence, repository, refresh = true))))
 
   private final class Operation(read: Boolean, creation: ComponentCreate,
     parameters: ComponentInitializationParameters, persistence: GoalPhaseRuntimeParameters.Persistence,
-    repository: BindRepository) extends spec.OperationDefinition {
-    val specification = NativeWorkflowDescriptionMetadata.operation(if (read)
+    repository: BindRepository, refresh: Boolean = false) extends spec.OperationDefinition {
+    val specification = NativeWorkflowDescriptionMetadata.operation(if (refresh)
+      SmWorkflowComponent.RepositorySyncServiceService.RefreshRepositoryDirectoryConfigurationOperation else if (read)
       SmWorkflowComponent.RepositorySyncServiceService.ReadRepositoryDirectoryResultOperation
       else SmWorkflowComponent.RepositorySyncServiceService.SyncRepositoryDirectoriesOperation)
     def createOperationRequest(request: Request): Consequence[OperationRequest] =
       if (request == null || !request.service.contains("RepositorySyncService") || request.operation != specification.name)
         _invalid("directory-list operation differs from its declared service")
-      else Consequence.success(Action(request, read, creation, parameters, persistence, repository))
+      else Consequence.success(Action(request, read, creation, parameters, persistence, repository, refresh))
   }
   private final case class Action(request: Request, read: Boolean, creation: ComponentCreate,
     parameters: ComponentInitializationParameters, persistence: GoalPhaseRuntimeParameters.Persistence,
-    repository: BindRepository) extends CommandAction {
+    repository: BindRepository, refresh: Boolean) extends CommandAction {
     override def commandExecutionMode = CommandExecutionMode.Sync
     def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
       val core = c
       def execute(): Consequence[OperationResponse] = for {
-        identity <- if (read) NativeWorkflowOperationInput.textC(Action.this.request, "sessionId")
+        identity <- if (read || refresh) NativeWorkflowOperationInput.textC(Action.this.request, "sessionId")
           else NativeWorkflowOperationInput.startSessionC(Action.this.request, core.executionContext)
         context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(identity))
         call = core.copy(executionContext = context)
@@ -186,7 +195,8 @@ private[smworkflow] object RepositorySyncDirectoryList {
           response <- _response_c(identity, revision, value, storage, call)
         } yield response
         else for {
-          input <- NativeWorkflowOperationInput.recordC(Action.this.request, "input")
+          input <- if (refresh) Consequence.success(Record.data("syncMode" -> "FULL_STATE"))
+            else NativeWorkflowOperationInput.recordC(Action.this.request, "input")
           _ <- if (DevelopmentOperationalView.json(input).asObject.exists(_.keys.toSet == Set("syncMode")) &&
               input.getString("syncMode").contains("FULL_STATE")) Consequence.unit
             else _invalid("directory-list input requires only explicit syncMode FULL_STATE")
@@ -196,34 +206,67 @@ private[smworkflow] object RepositorySyncDirectoryList {
                 .flatMap(_.map(Consequence.success).getOrElse(_invalid("Session is not a retained directory-list execution")))
               _ <- _admit_c(retained.receipt.payload.value, participant)
               _ <- if (retained.receipt.next == current) Consequence.unit else _invalid("native directory frontier differs")
+              _ <- if (refresh) NativeWorkflowOperationInput.textC(Action.this.request, "revision").flatMap { revision =>
+                if (revision == current.revision.value.toString &&
+                    Set("AttentionRequired", "ConfigurationRequired")(retained.receipt.payload.value.stage))
+                  Consequence.unit else _invalid("configuration refresh requires its exact outstanding aggregate revision")
+              } else Consequence.unit
             } yield current -> retained.receipt.payload.value
+            case None if refresh => _invalid("configuration refresh requires the existing aggregate Session")
             case None => for {
-              directories <- parameters.resolve(declaration).flatMap(_.value.map(Consequence.success)
-                .getOrElse(_invalid("sm-workflow.repository-sync.directories is not configured")))
-              raw <- GoalPhaseInputRecordReadPolicy.storedValue(creation.configuration.configuration.values,
-                CncfConfigurationParameterCatalog.SUBSYSTEM_PROCESS_EXECUTION_PLAN_KEY) match {
-                case Some(ConfigurationValue.StringValue(value)) => io.circe.parser.parse(value)
-                  .fold(e => _invalid(e.message), Consequence.success)
-                case _ => _invalid("no managed repository execution profile is configured")
-              }
-              members <- resolveC(directories, raw, identity)
+              directories <- parameters.resolve(declaration).map(_.value.getOrElse(Vector.empty))
+              resolved <- _configured_c(creation, directories, identity)
               initial <- InstanceRecord(InstanceIdentity(identity), definition, initialRevision, Lifecycle.NotStarted,
                 None, CorrelationReference("directory-list:" + identity), CausationReference("directory-list-start:" + identity),
                 None, None, None, Vector.empty).validateC
               _ <- instances.createC(initial)(using context)
               active <- instances.appendC(initial.identity, initial.revision,
                 _entry(initial, "DirectoryListStarted", "directory-list-start:" + identity))(using context)
-              saved <- _save_c(adapter, persistence, call, active, Payload(participant, members, Vector.empty, "Ready", None))
+              initialpayload = resolved.fold(reason => Payload(participant, Vector.empty, Vector.empty, "ConfigurationRequired", None,
+                Some(Setup(directories, reason))), members => Payload(participant, members, Vector.empty, "Ready", None))
+              saved <- _save_c(adapter, persistence, call, active, initialpayload)
             } yield saved
           }
-          result <- if (loaded._2.stage == "AttentionRequired")
-              _resume_c(loaded._1, loaded._2, adapter, persistence, storage, call, repository)
-            else if (loaded._2.stage != "Ready") Consequence.success(loaded)
-            else _run_c(loaded._1, loaded._2, adapter, persistence, storage, call, repository)
+          configured <- if (refresh && loaded._2.stage == "ConfigurationRequired") for {
+            _ <- if (loaded._2.members.isEmpty && loaded._2.results.isEmpty && loaded._2.attempting.isEmpty)
+              Consequence.unit else _invalid("target setup cannot replace any started or attempted child")
+            setup <- loaded._2.setup.map(Consequence.success).getOrElse(_invalid("configuration wait has no retained setup context"))
+            directories <- parameters.resolve(declaration).map(_.value.getOrElse(Vector.empty))
+            _ <- if (setup.directories.isEmpty || directories == setup.directories) Consequence.unit
+              else _invalid("configuration refresh cannot replace the captured directory selection")
+            resolved <- _configured_c(creation, directories, identity)
+            payload = resolved.fold(reason => loaded._2.copy(setup = Some(Setup(directories, reason))), members =>
+              loaded._2.copy(members = members, stage = "Ready", setup = None))
+            saved <- _save_c(adapter, persistence, call, loaded._1, payload)
+          } yield saved else Consequence.success(loaded)
+          result <- if (configured._2.stage == "AttentionRequired")
+              _resume_c(configured._1, configured._2, adapter, persistence, storage, call, repository, refresh)
+            else if (configured._2.stage != "Ready") Consequence.success(configured)
+            else _run_c(configured._1, configured._2, adapter, persistence, storage, call, repository)
           response <- _response_c(identity, result._1.revision.value.toString, result._2, storage, call)
         } yield response
       } yield response
     }
+  }
+
+  /** Missing configuration is a retained setup outcome before the first child
+    * or remote effect. Refresh consumes normal current host bindings; it neither
+    * guesses a destination nor changes a previously captured child target.
+    */
+  private def _configured_c(creation: ComponentCreate, directories: Vector[String], identity: String):
+      Consequence[Either[String, Vector[Member]]] = {
+    val resolved = for {
+      _ <- if (directories.nonEmpty) Consequence.unit else _invalid("sm-workflow.repository-sync.directories is not configured")
+      raw <- GoalPhaseInputRecordReadPolicy.storedValue(creation.configuration.configuration.values,
+        CncfConfigurationParameterCatalog.SUBSYSTEM_PROCESS_EXECUTION_PLAN_KEY) match {
+        case Some(ConfigurationValue.StringValue(value)) => io.circe.parser.parse(value)
+          .fold(e => _invalid(e.message), Consequence.success)
+        case _ => _invalid("no managed repository execution profile is configured")
+      }
+      members <- resolveC(directories, raw, identity)
+    } yield members
+    resolved.map[Either[String, Vector[Member]]](Right(_))
+      .recoverWith(conclusion => Consequence.success(Left(conclusion.show)))
   }
 
   private def _run_c(current: InstanceRecord, payload: Payload, adapter: WorkflowManagedMechanicalTransition[Payload],
@@ -265,7 +308,7 @@ private[smworkflow] object RepositorySyncDirectoryList {
     */
   private def _resume_c(current: InstanceRecord, payload: Payload, adapter: WorkflowManagedMechanicalTransition[Payload],
     persistence: GoalPhaseRuntimeParameters.Persistence, storage: WorkflowComponentStorage,
-    core: ActionCall.Core, repository: BindRepository): Consequence[(InstanceRecord, Payload)] =
+    core: ActionCall.Core, repository: BindRepository, refreshSetup: Boolean = false): Consequence[(InstanceRecord, Payload)] =
     payload.results.zipWithIndex.foldLeft(Consequence.success(current -> payload)) { case (prior, (result, ordinal)) =>
       prior.flatMap { (frontier, state) =>
         if (state.stage == "Indeterminate" || !Set("Request", "Wait", "Human")(result.kind)) Consequence.success(frontier -> state)
@@ -275,7 +318,9 @@ private[smworkflow] object RepositorySyncDirectoryList {
           instances <- storage.bindInstancesC()(using core.executionContext)
           child <- instances.loadC(InstanceIdentity(member.sessionId))(using core.executionContext)
             .flatMap(_.map(Consequence.success).getOrElse(_invalid("outstanding child Session is unavailable")))
-          next <- if (result.revision.contains(child.revision.value.toString)) Consequence.success(frontier -> state)
+          next <- if (result.revision.contains(child.revision.value.toString) &&
+              !(refreshSetup && result.kind == "Wait" && result.condition.contains("ValidationSetupRequired")))
+            Consequence.success(frontier -> state)
             else for {
               intent <- _save_c(adapter, persistence, core, frontier, state.copy(stage = "Attempting", attempting = Some(member.sessionId)))
               observed <- _execute_c(member, core, repository, start = false).map[Either[String, V.RepositorySyncAdvanceResult]](Right(_))
@@ -433,15 +478,22 @@ private[smworkflow] object RepositorySyncDirectoryList {
         .getOrElse(_invalid("result has no captured repository member"))
       work <- result.work.fold(Consequence.success(Option.empty[V.RepositorySyncAdvanceResult]))(reference =>
         _work_c(storage, core, member, reference).map(Some(_)))
+      retained <- work match {
+        case Some(value) if value.kind == "Human" => WorkflowRetainedWork.confirmedDecisionC(value.toRecord(), core).map(Some(_))
+        case _ => work.flatMap(_.issuedWorkContext).fold(Consequence.success(Option.empty[V.WorkflowRetainedWorkReference]))(
+          context => WorkflowRetainedWork.confirmedC(context, core).map(Some(_)))
+      }
     } yield values :+ V.RepositoryDirectorySummary(result.repositoryIdentity, result.workspace,
-      result.sessionId, result.kind, result.outcome, result.condition, result.revision, result.tip, result.tree, result.diagnostic, work) }
+      result.sessionId, result.kind, result.outcome, result.condition, result.revision, result.tip, result.tree, result.diagnostic,
+      if (retained.nonEmpty) None else work, retained, work.map(value => NativeWorkflowCompactResponse.summary(value.toRecord()))) }
   } yield NativeWorkflowOperationOutput.response(V.RepositoryDirectoryBatchResult(identity,
       if (payload.stage == "Attempting") "Indeterminate" else payload.stage,
       V.RepositoryDirectoryResultReference("RepositorySyncWorkflow", identity,
         _reference(identity, revision).identity, revision, readOperation),
       summaries,
       payload.members.drop(payload.results.size).filterNot(member => payload.attempting.contains(member.sessionId))
-        .map(_.repositoryIdentity), payload.attempting))
+        .map(_.repositoryIdentity), payload.attempting,
+      payload.setup.map(setup => V.RepositoryDirectoryConfigurationRequired(setup.directories, setup.diagnostic, refreshOperation))))
   private def _one_c(values: Vector[Json], reason: String): Consequence[Json] =
     if (values.size == 1) Consequence.success(values.head) else _invalid(reason)
   private def _text_c(value: Json, name: String): Consequence[String] =

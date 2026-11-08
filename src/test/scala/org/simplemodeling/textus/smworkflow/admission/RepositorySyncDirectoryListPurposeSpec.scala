@@ -147,9 +147,14 @@ final class RepositorySyncDirectoryListPurposeSpec extends AnyWordSpec with Give
         value.repositories.map(_.kind).distinct shouldBe Vector("Request")
         value.repositories.map(_.sessionId).distinct.size shouldBe 2
         value.repositories.foreach { repository =>
-          repository.work.get.sessionId shouldBe repository.sessionId
-          repository.work.get.submitOperation shouldBe Some("submitRepositoryPurposeResult")
-          repository.work.get.issuedWorkContext.get.runId shouldBe repository.sessionId
+          repository.work shouldBe empty
+          val detail = read_control_value[V.WorkflowRetainedWorkReadResult](take(owner.executeOperationResponseInContext(
+            Request.of(component = component.name, service = WorkflowRetainedWork.serviceName,
+              operation = WorkflowRetainedWork.readOperation, properties = List(Property("input", repository.retainedWork.get, None))), actor)))
+          val work = take(V.RepositorySyncAdvanceResult.createC(detail.response))
+          work.sessionId shouldBe repository.sessionId
+          work.submitOperation shouldBe Some("submitRepositoryPurposeResult")
+          work.issuedWorkContext.get.runId shouldBe repository.sessionId
         }
         batch(Some(value.sessionId)) shouldBe value
         Files.readString(root.resolve("repository/shared.md")) shouldBe first
@@ -204,7 +209,11 @@ final class RepositorySyncDirectoryListPurposeSpec extends AnyWordSpec with Give
           val summary = issued.repositories.head
           summary.workspace shouldBe "batch-dirty"
           summary.kind shouldBe "Request"
-          val semantic = summary.work.get
+          summary.work shouldBe empty
+          val detail = read_control_value[V.WorkflowRetainedWorkReadResult](take(owner.executeOperationResponseInContext(
+            Request.of(component = component.name, service = WorkflowRetainedWork.serviceName,
+              operation = WorkflowRetainedWork.readOperation, properties = List(Property("input", summary.retainedWork.get, None))), actor)))
+          val semantic = take(V.RepositorySyncAdvanceResult.createC(detail.response))
           semantic.sessionId shouldBe summary.sessionId
           semantic.submitOperation shouldBe Some("submitRepositoryPurposeResult")
           semantic.issuedWorkContext should not be empty

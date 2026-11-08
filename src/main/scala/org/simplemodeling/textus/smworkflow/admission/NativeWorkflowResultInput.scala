@@ -13,7 +13,7 @@ import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{Configuration, DefinitionBinding, InstanceIdentity, InstanceRecord}
 import org.goldenport.cncf.datastore.DataStore
-import org.goldenport.protocol.Request
+import org.goldenport.protocol.{Property, Request}
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
@@ -24,7 +24,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * Native completion consumes the typed result and owns its state, scope,
   * participant and update boundary. Public callers supply no control envelope.
   * @since   Oct.  9, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowResultInput {
@@ -184,7 +184,18 @@ private[smworkflow] object NativeWorkflowResultInput {
 
   private def _work[W](operation: StateMachineOperationIdentity,
     codec: WorkflowResultJsonV1.PayloadCodec[W], read: Request => Consequence[Value]): Target =
-    Target(operation, request => read(request).map(value => SelectedValue(_ => Consequence.success(value))), (storage, identity, context) =>
+    Target(operation, request => {
+      val record = request.toRecord
+      (record.getAny("result"), record.getAny("resultResource")) match {
+        case (Some(_), None) => read(request).map(value => SelectedValue(_ => Consequence.success(value)))
+        case (None, Some(resource: String)) => NativeWorkflowResourceInput.referenceC(resource).map(reference =>
+          SelectedValue(reader => reader(reference).flatMap(GoalPhasePrerequisitePublicationRecovery.validateBusinessTextC)
+            .flatMap(NativeWorkflowOperationInput.decodeValueC[Record](_, "result"))
+            .flatMap(value => read(request.copy(properties = request.properties.filterNot(p =>
+              Set("result", "resultResource")(p.name)) :+ Property("result", value, None))))))
+        case _ => _invalid("semantic completion requires exactly one result or resultResource")
+      }
+    }, (storage, identity, context) =>
       storage.bindIssuedC(operation, codec).flatMap(_.loadC(identity)(using context)).flatMap {
         case Some(value) => value.current match {
           case order: WorkflowContinuation.WorkOrder[?] =>

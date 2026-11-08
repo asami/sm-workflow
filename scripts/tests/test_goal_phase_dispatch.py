@@ -24,6 +24,31 @@ spec.loader.exec_module(A)
 
 
 class DispatchSpec(unittest.TestCase):
+    def test_explicit_native_detail_selects_original_request_and_refuses_crossed_revision(self):
+        # Given a retained owner response and the unchanged original issued context.
+        request = {'kind': 'Request', 'submit_session_id': 'session', 'work': {'kind': 'ImplementStep'},
+                   'issued_work_context': {'continuation_id': 'issued-work', 'expected_revision': '7'}}
+        detail = {'availability': 'available', 'reference': {
+            'schema_version': 'sm-workflow.retained-work-reference.v1', 'session_id': 'session',
+            'identity': 'issued-work', 'revision': '7'}, 'response': copy.deepcopy(request)}
+        original = copy.deepcopy(detail)
+        # When dispatch selects the explicit public detail response.
+        self.assertEqual(A.selected_request(detail), request)
+        # Then no complete historical envelope is rebuilt or modified.
+        self.assertEqual(detail, original)
+        detail['reference']['revision'] = '8'
+        with self.assertRaisesRegex(ValueError, 'crosses its issued'):
+            A.selected_request(detail)
+
+    def test_compact_control_requires_explicit_detail_without_launch_or_lookup(self):
+        # Given an actual compact control context with its native reference.
+        compact = {'kind': 'Request', 'issued_work_context': {'continuation_id': 'native-work'},
+                   'retained_work': {'resource': 'sm-workflow-work:actual-owner'}}
+        # When passive dispatch has no selected semantic body yet.
+        # Then it requests the explicit owner read without inferring work or a fallback.
+        with self.assertRaisesRegex(ValueError, 'explicit read-work/detail read'):
+            A.prepare(compact, {}, [])
+
     def test_unsupported_python_fails_before_role_loading_or_launch(self):
         # Given a system interpreter below the shared caller's declared minimum.
         for version in ((3, 9, 6), (3, 11, 9)):

@@ -10,8 +10,8 @@ import org.goldenport.protocol.spec as spec
 /** Publish ordinary descriptions before a particular run has been selected.
   * Each invocation composes its actual handler in the incoming call; no actor,
   * UoW, run settings or result is cached across requests.
-  * @since Oct. 27, 2026
-  * @version Oct. 27, 2026
+  * @since   Oct. 27, 2026
+  * @version Nov.  8, 2026
   */
 private[smworkflow] object DeferredWorkflowServices {
   type Resolver = (Request, ActionCall.Core) => Consequence[Vector[spec.ServiceDefinition]]
@@ -52,7 +52,7 @@ private[smworkflow] object DeferredWorkflowServices {
           override def afterCommitResponseC(response: OperationResponse): Consequence[OperationResponse] = {
             val selected = delegate
             delegate = None
-            selected.map(_.afterCommitResponseC(response))
+            selected.map(_.afterCommitResponseC(response).flatMap(NativeWorkflowCompactResponse.responseC(_, core)))
               .getOrElse(Consequence.stateConflict("Workflow runtime handler has not executed"))
           }
         }

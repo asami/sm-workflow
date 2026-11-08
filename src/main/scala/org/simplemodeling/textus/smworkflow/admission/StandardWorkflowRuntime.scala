@@ -37,6 +37,7 @@ private[smworkflow] object StandardWorkflowRuntime {
     request: Request, core: ActionCall.Core): Consequence[Vector[spec.ServiceDefinition]] = for {
     shared <- sharedC(creation, parameters)
     services <- request.service match {
+      case Some("WorkflowRetainedWorkService") => Consequence.success(Vector(WorkflowRetainedWork.bind))
       case Some("SplitPhaseService") => splitC(creation, parameters, shared, core).map(Vector(_))
       case Some("GoalPhaseService") => goalC(creation, parameters, shared, request, core).map(Vector(_))
       case Some("RepositorySyncService") if RepositorySyncDirectoryList.operations(request.operation) =>

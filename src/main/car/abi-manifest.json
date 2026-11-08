@@ -131,6 +131,9 @@
         },
         {
           "name": "WorkflowForceClosureService"
+        },
+        {
+          "name": "WorkflowRetainedWorkService"
         }
       ],
       "operations": [
@@ -896,6 +899,27 @@
           "kind": "COMMAND",
           "input": "StandaloneFixValidationRecoveryInput",
           "output": "StandaloneFixView"
+        },
+        {
+          "service": "WorkflowRetainedWorkService",
+          "name": "readWorkflowRetainedWork",
+          "kind": "COMMAND",
+          "input": "WorkflowRetainedWorkReference",
+          "output": "WorkflowRetainedWorkReadResult"
+        },
+        {
+          "service": "WorkflowRetainedWorkService",
+          "name": "readWorkflowRetainedSnapshot",
+          "kind": "COMMAND",
+          "input": "WorkflowRetainedSnapshotReference",
+          "output": "WorkflowRetainedSnapshotReadResult"
+        },
+        {
+          "service": "RepositorySyncService",
+          "name": "refreshRepositoryDirectoryConfiguration",
+          "kind": "COMMAND",
+          "input": "RepositoryDirectoryConfigurationRefreshInput",
+          "output": "RepositoryDirectoryBatchResult"
         }
       ],
       "types": [

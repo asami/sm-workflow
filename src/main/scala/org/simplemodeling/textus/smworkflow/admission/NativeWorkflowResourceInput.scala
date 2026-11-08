@@ -8,7 +8,7 @@ import org.goldenport.protocol.Request
 /** Shared transport only. The executing call owns Resource authorization,
   * finite streaming acquisition and UTF-8 decoding; business admission follows.
   * @since   Oct. 24, 2026
-  * @version Nov.  3, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowResourceInput {
@@ -19,6 +19,10 @@ private[smworkflow] object NativeWorkflowResourceInput {
   def referenceC(value: String): Consequence[ResourceReference.Url] =
     if (value == null || value.isEmpty || value.trim != value) _invalid("requires an absolute local file URI")
     else ResourceReference.parseC(value).flatMap {
+      case reference: ResourceReference.Url if reference.scheme == "sm-workflow-work" =>
+        WorkflowRetainedWork.decodeResourceC(value).map(_ => reference)
+      case reference: ResourceReference.Url if reference.scheme == "sm-workflow-snapshot" =>
+        WorkflowRetainedSnapshot.decodeResourceC(value).map(_ => reference)
       case reference: ResourceReference.Url if reference.scheme == "file" &&
           reference.uri.getRawAuthority == null && reference.uri.getRawQuery == null &&
           reference.uri.getRawFragment == null && Option(reference.uri.getPath).exists(_.startsWith("/")) =>
@@ -42,6 +46,13 @@ private[smworkflow] object NativeWorkflowResourceInput {
 
   def readC[A: ValueReader](source: Source[A], readText: ResourceReference => Consequence[String], valueName: String): Consequence[A] =
     source match {
+      case Inline(value: org.goldenport.record.Record) =>
+        if (!DevelopmentOperationalView.uniqueFields(value)) _invalid("inline artifact contains duplicate fields")
+        else value.toJsonStringC.flatMap { text =>
+          if (!text.contains("retainedSnapshot")) summon[ValueReader[A]].readC(value)
+          else WorkflowRetainedSnapshot.expandTextC(text, readText)
+            .flatMap(NativeWorkflowOperationInput.decodeValueC[A](_, valueName))
+        }
       case Inline(value) => Consequence.success(value)
       case Resource(reference) => readText(reference).flatMap(NativeWorkflowOperationInput.decodeValueC[A](_, valueName))
     }

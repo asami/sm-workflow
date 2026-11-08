@@ -34,12 +34,35 @@ def alias(value, camel, snake):
     return value.get(camel, value.get(snake))
 
 
+def selected_request(value):
+    """Read the exact Request selected by an explicit native detail response.
+
+    No provider call or workflow command is added to the dispatch adapter.
+    """
+    if not isinstance(value, dict) or 'availability' not in value or 'response' not in value:
+        return value
+    reference, request = value.get('reference'), value.get('response')
+    if value.get('availability') != 'available' or not isinstance(reference, dict) or not isinstance(request, dict):
+        raise ValueError('Selected native work detail is unavailable')
+    issued = alias(request, 'issuedWorkContext', 'issued_work_context')
+    if (request.get('kind') != 'Request' or not isinstance(issued, dict)
+            or alias(reference, 'schemaVersion', 'schema_version') != 'sm-workflow.retained-work-reference.v1'
+            or alias(request, 'submitSessionId', 'submit_session_id') != alias(reference, 'sessionId', 'session_id')
+            or alias(issued, 'continuationId', 'continuation_id') != reference.get('identity')
+            or alias(issued, 'expectedRevision', 'expected_revision') != reference.get('revision')):
+        raise ValueError('Selected native detail crosses its issued identity, revision or Session')
+    return request
+
+
 def prepare(request, mapping, capabilities, root=None, repository=None, request_artifact=None):
     """Capabilities are caller-exposed facts, not guessed from this table."""
+    request = selected_request(request)
     issued = request.get('issued_work_context', request.get('issuedWorkContext'))
     if request.get('kind') != 'Request' or not isinstance(issued, dict):
         raise ValueError('An actual issued Request is required')
-    work = request['work']
+    work = request.get('work')
+    if not isinstance(work, dict):
+        raise ValueError('Compact control requires one explicit read-work/detail read before semantic dispatch')
     capture = alias(work, 'operatingProfile', 'operating_profile')
     if not capture or not capture.get('dispatch'):
         raise ValueError('No retained new dispatch policy; use the original legacy route')
@@ -100,7 +123,7 @@ def prepare(request, mapping, capabilities, root=None, repository=None, request_
         supplied = Path(request_artifact)
         if not supplied.is_absolute() or not supplied.is_file() or supplied.is_symlink():
             raise ValueError('Use the exact caller-retained absolute public Request artifact')
-        if json.loads(supplied.read_text()) != request:
+        if selected_request(json.loads(supplied.read_text())) != request:
             raise ValueError('Public Request artifact differs from the unchanged issued Request')
         artifact = str(supplied)
     contract = tomllib.loads((root / 'agents' / ('sm_workflow_' + role + '.toml')).read_text())['developer_instructions']
@@ -137,7 +160,8 @@ def resolve(state, capabilities):
         state['resolved'] = dict(candidate=candidate, concrete=concrete, source=fact['source'])
         if state.get('requestArtifact'):
             input_message = ('Read the exact caller-retained public Request artifact: ' + state['requestArtifact'] +
-                             '\nPreserve that unchanged Request, its issued context and return contract. '
+                             '\nFor an explicit native detail response, response is the selected original Request. '
+                             'Preserve that unchanged Request, its issued context and return contract. '
                              'Read only the scope and evidence needed for this assignment; no private workflow storage.')
         else:
             input_message = ('Actual issued Request (unchanged):\n' + json.dumps(state['request'], ensure_ascii=False))
@@ -243,6 +267,7 @@ def execution_evidence(state, references):
 
 
 def restore(state, request):
+    request = selected_request(request)
     if state.get('schema') != SCHEMA or state.get('request') != request:
         raise ValueError('Retained resolution belongs to a different issued Request')
     capture = alias(request['work'], 'operatingProfile', 'operating_profile')

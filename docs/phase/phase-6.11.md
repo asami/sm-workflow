@@ -271,3 +271,36 @@ The new recorded-purpose and public directory-purpose specifications are authore
 only. The semantic worker ran no validation, independent review, acceptance,
 commit, publication or installed qualification. All P611 acceptance checkboxes
 remain pending; B4/B5 retained-reference/CLI work and broad recovery remain open.
+
+### B4 retained references and configuration recovery authored — 2026-11-08
+
+The B4 source connects compact public WorkOrder/Human controls across all six
+Workflow families to explicit exact native-owner detail reads. Large GoalPhase
+validation/completion, bounded Task/Fix state and Split selected-plan material
+uses typed field references; small current synchronization, Evidence and
+application observations remain labelled inline summaries. Reference creation
+confirms actual retention and preserves Component/Workflow revision, Session,
+continuation or receipt identity and exact revision. No new archive, digest,
+latest substitution or successful-effect reconstruction is introduced.
+
+Directory aggregates retain missing target configuration before child/remote
+effects and expose exact-revision same-Session configuration refresh. Captured
+directory selection and started child targets remain fixed; corrected ordinary
+validation configuration resumes only eligible outstanding setup work. Existing
+terminal, failed and UNKNOWN native histories and counters retain their owners.
+Purpose preparation/materialization target snapshots resolve inside runtime
+before unchanged complete-target, Human evidence and current-state admission.
+Legacy complete input records remain compatible.
+
+The product caller offers explicit `read-work`; semantic dispatch can consume
+the selected original issued Request from that owner response. Shared evidence
+preparation accepts the native resource directly. Deployed external caller
+copies and the current operational installation were not modified.
+
+The [response inventory](../design/phase-6.11-response-inventory.md#b4-authored-retained-owner-connections--2026-11-08)
+records connected producers, native storage versus Resource budget ownership,
+explicit legacy detail/export routes and authored specifications. The semantic
+worker ran no validation, independent review, commit, publication, installed
+qualification or effect on a live Session. B5 owns actual 37.5 MB incident
+qualification, fresh-process installed coverage, emitted-byte measurements and
+normal publication; all Phase acceptance checkboxes remain pending.

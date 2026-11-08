@@ -242,3 +242,59 @@ unresolved. The Phase's 29 acceptance conditions, B3 dirty-purpose work, B4
 recovery/reference work and B5 installed qualification remain unchanged and
 pending. No original checkout, old Session, counters or accepted workflow
 results were edited.
+
+## B4 authored retained-owner connections — 2026-11-08
+
+The issued B4 assignment belongs to Session
+`3585e04191dce0bc0f70e394b6745767`, continuation
+`3585e04191dce0bc0f70e394b6745767:ordered-implementation:2514`, expected
+revision `2515`, Plan revision `2`. The retained public Request was read without
+changing it. This section records source authorship, not a validation receipt or
+Step/Phase acceptance.
+
+| Producer / consumer | Authored connection |
+| --- | --- |
+| GoalPhase, GoalTask, DelegateTask, StandaloneFix, RepositorySync, SplitPhase issued work | The external control adapter confirms the actual native issued record before returning `retainedWork`; work/Human bodies remain with their existing WorkOrder/Decision owner. Genuine issued context, native completion identities, outcomes and repair counters remain inline. |
+| Native exact detail read | `WorkflowRetainedWorkService.readWorkflowRetainedWork` selects the exact Component instance, Workflow identity/revision, Session, continuation, expected revision and owning input codec. It loads immutable work and renders its owning business projection without advancing or replaying effects. |
+| GoalPhase validation/completion, bounded Task/Fix state, Split selected plan | `retainedMaterials` identifies exact mechanical receipt field projections. Current synchronization/Evidence/application observations remain explicitly in `controlSummary`; a historical snapshot is never relabelled as a later observation. |
+| Repository directory result | Aggregate revisions continue to retain original members and native work identities. Public summaries return confirmed work references and finite control summaries; collection does not reissue completed or uncertain child work. |
+| Repository setup supplementation | Missing directory/target settings are retained as `ConfigurationRequired` before any child or remote effect. `refreshRepositoryDirectoryConfiguration` requires the existing aggregate Session, participant and exact outstanding revision. It resolves only the captured directory selection or reconsiders native `ValidationSetupRequired` waits after normal host configuration changes; started targets and other failures/UNKNOWN effects retain their existing contracts. |
+| Purpose preparation/materialization recovery targets | Repeated progress/prepared/intent bodies become confirmed `retainedSnapshot` references to their actual native receipts. Runtime expansion precedes the unchanged complete target codec, genuine Human evidence and current-frontier admission. Legacy complete targets are still accepted. |
+| Shared preparation and result transport | Preparation accepts the exact work resource. Inline/Resource recovery inputs expand selected snapshot descriptors inside the owning runtime. Semantic result Resource transport uses the complete acquired serialized input and the existing result decoder; no caller envelope reconstruction or application content ceiling is added. |
+| Product caller compatibility | `native-goal-command.py read-work` performs one explicit public read. The dispatcher and submission helpers can select its original issued response while retaining the unchanged detail artifact. Evidence preparation forwards the owner resource. No deployed `development-workstation` file was edited. |
+
+The two public read Operations use existing managed native storage and its
+configured retention/receipt limits. They neither copy snapshots into Evidence
+nor create a parallel archive. Reference creation requires successful native
+read-back, not allocation. Missing/inaccessible/foreign/unsupported or uncertain
+reads return their concrete native failure; no latest revision or successful
+effect is substituted. Resource file acquisition retains the independently
+configured artifact budget, roots, authorization and UTF-8 decoding. Native
+datastore reads retain their own managed owner and independent receipt limits.
+
+Passive preparation is an explicit artifact export before host import, not an
+already-retained control response. Its existing importer rows and Evidence
+preparation are not advertised as usable stored references. Common Evidence's
+existing describe/archive metadata remains concise; `readEvidence`/range and
+the new native material reads are explicit selected-content reads. Legacy
+lower-level recovery description APIs retain their complete target contracts;
+only the connected preparation/materialization descriptors change representation.
+Their admission codecs and historical storage formats are not rewritten.
+
+Authored executable coverage includes raw compact Goal control with a growing
+multibyte/escaped retained Plan, a separate runtime reading the same exact issued
+revision, crossed/missing reference refusals, selected serialized snapshot
+restoration, two-repository dirty purpose reference consumption, and exact
+same-Session configuration refresh without repeating completed checks. Existing
+fixture consumers now follow explicit public detail reads when they need legacy
+full views; raw-control specifications use a separate helper. The product Python
+adapters have source specifications for explicit detail selection and refusal of
+crossed identity/revision. None of these checks was executed by the semantic
+implementation worker.
+
+B5 still owns installed qualification of the approximately 37.5 MB incident,
+actual stdout/stderr measurements, retained payload growth, representative
+route coverage, normal publication and integrated review. The source-level
+connections above are not a claim of those results. The existing installed
+operational caller remains unchanged until the owning runtime publishes/adopts
+the product and its packaged caller scripts.

@@ -11,7 +11,7 @@ import org.goldenport.configuration.ConfigurationValue
 /** Workflow input acquisition policy; the executing Resource owner retains all
   * provider, authorization, decoding and observation responsibilities.
   * @since   Nov.  5, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  8, 2026
   */
 private[smworkflow] object WorkflowArtifactBudget {
   val defaultMaximumBytes: Int = 67108864
@@ -46,8 +46,15 @@ private[smworkflow] object WorkflowArtifactBudget {
       case Some(component) => resolveC(component.initializationParameters)
       case None => Consequence.success(ResourceReadLimits(defaultMaximumBytes))
     }
-    text <- core.executionContext.readResourceText(reference, limits, charset)
-  } yield text
+    text <- reference match {
+      case value: ResourceReference.Url if value.scheme == "sm-workflow-work" =>
+        WorkflowRetainedWork.readResourceC(value.uri.toString, core)
+      case value: ResourceReference.Url if value.scheme == "sm-workflow-snapshot" =>
+        WorkflowRetainedSnapshot.readResourceC(value.uri.toString, core)
+      case _ => core.executionContext.readResourceText(reference, limits, charset)
+    }
+    expanded <- WorkflowRetainedSnapshot.expandTextC(text, readTextC(core, _, charset))
+  } yield expanded
 
   private def _invalid: Consequence[ResourceReadLimits] =
     Consequence.configurationInvalid("workflow.artifact.max-bytes requires an integer supported by CNCF ResourceReadLimits (1..268435456 bytes)")

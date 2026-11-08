@@ -284,6 +284,9 @@ OperationResult
 | repairProgress | GoalPhaseRepairProgress | ? |
 | findingRecording | GoalPhaseFindingRecordingState | ? |
 | localPublication | org.goldenport.record.Record | ? |
+| retainedWork | WorkflowRetainedWorkReference | ? |
+| controlSummary | record | ? |
+| retainedMaterials | WorkflowRetainedFieldReference | * |
 
 ## GoalPhaseClosureRecoveryDescriptionInput
 
@@ -2865,6 +2868,17 @@ OperationResult
 | sessionId | string | 1 |
 | revision | string | 1 |
 
+## RepositoryDirectoryConfigurationRefreshInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| revision | string | 1 |
+
 ## RepositoryDirectoryResultReference
 
 ### ATTRIBUTE
@@ -2894,6 +2908,22 @@ OperationResult
 | tree | string | ? |
 | diagnostic | string | ? |
 | work | RepositorySyncAdvanceResult | ? |
+| retainedWork | WorkflowRetainedWorkReference | ? |
+| controlSummary | record | ? |
+
+## RepositoryDirectoryConfigurationRequired
+
+### DESCRIPTION
+
+Actual missing directory/target setup retained before any child Session or remote effect. directories is the original captured selection; no destination is guessed. Supplement normal admitted configuration and refresh the exact aggregate revision. This record grants no workspace, executable or effect authority.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| directories | string | * |
+| diagnostic | string | 1 |
+| resumeOperation | string | 1 |
 
 ## RepositoryDirectoryBatchResult
 
@@ -2911,6 +2941,7 @@ OperationResult
 | repositories | RepositoryDirectorySummary | * |
 | notStarted | string | * |
 | pendingSessionId | string | ? |
+| configuration | RepositoryDirectoryConfigurationRequired | ? |
 
 ## RepositorySyncStartInput
 
@@ -2967,6 +2998,9 @@ OperationResult
 | repair | RepositorySyncNativeMergeRepairRequest | ? |
 | journalRecording | JournalRecordingState | ? |
 | purposeWork | record | ? |
+| retainedWork | WorkflowRetainedWorkReference | ? |
+| controlSummary | record | ? |
+| retainedMaterials | WorkflowRetainedFieldReference | * |
 
 ## RepositorySyncPurposeRequest
 
@@ -6332,6 +6366,10 @@ action = PresentRepositoryConflictDecision
 
 operation = RepositorySyncService.syncRepositoryDirectories
 
+#### refreshRepositoryDirectoryConfiguration
+
+operation = RepositorySyncService.refreshRepositoryDirectoryConfiguration
+
 #### readRepositoryDirectoryResult
 
 operation = RepositorySyncService.readRepositoryDirectoryResult
@@ -8579,6 +8617,8 @@ GoalPhaseCompletionPolicyAdoptionResult
 
 Consume outcome, summary and findings for the actual pending implementation/repair/review work, plus genuine result/artifact reference and only consumed evidence. Return committed accepted/outcome/message data for chat, not another Request. Submit never calls Advance or claims unexecuted checks, Step/Phase release or remote effects.
 
+Supply exactly one of result or resultResource. resultResource carries the complete selected result JSON through the executing Workflow artifact acquisition policy and unchanged owning result decoder. Resource transport grants no evidence, acceptance or following-effect authority.
+
 ##### TYPE
 
 COMMAND
@@ -8594,7 +8634,8 @@ GoalPhaseWorkResult
 | name | type | multiplicity |
 |------+------|--------------|
 | sessionId | string | 1 |
-| result | GoalPhaseWorkResult | 1 |
+| result | GoalPhaseWorkResult | ? |
+| resultResource | string | ? |
 | resultReference | WorkflowArtifactReference | 1 |
 | completionFacts | WorkflowArtifactReference | * |
 | executionEvidence | WorkflowExecutionEvidence | ? |
@@ -8611,6 +8652,8 @@ GoalPhaseWorkSubmissionResult
 
 Consume the exact finite recording result for the pending accepted review observations. Return committed acceptance only. File edits are the assigned semantic task; Submit runs no File, Git or SBT effect, changes no repair counts and issues no next work. Partial and failed outcomes remain visible without automatic retry.
 
+Supply exactly one of result or resultResource. resultResource carries the complete selected result JSON through the executing Workflow artifact acquisition policy and unchanged owning result decoder. Resource transport grants no evidence, acceptance or following-effect authority.
+
 ##### TYPE
 
 COMMAND
@@ -8626,7 +8669,8 @@ GoalPhaseFindingRecordingResult
 | name | type | multiplicity |
 |------+------|--------------|
 | sessionId | string | 1 |
-| result | GoalPhaseFindingRecordingResult | 1 |
+| result | GoalPhaseFindingRecordingResult | ? |
+| resultResource | string | ? |
 | resultReference | WorkflowArtifactReference | 1 |
 | completionFacts | WorkflowArtifactReference | * |
 | executionEvidence | WorkflowExecutionEvidence | ? |
@@ -8744,6 +8788,8 @@ SplitPhaseStartResult
 
 Consume the pending partition decision, rationale, requested estimates/boundaries and actual evidence. Workflow owns the result destination, known data, calibration and packing. Enriched/DecisionNeeded is semantic data, not Human consent. Return committed acceptance and useful chat text, not document application or next work; Advance alone progresses.
 
+Supply exactly one of result or resultResource. resultResource carries the complete selected result JSON through the executing Workflow artifact acquisition policy and unchanged owning result decoder. Resource transport grants no evidence, acceptance or following-effect authority.
+
 ##### TYPE
 
 COMMAND
@@ -8759,7 +8805,8 @@ SplitPhasePartitionSemanticResult
 | name | type | multiplicity |
 |------+------|--------------|
 | sessionId | string | 1 |
-| result | SplitPhasePartitionSemanticResult | 1 |
+| result | SplitPhasePartitionSemanticResult | ? |
+| resultResource | string | ? |
 | completionFacts | WorkflowArtifactReference | * |
 | executionEvidence | WorkflowExecutionEvidence | ? |
 
@@ -8803,6 +8850,8 @@ SplitPhaseAdvanceResult
 
 Consume the pending decision, rationale, ordered producing/receiving scopes and evidence. DecisionNeeded contains no partial scopes. Workflow owns assignment/destination. Return actual committed acceptance/message without transferring authority, applying documents or issuing work; call advanceSplitPhase after accepted intake.
 
+Supply exactly one of result or resultResource. resultResource carries the complete selected result JSON through the executing Workflow artifact acquisition policy and unchanged owning result decoder. Resource transport grants no evidence, acceptance or following-effect authority.
+
 ##### TYPE
 
 COMMAND
@@ -8818,7 +8867,8 @@ SplitPhaseScopeSemanticResult
 | name | type | multiplicity |
 |------+------|--------------|
 | sessionId | string | 1 |
-| result | SplitPhaseScopeSemanticResult | 1 |
+| result | SplitPhaseScopeSemanticResult | ? |
+| resultResource | string | ? |
 | completionFacts | WorkflowArtifactReference | * |
 | executionEvidence | WorkflowExecutionEvidence | ? |
 
@@ -8833,6 +8883,8 @@ SplitPhaseScopeSubmissionResult
 ##### DESCRIPTION
 
 Consume the pending decision, rationale, unknown-item assignments and evidence. Workflow owns its destination and objective calculation; the answer supplies no checkpoint or execution grant. Return committed acceptance/message. DecisionNeeded is not Human consent, and intake is not Preview/Apply; explicit Advance chooses following work.
+
+Supply exactly one of result or resultResource. resultResource carries the complete selected result JSON through the executing Workflow artifact acquisition policy and unchanged owning result decoder. Resource transport grants no evidence, acceptance or following-effect authority.
 
 ##### TYPE
 
@@ -8849,7 +8901,8 @@ SplitPhaseReasoningSemanticResult
 | name | type | multiplicity |
 |------+------|--------------|
 | sessionId | string | 1 |
-| result | SplitPhaseReasoningSemanticResult | 1 |
+| result | SplitPhaseReasoningSemanticResult | ? |
+| resultResource | string | ? |
 | completionFacts | WorkflowArtifactReference | * |
 | executionEvidence | WorkflowExecutionEvidence | ? |
 
@@ -8945,7 +8998,7 @@ Own configured repository synchronization through Start, Advance and the actual 
 
 ##### DESCRIPTION
 
-Synchronize the configured sm-workflow.repository-sync.directories list through the existing native RepositorySync owner. Each exact checkout must resolve uniquely to an already admitted workspace and Git repository binding. Duplicate checkout entries execute once; distinct worktrees retain separate Sessions. Explicit configured local and remote branches need no Git upstream write. The authenticated FULL_STATE request selects no executable or grants. Equal, local-ahead and fast-forward targets complete in one call without semantic work or product tests. Nonterminal targets retain their owning Session and require its existing continuation. Return concise aggregate and per-repository native references after retention. Recollection with the same sessionId does not replay successful or indeterminate effects. Later aggregate recovery is separate from this clean-batch entry.
+Synchronize the configured sm-workflow.repository-sync.directories list through the existing native RepositorySync owner. Each exact checkout must resolve uniquely to an already admitted workspace and Git repository binding. Duplicate checkout entries execute once; distinct worktrees retain separate Sessions. Explicit configured local and remote branches need no Git upstream write. The authenticated FULL_STATE request selects no executable or grants. Equal, local-ahead and fast-forward targets complete in one call without semantic work or product tests. Nonterminal targets retain their owning Session and require its existing continuation. Return concise aggregate and per-repository native references after retention. Recollection with the same sessionId does not replay successful or indeterminate effects. Missing directory/target configuration retains ConfigurationRequired in this same aggregate Session before any child or remote effect. The exact-revision refresh operation consumes corrected normal configuration without replacing already captured child targets.
 
 ##### TYPE
 
@@ -8963,6 +9016,35 @@ RepositoryDirectorySyncInput
 |------+------|--------------|
 | input | RepositoryDirectorySyncInput | 1 |
 | sessionId | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+RepositoryDirectoryBatchResult
+
+#### refreshRepositoryDirectoryConfiguration
+
+##### DESCRIPTION
+
+Resolve retained ConfigurationRequired directory/target setup before any child effect, or reconsider retained ValidationSetupRequired waits after normal host/project validation configuration is supplemented. Requires the same aggregate Session, original participant and exact current aggregate revision. Preserve captured repository/target bindings, terminal results, UNKNOWN attempts, accepted semantic results, completed checks and counters. Runtime calls the existing native owner only for eligible outstanding setup waits or actually changed child frontiers; native admission and retained effect receipts determine unfinished execution. This grants no executable/workspace authority and never re-Starts a child. Other failures and uncertain effects retain their original explicit continuation contracts.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+RepositoryDirectoryConfigurationRefreshInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| revision | string | 1 |
 
 ##### OUTPUT
 
@@ -9468,6 +9550,8 @@ RepositorySyncConflictSubmissionResult
 
 Consume the pending review decision, rationale, findings and actual result/evidence reference. Independent host evidence owns reviewer admission. Return committed acceptance/display text; acceptance alone is not commit/push/convergence and Submit never calls Advance.
 
+Supply exactly one of result or resultResource. resultResource carries the complete selected result JSON through the executing Workflow artifact acquisition policy and unchanged owning result decoder. Resource transport grants no evidence, acceptance or following-effect authority.
+
 ##### TYPE
 
 COMMAND
@@ -9483,7 +9567,8 @@ RepositorySyncNativeMergeReviewResult
 | name | type | multiplicity |
 |------+------|--------------|
 | sessionId | string | 1 |
-| result | RepositorySyncNativeMergeReviewResult | 1 |
+| result | RepositorySyncNativeMergeReviewResult | ? |
+| resultResource | string | ? |
 | resultReference | WorkflowArtifactReference | 1 |
 | completionFacts | WorkflowArtifactReference | * |
 | executionEvidence | WorkflowExecutionEvidence | ? |
@@ -10574,6 +10659,9 @@ OperationResult
 | stopped | SplitPhaseStoppedResult | ? |
 | issuedWorkContext | WorkflowIssuedWorkContext | ? |
 | journalRecording | JournalRecordingState | ? |
+| retainedWork | WorkflowRetainedWorkReference | ? |
+| controlSummary | record | ? |
+| retainedMaterials | WorkflowRetainedFieldReference | * |
 
 ## SplitPhaseHumanScopeCheckpointReference
 
@@ -11476,7 +11564,153 @@ Opaque canonical session JSON and optional nextSelection JSON strings retain the
 | nextSelection | string | ? |
 | completionEvidence | WorkflowExecutionEvidence | ? |
 
+## WorkflowRetainedWorkReference
+
+- input-kind :: COMMAND
+
+### DESCRIPTION
+
+Versioned address of an actually retained native issued WorkOrder. The exact owner, Component instance, Session, continuation and expected revision are required. A reference supplies no authority or success evidence. resource is a canonical transport of this same reference for shared preparation readers; it is not a filename or new store.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| schemaVersion | string | 1 |
+| componentInstance | string | 1 |
+| owner | string | 1 |
+| workflowRevision | string | 1 |
+| sessionId | string | 1 |
+| identity | string | 1 |
+| revision | string | 1 |
+| completionOperation | string | 1 |
+| materialType | string | 1 |
+| readOperation | string | 1 |
+| resource | string | 1 |
+
+## WorkflowRetainedSnapshotReference
+
+- input-kind :: COMMAND
+
+### DESCRIPTION
+
+Exact revision of selected material in the existing native mechanical receipt owner. representation specifies JSON or its complete serialized JSON string for compatibility with the original target field. No new archive, digest, size certificate, current-state admission or authority is created.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| schemaVersion | string | 1 |
+| componentInstance | string | 1 |
+| owner | string | 1 |
+| workflowRevision | string | 1 |
+| sessionId | string | 1 |
+| identity | string | 1 |
+| revision | string | 1 |
+| instanceRevision | string | 1 |
+| materialKind | string | 1 |
+| representation | string | 1 |
+| readOperation | string | 1 |
+| resource | string | 1 |
+
+## WorkflowRetainedFieldReference
+
+### DESCRIPTION
+
+Select one large public field from its exact native retained owner. Small current observations remain in controlSummary; the referenced immutable material does not claim to be a later observation or confer execution authority.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| fieldName | string | 1 |
+| reference | WorkflowRetainedSnapshotReference | 1 |
+
+## WorkflowRetainedSnapshotReadResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| availability | string | 1 |
+| reference | WorkflowRetainedSnapshotReference | 1 |
+| material | record | 1 |
+
+## WorkflowRetainedWorkReadResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| availability | string | 1 |
+| reference | WorkflowRetainedWorkReference | 1 |
+| response | record | 1 |
+
 # SERVICE
+
+## WorkflowRetainedWorkService
+
+### DESCRIPTION
+
+Read exact native issued work through its existing owner in the executing authenticated context. No Start, Advance, accepted Submit, validation or business effect is replayed. Full-body legacy Requests remain accepted by their original Submit and preparation routes. Missing, inaccessible, foreign, unsupported and indeterminate reads fail concretely; a selected revision is never replaced with latest. Native retention policies and storage limits remain independently owned.
+
+### OPERATION
+
+#### readWorkflowRetainedWork
+
+##### DESCRIPTION
+
+Explicitly retrieve only the selected retained issued work as its original full public business response. This is the compatibility/detail operation for compact control responses. Requires the original participant and exact Component/Workflow/Session/continuation/revision and owning input codec. It grants no completion authority and does not require the historical continuation to remain current.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+WorkflowRetainedWorkReference
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowRetainedWorkReference | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowRetainedWorkReadResult
+
+#### readWorkflowRetainedSnapshot
+
+##### DESCRIPTION
+
+Explicitly read the selected immutable native snapshot material. Resolve only the exact owner, Session, receipt and instance revision through native storage and original-participant admission. Return concrete failures without substituting latest, re-observing historical source or repeating any business effect. Recovery and preparation consume retainedSnapshot descriptors internally before the unchanged complete target codec and live admission checks.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+WorkflowRetainedSnapshotReference
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowRetainedSnapshotReference | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowRetainedSnapshotReadResult
 
 ## EvidenceService
 
@@ -12512,6 +12746,9 @@ WorkflowCallerInformationResult
 | resultType | string | ? |
 | diagnostics | record | * |
 | reviewContext | WorkflowReviewContext | ? |
+| retainedWork | WorkflowRetainedWorkReference | ? |
+| controlSummary | record | ? |
+| retainedMaterials | WorkflowRetainedFieldReference | * |
 
 ## StandaloneFixValidationRecoveryDescriptionInput
 
@@ -12885,6 +13122,8 @@ StandaloneFixView
 
 Admit the semantic result and independently supplied completion facts for the exact retained standalone WorkOrder. Submission does not run validation or commit changes; ordinary Advance owns subsequent progress.
 
+Supply exactly one of result or resultResource. resultResource carries the complete selected result JSON through the executing Workflow artifact acquisition policy and unchanged owning result decoder. Resource transport grants no evidence, acceptance or following-effect authority.
+
 ##### TYPE
 
 COMMAND
@@ -12900,7 +13139,8 @@ StandaloneFixWorkResult
 | name | type | multiplicity |
 |------+------|--------------|
 | sessionId | string | 1 |
-| result | StandaloneFixWorkResult | 1 |
+| result | StandaloneFixWorkResult | ? |
+| resultResource | string | ? |
 | resultReference | WorkflowArtifactReference | 1 |
 | completionFacts | WorkflowArtifactReference | * |
 | executionEvidence | WorkflowExecutionEvidence | ? |
@@ -13416,6 +13656,8 @@ GoalTaskView
 
 Admit a semantic result for the exact retained Task WorkOrder and supplied independent completion evidence. Any issuedWorkContext must match the actual issued identity, revision, session, contracts and context; it is required after durable supersession history. Submission does not run checks or commit changes.
 
+Supply exactly one of result or resultResource. resultResource carries the complete selected result JSON through the executing Workflow artifact acquisition policy and unchanged owning result decoder. Resource transport grants no evidence, acceptance or following-effect authority.
+
 ##### TYPE
 
 COMMAND
@@ -13431,7 +13673,8 @@ GoalTaskWorkResult
 | name | type | multiplicity |
 |------+------|--------------|
 | sessionId | string | 1 |
-| result | GoalTaskWorkResult | 1 |
+| result | GoalTaskWorkResult | ? |
+| resultResource | string | ? |
 | issuedWorkContext | WorkflowIssuedWorkContext | ? |
 | resultReference | WorkflowArtifactReference | 1 |
 | completionFacts | WorkflowArtifactReference | * |
@@ -14147,6 +14390,8 @@ DelegateTaskView
 
 Admit a semantic result for the exact retained Task WorkOrder and supplied independent completion evidence. Any issuedWorkContext must match the actual issued identity, revision, session, contracts and context; it is required after durable supersession history. Submission does not run checks or commit changes.
 
+Supply exactly one of result or resultResource. resultResource carries the complete selected result JSON through the executing Workflow artifact acquisition policy and unchanged owning result decoder. Resource transport grants no evidence, acceptance or following-effect authority.
+
 ##### TYPE
 
 COMMAND
@@ -14162,7 +14407,8 @@ DelegateTaskWorkResult
 | name | type | multiplicity |
 |------+------|--------------|
 | sessionId | string | 1 |
-| result | DelegateTaskWorkResult | 1 |
+| result | DelegateTaskWorkResult | ? |
+| resultResource | string | ? |
 | issuedWorkContext | WorkflowIssuedWorkContext | ? |
 | resultReference | WorkflowArtifactReference | 1 |
 | completionFacts | WorkflowArtifactReference | * |

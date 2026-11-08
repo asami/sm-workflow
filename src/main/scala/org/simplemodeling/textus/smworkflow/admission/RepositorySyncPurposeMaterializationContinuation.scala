@@ -372,9 +372,13 @@ private[smworkflow] object RepositorySyncPurposeMaterializationContinuation {
   }
   def describeC(identity: String, d: F.Declaration, definition: DefinitionBinding, core: ActionCall.Core,
     acknowledge: String => Consequence[Unit]): Consequence[V.RepositorySyncValidationContinuationDescriptionResult] =
-    sourceC(identity, d, definition, core, acknowledge).map(source =>
-      V.RepositorySyncValidationContinuationDescriptionResult(identity, "adoption-required", message,
-        source.target.componentInstance, targetRecord(source.target), choices, RepositorySyncValidationContinuation.adoptionOperation))
+    sourceC(identity, d, definition, core, acknowledge).flatMap { source => for {
+      target <- WorkflowRetainedSnapshot.compactC(targetRecord(source.target), Vector(
+        "progressSnapshot" -> WorkflowRetainedSnapshot.reference(source.store, source.prepared, source.target.preparedKey, "purpose-progress"),
+        "preparedPayload" -> WorkflowRetainedSnapshot.reference(source.store, source.prepared, source.target.preparedKey, "native-payload"),
+        "intentPayload" -> WorkflowRetainedSnapshot.reference(source.store, source.intent, source.target.intentKey, "native-payload")), core)
+    } yield V.RepositorySyncValidationContinuationDescriptionResult(identity, "adoption-required", message,
+        source.target.componentInstance, target, choices, RepositorySyncValidationContinuation.adoptionOperation) }
   def adoptC(input: V.RepositorySyncValidationContinuationAdoptionInput, d: F.Declaration, definition: DefinitionBinding,
     core: ActionCall.Core, installation: RepositorySyncValidationContinuation.Installation,
     acknowledge: String => Consequence[Unit]): Consequence[V.RepositorySyncValidationContinuationAdoptionResult] = for {
