@@ -19,7 +19,7 @@ import GoalPhasePlanRevision as R
 /** Automatic inventory under the retained original-purpose execution. A decoded
   * proposal is data; only the native issue/completion walker constructs Source.
   * @since   Nov. 3, 2026
-  * @version Nov. 3, 2026
+  * @version Nov. 9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseCurrentInventoryContinuation {
@@ -51,8 +51,10 @@ private[smworkflow] object GoalPhaseCurrentInventoryContinuation {
       Set("ImplementStep", "RepairStep")(input.kind) && input.stepIdentity.contains(controller.step.identity) &&
       input.review.isEmpty && input.publicationFailure.isEmpty &&
       input.checkFailure.forall(failure => failure.validation.dependency.isEmpty && failure.validation.dependencySource.isEmpty) &&
-      result.outcome == "decision-needed" && result.findings != null && result.findings.isEmpty &&
-      _absent(result.acceptance) && _concern_free_assessment(result.fixAssessment) && _absent(result.issueReport) &&
+      result.outcome == "decision-needed" && result.findings != null &&
+      (result.findings.isEmpty || result.acceptance != null && result.acceptance.nonEmpty) &&
+      GoalPhaseAcceptanceBoundary.admitC(input.selectedPlan, input.kind, result).isSuccess &&
+      _concern_free_assessment(result.fixAssessment) && _retained_issues(input, result.issueReport) &&
       _absent(result.dependencyProposal) && _absent(result.dependencyAdmission) &&
       _absent(result.dependencyValidation) && _absent(result.diagnosticRepair) && _absent(result.completionConditions) &&
       _absent(result.repairFindingSources) && _absent(result.reviewObservations) &&
@@ -286,6 +288,14 @@ private[smworkflow] object GoalPhaseCurrentInventoryContinuation {
     values.distinct == values && values.forall(value => _exact(value) && RepositorySyncNativeConflictInput.relative(value) &&
       !value.exists(c => "*?[]{}".contains(c)))
   private def _absent(value: Option[?]): Boolean = value != null && value.isEmpty
+  // A real Repair must account for its existing assigned issues. BLOCKED keeps
+  // them unresolved while the inventory is supplied; it settles no finding and
+  // adds no judgment. The ordinary semantic admission still owns the full report.
+  private def _retained_issues(input: W.Request, value: Option[GoalPhaseFixIssues.Report]): Boolean =
+    value != null && (value.isEmpty || (input.kind == "RepairStep" && input.issues != null && value.exists(report =>
+      GoalPhaseFixIssues.validateReportC(report).isSuccess && report.dispositions.nonEmpty &&
+      report.dispositions.map(_.issueIdentity).toSet == GoalPhaseFixIssues.assigned(input).map(_.identity).toSet &&
+      report.dispositions.forall(entry => entry.disposition == "BLOCKED" && entry.findingOrdinal.isEmpty))))
   private def _concern_free_assessment(value: Option[GoalPhaseFixAssessment.Report]): Boolean =
     value != null && value.forall(report => GoalPhaseFixAssessment.validateC(report).isSuccess &&
       !report.change.requirementChanged && !report.change.contractChanged && report.convergence.status == "PROGRESSING")

@@ -17,7 +17,7 @@ import IncrementalSbtDiagnosisRepair.given
   * only after their actual native predecessor has been connected.
   * @since   Oct.  6, 2026
   *  version Oct. 29, 2026
-  * @version Nov.  7, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWork {
@@ -53,6 +53,10 @@ private[smworkflow] object GoalPhaseNativeWork {
     diagnosticHistory: Option[Vector[IncrementalSbtDiagnosisRepair.Prior]] = None,
     operatingProfile: Option[GoalPhaseOperatingProfiles.Capture] = None,
     publicationFailure: Option[PublicationFailureContext] = None)
+  // Findings and acceptance observations remain evidence, including during an
+  // inventory-only Decision. They are not an additional Plan/effect instruction
+  // and are not settled by appending files. Business changes use the complete
+  // Plan proposal or the existing typed decision adjuncts, never prose parsing.
   final case class Result(outcome: String, summary: String, findings: Vector[String],
     acceptance: Option[GoalPhaseAcceptanceBoundary.Report] = None,
     fixAssessment: Option[GoalPhaseFixAssessment.Report] = None,

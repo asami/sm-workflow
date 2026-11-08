@@ -104,6 +104,20 @@ final class GoalPhaseAcceptanceBoundarySpec extends AnyWordSpec with Matchers wi
   }
 
   "E2 malformed declarations and scoped reports" should {
+    "retain unmet required observations during inventory without accepting incomplete work" in {
+      Given("spec:goal-phase-acceptance-boundary E2 R3; a configured current Step needs concrete additional files")
+      val report = _report(status = "unsatisfied")
+      val result = _result("decision-needed", report).copy(findings = Vector("The existing integration test file is needed"))
+      When("initial semantic admission consumes the same complete report for a Decision and for a completion claim")
+      val decision = S.admitInitialResultC(_request, result)
+      val completion = S.admitInitialResultC(_request, result.copy(outcome = "completed", findings = Vector.empty))
+      Then("the Decision retains evidence while unmet required conditions still prevent completion")
+      decision.isSuccess shouldBe true
+      completion.isSuccess shouldBe false
+      result.acceptance shouldBe Some(report)
+      S.admitInitialResultC(_request, result.copy(acceptance = None)).isSuccess shouldBe false
+    }
+
     "reject duplicate contradictory malformed and null configuration or adoption before capture" in {
       val conditions = Vector(_behavior.copy(identity = " padded "), _behavior.copy(identity = "x" * 129),
         _behavior.copy(scope = "unknown"), _behavior.copy(description = " "),

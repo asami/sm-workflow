@@ -11,7 +11,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Pure contracts; NativeGoalCurrentInventoryCliSpec owns actual native provenance.
   * @since   Nov. 3, 2026
-  * @version Nov. 3, 2026
+  * @version Nov. 9, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -47,6 +47,59 @@ final class GoalPhaseCurrentInventoryContinuationSpec extends AnyWordSpec with M
 
   "AUTO-FILE-GP current inventory" should afterWord(
     "in spec:goal-phase-current-inventory-continuation, example:E1, rules:R1,R2,R3, phase:AUTO-FILE-GP-01") {
+    "retain configured unsatisfied observations and findings without accepting them or suppressing typed concerns" in {
+      Given("docs/spec/goal-phase-current-inventory-continuation.md R2,R3: required behavior and validation remain unmet while concrete files are needed")
+      val boundary = GoalPhaseAcceptanceBoundary
+      val plan = take(boundary.captureC(None, _plan.copy(acceptance = Some(boundary.Adoption(
+        "The same selected product", Vector(boundary.Condition("behavior", "step", true, "Implement selected behavior"),
+          boundary.Condition("validation", "step", true, "Validate selected behavior")))))))
+      val source = _decision(take(O.startC(plan, _base, Some(GoalPhaseRuntimeRepairControl.version))))
+      val request = _request(source)
+      val report = boundary.Report(Vector(boundary.Observation("behavior", "unsatisfied", "Joined route coverage is still missing"),
+        boundary.Observation("validation", "not-evaluated", "Checks and review have not run")), Vector("Actual authored work remains unaccepted"))
+      val findings = Vector("The joined route requires the existing integration specification", "The source is authored but has not been validated")
+      val result = W.Result("decision-needed", "The same purpose needs these concrete files", findings,
+        acceptance = Some(report), planRevision = Some(_proposal(source)))
+      When("the typed inventory delta is selected with its complete required report and descriptive evidence")
+      val qualifies = C.pureProposal(source, request, result)
+      val selected = take(source.adoptCurrentInventoryRevisionC(
+        result.planRevision.get.plan.copy(effectiveAcceptance = plan.effectiveAcceptance), "retained-report-result"))
+      Then("continuation preserves observations and required conditions without claiming Step acceptance")
+      qualifies shouldBe true
+      W.admitInitialResultC(request, result).isSuccess shouldBe true
+      result.findings shouldBe findings
+      result.acceptance shouldBe Some(report)
+      selected.plan.effectiveAcceptance shouldBe plan.effectiveAcceptance
+      selected.completed shouldBe source.completed
+      selected.stage shouldBe O.Stage.Implementation
+      boundary.admitC(plan, "ImplementStep", result.copy(outcome = "completed", planRevision = None)).isSuccess shouldBe false
+      C.pureProposal(source, request, result.copy(acceptance = None)) shouldBe false
+      C.pureProposal(source, request, result.copy(acceptance = Some(report.copy(conditions = Vector.empty)))) shouldBe false
+      C.pureProposal(source, request, result.copy(planRevision = result.planRevision.map(p => p.copy(plan =
+        p.plan.copy(acceptance = None))))) shouldBe false
+      val progressing = GoalPhaseFixAssessment.Report(GoalPhaseFixAssessment.Change("STANDARD_LOGIC",
+        Vector("selected-product"), false, false, "The existing product is progressing", false, false),
+        GoalPhaseFixAssessment.Convergence("PROGRESSING", "HIGH", "No requirement or contract change"))
+      C.pureProposal(source, _request(source, "RepairStep"), result.copy(fixAssessment = Some(progressing))) shouldBe true
+      val issue = GoalPhaseFixIssues.Issue("existing-check", plan.repository, source.step.identity, "TEST", Some("test:selected"),
+        "Existing selected check remains unresolved", "actual-check", "OPEN", None)
+      val repairRequest = _request(source, "RepairStep").copy(issues = Some(GoalPhaseFixIssues.State(Vector(issue), Vector.empty, None)))
+      val blocked = GoalPhaseFixIssues.Report(Vector(GoalPhaseFixIssues.Disposition(issue.identity, "BLOCKED",
+        "Needed inventory has not yet been supplied", None)))
+      C.pureProposal(source, repairRequest, result.copy(fixAssessment = Some(progressing), issueReport = Some(blocked))) shouldBe true
+      Vector("FIXED", "DECLINED").foreach { judgment =>
+        C.pureProposal(source, repairRequest, result.copy(issueReport = Some(blocked.copy(dispositions = blocked.dispositions.map(
+          _.copy(disposition = judgment)))))) shouldBe false
+      }
+      C.pureProposal(source, repairRequest, result.copy(issueReport = Some(blocked.copy(dispositions = blocked.dispositions.map(
+        _.copy(issueIdentity = "another-owner-issue")))))) shouldBe false
+      Vector(progressing.copy(change = progressing.change.copy(requirementChanged = true)),
+        progressing.copy(change = progressing.change.copy(contractChanged = true)),
+        progressing.copy(convergence = progressing.convergence.copy(status = "BLOCKED"))).foreach { concern =>
+        C.pureProposal(source, _request(source, "RepairStep"), result.copy(fixAssessment = Some(concern))) shouldBe false
+      }
+    }
+
     "append concrete files with the saved acceptance and immutable closed prefix without consuming a repair" in {
       Given("docs/spec/goal-phase-current-inventory-continuation.md R1,R2 E1: an accepted first Step and the actual second implementation Decision")
       val source = _decision(_closed(_started))
