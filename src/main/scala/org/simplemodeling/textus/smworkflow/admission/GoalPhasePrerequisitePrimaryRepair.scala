@@ -27,7 +27,8 @@ import org.simplemodeling.textus.smworkflow.value as V
   * Publication authority is evaluated again at the actual repaired candidate.
   * @since   Nov.  2, 2026
   *  version Nov.  2, 2026
-  * @version Nov.  6, 2026
+  *  version Nov.  6, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
@@ -211,7 +212,8 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
             .filter(p => p.hcursor.get[String]("target").contains(target.workspace) &&
               p.hcursor.get[String]("operation").contains("publish-local"))
           val text = stdout.value + "\n" + stderr.value
-          val errors = _error_lines(text)
+          val lines = text.replaceAll("\u001b\\[[0-9;]*m", "").linesIterator.toVector
+          val errors = lines.filter(line => line.startsWith("[error]") && !line.startsWith("[error] Total time:"))
           val summaries = errors.filter(_.startsWith("[error] ("))
           WorkflowSbtCapture.exitCode(process).contains(1) && stdout.textStatus == "complete" &&
             stderr.textStatus == "complete" && !process.stdout.truncated && !process.stderr.truncated &&
@@ -220,18 +222,72 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
               "\\[error\\] \\(cozyGenerate\\) \\[sbt-cozy\\] cozy delegate failed \\(1\\) for .+") &&
             errors.exists(_generation_source_error) &&
             errors.exists(_empty_generation_output) &&
+            errors.forall(line => _generation_source_error(line) || _empty_generation_output(line) ||
+              _generation_scaffolding(line) || summaries.contains(line)) &&
+            lines.forall(line => {
+              val delegatedbody = line.stripPrefix("[warn] [sbt-cozy/cozy] ")
+              val diagnostic = line.stripPrefix("[warn] [sbt-cozy/cozy] ").stripPrefix("[warn] ")
+                .stripPrefix("[info] ").stripPrefix("[error] ")
+              (!line.trim.startsWith("[error]") || line.startsWith("[error]")) &&
+                (!line.startsWith("[warn] [sbt-cozy/cozy] ") ||
+                  delegatedbody.startsWith("[cozy.generation.acceptance] ") && _generation_notice(line) ||
+                  _generation_logger(delegatedbody) ||
+                  _empty_generation_output("[error] " + delegatedbody)) &&
+                (!line.contains("Error[") || _generation_source_error(line)) &&
+                (!line.matches(".*(?:Exception|Error):.*") || _generation_source_error(line) || _generation_scaffolding(line)) &&
+                (!line.contains("[cozy.generation.acceptance]") || _generation_notice(line)) &&
+                (!diagnostic.startsWith("[") || !diagnostic.contains("\"code\"") ||
+                  _empty_generation_output("[error] " + diagnostic))
+            }) &&
             errors.lastOption.exists(line => summaries.contains(line) || _generation_source_error(line) ||
               _empty_generation_output(line)) &&
             !text.linesIterator.exists(line => line.contains("published ") || line.contains("[success]") ||
               line.contains("(Compile /") || line.contains("(Test /"))
         })
 
+  private val _workflow_binding_error = (
+    "\\[error\\] Error\\[org\\.goldenport\\.exception\\.SyntaxErrorFaultException: WORKFLOW '([^'\\p{Cntrl}]+)' " +
+      "(OPERATION|REQUIRED-OPERATION) '([^'\\p{Cntrl}]+)' does not admit nested structural content\\.\\]").r
   private def _generation_source_error(line: String): Boolean = line == "[error] Error[No input]" || line.matches(
     "\\[error\\] Error\\[org\\.goldenport\\.exception\\.SyntaxErrorFaultException: Operation '[A-Za-z_][A-Za-z0-9_]*' " +
-      "INPUT Value '[A-Za-z_][A-Za-z0-9_]*' requires input-kind=COMMAND\\|QUERY\\.\\]")
+      "INPUT Value '[A-Za-z_][A-Za-z0-9_]*' requires input-kind=COMMAND\\|QUERY\\.\\]") || (line match {
+        case _workflow_binding_error(workflow, _, entry) => _text(workflow) && _text(entry)
+        case _ => false
+      })
+
+  /** The delegate's fixed failure envelope is neutral; other error diagnostics
+    * cannot borrow an otherwise qualifying source marker. */
+  private def _generation_logger(line: String): Boolean = {
+    val segment = "[\\p{L}_$][\\p{L}\\p{Nd}_$]*"
+    val provider = segment + "(?:\\." + segment + ")+@[0-9a-fA-F]+"
+    line == "SLF4J(W): Class path contains multiple SLF4J providers." ||
+      line.matches("SLF4J\\(W\\): Found provider \\[" + provider + "\\]") ||
+      line == "SLF4J(W): See https://www.slf4j.org/codes.html#multiple_bindings for an explanation." ||
+      line.matches("SLF4J\\(I\\): Actual provider is of type \\[" + provider + "\\]")
+  }
+
+  private def _generation_notice(line: String): Boolean = line
+    .stripPrefix("[warn] [sbt-cozy/cozy] ").stripPrefix("[info] ").stripPrefix("[error] ").matches(
+      "\\[cozy\\.generation\\.acceptance\\] boundary=(cli|sbt-bridge) level=notice code=MutableDevelopmentPairAccepted " +
+        "lifecycle=development source=cli pair=\\S+ evidence=META-INF/cozy/generation-compatibility\\.v1\\.json " +
+        "message=Explicit mutable development generation pair accepted: \\S+\\.")
+
+  private def _generation_scaffolding(line: String): Boolean =
+    line.startsWith("[error] ") && _generation_logger(line.stripPrefix("[error] ")) || Vector(
+    "\\[error\\] java\\.lang\\.RuntimeException: \\[sbt-cozy\\] cozy delegate failed \\(1\\) for [^\\p{Cntrl}]+",
+    "\\[error\\] \\[sbt-cozy\\] generator: [A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+",
+    "\\[error\\] \\[sbt-cozy\\] command: cozy --runtime [A-Za-z0-9_.-]+ sbt-bridge v1 --request [^\\p{Cntrl}]+",
+    "\\[error\\] \\[sbt-cozy\\] cwd: [^\\p{Cntrl}]+",
+    "\\[error\\] \\[sbt-cozy\\] recovery: publish-or-select-the-exact-project-owned-Cozy-generator-coordinate",
+    "\\[error\\] \\[sbt-cozy\\] recent logs:",
+    "\\[error\\] \\[cozy\\.generation\\.acceptance\\] boundary=sbt-bridge level=notice code=MutableDevelopmentPairAccepted " +
+      "lifecycle=development source=cli pair=\\S+ evidence=META-INF/cozy/generation-compatibility\\.v1\\.json " +
+      "message=Explicit mutable development generation pair accepted: \\S+\\.",
+    "\\[error\\] \\tat [A-Za-z0-9_.$/]+\\([^()\\p{Cntrl}]+\\)"
+  ).exists(line.matches)
 
   private def _empty_generation_output(line: String): Boolean =
-    io.circe.parser.parse(line.stripPrefix("[error] ")).toOption.flatMap(_.asArray).exists(_.exists { item =>
+    io.circe.parser.parse(line.stripPrefix("[error] ")).toOption.flatMap(_.asArray).exists(items => items.nonEmpty && items.forall { item =>
       val cursor = item.hcursor
       cursor.get[String]("code").contains("GENERATION_PROVENANCE_OUTPUT_TAMPERED") &&
         cursor.get[String]("expected").contains("at least one generated Scala artifact") &&

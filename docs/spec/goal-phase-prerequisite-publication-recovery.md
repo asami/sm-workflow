@@ -3,7 +3,7 @@
 ## Primary generation repair v2 and publication recovery v5
 
 RGEN01. A distinct primary generation classification admits the observed sbt-cozy
-missing-input and INPUT-kind syntax failures before selected checks. It requires the actual failed
+missing-input, INPUT-kind syntax and Workflow operation-binding structural failures before selected checks. It requires the actual failed
 `beforeChecks` primary publication, exact Session, participant, candidate source,
 request namespace, target and fixed `publish-local` program. Both typed process
 streams must be complete and untruncated, with confirmed `Exited(1)`. The only
@@ -13,12 +13,51 @@ line or the exact fully qualified syntax family
 `[error] Error[org.goldenport.exception.SyntaxErrorFaultException: Operation '<identifier>' INPUT Value '<identifier>' requires input-kind=COMMAND|QUERY.]`.
 Both identifiers require a letter or underscore followed only by letters,
 digits or underscores. Prefixes, suffixes, other exception classes, OUTPUT
-errors and other input-kind messages do not qualify. The same closed source
+errors and other input-kind messages do not qualify. The additional finite family is exactly
+`[error] Error[org.goldenport.exception.SyntaxErrorFaultException: WORKFLOW '<identity>' OPERATION '<entry>' does not admit nested structural content.]`
+or the same complete line with `REQUIRED-OPERATION` instead of `OPERATION`.
+Workflow and entry identities must be nonempty, already trimmed, and contain
+neither a quote nor control characters; real CML identities, including hyphens
+and non-ASCII text, are allowed. This is the direct-binding structural refusal
+issued by Cozy's provided/required-operation parser, not general syntax-error
+admission. Other contexts, classes, messages, leading text and suffixes refuse.
+The same closed source
 predicate applies to a final source-error line. The capture must also contain the
 error JSON diagnostic `GENERATION_PROVENANCE_OUTPUT_TAMPERED`, with expected
 `at least one generated Scala artifact`, actual `none`, and message
 `Generation provenance cannot describe an empty output.` The repeated diagnostic
-after the task summary is retained and accepted. A warning alone does not prove
+after the task summary is retained and accepted. Every entry in each qualifying
+provenance error array must be that existing empty-output diagnostic; mixing in
+another failure code refuses the whole capture. The error stream admits only
+recognized source diagnostics, that provenance, and the demonstrated delegate
+failure envelope: the wrapper RuntimeException root, fixed sbt-cozy generator,
+command/cwd/recovery/recent-log metadata, notice-level
+`MutableDevelopmentPairAccepted`, Java stack trace lines and the single
+`cozyGenerate` task summary. The retained isolated structural-old capture also
+contains neutral SLF4J multiple-provider bootstrap metadata. Exactly these
+complete bodies are permitted after `[warn] [sbt-cozy/cozy] ` or `[error] `:
+
+- `SLF4J(W): Class path contains multiple SLF4J providers.`
+- `SLF4J(W): Found provider [<provider-class>@<hex-identity>]`
+- `SLF4J(W): See https://www.slf4j.org/codes.html#multiple_bindings for an explanation.`
+- `SLF4J(I): Actual provider is of type [<provider-class>@<hex-identity>]`
+
+The provider class is a nonempty fully qualified Java name with dot-separated
+identifier segments (letters, digits, underscore and dollar; no leading digit),
+and the identity is nonempty hexadecimal. Control characters, brackets within
+the identity, malformed names, other SLF4J messages and added text refuse on
+these channels. Provider equality is not required because these entries are
+metadata. They never establish positive generation-source proof. This finite
+family describes the observed logger scaffold in that saved isolated capture;
+it adds no source syntax family and claims no successful new-side continuation.
+The original complete typed capture, exact source/provenance, fixed program,
+authority and repair-count requirements remain unchanged.
+
+Repeated source/provenance is permitted. An
+unrecognized `Error[...]`, another exception or failure message, admission
+rejection, other provenance error or another failed task refuses even when a
+qualifying source marker appears elsewhere. Source-looking metadata cannot
+establish the source diagnostic. A warning alone does not prove
 the failure. Arbitrary exits, missing markers, other or mixed failing tasks,
 Compile, Test, doc-only, publication success, nonstart, cancellation, timeout,
 UNKNOWN, incomplete text and truncation do not qualify.
@@ -47,7 +86,7 @@ At a retained eligible failed primary frontier, public
 returns the v5 generation Target. A later ordinary `advanceGoalPhase` reserves
 the existing repair and then issues `RepairStep` (the reservation call may first
 return the retained failed result). The assigned worker corrects the missing
-CML INPUT and submits only that issued repair. Ordinary Advance captures a new
+CML INPUT or direct Workflow operation binding and submits only that issued repair. Ordinary Advance captures a new
 candidate, runs the required publication and checks, and reaches independent
 review. The already accepted implementation is never submitted again; there is
 no new Start, counter reset or replay of an unknown effect. This describes the
@@ -66,8 +105,9 @@ signature, strict negatives, one reservation and truthful unexecuted tests.
 Its separately selectable `GoalPhasePrerequisitePrimaryRepairCodecSpec` covers
 v2/v5 roundtrips, rejected crossed versions, unchanged Compile canonical
 serialization and independent preparation. E16 in the separately selectable
-single-case `GoalPhasePrerequisitePrimaryGenerationSyntaxSpec` covers the exact
-INPUT-kind syntax family, strict error/task/target/process/termination/capture
+`GoalPhasePrerequisitePrimaryGenerationSyntaxSpec` covers the exact
+INPUT-kind and both structural binding families, complete stdout/stderr and
+stderr-only captures, mixed diagnostic/provenance refusal, strict error/task/target/process/termination/capture
 negatives, and the next ordinary same-Step reservation under the original limit,
 retaining the first failure. These typed captures are specification data, never
 actual publication receipts.
@@ -81,10 +121,20 @@ episode on a tiny real sbt-cozy project. Select these JVM properties:
 - `smworkflow.spec.generationLocator`: absolute caller-owned locator file;
   absent for capture, retained unchanged for continuation.
 - `smworkflow.spec.generationMode`: exactly `capture-old`, `continue-new`,
-  `resume-current-generation` or `qualify-current`.
+  `resume-current-generation`, `qualify-current`, `collect-review`,
+  `capture-history-old`, `continue-history-new`, `capture-structural-old`,
+  `continue-structural-new` or `collect-structural-closure`.
 - `smworkflow.spec.generationLogIndex`: optional for `continue-new`, default
   `2000`, with `2000` or `3000` allowed. The bounded resume mode requires the
   explicit unused value `4000`.
+- For `collect-structural-closure` only,
+  `smworkflow.spec.generationClosureLocator` is the explicit absolute
+  `structural-closure-locator.json` beside the unchanged original
+  `generationLocator`. It names the same original locator and Session plus
+  the actual saved public repair, accepted repair, Step review, Step
+  publication, accepted controlled review, closure Wait and Phase outputs.
+  This passive collector requires an explicit `generationLogIndex` of `4000`
+  or `5000`, selecting an unused range and preserving every earlier log.
 - For `resume-current-generation` only,
   `smworkflow.spec.generationFailureOutput`,
   `smworkflow.spec.generationRepairOutput` and
@@ -122,6 +172,103 @@ Specification-owned fixture setup and semantic results confer no consumer
 authority. The episode stops before independent review acceptance and Step
 commit; parent-owned actual validation and installed receipts establish whether
 it qualifies. Its presence alone claims no runtime qualification.
+
+The separately selected finite pair `capture-structural-old` and
+`continue-structural-new` uses a fresh caller-owned `generationLocator` and the
+same tiny real sbt-cozy fixture, never a copy of the product. Capture must run
+before producer publication. Its genuine malformed CML retains the corrected
+`ProbeInput` COMMAND input-kind, full public `ProbeService.echo` INPUT/OUTPUT,
+`ProbeResult`, `ProbeLifecycle` Ready/Done states, and `GenerationWorkflow` v1
+with a valid constituent, derivations and initial state. Only the Workflow
+OPERATION binding is malformed: nested TYPE/INPUT/OUTPUT replaces the required
+direct binding. Capture requires the real fully qualified structural error,
+complete typed `Exited(1)`, no selected checks, and the old description's
+structured 409 `Unsupported primary publication failure`. Repeated ordinary
+collection must not republish. The locator retains actual public output paths
+and bytes, accepted implementation, source/config/Plan/base, HEAD/index,
+counters and fixed invocation logs; it writes no native state.
+
+After normal new producer publication, structural continuation reopens that
+same physical fixture and Session at unused log index 2000 (or explicitly
+3000). The public v5 description must match its saved failure and original
+Plan/base/prefix. Ordinary Advance reserves exactly one same-Step repair; its
+first response may retain the failure before a second response issues RepairStep.
+Pending recollection has no additional charge or effect. Only the newly issued
+repair replaces the nested Workflow binding with
+`operation = ProbeService.echo`, preserving every public model declaration. One
+new semantic Submit creates the fresh candidate. Exactly two publication
+attempts total and one actual Step Compile and focused TestOnly must reach
+ReviewStep, with the original failed result and already accepted implementation
+unchanged.
+
+This structural pair additionally exercises actual native Step closure using
+passive `prepareEvidence`, its selected normal import, Review Submit, the real
+StepClosure authority Wait, and passive `prepareAuthority` plus import. These
+review and authority inputs are explicitly **SPECIFICATION-OWNED controlled
+inputs**. They are not actual independent provider, Human or consumer evidence;
+the parent's independent source review remains separate. The resulting real
+Step commit must name the original HEAD as parent and the reviewed candidate
+tree, retaining one ordinary repair at the Step review. The existing shared
+host declares separate Step and Phase Compile/TestOnly checks and a
+`beforeChecks` publication for the new Phase candidate after the Step commit.
+There are therefore three distinct publication attempts by ReviewPhase:
+the original failure, the repaired Step publication, and the Phase publication
+whose source HEAD is the actual Step commit and whose tree is the committed
+candidate tree. All request identities differ; the Phase publication is a new
+declared effect, not replay of the successful Step publication. The structural
+fixture alone appends a countable focused-test marker: one completion at
+ReviewStep and a second only for the distinct Phase check after closure. Their
+different Step/Phase work contexts, commit snapshots and receipts distinguish
+that declared Phase execution from replay of the Step success. Old modes retain
+their existing CREATE_NEW marker behavior. Continuation stops at the actual
+pending ReviewPhase frontier, with no Phase review submission or whole-Phase
+completion claim. Another ordinary collection must repeat neither successful
+publication, checks nor commit. Only after all assertions does it write
+`structural-generation-qualification-result.json` inside the fixture root,
+recording actual failure, publication, Step commit, Step/Phase receipts and
+qualification limitations. Presence of these modes alone establishes no
+execution result and no activation of the consumer's retained Session.
+
+If the episode already reached ReviewPhase and only a fixture assertion failed,
+`collect-structural-closure` qualifies its retained results without rerunning the
+full continuation. The caller-selected closure locator identifies exactly the
+saved public `3005` RepairStep, `3008` accepted repair Submit, `3009` ReviewStep,
+`3010` successful Step-publication collection, `3016` accepted controlled Review
+Submit, `3017` StepClosure authority Wait and `3020` ReviewPhase stdout JSON
+files. Every file must be normalized, real, and directly in the same fixture's
+`logs` directory. The collector checks their typed Session, Plan/base, source,
+failure context, Step repair count one, actual commit parent/tree and separate
+Step/Phase Compile and single-test TestOnly receipts. The Phase window's repair
+count zero is ordinary progression; it does not erase the saved Step charge.
+
+The complete real invocation sequence must remain exactly seven entries:
+failed publication; repaired Step publication, Compile and TestOnly; distinct
+Phase publication, Compile and TestOnly. The original invocation prefix and
+both focused-test completion markers remain unchanged. One ordinary Advance
+recollects only the already pending ReviewPhase request in the explicitly
+selected unused `4000` or `5000` log range;
+the public publication collectors read the latest Phase publication and both
+earlier exact records. Before and after these calls, the collector compares
+source, index, HEAD, caller routing, config/Plan, invocation logs, selected
+accepted/failed output bytes and both locators. It performs no Start, source
+edit, Plan selection, semantic Submit, authority preparation, publication,
+check or commit. Only after those assertions may it write
+`structural-generation-qualification-result.json` in that same fixture root,
+naming actual public outputs, the real Step commit, all three source-bound
+publications and both sets of check receipts. The controlled review/authority
+inputs remain SPECIFICATION-OWNED, and the frontier remains pending ReviewPhase
+without whole-Phase or consumer completion. Defining the collector does not
+claim that its qualification has succeeded.
+
+The collector identifies exactly four business invocations by complete
+qualified operation selectors present as argv members, in order: one
+`GoalPhaseService.advanceGoalPhase`, one
+`LocalPublicationService.collectLatestLocalPublication`, then two
+`LocalPublicationService.collectLocalPublication` calls. The fixture also logs
+its permitted read-only Git observations; transport filenames and total log
+count do not define the business-operation count. The result's
+`collectionOutputs` contains only the three actual publication-collector stdout
+paths, excluding those Git observation logs.
 
 The bounded `resume-current-generation` mode continues the existing episode
 whose first accepted repair added INPUT alone and then encountered the exact

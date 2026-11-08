@@ -43,6 +43,35 @@ private[admission] object PrimaryPublicationRepairSpecificationFixture {
   val generationSummary = "[error] (cozyGenerate) [sbt-cozy] cozy delegate failed (1) for /specification/src/main/cozy/product.cml\n"
   val generationOutput = "[error] Error[No input]\n" + generationDiagnostic + generationSummary +
     "[error] Error[No input]\n" + generationDiagnostic
+  val structuralMarker = "[error] Error[org.goldenport.exception.SyntaxErrorFaultException: WORKFLOW 'RepositorySyncWorkflow' " +
+    "OPERATION 'refreshRepositoryDirectoryConfiguration' does not admit nested structural content.]"
+  val requiredStructuralMarker = "[error] Error[org.goldenport.exception.SyntaxErrorFaultException: WORKFLOW '注文-workflow.v1' " +
+    "REQUIRED-OPERATION 'capture-payment' does not admit nested structural content.]"
+  def structuralOutput(marker: String = structuralMarker): String = {
+    val metadata = "[error] [sbt-cozy] generator: org.simplemodeling:cozy_2.12:0.3.3-SNAPSHOT\n" +
+      "[error] [sbt-cozy] command: cozy --runtime 0.3.3-SNAPSHOT sbt-bridge v1 --request /specification/request.json\n" +
+      "[error] [sbt-cozy] cwd: /specification\n" +
+      "[error] [sbt-cozy] recovery: publish-or-select-the-exact-project-owned-Cozy-generator-coordinate\n" +
+      "[error] [sbt-cozy] recent logs:\n"
+    val notice = "[error] [cozy.generation.acceptance] boundary=sbt-bridge level=notice code=MutableDevelopmentPairAccepted " +
+      "lifecycle=development source=cli pair=org.goldenport:goldenport-cncf_3:0.5.6-SNAPSHOT|org.simplemodeling:cozy_2.12:0.3.3-SNAPSHOT " +
+      "evidence=META-INF/cozy/generation-compatibility.v1.json message=Explicit mutable development generation pair accepted: " +
+      "org.goldenport:goldenport-cncf_3:0.5.6-SNAPSHOT|org.simplemodeling:cozy_2.12:0.3.3-SNAPSHOT.\n"
+    "[warn] [sbt-cozy/cozy] " + generationDiagnostic.stripPrefix("[error] ") +
+      "[error] java.lang.RuntimeException: [sbt-cozy] cozy delegate failed (1) for /specification/src/main/cozy/product.cml\n" +
+      metadata + marker + "\n" + notice + generationDiagnostic +
+      "[error] \tat scala.sys.package$.error(package.scala:30)\n" +
+      "[error] \tat java.base/java.lang.Thread.run(Thread.java:1474)\n" + generationSummary +
+      metadata + marker + "\n" + notice + generationDiagnostic + "[error] Total time: 13 s, completed 2026/11/08 19:36:14\n"
+  }
+  def streamProcess(stdout: String, stderr: String): Json = {
+    def _capture_(text: String): ProcessExecutionCapture = {
+      val bytes = text.getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector
+      ProcessExecutionCapture(bytes, bytes.size.toLong, false)
+    }
+    WorkflowSbtCapture.encode(ProcessExecutionResult(ProcessExecutionTermination.Exited(1), _capture_(stdout), _capture_(stderr),
+      Vector.empty, 66358L, program))
+  }
   def process(text: String = output, termination: ProcessExecutionTermination = ProcessExecutionTermination.Exited(1),
     truncated: Boolean = false, identity: String = program): Json = {
     val bytes = text.getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector
@@ -1353,6 +1382,36 @@ final class GoalPhasePrerequisitePrimaryRepairCodecSpec extends AnyWordSpec with
 
   "E14 primary publication generation repair" should afterWord(
     "in spec:goal-phase-prerequisite-publication-recovery, example:E14, rules:RGEN01, phase:6.11") {
+    "retain structural v2 facts and v5 targets through canonical collection without another repair charge" in {
+      Given("pure complete OPERATION and REQUIRED-OPERATION captures at the same original Step frontier")
+      Vector(F.structuralMarker, F.requiredStructuralMarker).foreach { marker =>
+        val failure = F.generationFailure.copy(failed = F.generationFailure.failed.copy(process = Some(F.process(F.structuralOutput(marker)))))
+        val before = failure.asJson
+        When("the same failure is derived twice and recollected through its canonical v2 fact")
+        val states = Vector.fill(2)(take(A.stateC(F.controller, failure)))
+        val fact = A.Fact(A.generationSchema, failure, A.directive(failure), F.sorted(B.controller(states.head)))
+        val wire = A.codec.encode(fact)
+        val restored = A.codec.decode(wire).toOption.get
+        val target = F.originalTarget(failure)
+        Then("one ordinary same-Step reservation and the unchanged failure survive the existing v2/v5 codecs")
+        states.map(s => (s.generation, s.repairs, s.ordinaryRepairs)) shouldBe Vector.fill(2)((2L, 1, 1))
+        val reconstructed = take(A.stateC(F.controller, restored.failure))
+        F.sorted(B.controller(reconstructed)) shouldBe F.sorted(B.controller(states.head))
+        restored shouldBe fact
+        A.codec.encode(restored) shouldBe wire
+        target.schemaVersion shouldBe A.generationTargetSchema
+        target.asJson.as[A.Target] shouldBe Right(target)
+        A.codec.decode(wire.mapObject(_.add("schemaVersion", A.schema.asJson))).isLeft shouldBe true
+        target.copy(schemaVersion = A.targetSchema).asJson.as[A.Target].isLeft shouldBe true
+        failure.asJson shouldBe before
+        states.head.plan shouldBe F.plan
+        states.head.base shouldBe F.base
+        states.head.completed shouldBe F.controller.completed
+        states.head.stage shouldBe O.Stage.Repair
+        states.head.checksReceipt shouldBe None
+      }
+    }
+
     "roundtrip generation v2 and v5 while preserving legacy Compile v1 and v3 bytes" in {
       Given("separate pure generation and Compile facts with exact original public targets")
       val target = F.originalTarget(F.generationFailure)
@@ -1409,17 +1468,200 @@ final class GoalPhasePrerequisitePrimaryRepairCodecSpec extends AnyWordSpec with
   }
 }
 
-/** One independently selectable regression for the observed INPUT-kind source
+/** Independently selectable regressions for the closed source-diagnostic families.
   * error. Captures and references here are pure specification data.
-  * Introduced and updated Nov. 6, 2026 by ASAMI, Tomoharu.
+  * Introduced Nov. 6, 2026; updated Nov. 8, 2026 by ASAMI, Tomoharu.
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhasePrerequisitePrimaryGenerationSyntaxSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import PrimaryPublicationRepairSpecificationFixture as F
 
+  private val _logger_messages = Vector(
+    "SLF4J(W): Class path contains multiple SLF4J providers.",
+    "SLF4J(W): Found provider [ch.qos.logback.classic.spi.LogbackServiceProvider@59fbb34]",
+    "SLF4J(W): Found provider [org.apache.logging.slf4j.SLF4JServiceProvider@1b6924cb]",
+    "SLF4J(W): See https://www.slf4j.org/codes.html#multiple_bindings for an explanation.",
+    "SLF4J(I): Actual provider is of type [ch.qos.logback.classic.spi.LogbackServiceProvider@59fbb34]")
+
   "E16 primary generation syntax recovery" should afterWord(
     "in spec:goal-phase-prerequisite-publication-recovery, example:E16, rules:RGEN01, phase:6.11") {
+    "admit complete structural operation-binding envelopes in either retained stream" in {
+      Given("the exact OPERATION diagnostic and a different nonempty REQUIRED-OPERATION identity with neutral delegate scaffolding")
+      val captures = Vector(F.structuralMarker, F.requiredStructuralMarker).flatMap { marker =>
+        val text = F.structuralOutput(marker)
+        val lines = text.linesIterator.toVector
+        val split = lines.size / 2
+        Vector(F.process(text), F.streamProcess("", text),
+          F.streamProcess("[info] delegate started\n", text),
+          F.streamProcess(lines.take(split).mkString("\n") + "\n", lines.drop(split).mkString("\n") + "\n"))
+      } ++ Vector(F.process(F.generationOutput), F.process(F.generationOutput.replace("[error] Error[No input]",
+        "[error] Error[org.goldenport.exception.SyntaxErrorFaultException: Operation 'echo' INPUT Value 'ProbeInput' requires input-kind=COMMAND|QUERY.]")))
+      When("the closed classifier consumes complete pure captures bound to the actual-shaped publication")
+      val results = captures.map(raw => A.generationFailure(F.generationFailure.failed.copy(process = Some(raw)),
+        F.target, "primary-session", "primary-participant", F.source, F.processPolicy(F.target)))
+      Then("all finite source families qualify without treating pure specification captures as real execution evidence")
+      results shouldBe Vector.fill(captures.size)(true)
+    }
+
+    "retain the observed finite logger bootstrap scaffold with every admitted source family and complete stream layout" in {
+      Given("the isolated old capture's exact SLF4J multiple-provider templates on delegated warnings and repeated outer error logs")
+      val inputkind = "[error] Error[org.goldenport.exception.SyntaxErrorFaultException: Operation 'echo' INPUT Value 'ProbeInput' requires input-kind=COMMAND|QUERY.]"
+      val markers = Vector(F.structuralMarker, F.requiredStructuralMarker, "[error] Error[No input]", inputkind)
+      val messages = _logger_messages ++ Vector("SLF4J(W): Found provider [org.example._Provider$Nested2@A0b1]",
+        "SLF4J(I): Actual provider is of type [org.example.OtherProvider@F00]")
+      val warnings = messages.map("[warn] [sbt-cozy/cozy] " + _).mkString("", "\n", "\n")
+      val errors = messages.map("[error] " + _).mkString("", "\n", "\n")
+      val captures = markers.flatMap { marker =>
+        val text = warnings + F.structuralOutput(marker).replace(F.generationDiagnostic, errors + F.generationDiagnostic)
+        val lines = text.linesIterator.toVector
+        val split = lines.size / 2
+        Vector(F.process(text), F.streamProcess("", text),
+          F.streamProcess(lines.take(split).mkString("\n") + "\n", lines.drop(split).mkString("\n") + "\n"))
+      }
+      When("the source classifier reads those pure complete captures with unchanged publication and source guards")
+      val results = captures.map(raw => A.generationFailure(F.generationFailure.failed.copy(process = Some(raw)),
+        F.target, "primary-session", "primary-participant", F.source, F.processPolicy(F.target)))
+      Then("only neutral logger metadata is ignored while exact error source proof remains necessary for Generation")
+      results shouldBe Vector.fill(captures.size)(true)
+    }
+
+    "refuse unknown or malformed logger bootstrap output without borrowing the recognized metadata templates" in {
+      Given("a complete structural envelope crossed with logger failures malformed provider identities and other delegated tasks")
+      val text = F.structuralOutput()
+      val provider = "SLF4J(W): Found provider [ch.qos.logback.classic.spi.LogbackServiceProvider@59fbb34]"
+      val bodies = Vector("SLF4J(W): Unknown bootstrap message.", "SLF4J(E): Failed to initialize logging.",
+        "SLF4J(W): Failed to instantiate provider [ch.qos.logback.classic.spi.LogbackServiceProvider@59fbb34]",
+        provider.replace("ch.qos.logback.classic.spi.LogbackServiceProvider", ""),
+        provider.replace("ch.qos.logback.classic.spi.LogbackServiceProvider", "Provider"),
+        provider.replace("ch.qos", "ch..qos"), provider.replace("ch.qos", "ch.2qos"),
+        provider.replace("ch.qos", "ch.qos-invalid"), provider.replace("ch.qos", "ch.qos\tinvalid"),
+        provider.replace("59fbb34", ""), provider.replace("59fbb34", "not-hex"),
+        provider.stripSuffix("]"), provider + " extra", " " + provider,
+        "SLF4J(I): Actual provider is of type [org.example.Provider@]",
+        "SLF4J(W): Class path contains multiple SLF4J providers. failed",
+        "SLF4J(W): See https://www.slf4j.org/codes.html#other for an explanation.",
+        "(otherTask) failed", "dependency resolution failed", "Error[other source failure]")
+      val captures = bodies.flatMap { body =>
+        val warning = "[warn] [sbt-cozy/cozy] " + body + "\n"
+        val error = "[error] " + body + "\n"
+        Vector(F.process(warning + text), F.streamProcess(text, warning),
+          F.process(text.replace(F.generationDiagnostic, error + F.generationDiagnostic)), F.streamProcess(text, error))
+      } ++ Vector(F.process(_logger_messages.map("[error] " + _).mkString("", "\n", "\n") +
+        F.structuralOutput().replace(F.structuralMarker + "\n", "")))
+      When("the bounded logger predicate and existing source requirements inspect both warning and error channels")
+      val results = captures.map(raw => A.generationFailure(F.generationFailure.failed.copy(process = Some(raw)),
+        F.target, "primary-session", "primary-participant", F.source, F.processPolicy(F.target)))
+      Then("unknown logging failures malformed class or hex syntax extra text and logger-only source proof all refuse")
+      results shouldBe Vector.fill(captures.size)(false)
+    }
+
+    "retain complete source-failure envelopes whose source request and cwd paths contain spaces" in {
+      Given("all finite source families with ordinary spaces in the fixed delegate source request and cwd path tails")
+      val inputkind = "[error] Error[org.goldenport.exception.SyntaxErrorFaultException: Operation 'echo' INPUT Value 'ProbeInput' requires input-kind=COMMAND|QUERY.]"
+      val markers = Vector(F.structuralMarker, F.requiredStructuralMarker, "[error] Error[No input]", inputkind)
+      val notice = F.structuralOutput().linesIterator.find(_.startsWith("[error] [cozy.generation.acceptance] ")).get
+        .stripPrefix("[error] ")
+      val outputs = markers.map(marker => "[info] loading project settings\n[warn] unused fixture key\n" +
+        "[warn] [sbt-cozy/cozy] " + notice + "\n" +
+        F.structuralOutput(marker).replace("/specification", "/specification/primary generation"))
+      val captures = outputs.flatMap(text => Vector(F.process(text), F.streamProcess("", text)))
+      When("the finite envelope classifier reads complete stdout and stderr captures without changing typed source guards")
+      val results = captures.map(raw => A.generationFailure(F.generationFailure.failed.copy(process = Some(raw)),
+        F.target, "primary-session", "primary-participant", F.source, F.processPolicy(F.target)))
+      Then("spaces preserve structural No-input and INPUT-kind classification with only neutral delegated warnings")
+      results shouldBe Vector.fill(captures.size)(true)
+    }
+
+    "refuse every unrecognized delegated warning body in stdout stderr or mixed source output" in {
+      Given("a valid complete structural envelope beside unknown delegated messages tasks exceptions and provenance")
+      val text = F.structuralOutput()
+      val prefix = "[warn] [sbt-cozy/cozy] "
+      val notice = text.linesIterator.find(_.startsWith("[error] [cozy.generation.acceptance] ")).get.stripPrefix("[error] ")
+      val bodies = Vector("(otherTask) failed", "dependency resolution failed", "unknown delegated diagnostic",
+        "java.lang.IllegalStateException: failed", "[{\"code\":\"OTHER_FAILURE\"}]",
+        "[error] " + F.generationDiagnostic.stripPrefix("[error] ").trim,
+        "[info] " + notice, F.structuralMarker.stripPrefix("[error] "))
+      val captures = bodies.flatMap { body =>
+        val warning = prefix + body + "\n"
+        Vector(F.process(text + warning), F.streamProcess(text, warning), F.streamProcess(warning, text))
+      } ++ Vector(F.process(text.replace(F.structuralMarker, prefix + F.structuralMarker.stripPrefix("[error] "))),
+        F.streamProcess("", text.replace(F.structuralMarker, prefix + F.structuralMarker.stripPrefix("[error] "))))
+      When("the closed delegated channel inspects original untrimmed bodies in both captured streams")
+      val results = captures.map(raw => A.generationFailure(F.generationFailure.failed.copy(process = Some(raw)),
+        F.target, "primary-session", "primary-participant", F.source, F.processPolicy(F.target)))
+      Then("unknown delegated failures or tasks cannot borrow a valid error marker and warning-only source text proves no failure")
+      results shouldBe Vector.fill(captures.size)(false)
+    }
+
+    "refuse false structural contexts and every mixed failure rather than borrowing a valid source marker" in {
+      Given("a qualifying structural envelope and variants with crossed source diagnostics or failure scaffolding")
+      val marker = F.structuralMarker
+      val text = F.structuralOutput()
+      val markers = Vector(marker.replace("WORKFLOW", "STATE-MACHINE"), marker.replace("OPERATION", "ACTION"),
+        marker.replace("OPERATION", "required-operation"), marker.replace("SyntaxErrorFaultException", "RuntimeException"),
+        marker.replace("org.goldenport.exception.", ""), marker.replace("nested structural content", "execution-binding vocabulary"),
+        marker.replace("'RepositorySyncWorkflow'", "''"), marker.replace("'RepositorySyncWorkflow'", "' workflow'"),
+        marker.replace("'refreshRepositoryDirectoryConfiguration'", "'entry '"),
+        marker.replace("'RepositorySyncWorkflow'", "'bad\tidentity'"), marker.replace("'RepositorySyncWorkflow'", "'bad'identity'"),
+        marker.stripSuffix("]"), "prefix " + marker, " " + marker, marker + " trailing")
+      val other = "[error] Error[org.goldenport.exception.SyntaxErrorFaultException: unrelated source fault.]\n"
+      val extraprovenance = F.generationDiagnostic.replace("}]", ",\"detail\":\"retained\"},{\"code\":\"OTHER_FAILURE\"}]")
+      val outputs = markers.map(text.replace(marker, _)) ++ Vector(
+        text.replace(marker, "[error] [sbt-cozy] recent logs: " + marker),
+        text.replace(marker, "[info] " + marker),
+        text.replace(F.generationDiagnostic, extraprovenance),
+        text.replace(F.generationDiagnostic, F.generationDiagnostic.replace("OUTPUT_TAMPERED", "SOURCE_MISMATCH")),
+        text.replace(F.generationSummary, other + F.generationSummary),
+        text.replace(F.generationSummary, "[error] java.lang.IllegalStateException: unrelated\n" + F.generationSummary),
+        text.replace(F.generationSummary, "[error] [cozy.generation.acceptance] level=error code=PairRejected\n" + F.generationSummary),
+        text.replace(F.generationSummary, "[warn] [sbt-cozy/cozy] [cozy.generation.acceptance] level=error code=PairRejected\n" + F.generationSummary),
+        text.replace(F.generationSummary, "[info] Error[unrelated input failure]\n" + F.generationSummary),
+        text.replace(F.generationSummary, "[warn] java.lang.IllegalStateException: unrelated\n" + F.generationSummary),
+        text.replace(F.generationSummary, "[warn] [{\"code\":\"OTHER_PROVENANCE_ERROR\"}]\n" + F.generationSummary),
+        text.replace(F.generationSummary, "[error] unknown failure message\n" + F.generationSummary),
+        text.replace(F.generationSummary, "[error] (otherTask) failed\n" + F.generationSummary),
+        text.replace(F.generationSummary, F.generationSummary + F.generationSummary))
+      val failed = F.generationFailure.failed
+      When("the source classifier inspects all crossed complete outputs")
+      val results = outputs.map(output => A.generationFailure(failed.copy(process = Some(F.process(output))),
+        F.target, "primary-session", "primary-participant", F.source, F.processPolicy(F.target)))
+      Then("unknown errors mixed provenance admission rejection task mixtures and metadata-only markers all refuse")
+      results shouldBe Vector.fill(outputs.size)(false)
+    }
+
+    "retain every original process admission and publication guard for structural source failures" in {
+      Given("a pure complete structural capture crossed with nonexecution incomplete streams and different publication bindings")
+      val text = F.structuralOutput()
+      val failed = F.generationFailure.failed.copy(process = Some(F.process(text)))
+      val captured = WorkflowSbtCapture.decode(failed.process.get).toOption.get
+      val terminations = Vector(ProcessExecutionTermination.NotStarted, ProcessExecutionTermination.Cancelled,
+        ProcessExecutionTermination.TimedOut, ProcessExecutionTermination.TerminationUnconfirmed,
+        ProcessExecutionTermination.Exited(0), ProcessExecutionTermination.Exited(2))
+      val invalid = terminations.map(termination => failed.copy(process = Some(F.process(text, termination)))) ++ Vector(
+        failed.copy(status = "uncertain"), failed.copy(status = "not-executed"), failed.copy(status = "admission-rejected"), failed.copy(process = None),
+        failed.copy(process = Some(F.process(text, truncated = true))),
+        failed.copy(process = Some(F.process(text, identity = "other-program"))),
+        failed.copy(process = Some(WorkflowSbtCapture.encode(captured.copy(stderr = captured.stderr.copy(truncated = true))))),
+        failed.copy(process = Some(WorkflowSbtCapture.encode(captured.copy(stdout = ProcessExecutionCapture(Vector(0xc3.toByte), 1L, false))))),
+        failed.copy(request = failed.request.copy(participant = "other-participant")),
+        failed.copy(request = failed.request.copy(input = failed.request.input.copy(ownerSessionId = Some("other-session")))),
+        failed.copy(request = failed.request.copy(input = failed.request.input.copy(explicit = true))))
+      val targets = Vector(F.target.copy(identity = "other-target"), F.target.copy(component = "other-component"),
+        F.target.copy(workspace = "other-workspace"), F.target.copy(beforeChecks = false), F.target.copy(dependency = Some("dependency")))
+      When("the existing status target Session source fixed-program and capture guards inspect these variants")
+      val results = invalid.map(A.generationFailure(_, F.target, "primary-session", "primary-participant", F.source, F.processPolicy(F.target))) ++
+        targets.map(A.generationFailure(failed, _, "primary-session", "primary-participant", F.source, F.processPolicy(F.target))) ++ Vector(
+          A.generationFailure(failed, F.target, "wrong-session", "primary-participant", F.source, F.processPolicy(F.target)),
+          A.generationFailure(failed, F.target, "primary-session", "wrong-participant", F.source, F.processPolicy(F.target)),
+          A.generationFailure(failed, F.target, "primary-session", "primary-participant", F.source.copy(tree = "d" * 40), F.processPolicy(F.target)),
+          A.generationFailure(failed, F.target, "primary-session", "primary-participant", F.source,
+            F.processPolicy(F.target).replace("publish-local", "test")))
+      Then("none establishes an eligible primary generation failure or a successful check")
+      results shouldBe Vector.fill(results.size)(false)
+      A.compileFailure(failed, F.target, "primary-session", "primary-participant", F.source, F.processPolicy(F.target)) shouldBe false
+    }
+
     "admit only the observed INPUT-kind syntax family and reserve the next same-Step source repair" in {
       Given("the exact complete typed cozyGenerate INPUT-kind source diagnostic following one retained missing-input repair")
       val marker = "[error] Error[org.goldenport.exception.SyntaxErrorFaultException: Operation 'echo' INPUT Value 'ProbeInput' requires input-kind=COMMAND|QUERY.]"

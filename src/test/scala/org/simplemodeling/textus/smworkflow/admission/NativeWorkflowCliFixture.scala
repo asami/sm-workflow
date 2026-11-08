@@ -1978,7 +1978,7 @@ private[admission] object NativeWorkflowCliFixture {
     require(root.isAbsolute && root.normalize == root && Files.isDirectory(root) && root.toRealPath() == root &&
       root.getParent == _primary.resolve("target/sm-workflow/work/native-cli") &&
       root.getFileName.toString.startsWith("primary-generation-"), "Select the exact retained generation fixture root")
-    require(Set(1000, 2000, 3000, 4000)(startingLogIndex), "Select the finite capture or continuation log range")
+    require(Set(1000, 2000, 3000, 4000, 5000)(startingLogIndex), "Select the finite capture or continuation log range")
     val config = parse(Files.readString(root.resolve(".textus/config.json"))).fold(
       error => throw new AssertionError(error.message), identity)
     val declared = config.hcursor.get[String]("sm-workflow.runtime.definition").flatMap(value =>

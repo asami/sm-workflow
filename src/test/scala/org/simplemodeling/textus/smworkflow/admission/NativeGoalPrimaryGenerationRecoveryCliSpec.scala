@@ -5,6 +5,7 @@ import io.circe.generic.auto.*
 import io.circe.parser.parse
 import io.circe.syntax.*
 import java.nio.file.{Files, Path, StandardOpenOption}
+import java.time.Instant
 import org.goldenport.convert.ValueReader
 import org.goldenport.cncf.processexecution.{GitOperationKind, SbtOperation}
 import org.goldenport.cncf.workflow.{WorkflowMechanicalReceiptLimits, WorkflowMechanicalReceiptParameters}
@@ -45,7 +46,8 @@ private[admission] object PrimaryGenerationHistorySpecificationFixture extends N
   * The locator is caller-owned routing, never native state or consumer authority.
   * All publication/check effects use the normal installed CLI and typed UoW.
   * @since   Nov.  6, 2026
-  * @version Nov.  6, 2026
+  *  version Nov.  6, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.scalatest.DoNotDiscover
@@ -161,6 +163,84 @@ final class NativeGoalPrimaryGenerationRecoveryCliSpec extends AnyWordSpec with 
     |##### OUTPUT""".stripMargin)
   private val _corrected_input = _input_only.replace("## ProbeInput\n\n### ATTRIBUTE",
     "## ProbeInput\n\n- input-kind :: COMMAND\n\n### ATTRIBUTE")
+  private val _workflow_model = """
+    |
+    |# STATE-MACHINE
+    |
+    |## ProbeLifecycle
+    |
+    |### State
+    |
+    |#### Ready
+    |
+    |##### Transition
+    |
+    |to = Done
+    |on = echoed
+    |
+    |#### Done
+    |
+    |# WORKFLOW
+    |
+    |## GenerationWorkflow
+    |
+    |version = v1
+    |
+    |### COMPOSITE-STATEMACHINE
+    |
+    |#### CONSTITUENT
+    |
+    |##### probe
+    |
+    |state-machine = ProbeLifecycle
+    |
+    |#### STATE
+    |
+    |##### Ready
+    |
+    |##### Done
+    |
+    |#### DERIVATION
+    |
+    |##### ready
+    |
+    |state = Ready
+    |when = probe.Ready
+    |
+    |##### done
+    |
+    |state = Done
+    |when = probe.Done
+    |
+    |#### INITIAL
+    |
+    |probe.Ready
+    |
+    |### OPERATION
+    |
+    |#### echo
+    |
+    |""".stripMargin
+  private val _structural_binding = """##### TYPE
+    |
+    |COMMAND
+    |
+    |##### INPUT
+    |
+    |###### TYPE
+    |
+    |ProbeInput
+    |
+    |##### OUTPUT
+    |
+    |###### TYPE
+    |
+    |ProbeResult
+    |""".stripMargin
+  private val _structural_source = _corrected_input + _workflow_model + _structural_binding
+  private val _structural_corrected = _corrected_input + _workflow_model + "operation = ProbeService.echo\n"
+  private val _structural_error = "[error] Error[org.goldenport.exception.SyntaxErrorFaultException: WORKFLOW 'GenerationWorkflow' " +
+    "OPERATION 'echo' does not admit nested structural content.]"
 
   private def _array(value: Json, key: String): Vector[Json] = value.hcursor.get[Vector[Json]](key).fold(
     error => fail(error.message), identity)
@@ -201,7 +281,7 @@ final class NativeGoalPrimaryGenerationRecoveryCliSpec extends AnyWordSpec with 
 
   /** Only fixed fixture build inputs are committed here, before Start. The
     * faulty and corrected operation source remains assigned semantic work. */
-  private def _build(scenario: F.Scenario): Unit = {
+  private def _build(scenario: F.Scenario, structural: Boolean = false): Unit = {
     val repository = Path.of(scenario.host.target.root)
     Files.createDirectories(repository.resolve("src/main/cozy"))
     Files.createDirectories(repository.resolve("project"))
@@ -269,7 +349,7 @@ final class NativeGoalPrimaryGenerationRecoveryCliSpec extends AnyWordSpec with 
       |  }
       |}
       |""".stripMargin)
-    Files.writeString(repository.resolve("src/test/scala/ProductCheck.scala"), """package fixture.primarygeneration
+    val testsource = """package fixture.primarygeneration
       |
       |import java.nio.file.{Files, Path, StandardOpenOption}
       |import org.scalatest.GivenWhenThen
@@ -295,7 +375,9 @@ final class NativeGoalPrimaryGenerationRecoveryCliSpec extends AnyWordSpec with 
       |    }
       |  }
       |}
-      |""".stripMargin)
+      |""".stripMargin
+    Files.writeString(repository.resolve("src/test/scala/ProductCheck.scala"), if (structural)
+      testsource.replace("StandardOpenOption.CREATE_NEW", "StandardOpenOption.CREATE, StandardOpenOption.APPEND") else testsource)
     take(_run_setup_command_(Vector("-C", repository.toString, "-c", "core.hooksPath=/dev/null", "--literal-pathspecs",
       "add", "--", "build.sbt", "project/plugins.sbt", "project.yaml", "src/test/scala/ProductCheck.scala")))
     take(_run_setup_command_(Vector("-C", repository.toString, "-c", "core.hooksPath=/dev/null", "-c",
@@ -357,12 +439,12 @@ final class NativeGoalPrimaryGenerationRecoveryCliSpec extends AnyWordSpec with 
     F.reopenPrimaryGeneration(root, host, plan, 1000)
   }
 
-  private def _capture(locator: Path, historical: Boolean = true): Unit = {
+  private def _capture(locator: Path, historical: Boolean = true, structural: Boolean = false): Unit = {
     Given(if (historical) "RGEN01 E15: an explicitly selected old installed CLI and a fresh tiny real sbt-cozy project with no native state"
       else "RGEN01 E15: the current normal installed CLI and a new tiny project with canonical CAR packaging metadata")
     Files.exists(locator) shouldBe false
     val initial = F.fresh("primary-generation-capture", sbtRepair = Some(TypedSbtHostPlanFixture.normalExecutable), repairContinuation = true)
-    _build(initial)
+    _build(initial, structural)
     val scenario = _configure(initial)
     val task = scenario.ownTask("primary-generation-recovery")
     val prepared = scenario.prepareHostInput("prepareGoalStart", scenario.selectedGoalPreparationInput.toRecord())
@@ -372,7 +454,8 @@ final class NativeGoalPrimaryGenerationRecoveryCliSpec extends AnyWordSpec with 
     val issued = scenario.advance(task)
     val request = issued.business[V.GoalPhaseAdvanceResult]
     request.work.get.kind shouldBe "ImplementStep"
-    Files.writeString(Path.of(scenario.host.target.root).resolve(_source), _missing_input, StandardOpenOption.CREATE_NEW)
+    val source = if (structural) _structural_source else _missing_input
+    Files.writeString(Path.of(scenario.host.target.root).resolve(_source), source, StandardOpenOption.CREATE_NEW)
     val accepted = _submit(scenario, request, "initial")
     When("ordinary installed Advance captures that actual CML and executes its real primary publishLocal")
     val output = scenario.advance(task)
@@ -390,22 +473,39 @@ final class NativeGoalPrimaryGenerationRecoveryCliSpec extends AnyWordSpec with 
     WorkflowSbtCapture.text(process.stderr).textStatus shouldBe "complete"
     process.stdout.truncated shouldBe false
     process.stderr.truncated shouldBe false
-    text should include("[error] Error[No input]")
+    text should include(if (structural) _structural_error else "[error] Error[No input]")
     text should include("GENERATION_PROVENANCE_OUTPUT_TAMPERED")
     text should include("[error] (cozyGenerate) [sbt-cozy] cozy delegate failed (1) for ")
     _lines(scenario.root.resolve("generation-publication-attempts.txt")).size shouldBe 1
     _lines(scenario.root.resolve("generation-sbt-invocations.txt")).size shouldBe 1
     Files.exists(scenario.root.resolve("generation-real-test-passed.txt")) shouldBe false
-    if (historical) {
+    val description = if (historical) {
       val description = scenario.call("command", B.describeOperation, Vector("--sessionId", started.sessionId))
       description.exitCode should not be 0
-      description.invocation.logs should include("None.get")
-      description.invocation.logs should include("500")
-    } else withClue(output.invocation.logs) {
+      if (structural) {
+        description.invocation.logs should include("Unsupported primary publication failure")
+        description.invocation.logs should include("409")
+      } else {
+        description.invocation.logs should include("None.get")
+        description.invocation.logs should include("500")
+      }
+      Some(description)
+    } else {
+      withClue(output.invocation.logs) {
       failed.repairProgress should not be empty
       failed.repairProgress.get.automaticCount shouldBe 1
       failed.repairProgress.get.ordinaryCount shouldBe 1
       failed.repairProgress.get.limit shouldBe 2
+      }
+      None
+    }
+    if (structural) {
+      When("ordinary old-runtime recollection inspects the retained unsupported structural failure")
+      scenario.advance(task).business[V.GoalPhaseAdvanceResult].work shouldBe None
+      Then("neither publication nor any selected check replays while the old failure remains collectable")
+      _latest(scenario, started.sessionId) shouldBe publication
+      _lines(scenario.root.resolve("generation-publication-attempts.txt")).size shouldBe 1
+      _lines(scenario.root.resolve("generation-sbt-invocations.txt")).size shouldBe 1
     }
     _original(scenario, publication) shouldBe publication
     val snapshot = Json.obj("root" -> scenario.root.toString.asJson,
@@ -413,16 +513,26 @@ final class NativeGoalPrimaryGenerationRecoveryCliSpec extends AnyWordSpec with 
       "task" -> task.toString.asJson, "sessionId" -> started.sessionId.asJson,
       "initialOutput" -> issued.invocation.stdout.toString.asJson, "acceptedOutput" -> accepted.invocation.stdout.toString.asJson,
       "failedOutput" -> output.invocation.stdout.toString.asJson, "failedBytes" -> Files.readString(output.invocation.stdout).asJson,
+      "structural" -> structural.asJson, "source" -> source.asJson,
+      "initialBytes" -> Files.readString(issued.invocation.stdout).asJson,
+      "acceptedBytes" -> Files.readString(accepted.invocation.stdout).asJson,
+      "failedStderr" -> Files.readString(output.invocation.stderr).asJson,
+      "failedStderrPath" -> output.invocation.stderr.toString.asJson,
+      "descriptionOutput" -> description.map(_.invocation.stdout.toString).asJson,
+      "descriptionStderr" -> description.map(value => Files.readString(value.invocation.stderr)).asJson,
+      "repairProgress" -> failed.repairProgress.asJson,
       "failedPublication" -> publication.asJson, "config" -> Files.readString(scenario.root.resolve(".textus/config.json")).asJson,
       "head" -> scenario.candidateHead.asJson, "indexDiff" -> scenario.candidateIndexDiff.asJson,
       "calls" -> _lines(scenario.root.resolve("generation-sbt-invocations.txt")).asJson)
     Files.writeString(locator, snapshot.noSpaces, StandardOpenOption.CREATE_NEW)
   }
 
-  private def _continue(locator: Path, alreadyreserved: Boolean = false): Unit = {
+  private def _continue(locator: Path, alreadyreserved: Boolean = false, structural: Boolean = false): Unit = {
     Given(if (alreadyreserved) "RGEN01 E15: the exact new current-runtime locator with ordinary repair one already reserved"
       else "RGEN01 E15: the exact caller-owned locator from capture-old and the newly published installed CLI")
     val saved = _read(locator)
+    val locatorbytes = Files.readAllBytes(locator).toVector
+    if (structural) saved.hcursor.get[Boolean]("structural") shouldBe Right(true)
     val root = Path.of(saved.hcursor.get[String]("root").toOption.get)
     val host = take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(saved.hcursor.get[Json]("host").toOption.get))
     val plan = saved.hcursor.get[O.Plan]("plan").toOption.get
@@ -443,6 +553,13 @@ final class NativeGoalPrimaryGenerationRecoveryCliSpec extends AnyWordSpec with 
     val failedbytes = saved.hcursor.get[String]("failedBytes").toOption.get
     val failed = saved.hcursor.get[LocalPublication.Result]("failedPublication").toOption.get
     val oldcalls = saved.hcursor.get[Vector[String]]("calls").toOption.get
+    if (structural) {
+      Files.readString(initialpath) shouldBe saved.hcursor.get[String]("initialBytes").toOption.get
+      Files.readString(acceptedpath) shouldBe saved.hcursor.get[String]("acceptedBytes").toOption.get
+      Files.readString(Path.of(host.target.root).resolve(_source)) shouldBe saved.hcursor.get[String]("source").toOption.get
+      Files.readString(root.resolve("goal-plan.json")) shouldBe plan.asJson.noSpaces
+      _business[V.GoalPhaseAdvanceResult](failedpath).repairProgress.asJson shouldBe saved.hcursor.downField("repairProgress").focus.get
+    }
     Files.readString(root.resolve(".textus/config.json")) shouldBe saved.hcursor.get[String]("config").toOption.get
     Files.readString(failedpath) shouldBe failedbytes
     scenario.candidateHead shouldBe saved.hcursor.get[String]("head").toOption.get
@@ -506,10 +623,11 @@ final class NativeGoalPrimaryGenerationRecoveryCliSpec extends AnyWordSpec with 
     repeated shouldBe repair
     _lines(root.resolve("generation-sbt-invocations.txt")) shouldBe oldcalls
     _original(scenario, failed) shouldBe failed
-    When("the assigned correction adds only the missing CML INPUT in the same physical repository")
+    When(if (structural) "only the newly assigned RepairStep replaces the nested Workflow binding with direct operation = ProbeService.echo"
+      else "the assigned correction adds only the missing CML INPUT in the same physical repository")
     val source = Path.of(host.target.root).resolve(_source)
-    Files.readString(source) shouldBe _missing_input
-    Files.writeString(source, _corrected_input)
+    Files.readString(source) shouldBe (if (structural) _structural_source else _missing_input)
+    Files.writeString(source, if (structural) _structural_corrected else _corrected_input)
     _submit(scenario, repair, "corrected")
     val output = scenario.advance(task)
     val reviewed = output.business[V.GoalPhaseAdvanceResult]
@@ -553,10 +671,444 @@ final class NativeGoalPrimaryGenerationRecoveryCliSpec extends AnyWordSpec with 
     Files.readAllBytes(acceptedpath).toVector shouldBe acceptedbytes
     _lines(root.resolve("generation-sbt-invocations.txt")) shouldBe calls
     _lines(root.resolve("generation-publication-attempts.txt")).size shouldBe 2
-    Files.writeString(root.resolve("generation-continuation-result.json"), Json.obj("sessionId" -> session.asJson,
+    if (structural) {
+      _close_structural_step(scenario, task, output, saved, failedpath, acceptedpath, locator, locatorbytes, calls)
+    } else Files.writeString(root.resolve("generation-continuation-result.json"), Json.obj("sessionId" -> session.asJson,
       "frontier" -> "independent-review-required".asJson, "reviewOutput" -> output.invocation.stdout.toString.asJson,
       "originalFailure" -> original.asJson, "published" -> latest.asJson, "calls" -> calls.asJson).noSpaces,
       StandardOpenOption.CREATE_NEW)
+  }
+
+  /** Controlled review and authority inputs exercise native closure; neither
+    * constitutes actual independent provider, Human or consumer evidence. */
+  private def _close_structural_step(scenario: F.Scenario, task: Path, output: F.Result, saved: Json,
+    failedpath: Path, acceptedpath: Path, locator: Path, locatorbytes: Vector[Byte], stepcalls: Vector[String]): Unit = {
+    val root = scenario.root
+    val reviewed = output.business[V.GoalPhaseAdvanceResult]
+    val work = reviewed.work.get
+    val failed = saved.hcursor.get[LocalPublication.Result]("failedPublication").toOption.get
+    val parent = saved.hcursor.get[String]("head").toOption.get
+    def _save_(name: String, value: Json): String = {
+      val path = root.resolve("structural-" + name + ".json")
+      Files.writeString(path, value.noSpaces, StandardOpenOption.CREATE_NEW)
+      path.toUri.toASCIIString
+    }
+    Given("the actual ReviewStep with one successful Step Compile and focused test, plus SPECIFICATION-OWNED controlled review inputs")
+    work.kind shouldBe "ReviewStep"
+    work.stepIdentity shouldBe Some("step-1")
+    reviewed.validation.get.scopeIdentity shouldBe "step-1"
+    val stepchecks = work.review.get.checks
+    stepchecks.map(_.identity) shouldBe _checks.map(_.identity)
+    stepchecks.map(_.sbt.get.kind) shouldBe Vector("compile", "test-only")
+    stepchecks.foreach { receipt =>
+      receipt.termination shouldBe "exited"
+      receipt.exitCode shouldBe Some(0)
+      receipt.sbt.get.outcome shouldBe "succeeded"
+    }
+    stepchecks.last.sbt.get.selection.get.completedSuites shouldBe 1
+    stepchecks.last.sbt.get.selection.get.testsRun shouldBe 1
+    _lines(root.resolve("generation-real-test-passed.txt")) shouldBe Vector("qualified-input")
+    val steppublication = _latest(scenario, reviewed.sessionId)
+    steppublication.status shouldBe "published"
+    steppublication.request.source.head shouldBe work.candidate.get.head
+    steppublication.request.source.tree shouldBe work.candidate.get.tree
+    val result = Json.obj("outcome" -> "accept".asJson,
+      "summary" -> "SPECIFICATION-OWNED controlled structural fixture review; no independent provider or consumer claim".asJson,
+      "findings" -> Json.arr())
+    val reference = V.WorkflowArtifactReference("specification-structural-step-review", "1")
+    val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("specification-controlled-reviewer"), None, None)
+    val input = V.WorkflowEvidencePreparationInput("GoalPhase", "review", output.invocation.stdout.toUri.toASCIIString,
+      _save_("review-result", result), _save_("review-reference", _json(reference)), _save_("review-execution", _json(execution)),
+      "normal-development-host", Instant.now().minusSeconds(60).toString, "entity:smworkflow.cli.host_evidence", None)
+    When("normal passive prepareEvidence and its actual selected import precede one native Review Submit")
+    val prepared = scenario.prepareHostInput("prepareEvidence", input.toRecord())
+    withClue(prepared.invocation.logs) { prepared.exitCode shouldBe 0 }
+    scenario.selectPreparedImport(prepared)
+    val accepted = scenario.call("command", reviewed.submitOperation.get, Vector("--sessionId", reviewed.submitSessionId.get,
+      "--result", result.noSpaces, "--resultReference", _json(reference).noSpaces, "--executionEvidence", _json(execution).noSpaces))
+    Then("the controlled fixture review is accepted without replaying implementation publication or Step checks")
+    accepted.business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+    _lines(root.resolve("generation-sbt-invocations.txt")) shouldBe stepcalls
+
+    When("ordinary Advance reaches the real missing-authority StepClosure frontier")
+    val closing = scenario.advance(task)
+    val waiting = closing.business[V.GoalPhaseAdvanceResult]
+    Then("closure waits for its own SPECIFICATION-OWNED authority while retaining the checked candidate")
+    waiting.kind shouldBe "Wait"
+    waiting.authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
+    scenario.candidateHead shouldBe parent
+    _lines(root.resolve("generation-sbt-invocations.txt")) shouldBe stepcalls
+
+    Given("that actual closure Wait and a SPECIFICATION-OWNED controlled local closure reference, with no manufactured Human answer")
+    val authorityreference = V.WorkflowArtifactReference("specification-structural-step-closure", "1")
+    val authority = V.WorkflowAuthorityPreparationInput(closing.invocation.stdout.toUri.toASCIIString,
+      _save_("closure-reference", _json(authorityreference)), "participant", "normal-development-host",
+      Instant.now().minusSeconds(60).toString, "entity:smworkflow.cli.host_evidence")
+    When("normal prepareAuthority import and ordinary Advance perform the actual typed Step commit and reach the next Phase frontier")
+    val admitted = scenario.prepareHostInput("prepareAuthority", authority.toRecord())
+    withClue(admitted.invocation.logs) { admitted.exitCode shouldBe 0 }
+    scenario.selectPreparedImport(admitted)
+    val closedoutput = scenario.advance(task)
+    val phase = closedoutput.business[V.GoalPhaseAdvanceResult]
+    Then("one real Step commit and a separately declared Phase check lead to pending ReviewPhase without claiming Phase completion")
+    withClue(closedoutput.invocation.logs) { phase.work should not be empty }
+    phase.sessionId shouldBe reviewed.sessionId
+    phase.completion shouldBe None
+    phase.work.get.kind shouldBe "ReviewPhase"
+    phase.work.get.stepIdentity shouldBe None
+    phase.validation.get.scopeIdentity shouldBe "phase:" + scenario.plan.phase
+    phase.validation.get.sourceRevision should not be reviewed.validation.get.sourceRevision
+    phase.work.get.originalBase shouldBe work.originalBase
+    phase.work.get.selectedPlan shouldBe work.selectedPlan
+    phase.work.get.completed.map(_.step) shouldBe Vector("step-1")
+    val closed = phase.work.get.completed.head
+    closed.review shouldBe Some(reference.identity)
+    closed.commit.parent shouldBe parent
+    closed.commit.identity shouldBe scenario.candidateHead
+    scenario.candidateParent shouldBe parent
+    closed.commit.identity should not be parent
+    closed.commit.tree shouldBe work.candidate.get.tree
+    phase.work.get.candidate.get.head shouldBe closed.commit.identity
+    phase.work.get.candidate.get.tree shouldBe closed.commit.tree
+    phase.issuedWorkContext should not be reviewed.issuedWorkContext
+    val phasechecks = phase.work.get.review.get.checks
+    phasechecks.map(_.identity) shouldBe _checks.map(_.identity)
+    phasechecks.map(_.sbt.get.kind) shouldBe Vector("compile", "test-only")
+    phasechecks.foreach { receipt =>
+      receipt.termination shouldBe "exited"
+      receipt.exitCode shouldBe Some(0)
+      receipt.sbt.get.outcome shouldBe "succeeded"
+    }
+    phasechecks.last.sbt.get.selection.get.completedSuites shouldBe 1
+    phasechecks.last.sbt.get.selection.get.testsRun shouldBe 1
+    _lines(root.resolve("generation-real-test-passed.txt")) shouldBe Vector.fill(2)("qualified-input")
+    val calls = _lines(root.resolve("generation-sbt-invocations.txt"))
+    calls.take(stepcalls.size) shouldBe stepcalls
+    calls.size shouldBe stepcalls.size + 3
+    calls.count(_.contains("publishLocal")) shouldBe 3
+    calls.count(_.contains("testOnly")) shouldBe 2
+    _lines(root.resolve("generation-publication-attempts.txt")).size shouldBe 3
+    reviewed.repairProgress.get.ordinaryCount shouldBe 1
+    reviewed.repairProgress.get.automaticCount shouldBe 1
+    _original(scenario, failed) shouldBe failed
+    Files.readString(failedpath) shouldBe saved.hcursor.get[String]("failedBytes").toOption.get
+    Files.readString(Path.of(saved.hcursor.get[String]("failedStderrPath").toOption.get)) shouldBe
+      saved.hcursor.get[String]("failedStderr").toOption.get
+    Files.readString(acceptedpath) shouldBe saved.hcursor.get[String]("acceptedBytes").toOption.get
+    Files.readAllBytes(locator).toVector shouldBe locatorbytes
+    Files.readString(Path.of(scenario.host.target.root).resolve(_source)) shouldBe _structural_corrected
+    val published = _latest(scenario, reviewed.sessionId)
+    published.status shouldBe "published"
+    published.request.source.head shouldBe closed.commit.identity
+    published.request.source.tree shouldBe closed.commit.tree
+    published.request.input.requestIdentity should not be failed.request.input.requestIdentity
+    published.request.input.requestIdentity should not be steppublication.request.input.requestIdentity
+    WorkflowSbtCapture.exitCode(WorkflowSbtCapture.decode(published.process.get).fold(fail(_), identity)) shouldBe Some(0)
+    _original(scenario, steppublication) shouldBe steppublication
+
+    When("ordinary Advance recollects the pending Phase frontier and all three distinct source-publication results")
+    val repeated = scenario.advance(task).business[V.GoalPhaseAdvanceResult]
+    Then("Step closure and distinct Step and Phase checks remain retained without another successful effect")
+    repeated.work shouldBe phase.work
+    repeated.issuedWorkContext shouldBe phase.issuedWorkContext
+    repeated.repairProgress shouldBe phase.repairProgress
+    repeated.completion shouldBe None
+    scenario.candidateHead shouldBe closed.commit.identity
+    scenario.candidateParent shouldBe parent
+    _latest(scenario, reviewed.sessionId) shouldBe published
+    _original(scenario, failed) shouldBe failed
+    _original(scenario, steppublication) shouldBe steppublication
+    _lines(root.resolve("generation-sbt-invocations.txt")) shouldBe calls
+    _lines(root.resolve("generation-publication-attempts.txt")).size shouldBe 3
+    _lines(root.resolve("generation-real-test-passed.txt")) shouldBe Vector.fill(2)("qualified-input")
+    Files.readString(failedpath) shouldBe saved.hcursor.get[String]("failedBytes").toOption.get
+    Files.readString(acceptedpath) shouldBe saved.hcursor.get[String]("acceptedBytes").toOption.get
+    Files.readAllBytes(locator).toVector shouldBe locatorbytes
+    Files.writeString(root.resolve("structural-generation-qualification-result.json"), Json.obj(
+      "sessionId" -> reviewed.sessionId.asJson, "frontier" -> "ReviewPhase".asJson,
+      "phaseComplete" -> false.asJson, "controlledInputs" -> "SPECIFICATION-OWNED review and closure authority; no actual independent provider, Human or consumer evidence".asJson,
+      "reviewOutput" -> output.invocation.stdout.toString.asJson, "closureOutput" -> closedoutput.invocation.stdout.toString.asJson,
+      "originalFailure" -> failed.asJson, "published" -> published.asJson, "stepCommit" -> _json(closed.commit),
+      "stepPublication" -> steppublication.asJson, "phasePublication" -> published.asJson,
+      "ordinaryRepairCountAtStep" -> reviewed.repairProgress.get.ordinaryCount.asJson,
+      "stepChecks" -> stepchecks.map(_json).asJson, "phaseChecks" -> phasechecks.map(_json).asJson,
+      "calls" -> calls.asJson).noSpaces, StandardOpenOption.CREATE_NEW)
+  }
+
+  /** Passive qualification of an already reached Phase frontier. Every selected
+    * completion is an actual public artifact; no successful work is resubmitted. */
+  private def _collect_structural_closure(locator: Path): Unit = {
+    Given("the exact unchanged structural locator and caller-selected public outputs from the already committed tiny Step")
+    locator.toRealPath() shouldBe locator
+    val closurelocator = _required("smworkflow.spec.generationClosureLocator")
+    closurelocator shouldBe locator.getParent.resolve("structural-closure-locator.json")
+    closurelocator.toRealPath() shouldBe closurelocator
+    val locatorbytes = Files.readAllBytes(locator).toVector
+    val closurebytes = Files.readAllBytes(closurelocator).toVector
+    val saved = _read(locator)
+    val closure = _read(closurelocator)
+    closure.hcursor.get[String]("originalLocator") shouldBe Right(locator.toString)
+    saved.hcursor.get[Boolean]("structural") shouldBe Right(true)
+    val root = Path.of(saved.hcursor.get[String]("root").toOption.get)
+    val host = take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(saved.hcursor.get[Json]("host").toOption.get))
+    val plan = saved.hcursor.get[O.Plan]("plan").toOption.get
+    val session = saved.hcursor.get[String]("sessionId").toOption.get
+    closure.hcursor.get[String]("sessionId") shouldBe Right(session)
+    val task = Path.of(saved.hcursor.get[String]("task").toOption.get)
+    task shouldBe root.resolve("target/sm-workflow/tasks/primary-generation-recovery")
+    task.toRealPath() shouldBe task
+    def _selected_output_(path: Path): Path = {
+      path.isAbsolute shouldBe true
+      path.normalize shouldBe path
+      path.getParent shouldBe root.resolve("logs")
+      path.getFileName.toString should fullyMatch regex "[0-9]+\\.stdout\\.json"
+      Files.isRegularFile(path) shouldBe true
+      path.toRealPath() shouldBe path
+      path
+    }
+    def _selected_(key: String, filename: String): Path = {
+      val path = _selected_output_(Path.of(closure.hcursor.get[String](key).toOption.get))
+      path.getFileName.toString shouldBe filename
+      path
+    }
+    val initialpath = _selected_output_(Path.of(saved.hcursor.get[String]("initialOutput").toOption.get))
+    val acceptedpath = _selected_output_(Path.of(saved.hcursor.get[String]("acceptedOutput").toOption.get))
+    val failedpath = _selected_output_(Path.of(saved.hcursor.get[String]("failedOutput").toOption.get))
+    val repairpath = _selected_("repairOutput", "3005.stdout.json")
+    val repairsubmitpath = _selected_("repairSubmitOutput", "3008.stdout.json")
+    val reviewpath = _selected_("reviewOutput", "3009.stdout.json")
+    val steppublicationpath = _selected_("stepPublicationOutput", "3010.stdout.json")
+    val reviewsubmitpath = _selected_("reviewSubmitOutput", "3016.stdout.json")
+    val waitingpath = _selected_("closureWaitOutput", "3017.stdout.json")
+    val phasepath = _selected_("phaseOutput", "3020.stdout.json")
+    val selectedpaths = Vector(initialpath, acceptedpath, failedpath, repairpath, repairsubmitpath, reviewpath,
+      steppublicationpath, reviewsubmitpath, waitingpath, phasepath)
+    selectedpaths.distinct.size shouldBe selectedpaths.size
+    val preserved = selectedpaths.map(path => path -> Files.readAllBytes(path).toVector)
+    val failedstderr = Path.of(saved.hcursor.get[String]("failedStderrPath").toOption.get)
+    failedstderr shouldBe failedpath.resolveSibling(failedpath.getFileName.toString.stripSuffix(".stdout.json") + ".stderr")
+    failedstderr.toRealPath() shouldBe failedstderr
+    val resultpath = root.resolve("structural-generation-qualification-result.json")
+    Files.exists(resultpath) shouldBe false
+
+    When("the selected typed repair acceptance Step review publication closure Wait and Phase outputs are decoded without executing them")
+    val initial = _business[V.GoalPhaseAdvanceResult](initialpath)
+    val accepted = _business[V.GoalPhaseWorkSubmissionResult](acceptedpath)
+    val failedoutput = _business[V.GoalPhaseAdvanceResult](failedpath)
+    val repair = _business[V.GoalPhaseAdvanceResult](repairpath)
+    val repairsubmit = _business[V.GoalPhaseWorkSubmissionResult](repairsubmitpath)
+    val reviewed = _business[V.GoalPhaseAdvanceResult](reviewpath)
+    val steppublication = _publication_result(_business[V.LocalPublicationResult](steppublicationpath))
+    val reviewsubmit = _business[V.GoalPhaseWorkSubmissionResult](reviewsubmitpath)
+    val waiting = _business[V.GoalPhaseAdvanceResult](waitingpath)
+    val phase = _business[V.GoalPhaseAdvanceResult](phasepath)
+    val failed = saved.hcursor.get[LocalPublication.Result]("failedPublication").toOption.get
+    Then("the original accepted implementation and exact failure led to one new same-Step repair and the saved controlled closure")
+    Vector(initial, failedoutput, repair, reviewed, waiting, phase).foreach(_.sessionId shouldBe session)
+    Vector(accepted, repairsubmit, reviewsubmit).foreach { submission =>
+      submission.sessionId shouldBe session
+      submission.accepted shouldBe true
+      submission.outcome shouldBe "accepted"
+    }
+    Files.readString(initialpath) shouldBe saved.hcursor.get[String]("initialBytes").toOption.get
+    Files.readString(acceptedpath) shouldBe saved.hcursor.get[String]("acceptedBytes").toOption.get
+    Files.readString(failedpath) shouldBe saved.hcursor.get[String]("failedBytes").toOption.get
+    Files.readString(failedstderr) shouldBe saved.hcursor.get[String]("failedStderr").toOption.get
+    failedoutput.outcome shouldBe Some("failed")
+    failedoutput.validation shouldBe None
+    failedoutput.repairProgress.asJson shouldBe saved.hcursor.downField("repairProgress").focus.get
+    initial.work.get.kind shouldBe "ImplementStep"
+    repair.kind shouldBe "Request"
+    repair.work.get.kind shouldBe "RepairStep"
+    repair.work.get.stepIdentity shouldBe Some("step-1")
+    repair.submitSessionId shouldBe Some(session)
+    repair.validation shouldBe None
+    repair.repairProgress.get.ordinaryCount shouldBe 1
+    repair.repairProgress.get.automaticCount shouldBe 1
+    repair.repairProgress.get.limit shouldBe 2
+    val failurecontext = GoalPhaseNativeMetadata.normalizePublicJson(_json(repair.work.get.publicationFailure.get)).flatMap(
+      _.as[GoalPhaseNativeWork.PublicationFailureContext].left.map(_.message)).fold(fail(_), identity)
+    failurecontext.publication shouldBe failed
+    failurecontext.testsExecuted shouldBe false
+    failurecontext.changedPaths shouldBe Vector(_source)
+    failurecontext.diff shouldBe saved.hcursor.get[String]("indexDiff").toOption.get
+    val failedcapture = WorkflowSbtCapture.decode(failed.process.get).fold(fail(_), identity)
+    WorkflowSbtCapture.exitCode(failedcapture) shouldBe Some(1)
+    (WorkflowSbtCapture.text(failedcapture.stdout).value + "\n" + WorkflowSbtCapture.text(failedcapture.stderr).value) should
+      include(_structural_error)
+    failed.request.target shouldBe _publication
+    failed.request.input.ownerSessionId shouldBe Some(session)
+    failed.request.source.head shouldBe saved.hcursor.get[String]("head").toOption.get
+    Vector(repair.work.get, reviewed.work.get, phase.work.get).foreach { work =>
+      work.originalBase shouldBe initial.work.get.originalBase
+      work.selectedPlan shouldBe initial.work.get.selectedPlan
+    }
+    GoalPhaseNativeMetadata.normalizePublicJson(_json(F.publicPlan(plan))).fold(fail(_), identity) shouldBe
+      GoalPhaseNativeMetadata.normalizePublicJson(_json(initial.work.get.selectedPlan)).fold(fail(_), identity)
+    repair.work.get.completed shouldBe initial.work.get.completed
+    reviewed.work.get.completed shouldBe initial.work.get.completed
+    reviewed.work.get.kind shouldBe "ReviewStep"
+    reviewed.work.get.stepIdentity shouldBe Some("step-1")
+    reviewed.repairProgress shouldBe repair.repairProgress
+    waiting.kind shouldBe "Wait"
+    waiting.authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
+    waiting.validation.get.checks shouldBe reviewed.work.get.review.get.checks
+    phase.kind shouldBe "Request"
+    phase.work.get.kind shouldBe "ReviewPhase"
+    phase.work.get.stepIdentity shouldBe None
+    phase.completion shouldBe None
+    phase.repairProgress.get.ordinaryCount shouldBe 0
+    phase.repairProgress.get.automaticCount shouldBe 0
+    phase.repairProgress.get.limit shouldBe 2
+    phase.work.get.completed.map(_.step) shouldBe Vector("step-1")
+    val closed = phase.work.get.completed.head
+    closed.review shouldBe Some("specification-structural-step-review")
+    closed.commit.parent shouldBe saved.hcursor.get[String]("head").toOption.get
+    closed.commit.identity should not be closed.commit.parent
+    closed.commit.tree shouldBe reviewed.work.get.candidate.get.tree
+    reviewed.work.get.candidate.get.head shouldBe closed.commit.parent
+    phase.work.get.candidate.get.head shouldBe closed.commit.identity
+    phase.work.get.candidate.get.tree shouldBe closed.commit.tree
+    phase.issuedWorkContext should not be reviewed.issuedWorkContext
+    phase.validation.get.sourceRevision should not be reviewed.validation.get.sourceRevision
+    def _assert_checks_(value: V.GoalPhaseAdvanceResult, scope: String): Vector[V.GoalPhaseNativeCheckReceipt] = {
+      val validation = value.validation.get
+      val checks = value.work.get.review.get.checks
+      validation.scopeIdentity shouldBe scope
+      validation.outcome shouldBe Some("passed")
+      validation.candidate shouldBe value.work.get.candidate.get
+      validation.selectedChecks.map(_.identity) shouldBe _checks.map(_.identity)
+      validation.checks shouldBe checks
+      checks.map(_.identity) shouldBe _checks.map(_.identity)
+      checks.map(_.sbt.get.kind) shouldBe Vector("compile", "test-only")
+      checks.foreach { receipt =>
+        receipt.termination shouldBe "exited"
+        receipt.exitCode shouldBe Some(0)
+        receipt.sbt.get.outcome shouldBe "succeeded"
+        receipt.processObservation should not be empty
+        val projection = GoalPhaseNativeMetadata.normalizePublicJson(_json(receipt.processObservation.get)).fold(fail(_), identity)
+        val raw = projection.mapObject(fields => Vector("stdout", "stderr").foldLeft(fields) { (prior, key) =>
+          prior.add(key, fields(key).get.mapObject(_.remove("textStatus").remove("trailingUndecodedBytes")))
+        })
+        val observed = WorkflowSbtCapture.decode(raw).fold(fail(_), identity)
+        WorkflowSbtCapture.projection(observed) shouldBe projection
+        WorkflowSbtCapture.exitCode(observed) shouldBe Some(0)
+        WorkflowSbtCapture.text(observed.stdout).textStatus shouldBe "complete"
+        WorkflowSbtCapture.text(observed.stderr).textStatus shouldBe "complete"
+        observed.stdout.truncated shouldBe false
+        observed.stderr.truncated shouldBe false
+      }
+      checks.last.sbt.get.selection.get.testClasses shouldBe Vector(_suite)
+      checks.last.sbt.get.selection.get.completedSuites shouldBe 1
+      checks.last.sbt.get.selection.get.testsRun shouldBe 1
+      checks
+    }
+    val stepchecks = _assert_checks_(reviewed, "step-1")
+    val phasechecks = _assert_checks_(phase, "phase:" + plan.phase)
+    steppublication.status shouldBe "published"
+    steppublication.request.target shouldBe _publication
+    steppublication.request.input.ownerSessionId shouldBe Some(session)
+    steppublication.request.source.head shouldBe closed.commit.parent
+    steppublication.request.source.tree shouldBe closed.commit.tree
+    steppublication.request.input.requestIdentity should not be failed.request.input.requestIdentity
+    WorkflowSbtCapture.exitCode(WorkflowSbtCapture.decode(steppublication.process.get).fold(fail(_), identity)) shouldBe Some(0)
+
+    Given("the same physical fixture with seven real invocation entries and the corrected source already committed")
+    val logindex = sys.props.get("smworkflow.spec.generationLogIndex").map(_.toInt)
+      .getOrElse(fail("Select an unused smworkflow.spec.generationLogIndex of 4000 or 5000 for passive closure collection"))
+    Set(4000, 5000)(logindex) shouldBe true
+    val scenario = F.reopenPrimaryGeneration(root, host, plan, logindex)
+    scenario.retrieve(task) shouldBe session
+    scenario.invocations shouldBe empty
+    val source = Path.of(host.target.root).resolve(_source)
+    val config = root.resolve(".textus/config.json")
+    val planpath = root.resolve("goal-plan.json")
+    val currentconfig = _read(config)
+    currentconfig.hcursor.get[String]("textus.import.data.file") shouldBe Right(root.resolve("logs/3019.stdout.json").toString)
+    currentconfig.mapObject(_.remove("textus.import.data.file")) shouldBe parse(saved.hcursor.get[String]("config").toOption.get)
+      .fold(error => fail(error.message), identity).mapObject(_.remove("textus.import.data.file"))
+    Files.readString(planpath) shouldBe plan.asJson.noSpaces
+    saved.hcursor.get[String]("source") shouldBe Right(_structural_source)
+    Files.readString(source) shouldBe _structural_corrected
+    val head = scenario.candidateHead
+    head shouldBe closed.commit.identity
+    scenario.candidateParent shouldBe closed.commit.parent
+    val index = scenario.candidateIndexDiff
+    index shouldBe ""
+    val indexpath = Path.of(host.target.root).resolve(".git/index")
+    val calls = _lines(root.resolve("generation-sbt-invocations.txt"))
+    val commands = calls.map(_.split("\\|").last)
+    commands shouldBe Vector("publishLocal", "publishLocal", "compile", "testOnly " + _suite,
+      "publishLocal", "compile", "testOnly " + _suite)
+    val oldcalls = saved.hcursor.get[Vector[String]]("calls").toOption.get
+    oldcalls.size shouldBe 1
+    calls.take(oldcalls.size) shouldBe oldcalls
+    val attempts = _lines(root.resolve("generation-publication-attempts.txt"))
+    attempts shouldBe calls.filter(_.split("\\|").last == "publishLocal")
+    attempts.size shouldBe 3
+    val marker = root.resolve("generation-real-test-passed.txt")
+    _lines(marker) shouldBe Vector.fill(2)("qualified-input")
+    val stablepaths = Vector(source, indexpath, config, planpath, marker,
+      root.resolve("generation-sbt-invocations.txt"), root.resolve("generation-publication-attempts.txt"), failedstderr,
+      task.resolve("workflow-session.json"))
+    val stablebytes = stablepaths.map(path => path -> Files.readAllBytes(path).toVector)
+
+    When("ordinary public Advance recollects only pending ReviewPhase and public publication collectors read its three retained attempts")
+    val repeatedoutput = scenario.advance(task)
+    val repeated = repeatedoutput.business[V.GoalPhaseAdvanceResult]
+    val published = _latest(scenario, session)
+    val retainedfailure = _original(scenario, failed)
+    val retainedstep = _original(scenario, steppublication)
+    Then("the Phase request and distinct post-commit publication remain exact with no successful effect replay")
+    repeated.work shouldBe phase.work
+    repeated.issuedWorkContext shouldBe phase.issuedWorkContext
+    repeated.repairProgress shouldBe phase.repairProgress
+    repeated.completion shouldBe None
+    repeated.validation.get.checks shouldBe phasechecks
+    repeated.validation.get.sourceRevision shouldBe phase.validation.get.sourceRevision
+    Set(phase.validation.get.assessmentJournal, None)(repeated.validation.get.assessmentJournal) shouldBe true
+    retainedfailure shouldBe failed
+    retainedstep shouldBe steppublication
+    published.status shouldBe "published"
+    published.request.target shouldBe _publication
+    published.request.input.ownerSessionId shouldBe Some(session)
+    published.request.source.head shouldBe closed.commit.identity
+    published.request.source.tree shouldBe closed.commit.tree
+    published.request.input.requestIdentity should not be failed.request.input.requestIdentity
+    published.request.input.requestIdentity should not be steppublication.request.input.requestIdentity
+    WorkflowSbtCapture.exitCode(WorkflowSbtCapture.decode(published.process.get).fold(fail(_), identity)) shouldBe Some(0)
+    scenario.candidateHead shouldBe head
+    scenario.candidateParent shouldBe closed.commit.parent
+    scenario.candidateIndexDiff shouldBe index
+    _lines(root.resolve("generation-sbt-invocations.txt")) shouldBe calls
+    _lines(root.resolve("generation-publication-attempts.txt")) shouldBe attempts
+    stablebytes.foreach { (path, bytes) => Files.readAllBytes(path).toVector shouldBe bytes }
+    preserved.foreach { (path, bytes) => Files.readAllBytes(path).toVector shouldBe bytes }
+    Files.readAllBytes(locator).toVector shouldBe locatorbytes
+    Files.readAllBytes(closurelocator).toVector shouldBe closurebytes
+    val component = SmWorkflowComponent.componentId.name
+    val operations = Vector(component + ".GoalPhaseService.advanceGoalPhase",
+      component + ".LocalPublicationService.collectLatestLocalPublication",
+      component + ".LocalPublicationService.collectLocalPublication",
+      component + ".LocalPublicationService.collectLocalPublication")
+    scenario.invocations.flatMap(invocation => operations.distinct.filter(invocation.argv.contains)) shouldBe operations
+    val publicationoperations = operations.tail.toSet
+    val collectionoutputs = scenario.invocations.filter(invocation => invocation.argv.exists(publicationoperations.contains))
+      .map(_.stdout.toString)
+    collectionoutputs.size shouldBe 3
+    Files.writeString(resultpath, Json.obj("sessionId" -> session.asJson, "frontier" -> "ReviewPhase".asJson,
+      "phaseComplete" -> false.asJson,
+      "controlledInputs" -> "SPECIFICATION-OWNED review and closure authority; no actual independent provider, Human or consumer evidence".asJson,
+      "originalLocator" -> locator.toString.asJson, "closureLocator" -> closurelocator.toString.asJson,
+      "selectedOutputs" -> selectedpaths.map(_.toString).asJson,
+      "repeatedPhaseOutput" -> repeatedoutput.invocation.stdout.toString.asJson,
+      "collectionOutputs" -> collectionoutputs.asJson,
+      "originalFailure" -> retainedfailure.asJson, "stepPublication" -> retainedstep.asJson,
+      "phasePublication" -> published.asJson, "stepCommit" -> _json(closed.commit),
+      "ordinaryRepairCountAtStep" -> reviewed.repairProgress.get.ordinaryCount.asJson,
+      "phaseWindowRepairCount" -> phase.repairProgress.get.ordinaryCount.asJson,
+      "stepChecks" -> stepchecks.map(_json).asJson, "phaseChecks" -> phasechecks.map(_json).asJson,
+      "calls" -> calls.asJson).noSpaces, StandardOpenOption.CREATE_NEW)
   }
 
   private def _resume_current_generation(locator: Path): Unit = {
@@ -1297,9 +1849,12 @@ final class NativeGoalPrimaryGenerationRecoveryCliSpec extends AnyWordSpec with 
         case "collect-review" => _collect_review(locator)
         case "capture-history-old" => _capture_history(locator)
         case "continue-history-new" => _continue_history(locator)
-        case _ => fail("Only capture-old, continue-new, resume-current-generation, qualify-current, collect-review, capture-history-old and continue-history-new are supported")
+        case "capture-structural-old" => _capture(locator, structural = true)
+        case "continue-structural-new" => _continue(locator, structural = true)
+        case "collect-structural-closure" => _collect_structural_closure(locator)
+        case _ => fail("Only capture-old, continue-new, resume-current-generation, qualify-current, collect-review, capture-history-old, continue-history-new, capture-structural-old, continue-structural-new and collect-structural-closure are supported")
       }
-      Then("the selected mode has retained its actual process output and claimed no independent review or Step commit")
+      Then("the selected mode retains actual outputs; only structural continuation qualifies controlled fixture Step closure, without consumer or Phase completion claims")
       Files.isRegularFile(locator) shouldBe true
     }
   }
