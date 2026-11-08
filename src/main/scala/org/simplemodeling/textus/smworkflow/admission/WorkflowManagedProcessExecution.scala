@@ -53,7 +53,7 @@ private[smworkflow] object WorkflowManagedProcessExecution {
   /** Data narrowed from the owning native purpose request, never a process grant. */
   def executePurposeC[A](core: ActionCall.Core, operation: GitOperation[A],
     selection: GitSelectionParameters): Consequence[GitExecutionResult[A]] = for {
-    workspace <- WorkspaceId.parseC("sm-workflow-repository")
+    workspace <- WorkspaceId.parseC(RepositorySyncDirectoryList.workspace(core, "sm-workflow-repository"))
     target = GitTarget(workspace, Some(selection))
     execution = new Execution(core)
     result <- execution.runGitC(execution.prepareGit(target, operation))

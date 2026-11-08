@@ -54,15 +54,18 @@ private[smworkflow] object RepositorySyncDirectoryList {
     localBranch: String, remote: String, remoteBranch: String, endpoint: String, sessionId: String) {
     def target: Target = Target(Path.of(root), localBranch, remote, remoteBranch, endpoint)
   }
+  final case class Work(operation: String, continuationId: String, expectedRevision: String)
+  private given Encoder[Work] = deriveEncoder
+  private given Decoder[Work] = deriveDecoder
   final case class Result(repositoryIdentity: String, workspace: String, sessionId: String,
     kind: String, outcome: String, condition: Option[String], revision: Option[String],
-    tip: Option[String], tree: Option[String], diagnostic: Option[String] = None)
+    tip: Option[String], tree: Option[String], diagnostic: Option[String] = None, work: Option[Work] = None)
   final case class Payload(participant: String, members: Vector[Member], results: Vector[Result],
     stage: String, attempting: Option[String])
   private given Encoder[Member] = deriveEncoder
   private given Decoder[Member] = deriveDecoder
   private given Encoder[Result] = deriveEncoder[Result].mapJson(_.mapObject(_.filter {
-    case ("diagnostic", value) => !value.isNull
+    case ("diagnostic" | "work", value) => !value.isNull
     case _ => true
   }))
   private given Decoder[Result] = deriveDecoder
@@ -180,7 +183,8 @@ private[smworkflow] object RepositorySyncDirectoryList {
           _ <- _admit_c(value, participant)
           _ <- if (retained.receipt.next.identity.value == identity && retained.receipt.next.revision.value.toString == revision)
             Consequence.unit else _invalid("selected result crosses its native Session or revision")
-        } yield _response(identity, revision, value)
+          response <- _response_c(identity, revision, value, storage, call)
+        } yield response
         else for {
           input <- NativeWorkflowOperationInput.recordC(Action.this.request, "input")
           _ <- if (DevelopmentOperationalView.json(input).asObject.exists(_.keys.toSet == Set("syncMode")) &&
@@ -212,9 +216,12 @@ private[smworkflow] object RepositorySyncDirectoryList {
               saved <- _save_c(adapter, persistence, call, active, Payload(participant, members, Vector.empty, "Ready", None))
             } yield saved
           }
-          result <- if (loaded._2.stage != "Ready") Consequence.success(loaded)
+          result <- if (loaded._2.stage == "AttentionRequired")
+              _resume_c(loaded._1, loaded._2, adapter, persistence, storage, call, repository)
+            else if (loaded._2.stage != "Ready") Consequence.success(loaded)
             else _run_c(loaded._1, loaded._2, adapter, persistence, storage, call, repository)
-        } yield _response(identity, result._1.revision.value.toString, result._2)
+          response <- _response_c(identity, result._1.revision.value.toString, result._2, storage, call)
+        } yield response
       } yield response
     }
   }
@@ -235,7 +242,8 @@ private[smworkflow] object RepositorySyncDirectoryList {
             case Right(value) => Result(member.repositoryIdentity, member.workspace, member.sessionId, value.kind,
               value.outcome.getOrElse(if (value.kind == "Terminal") "completed" else "unfinished"), value.condition,
               child.map(_.revision.value.toString), value.convergence.map(_.tip), value.convergence.map(_.tree),
-              if (value.condition.contains("ValidationSetupRequired")) Some(value.message) else None)
+              _diagnostic(value),
+              _work_reference(value, child))
             case Left(diagnostic) => Result(member.repositoryIdentity, member.workspace, member.sessionId, "Indeterminate", "indeterminate",
               Some("Native call returned no observed business result; inspect its owning Session before continuation. " + diagnostic),
               child.map(_.revision.value.toString), None, None)
@@ -251,7 +259,59 @@ private[smworkflow] object RepositorySyncDirectoryList {
         if (state.results.forall(_.kind == "Terminal")) "Completed" else "AttentionRequired"))
     }
 
-  private def _execute_c(member: Member, core: ActionCall.Core, repository: BindRepository): Consequence[V.RepositorySyncAdvanceResult] = {
+  /** Accepted paired work advances the child frontier. Only those changed
+    * outstanding children are called again; terminal, unchanged and unknown
+    * attempts are retained. Native Advance owns every check/effect decision.
+    */
+  private def _resume_c(current: InstanceRecord, payload: Payload, adapter: WorkflowManagedMechanicalTransition[Payload],
+    persistence: GoalPhaseRuntimeParameters.Persistence, storage: WorkflowComponentStorage,
+    core: ActionCall.Core, repository: BindRepository): Consequence[(InstanceRecord, Payload)] =
+    payload.results.zipWithIndex.foldLeft(Consequence.success(current -> payload)) { case (prior, (result, ordinal)) =>
+      prior.flatMap { (frontier, state) =>
+        if (state.stage == "Indeterminate" || !Set("Request", "Wait", "Human")(result.kind)) Consequence.success(frontier -> state)
+        else for {
+          member <- state.members.find(_.sessionId == result.sessionId).map(Consequence.success)
+            .getOrElse(_invalid("outstanding result has no captured member"))
+          instances <- storage.bindInstancesC()(using core.executionContext)
+          child <- instances.loadC(InstanceIdentity(member.sessionId))(using core.executionContext)
+            .flatMap(_.map(Consequence.success).getOrElse(_invalid("outstanding child Session is unavailable")))
+          next <- if (result.revision.contains(child.revision.value.toString)) Consequence.success(frontier -> state)
+            else for {
+              intent <- _save_c(adapter, persistence, core, frontier, state.copy(stage = "Attempting", attempting = Some(member.sessionId)))
+              observed <- _execute_c(member, core, repository, start = false).map[Either[String, V.RepositorySyncAdvanceResult]](Right(_))
+                .recoverWith(conclusion => Consequence.success(Left(conclusion.show)))
+              after <- instances.loadC(InstanceIdentity(member.sessionId))(using core.executionContext)
+              updated = observed match {
+                case Right(value) => Result(member.repositoryIdentity, member.workspace, member.sessionId, value.kind,
+                  value.outcome.getOrElse(if (value.kind == "Terminal") "completed" else "unfinished"), value.condition,
+                  after.map(_.revision.value.toString), value.convergence.map(_.tip), value.convergence.map(_.tree),
+                  _diagnostic(value),
+                  _work_reference(value, after))
+                case Left(diagnostic) => result.copy(kind = "Indeterminate", outcome = "indeterminate", work = None,
+                  condition = Some("Native continuation returned no observed business result; inspect its owning Session. " + diagnostic),
+                  revision = after.map(_.revision.value.toString))
+              }
+              saved <- _save_c(adapter, persistence, core, intent._1, state.copy(results = state.results.updated(ordinal, updated),
+                stage = if (observed.isLeft) "Indeterminate" else "AttentionRequired", attempting = None))
+            } yield saved
+        } yield next
+      }
+    }.flatMap { (frontier, state) =>
+      if (state.stage != "Indeterminate" && state.results.forall(_.kind == "Terminal"))
+        _save_c(adapter, persistence, core, frontier, state.copy(stage = "Completed"))
+      else Consequence.success(frontier -> state)
+    }
+
+  /** Keep the actual native refusal visible without expanding captures or work.
+    * The condition and exact child revision remain alongside this bounded text.
+    */
+  private def _diagnostic(value: V.RepositorySyncAdvanceResult): Option[String] =
+    if (value.condition.contains("ValidationSetupRequired")) Some(value.message)
+    else if (value.kind == "Wait") Some(value.message.take(4096))
+    else None
+
+  private def _execute_c(member: Member, core: ActionCall.Core, repository: BindRepository,
+    start: Boolean = true): Consequence[V.RepositorySyncAdvanceResult] = {
     def _invoke_[A](operation: String, properties: List[Property])(using reader: ValueReader[A]): Consequence[A] = for {
       context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(member.sessionId))
       request = Request.of(component = SmWorkflowComponent.name, service = "RepositorySyncService", operation = operation,
@@ -271,9 +331,9 @@ private[smworkflow] object RepositorySyncDirectoryList {
       }
     } yield value
     for {
-      _ <- _invoke_[V.RepositorySyncStartResult]("startRepositorySync", List(
+      _ <- if (!start) Consequence.unit else _invoke_[V.RepositorySyncStartResult]("startRepositorySync", List(
         Property("sessionId", member.sessionId, None), Property("input", Record.data(
-          "repositoryIdentity" -> member.repositoryIdentity, "syncMode" -> "FULL_STATE"), None)))
+          "repositoryIdentity" -> member.repositoryIdentity, "syncMode" -> "FULL_STATE"), None))).map(_ => ())
       result <- _invoke_[V.RepositorySyncAdvanceResult]("advanceRepositorySync", List(Property("sessionId", member.sessionId, None)))
     } yield result
   }
@@ -307,13 +367,79 @@ private[smworkflow] object RepositorySyncDirectoryList {
   private def _admit_c(payload: Payload, participant: String): Consequence[Unit] =
     if (payload.participant == participant) Consequence.unit
     else Consequence.securityPermissionDenied("Directory-list result belongs to another participant")
-  private def _response(identity: String, revision: String, payload: Payload): OperationResponse =
-    NativeWorkflowOperationOutput.response(V.RepositoryDirectoryBatchResult(identity,
+  private def _work_reference(value: V.RepositorySyncAdvanceResult, child: Option[InstanceRecord]): Option[Work] =
+    value.submitOperation.flatMap { operation =>
+      value.issuedWorkContext.map(context => Work(operation, context.continuationId, context.expectedRevision))
+        .orElse(Option.when(value.kind == "Human")(child.flatMap(_.suspension).map(boundary =>
+          Work(operation, boundary.continuationIdentity.value, boundary.expectedRevision.value.toString))).flatten)
+    }
+
+  /** Retain only the actual issued identity/revision. Sources and candidate
+    * bodies stay with their existing native issued-work owner, including when
+    * an older aggregate revision is read after the child has progressed.
+    */
+  private def _work_c(storage: WorkflowComponentStorage, core: ActionCall.Core, member: Member,
+    reference: Work): Consequence[V.RepositorySyncAdvanceResult] = for {
+    context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(member.sessionId))
+    call = scopedCore(core.copy(executionContext = context), member.workspace)
+    value <- {
+      def load[A](operation: StateMachineOperationIdentity, codec: WorkflowResultJsonV1.PayloadCodec[A],
+        render: WorkflowProtocolV1.WorkflowInteraction[A, Nothing] => Consequence[V.RepositorySyncAdvanceResult]):
+          Consequence[V.RepositorySyncAdvanceResult] = for {
+        issued <- storage.bindIssuedC(operation, codec)
+        work <- issued.loadC(org.goldenport.cncf.workflow.ContinuationIdentity(reference.continuationId))(using context)
+          .flatMap(_.map(Consequence.success).getOrElse(_invalid("selected native issued work is unavailable")))
+        _ <- work.current match {
+          case order: WorkflowProtocolV1.WorkflowContinuation.WorkOrder[?] if
+              work.handle.instanceIdentity.value == member.sessionId &&
+              order.request.expectedRevision.value == reference.expectedRevision &&
+              order.request.continuationId.value == reference.continuationId => Consequence.unit
+          case _ => _invalid("selected work crosses its native child Session, identity or revision")
+        }
+        value <- render(work)
+      } yield value
+      reference.operation match {
+        case "submitRepositoryPurposeResult" => load(RepositorySyncPurposeContinuation.completionOperation,
+          RepositorySyncPurpose.inputCodec, NativeWorkflowOperationOutput.repositoryPurposeRequestC)
+        case "submitRepositorySyncWorkResult" => load(RepositorySyncNativeConflictContinuation.completionOperation,
+          RepositorySyncConflictSemantic.inputCodec, NativeWorkflowOperationOutput.repositoryConflictRequestC)
+        case "submitNativeMergeReview" => load(RepositorySyncNativeMergeReviewContinuation.completionOperation,
+          RepositorySyncNativeMergeReview.inputCodec, work => NativeWorkflowOperationOutput.repositoryReviewRequestC(work, call))
+        case "submitNativeMergeRepair" => load(RepositorySyncNativeMergeRepairContinuation.completionOperation,
+          RepositorySyncNativeMergeRepair.inputCodec, NativeWorkflowOperationOutput.repositoryRepairRequestC)
+        case "submitRepositoryConflictDecision" => for {
+          questions <- storage.bindDecisionC(RepositorySyncHumanConflict.completionOperation, RepositorySyncHumanConflict.inputCodec)
+          question <- questions.loadC(org.goldenport.cncf.workflow.ContinuationIdentity(reference.continuationId))(using context)
+            .flatMap(_.map(Consequence.success).getOrElse(_invalid("selected native Human question is unavailable")))
+          _ <- question.current match {
+            case decision: WorkflowProtocolV1.WorkflowContinuation.Decision[?] if
+                question.handle.instanceIdentity.value == member.sessionId &&
+                decision.request.expectedRevision.value == reference.expectedRevision &&
+                decision.request.continuationId.value == reference.continuationId => Consequence.unit
+            case _ => _invalid("selected Human question crosses its native child Session, identity or revision")
+          }
+          value <- NativeWorkflowOperationOutput.repositoryHumanC(question, call)
+        } yield value
+        case _ => _invalid("selected work has no supported native repository owner")
+      }
+    }
+  } yield value
+
+  private def _response_c(identity: String, revision: String, payload: Payload,
+    storage: WorkflowComponentStorage, core: ActionCall.Core): Consequence[OperationResponse] = for {
+    summaries <- payload.results.foldLeft(Consequence.success(Vector.empty[V.RepositoryDirectorySummary])) { (prior, result) => for {
+      values <- prior
+      member <- payload.members.find(_.sessionId == result.sessionId).map(Consequence.success)
+        .getOrElse(_invalid("result has no captured repository member"))
+      work <- result.work.fold(Consequence.success(Option.empty[V.RepositorySyncAdvanceResult]))(reference =>
+        _work_c(storage, core, member, reference).map(Some(_)))
+    } yield values :+ V.RepositoryDirectorySummary(result.repositoryIdentity, result.workspace,
+      result.sessionId, result.kind, result.outcome, result.condition, result.revision, result.tip, result.tree, result.diagnostic, work) }
+  } yield NativeWorkflowOperationOutput.response(V.RepositoryDirectoryBatchResult(identity,
       if (payload.stage == "Attempting") "Indeterminate" else payload.stage,
       V.RepositoryDirectoryResultReference("RepositorySyncWorkflow", identity,
         _reference(identity, revision).identity, revision, readOperation),
-      payload.results.map(result => V.RepositoryDirectorySummary(result.repositoryIdentity, result.workspace,
-        result.sessionId, result.kind, result.outcome, result.condition, result.revision, result.tip, result.tree, result.diagnostic)),
+      summaries,
       payload.members.drop(payload.results.size).filterNot(member => payload.attempting.contains(member.sessionId))
         .map(_.repositoryIdentity), payload.attempting))
   private def _one_c(values: Vector[Json], reason: String): Consequence[Json] =

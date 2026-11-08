@@ -255,3 +255,19 @@ LabelledTests runner currently supports in-process execution only, so fork=true
 now fails explicitly before framework dispatch, with a controlled real-adapter
 failure specification. No alternate fork engine or production certificate is
 introduced. All these cases remain authored and unexecuted in this assignment.
+
+### B3 dirty-purpose connection authored — 2026-11-08
+
+The directory entry now connects genuine native purpose/conflict/review/repair
+handbacks with per-repository attribution, exact issued owner references and
+changed-frontier-only continuation. It reuses an exact recorded Task candidate
+partition, orders declared dependencies mechanically, scopes configured purpose
+sources/slots by repository when supplied, and routes native purpose/conflict
+File/Git work through the resolved checkout workspace. The existing content-aware
+owner retains excluded remainders and completed commits before synchronization.
+The post-purpose conflict route uses the existing bounded conflict owner.
+
+The new recorded-purpose and public directory-purpose specifications are authored
+only. The semantic worker ran no validation, independent review, acceptance,
+commit, publication or installed qualification. All P611 acceptance checkboxes
+remain pending; B4/B5 retained-reference/CLI work and broad recovery remain open.

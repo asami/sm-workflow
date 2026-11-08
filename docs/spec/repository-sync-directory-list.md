@@ -300,3 +300,57 @@ save an English Git-tracked summary of actual tested routes, source/installed
 revisions, selected/reused checks, semantic-call counts and limitations. Disposable
 Evidence links supplement rather than replace this record. This plan does not
 execute Git operations, switch a runtime, or authorize completion claims.
+
+## B3 native dirty-purpose connection — source authored 2026-11-08
+
+The directory result's optional per-repository `work` is the actual existing
+native purpose, conflict, review, repair or Human request, including its original
+child Session and completion context. All currently known independent questions
+are returned in input order. The aggregate retains only the issued continuation
+identity, expected revision and owning completion operation; its native issued
+owner retains the input. Exact aggregate rereads resolve that same work revision,
+including after the child progresses. Missing native work is an explicit failure.
+This introduces no second semantic result or source archive.
+
+Submit an answer through its original paired native completion. Reinvoke the
+ordinary directory entry with the aggregate Session to continue. The runtime
+calls Advance only for an outstanding child whose native revision has changed;
+it never restarts a child. Completed, unchanged and indeterminate attempts are
+retained. The existing owner decides whether checks, a purpose commit or later
+integration may execute. An interrupted aggregate attempt remains indeterminate;
+B4 owns its broader public recovery and response-reference qualification.
+
+Recorded native Task purposes can classify a complete known staged partition
+without another AI call when the captured candidate HEAD, index tree and literal
+selected paths exactly match the current inventory, each path has one owner,
+and all declared dependencies name selected Tasks. Task dependency order takes
+precedence over source order; independent groups retain source order. This is
+intent reuse only: the ordinary native purpose owner still applies its existing
+validation, applicable evidence reuse, assessment and conditional review before
+committing. Broad ownership alone, a changed candidate, partial staging, unknown
+paths, overlapping owners, cyclic/missing dependencies and live commit intents
+retain semantic handling. Step/Finding/Journal sources remain available as
+context where they do not establish an exact deterministic candidate partition.
+
+The existing dirty-purpose policy may qualify each source and fixed candidate
+slot with optional `repositoryIdentity`. Qualified sources are read only for
+that selected repository and slots advance in that repository's order. Absent
+qualification preserves the existing single-repository policy. All slots remain
+explicitly configured and globally distinct; this does not allocate workspaces
+or grant capabilities. Existing finite policy limits remain unchanged.
+
+Typed purpose Git effects and original-worktree File reads, semantic conflict
+writes and purpose repair/preparation observations honor the resolved native
+workspace. A real conflict reached after purpose commits goes to the existing
+bounded native conflict owner. Excluded staged/unstaged/untracked content remains
+in the original checkout; a remainder preventing clean integration returns Wait
+with earlier purpose commits preserved. No stash, reset or blanket stage is added.
+
+Authored coverage: `RepositorySyncRecordedPurposeSpec` and
+`RepositorySyncDirectoryListPurposeSpec`, alongside the existing dirty-purpose
+shared-file, inseparable, failure and UNKNOWN specifications. The new public
+cases author combined independent requests, original contexts, non-default
+workspace selection, ordered shared-file commits, excluded remainders and
+same-Session recollection. No compiler, test, lint, independent review, installed
+qualification, acceptance or repository effect was run by this semantic author.
+Compact public handbacks and the full retained-response inventory remain B4/B5.

@@ -10,7 +10,7 @@ import RepositorySyncNativeConflictInput as I
 /** Assigned semantic text effects in the existing repository workspace.
   * CNCF owns acquisition and installation; saved workflow intent owns no replay.
   * @since   Oct. 15, 2026
-  * @version Nov.  3, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncFileEffect {
@@ -41,7 +41,7 @@ private[smworkflow] object RepositorySyncFileEffect {
       state == State.Applied && !file.expected.contains(file.replacement))
     outcome <- if (states.contains(State.Conflict) || replay) Consequence.success(result(request, "conflict"))
       else for {
-        target <- targetC
+        target <- targetC(core)
         conflict <- request.files.filterNot(file => file.expected.contains(file.replacement))
           .foldLeft(Consequence.success(false)) { (prior, file) => prior.flatMap {
             case true => Consequence.success(true)
@@ -60,7 +60,8 @@ private[smworkflow] object RepositorySyncFileEffect {
       } yield result(request, if (conflict) "conflict" else "applied")
   } yield outcome
 
-  private def targetC: Consequence[FileTarget] = WorkspaceId.parseC("sm-workflow-repository").map(FileTarget.apply)
+  private def targetC(core: ActionCall.Core): Consequence[FileTarget] =
+    WorkspaceId.parseC(RepositorySyncDirectoryList.workspace(core, "sm-workflow-repository")).map(FileTarget.apply)
 
   private def validateC(policy: I.Policy, request: Request, capture: Boolean): Consequence[Unit] = for {
     _ <- if (policy != null) policy.validateC else invalid("semantic policy is absent")
@@ -78,7 +79,7 @@ private[smworkflow] object RepositorySyncFileEffect {
     StandardCharsets.UTF_8.newEncoder().canEncode(text)
 
   private def readC(core: ActionCall.Core, policy: I.Policy, request: Request): Consequence[Vector[Option[String]]] = for {
-    target <- targetC
+    target <- targetC(core)
     values <- request.files.foldLeft(Consequence.success(Vector.empty[Option[String]])) { (prior, file) => for {
       values <- prior
       path <- WorkspaceFilePath.parseC(file.path)

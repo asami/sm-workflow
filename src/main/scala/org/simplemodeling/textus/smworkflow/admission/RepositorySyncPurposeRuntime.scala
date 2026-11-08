@@ -15,7 +15,7 @@ import WorkflowManagedProcessExecution as E
   * Missing results are never replayed. Original worktree content is never staged,
   * reset, stashed or used as the candidate's product-check workspace.
   * @since   Oct. 28, 2026
-  * @version Oct. 28, 2026
+  * @version Nov.  8, 2026
   */
 private[smworkflow] object RepositorySyncPurposeRuntime {
   type Finish = (N.Stage, G.Observed) => Consequence[V.RepositorySyncAdvanceResult]
@@ -45,7 +45,15 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
         else store.loadC(current.causation.value.substring(prefix.length)).flatMap(
           _.map(Consequence.success).getOrElse(N.invalid("current purpose receipt is absent")))
       }
-    output <- if (source.payload.stage == "PurposeInventory") for {
+    recorded = Option.when(source.payload.stage == "PurposeInventory" && current.suspension.isEmpty &&
+      (!selected(current) || current == source.record))(
+      RepositorySyncRecordedPurpose.resolve(source.payload.purposes.get.request)).flatten
+    output <- if (recorded.nonEmpty) for {
+      grouped <- store.saveC("purpose-recorded-grouped", "purpose-progress", source.record,
+        source.payload.copy(stage = "PurposeGrouped", purposes = source.payload.purposes.map(progress =>
+          progress.copy(plan = recorded))))
+      output <- _drive_c(store, grouped, policy, authority, review, finish)
+    } yield output else if (source.payload.stage == "PurposeInventory") for {
       definition <- RepositorySyncDefinitionBinding.bindC
       port <- RepositorySyncPurposeContinuation.bindC(store.declaration, definition)
       semantic <- port.advanceC(store.identity, store.core)
@@ -82,7 +90,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
         } yield output
     } yield output
     val group = RepositorySyncPurposeOwnership.effectiveGroup(progress, groups(progress.cursor))
-    val slot = store.declaration.purposePolicy.toVector.flatMap(_.slots).lift(progress.slotCursor)
+    val slot = RepositorySyncPurpose.slots(store.declaration.purposePolicy, store.context.repositoryIdentity).lift(progress.slotCursor)
     source.payload.stage match {
       case "PurposeGrouped" | "PurposeInstalled" => for {
         _ <- RepositorySyncPurposePreparationContinuation.authenticateC(store, source)
@@ -358,7 +366,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
     _ <- if (retained == failed) Consequence.unit else N.invalid("Purpose failure crosses the actual retained progress")
     progress = failed.payload.purposes.get
     candidate <- progress.candidate.map(Consequence.success).getOrElse(N.invalid("Failed Purpose candidate is absent"))
-    slot <- store.declaration.purposePolicy.toVector.flatMap(_.slots).lift(progress.slotCursor).map(Consequence.success)
+    slot <- RepositorySyncPurpose.slots(store.declaration.purposePolicy, store.context.repositoryIdentity).lift(progress.slotCursor).map(Consequence.success)
       .getOrElse(N.invalid("Failed Purpose validation slot is absent"))
     _ <- candidateWorkspaceC(store, slot, candidate)
     actual <- G.inspectC(store.core)
@@ -367,7 +375,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
     snapshot = P.RepairSnapshot(progress, actual, index)
     _ <- if (if (review) validBudgetSnapshot(snapshot) else validRepairSnapshot(snapshot)) Consequence.unit
       else N.invalid("Failed Purpose original HEAD branch index or candidate relationships have drifted")
-    workspace <- WorkspaceId.parseC("sm-workflow-repository")
+    workspace <- WorkspaceId.parseC(RepositorySyncDirectoryList.workspace(store.core, "sm-workflow-repository"))
     expected = (progress.request.files.map(_.path) ++ progress.projectedWorktree.toVector.flatten.map(_.path)).distinct
       .flatMap(path => RepositorySyncPurposeOwnership.expected(progress, path))
     _ <- expected.foldLeft(Consequence.unit) { (prior, file) => for {
@@ -428,7 +436,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
         snapshot <- repairSnapshotC(store, basis.validated)
         _ <- if (scope.purpose.exists(_.snapshot == snapshot)) Consequence.unit else N.invalid("Purpose repair snapshot drifted before retaining the next attempt")
         baselineexpectations <- RepositorySyncPurposeOwnership.baselineRootExpectationsC(progress, scope.purpose.get.baselines)
-        workspace <- WorkspaceId.parseC("sm-workflow-repository")
+        workspace <- WorkspaceId.parseC(RepositorySyncDirectoryList.workspace(store.core, "sm-workflow-repository"))
         _ <- baselineexpectations.foldLeft(Consequence.unit) { (prior, file) => for {
           _ <- prior
           path <- WorkspaceFilePath.parseC(file.path)
@@ -456,7 +464,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
     rows <- E.executePurposeC(store.core, GitOperation.TreeEntries(tree, selection.identity), selection).flatMap(_.valueC)
     _ <- if (rows.map(_.path.value) == group.content.map(_.path)) Consequence.unit
       else N.uncertain("installed Purpose worktree projection crossed its exact selected paths")
-    workspace <- WorkspaceId.parseC("sm-workflow-repository")
+    workspace <- WorkspaceId.parseC(RepositorySyncDirectoryList.workspace(store.core, "sm-workflow-repository"))
     projected <- rows.foldLeft(Consequence.success(Vector.empty[P.Content])) { (prior, row) => for {
       values <- prior
       text <- row.entry match {

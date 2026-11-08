@@ -24,7 +24,7 @@ import RepositorySyncPurpose.given
 /** Read the actual failed Git receipt; a separate Human direction appends a
   * fresh preparation namespace without resubmitting the accepted repair.
   * @since   Nov.  4, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  8, 2026
   */
 private[smworkflow] object RepositorySyncPurposePreparationContinuation {
   val purpose = "repository-sync-purpose-preparation-continuation"
@@ -222,7 +222,7 @@ private[smworkflow] object RepositorySyncPurposePreparationContinuation {
     } yield matched && actual == expected.text }
   }
   private def _root_matches_c(store: N.Store, p: P.Progress): Consequence[Boolean] = for {
-    workspace <- WorkspaceId.parseC("sm-workflow-repository")
+    workspace <- WorkspaceId.parseC(RepositorySyncDirectoryList.workspace(store.core, "sm-workflow-repository"))
     matches <- rootMatchesC(p, name => for {
       path <- WorkspaceFilePath.parseC(name)
       actual <- WorkflowFileExecution.readTextC(store.core, FileTarget(workspace), path)

@@ -962,6 +962,12 @@
               "type": "string",
               "multiplicity": "?",
               "required": false
+            },
+            {
+              "name": "work",
+              "type": "RepositorySyncAdvanceResult",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },

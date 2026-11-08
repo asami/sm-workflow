@@ -275,10 +275,7 @@ private[smworkflow] object RepositorySyncNativeProgression {
       else if (integrated.payload.stage == "PendingMergePrepared")
         "Actual uncommitted merge retained; validation and required review must precede merge commit and final convergence."
       else "Actual local integration retained; selected validation and non-force final convergence are not complete. No semantic merge review is needed."
-    wire <- if (store.pushContinuation.isEmpty && integrated.payload.stage == "MergeConflicted" && fetched.history.exists(
-        _.currentProgression.exists(_.value == "sync.PurposeInstalled")))
-      Consequence.success(NativeWorkflowOperationOutput.repositoryWait(integrated.record.identity.value, detail, integrated.payload.stage))
-      else if (conflicts.nonEmpty && integrated.payload.stage == "MergeConflicted")
+    wire <- if (conflicts.nonEmpty && integrated.payload.stage == "MergeConflicted")
       conflicts.get.advanceC(store.identity, store.core)
       else if (integrated.payload.stage == "PendingMergePrepared")
         pendingMergeC(store.scoped(""), integrated, validationPolicy, review, convergence, store.namespace, repair)
