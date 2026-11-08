@@ -128,6 +128,25 @@ also binds the actual adopted delivery and recollection/artifact references.
 The saved source Direction does not adopt an artifact, grant publication or
 complete semantic work. Real consumer adoption remains a separate action.
 
+The later-Step publication-repair successor uses canonical target v11 and
+capture v12 while retaining the original v10/v11 readers and encodings. Its
+publication cause is the actual retained primary failure before checks, and its
+accepted-source prefix names an actual earlier native capture and closure.
+Neither representation relabels a delivered publication source as a later
+synchronization tip. The exact independently declared binding must still match
+the producer's clean published HEAD/tree, owner, target workspace and safe
+program. UNKNOWN or unclassified publication is never source qualification.
+Old runtimes cannot consume these new versions.
+
+Source adoption retains the original primary repair reservation and failed
+publication; it does not transfer publication permission. Fresh primary
+publication and any exact Human publication decision remain with their existing
+normal owners at the newly captured candidate. Current check consumption is
+selected through authenticated native source succession while old accepted
+captures and recorded bindings remain literal. The independent two-stage tiny
+fixture is `NativeGoalLaterSourcePublicationRepairCliSpec`, with its finite
+stage and locator contract documented in the dependency source specification.
+
 ## Executable evidence
 
 `GoalPhasePublishedDependencySourceAdoptionSpec` supplies clearly labeled pure

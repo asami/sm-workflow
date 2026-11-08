@@ -116,6 +116,119 @@ private[admission] object CanonicalDependencySourceSpecificationFixture {
     target.step, controller.generation + 1, "34", D.primaryBase, direction, guard, Vector.empty, guard)
 }
 
+/** Pure fixtures describe classified native-shaped failures, never authority. */
+private[admission] object LaterSourcePublicationSpecificationFixture {
+  import CanonicalDependencySourceSpecificationFixture as F
+  import PrimaryPublicationRepairSpecificationFixture as P
+  import GoalPhasePrerequisitePrimaryRepair as A
+  import GoalPhasePrerequisitePublicationRecovery as B
+  val plan = F.plan.copy(steps = F.plan.steps :+ F.plan.steps.last.copy(identity = "step-2",
+    purpose = "Consume the later dependency API", checks = Vector("primary-later")))
+  val initial = take(O.startC(plan, F.target.primaryBase, Some(GoalPhaseRuntimeRepairControl.version)))
+  val prefiximplemented = take(initial.acceptC(O.SemanticCompleted(initial.next.asInstanceOf[O.Semantic].key,
+    "SPECIFICATION-ONLY first accepted result")))
+  val prefixinspected = take(prefiximplemented.acceptC(O.CandidateObserved(F.prefixcandidate)))
+  val prefixchecked = take(prefixinspected.acceptC(O.ChecksObserved(F.prefixcandidate, Vector("primary-test"), "prefix-checks", true)))
+  val prefixreviewed = take(prefixchecked.acceptC(O.ReviewAdmitted(prefixchecked.next.asInstanceOf[O.Semantic].key,
+    F.prefixcandidate, "prefix-checks", "prefix-independent-review", O.ReviewOutcome.Accept)))
+  val prefixintent = take(prefixreviewed.acceptC(O.ClosureIntentSaved(F.prefixcandidate, "prefix-closure")))
+  val prefixclosed = take(prefixintent.acceptC(O.StepCommitObserved("prefix-closure",
+    O.Commit("8" * 40, F.target.primaryBase.head, F.prefixcandidate.tree))))
+  val oldimplemented = take(prefixclosed.acceptC(O.SemanticCompleted(prefixclosed.next.asInstanceOf[O.Semantic].key,
+    "SPECIFICATION-ONLY earlier implementation")))
+  val oldinspected = take(oldimplemented.acceptC(O.CandidateObserved(F.inspected.candidate.get)))
+  val oldcontroller = take(oldinspected.acceptC(O.RepairableChecksObserved(oldinspected.candidate.get,
+    Vector("primary-test"), "specification-prior-failure", F.controller.repairDirective.get)))
+  val olddirection = F.direction.copy(target = F.target.copy(plan = plan, generation = oldcontroller.generation,
+    completed = oldcontroller.completed, repairProgress = GoalPhaseRepairProgress.snapshot(oldcontroller),
+    canonicalOrigin = Some(F.origin.copy(controller = GoalPhaseCandidateRecovery.controllerSnapshot(oldcontroller)))))
+  val oldcapture = F.capture.copy(direction = olddirection, generation = oldcontroller.generation + 1)
+  val selected = take(oldcontroller.adoptCanonicalDependencySourceC(olddirection.directive))
+  val implemented = take(selected.acceptC(O.SemanticCompleted(selected.next.asInstanceOf[O.Semantic].key,
+    "SPECIFICATION-ONLY earlier source implementation")))
+  val inspected = take(implemented.acceptC(O.CandidateObserved(O.Snapshot(selected.tipSnapshot.head, "6" * 40))))
+  val checked = take(inspected.acceptC(O.ChecksObserved(inspected.candidate.get, Vector("primary-test"), "old-source-checks", true)))
+  val reviewed = take(checked.acceptC(O.ReviewAdmitted(checked.next.asInstanceOf[O.Semantic].key,
+    checked.candidate.get, "old-source-checks", "independent-old-source-review", O.ReviewOutcome.Accept)))
+  val intent = take(reviewed.acceptC(O.ClosureIntentSaved(reviewed.candidate.get, "old-source-closure")))
+  val later = take(intent.acceptC(O.StepCommitObserved("old-source-closure",
+    O.Commit("1" * 40, intent.candidate.get.head, intent.candidate.get.tree))))
+  val validation = take(take(later.acceptC(O.SemanticCompleted(later.next.asInstanceOf[O.Semantic].key,
+    "SPECIFICATION-ONLY accepted later implementation"))).acceptC(O.CandidateObserved(O.Snapshot(later.tipSnapshot.head, "2" * 40))))
+  val failedcandidate = GoalPhaseNativeCandidate.Payload("60", "step-2", Vector("screen.scala"), Vector("screen.scala"),
+    validation.candidate, Vector("screen.scala"), Some("diff --git a/screen.scala b/screen.scala\n+missingApi\n"))
+  val primary = P.target.copy(component = F.binding.requester.identity, workspace = F.binding.requester.workspace)
+  val processPolicy = {
+    val original = io.circe.parser.parse(F.processPolicy).toOption.get
+    val process = original.hcursor.get[Json]("processPlan").toOption.get
+    val programs = process.hcursor.get[Vector[Json]]("sbtPrograms").toOption.get
+    val laterprogram = programs.head.mapObject(_.add("identity", "specification-later-primary".asJson)
+      .add("capability", "specification-later-primary".asJson).add("target", "specification-later-workspace".asJson))
+    val publisher = Json.obj("identity" -> P.program.asJson, "target" -> primary.workspace.asJson,
+      "operation" -> "publish-local".asJson)
+    val grants = process.hcursor.get[Vector[Json]]("grants").toOption.get.map(_.mapObject(fields =>
+      fields.add("capabilities", (fields("capabilities").get.as[Vector[String]].toOption.get :+
+        "specification-later-primary").asJson)))
+    val workspaces = process.hcursor.get[Vector[Json]]("workspaces").toOption.get :+
+      Json.obj("identity" -> "specification-later-workspace".asJson, "root" -> F.primaryRoot.asJson)
+    val workspacegrants = process.hcursor.get[Vector[Json]]("workspaceGrants").toOption.get :+
+      Json.obj("componentId" -> org.simplemodeling.textus.smworkflow.SmWorkflowComponent.componentId.name.asJson,
+        "workspaceId" -> "specification-later-workspace".asJson, "access" -> "manage".asJson)
+    val validation = original.hcursor.get[GoalPhaseNativeValidation.Policy]("validation").toOption.get
+    P.sorted(original.mapObject(_.add("validation", validation.copy(checks = validation.checks :+
+      GoalPhaseNativeValidation.Check("primary-later", 2, WorkflowSbtValidation.Kind.Test)).asJson)
+      .add("processPlan", process.mapObject(_.add("sbtPrograms", (programs ++ Vector(laterprogram, publisher)).asJson)
+        .add("grants", grants.asJson).add("workspaces", workspaces.asJson).add("workspaceGrants", workspacegrants.asJson)))))
+  }
+  val failed = {
+    val input = LocalPublicationRuntime.prerequisiteInput("same-session", failedcandidate, primary)
+    LocalPublication.Result("failed", "Specification terminated real Compile classification",
+      LocalPublication.Request(input.copy(requestIdentity = input.requestIdentity + ":prerequisite:0"), primary,
+        LocalPublication.Source(validation.candidate.get.head, validation.candidate.get.tree, Vector.empty),
+        "participant", "SPECIFICATION-ONLY managed failure", None, Vector.empty), Some(P.process()))
+  }
+  val failure = A.Failure(F.origin.componentInstance, "participant", "same-session", "62", P.sorted(B.controller(validation)),
+    plan, validation.base, validation.generation, validation.completed, GoalPhaseRepairProgress.snapshot(validation),
+    "62", failedcandidate, ContextReference("later-implementation", "1"), Vector(primary),
+    P.publicationPolicy(Vector(primary)), processPolicy, failed, None, Vector.empty, Vector.empty)
+  val repair = take(A.stateC(validation, failure))
+  val fact = A.Fact(A.schema, failure, A.directive(failure), P.sorted(B.controller(repair)))
+  val saved = A.Saved(P.nativeRecord(63), fact)
+  val historical = C.HistoricalPublicationFailure(saved.reference, fact)
+  val prefix = C.AcceptedSourcePrefix(ContextReference("same-session", oldcapture.sourceRevision),
+    ContextReference("same-session", "50"), oldcapture.step, olddirection.directive, None)
+  val binding = F.binding.copy(revision = 4, step = "step-2", base = O.Snapshot("3" * 40, "4" * 40))
+  val consumption = F.consumption.copy(programs = F.consumption.programs.updated(0,
+    F.consumption.programs.head.copy(check = "primary-later", program = "specification-later-primary", workspace = "specification-later-workspace")))
+  val publication = {
+    val old = F.publication.result.publication
+    F.publication.copy(result = F.publication.result.copy(publication = old.copy(request = old.request.copy(
+      source = LocalPublication.Source(binding.base.head, binding.base.tree, Vector.empty)))))
+  }
+  val proposal = F.proposal.copy(source = F.source.copy(binding = ContextReference(binding.identity, "4"), consumption = consumption),
+    publication = publication)
+  val guard = F.guard.copy(head = binding.base.head, committedTree = binding.base.tree, indexTree = binding.base.tree)
+  val origin = F.origin.copy(controller = GoalPhaseCandidateRecovery.controllerSnapshot(repair), originalDirection = Some(olddirection),
+    selection = proposal, processPolicy = processPolicy, baseLineage = Vector(
+      O.HistoryCommit(binding.base.head, binding.base.tree, Vector(F.binding.base.head)),
+      O.HistoryCommit(F.binding.base.head, F.binding.base.tree, Vector.empty)),
+    historicalPublicationFailure = Some(historical), acceptedSourcePrefix = Some(prefix))
+  val target = F.target.copy(schemaVersion = R.canonicalSuccessorSchema, sourceRevision = "70", pendingRevision = "70",
+    plan = plan, step = "step-2", generation = repair.generation, completed = repair.completed,
+    repairProgress = GoalPhaseRepairProgress.snapshot(repair), requestingResult = failure.requestingResult,
+    proposal = proposal.source, binding = binding, preStageGuard = guard, canonicalOrigin = Some(origin))
+  val direction = R.Direction(target, ContextReference("later-source-human", "1"), "participant",
+    "SPECIFICATION-ONLY exact later source", Some(C.choice))
+  val successor = take(repair.adoptCanonicalDependencySourceC(direction.directive))
+  val capture = R.Capture(R.canonicalSuccessorCaptureSchema, "same-session", ContextReference(plan.identity, plan.revision),
+    "step-2", successor.generation, "74", repair.base, direction, guard, Vector.empty, guard)
+  val fresh = failedcandidate.copy(sourceRevision = "74", candidate = None, changedPaths = Vector.empty, diff = None,
+    stagedPaths = Vector.empty, dependencySourceDirection = Some(direction), primaryPublicationRepair = Some(saved.reuse))
+  val candidate = fresh.copy(candidate = Some(O.Snapshot(validation.candidate.get.head, "5" * 40)),
+    stagedPaths = fresh.selectedPaths, changedPaths = fresh.selectedPaths, diff = Some("SPECIFICATION-ONLY corrected source"),
+    dependencySourceGuard = Some(guard), dependencySourceCapture = Some(capture))
+}
+
 /** Canonical source contracts use specification-only observations and authority.
   * @since   Nov.  8, 2026
   * @version Nov.  8, 2026
@@ -124,6 +237,129 @@ private[admission] object CanonicalDependencySourceSpecificationFixture {
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseCanonicalDependencySourceSuccessionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import CanonicalDependencySourceSpecificationFixture as F
+  "LSR-01 Later source and genuine publication failure" should {
+    import LaterSourcePublicationSpecificationFixture as L
+    import GoalPhasePrerequisitePrimaryRepair as A
+    "resolve current same-core routes without reinterpreting retained predecessor registrations as future extensions" in {
+      Given("the actual old and current fixture captures with one source core and different fixed current-Step routes")
+      val old = R.consumptionOf(L.oldcapture)
+      val current = R.consumptionOf(L.capture)
+      val declarations: Vector[R.ConsumptionRecord] = Vector(old, current)
+      val basis = take(GoalPhaseCanonicalCheckConsumption.basisC(L.direction))
+      val selected = Vector(GoalPhaseNativeValidation.Check("primary-later", 2, WorkflowSbtValidation.Kind.Test))
+      When("the source owner projects only proven literal ancestors before the unchanged canonical policy and check resolver")
+      val view = take(C.currentRegistrationsC(L.direction, declarations))
+      val resolved = GoalPhaseCanonicalCheckConsumption.resolveC(Some(current), Some(basis), L.plan, selected,
+        sameStepCapture = true, retained = None, declarations = view, phasePolicy = None)
+      val policy = GoalPhaseCanonicalCheckConsumption.policyC(basis, L.origin.processPolicy, L.origin.processPolicy, view, None)
+      val unprojected = GoalPhaseCanonicalCheckConsumption.resolveC(Some(current), Some(basis), L.plan, selected,
+        sameStepCapture = true, retained = None, declarations = declarations, phasePolicy = None)
+      Then("the current route is selected while the original declaration vector and accepted source remain literal")
+      view shouldBe Vector(current)
+      take(resolved) shouldBe Some(current)
+      policy.isSuccess shouldBe true
+      unprojected.isSuccess shouldBe false
+      declarations shouldBe Vector(old, current)
+      R.consumptionOf(L.oldcapture) shouldBe old
+      L.direction.target.canonicalOrigin.get.originalDirection shouldBe Some(L.olddirection)
+    }
+    "preserve unrelated ambiguity and reject duplicate declarations or crossed claimed source lineage" in {
+      Given("the same-core successor, an unrelated route, and exact predecessor declarations retained as history")
+      val old = R.consumptionOf(L.oldcapture)
+      val current = L.consumption
+      val declarations: Vector[R.ConsumptionRecord] = Vector(old, current)
+      val unrelated = current.copy(programs = current.programs.updated(0, current.programs.head.copy(program = "unrelated-fixed-route")))
+      val basis = take(GoalPhaseCanonicalCheckConsumption.basisC(L.direction))
+      val selected = Vector(GoalPhaseNativeValidation.Check("primary-later", 2, WorkflowSbtValidation.Kind.Test))
+      val crossed = L.direction.copy(target = L.target.copy(canonicalOrigin = Some(L.origin.copy(originalDirection = Some(
+        L.olddirection.copy(target = L.olddirection.target.copy(sessionId = "foreign-session")))))))
+      When("projection receives unrelated same-core declarations, hidden duplicate ancestors, crossed lineage or a legacy direction")
+      val view = take(C.currentRegistrationsC(L.direction, declarations :+ unrelated))
+      val refused = GoalPhaseCanonicalCheckConsumption.resolveC(Some(current), Some(basis), L.plan, selected,
+        sameStepCapture = true, retained = None, declarations = view, phasePolicy = None)
+      val legacy = C.currentRegistrationsC(L.olddirection, declarations)
+      val legacybasis = take(GoalPhaseCanonicalCheckConsumption.basisC(L.olddirection))
+      Then("only exact historical records are filtered; unrelated ambiguity and the old resolver contract still refuse")
+      view shouldBe Vector(current, unrelated)
+      refused.isSuccess shouldBe false
+      GoalPhaseCanonicalCheckConsumption.policyC(basis, L.origin.processPolicy, L.origin.processPolicy, view, None).isSuccess shouldBe false
+      C.currentRegistrationsC(L.direction, declarations :+ old).isSuccess shouldBe false
+      C.currentRegistrationsC(L.direction, declarations :+ current).isSuccess shouldBe false
+      C.currentRegistrationsC(L.direction, declarations :+ null).isSuccess shouldBe false
+      C.currentRegistrationsC(crossed, declarations).isSuccess shouldBe false
+      take(legacy) shouldBe declarations
+      GoalPhaseCanonicalCheckConsumption.policyC(legacybasis, L.olddirection.target.canonicalOrigin.get.processPolicy,
+        L.olddirection.target.canonicalOrigin.get.processPolicy, take(legacy), None).isSuccess shouldBe false
+    }
+    "round trip the separate publication cause and accepted earlier Step while preserving legacy bytes" in {
+      Given("a classified pre-check Compile failure after a pure accepted earlier source Step, with no old later-Step source capture")
+      val legacy = F.target.asJson
+      When("the v11 target and v12 capture cross the public Record and strict owner codecs")
+      val publictarget = R.targetC(GoalPhaseNativeMetadata.record(L.target.asJson))
+      val context = C.publicationContext(L.historical)
+      Then("the literal original and accepted prefix remain separate from current source and repair accounting")
+      A.factValid(L.fact) shouldBe true
+      R.directionValid(L.olddirection) shouldBe true
+      R.targetValid(L.target) shouldBe true
+      take(publictarget) shouldBe L.target
+      L.target.asJson.as[R.Target] shouldBe Right(L.target)
+      L.capture.asJson.as[R.Capture] shouldBe Right(L.capture)
+      context.publication shouldBe L.failed
+      context.testsExecuted shouldBe false
+      L.failedcandidate.dependencySourceCapture shouldBe None
+      L.target.canonicalOrigin.get.originalDirection shouldBe Some(L.olddirection)
+      L.target.completed shouldBe L.repair.completed
+      GoalPhaseRepairProgress.snapshot(L.successor) shouldBe GoalPhaseRepairProgress.snapshot(L.repair)
+      legacy.hcursor.downField("canonicalOrigin").downField("historicalPublicationFailure").succeeded shouldBe false
+      legacy.hcursor.downField("canonicalOrigin").downField("acceptedSourcePrefix").succeeded shouldBe false
+      legacy.as[R.Target] shouldBe Right(F.target)
+      F.capture.asJson.as[R.Capture] shouldBe Right(F.capture)
+    }
+    "reject crossed missing null stale and mixed cause or version fields" in {
+      Given("the exact later-Step publication target and immutable native-shaped reservation")
+      val origins = Vector(L.origin.copy(acceptedSourcePrefix = None),
+        L.origin.copy(acceptedSourcePrefix = Some(L.prefix.copy(closure = ContextReference("foreign", "50")))),
+        L.origin.copy(acceptedSourcePrefix = Some(L.prefix.copy(closure = ContextReference("same-session", "71")))),
+        L.origin.copy(historicalPublicationFailure = Some(L.historical.copy(repair = ContextReference("same-session", "64")))),
+        L.origin.copy(historicalPublicationFailure = Some(L.historical.copy(repair = ContextReference("foreign", "63")))),
+        L.origin.copy(controller = L.origin.controller.copy(ordinaryRepairs = L.origin.controller.ordinaryRepairs + 1)))
+      When("one exact relation, version discriminator, source binding or required field is crossed")
+      val targets = origins.map(o => L.target.copy(canonicalOrigin = Some(o))) ++ Vector(
+        L.target.copy(schemaVersion = R.canonicalSchema),
+        L.target.copy(binding = L.binding.copy(step = L.olddirection.target.step)),
+        L.target.copy(plan = L.plan.copy(identity = "foreign-plan")))
+      val malformed = Vector(L.historical.asJson.mapObject(_.remove("fact")),
+        L.historical.asJson.mapObject(_.add("fact", Json.Null)),
+        L.historical.asJson.mapObject(_.add("authority", Json.True)))
+      Then("none decodes into a usable direction or fabricated check failure")
+      targets.foreach(value => R.targetValid(value) shouldBe false)
+      malformed.foreach(_.as[C.HistoricalPublicationFailure].isLeft shouldBe true)
+      L.target.asJson.mapObject(_.add("canonicalOrigin", L.origin.asJson.mapObject(
+        _.add("historicalPublicationFailure", Json.Null)))).as[R.Target].isLeft shouldBe true
+      L.capture.copy(schemaVersion = R.canonicalCaptureSchema).asJson.as[R.Capture].isLeft shouldBe true
+      F.capture.copy(schemaVersion = R.canonicalSuccessorCaptureSchema).asJson.as[R.Capture].isLeft shouldBe true
+    }
+    "select only the effective authenticated structural source sequence for Step and Phase execution" in {
+      Given("old accepted source and a later source with different current-Step fixed routes; tuples carry no native authority")
+      val accepted = Vector(L.oldcapture -> Some("50"))
+      val complete = accepted :+ (L.capture -> Some("80"))
+      When("the structural selector proves each consumption change against the exact prior source and closure")
+      val step = GoalPhaseNativeValidation.sourceConsumptionSequenceC(accepted :+ (L.capture -> None))
+      val phase = GoalPhaseNativeValidation.sourceConsumptionSequenceC(complete)
+      val legacy = GoalPhaseNativeValidation.sourceConsumptionSequenceC(accepted)
+      val unowned = GoalPhaseNativeValidation.admittedSourceConsumptionC(Some(L.capture), None)
+      Then("current execution uses the new routes while original captures and single-base behavior remain literal")
+      take(step) shouldBe Some(L.consumption)
+      take(phase) shouldBe Some(L.consumption)
+      take(legacy) shouldBe Some(R.consumptionOf(L.oldcapture))
+      take(unowned) shouldBe Some(L.consumption)
+      Vector(accepted :+ (L.capture.copy(direction = F.direction) -> None),
+        Vector(L.oldcapture -> Some("51"), L.capture -> None),
+        Vector(L.oldcapture -> None, L.capture -> None),
+        Vector(L.capture -> Some("80"), L.oldcapture -> None)).foreach(entries =>
+        GoalPhaseNativeValidation.sourceConsumptionSequenceC(entries).isSuccess shouldBe false)
+    }
+  }
   "E1 Canonical committed source and current Plan lineage" must afterWord(
     "in spec:goal-phase-dependency-source-revision, example:E1, rules:R10,R11,R12, phase:6.11") {
     "round trip distinct closed proposal target direction and capture without management file identities" in {

@@ -25,7 +25,8 @@ import GoalPhaseDependencyValidation.given
   * An intent without its actual recorded result is retained, never replayed.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  6, 2026
+  *  version Nov.  6, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeCandidate {
@@ -123,7 +124,9 @@ private[smworkflow] object GoalPhaseNativeCandidate {
       case None => GoalPhaseDependencySourceRevision.candidateValid(value)
       case Some(reuse) => GoalPhasePrerequisitePrimaryRepair.reuseValid(reuse) &&
         value.sourceRevision.toLongOption.exists(_ > reuse.repair.revision.toLong) &&
-        (value.dependencySourceScope.exists(_.consumptionDirection.exists(_.target.sourceSuccession.nonEmpty)) &&
+        (value.dependencySourceDirection.exists(_.target.canonicalOrigin.exists(_.historicalPublicationFailure.exists(h =>
+          GoalPhasePrerequisitePrimaryRepair.canonicalSourceSuccessorValid(h.fact.failure.candidate, value)))) ||
+          value.dependencySourceScope.exists(_.consumptionDirection.exists(_.target.sourceSuccession.nonEmpty)) &&
           GoalPhaseDependencySourceRevision.candidateValid(value) ||
           GoalPhaseDependencySourceRevision.candidateValid(_historical_source_view(value, reuse)))
     })
@@ -471,6 +474,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
           store.dependencySourceScope == previous.dependencySourceScope) Consequence.success(true)
       else if (previous.dependencySourceCapture.exists(GoalPhasePrerequisitePrimaryRepair.sourceSuccessorValid(_,
           store.dependencySourceDirection, store.dependencySourceScope))) Consequence.success(false)
+      else if (GoalPhasePrerequisitePrimaryRepair.canonicalSelectionValid(saved, store.dependencySourceDirection,
+          store.dependencySourceScope, store.controller)) Consequence.success(false)
       else F.invalid("Primary repair source selection has no authenticated historical or successor relation")
     }
     _ <- if (historical) store.primaryRepair.get.fact.failure.candidate.dependencySourceCapture

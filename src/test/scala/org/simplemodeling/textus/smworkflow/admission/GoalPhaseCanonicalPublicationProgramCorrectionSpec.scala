@@ -134,6 +134,52 @@ private[admission] object CanonicalPublicationProgramCorrectionSpecificationFixt
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseCanonicalPublicationProgramCorrectionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  "LSR-01 Versioned canonical publisher consumers" should {
+    "derive the same exact publisher correction from a v12 later-Step capture" in {
+      Given("a later-Step v11 source direction with genuine-shaped publication provenance and an earlier accepted source")
+      import LaterSourcePublicationSpecificationFixture as L
+      val root = "/specification/later-canonical-source"
+      val binding = L.binding.copy(root = root)
+      val consumption = L.consumption.copy(sourceRoot = root)
+      val publication = L.publication.copy(publisherProcessPolicy = P.sorted(Json.obj("processPlan" -> Json.obj(
+        "sbtPrograms" -> Json.arr(Json.obj("target" -> C.publisherWorkspace.asJson,
+          "operation" -> "publish-local".asJson, "identity" -> "specification-dependency-publication".asJson)),
+        "workspaces" -> Json.arr(Json.obj("identity" -> C.publisherWorkspace.asJson, "root" -> root.asJson))))))
+      val policy = io.circe.parser.parse(L.processPolicy).toOption.get
+      val plan = policy.hcursor.get[Json]("processPlan").toOption.get
+      val programs = plan.hcursor.get[Vector[Json]]("sbtPrograms").toOption.get.map { program =>
+        if (program.hcursor.get[String]("identity").contains("specification-later-primary"))
+          program.mapObject(_.add("environment", Json.obj("SELECTED_SOURCE" -> root.asJson)))
+        else if (program.hcursor.get[String]("identity").contains(P.program))
+          program.mapObject(_.add("environment", Json.obj("SELECTED_SOURCE" -> L.binding.root.asJson)))
+        else program
+      }
+      val workspaces = plan.hcursor.get[Vector[Json]]("workspaces").toOption.get.map { workspace =>
+        if (workspace.hcursor.get[String]("identity").contains(binding.dependency.workspace))
+          workspace.mapObject(_.add("root", root.asJson)) else workspace
+      }
+      val process = P.sorted(policy.mapObject(_.add("processPlan", plan.mapObject(
+        _.add("sbtPrograms", programs.asJson).add("workspaces", workspaces.asJson)))))
+      val proposal = L.proposal.copy(source = L.proposal.source.copy(consumption = consumption), publication = publication)
+      val origin = L.origin.copy(selection = proposal, processPolicy = process)
+      val target = L.target.copy(binding = binding, proposal = proposal.source, preStageGuard = L.guard.copy(root = root),
+        canonicalOrigin = Some(origin))
+      val direction = L.direction.copy(target = target)
+      val capture = L.capture.copy(direction = direction, preStageGuard = target.preStageGuard, postStageGuard = target.preStageGuard)
+      val candidate = L.candidate.copy(dependencySourceDirection = Some(direction), dependencySourceGuard = Some(target.preStageGuard),
+        dependencySourceCapture = Some(capture))
+      When("the publisher correction consumes the new canonical capture selector")
+      val correction = K.derive(candidate, L.primary)
+      Then("only the exact old-root publisher selector changes and crossed capture versions still refuse")
+      R.captureValid(capture) shouldBe true
+      correction should not be empty
+      correction.get.previousRoot shouldBe L.binding.root
+      correction.get.sourceRoot shouldBe root
+      K.matches(correction.get, candidate, L.primary) shouldBe true
+      K.derive(candidate.copy(dependencySourceCapture = Some(capture.copy(schemaVersion = R.canonicalCaptureSchema))), L.primary) shouldBe None
+      K.matches(correction.get.copy(sourceCapture = ContextReference("foreign", capture.sourceRevision)), candidate, L.primary) shouldBe false
+    }
+  }
   import CanonicalPublicationProgramCorrectionSpecificationFixture as S
   private def _derive(candidate: GoalPhaseNativeCandidate.Payload = S.candidate): Option[K.Correction] = K.derive(candidate, S.primary)
   private def _policy(candidate: GoalPhaseNativeCandidate.Payload, policy: Json): GoalPhaseNativeCandidate.Payload = {

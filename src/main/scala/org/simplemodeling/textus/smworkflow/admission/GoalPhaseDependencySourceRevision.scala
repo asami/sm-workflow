@@ -34,7 +34,8 @@ import WorkflowManagedProcessExecution as E
   * Native capture/check/review/closure owners qualify the newly selected bytes.
   * @since   Oct. 26, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  8, 2026
+  *  version Nov.  8, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseDependencySourceRevision {
@@ -65,6 +66,12 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
   val publishedCaptureSchema = "sm-workflow.goal-phase-dependency-source-capture.v10"
   val canonicalSchema = "sm-workflow.goal-phase-dependency-source-revision.v10"
   val canonicalCaptureSchema = "sm-workflow.goal-phase-dependency-source-capture.v11"
+  val canonicalSuccessorSchema = "sm-workflow.goal-phase-dependency-source-revision.v11"
+  val canonicalSuccessorCaptureSchema = "sm-workflow.goal-phase-dependency-source-capture.v12"
+  def isCanonicalSchema(value: String): Boolean = Set(canonicalSchema, canonicalSuccessorSchema)(value)
+  def isCanonicalCaptureSchema(value: String): Boolean = Set(canonicalCaptureSchema, canonicalSuccessorCaptureSchema)(value)
+  def canonicalCaptureSchemaFor(direction: Direction): String =
+    if (direction.target.schemaVersion == canonicalSuccessorSchema) canonicalSuccessorCaptureSchema else canonicalCaptureSchema
   val initialChoice = "AdoptInitialDependencySourceRevisionAcceptingUnknownEffects"
   val initialGuardUnavailable = "not-recorded-before-first-dependency-capture"
   val combinedPrimaryChoice = "AdoptDependencySourceRevisionAndContinuePublicationWithUnknownEffects"
@@ -434,7 +441,7 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
     else if (direction.nonEmpty) runtimeScopeSchema else scopeSchema
 
   private def _capture_schema(direction: Direction, scope: Option[ScopeSuccessor]): String =
-    if (direction != null && direction.target != null && direction.target.schemaVersion == canonicalSchema) canonicalCaptureSchema
+    if (direction != null && direction.target != null && isCanonicalSchema(direction.target.schemaVersion)) canonicalCaptureSchemaFor(direction)
     else if (direction != null && direction.target != null && direction.target.schemaVersion == publishedSchema) publishedCaptureSchema
     else if (direction != null && direction.target != null && direction.target.schemaVersion == initialSchema) initialCaptureSchema
     else if (direction != null && direction.target != null && direction.target.schemaVersion == primarySchema) primaryCaptureSchema
@@ -1305,7 +1312,7 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
   }
 
   def targetValid(value: Target): Boolean = value != null && value.canonicalOrigin != null &&
-    (if (value.schemaVersion == canonicalSchema) GoalPhaseCanonicalDependencySourceSuccession.targetValid(value)
+    (if (isCanonicalSchema(value.schemaVersion)) GoalPhaseCanonicalDependencySourceSuccession.targetValid(value)
     else value.canonicalOrigin.isEmpty && value.preStageGuard != null && value.preStageGuard.committedInventory != null && value.preStageGuard.committedInventory.isEmpty &&
       value.predecessorGuard != null && value.predecessorGuard.forall(g => g != null && g.committedInventory != null && g.committedInventory.isEmpty) &&
       _legacy_target_valid(value))
@@ -1460,7 +1467,7 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
           value.target.canonicalOrigin.nonEmpty && choicesFor(value.target).filterNot(_ == "Defer").contains(choice))
   def captureValid(value: Capture): Boolean = value != null && value.scope != null && value.planSelection != null &&
     value.schemaVersion == (if (value.direction != null && value.direction.target != null && value.direction.target.canonicalOrigin.nonEmpty)
-      canonicalCaptureSchema else if (value.planSelection.nonEmpty) developmentCaptureSchema else _capture_schema(value.direction, value.scope)) &&
+      canonicalCaptureSchemaFor(value.direction) else if (value.planSelection.nonEmpty) developmentCaptureSchema else _capture_schema(value.direction, value.scope)) &&
     value.scope.forall(scopeValid(value.direction, _)) &&
     directionValid(value.direction) && value.sessionId == value.direction.target.sessionId &&
     value.plan != null && revision(value.sourceRevision) && (value.planSelection match {
@@ -1598,7 +1605,7 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
           } yield result }
         intent <- saveC("dependency-source-observation-intent", staged.record, staged.payload)
         after <- _observe_()
-        capture = Capture(if (direction.target.canonicalOrigin.nonEmpty) canonicalCaptureSchema
+        capture = Capture(if (direction.target.canonicalOrigin.nonEmpty) canonicalCaptureSchemaFor(direction)
           else if (planselection.nonEmpty) developmentCaptureSchema else _capture_schema(direction, scope),
           current.record.identity.value, ContextReference(controller.plan.identity, controller.plan.revision),
           binding.step, controller.generation, current.payload.sourceRevision, controller.base, direction, after,

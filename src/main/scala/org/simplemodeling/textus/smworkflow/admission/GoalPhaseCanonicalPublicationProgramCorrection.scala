@@ -11,7 +11,8 @@ import GoalPhaseNativeCandidate as C
   * Policy and Direction references express causality, not tamper-proof evidence.
   * Native traversal and independent Human admission remain their own owners.
   * @since   Nov.  8, 2026
-  * @version Nov.  8, 2026
+  *  version Nov.  8, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseCanonicalPublicationProgramCorrection {
@@ -67,7 +68,7 @@ private[smworkflow] object GoalPhaseCanonicalPublicationProgramCorrection {
     */
   def derive(candidate: C.Payload, target: LocalPublication.Target): Option[Correction] = for {
     capture <- Option(candidate).flatMap(_.dependencySourceCapture)
-      .filter(c => c.schemaVersion == R.canonicalCaptureSchema && R.captureValid(c))
+      .filter(c => R.isCanonicalCaptureSchema(c.schemaVersion) && R.captureValid(c))
     direction = capture.direction
     origin <- direction.target.canonicalOrigin
     previous <- origin.previousDirection.orElse(origin.originalDirection).filter(R.directionValid)
@@ -124,7 +125,7 @@ private[smworkflow] object GoalPhaseCanonicalPublicationProgramCorrection {
     def _contains_(direction: R.Direction): Boolean = direction.target.canonicalOrigin.exists(origin =>
       Vector(origin.originalDirection, origin.previousDirection).flatten.exists(previous =>
         previous == historical || _contains_(previous)))
-    capture != null && capture.schemaVersion == R.canonicalCaptureSchema && R.captureValid(capture) &&
+    capture != null && R.isCanonicalCaptureSchema(capture.schemaVersion) && R.captureValid(capture) &&
       R.directionValid(historical) && _contains_(capture.direction)
   }
 

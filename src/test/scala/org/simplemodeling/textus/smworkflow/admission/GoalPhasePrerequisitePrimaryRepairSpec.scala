@@ -302,13 +302,76 @@ private[admission] object PrimaryPublicationRepairSpecificationFixture {
 
 /** Primary publication repair authority, attribution and retained capture contracts.
   * @since   Nov.  2, 2026
-  * @version Nov.  7, 2026
+  *  version Nov.  7, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhasePrerequisitePrimaryRepairSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import PrimaryPublicationRepairSpecificationFixture as F
+  "LSR-01 Canonical publication-failure succession" should {
+    import LaterSourcePublicationSpecificationFixture as L
+    "carry only the exact saved publication cause through one canonical generation without another reservation" in {
+      Given("a real classified pure Compile failure and its exact ordinary reservation after an accepted earlier source Step")
+      When("canonical adoption adds its one generation and the context owner authenticates the retained relation")
+      val context = A.canonicalWorkContextC(L.saved, Some(L.direction), L.successor, "RepairStep")
+      val ordinary = A.workContextC(L.fact, L.saved.reference, L.successor, "RepairStep")
+      Then("the genuine publication remains the cause while the generic old generation contract and accounting stay intact")
+      A.currentCauseAt(L.fact, L.repair) shouldBe true
+      A.currentCauseAt(L.fact, L.successor) shouldBe false
+      A.canonicalCauseAt(L.saved, Some(L.direction), L.successor) shouldBe true
+      take(context).get.publication shouldBe L.failed
+      take(context).get.testsExecuted shouldBe false
+      take(ordinary) shouldBe None
+      take(A.canonicalWorkContextC(L.saved, Some(L.direction), L.successor, "ImplementStep")) shouldBe None
+      GoalPhaseRepairProgress.snapshot(L.successor) shouldBe GoalPhaseRepairProgress.snapshot(L.repair)
+      Vector(take(L.successor.adoptCanonicalDependencySourceC(ContextReference("another-source", "1"))),
+        L.repair, F.repair, CanonicalDependencySourceSpecificationFixture.controller).foreach(controller =>
+        A.canonicalCauseAt(L.saved, Some(L.direction), controller) shouldBe false)
+      A.canonicalCauseAt(L.saved.copy(record = F.nativeRecord(64)), Some(L.direction), L.successor) shouldBe false
+    }
+    "capture fresh current source when the failed later-Step candidate had no source capture" in {
+      Given("the old candidate is source-less because its standing direction belonged to an already accepted Step")
+      val inspection = take(L.successor.acceptC(O.SemanticCompleted(L.successor.next.asInstanceOf[O.Semantic].key,
+        "SPECIFICATION-ONLY fresh current repair")))
+      When("partial inspection and the completed current capture are checked against the exact saved failure")
+      val partial = A.reusedCandidateC(L.saved, L.fresh, inspection, F.nativeRecord(74))
+      val complete = A.reusedCandidateC(L.saved, L.candidate, inspection, F.nativeRecord(74))
+      Then("the new owner capture is required and no historical capture is manufactured or reused")
+      L.failedcandidate.dependencySourceCapture shouldBe None
+      A.canonicalSelectionValid(L.saved, Some(L.direction), None, inspection) shouldBe true
+      partial.isSuccess shouldBe true
+      complete.isSuccess shouldBe true
+      C.sourceCaptureValid(L.candidate) shouldBe true
+      A.currentSourceSuccessorValid(L.failedcandidate, L.candidate) shouldBe true
+      Vector(L.candidate.copy(primaryPublicationRepair = Some(L.saved.reuse.copy(repair = ContextReference("foreign", "63")))),
+        L.candidate.copy(sourceRevision = "70"), L.candidate.copy(dependencySourceCapture = Some(L.capture.copy(generation = L.capture.generation + 1))),
+        L.candidate.copy(dependencySourceDirection = Some(L.olddirection))).foreach(candidate =>
+          A.reusedCandidateC(L.saved, candidate, inspection, F.nativeRecord(74)).isSuccess shouldBe false)
+      A.processPolicyMatches(L.failedcandidate, L.candidate, L.failure.processPolicy, L.origin.processPolicy) shouldBe true
+      A.processPolicyMatches(L.failedcandidate, L.candidate, L.failure.processPolicy, "{}") shouldBe false
+      A.publicationRoute(L.failure, A.scope(L.failure), Vector.empty, L.candidate, "76", L.successor.generation) should not be (A.PublicationRoute.FirstFailureSuccessor)
+    }
+    "retain strict genuine generation compile and termination classifications inside opaque publication provenance" in {
+      Given("the existing complete generation signature, Compile signature and a new exact publication provenance value")
+      val generationfailure = L.failure.copy(failed = L.failed.copy(process = Some(F.process(F.generationOutput))))
+      val generationrepair = take(A.stateC(L.validation, generationfailure))
+      val generationfact = A.Fact(A.generationSchema, generationfailure, A.directive(generationfailure), F.sorted(B.controller(generationrepair)))
+      val historical = GoalPhaseCanonicalDependencySourceSuccession.HistoricalPublicationFailure(L.saved.reference, generationfact)
+      When("the owner codec receives a genuine generation cause or incomplete unknown live and crossed captures")
+      val invalid = Vector(L.failed.copy(status = "unknown"),
+        L.failed.copy(process = Some(F.process(termination = ProcessExecutionTermination.TerminationUnconfirmed))),
+        L.failed.copy(process = Some(F.process(truncated = true))),
+        L.failed.copy(process = Some(F.process(identity = "foreign-program"))),
+        L.failed.copy(process = Some(F.process(text = "[error] (Test / test) Tests unsuccessful\n"))))
+      Then("only a formally ended classified failure remains publication provenance and none becomes a check failure")
+      A.failureKind(generationfailure) shouldBe Some(A.FailureKind.Generation)
+      historical.asJson.as[GoalPhaseCanonicalDependencySourceSuccession.HistoricalPublicationFailure] shouldBe Right(historical)
+      invalid.foreach(failed => GoalPhaseCanonicalDependencySourceSuccession.publicationFailureValid(
+        L.historical.copy(fact = L.fact.copy(failure = L.failure.copy(failed = failed)))) shouldBe false)
+    }
+  }
 
   "E14 primary publication generation repair" should afterWord(
     "in spec:goal-phase-prerequisite-publication-recovery, example:E14, rules:RGEN01, phase:6.11") {

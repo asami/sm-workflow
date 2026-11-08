@@ -241,8 +241,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
     if (controller.stage != O.Stage.Validation || candidate.record.revision.value > from.revision.value)
       F.invalid("Primary publication repair has no unstarted current Validation frontier")
     else _store_c(session, d, core, candidate, controller, _ => Consequence.unit, Some(from),
-      documentPolicy, recordingPaths, Some(dependencyChain)).flatMap(store =>
-        requireUnstartedPrerequisiteC(key => store.loadC(key).map(_.nonEmpty), store.requested.size))
+      documentPolicy, recordingPaths, Some(dependencyChain), StorePurpose.UnstartedPrimaryPublication).map(_ => ())
 
   def advanceC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, acknowledgement: String => Consequence[Unit],
@@ -373,31 +372,34 @@ private[smworkflow] object GoalPhaseNativeValidation {
     actual <- store.actualTerminalAttemptC(limited, "incomplete", outputLimited(limited.payload))
   } yield OutputLimitedAttempt(actual._1, actual._2, actual._3, actual._4)
 
+  private enum StorePurpose {
+    case Execution, UnstartedPrimaryPublication
+  }
+
   private def _store_c(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, acknowledgement: String => Consequence[Unit],
     from: Option[InstanceRecord], documentpolicy: Option[GoalPhaseDocumentProgress.Policy], recordingpaths: Vector[String],
-    dependencychain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None): Consequence[Store] = for {
+    dependencychain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None,
+    purpose: StorePurpose = StorePurpose.Execution): Consequence[Store] = for {
     _ <- if (controller.cursor != controller.plan.steps.size || !controller.releaseRepairActive ||
         d.phaseDependencyValidation.isEmpty || dependencychain.exists(chain =>
           chain.activePhaseCapture.nonEmpty || chain.historicalPhase.nonEmpty)) Consequence.unit
       else F.invalid("explicit phase dependency requires its authenticated successor before validation; an existing check or metadata intent cannot be superseded")
     store <- _authenticated_store_c(session, d, core, candidate, controller, acknowledgement, from,
-      documentpolicy, recordingpaths, dependencychain)
+      documentpolicy, recordingpaths, dependencychain, purpose)
   } yield store
 
   private def _authenticated_store_c(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     candidate: GoalPhaseNativeCandidate.Saved, controller: O.State, acknowledgement: String => Consequence[Unit],
     from: Option[InstanceRecord], documentpolicy: Option[GoalPhaseDocumentProgress.Policy], recordingpaths: Vector[String],
-    dependencychain: Option[GoalPhaseNativeWorkContinuation.DependencyChain]): Consequence[Store] = for {
+    dependencychain: Option[GoalPhaseNativeWorkContinuation.DependencyChain],
+    purpose: StorePurpose = StorePurpose.Execution): Consequence[Store] = for {
     whole <- Consequence.success(controller.cursor == controller.plan.steps.size)
     _ <- documentpolicy.fold(Consequence.unit)(_.validateC(controller.plan, d.candidatePaths))
     _ <- GoalPhaseNativeFindingRecording.validatePathsC(recordingpaths, controller.plan, d.candidatePaths)
     step = if (whole) None else Some(controller.plan.steps(controller.cursor).identity)
     primary <- selectedChecksC(d, controller.plan, step)
-    consumptions = (dependencychain.toVector.flatMap(_.acceptedSources.map(entry => GoalPhaseDependencySourceRevision.consumptionOf(entry.capture))) ++
-      candidate.payload.dependencySourceCapture.map(GoalPhaseDependencySourceRevision.consumptionOf)).distinct
-    _ <- if (consumptions.size <= 1) Consequence.unit
-      else F.invalid("primary checks have no unambiguous admitted source-consumption programs")
+    consumptionbase <- admittedSourceConsumptionC(candidate.payload.dependencySourceCapture, dependencychain)
     phasecapture = if (whole) dependencychain.flatMap(_.activePhaseCapture) else None
     historical = whole && dependencychain.exists(_.historicalPhase.nonEmpty)
     _ <- if (!historical) Consequence.unit else dependencychain.get.historicalPhaseC(d.phaseDependencyValidation,
@@ -440,41 +442,125 @@ private[smworkflow] object GoalPhaseNativeValidation {
         candidate.payload.candidate.nonEmpty && candidate.payload.diff.nonEmpty) Consequence.unit
       else F.invalid("native checks require the actual saved candidate")
     adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
-    retainedbindings <- Vector("selection", "check-intent-0", "check-result-0", "validation")
-      .foldLeft(Consequence.success(Vector.empty[Option[GoalPhaseDependencySourceRevision.ConsumptionRecord]])) { (prior, key) => for {
-        values <- prior
-        saved <- _load_c(adapter, session, core, frontier, key)
-      } yield values ++ saved.toVector.map(_.payload.sourceConsumption) }
-    retainedbinding <- Q.retainedBindingC(retainedbindings)
-    basis <- canonicalBasisC(consumptions.headOption, candidate.payload.dependencySourceCapture, dependencychain)
-    consumption <- Q.resolveC(consumptions.headOption, basis, controller.plan, primary,
-      candidate.payload.dependencySourceCapture.nonEmpty, retainedbinding, d.dependencySourceConsumptions, d.phaseValidationPolicy)
+    routing <- purpose match {
+      case StorePurpose.UnstartedPrimaryPublication =>
+        requireUnstartedPrerequisiteC(key => _load_c(adapter, session, core, frontier, key).map(_.nonEmpty), selected.size)
+          .map(_ => Option.empty[Q.Basis] -> consumptionbase)
+      case StorePurpose.Execution => for {
+        retainedbindings <- Vector("selection", "check-intent-0", "check-result-0", "validation")
+          .foldLeft(Consequence.success(Vector.empty[Option[GoalPhaseDependencySourceRevision.ConsumptionRecord]])) { (prior, key) => for {
+            values <- prior
+            saved <- _load_c(adapter, session, core, frontier, key)
+          } yield values ++ saved.toVector.map(_.payload.sourceConsumption) }
+        retainedbinding <- Q.retainedBindingC(retainedbindings)
+        basis <- canonicalBasisC(consumptionbase, candidate.payload.dependencySourceCapture, dependencychain)
+        registrations <- _canonical_registrations_c(consumptionbase, candidate.payload.dependencySourceCapture,
+          dependencychain, d.dependencySourceConsumptions)
+        consumption <- Q.resolveC(consumptionbase, basis, controller.plan, primary,
+          candidate.payload.dependencySourceCapture.nonEmpty, retainedbinding, registrations, d.phaseValidationPolicy)
+      } yield basis -> consumption
+    }
+    basis = routing._1
+    consumption = routing._2
     prefix = if (selected.exists(_.metadata.nonEmpty)) selected.takeWhile(_.metadata.isEmpty) else Vector.empty
     initial = Payload(frontier.revision.value.toString, scope, candidate.payload.candidate.get,
       if (prefix.nonEmpty) prefix else selected, Vector.empty, None, dependency = dependency,
       dependencySource = candidate.payload.dependencySourceCapture, sourceConsumption = consumption)
     store = new Store(adapter, session, d, core, candidate, frontier, controller, selected, initial,
       None, acknowledgement, documentpolicy, recordingpaths, dependencychain, basis)
-    retained <- store.loadC("selection")
-    actual <- retained match {
-      case Some(saved) => store.retainedSelectionC(saved)
-      case None if selected.exists(_.metadata.nonEmpty) && prefix.isEmpty => for {
-        validation <- store.loadC("validation")
-        intent <- store.loadC("check-intent-0")
-        _ <- if (validation.isEmpty && intent.isEmpty) Consequence.unit
-          else F.invalid("Retained metadata validation has no actual saved selection")
-      } yield store
-      case None => Consequence.success(store)
+    actual <- purpose match {
+      case StorePurpose.UnstartedPrimaryPublication => Consequence.success(store)
+      case StorePurpose.Execution => for {
+        retained <- store.loadC("selection")
+        value <- retained match {
+          case Some(saved) => store.retainedSelectionC(saved)
+          case None if selected.exists(_.metadata.nonEmpty) && prefix.isEmpty => for {
+            validation <- store.loadC("validation")
+            intent <- store.loadC("check-intent-0")
+            _ <- if (validation.isEmpty && intent.isEmpty) Consequence.unit
+              else F.invalid("Retained metadata validation has no actual saved selection")
+          } yield store
+          case None => Consequence.success(store)
+        }
+      } yield value
     }
   } yield actual
+
+  /** Only the native private chain supplies authority for an effective source.
+    * Historical captures are retained and authenticated, never normalized. */
+  private[admission] def admittedSourceConsumptionC(currentCapture: Option[GoalPhaseDependencySourceRevision.Capture],
+    actualPrivateChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain]):
+    Consequence[Option[GoalPhaseDependencySourceRevision.ConsumptionRecord]] = {
+    import GoalPhaseDependencySourceRevision as R
+    val captures = actualPrivateChain.toVector.flatMap(_.acceptedSources.map(_.capture)) ++ currentCapture
+    val consumptions = captures.map(R.consumptionOf).distinct
+    if (consumptions.size <= 1) Consequence.success(consumptions.headOption)
+    else actualPrivateChain match {
+      case None => F.invalid("changed source consumption has no actual native dependency chain")
+      case Some(chain) => for {
+        _ <- captures.foldLeft(Consequence.unit)((prior, capture) => prior.flatMap(_ => chain.sourceCaptureC(capture)))
+        selected <- sourceConsumptionSequenceC(chain.acceptedSources.map(a => a.capture -> Some(a.closureRevision)) ++
+          currentCapture.toVector.map(_ -> None))
+      } yield selected
+    }
+  }
+
+  /** Structural qualification only; callers must separately authenticate every
+    * capture through the actual private native chain before using this result. */
+  private[admission] def sourceConsumptionSequenceC(entries: Vector[(GoalPhaseDependencySourceRevision.Capture, Option[String])]):
+    Consequence[Option[GoalPhaseDependencySourceRevision.ConsumptionRecord]] = {
+    import GoalPhaseDependencySourceRevision as R
+    def _boundary_(left: R.Direction, right: R.Direction): Boolean =
+      left.target.sessionId == right.target.sessionId && left.target.primaryBase == right.target.primaryBase &&
+        left.target.plan.identity == right.target.plan.identity && left.target.plan.phase == right.target.plan.phase &&
+        left.target.plan.repository == right.target.plan.repository &&
+        left.target.predecessor == right.target.predecessor &&
+        left.target.binding.identity == right.target.binding.identity &&
+        left.target.binding.requester == right.target.binding.requester &&
+        left.target.binding.dependency.identity == right.target.binding.dependency.identity &&
+        left.target.binding.dependency.repository == right.target.binding.dependency.repository
+    def _linked_(prior: R.Capture, closure: String, direction: R.Direction): Boolean = {
+      val expected = GoalPhaseCanonicalDependencySourceSuccession.AcceptedSourcePrefix(
+        ContextReference(prior.sessionId, prior.sourceRevision), ContextReference(prior.sessionId, closure),
+        prior.step, prior.direction.directive, prior.scope.flatMap(_.consumptionDirection).map(_.directive))
+      def _walk_(current: R.Direction): Boolean = R.directionValid(current) && _boundary_(prior.direction, current) &&
+        current.target.canonicalOrigin.exists(origin => origin.acceptedSourcePrefix.contains(expected) ||
+          origin.originalDirection.exists(previous => BigInt(previous.target.sourceRevision) < BigInt(current.target.sourceRevision) &&
+            _boundary_(previous, current) && _walk_(previous)))
+      _walk_(direction)
+    }
+    val valid = entries != null && entries.forall { case (capture, closure) =>
+      R.captureValid(capture) && closure != null && closure.forall(value =>
+        value.toLongOption.exists(n => n > 0 && n.toString == value && n > capture.sourceRevision.toLong))
+    } && entries.zipWithIndex.forall { case ((_, closure), index) => closure.nonEmpty || index == entries.size - 1 } &&
+      entries.sliding(2).forall {
+        case Vector((prior, Some(closure)), (next, _)) =>
+          _boundary_(prior.direction, next.direction) && prior.sessionId == next.sessionId &&
+            prior.primaryBase == next.primaryBase && BigInt(closure) < BigInt(next.sourceRevision) &&
+            (R.consumptionOf(prior) == R.consumptionOf(next) || _linked_(prior, closure, next.direction))
+        case pair => pair.size < 2
+      }
+    if (valid) Consequence.success(entries.lastOption.map(entry => R.consumptionOf(entry._1)))
+    else F.invalid("primary checks have no authenticated ordered canonical source-consumption succession")
+  }
 
   private[admission] def canonicalBasisC(base: Option[GoalPhaseDependencySourceRevision.ConsumptionRecord],
     capture: Option[GoalPhaseDependencySourceRevision.Capture],
     chain: Option[GoalPhaseNativeWorkContinuation.DependencyChain]): Consequence[Option[Q.Basis]] = {
-    val captures = capture.toVector ++ chain.toVector.flatMap(_.acceptedSources.reverse.map(_.capture))
-    captures.find(c => base.contains(GoalPhaseDependencySourceRevision.consumptionOf(c)) && c.direction.target.canonicalOrigin.nonEmpty)
+    _canonical_capture(base, capture, chain)
       .fold(Consequence.success(Option.empty[Q.Basis]))(c => Q.basisC(c.direction).map(Some(_)))
   }
+  private def _canonical_capture(base: Option[GoalPhaseDependencySourceRevision.ConsumptionRecord],
+    capture: Option[GoalPhaseDependencySourceRevision.Capture], chain: Option[GoalPhaseNativeWorkContinuation.DependencyChain]):
+    Option[GoalPhaseDependencySourceRevision.Capture] =
+    (capture.toVector ++ chain.toVector.flatMap(_.acceptedSources.reverse.map(_.capture))).find(c =>
+      base.contains(GoalPhaseDependencySourceRevision.consumptionOf(c)) && c.direction.target.canonicalOrigin.nonEmpty)
+  private def _canonical_registrations_c(base: Option[GoalPhaseDependencySourceRevision.ConsumptionRecord],
+    capture: Option[GoalPhaseDependencySourceRevision.Capture], chain: Option[GoalPhaseNativeWorkContinuation.DependencyChain],
+    declarations: Vector[GoalPhaseDependencySourceRevision.ConsumptionRecord]):
+    Consequence[Vector[GoalPhaseDependencySourceRevision.ConsumptionRecord]] =
+    _canonical_capture(base, capture, chain).fold(Consequence.success(declarations))(selected =>
+      GoalPhaseCanonicalDependencySourceSuccession.currentRegistrationsC(selected.direction, declarations))
   private def _reference(frontier: InstanceRecord, key: String): WorkflowMechanicalTransition.Reference =
     WorkflowMechanicalTransition.Reference(frontier.identity.value + ":ordered-validation:" + frontier.revision.value + ":" + key, "1")
   private def _actual_record_c(session: F.Session, core: ActionCall.Core, frontier: InstanceRecord): Consequence[InstanceRecord] = for {
@@ -877,11 +963,16 @@ private[smworkflow] object GoalPhaseNativeValidation {
     def preconditionsC: Consequence[Unit] = for {
       _ <- GoalPhaseDependencySourceRevision.chainFreshnessC(core, dependencyChain,
         initial.dependency.toVector, initial.dependencySource.toVector)
+      consumptionbase <- admittedSourceConsumptionC(candidate.payload.dependencySourceCapture, dependencyChain)
+      _ <- if (sourceBasis.fold(consumptionbase == initial.sourceConsumption)(basis => consumptionbase.contains(basis.base)))
+        Consequence.unit else F.invalid("Current source consumption base differs from its retained native selection")
+      registrations <- _canonical_registrations_c(consumptionbase, candidate.payload.dependencySourceCapture,
+        dependencyChain, d.dependencySourceConsumptions)
       _ <- sourceBasis.filter(basis => initial.sourceConsumption.exists(_ != basis.base)).fold(Consequence.unit) { basis => for {
         _ <- if (basis.plan == controller.plan) Consequence.unit else F.invalid("Extended check launch crosses its canonical Plan")
         policy <- GoalPhasePrerequisitePublicationRecovery.processPolicyC(d, core)
         _ <- Q.launchC(basis, initial.sourceConsumption.get, initial.selected,
-          d.dependencySourceConsumptions, d.phaseValidationPolicy, policy)
+          registrations, d.phaseValidationPolicy, policy)
       } yield () }
       parent <- B.parentC(controller.tipSnapshot, candidate.payload.continuation)
       _ <- if (parent == base && (controller.candidateParent.isEmpty || controller.candidateBase == parent)) Consequence.unit

@@ -28,7 +28,8 @@ import org.simplemodeling.textus.smworkflow.value as V
   * @since   Nov.  2, 2026
   *  version Nov.  2, 2026
   *  version Nov.  6, 2026
-  * @version Nov.  8, 2026
+  *  version Nov.  8, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
@@ -449,16 +450,54 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
     }
 
   private[admission] def currentSourceSuccessorValid(previous: C.Payload, candidate: C.Payload): Boolean =
-    previous.dependencySourceCapture.exists(sourceSuccessorValid(_, candidate.dependencySourceDirection,
+    canonicalSourceSuccessorValid(previous, candidate) || previous.dependencySourceCapture.exists(sourceSuccessorValid(_, candidate.dependencySourceDirection,
       candidate.dependencySourceScope)) && R.candidateValid(candidate) &&
       candidate.dependencySourceScope.flatMap(_.consumptionDirection).exists(next =>
         candidate.sourceRevision.toLongOption.exists(n => n.toString == candidate.sourceRevision &&
           n > next.target.pendingRevision.toLong))
 
+  /** The direction must name this exact retained failure and reservation. This
+    * is separate from the generic historical/v5 reuse contract. */
+  private[admission] def canonicalSelectionValid(saved: Saved, direction: Option[R.Direction],
+    selectedScope: Option[R.ScopeSuccessor], controller: O.State): Boolean = direction.exists { next =>
+    factValid(saved.fact) && R.directionValid(next) && next.target.schemaVersion == R.canonicalSuccessorSchema &&
+      next.target.canonicalOrigin.exists(_.historicalPublicationFailure.contains(
+        GoalPhaseCanonicalDependencySourceSuccession.HistoricalPublicationFailure(saved.reference, saved.fact))) &&
+      next.target.plan == controller.plan && next.target.primaryBase == controller.base &&
+      next.target.completed == controller.completed && next.target.step == saved.fact.failure.candidate.step &&
+      controller.plan.steps.lift(controller.cursor).exists(_.identity == next.target.step) &&
+      controller.generation == next.target.generation + 1 &&
+      controller.repairs == next.target.repairProgress.automaticCount &&
+      controller.ordinaryRepairs == next.target.repairProgress.ordinaryCount &&
+      selectedScope != null && selectedScope.forall(R.scopeValid(next, _)) &&
+      saved.record.identity.value == next.target.sessionId &&
+      saved.record.revision.value.toString == saved.reference.revision &&
+      BigInt(next.target.sourceRevision) >= saved.record.revision.value
+  }
+  private[admission] def canonicalSourceSuccessorValid(previous: C.Payload, candidate: C.Payload): Boolean =
+    candidate != null && candidate.dependencySourceDirection.exists { direction =>
+      R.directionValid(direction) && direction.target.schemaVersion == R.canonicalSuccessorSchema &&
+        direction.target.canonicalOrigin.exists(_.historicalPublicationFailure.exists { historical =>
+          val failure = historical.fact.failure
+          failure.candidate == previous && candidate.primaryPublicationRepair.exists(reuse =>
+            reuse.repair == historical.repair && reuse.candidateRecordRevision == failure.candidateRecordRevision &&
+              reuse.sourceRevision == previous.primaryPublicationRepair.map(_.sourceRevision).getOrElse(previous.sourceRevision) &&
+              reuse.generation == failure.generation) &&
+            candidate.step == direction.target.step && candidate.sourceRevision.toLongOption.exists(n =>
+              n.toString == candidate.sourceRevision && n > direction.target.pendingRevision.toLong) &&
+            candidate.dependencySourceScope.forall(R.scopeValid(direction, _)) && R.candidateValid(candidate) &&
+            candidate.dependencySourceCapture.forall(c => c.generation == direction.target.generation + 1 &&
+              c.sourceRevision == candidate.sourceRevision && c.direction == direction)
+        })
+    }
+
   /** Only a separately authenticated committed source inventory may change.
     * The complete publication/check execution policy otherwise stays exact. */
   private[admission] def processPolicyMatches(previous: C.Payload, candidate: C.Payload,
     previousPolicy: String, currentPolicy: String): Boolean = previousPolicy == currentPolicy ||
+    canonicalSourceSuccessorValid(previous, candidate) && candidate.dependencySourceDirection.exists(direction =>
+      direction.target.canonicalOrigin.exists(origin => origin.processPolicy == currentPolicy &&
+        origin.historicalPublicationFailure.exists(_.fact.failure.processPolicy == previousPolicy))) ||
     currentSourceSuccessorValid(previous, candidate) && (for {
       before <- previous.dependencySourceCapture.filter(R.captureValid)
       after <- candidate.dependencySourceCapture.filter(R.captureValid)
@@ -497,6 +536,9 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
     val failure = saved.fact.failure
     val previous = failure.candidate
     val dependencies = sameDependencyCapture(candidate, previous) ||
+      canonicalSelectionValid(saved, candidate.dependencySourceDirection, candidate.dependencySourceScope, controller) &&
+        canonicalSourceSuccessorValid(previous, candidate) &&
+        candidate.dependencySourceCapture.forall(_.generation == controller.generation) ||
       currentSourceSuccessorValid(previous, candidate) &&
         candidate.dependencySourceScope.flatMap(_.consumptionDirection).exists(_.target.generation < controller.generation) &&
         candidate.dependencySourceCapture.forall(_.generation == controller.generation)
@@ -523,6 +565,17 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
       controller.plan.steps.lift(controller.cursor).exists(_.identity == fact.failure.candidate.step) &&
       controller.generation == fact.failure.generation + 1 && controller.stage == O.Stage.Repair &&
       controller.repairDirective.contains(fact.directive)
+
+  /** Canonical adoption adds one generation without reserving another repair. */
+  private[admission] def canonicalCauseAt(saved: Saved, direction: Option[R.Direction], controller: O.State): Boolean =
+    canonicalSelectionValid(saved, direction, None, controller) && controller.stage == O.Stage.Repair &&
+      controller.repairDirective.contains(saved.fact.directive)
+
+  private[admission] def canonicalWorkContextC(saved: Saved, direction: Option[R.Direction], controller: O.State,
+    kind: String): Consequence[Option[GoalPhaseNativeWork.PublicationFailureContext]] =
+    if (kind != "RepairStep" || !canonicalCauseAt(saved, direction, controller)) Consequence.success(None)
+    else Consequence.success(direction.flatMap(_.target.canonicalOrigin).flatMap(_.historicalPublicationFailure)
+      .map(GoalPhaseCanonicalDependencySourceSuccession.publicationContext))
 
   def workContextC(fact: Fact, reference: ContextReference, controller: O.State,
     kind: String): Consequence[Option[GoalPhaseNativeWork.PublicationFailureContext]] =

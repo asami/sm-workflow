@@ -1,6 +1,6 @@
 # GoalPhase dependency source revision
 
-## Canonical committed source continuation (v10 target, v11 capture)
+## Canonical committed source continuation (v10/v11 targets, v11/v12 captures)
 
 R10. The existing describe/adopt source Operations accept the distinct closed
 `sm-workflow.goal-phase-canonical-dependency-source-proposal.v1`. Its fields are
@@ -96,6 +96,79 @@ the normal `smworkflow.spec.installedCommand` and `smworkflow.spec.componentFile
 Prepare must run before product replacement; resume reuses the same physical
 native SQLite/Session. Fixture evidence is specification-only, and authoring the
 fixture establishes no execution or consumer adoption claim.
+
+R14. A genuinely terminated primary publication failure before checks is a
+distinct cause. The native walker authenticates the actual saved primary repair
+fact and candidate, same-Session historical prefix, retained managed failure,
+Plan/base/current Step, directive, generation and repair counts. It never creates
+a failed check receipt. `canonicalOrigin.historicalPublicationFailure` contains
+the exact repair reference and the owning primary Fact as opaque canonical JSON
+text. Its derived `PublicationFailureContext` has `testsExecuted=false`. A target
+cannot contain both a historical check cause and a publication cause. UNKNOWN,
+live, truncated, unclassified, foreign and crossed failures refuse.
+
+R15. An original source Direction may belong to an earlier accepted Step. The
+native private dependency chain must match exactly one accepted source capture
+and its actual closure to `acceptedSourcePrefix`: Session/capture-source and
+closure references, Step, original directive and effective consumption directive.
+Capture precedes closure, which precedes or equals the source frontier. The
+original Direction and every closed Step definition remain literal. The new
+binding selects the current Step while preserving the original standing binding
+and all other existing source-boundary constraints. Decoded prefix references
+supply no native authority.
+
+These additions select target
+`sm-workflow.goal-phase-dependency-source-revision.v11` and capture
+`sm-workflow.goal-phase-dependency-source-capture.v12`. A v11 target requires at
+least a publication cause or an accepted earlier-Step prefix; old v10 targets
+forbid both. Optional absent fields remain omitted, preserving existing v10
+target/v11 capture wire behavior. Explicit null, crossed versions, missing
+required fields and extra fields refuse. Old runtimes cannot read the new
+v11 target/v12 capture; replace the producer product before current-stage resume.
+
+R16. Source adoption preserves the original primary repair Fact and reservation
+and adds only its usual one generation. Separate Advance projects the exact
+publication cause into the newly issued current-Step Repair. Its result receives
+a fresh current source capture even if the old failed later-Step candidate had
+no capture because the standing source belonged to an earlier Step. Partial
+inspection and completed capture each require their own exact authenticated
+successor relation. Existing primary publication authority, artifact uncertainty,
+fresh checks, independent review and ordinary closure retain their owners.
+
+When accepted and current source consumptions differ, NativeValidation selects
+the effective execution base only after authenticating every capture through
+the actual private native chain and proving each change against the immediately
+preceding accepted capture and closure. An unchanged same-Step canonical chain
+may inherit that exact prefix through literal original Directions with strictly
+decreasing source revisions. Same-consumption entries remain in order; unrelated
+histories, missing prefix relations and ambiguous lineages refuse. Phase checks
+with no current capture use this same authenticated accepted sequence. Historical
+captures and their recorded program bindings remain unchanged. The ordinary
+canonical check resolver and selected-check/program admission still apply.
+
+`NativeGoalLaterSourcePublicationRepairCliSpec` is an independent explicit-only
+tiny-project qualification. Select
+`smworkflow.spec.laterSourcePublicationMode=PREPARE_OLD|RESUME_CURRENT|COLLECT`
+and absolute `smworkflow.spec.laterSourcePublicationLocator` under the canonical
+checkout's target directory, plus the normal installed command and component
+properties. PREPARE_OLD accepts an earlier canonical source Step, accepts the
+later implementation once, retains a real managed primary Compile failure and
+one ordinary reservation, commits and normally publishes a genuinely changed
+dependency API, and records the two separate old-runtime refusals. It stops
+before producer product publication. RESUME_CURRENT reopens the same physical
+Session, admits the exact independent specification Human source choice, issues
+and submits only the new Repair, and requires fresh v12 capture, necessary new
+publication, the original Compile/TestOnly checks, independent specification
+review and ordinary Step closure. Caller result locators retain successful
+operations for finite same-episode recollection; COLLECT performs no effects.
+If old-stage qualification stops after successful effects, the explicit
+`smworkflow.spec.laterSourcePublicationResumePoint` is limited to `OLD_SOURCE`,
+`LATER_PUBLICATION_FAILURE` or `OLD_REFUSALS`, each requiring its retained prior
+public response. The original component and fixture setup must still match.
+Completed CLI operations and formally terminated fixture setup commands are
+recollected from their original files; unknown setup termination refuses.
+All old public logs remain byte-preserved. This qualification neither supplies
+real consumer authority nor establishes Phase or Terminal acceptance.
 
 `NativeGoalCanonicalDependencySourceSuccessionCliSpec` calls the bounded
 `qualifyCanonicalSource` fixture entry. Prepare uses the old installed product

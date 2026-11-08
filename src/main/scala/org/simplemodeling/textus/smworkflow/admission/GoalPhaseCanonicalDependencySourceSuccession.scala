@@ -21,12 +21,14 @@ import GoalPhaseOrderedProgression as O
 import GoalPhasePublishedDependencySourceAdoption as P
 import RepositorySyncManagedGitObservation as G
 import WorkflowManagedProcessExecution as E
+import GoalPhasePrerequisitePrimaryRepair as A
 
 /** Committed canonical source selection over the existing source direction API.
   * Native traversal, not these records, supplies historical authority. External
   * publication is provenance; no artifact adoption or publication happens here.
   * @since   Nov.  8, 2026
-  * @version Nov.  8, 2026
+  *  version Nov.  8, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
@@ -66,7 +68,40 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
     controller: GoalPhaseCandidateRecovery.Controller, approvals: Vector[D.Approval],
     originalDirection: Option[R.Direction], previousDirection: Option[R.Direction],
     pending: Option[Pending], selection: Proposal, primaryRoot: String, processPolicy: String,
-    baseLineage: Vector[O.HistoryCommit], historicalFailure: Option[HistoricalFailure] = None)
+    baseLineage: Vector[O.HistoryCommit], historicalFailure: Option[HistoricalFailure] = None,
+    historicalPublicationFailure: Option[HistoricalPublicationFailure] = None,
+    acceptedSourcePrefix: Option[AcceptedSourcePrefix] = None)
+  /** The opaque owner encoding survives public Record conversion verbatim. */
+  final case class HistoricalPublicationFailure(repair: ContextReference, fact: A.Fact)
+  object HistoricalPublicationFailure {
+    given Encoder[HistoricalPublicationFailure] = Encoder.instance(v => Json.obj(
+      "repair" -> v.repair.asJson, "fact" -> A.codec.encode(v.fact).noSpaces.asJson))
+    given Decoder[HistoricalPublicationFailure] = _closed(Decoder.instance(c => for {
+      repair <- c.get[ContextReference]("repair")
+      raw <- c.get[String]("fact")
+      json <- io.circe.parser.parse(raw).left.map(e => DecodingFailure(e.message, c.history))
+      fact <- A.codec.decode(json).left.map(DecodingFailure(_, c.history))
+    } yield HistoricalPublicationFailure(repair, fact)), publicationFailureValid)
+  }
+  def publicationFailureValid(v: HistoricalPublicationFailure): Boolean = v != null &&
+    R.referenceValid(v.repair) && _revision(v.repair.revision) && A.factValid(v.fact) &&
+    v.repair.identity == v.fact.failure.sessionId &&
+    BigInt(v.repair.revision) == BigInt(v.fact.failure.frontierRevision) + 1
+  def publicationContext(v: HistoricalPublicationFailure): S.PublicationFailureContext =
+    S.PublicationFailureContext(v.repair, v.fact.failure.candidate.changedPaths,
+      v.fact.failure.candidate.diff.get, v.fact.failure.failed, testsExecuted = false)
+  /** A value describes an accepted source; only the native chain authenticates it. */
+  final case class AcceptedSourcePrefix(capture: ContextReference, closure: ContextReference,
+    step: String, direction: ContextReference, consumption: Option[ContextReference])
+  object AcceptedSourcePrefix {
+    given Encoder[AcceptedSourcePrefix] = deriveEncoder[AcceptedSourcePrefix].mapJson(P.publicJson)
+    given Decoder[AcceptedSourcePrefix] = _closed(deriveDecoder, acceptedSourcePrefixValid)
+  }
+  def acceptedSourcePrefixValid(v: AcceptedSourcePrefix): Boolean = v != null &&
+    Vector(v.capture, v.closure, v.direction).forall(R.referenceValid) &&
+    _revision(v.capture.revision) && _revision(v.closure.revision) &&
+    v.capture.identity == v.closure.identity && BigInt(v.capture.revision) < BigInt(v.closure.revision) &&
+    _exact(v.step) && v.consumption != null && v.consumption.forall(R.referenceValid)
   final case class HistoricalFailure(candidate: ContextReference, validation: ContextReference,
     context: S.CheckFailureContext)
   object HistoricalFailure {
@@ -123,7 +158,9 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
   final case class Source(session: F.Session, from: InstanceRecord, controller: O.State,
     predecessor: D.Admission, ancestors: Vector[R.Ancestor], approvals: Vector[D.Approval],
     originalDirection: Option[R.Direction], previousDirection: Option[R.Direction],
-    requestingResult: ContextReference, pending: Option[Pending], historicalFailure: Option[HistoricalFailure] = None)
+    requestingResult: ContextReference, pending: Option[Pending], historicalFailure: Option[HistoricalFailure] = None,
+    historicalPublicationFailure: Option[HistoricalPublicationFailure] = None,
+    acceptedSourcePrefix: Option[AcceptedSourcePrefix] = None)
   final case class Saved(direction: R.Direction, state: O.State, record: InstanceRecord)
 
   private def _closed[A: Encoder](decoder: Decoder[A], valid: A => Boolean): Decoder[A] =
@@ -202,6 +239,11 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
       _clause("native-origin.direction-relation")(v.previousDirection.isEmpty || v.originalDirection.nonEmpty),
       _clause("native-origin.pending")(v.pending != null && v.pending.forall(p => p != null && R.referenceValid(p.continuation) && _revision(p.entityRevision))),
       _clause("native-origin.historical-failure")(v.historicalFailure != null && v.historicalFailure.forall(failureValid)),
+      _clause("native-origin.publication-failure")(v.historicalPublicationFailure != null &&
+        v.historicalPublicationFailure.forall(publicationFailureValid) &&
+        !(v.historicalFailure.nonEmpty && v.historicalPublicationFailure.nonEmpty)),
+      _clause("native-origin.accepted-source-prefix")(v.acceptedSourcePrefix != null &&
+        v.acceptedSourcePrefix.forall(acceptedSourcePrefixValid)),
       _clause("native-origin.selection")(proposalValid(v.selection)),
       _clause("native-origin.worker-lifecycle")(v.selection.workerLifecycle.nonEmpty == v.pending.nonEmpty),
       _clause("native-origin.primary-root")(_root(v.primaryRoot)),
@@ -242,7 +284,8 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
       _clause("scope-boundary.component")(v.binding.dependency.identity == old.dependency.identity),
       _clause("scope-boundary.repository")(v.binding.dependency.repository == old.dependency.repository),
       _clause("scope-boundary.binding-copy")(v.binding.copy(revision = old.revision, root = old.root, branch = old.branch,
-        base = old.base, paths = old.paths, dependency = old.dependency) == old),
+        base = old.base, paths = old.paths, dependency = old.dependency,
+        step = if (o.acceptedSourcePrefix.nonEmpty) old.step else v.binding.step) == old),
       _clause("scope-boundary.added-approvals")(added.forall(a => a.proposal.requester == old.requester &&
         a.proposal.dependency.identity == old.dependency.identity && a.proposal.dependency.repository == old.dependency.repository &&
         inherited.map(_.proposal.usageContract).distinct == Vector(a.proposal.usageContract))),
@@ -253,13 +296,29 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
       _clause("scope-boundary.inherited-exclusions")(o.previousDirection.orElse(original).forall(d =>
         v.proposal.excludedPaths == d.target.proposal.excludedPaths)),
       _clause("scope-boundary.original-direction")(original.forall(d => d.target.sessionId == v.sessionId && d.target.predecessor == v.predecessor &&
-        d.target.ancestors == v.ancestors && d.target.primaryBase == v.primaryBase && d.target.step == v.step &&
+        (if (o.acceptedSourcePrefix.nonEmpty) v.ancestors.startsWith(d.target.ancestors) else d.target.ancestors == v.ancestors) &&
+        d.target.primaryBase == v.primaryBase && (d.target.step == v.step || _accepted_prefix_matches(v, o)) &&
         d.target.plan.identity == v.plan.identity && d.target.plan.phase == v.plan.phase &&
         d.target.plan.repository == v.plan.repository && d.target.plan.steps.take(d.target.completed.size) ==
-          v.plan.steps.take(d.target.completed.size) && v.completed.startsWith(d.target.completed))),
+          v.plan.steps.take(d.target.completed.size) && v.completed.startsWith(d.target.completed) &&
+        (o.acceptedSourcePrefix.isEmpty || d.target.plan.steps.take(v.completed.size) == v.plan.steps.take(v.completed.size)))),
       _clause("scope-boundary.previous-direction")(o.previousDirection.forall(d => d.target.sessionId == v.sessionId &&
-        d.target.predecessor == v.predecessor && d.target.step == v.step && d.target.primaryBase == v.primaryBase))))
+        d.target.predecessor == v.predecessor && (d.target.step == v.step || _accepted_prefix_matches(v, o)) && d.target.primaryBase == v.primaryBase))))
   }
+  private def _accepted_prefix_matches(v: R.Target, o: Origin): Boolean = o.acceptedSourcePrefix.exists { prefix =>
+    acceptedSourcePrefixValid(prefix) && prefix.capture.identity == v.sessionId &&
+      BigInt(prefix.closure.revision) <= BigInt(v.sourceRevision) && prefix.step != v.step &&
+      v.completed.exists(_.step == prefix.step) && o.originalDirection.exists(d =>
+        d.target.step == prefix.step && d.directive == prefix.direction && d.target.sessionId == v.sessionId &&
+        BigInt(d.target.pendingRevision) < BigInt(prefix.capture.revision)) &&
+      prefix.consumption == o.previousDirection.map(_.directive)
+  }
+  private def _publication_controller_matches(fact: A.Fact, controller: GoalPhaseCandidateRecovery.Controller): Boolean =
+    io.circe.parser.parse(fact.successorController).toOption.exists { json =>
+      controller.asJson.asObject.exists(_.toVector.filterNot(_._1 == "tip").forall { (key, value) =>
+        json.asObject.flatMap(_(key)).contains(value)
+      }) && controller.tip == controller.completed.lastOption.map(c => O.Snapshot(c.commit.identity, c.commit.tree)).getOrElse(controller.base)
+    }
   def targetValid(v: R.Target): Boolean = _target_failure(v).isEmpty
 
   /** One ordered lazy validation path serves the Boolean codec contract and the
@@ -273,7 +332,10 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
       case Some(o) =>
         val clauses: Vector[() => Option[String]] = Vector(
           () => _origin_failure(o),
-          _clause("native-origin.schema")(v.schemaVersion == R.canonicalSchema),
+          _clause("native-origin.schema")(R.isCanonicalSchema(v.schemaVersion) &&
+            (v.schemaVersion == R.canonicalSuccessorSchema) ==
+              (o.historicalPublicationFailure.nonEmpty || o.acceptedSourcePrefix.nonEmpty)),
+          _clause("native-origin.accepted-source-prefix")(o.acceptedSourcePrefix.isEmpty || _accepted_prefix_matches(v, o)),
           _clause("native-origin.discriminators")(v.runtime == None && v.sourceSuccession == None &&
             v.exclusionSuccession == None && v.committedBaseSuccession == None && v.waitOrigin == None &&
             v.primaryFailureOrigin == None && v.initialOrigin == None && v.publishedOrigin == None),
@@ -322,7 +384,18 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
             p.request.originalBase == v.primaryBase && p.request.completed == v.completed &&
             p.request.generation == v.generation && p.request.stepIdentity.contains(v.step) &&
             p.request.kind == (if (o.controller.stage == "Implementation") "ImplementStep" else "RepairStep") &&
-            o.historicalFailure.forall(f => p.request.checkFailure.contains(f.context)))),
+            o.historicalFailure.forall(f => p.request.checkFailure.contains(f.context)) &&
+            o.historicalPublicationFailure.forall(f => p.request.publicationFailure.contains(publicationContext(f)) && p.request.checkFailure.isEmpty))),
+          _clause("historical-publication-failure")(o.historicalPublicationFailure.forall(f => {
+            val failure = f.fact.failure
+            o.controller.stage == "Repair" && failure.componentInstance == o.componentInstance &&
+              failure.participant == o.participant && failure.sessionId == v.sessionId && failure.plan == v.plan &&
+              failure.base == v.primaryBase && failure.completed == v.completed && failure.candidate.step == v.step &&
+              failure.generation + 1 == v.generation && o.controller.repairDirective.contains(f.fact.directive) &&
+              BigInt(f.repair.revision) <= BigInt(v.sourceRevision) &&
+              (o.pending.isEmpty || BigInt(f.repair.revision) < BigInt(v.sourceRevision)) &&
+              _publication_controller_matches(f.fact, o.controller)
+          })),
           _clause("historical-failure")(o.historicalFailure.forall(f => o.controller.stage == "Repair" &&
             f.candidate.identity == v.sessionId && BigInt(f.validation.revision) <= BigInt(v.sourceRevision) &&
             (o.pending.isEmpty || BigInt(f.validation.revision) < BigInt(v.sourceRevision)) &&
@@ -406,8 +479,10 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
     _ <- _check(primaryroot == d.target.root.toString, "canonical selection crosses the primary root")
     origin = Origin(core.component.get.core.instanceId.canonicalKey, source.session.participantIdentity,
       GoalPhaseCandidateRecovery.controllerSnapshot(source.controller), source.approvals,
-      source.originalDirection, source.previousDirection, source.pending, proposal, primaryroot, process, lineage, source.historicalFailure)
-    target = R.Target(R.canonicalSchema, source.session.current.identity.value, "", source.from.revision.value.toString,
+      source.originalDirection, source.previousDirection, source.pending, proposal, primaryroot, process, lineage,
+      source.historicalFailure, source.historicalPublicationFailure, source.acceptedSourcePrefix)
+    target = R.Target(if (source.historicalPublicationFailure.nonEmpty || source.acceptedSourcePrefix.nonEmpty)
+      R.canonicalSuccessorSchema else R.canonicalSchema, source.session.current.identity.value, "", source.from.revision.value.toString,
       source.from.revision.value.toString, source.controller.plan, source.controller.plan.steps(source.controller.cursor).identity,
       source.controller.generation, source.controller.base, source.controller.completed,
       GoalPhaseRepairProgress.snapshot(source.controller), source.requestingResult, source.predecessor, source.ancestors,
@@ -434,6 +509,40 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
   private[admission] def currentC(direction: R.Direction, d: F.Declaration, core: ActionCall.Core,
     host: GoalPhasePrerequisitePublicationHostRecovery.Saved): Consequence[Unit] =
     _current_c(direction, d, core, Some(host))
+
+  /** A current registration view only. Literal historical declarations remain
+    * stored, and native traversal must independently authenticate Direction. */
+  private[admission] def currentRegistrationsC(direction: R.Direction, declarations: Vector[R.ConsumptionRecord]):
+    Consequence[Vector[R.ConsumptionRecord]] = {
+    def _children_(current: R.Direction): Vector[R.Direction] = current.target.canonicalOrigin.toVector.flatMap(origin =>
+      origin.originalDirection.toVector ++ origin.previousDirection.toVector).distinct
+    def _has_successor_(current: R.Direction): Boolean = current.target.schemaVersion == R.canonicalSuccessorSchema ||
+      _children_(current).exists(_has_successor_)
+    def _same_boundary_(child: R.Direction, parent: R.Direction): Boolean =
+      child.target.sessionId == parent.target.sessionId && child.target.primaryBase == parent.target.primaryBase &&
+        child.target.plan.identity == parent.target.plan.identity && child.target.plan.phase == parent.target.plan.phase &&
+        child.target.plan.repository == parent.target.plan.repository && child.target.predecessor == parent.target.predecessor &&
+        child.target.binding.identity == parent.target.binding.identity && child.target.binding.requester == parent.target.binding.requester &&
+        child.target.binding.dependency.identity == parent.target.binding.dependency.identity &&
+        child.target.binding.dependency.repository == parent.target.binding.dependency.repository
+    def _ancestors_(current: R.Direction): Consequence[Vector[R.ConsumptionRecord]] =
+      _children_(current).foldLeft(Consequence.success(Vector.empty[R.ConsumptionRecord])) { (prior, parent) => for {
+        values <- prior
+        _ <- _check(R.directionValid(parent) && _same_boundary_(current, parent) &&
+          BigInt(parent.target.sourceRevision) < BigInt(current.target.sourceRevision),
+          "canonical registration view crosses its literal older source lineage")
+        ancestors <- _ancestors_(parent)
+      } yield values ++ Vector(parent.target.proposal.consumption) ++ ancestors }
+    for {
+      _ <- _check(R.directionValid(direction), "canonical registration view requires a valid current direction")
+      _ <- _check(declarations != null && declarations.forall(R.consumptionValid) && declarations.distinct.size == declarations.size,
+        "canonical registration view refuses null, malformed or duplicate declarations")
+      result <- if (!_has_successor_(direction)) Consequence.success(declarations) else for {
+        ancestors <- _ancestors_(direction)
+        historical = ancestors.filterNot(_ == direction.target.proposal.consumption).toSet
+      } yield declarations.filterNot(historical.contains)
+    } yield result
+  }
   private def _current_c(direction: R.Direction, d: F.Declaration, core: ActionCall.Core,
     host: Option[GoalPhasePrerequisitePublicationHostRecovery.Saved]): Consequence[Unit] = for {
     _ <- _check(R.directionValid(direction) && direction.target.canonicalOrigin.nonEmpty,
@@ -460,8 +569,9 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
     _ <- _check(guard == target.preStageGuard,
       "canonical source or actual consumption policy changed")
     basis <- GoalPhaseCanonicalCheckConsumption.basisC(direction)
+    registrations <- currentRegistrationsC(direction, d.dependencySourceConsumptions)
     _ <- GoalPhaseCanonicalCheckConsumption.policyC(basis, expected, process,
-      d.dependencySourceConsumptions, d.phaseValidationPolicy)
+      registrations, d.phaseValidationPolicy)
   } yield ()
 
   def adoptC(source: Source, d: F.Declaration, core: ActionCall.Core, input: V.GoalPhaseDependencySourceRevisionAdoptionInput):
@@ -535,6 +645,7 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
           o.controller == GoalPhaseCandidateRecovery.controllerSnapshot(source.controller) && o.approvals == source.approvals &&
           o.originalDirection == source.originalDirection && o.previousDirection == source.previousDirection && o.pending == source.pending &&
           o.historicalFailure == source.historicalFailure &&
+          o.historicalPublicationFailure == source.historicalPublicationFailure && o.acceptedSourcePrefix == source.acceptedSourcePrefix &&
           o.componentInstance == core.component.get.core.instanceId.canonicalKey && o.participant == source.session.participantIdentity &&
           direction.participant == source.session.participantIdentity, "canonical history crosses its actual native predecessor")
         state <- source.controller.adoptCanonicalDependencySourceC(direction.directive)

@@ -336,11 +336,10 @@ private[smworkflow] object GoalPhaseStepTestReportRepair {
         "accepted source crosses its same-Session Plan, base or preceding native closure")
       _ <- GoalPhaseNativeHistory.prefixC(from, InstanceRevision(entry.closureRevision.toLong)).map(_ => ())
     } yield () } }
-    consumptions = (actual.acceptedSources.map(entry => D.consumptionOf(entry.capture)) ++
-      candidate.dependencySourceCapture.map(D.consumptionOf)).distinct
-    _ <- _check(consumptions.size == 1, "source report has no unique actual accepted consumption base")
-    basis <- V.canonicalBasisC(consumptions.headOption, candidate.dependencySourceCapture, chain)
-    resolved <- GoalPhaseCanonicalCheckConsumption.resolveC(consumptions.headOption, basis, controller.plan, required,
+    consumption <- V.admittedSourceConsumptionC(candidate.dependencySourceCapture, chain)
+    _ <- _check(consumption.nonEmpty, "source report has no actual accepted consumption base")
+    basis <- V.canonicalBasisC(consumption, candidate.dependencySourceCapture, chain)
+    resolved <- GoalPhaseCanonicalCheckConsumption.resolveC(consumption, basis, controller.plan, required,
       candidate.dependencySourceCapture.nonEmpty, Some(validation.sourceConsumption), Vector.empty, None)
     _ <- _check(resolved == validation.sourceConsumption, "source report changes its retained canonical routing")
   } yield ()
