@@ -7,12 +7,14 @@ import WorkflowSbtValidation as V
 /** Eligibility over the original managed observation, never a process detector.
   * Old Wait checkpoints retain the complete attempt when the active prefix moves.
   * @since   Nov.  6, 2026
-  * @version Nov.  8, 2026
+  *  version Nov.  8, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object TerminatedValidationContinuation {
-  /** A canceled ScalaTest case is not a canceled process. Only a separately
-    * admitted direction can select another attempt of this known-ended check.
+  /** A canceled ScalaTest case or ZeroTests selection is not a live process.
+    * ZeroTests stays unsuccessful; only a separately admitted direction can
+    * select another attempt of this known-ended check.
     * Actual assertion failures and ambiguous/incomplete observations stay out.
     */
   def unverified(state: S.State): Boolean = state != null && state.stage == "Wait" &&
@@ -29,8 +31,10 @@ private[smworkflow] object TerminatedValidationContinuation {
             process.termination == ProcessExecutionTermination.Exited(0) && WorkflowSbtCapture.valid(process, facts) &&
               !process.stdout.truncated && !process.stderr.truncated)) &&
         S.diagnostics(state, "selected-validation-continuation").lastOption.exists(d =>
-          d.testExecution.failedTests.contains(0) && d.testExecution.testsRun.exists(_ > 0) &&
-            d.testExecution.completedSuites.exists(_ > 0) &&
+          d.testExecution.failedTests.contains(0) &&
+            ((d.testExecution.testsRun.exists(_ > 0) && d.testExecution.completedSuites.exists(_ > 0)) ||
+              (receipt.sbt.exists(_.reason.contains("ZeroTests")) &&
+                d.testExecution.testsRun.contains(0L) && d.testExecution.completedSuites.contains(0))) &&
             d.groups.forall(g => !Set("test-failure", "suite-abort", "compiler-error", "compilation-failure")(g.kind)))
     }
   def eligible(state: S.State, progressDepth: Int = 0): Boolean = {

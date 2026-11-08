@@ -15,7 +15,8 @@ import RepositorySyncNativeMergeValidation as B
 
 /** Fixture observations, not installed execution or acceptance evidence.
   * @since   Nov.  6, 2026
-  * @version Nov.  8, 2026
+  *  version Nov.  8, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object TerminatedValidationFixture {
@@ -53,6 +54,54 @@ final class TerminatedValidationContinuationSpec extends AnyWordSpec with Matche
   }
 
   "Explicit selected-validation continuation" should {
+    "retain a confirmed zero-test selection as unsuccessful while admitting its separately selected new attempt" in {
+      Given("an exact specification-owned exited-zero report with no suites or tests and a successful Compile prefix")
+      val original = SelectedValidationFixture.state.copy(ordinaryCount = 9, automaticCount = 9,
+        receipts = SelectedValidationFixture.state.receipts.dropRight(1) :+ SelectedValidationFixture.zeroReceipt())
+      val restored = original.asJson.as[S.State].toOption.get
+      When("the common continuation selects a fresh attempt over the same original candidate")
+      val next = _take(S.continueUnverifiedValidationC(restored))
+      Then("zero tests never count as success and the original observation, order, limits and counters survive")
+      TerminatedValidationContinuation.unverified(restored) shouldBe true
+      B.productSuccessful(restored.receipts.last, V.Kind.TestOnly) shouldBe false
+      next.receipts shouldBe restored.receipts.dropRight(1)
+      next.selected shouldBe restored.selected
+      next.input shouldBe restored.input
+      next.candidate shouldBe restored.candidate
+      next.repairControl shouldBe restored.repairControl
+      next.ordinaryCount shouldBe 9
+      next.automaticCount shouldBe 9
+      restored.receipts.last.sbt.get.reason shouldBe Some("ZeroTests")
+      restored.receipts.last.sbt.get.outcome shouldBe V.Outcome.Unverified
+      S.assessC(restored.copy(stage = "Assess")).isSuccess shouldBe false
+    }
+
+    "refuse incomplete, inconsistent or failed observations instead of inferring an eligible zero-test result" in {
+      Given("a captured ZeroTests report and negative variations of its actual observation")
+      val original = SelectedValidationFixture.state
+      val zero = SelectedValidationFixture.zeroReceipt()
+      val process = zero.processObservation.get
+      val refused = Vector(
+        zero.copy(processObservation = None),
+        zero.copy(processObservation = Some(process.copy(termination = ProcessExecutionTermination.TerminationUnconfirmed))),
+        zero.copy(processObservation = Some(process.copy(termination = ProcessExecutionTermination.NotStarted))),
+        zero.copy(processObservation = Some(process.copy(termination = ProcessExecutionTermination.Exited(1)))),
+        zero.copy(processObservation = Some(process.copy(stdout = process.stdout.copy(truncated = true)))),
+        zero.copy(processObservation = Some(process.copy(stdout = process.stdout.copy(byteCount = 0L)))),
+        zero.copy(stdout = "different capture"),
+        zero.copy(sbt = zero.sbt.map(_.copy(reason = Some("InvalidReport")))),
+        SelectedValidationFixture.zeroReceipt(tests = 1),
+        SelectedValidationFixture.zeroReceipt(suites = 1),
+        SelectedValidationFixture.zeroReceipt(failed = 1),
+        SelectedValidationFixture.zeroReceipt(extra = "[info] FixtureSpec *** ABORTED ***\n"),
+        SelectedValidationFixture.zeroReceipt(extra = "[error] src/Value.scala:1: missing value\n"))
+      When("the shared owner considers continuation without modifying any of those observations")
+      val results = refused.map(r => TerminatedValidationContinuation.unverified(
+        original.copy(receipts = original.receipts.dropRight(1) :+ r)))
+      Then("unknown, unstarted, failing, contradictory and incomplete evidence grants no new attempt")
+      results shouldBe Vector.fill(refused.size)(false)
+    }
+
     "distinguish an ended unverified test from process uncertainty and failed assertions" in {
       Given("an actual-shaped specification-owned exited-zero canceled-test report")
       val state = SelectedValidationFixture.state
@@ -153,6 +202,17 @@ private[admission] object SelectedValidationFixture {
       Vector.empty, 1L, "fixture-sbt")
     B.Receipt("focused", "exited", Some(0), text, "",
       Some(V.Facts(V.Kind.TestOnly, V.Outcome.Unverified, None, Some("FailedTests"))), Some(process))
+  }
+  def zeroReceipt(tests: Int = 0, suites: Int = 0, failed: Int = 0, extra: String = ""): B.Receipt = {
+    val text = s"[info] Total number of tests run: $tests\n[info] Suites: completed $suites, aborted 0\n" +
+      s"[info] Tests: succeeded $tests, failed $failed, canceled 0, ignored 0, pending 0\n" +
+      "[info] No tests were executed.\n" + extra
+    val bytes = text.getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector
+    val process = ProcessExecutionResult(ProcessExecutionTermination.Exited(0),
+      ProcessExecutionCapture(bytes, bytes.size.toLong, false), ProcessExecutionCapture(Vector.empty, 0L, false),
+      Vector.empty, 1L, "fixture-sbt")
+    B.Receipt("focused", "exited", Some(0), text, "",
+      Some(V.Facts(V.Kind.TestOnly, V.Outcome.Unverified, None, Some("ZeroTests"))), Some(process))
   }
   def state: S.State = {
     val input = S.Input("fixture", "selected-continuation", "Retain ordinary behavior", Vector("src"),

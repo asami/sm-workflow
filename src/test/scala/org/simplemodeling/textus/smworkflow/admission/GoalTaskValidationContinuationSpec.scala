@@ -29,6 +29,31 @@ final class GoalTaskValidationContinuationSpec extends AnyWordSpec with GivenWhe
   private val target = C.Target("component", "session", "participant", 8, Json.obj("frontier" -> true.asJson), payload, C.missing(payload))
 
   "The common selected-validation target" should {
+    "refresh a zero-test candidate without accepting its old check or changing the Task contract" in {
+      Given("a GoalTask with a captured zero-test selected check and the original successful prefix")
+      val original = SelectedValidationFixture.state
+      val state = original.copy(receipts = original.receipts.dropRight(1) :+ SelectedValidationFixture.zeroReceipt())
+      val payload = BoundedWorkRuntime.Payload(state, "/fixture", "main", state.candidate.get.head)
+      val r = BoundedSelectedValidationContinuation
+      val target = r.Target(r.schema, "component", "session", "participant", "GoalTask", 8,
+        payload.baseHead, state.candidate.get.tree, "focused", state.input.ownedPaths, Vector.empty, true)
+      val direction = C.Direction(target.asJson, r.refresh, "Correct the selected suite classification", "participant",
+        ContextReference("specification-zero-tests-direction", "1"))
+      When("an independently admitted direction selects the current owned candidate")
+      val adopted = r.adoptedC(payload, target, direction).toOption.get
+      Then("the old observation and contract remain while native Advance owns fresh candidate observation")
+      adopted.state.stage shouldBe "SelectedValidationCandidateReady"
+      adopted.state.receipts shouldBe state.receipts
+      adopted.state.selected shouldBe state.selected
+      adopted.state.input shouldBe state.input
+      adopted.baseHead shouldBe payload.baseHead
+      adopted.state.repairControl shouldBe state.repairControl
+      adopted.state.ordinaryCount shouldBe state.ordinaryCount
+      adopted.state.automaticCount shouldBe state.automaticCount
+      adopted.validationContinuation shouldBe Some(direction)
+      RepositorySyncNativeMergeValidation.productSuccessful(adopted.state.receipts.last, WorkflowSbtValidation.Kind.TestOnly) shouldBe false
+    }
+
     "retain old receipts and distinguish unchanged and source-changing continuation" in {
       Given("a GoalTask Wait and independently selected fixture direction")
       val state = SelectedValidationFixture.state

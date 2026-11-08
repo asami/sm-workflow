@@ -280,10 +280,13 @@ private[smworkflow] object GoalTaskValidationContinuation {
 }
 
 /** Shared public continuation for a known-ended, unverified selected test.
+  * An accurately captured ZeroTests stop uses the same explicit direction and
+  * candidate-refresh path; it never becomes successful validation evidence.
   * Uses the existing bounded checkpoint and validation-continuation evidence;
   * historical supplemental GoalTask targets keep their original decoder.
   * @since   Nov.  8, 2026
-  * @version Nov.  8, 2026
+  *  version Nov.  8, 2026
+  * @version Nov.  9, 2026
   */
 private[smworkflow] object BoundedSelectedValidationContinuation {
   import StandaloneFixExecution as S
