@@ -13163,6 +13163,15 @@ operation = GoalTaskService.describeGoalTaskMalformedIssuedWorkRecovery
 
 operation = GoalTaskService.recoverGoalTaskMalformedIssuedWork
 
+
+#### describeGoalTaskUnverifiedValidationContinuation
+
+operation = GoalTaskService.describeGoalTaskUnverifiedValidationContinuation
+
+#### adoptGoalTaskUnverifiedValidationContinuation
+
+operation = GoalTaskService.adoptGoalTaskUnverifiedValidationContinuation
+
 # STATE-MACHINE
 
 ## GoalTaskLifecycle
@@ -13489,6 +13498,66 @@ GoalTaskWorkResult
 ###### TYPE
 
 GoalTaskView
+
+
+#### describeGoalTaskUnverifiedValidationContinuation
+
+##### DESCRIPTION
+
+Describe the same Session confirmed-ended unverified selected check and optional same-purpose owned candidate scope. No effects or execution authority.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+BoundedValidationContinuationDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | BoundedValidationContinuationDescriptionInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+BoundedValidationContinuationView
+
+
+#### adoptGoalTaskUnverifiedValidationContinuation
+
+##### DESCRIPTION
+
+Admit independently selected direction for one new selected validation attempt or current owned candidate capture. Preserve old unverified result, successful history and counters. A separate Advance owns effects; unknown/live/denied observations and failed assertions are ineligible.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+BoundedValidationContinuationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | BoundedValidationContinuationInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+BoundedValidationContinuationView
 
 # SERVICE
 
@@ -14007,6 +14076,15 @@ operation = DelegateTaskDeliveryService.observeDelegateTaskDelivery
 
 operation = DelegateTaskDeliveryService.describeDelegateTaskAdoption
 
+
+#### describeDelegateTaskValidationContinuation
+
+operation = DelegateTaskService.describeDelegateTaskValidationContinuation
+
+#### adoptDelegateTaskValidationContinuation
+
+operation = DelegateTaskService.adoptDelegateTaskValidationContinuation
+
 # STATE-MACHINE
 
 ## DelegateTaskLifecycle
@@ -14280,6 +14358,66 @@ DelegateTaskWorkResult
 ###### TYPE
 
 DelegateTaskView
+
+
+#### describeDelegateTaskValidationContinuation
+
+##### DESCRIPTION
+
+Describe the same Session confirmed-ended unverified selected check and optional same-purpose owned candidate scope. No effects or execution authority.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+BoundedValidationContinuationDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | BoundedValidationContinuationDescriptionInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+BoundedValidationContinuationView
+
+
+#### adoptDelegateTaskValidationContinuation
+
+##### DESCRIPTION
+
+Admit independently selected direction for one new selected validation attempt or current owned candidate capture. Preserve old unverified result, successful history and counters. A separate Advance owns effects; unknown/live/denied observations and failed assertions are ineligible.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+BoundedValidationContinuationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | BoundedValidationContinuationInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+BoundedValidationContinuationView
 
 # SERVICE
 
@@ -14998,6 +15136,49 @@ Explicit ad hoc Task request selection metadata and absolute local file: URI ref
 | reference | WorkflowArtifactReference | 1 |
 
 ## GoalTaskRepairContinuationDescriptionResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| componentInstance | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| target | string | 1 |
+| choices | string | * |
+| resumeOperation | string | 1 |
+
+# VALUE
+
+## BoundedValidationContinuationDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| additionalOwnedPaths | string | * |
+| refreshCandidate | boolean | 1 |
+
+## BoundedValidationContinuationInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | string | 1 |
+| choice | string | 1 |
+| rationale | string | 1 |
+| participant | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+
+## BoundedValidationContinuationView
 
 ### ATTRIBUTE
 

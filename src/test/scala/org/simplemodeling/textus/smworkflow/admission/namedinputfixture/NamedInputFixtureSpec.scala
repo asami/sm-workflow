@@ -14,7 +14,8 @@ import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseNativeMetadata a
 
 /** Trusted exact input names that collide under ordinary property naming.
   * @since   Oct. 19, 2026
-  * @version Oct. 24, 2026
+  *  version Oct. 24, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 class NamedInputDeclarations extends ValidationDeclarationProvider {
@@ -77,6 +78,6 @@ private[admission] object NamedInputFixture {
     "case--label" -> Json.fromString("variant double"), "tail-" -> Json.fromString("variant tail"))
   def plan: L.Plan = L.Plan(source.identity, "revision-1", source.sliceRef,
     Vector(L.Condition("named-condition", "Exact named inputs survive the query and explicit second variant")),
-    D.SelectionQuery(), Vector(L.Invocation(reference, variant)), globals,
+    D.SelectionQuery(explicitSuites = Set(fixtureClass.getName)), Vector(L.Invocation(reference, variant)), globals,
     Vector(L.Coverage("named-condition", true, Vector(reference))))
 }

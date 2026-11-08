@@ -15,7 +15,8 @@ import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseNativeMetadata a
 
 /** Trusted local schema for one ordinary ConfigMap-consuming registration.
   * @since   Oct. 19, 2026
-  * @version Oct. 24, 2026
+  *  version Oct. 24, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 class TypedMetadataDeclarations extends ValidationDeclarationProvider {
@@ -123,6 +124,6 @@ private[admission] object TypedMetadataFixture {
     Some(profile))
   def plan: L.Plan = L.Plan(source.identity, "revision-1", source.sliceRef,
     Vector(L.Condition("typed-condition", "The same discovered scenario is selected with two distinct counts")),
-    D.SelectionQuery(), Vector(L.Invocation(reference, Map("count" -> io.circe.Json.fromInt(2)))), Map.empty,
+    D.SelectionQuery(explicitSuites = Set(fixtureClass.getName)), Vector(L.Invocation(reference, Map("count" -> io.circe.Json.fromInt(2)))), Map.empty,
     Vector(L.Coverage("typed-condition", true, Vector(reference))))
 }

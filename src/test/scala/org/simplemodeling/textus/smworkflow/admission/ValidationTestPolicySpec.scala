@@ -13,7 +13,8 @@ import org.simplemodeling.textus.smworkflow.testing.metafixture.explicit.Explici
 
 /** Metadata-driven discovery, exclusion and explicit selection without executing HEAVY bodies.
   * @since   Oct. 24, 2026
-  * @version Oct. 31, 2026
+  *  version Oct. 31, 2026
+  * @version Nov.  8, 2026
   */
 @ValidationSpecification(declaration = classOf[LocalTestDeclaration])
 final class ValidationTestPolicySpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -101,6 +102,28 @@ final class ValidationTestPolicySpec extends AnyWordSpec with Matchers with Give
       Then("local resource use does not create an invented external-service restriction")
       result.toOption shouldBe Some(())
       ValidationTestPolicy.requiresRuntime(local) shouldBe false
+    }
+  }
+
+  "Automatic and manual Plan revision selection" should {
+    "keep E4 in its original focused suite and require explicit selection for the staged driver" in {
+      Given("the ordinary E4 suite and a distinct standard explicit-only manual suite")
+      val root = Path.of(getClass.getProtectionDomain.getCodeSource.getLocation.toURI).toRealPath().toString
+      val automatic = classOf[NativeGoalPlanRevisionLiveSpec].getName
+      val manual = classOf[NativeGoalDocumentPlanRevisionManualSpec].getName
+      When("the build bridge selects the actual automatic suite")
+      val selected = LabelledTestSelection.select(root, "test", "FOCUSED", Array(automatic, manual),
+        Array.empty[String], Array.empty[String], Array(automatic))
+      Then("E4 remains runnable without selecting the external staged body")
+      selected.map(_(0)).toSet shouldBe Set(automatic)
+      selected.map(_(1)).exists(_.contains("issue the actual scoped question")) shouldBe true
+      new NativeGoalPlanRevisionLiveSpec().testNames.size shouldBe 1
+      classOf[NativeGoalDocumentPlanRevisionManualSpec].isAnnotationPresent(classOf[org.scalatest.DoNotDiscover]) shouldBe true
+      classOf[NativeGoalDocumentPlanRevisionManualSpec].isAnnotationPresent(classOf[org.scalatest.tags.Slow]) shouldBe true
+      val explicit = LabelledTestSelection.select(root, "test", "FOCUSED", Array(manual),
+        Array.empty[String], Array.empty[String], Array(manual))
+      explicit.map(_(0)).toSet shouldBe Set(manual)
+      explicit.map(_(1)).exists(_.contains("perform only one explicitly selected stage")) shouldBe true
     }
   }
 

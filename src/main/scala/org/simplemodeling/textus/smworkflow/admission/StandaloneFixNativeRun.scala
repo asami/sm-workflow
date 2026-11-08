@@ -60,7 +60,7 @@ private[smworkflow] object BoundedWorkRuntime {
   * No Phase Start, Plan, Step acceptance, commit or private command driver.
   * @since   Oct. 26, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  7, 2026
+  * @version Nov.  8, 2026
   */
 private[smworkflow] object StandaloneFixNativeRun extends BoundedWorkNativeRun(false) {
   type Host = BoundedWorkRuntime.Host
@@ -403,7 +403,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
         else Consequence.success(current)
         payload <- loadPayloadC(storage, id, state.revision.value, core)
         _ <- GoalPhaseParticipantAdmission.admitC(payload.state.participant, core.executionContext)
-        _ <- if (task && !delegation) GoalTaskValidationContinuation.retainedC(payload, core.component.get.core.instanceId.canonicalKey, id, state.revision.value) else Consequence.unit
+        _ <- if (task) GoalTaskValidationContinuation.retainedC(payload, core.component.get.core.instanceId.canonicalKey, id, state.revision.value) else Consequence.unit
         response <- _progress_c(h, definition, storage, state, payload, core, 0)
       } yield response
     }
@@ -453,6 +453,19 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
         saved <- saveC(h, store, intent, payload.copy(state = next), core)
         result <- _progress_c(h, definition, store, saved, payload.copy(state = next), core, depth + 1)
       } yield result
+      case "SelectedValidationCandidateReady" => for {
+        intent <- saveC(h, store, record, payload.copy(state = s.copy(stage = "SelectedValidationCandidateIntent")), core)
+        observed <- captureC(h, payload, core, remainingOnly = true)
+        next <- observed match {
+          case Right(candidate) if s.candidate.contains(candidate) =>
+            S.continueUnverifiedValidationC(s.copy(stage = "Wait"))
+          case Right(candidate) => S.candidateC(s.copy(stage = "Inspect"), candidate)
+          case Left(reason) => Consequence.success(s.copy(stage = "Human", message = reason))
+        }
+        retained = payload.copy(state = next)
+        saved <- saveC(h, store, intent, retained, core)
+        response <- _progress_c(h, definition, store, saved, retained, core, depth + 1)
+      } yield response
       case "CandidateContinuationReady" if delegation => for {
         _ <- DelegateTaskCandidateContinuation.currentC(h, record, payload, core)
         intent <- saveC(h, store, record, payload.copy(state = s.copy(stage = "CandidateContinuationIntent")), core)

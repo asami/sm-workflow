@@ -36,7 +36,8 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Shared real producer discovery, never a synthetic positive inventory.
   * @since   Oct. 18, 2026
-  * @version Oct. 24, 2026
+  *  version Oct. 24, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object GoalPhaseNativeMetadataFixture {
@@ -47,7 +48,7 @@ private[admission] object GoalPhaseNativeMetadataFixture {
     val artifact = D.ArtifactScope("component:sm-workflow-fixture", "sm-workflow-fixture-tests", "artifact-1", "source-1",
       root, "org.simplemodeling.textus.smworkflow.admission.metafixture")
     N.Profile(D.DiscoveryScope("sm-workflow-metadata-fixture", "scope-1", Vector(artifact)),
-      D.SelectionQuery(Set(M.Purpose.SMOKE)),
+      D.SelectionQuery(Set(M.Purpose.SMOKE), explicitSuites = Set(fixtureClass.getName)),
       Vector(D.OperationReference("component:sm-workflow-fixture", "metadata-fixture", "focused-b")))
   }
   def check: V.Check = V.Check("selected-metadata", 2, WorkflowSbtValidation.Kind.TestOnly, Some(profile))
@@ -212,6 +213,27 @@ final class GoalPhaseNativeMetadataSpec extends AnyWordSpec with Matchers with G
   }
 
   "Structured native metadata configuration" should {
+    "retain producer framework options and suite facts while reading their absent historical fields" in {
+      Given("a real producer-selected fixture inventory and its framework-aware query")
+      val selected = batch
+      val query = profile.query.copy(standardFramework = true, includeSlow = true)
+      val operation = selected.inventory.operations.head
+      val oldquery = query.asJson.mapObject(_.remove("standardFramework").remove("includeSlow").remove("explicitSuites"))
+      val oldoperation = operation.asJson.mapObject(_.remove("framework"))
+      When("current and historical query and operation values cross the retained JSON boundary")
+      val currentquery = query.asJson.as[D.SelectionQuery]
+      val currentoperation = operation.asJson.as[D.Operation]
+      val historicalquery = oldquery.as[D.SelectionQuery]
+      val historicaloperation = oldoperation.as[D.Operation]
+      Then("current values retain all producer semantics and absent old fields use the established defaults")
+      currentquery shouldBe Right(query)
+      currentoperation shouldBe Right(operation)
+      operation.framework.map(_.explicitOnly) shouldBe Some(true)
+      historicalquery shouldBe Right(D.SelectionQuery(query.purposes, query.features))
+      historicaloperation shouldBe Right(operation.copy(framework = None))
+      N.normalizeBatches(Json.arr(selected.asJson)).flatMap(_.as[Vector[N.Batch]].left.map(_.message)) shouldBe Right(Vector(selected))
+    }
+
     "discover the complete actual fixture from a source-bound captured plan and retain its enriched Batch" in {
       Given("an explicit source-only profile and the typed plan captured by the owning boundary, using the real compiled fixture")
       val sourcecheck = GoalPhaseSliceValidationPlanFixture.check

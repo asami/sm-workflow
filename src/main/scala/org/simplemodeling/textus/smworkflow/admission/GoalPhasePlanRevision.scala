@@ -16,7 +16,7 @@ import GoalPhaseDocumentPlan as P
   * Neither value certifies consent, transport integrity or execution authority.
   * @since   Oct. 18, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhasePlanRevision {
@@ -272,7 +272,8 @@ private[smworkflow] object GoalPhasePlanRevision {
   def eligibleC(controller: O.State, captured: Captured): Consequence[Unit] = for {
     _ <- validateCapturedC(captured)
     _ <- _check(controller != null, "controller is absent")
-    _ <- if (captured.revisionScope.contains(phaseAcceptanceDeferralScope))
+    _ <- if (captured.revisionScope.contains(phaseAcceptanceDeferralScope) ||
+      captured.revisionScope.contains(remainingPurposeScope))
       adoptedC(controller, captured, "proposal-eligibility").map(_ => ())
       else if (controller.cursor < controller.plan.steps.size && captured.plan.steps.size == controller.plan.steps.size &&
         captured.plan.steps.map(_.ownedPaths) != controller.plan.steps.map(_.ownedPaths))

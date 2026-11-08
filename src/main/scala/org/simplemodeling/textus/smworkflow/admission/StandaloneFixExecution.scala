@@ -13,7 +13,7 @@ import GoalPhaseRuntimeRepairControl as R
   * It is neither a Phase Plan nor a second mechanical command runner.
   * @since   Oct. 26, 2026
   *  version Oct. 27, 2026
-  * @version Nov.  7, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object StandaloneFixExecution {
@@ -166,6 +166,15 @@ private[smworkflow] object StandaloneFixExecution {
       stage = "Validate", receipts = state.receipts.dropRight(1),
       message = "Confirmed terminated incomplete attempt retained in history; continue only its selected check"))
     else invalid("Validation continuation requires the original confirmed terminal incomplete observation")
+
+  /** The public adoption owner has independently admitted the new selected
+    * attempt. Its predecessor checkpoint keeps the original Unverified receipt.
+    */
+  def continueUnverifiedValidationC(state: State): Consequence[State] =
+    if (TerminatedValidationContinuation.unverified(state)) Consequence.success(state.copy(
+      stage = "Validate", receipts = state.receipts.dropRight(1),
+      message = "Admitted new selected check attempt; original Unverified retained in native history"))
+    else invalid("Selected validation continuation requires a confirmed ended unverified check without failed assertions")
 
   /** An intent is retained before its typed SBT effect. Redisplay of an intent
     * is uncertainty/collection work, never permission to run it again. */

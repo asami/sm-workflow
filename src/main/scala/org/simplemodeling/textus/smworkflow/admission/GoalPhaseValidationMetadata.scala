@@ -7,7 +7,8 @@ import org.goldenport.cncf.workspace.WorkspaceId
 
 /** Bounded metadata selection and exact producer binding, before effect admission.
   * @since   Oct. 18, 2026
-  * @version Oct. 24, 2026
+  *  version Oct. 24, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseValidationMetadata {
@@ -43,7 +44,7 @@ private[smworkflow] object GoalPhaseValidationMetadata {
   def discoverC(request: Request, loader: ClassLoader): Consequence[Selection] =
     for {
       _ <- _request_c(request)
-      inventory <- D.discoverC(request.scope, loader)
+      inventory <- D.discoverC(request.scope, loader, request.query.explicitSuites)
       selected <- selectC(request, inventory)
     } yield selected
 

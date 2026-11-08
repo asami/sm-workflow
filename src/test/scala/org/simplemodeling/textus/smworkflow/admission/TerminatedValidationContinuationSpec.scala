@@ -15,7 +15,7 @@ import RepositorySyncNativeMergeValidation as B
 
 /** Fixture observations, not installed execution or acceptance evidence.
   * @since   Nov.  6, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object TerminatedValidationFixture {
@@ -50,6 +50,32 @@ final class TerminatedValidationContinuationSpec extends AnyWordSpec with Matche
     val successful = checks.dropRight(1).map(check => B.Receipt(check.identity, "exited", Some(0), "", "",
       Some(V.Facts(check.kind, V.Outcome.Succeeded, None, None))))
     _take(S.observedC(_take(S.intentC(started.copy(receipts = successful))), TerminatedValidationFixture.receipt(checks.last)))
+  }
+
+  "Explicit selected-validation continuation" should {
+    "distinguish an ended unverified test from process uncertainty and failed assertions" in {
+      Given("an actual-shaped specification-owned exited-zero canceled-test report")
+      val state = SelectedValidationFixture.state
+      When("the common owner classifies it without changing its old result")
+      val resumed = _take(S.continueUnverifiedValidationC(state))
+      Then("the successful prefix and limits remain while only the affected check becomes runnable")
+      TerminatedValidationContinuation.unverified(state) shouldBe true
+      TerminatedValidationContinuation.eligible(state) shouldBe false
+      resumed.receipts shouldBe state.receipts.dropRight(1)
+      resumed.selected shouldBe state.selected
+      resumed.candidate shouldBe state.candidate
+      resumed.ordinaryCount shouldBe 0
+      resumed.automaticCount shouldBe 0
+      state.receipts.last.sbt.get.outcome shouldBe V.Outcome.Unverified
+      TerminatedValidationContinuation.unverified(state.copy(receipts = state.receipts.dropRight(1) :+
+        SelectedValidationFixture.receipt(failed = 1))) shouldBe false
+      val last = state.receipts.last
+      val unknown = last.copy(processObservation = last.processObservation.map(_.copy(
+        termination = ProcessExecutionTermination.TerminationUnconfirmed)))
+      TerminatedValidationContinuation.unverified(state.copy(receipts = state.receipts.dropRight(1) :+ unknown)) shouldBe false
+      TerminatedValidationContinuation.unverified(state.copy(receipts = state.receipts.dropRight(1) :+
+        last.copy(processObservation = None))) shouldBe false
+    }
   }
 
   "Confirmed terminated validation continuation" should {
@@ -109,5 +135,32 @@ final class TerminatedValidationContinuationSpec extends AnyWordSpec with Matche
       restored shouldBe Right(legacy)
       S.continueTerminatedValidationC(legacy).isSuccess shouldBe false
     }
+  }
+}
+
+/** Specification-owned terminated observations; never a real check receipt. */
+private[admission] object SelectedValidationFixture {
+  val checks = Vector(GoalPhaseNativeValidation.Check("compile", 1, V.Kind.Compile),
+    GoalPhaseNativeValidation.Check("focused", 2, V.Kind.TestOnly),
+    GoalPhaseNativeValidation.Check("test", 3, V.Kind.Test))
+  def receipt(failed: Int = 0): B.Receipt = {
+    val text = s"[info] FixtureSpec:\n[info] - explicit stage !!! CANCELED !!!\n" +
+      s"[info] Total number of tests run: 3\n[info] Suites: completed 1, aborted 0\n" +
+      s"[info] Tests: succeeded ${3-failed}, failed $failed, canceled 1, ignored 0, pending 0\n"
+    val bytes = text.getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector
+    val process = ProcessExecutionResult(ProcessExecutionTermination.Exited(0),
+      ProcessExecutionCapture(bytes, bytes.size.toLong, false), ProcessExecutionCapture(Vector.empty, 0L, false),
+      Vector.empty, 1L, "fixture-sbt")
+    B.Receipt("focused", "exited", Some(0), text, "",
+      Some(V.Facts(V.Kind.TestOnly, V.Outcome.Unverified, None, Some("FailedTests"))), Some(process))
+  }
+  def state: S.State = {
+    val input = S.Input("fixture", "selected-continuation", "Retain ordinary behavior", Vector("src"),
+      checks.map(_.identity), Vector("behavior"), Vector(ContextReference("specification", "1")), true,
+      task = Some(S.Task("direct-instruction", Vector.empty)))
+    val initial = S.startC(input, "participant", checks).toOption.get
+    initial.copy(stage = "Wait", candidate = Some(S.Candidate("a"*40, "b"*40, Vector("src/Value.scala"), "fixture")),
+      semanticReference = Some(ContextReference("specification-implementation", "1")),
+      receipts = Vector(B.Receipt("compile", "exited", Some(0), "", "", Some(V.Facts(V.Kind.Compile, V.Outcome.Succeeded, None, None))), receipt()))
   }
 }

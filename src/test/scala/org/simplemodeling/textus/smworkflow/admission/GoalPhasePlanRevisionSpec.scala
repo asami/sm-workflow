@@ -21,7 +21,7 @@ import GoalPhaseDocumentPlan as P
   * Native persistence, providers, Human admission and effects are not proved.
   * @since   Oct. 18, 2026
   *  version Oct. 27, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -105,10 +105,14 @@ final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with Giv
       When("fresh semantic capture selects the structural branch and saved adoption consumes its own scope")
       val captured = _take(captureSemanticProposalC(paused, proposed, Some(later)))
       val saved = captured.asJson.as[Captured].toOption.get
+      val eligible = eligibleC(paused, saved)
       val adopted = _take(adoptedC(paused, saved, "spec-independent-human"))
       Then("legacy capture still refuses and no later project defaults, accepted work or repair history change")
       captureC(paused, proposed, Some(_project)) shouldBe a[Consequence.Failure[?]]
       captured.revisionScope shouldBe Some(remainingPurposeScope)
+      eligible.isSuccess shouldBe true
+      eligibleC(paused, saved.copy(revisionScope = None)) shouldBe a[Consequence.Failure[?]]
+      eligibleC(adopted, saved) shouldBe a[Consequence.Failure[?]]
       captured.documents shouldBe None
       captured.plan.effectiveAcceptance shouldBe paused.plan.effectiveAcceptance
       saved shouldBe captured
@@ -165,16 +169,19 @@ final class GoalPhasePlanRevisionSpec extends AnyWordSpec with Matchers with Giv
       malformed.foreach(_ shouldBe a[Left[?, ?]])
       captureSemanticProposalC(paused, _proposal(revised), Some(_project), Some(_documents())) shouldBe a[Consequence.Failure[?]]
       validateCapturedC(captured.copy(documents = Some(_documents()))) shouldBe a[Consequence.Failure[?]]
+      eligibleC(paused, captured.copy(documents = Some(_documents()))) shouldBe a[Consequence.Failure[?]]
       captured.copy(documents = Some(_documents())).asJson.as[Captured] shouldBe a[Left[?, ?]]
       validateCapturedC(captured.copy(revisionScope = null)) shouldBe a[Consequence.Failure[?]]
       validateCapturedC(captured.copy(plan = captured.plan.copy(steps = captured.plan.steps.reverse))) shouldBe a[Consequence.Failure[?]]
       val changed = captured.plan.copy(effectiveAcceptance = _take(A.captureC(None, revised)).effectiveAcceptance)
       adoptedC(paused, captured.copy(plan = changed), "spec-crossed-effective") shouldBe a[Consequence.Failure[?]]
+      eligibleC(paused, captured.copy(plan = changed)) shouldBe a[Consequence.Failure[?]]
       val exhausted = _decision(_start)
       val repairs = exhausted.getClass.getDeclaredField("repairs")
       repairs.setAccessible(true)
       repairs.setInt(exhausted, exhausted.effectiveRepairLimit)
       captureSemanticProposalC(exhausted, _proposal(revised), Some(_project)) shouldBe a[Consequence.Failure[?]]
+      eligibleC(exhausted, captured) shouldBe a[Consequence.Failure[?]]
       val overflow = _decision(_start)
       val generation = overflow.getClass.getDeclaredField("generation")
       generation.setAccessible(true)

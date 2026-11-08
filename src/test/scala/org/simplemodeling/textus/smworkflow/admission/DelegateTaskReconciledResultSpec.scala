@@ -28,12 +28,11 @@ import SplitPhaseExplicitPartitionFixture.take
   * effects. The opt-in variant uses distinct selected installed CLI processes.
   * Neither variant is the authorized live existing-chat D2 delivery.
   * @since   Oct. 27, 2026
-  * @version Oct. 27, 2026
+  *  version Oct. 27, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
-@org.goldenport.cncf.validation.annotation.ValidationSpecification(
-  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
-final class DelegateTaskReconciledResultSpec extends AnyWordSpec with GivenWhenThen with ThreeWorkflowManagedRepositoryFixture {
+private[admission] abstract class DelegateTaskReconciledResultFixture extends AnyWordSpec with GivenWhenThen with ThreeWorkflowManagedRepositoryFixture {
   private val _native = DelegateTaskNativeRun
   private val _checks = Vector(GoalPhaseNativeValidation.Check("compile", 1, WorkflowSbtValidation.Kind.Compile),
     GoalPhaseNativeValidation.Check("focused", 2, WorkflowSbtValidation.Kind.TestOnly))
@@ -105,7 +104,7 @@ final class DelegateTaskReconciledResultSpec extends AnyWordSpec with GivenWhenT
       unrelated = Some(observed.dirty.filterNot(_.path == "value.txt"))), core)
   } yield ()
 
-  private def _qualify(installed: Option[(Path, Path)], unknown: Boolean): Unit = {
+  protected def qualify_result(installed: Option[(Path, Path)], unknown: Boolean): Unit = {
     val scenario = NativeWorkflowCliFixture.fresh("p68-reconciled-" + unknown, bootstrapSelectedInput = false)
     val root = scenario.root
     _prepare(root)
@@ -259,12 +258,31 @@ final class DelegateTaskReconciledResultSpec extends AnyWordSpec with GivenWhenT
     legacy.asJson.as[S.State].toOption shouldBe Some(legacy)
   }
 
+}
+
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
+final class DelegateTaskReconciledResultSpec extends DelegateTaskReconciledResultFixture {
   "Reconciled delegated commit results" should {
     "retain failed and missing execution observations through managed collection requester adoption and re-entry" in {
       Given("two fresh fixture-owned native checkpoints, with accepted semantics/checks explicitly marked as specification data")
-      Vector(false, true).foreach(unknown => _qualify(None, unknown))
+      Vector(false, true).foreach(unknown => qualify_result(None, unknown))
     }
+  }
+}
+
+/** Explicit installed-image qualification retains its original external inputs and assertions.
+  * @since Nov. 8, 2026
+  * @version Nov. 8, 2026
+  */
+@org.scalatest.DoNotDiscover
+@org.scalatest.tags.Slow
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
+final class DelegateTaskReconciledResultInstalledSpec extends DelegateTaskReconciledResultFixture {
+  "Reconciled delegated commit results in an installed image" should {
     "qualify the affected result path in the explicitly selected installed image" in {
+      Given("an explicitly selected installed command and registered installation root")
       val command = sys.props.get("smworkflow.spec.installedCommand").orElse(sys.env.get("SM_WORKFLOW_SPEC_INSTALLED_COMMAND"))
       val root = sys.props.get("smworkflow.spec.phase68Installations").orElse(sys.env.get("SM_WORKFLOW_SPEC_PHASE68_INSTALLATIONS"))
       if (command.isEmpty || root.isEmpty) cancel("Installed affected-path qualification unavailable: explicitly select both installed command and Phase68 installation root")
@@ -286,15 +304,17 @@ final class DelegateTaskReconciledResultSpec extends AnyWordSpec with GivenWhenT
       val archive = directory.resolve(component.get[String]("path").toOption.get).normalize
       require(archive.startsWith(directory.resolve("components")) && Files.isRegularFile(archive) && !Files.isSymbolicLink(archive),
         "Select the immutable installed component archive")
-      def digest(bytes: Array[Byte]): String = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes))
-      val archiveDigest = digest(Files.readAllBytes(archive))
+      def _digest_(bytes: Array[Byte]): String = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes))
+      val archiveDigest = _digest_(Files.readAllBytes(archive))
       info("Installed affected-path provenance: installation=" + identity + " command=" + executable +
-        " manifestSha256=" + digest(manifestBytes) + " component=" + archive + " componentSha256=" + archiveDigest)
+        " manifestSha256=" + _digest_(manifestBytes) + " component=" + archive + " componentSha256=" + archiveDigest)
       Given("an explicitly selected immutable installed image; no source-classpath or global-image fallback")
-      Vector(false, true).foreach(unknown => _qualify(Some(executable -> installations), unknown))
+      When("the affected result path runs through that selected installed image")
+      Vector(false, true).foreach(unknown => qualify_result(Some(executable -> installations), unknown))
+      Then("the selected installation and its retained artifacts remain unchanged")
       Files.readString(installations.resolve("selected")) shouldBe selected
       Files.readAllBytes(directory.resolve("runtime-installation.json")).toVector shouldBe manifestBytes.toVector
-      digest(Files.readAllBytes(archive)) shouldBe archiveDigest
+      _digest_(Files.readAllBytes(archive)) shouldBe archiveDigest
     }
   }
 }

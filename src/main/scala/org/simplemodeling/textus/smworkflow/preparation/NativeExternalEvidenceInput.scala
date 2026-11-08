@@ -17,7 +17,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * standard StartupImport input. It neither writes storage nor calls Workflow.
   * @since   Oct. 14, 2026
   *  version Oct. 27, 2026
-  * @version Nov.  2, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeExternalEvidenceInput {
@@ -42,17 +42,18 @@ private[smworkflow] object NativeExternalEvidenceInput {
     for {
       options <- NativePreparationInput.optionsC(supplied, _required, readText, Set("participant"))
       _ <- if (Set("DelegateTask", "GoalTask", "StandaloneFix", "GoalPhase", "RepositorySync", "SplitPhase")(options("family")) &&
-          Set("repair-continuation", "completion-record-closure", "adoption", "malformed-issued-work-recovery", "review", "human", "validation-continuation", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "source-history-normalization", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "dependency-source-revision", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption", "standalone-fix-validation-recovery")(options("kind")) &&
-          (options("family") != "DelegateTask" || Set("review", "adoption", "completion-record-closure")(options("kind"))) &&
+          Set("selected-validation-continuation", "repair-continuation", "completion-record-closure", "adoption", "malformed-issued-work-recovery", "review", "human", "validation-continuation", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "source-history-normalization", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "dependency-source-revision", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption", "standalone-fix-validation-recovery")(options("kind")) &&
+          (options("family") != "DelegateTask" || Set("review", "adoption", "completion-record-closure", "selected-validation-continuation")(options("kind"))) &&
           (options("kind") != "adoption" || options("family") == "DelegateTask") &&
-          (options("family") != "GoalTask" || Set("repair-continuation", "validation-continuation", "review", "malformed-issued-work-recovery", "completion-record-closure")(options("kind"))) &&
+          (options("kind") != "selected-validation-continuation" || Set("GoalTask", "DelegateTask")(options("family"))) &&
+          (options("family") != "GoalTask" || Set("selected-validation-continuation", "repair-continuation", "validation-continuation", "review", "malformed-issued-work-recovery", "completion-record-closure")(options("kind"))) &&
           (options("kind") != "malformed-issued-work-recovery" || options("family") == "GoalTask") &&
           (options("kind") != "repair-continuation" || options("family") == "GoalTask") &&
           (options("kind") != "standalone-fix-validation-recovery" || options("family") == "StandaloneFix") &&
           (options("kind") != "validation-continuation" || Set("RepositorySync", "GoalTask")(options("family"))) &&
           !(options("family") == "SplitPhase" && options("kind") == "review") &&
           (!Set("release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "source-history-normalization", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "dependency-source-revision", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption")(options("kind")) || options("family") == "GoalPhase") &&
-          (if (Set("repair-continuation", "completion-record-closure", "malformed-issued-work-recovery", "human", "validation-continuation", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "source-history-normalization", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "dependency-source-revision", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption", "standalone-fix-validation-recovery")(options("kind"))) options.contains("participant")
+          (if (Set("selected-validation-continuation", "repair-continuation", "completion-record-closure", "malformed-issued-work-recovery", "human", "validation-continuation", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "source-history-normalization", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "dependency-source-revision", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption", "standalone-fix-validation-recovery")(options("kind"))) options.contains("participant")
             else !options.contains("participant"))) Consequence.unit
         else _invalid("unsupported family/kind or missing Human participant")
       occurred <- NativePreparationInput.instantC(options("occurred-at"))
@@ -346,6 +347,12 @@ private[smworkflow] object NativeExternalEvidenceInput {
         context <- _one_c(output.reviewContext.toVector)
         answer <- summon[ValueReader[V.GoalTaskWorkResult]].readC(result)
         prepared <- NativeReviewPreparation.taskC(context, answer, reference, execution, issuer, occurred)
+      } yield (prepared.recordIdentity, prepared.record)
+      case "GoalTask" | "DelegateTask" if options("kind") == "selected-validation-continuation" => for {
+        description <- summon[ValueReader[V.BoundedValidationContinuationView]].readC(request)
+        answer <- summon[ValueReader[V.BoundedValidationContinuationInput]].readC(result)
+        prepared <- NativeReviewPreparation.selectedValidationContinuationC(description, answer, reference, execution,
+          participant, issuer, occurred)
       } yield (prepared.recordIdentity, prepared.record)
       case "GoalTask" if options("kind") == "validation-continuation" => for {
         description <- summon[ValueReader[V.GoalTaskValidationContinuationDescriptionResult]].readC(request)

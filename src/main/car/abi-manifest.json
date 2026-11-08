@@ -945,6 +945,48 @@
           "kind": "COMMAND",
           "input": "DelegateTaskCandidateContinuationInput",
           "output": "DelegateTaskCandidateContinuationView"
+        },
+        {
+          "service": "DelegateTaskService",
+          "name": "adoptDelegateTaskValidationContinuation",
+          "kind": "COMMAND",
+          "input": "BoundedValidationContinuationInput",
+          "output": "BoundedValidationContinuationView"
+        },
+        {
+          "service": "DelegateTaskService",
+          "name": "describeDelegateTaskValidationContinuation",
+          "kind": "COMMAND",
+          "input": "BoundedValidationContinuationDescriptionInput",
+          "output": "BoundedValidationContinuationView"
+        },
+        {
+          "service": "GoalTaskService",
+          "name": "adoptGoalTaskUnverifiedValidationContinuation",
+          "kind": "COMMAND",
+          "input": "BoundedValidationContinuationInput",
+          "output": "BoundedValidationContinuationView"
+        },
+        {
+          "service": "GoalTaskService",
+          "name": "adoptGoalTaskValidationContinuation",
+          "kind": "COMMAND",
+          "input": "GoalTaskValidationContinuationInput",
+          "output": "GoalTaskValidationContinuationDescriptionResult"
+        },
+        {
+          "service": "GoalTaskService",
+          "name": "describeGoalTaskUnverifiedValidationContinuation",
+          "kind": "COMMAND",
+          "input": "BoundedValidationContinuationDescriptionInput",
+          "output": "BoundedValidationContinuationView"
+        },
+        {
+          "service": "GoalTaskService",
+          "name": "describeGoalTaskValidationContinuation",
+          "kind": "COMMAND",
+          "input": "GoalTaskValidationContinuationDescriptionInput",
+          "output": "GoalTaskValidationContinuationDescriptionResult"
         }
       ],
       "types": [
@@ -8617,6 +8659,210 @@
             {
               "name": "selectionCollection",
               "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "BoundedValidationContinuationDescriptionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "additionalOwnedPaths",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "refreshCandidate",
+              "type": "boolean",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "BoundedValidationContinuationInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choice",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "BoundedValidationContinuationView",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "componentInstance",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choices",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "resumeOperation",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalTaskValidationContinuationDescriptionResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "componentInstance",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choices",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "resumeOperation",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalTaskValidationContinuationInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choice",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reference",
+              "type": "WorkflowArtifactReference",
               "multiplicity": "1",
               "required": true
             }
