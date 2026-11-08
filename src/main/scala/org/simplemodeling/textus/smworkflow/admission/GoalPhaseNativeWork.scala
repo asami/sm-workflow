@@ -19,7 +19,7 @@ import IncrementalSbtDiagnosisRepair.given
   * only after their actual native predecessor has been connected.
   * @since   Oct.  6, 2026
   *  version Oct. 29, 2026
-  * @version Nov.  8, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWork {
@@ -219,6 +219,8 @@ private[smworkflow] object GoalPhaseNativeWork {
         (GoalPhaseInitialPhaseCheckRepair.terminalFailureValid(value.validation) ||
           value.validation.outcome.exists(Set("repair-required", "repair-limit-reached")) &&
             GoalPhaseInitialPhaseCheckRepair.repairContextValid(value.validation))
+      // Complete InvalidReport/SuiteMismatch facts are repair context only
+      // through their original append-only report-repair provenance.
       val report = value.changedPaths.nonEmpty && value.initialPhaseRepair.isEmpty && value.stepTestReportRepair.nonEmpty &&
         value.stepTestReportRepair.forall(GoalPhaseStepTestReportRepair.validReference) &&
         GoalPhaseStepTestReportRepair.reportRepairFailureValid(value.validation)

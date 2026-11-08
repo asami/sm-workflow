@@ -14,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.testing.metafixture.explicit.Explici
 /** Metadata-driven discovery, exclusion and explicit selection without executing HEAVY bodies.
   * @since   Oct. 24, 2026
   *  version Oct. 31, 2026
-  * @version Nov.  8, 2026
+  * @version Nov.  9, 2026
   */
 @ValidationSpecification(declaration = classOf[LocalTestDeclaration])
 final class ValidationTestPolicySpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -233,6 +233,26 @@ final class ValidationTestPolicySpec extends AnyWordSpec with Matchers with Give
       containingrows should not be empty
       (exactrows ++ containingrows).foreach(row => expected should contain(row(0) -> row(1)))
       (exactrows ++ containingrows).forall(_(2) == "false") shouldBe true
+    }
+
+    "require explicit selection for the installed same-Session report repair suite through its normal declaration" in {
+      Given("the explicit-only source-lineage report continuation suite and its existing dependency runtime declaration")
+      val root = Path.of(getClass.getProtectionDomain.getCodeSource.getLocation.toURI).toRealPath().toString
+      val installed = classOf[NativeGoalStepTestReportRepairCliSpec].getName
+      val declared = new NativeGoalStepTestReportRepairCliSpec().testNames
+      When("the real bridge performs explicit selection and automatic FULL or HEAVY discovery without executing the fixture")
+      val explicit = LabelledTestSelection.select(root, "test", "EXPLICIT", Array(installed))
+      Then("explicit callers retain the declared runtime requirement and discovery does not enroll the installed episode")
+      explicit.map(row => row(0) -> row(1)).toSet shouldBe declared.map(installed -> _)
+      explicit should not be empty
+      explicit.forall(_(2) == "true") shouldBe true
+      And("each isolated automatic purpose rejects its empty selection")
+      intercept[IllegalArgumentException] {
+        LabelledTestSelection.select(root, "test", "FULL", Array(installed))
+      }
+      intercept[IllegalArgumentException] {
+        LabelledTestSelection.select(root, "test", "HEAVY", Array(installed))
+      }
     }
 
     "select ADMISSION without changing FULL or admitting HEAVY" in {

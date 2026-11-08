@@ -1,7 +1,3 @@
-/**
- * @since   Oct. 27, 2026
- * @version Oct. 27, 2026
- */
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
@@ -15,6 +11,7 @@ import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.TypedValue
 import org.scalatest.wordspec.AnyWordSpec
+import org.scalatest.GivenWhenThen
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms as Programs
 import org.simplemodeling.textus.smworkflow.value as V
@@ -27,10 +24,12 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Real isolated managed host/SQLite and native typed process capture. The
   * executable deliberately emits fixture INVALID reports; it runs no tests
   * and provides no successful selected-test or genuine Human evidence.
+  * @since   Oct. 27, 2026
+  * @version Nov.  9, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
-final class GoalPhaseStepTestReportRepairOperationSpec extends AnyWordSpec with GoalPhaseValidationRecoveryOperationFixture {
+final class GoalPhaseStepTestReportRepairOperationSpec extends AnyWordSpec with GoalPhaseValidationRecoveryOperationFixture with GivenWhenThen {
   private val _classes = Vector("fixture.OneSpec", "fixture.TwoSpec")
   override protected def _recovery_plan = O.Plan("step-report-operation", "2", "phase-2", "sm-workflow",
     Vector(O.Step("step-1", "Correct only the fixture report", Vector("value.txt"), Vector.empty, Vector("focused"))),
@@ -74,7 +73,7 @@ final class GoalPhaseStepTestReportRepairOperationSpec extends AnyWordSpec with 
   }
   private def _native(record: InstanceRecord): Json = io.circe.parser.parse(take(WorkflowInstanceRecordJsonV1.encodeC(record))).toOption.get
   private def _processes(root: Path): Int = Files.readString(root.resolve("report-processes.txt")).linesIterator.size
-  private def _requiredC[A](value: Option[A], fact: String): Consequence[A] = value match {
+  private def _required_c[A](value: Option[A], fact: String): Consequence[A] = value match {
     case Some(actual) => Consequence.success(actual)
     case None => Consequence.stateConflict("Report-restoration fixture is missing " + fact)
   }
@@ -82,53 +81,53 @@ final class GoalPhaseStepTestReportRepairOperationSpec extends AnyWordSpec with 
     var result = Option.empty[A.Source]
     e.prepare(call => for {
       catalog <- GoalPhaseRuntimeCatalog.loadC()
-      component <- _requiredC(call.core.component, "the actual setup component")
-      owner <- _requiredC(component.subsystem, "the actual setup subsystem")
+      component <- _required_c(call.core.component, "the actual setup component")
+      owner <- _required_c(component.subsystem, "the actual setup subsystem")
       storage <- WorkflowComponentStorage.bindC(ComponentCreate(owner, ComponentOrigin.Builtin),
         SmWorkflowComponent.componentId, _configuration_, Vector(catalog.definition), _collection_("instances"), _collection_("continuations"))
       instances <- storage.bindInstancesC()(using call.executionContext)
       loaded <- instances.loadC(InstanceIdentity(identity))(using call.executionContext)
-      current <- _requiredC(loaded, "the current native instance " + identity)
+      current <- _required_c(loaded, "the current native instance " + identity)
       _ = _native(current) shouldBe _native(original)
       starts <- storage.bindMechanicalC(F.startOperation, F.codec)
-      startReference = WorkflowMechanicalTransition.Reference(identity + ":ordered-start", "1")
-      start <- starts.loadRetainedC(startReference)(using call.executionContext)
-      started <- _requiredC(start, "the retained start receipt " + startReference)
-      candidateReader <- storage.bindMechanicalC(F.advanceOperation, GoalPhaseNativeCandidate.codec)
-      inspection <- _requiredC(current.history.findLast(_.causation.value == "ordered-candidate:inspection"),
+      startreference = WorkflowMechanicalTransition.Reference(identity + ":ordered-start", "1")
+      start <- starts.loadRetainedC(startreference)(using call.executionContext)
+      started <- _required_c(start, "the retained start receipt " + startreference)
+      candidatereader <- storage.bindMechanicalC(F.advanceOperation, GoalPhaseNativeCandidate.codec)
+      inspection <- _required_c(current.history.findLast(_.causation.value == "ordered-candidate:inspection"),
         "the native ordered-candidate:inspection history entry")
       // Store._reference anchors all inspection/staging/candidate receipts to
       // the initial frontier, before its inspection entry. Later records also
       // remain in InspectCandidate and cannot identify that receipt namespace.
       frontier <- GoalPhaseNativeHistory.prefixC(current, InstanceRevision(inspection.revision.value - 1))
       _ = frontier.currentProgression shouldBe Some(ProgressionReference("phase.InspectCandidate"))
-      candidateReference = WorkflowMechanicalTransition.Reference(identity + ":ordered-candidate:" + frontier.revision.value + ":candidate", "1")
-      candidate <- candidateReader.loadRetainedC(candidateReference)(using call.executionContext)
-      retainedCandidate <- _requiredC(candidate, "the retained candidate receipt " + candidateReference)
-      savedCandidate = GoalPhaseNativeCandidate.Saved(retainedCandidate.receipt.next, retainedCandidate.receipt.payload.value)
-      _ = savedCandidate.payload.sourceRevision shouldBe frontier.revision.value.toString
-      candidatePrefix <- GoalPhaseNativeHistory.prefixC(current, savedCandidate.record.revision)
-      _ = _native(candidatePrefix) shouldBe _native(savedCandidate.record)
+      candidatereference = WorkflowMechanicalTransition.Reference(identity + ":ordered-candidate:" + frontier.revision.value + ":candidate", "1")
+      candidate <- candidatereader.loadRetainedC(candidatereference)(using call.executionContext)
+      retainedcandidate <- _required_c(candidate, "the retained candidate receipt " + candidatereference)
+      savedcandidate = GoalPhaseNativeCandidate.Saved(retainedcandidate.receipt.next, retainedcandidate.receipt.payload.value)
+      _ = savedcandidate.payload.sourceRevision shouldBe frontier.revision.value.toString
+      candidateprefix <- GoalPhaseNativeHistory.prefixC(current, savedcandidate.record.revision)
+      _ = _native(candidateprefix) shouldBe _native(savedcandidate.record)
       reader <- storage.bindMechanicalC(F.advanceOperation, N.codec)
-      validationReference = WorkflowMechanicalTransition.Reference(identity + ":ordered-validation:" +
-        savedCandidate.record.revision.value + ":validation", "1")
-      validation <- reader.loadRetainedC(validationReference)(using call.executionContext)
-      retainedValidation <- _requiredC(validation, "the retained terminal validation receipt " + validationReference)
-      _ = retainedValidation.receipt.payload.value.sourceRevision shouldBe savedCandidate.record.revision.value.toString
-      _ = _native(retainedValidation.receipt.next) shouldBe _native(current)
+      validationreference = WorkflowMechanicalTransition.Reference(identity + ":ordered-validation:" +
+        savedcandidate.record.revision.value + ":validation", "1")
+      validation <- reader.loadRetainedC(validationreference)(using call.executionContext)
+      retainedvalidation <- _required_c(validation, "the retained terminal validation receipt " + validationreference)
+      _ = retainedvalidation.receipt.payload.value.sourceRevision shouldBe savedcandidate.record.revision.value.toString
+      _ = _native(retainedvalidation.receipt.next) shouldBe _native(current)
       initial <- O.startC(_recovery_plan, started.receipt.payload.value.base, Some(GoalPhaseRuntimeRepairControl.version))
       semantic <- initial.next match {
         case value: O.Semantic => Consequence.success(value)
         case value => Consequence.stateConflict("Report-restoration fixture start has no semantic implementation: " + value)
       }
       implemented <- initial.acceptC(O.SemanticCompleted(semantic.key, "Fixture completed"))
-      observedCandidate <- _requiredC(savedCandidate.payload.candidate, "the actual observed candidate in " + candidateReference)
-      inspected <- implemented.acceptC(O.CandidateObserved(observedCandidate))
-      failed <- N.observedStateC(inspected, retainedValidation.receipt.payload.value,
-        validationReference.identity, savedCandidate.payload.changedPaths)
-      selected <- A.selectC(current, failed, Some(savedCandidate), Some(N.Saved(retainedValidation.receipt.next,
-        retainedValidation.receipt.payload.value)), recoveryHost(e.root).goal.stepValidation.checks)
-      actual <- _requiredC(selected, "eligibility from the exact retained candidate/validation/controller Decision")
+      observedcandidate <- _required_c(savedcandidate.payload.candidate, "the actual observed candidate in " + candidatereference)
+      inspected <- implemented.acceptC(O.CandidateObserved(observedcandidate))
+      failed <- N.observedStateC(inspected, retainedvalidation.receipt.payload.value,
+        validationreference.identity, savedcandidate.payload.changedPaths)
+      selected <- A.selectC(current, failed, Some(savedcandidate), Some(N.Saved(retainedvalidation.receipt.next,
+        retainedvalidation.receipt.payload.value)), recoveryHost(e.root).goal.stepValidation.checks)
+      actual <- _required_c(selected, "eligibility from the exact retained candidate/validation/controller Decision")
       _ = result = Some(actual)
     } yield ())
     result.getOrElse(fail("Report-restoration fixture source callback produced no actual source"))
@@ -136,6 +135,7 @@ final class GoalPhaseStepTestReportRepairOperationSpec extends AnyWordSpec with 
 
   "Ordinary managed Step report restoration" should {
     "leave failed preparation unchanged, reopen the retained Decision and issue one counted repair without replaying the process" in {
+      Given("an actual isolated managed Session with an explicitly invalid fixture report and no successful test claim")
       val root = freshRecoveryRoot("step-report")
       var identity = ""
       var source = Option.empty[A.Source]
@@ -149,7 +149,9 @@ final class GoalPhaseStepTestReportRepairOperationSpec extends AnyWordSpec with 
         val implementation = e.advance(identity)
         implementation.work.get.kind shouldBe "ImplementStep"
         e.submitImplementation(implementation).accepted shouldBe true
+        When("native validation durably records the report and fixture acknowledgement interrupts response collection")
         e.call("advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(identity)).isSuccess shouldBe false
+        Then("the original failed validation and exact native candidate are retained")
         val decision = e.current(identity)
         decision.currentProgression shouldBe Some(ProgressionReference("phase.Decision"))
         _processes(root) shouldBe 1
@@ -178,7 +180,9 @@ final class GoalPhaseStepTestReportRepairOperationSpec extends AnyWordSpec with 
         // Corrected bytes may exist before the new repair is issued. They must
         // remain owned and cannot be certified as the old accepted candidate.
         Files.writeString(root.resolve("repository/value.txt"), "fixture corrected report preparation\n")
+        When("a reopened native owner advances the original Decision")
         val repair = e.advance(identity)
+        Then("one counted report repair is issued with its exact failure provenance and no second process")
         withClue(s"Actual restoration ${repair.kind}: ${repair.message}. ") { repair.kind shouldBe "Request" }
         repair.work.get.kind shouldBe "RepairStep"
         repair.work.get.stepIdentity shouldBe Some("step-1")
@@ -201,7 +205,9 @@ final class GoalPhaseStepTestReportRepairOperationSpec extends AnyWordSpec with 
         preserved = Some(_native(current))
       }
       withRecoveryEpisode(root) { e =>
+        When("a second reopen recollects the issued repair and a competing stale transition is attempted")
         e.advance(identity).issuedWorkContext shouldBe issued.get.issuedWorkContext
+        Then("the original native reservation and failed observation remain exact")
         _native(e.current(identity)) shouldBe preserved.get
         e.prepare(call => for {
           catalog <- GoalPhaseRuntimeCatalog.loadC()

@@ -29,7 +29,7 @@ import GoalPhaseCanonicalCheckConsumption as Q
   * commits precede each external effect. Unknown results are not replayed.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  8, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeValidation {
@@ -446,7 +446,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
         saved <- _load_c(adapter, session, core, frontier, key)
       } yield values ++ saved.toVector.map(_.payload.sourceConsumption) }
     retainedbinding <- Q.retainedBindingC(retainedbindings)
-    basis <- _canonical_basis_c(consumptions.headOption, candidate.payload.dependencySourceCapture, dependencychain)
+    basis <- canonicalBasisC(consumptions.headOption, candidate.payload.dependencySourceCapture, dependencychain)
     consumption <- Q.resolveC(consumptions.headOption, basis, controller.plan, primary,
       candidate.payload.dependencySourceCapture.nonEmpty, retainedbinding, d.dependencySourceConsumptions, d.phaseValidationPolicy)
     prefix = if (selected.exists(_.metadata.nonEmpty)) selected.takeWhile(_.metadata.isEmpty) else Vector.empty
@@ -468,7 +468,7 @@ private[smworkflow] object GoalPhaseNativeValidation {
     }
   } yield actual
 
-  private def _canonical_basis_c(base: Option[GoalPhaseDependencySourceRevision.ConsumptionRecord],
+  private[admission] def canonicalBasisC(base: Option[GoalPhaseDependencySourceRevision.ConsumptionRecord],
     capture: Option[GoalPhaseDependencySourceRevision.Capture],
     chain: Option[GoalPhaseNativeWorkContinuation.DependencyChain]): Consequence[Option[Q.Basis]] = {
     val captures = capture.toVector ++ chain.toVector.flatMap(_.acceptedSources.reverse.map(_.capture))

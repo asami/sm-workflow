@@ -15,12 +15,14 @@ import GoalPhaseNativeRun as F
 import GoalPhaseOrderedProgression as O
 import GoalPhaseNativeValidation as V
 import GoalPhaseRuntimeRepairControl as R
+import GoalPhaseDependencySourceRevision as D
 
 /** Append-only ordinary repair for a genuinely ended selected Step TestOnly
-  * whose complete native report was unverified/InvalidReport. Historical validation
+  * whose complete native report was unverified/InvalidReport or SuiteMismatch. Historical validation
   * remains failed and unverified. No old process is replayed or reclassified.
   * @since   Oct. 26, 2026
-  * @version Oct. 27, 2026
+  *  version Oct. 27, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseStepTestReportRepair {
@@ -48,9 +50,10 @@ private[smworkflow] object GoalPhaseStepTestReportRepair {
     */
   private[admission] def selectC(from: InstanceRecord, controller: O.State,
     candidate: Option[GoalPhaseNativeCandidate.Saved], validation: Option[V.Saved],
-    requiredchecks: Vector[V.Check]): Consequence[Option[Source]] = for {
+    requiredchecks: Vector[V.Check],
+    dependencyChain: Option[GoalPhaseNativeWorkContinuation.DependencyChain] = None): Consequence[Option[Source]] = for {
     _ <- _check(from != null && controller != null && candidate != null && validation != null &&
-      requiredchecks != null && requiredchecks.forall(_ != null) &&
+      requiredchecks != null && requiredchecks.forall(_ != null) && dependencyChain != null && dependencyChain.forall(_ != null) &&
       candidate.forall(c => c != null && c.record != null && c.payload != null) &&
       validation.forall(v => v != null && v.record != null && v.payload != null),
       "source contains null native material")
@@ -94,7 +97,7 @@ private[smworkflow] object GoalPhaseStepTestReportRepair {
         actualcandidate.payload.candidate.contains(actualvalidation.payload.candidate) &&
         controller.decision.contains("Selected native checks failed: " + _checks_reference(actualvalidation)),
         "Decision changes its original candidate, Step or failed receipt identity")
-      _ <- _dependency_source_c(from, controller, actualcandidate.payload, actualvalidation.payload)
+      _ <- _dependency_source_c(from, controller, actualcandidate.payload, actualvalidation.payload, requiredchecks, dependencyChain)
       _ <- _coverage_c(controller.plan.steps(controller.cursor), requiredchecks, actualvalidation.payload)
       directive = _directive(actualvalidation.payload)
       _ <- controller.continueStepTestReportRepairC(_checks_reference(actualvalidation), directive)
@@ -225,14 +228,15 @@ private[smworkflow] object GoalPhaseStepTestReportRepair {
     * grant execution, or make absence of a claim into nonexecution evidence.
     */
   private[admission] def terminalFailureValid(value: V.Payload): Boolean =
-    _terminated_report_valid(value) && value.dependency.isEmpty && value.selected.forall(_.dependency.isEmpty)
+    _terminated_report_valid(value) && value.dependency.isEmpty && value.dependencySource.isEmpty &&
+      value.sourceConsumption.isEmpty && value.selected.forall(_.dependency.isEmpty)
 
   /** Distinct retained-source branch only: the failed primary report precedes
     * every selected dependency check. A capture is historical context, never
     * evidence that dependency work passed or that external effects did not run.
     */
   private[admission] def frozenDependencyFailureValid(value: V.Payload): Boolean =
-    _terminated_report_valid(value) && value.dependency.exists { capture =>
+    _terminated_report_valid(value) && value.dependencySource.isEmpty && value.sourceConsumption.isEmpty && value.dependency.exists { capture =>
       val primary = value.selected.takeWhile(_.dependency.isEmpty)
       val dependent = capture.admission.binding.checks.map(_.copy(dependency = Some(capture.admission.binding.identity)))
       GoalPhaseDependencyValidation.captureValid(capture) && primary.nonEmpty &&
@@ -240,13 +244,19 @@ private[smworkflow] object GoalPhaseStepTestReportRepair {
     }
 
   private[admission] def reportRepairFailureValid(value: V.Payload): Boolean =
-    terminalFailureValid(value) || frozenDependencyFailureValid(value)
+    terminalFailureValid(value) || frozenDependencyFailureValid(value) || sourceConsumptionFailureValid(value)
+
+  /** Shape only. Actual route authority must come from the continuation's
+    * private-constructor chain, never from these decodable source fields. */
+  private[admission] def sourceConsumptionFailureValid(value: V.Payload): Boolean =
+    _terminated_report_valid(value) && value.sourceConsumption.nonEmpty &&
+      value.dependencySource.forall(D.captureValid) &&
+      value.receipts.size <= value.selected.takeWhile(_.dependency.isEmpty).size
 
   private def _terminated_report_valid(value: V.Payload): Boolean =
     _roundtrip_validation(value) && value.outcome.contains("failed") &&
       value.stopped.isEmpty && value.admissionFailures.isEmpty && value.uncertainties.isEmpty &&
-      value.newAttempts.isEmpty && value.dependencySource.isEmpty &&
-      value.sourceConsumption.isEmpty && value.dependencyExecutions.isEmpty && value.assessment.isEmpty && value.receipts.nonEmpty &&
+      value.newAttempts.isEmpty && value.dependencyExecutions.isEmpty && value.assessment.isEmpty && value.receipts.nonEmpty &&
       value.receipts.size <= value.selected.size &&
       V.successful(value.receipts.dropRight(1), value.selected) &&
       value.receipts.zip(value.selected).forall { (receipt, check) =>
@@ -257,13 +267,18 @@ private[smworkflow] object GoalPhaseStepTestReportRepair {
       } && {
         val last = value.receipts.last
         val check = value.selected(value.receipts.size - 1)
-        check.kind == WorkflowSbtValidation.Kind.TestOnly && last.termination == "exited" && last.exitCode.contains(0) &&
-          last.sbt.contains(WorkflowSbtValidation.Facts(WorkflowSbtValidation.Kind.TestOnly,
-            WorkflowSbtValidation.Outcome.Unverified, None, Some("InvalidReport")))
+        check.dependency.isEmpty && check.kind == WorkflowSbtValidation.Kind.TestOnly &&
+          last.termination == "exited" && last.exitCode.contains(0) &&
+          last.sbt.exists(facts => facts.kind == WorkflowSbtValidation.Kind.TestOnly &&
+            facts.outcome == WorkflowSbtValidation.Outcome.Unverified && facts.selection.isEmpty &&
+            facts.reason.exists(Set("InvalidReport", "SuiteMismatch")))
       }
 
   private def _dependency_source_c(from: InstanceRecord, controller: O.State,
-    candidate: GoalPhaseNativeCandidate.Payload, validation: V.Payload): Consequence[Unit] = for {
+    candidate: GoalPhaseNativeCandidate.Payload, validation: V.Payload, required: Vector[V.Check],
+    chain: Option[GoalPhaseNativeWorkContinuation.DependencyChain]): Consequence[Unit] =
+    if (validation.sourceConsumption.nonEmpty) _source_consumption_c(from, controller, candidate, validation, required, chain)
+    else for {
     _ <- _check(candidate.dependency == validation.dependency && candidate.dependencySourceCapture.isEmpty &&
       candidate.dependencySourceDirection.isEmpty && candidate.dependencySourceGuard.isEmpty && candidate.dependencySourceStages.isEmpty &&
       validation.dependencySource.isEmpty && validation.sourceConsumption.isEmpty,
@@ -282,11 +297,59 @@ private[smworkflow] object GoalPhaseStepTestReportRepair {
     } yield () }
   } yield ()
 
+  private def _source_consumption_c(from: InstanceRecord, controller: O.State,
+    candidate: GoalPhaseNativeCandidate.Payload, validation: V.Payload, required: Vector[V.Check],
+    chain: Option[GoalPhaseNativeWorkContinuation.DependencyChain]): Consequence[Unit] = for {
+    _ <- _check(sourceConsumptionFailureValid(validation) && chain.nonEmpty &&
+      candidate.dependency == validation.dependency && candidate.dependencySourceCapture == validation.dependencySource &&
+      GoalPhaseNativeCandidate.sourceCaptureValid(candidate),
+      "source report lacks its actual native chain or exact candidate source metadata")
+    actual = chain.get
+    _ <- candidate.dependency.fold(Consequence.unit)(actual.captureC)
+    _ <- _check(candidate.dependency.forall(capture =>
+      candidate.dependencyAdmission.contains(capture.admission) && capture.session == from.identity.value &&
+        capture.plan == ContextReference(controller.plan.identity, controller.plan.revision) &&
+        capture.primaryBase == controller.base && capture.step == candidate.step &&
+        capture.admission.binding.requester.repository == controller.plan.repository &&
+        capture.generation <= controller.generation && _revision(capture.sourceRevision) &&
+        BigInt(capture.sourceRevision) <= BigInt(candidate.sourceRevision)),
+      "source report crosses its original dependency capture metadata")
+    _ <- candidate.dependencySourceCapture.fold(Consequence.unit) { capture => for {
+      _ <- actual.sourceCaptureC(capture)
+      _ <- _check(capture.sessionId == from.identity.value &&
+        capture.plan == ContextReference(controller.plan.identity, controller.plan.revision) &&
+        capture.primaryBase == controller.base && capture.step == candidate.step &&
+        ((capture.generation == controller.generation && capture.sourceRevision == candidate.sourceRevision) ||
+          candidate.primaryPublicationRepair.exists(reuse => capture.generation <= reuse.generation &&
+            capture.sourceRevision == reuse.sourceRevision && reuse.generation < controller.generation)),
+        "source capture crosses the original Session, Plan, base, Step or authenticated candidate generation")
+      prefix <- GoalPhaseNativeHistory.prefixC(from, InstanceRevision(capture.sourceRevision.toLong))
+      _ <- _check(prefix.currentProgression.contains(ProgressionReference("phase.InspectCandidate")),
+        "source capture has no actual original native inspection prefix")
+    } yield () }
+    _ <- actual.acceptedSources.foldLeft(Consequence.unit) { (prior, entry) => prior.flatMap { _ => for {
+      _ <- actual.sourceCaptureC(entry.capture)
+      _ <- _check(entry.capture.sessionId == from.identity.value &&
+        entry.capture.plan == ContextReference(controller.plan.identity, controller.plan.revision) &&
+        entry.capture.primaryBase == controller.base && _revision(entry.closureRevision) &&
+        BigInt(entry.closureRevision) < BigInt(candidate.sourceRevision),
+        "accepted source crosses its same-Session Plan, base or preceding native closure")
+      _ <- GoalPhaseNativeHistory.prefixC(from, InstanceRevision(entry.closureRevision.toLong)).map(_ => ())
+    } yield () } }
+    consumptions = (actual.acceptedSources.map(entry => D.consumptionOf(entry.capture)) ++
+      candidate.dependencySourceCapture.map(D.consumptionOf)).distinct
+    _ <- _check(consumptions.size == 1, "source report has no unique actual accepted consumption base")
+    basis <- V.canonicalBasisC(consumptions.headOption, candidate.dependencySourceCapture, chain)
+    resolved <- GoalPhaseCanonicalCheckConsumption.resolveC(consumptions.headOption, basis, controller.plan, required,
+      candidate.dependencySourceCapture.nonEmpty, Some(validation.sourceConsumption), Vector.empty, None)
+    _ <- _check(resolved == validation.sourceConsumption, "source report changes its retained canonical routing")
+  } yield ()
+
   private def _coverage_c(step: O.Step, required: Vector[V.Check], value: V.Payload): Consequence[Unit] = for {
     _ <- _check(GoalPhaseNativeMetadata.declaredIdentities(value.selected.filter(_.dependency.isEmpty)) == step.checks &&
       required.map(_.identity) == step.checks && required.forall(_.dependency.isEmpty),
       "validation does not cover the unchanged selected Step check metadata")
-    combined <- GoalPhaseNativeDependencyValidation.checksC(required, value.dependency)
+    combined <- GoalPhaseNativeDependencyValidation.checksC(required, value.dependency, value.dependencySource)
     _ <- GoalPhaseNativeMetadata.validateRetainedC(combined, value.selected, value.metadata)
   } yield ()
 
@@ -318,7 +381,8 @@ private[smworkflow] object GoalPhaseStepTestReportRepair {
 
   private def _directive(value: V.Payload): O.RepairDirective = {
     val failed = value.selected(value.receipts.size - 1)
-    O.RepairDirective("Correct selected Step TestOnly report for " + failed.identity + " after terminated unverified InvalidReport",
+    O.RepairDirective("Correct selected Step TestOnly report for " + failed.identity + " after terminated unverified " +
+      value.receipts.last.sbt.flatMap(_.reason).get,
       Vector("Retain the original failed/unverified receipt for " + value.step + "; repair the selected test orchestration " +
         "within the same adopted Step scope. Submit fresh semantic work before new candidate checks and applicable independent review. " +
         "The old exit zero does not verify selected tests. Runtime contract: " + correctionContract))
@@ -338,7 +402,8 @@ private[smworkflow] object GoalPhaseStepTestReportRepair {
     value.nativeSource != null && value.nativeSource.isObject && value.originalCandidate != null &&
     GoalPhaseNativeCandidate.codec.decode(value.originalCandidate).isRight && value.originalValidation != null &&
     value.frozenDependencyBranch != null && V.codec.decode(value.originalValidation).exists(validation =>
-      if (value.frozenDependencyBranch.isEmpty) terminalFailureValid(validation)
+      if (value.frozenDependencyBranch.isEmpty) terminalFailureValid(validation) ||
+        sourceConsumptionFailureValid(validation) && _source_payload_valid(value, validation)
       else frozenDependencyFailureValid(validation) && value.frozenDependencyBranch == _frozen_branch(validation) &&
         GoalPhaseNativeCandidate.codec.decode(value.originalCandidate).exists(candidate =>
           candidate.dependency == validation.dependency && candidate.sourceRevision == value.candidateSourceRevision &&
@@ -349,13 +414,37 @@ private[smworkflow] object GoalPhaseStepTestReportRepair {
             _revision(capture.sourceRevision) && BigInt(capture.sourceRevision) <= BigInt(value.candidateSourceRevision)))) &&
     value.directive != null && _text(value.directive.reason) && value.directive.findings != null &&
     value.directive.findings.nonEmpty && value.directive.findings.size <= 128 && value.directive.findings.forall(_text)
+  private def _source_payload_valid(value: Payload, validation: V.Payload): Boolean =
+    GoalPhaseNativeCandidate.codec.decode(value.originalCandidate).exists { candidate =>
+      _candidate_valid(candidate) && candidate.sourceRevision == value.candidateSourceRevision && candidate.step == value.step &&
+        candidate.candidate.contains(value.candidate) && validation.sourceRevision == value.validationSourceRevision &&
+        validation.step == value.step && validation.candidate == value.candidate &&
+        candidate.dependency == validation.dependency && candidate.dependencySourceCapture == validation.dependencySource &&
+        GoalPhaseNativeCandidate.sourceCaptureValid(candidate) && value.directive == _directive(validation) &&
+        GoalPhaseRuntimeCatalog.loadC().flatMap(catalog => WorkflowInstanceRecordJsonV1.catalogC(Vector(catalog.definition)))
+          .flatMap(definitions => WorkflowInstanceRecordJsonV1.decodeC(value.nativeSource.noSpaces, definitions)).toOption.exists { native =>
+          native.revision.value.toString == value.sourceRevision && native.lifecycle == Lifecycle.Active &&
+            native.suspension.isEmpty && native.currentProgression.contains(ProgressionReference("phase.Decision")) &&
+            value.candidateReference == ContextReference(native.identity.value + ":ordered-candidate:" +
+              value.candidateSourceRevision + ":candidate", "1") &&
+            value.validationReference == ContextReference(native.identity.value + ":ordered-validation:" +
+              value.validationSourceRevision + ":validation", "1") &&
+            candidate.dependencySourceCapture.forall(capture => capture.sessionId == native.identity.value &&
+              capture.plan == value.plan && capture.step == value.step && capture.generation <= value.generation &&
+              _revision(capture.sourceRevision) && BigInt(capture.sourceRevision) <= BigInt(value.candidateSourceRevision)) &&
+            candidate.dependency.forall(capture => capture.session == native.identity.value &&
+              capture.plan == value.plan && capture.step == value.step && capture.generation <= value.generation &&
+              _revision(capture.sourceRevision) && BigInt(capture.sourceRevision) <= BigInt(value.candidateSourceRevision))
+        }
+    }
   private def _candidate_valid(value: GoalPhaseNativeCandidate.Payload): Boolean = value != null &&
     _revision(value.sourceRevision) && _text(value.step) && value.selectedPaths != null &&
     value.selectedPaths.distinct == value.selectedPaths && value.selectedPaths.forall(_text) &&
     value.stagedPaths != null && value.stagedPaths == value.selectedPaths && value.changedPaths != null &&
     value.changedPaths.nonEmpty && value.changedPaths.forall(_text) && value.diff != null && value.diff.exists(_diff_text) &&
     value.candidate != null && value.candidate.exists(c => c != null && Vector(c.head, c.tree).forall(_oid))
-  private def _frozen_branch(value: V.Payload): Option[FrozenDependencyBranch] = value.dependency.map { capture =>
+  private def _frozen_branch(value: V.Payload): Option[FrozenDependencyBranch] =
+    value.dependency.filter(_ => value.sourceConsumption.isEmpty).map { capture =>
     FrozenDependencyBranch("primary-invalid-report-before-frozen-dependency.v1",
       ContextReference(capture.admission.binding.identity, capture.admission.binding.revision.toString),
       capture.sourceRevision, value.selected)

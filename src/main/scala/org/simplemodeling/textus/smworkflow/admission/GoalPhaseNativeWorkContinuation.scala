@@ -45,7 +45,7 @@ import GoalPhaseCanonicalDependencySourceSuccession as CanonicalSource
   *  version Oct. 28, 2026
   *  version Oct. 31, 2026
   *  version Oct. 29, 2026
-  * @version Nov.  8, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWorkContinuation {
@@ -3344,7 +3344,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       else for {
         checks <- GoalPhaseNativeValidation.selectedChecksC(d, cursor.controller.plan,
           cursor.controller.plan.steps.lift(cursor.controller.cursor).map(_.identity))
-        selected <- U.selectC(cursor.from, cursor.controller, cursor.candidate, cursor.validation, checks)
+        selected <- U.selectC(cursor.from, cursor.controller, cursor.candidate, cursor.validation, checks, Some(cursor.dependencyChain))
       } yield selected
 
     private def _step_test_report_provenance(cursor: Cursor): Option[U.Saved] =
@@ -3355,7 +3355,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] =
       _dependency_freshness_c(cursor, core).flatMap(_ => U.advanceC(source, d, core, selected)).flatMap(saved =>
         F.waitC(saved.record, "Terminated selected Step test report repair admitted",
-          "The old failed/unverified InvalidReport remains retained; one ordinary repair batch is reserved. " +
+          "The old failed/unverified " + selected.validation.payload.receipts.last.sbt.flatMap(_.reason).get +
+            " remains retained; one ordinary repair batch is reserved. " +
             "Fresh semantic Submit, candidate checks and applicable independent review remain required.")
           .flatMap(_after_native_c(source, cursor, _, core)))
 

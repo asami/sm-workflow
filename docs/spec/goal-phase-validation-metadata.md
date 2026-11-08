@@ -332,13 +332,82 @@ candidate context. Nonleading, reordered, extra, empty or wrong-candidate partia
 selection is refused. With valid matching typed facts and successful earlier
 receipts, exited/nonzero/Failed, indeterminate/no-exit/Incomplete and
 exited/zero/Unverified TestOnly results can take the normal failure disposition.
-Only the existing repairable typed failure permits Repair. Incomplete and
-Unverified results reach Decision without retry authority, successful SBT claims
+Ordinary failed-check repair still requires its existing repairable typed failure.
+Incomplete and Unverified results reach Decision without successful SBT claims
 or metadata discovery. An intent without a returned result stays pending.
+The exact terminated selected-Step report continuation below can append a new
+ordinary repair after an eligible Decision; it never reclassifies the old result.
 Successful admission still requires exact coverage of the
 controller's full current Step or Phase check list; a successful ordinary prefix
 cannot enter Review. Omitted metadata checks remain unfinished. None of these
 source contracts establishes actual CML consumer execution or acceptance.
+
+### Terminated selected-Step report continuation
+
+Given a selected native Step TestOnly with complete, untruncated, valid UTF-8
+stdout/stderr, an actual `Exited(0)` observation and exact typed
+`Unverified` facts with no test selection/success claim and reason `InvalidReport`
+or `SuiteMismatch`, ordinary Advance may append the existing
+`ordered-step-test-report-repair:admitted` transition. All preceding selected
+checks must genuinely have succeeded in order. The failed check must belong to
+the primary Step. No stopped check, admission failure, uncertainty, new attempt,
+dependency execution or assessment may be present. Other Unverified reasons,
+nonzero/incomplete/nonstarted/UNKNOWN observations and truncated captures do not
+enter this branch. Generic failed-check repair remains unchanged.
+
+The source-less branch and the historical frozen dependency-before-execution
+branch retain their existing v1 wire encoding. The latter still requires its
+explicit `primary-invalid-report-before-frozen-dependency.v1` proof; the contract
+literal remains readable for historical InvalidReport receipts. No optional
+source schema or new public operation is introduced.
+
+Source consumption is admitted only through the actual continuation cursor's
+privately constructed native dependency chain. Original candidate and validation
+must carry the same dependency and source captures, whose binding, direction,
+guards, stages and codec contracts remain exact. A current source capture must
+bind Session, Plan, primary base, Step and original inspection prefix; genuine
+primary-publication repair reuse retains its authenticated older capture view.
+Previously accepted source captures must belong to the same Session, Plan and
+base, and their actual closures must precede the candidate source. The distinct
+accepted captures plus the current source capture must yield one actual base.
+The native canonical basis and retained check-consumption resolver validate the
+original route or its approved later-check extension against the unchanged Plan
+and required primary checks. A decoded consumption record cannot construct a
+chain, bypass participant/program/prefix proof, or change selected suites.
+
+The append-only receipt retains original candidate, validation and native source
+proofs. The issued failure context accepts these complete report facts only with
+the original report-repair reference. The directive names the actual final typed
+reason. One ordinary reservation increments the existing counters once; duplicate
+collection retains that reservation and runs no old process. Fresh semantic
+Submit, candidate capture, all unchanged selected checks, applicable independent
+review and ordinary Step closure remain required. Old successful checks and
+accepted results remain historical evidence rather than success for a new tree.
+
+`GoalPhaseStepTestReportRepairSpec` covers exact terminal shapes, historical
+encoding, provenance, absent-chain refusal and bounded negative observations.
+`GoalPhaseStepTestReportRepairOperationSpec` exercises durable failed preparation,
+managed reopen, one reservation and duplicate recollection. The explicit-only
+`NativeGoalStepTestReportRepairCliSpec` adds a real source-adopted canonical first
+Step and an approved later-check route: the old installed mode executes Compile
+and `testOnly fixture.OneSpec fixture.TwoSpec` while only OneSpec exists, retaining
+its real SuiteMismatch Decision. The new installed mode reopens that physical
+Session, obtains the newly issued RepairStep, supplies TwoSpec within predeclared
+ownership, and runs fresh checks, specification-owned independent review and the
+ordinary Step commit. The same ordinary Advance then performs its separately
+declared post-commit Phase Compile and stops at pending ReviewPhase. The fixture
+records Step acceptance/checks/repair accounting separately from the new Phase
+candidate, validation, invocation and normal Phase repair window; this is neither
+a Phase acceptance nor a manual counter reset. Fixture Human/review/closure
+evidence grants no consumer or external-provider authority.
+
+The installed caller must select absolute `smworkflow.spec.installedCommand`,
+`smworkflow.spec.componentFile` and `smworkflow.spec.stepReportLocator` properties,
+with `smworkflow.spec.stepReportMode=capture-old|continue-new|collect-closure`.
+Capture writes its old output locator using CREATE_NEW. Continuation uses a
+separate finite log range and preserves old outputs, Plan/base, counters, accepted
+prefix and failed facts. Completed native effects are never replayed; final
+`collect-closure` reads retained outputs passively. No mode defaults to execution.
 
 For each metadata check the current owning call uses the producer's exact bound
 TestOnly intent through `WorkflowManagedProcessExecution.validationOperationC` and
