@@ -14,11 +14,38 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Passive preparation of managed review input using the existing v7 codec.
   * The independent reviewer owns the review and provisioning of the returned row.
   * @since   Oct. 14, 2026
-  * @version Oct. 27, 2026
+  *  version Oct. 27, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 object NativeReviewPreparation {
   final case class Prepared(recordIdentity: String, record: Record)
+
+  /** Encode actual independently observed Human direction, never grant it. */
+  private[smworkflow] def selectedValidationContinuationC(description: V.BoundedValidationContinuationView,
+    answer: V.BoundedValidationContinuationInput, reference: V.WorkflowArtifactReference,
+    execution: V.WorkflowExecutionEvidence, participant: String, issuer: String,
+    occurredAt: Instant): Consequence[Prepared] = {
+    import org.simplemodeling.textus.smworkflow.admission.BoundedSelectedValidationContinuation as R
+    for {
+      target <- io.circe.parser.parse(description.target).fold(e => Consequence.stateConflict(e.message), R.targetC)
+      n = if (target.family == "DelegateTask") org.simplemodeling.textus.smworkflow.admission.DelegateTaskNativeRun
+        else org.simplemodeling.textus.smworkflow.admission.GoalTaskNativeRun
+      _ <- if (description.outcome == "decision-required" && description.choices == R.choices(target) &&
+        description.resumeOperation == R.adoptName(n) && answer.target == description.target &&
+        answer.sessionId == target.sessionId && description.sessionId == target.sessionId &&
+        description.componentInstance == target.componentInstance && reference == answer.reference &&
+        participant == target.participant && participant == answer.participant &&
+        execution.workerIdentity.contains(participant) && issuer != null && issuer.trim.nonEmpty && occurredAt != null)
+        Consequence.unit else Consequence.stateConflict("Selected continuation preparation crosses its actual description or Human provenance")
+      binding <- R.bindingC(target, answer.choice, answer.rationale, participant,
+        org.goldenport.cncf.workflow.ContextReference(reference.identity, reference.revision))
+      purpose = NativeExternalEvidence.Purpose.GoalTaskValidationContinuation
+      identity = ThreeWorkflowExternalEvidencePorts.key(reference.identity, reference.revision)
+      encoded <- NativeExternalEvidence.encodeStorageC(NativeExternalEvidence.Evidence(NativeExternalEvidence.schema,
+        purpose.identity, identity, reference.identity, reference.revision, issuer, participant, binding, occurredAt.toString))
+    } yield Prepared(NativeExternalEvidence.recordIdentity(purpose, identity), Record.data(NativeExternalEvidence.storageField -> encoded))
+  }
 
   /** Passive serialization: only the independently observing host may provision
     * this row. A prepared row itself supplies no Human authority. */

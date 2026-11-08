@@ -13,7 +13,8 @@ import org.simplemodeling.textus.smworkflow.value as V
 /**
  * @since   Oct.  2, 2026
  *  version Oct. 28, 2026
- * @version Nov.  6, 2026
+ *  version Nov.  6, 2026
+  * @version Nov.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -139,7 +140,9 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
           "DelegateTaskScopeCorrectionInput", "DelegateTaskScopeCorrectionView",
           "WorkflowDelegateTaskScopeCorrectionPreparationInput",
           "DelegateTaskCandidateContinuationDescriptionInput", "DelegateTaskCandidateContinuationInput",
-          "DelegateTaskCandidateContinuationView", "WorkflowDelegateTaskCandidateContinuationPreparationInput")
+          "DelegateTaskCandidateContinuationView", "WorkflowDelegateTaskCandidateContinuationPreparationInput",
+          "GoalTaskValidationContinuationInput", "GoalTaskValidationContinuationDescriptionResult",
+          "BoundedValidationContinuationDescriptionInput", "BoundedValidationContinuationInput", "BoundedValidationContinuationView")
       values.foreach { name =>
         val fields = "(?m)^\\| (\\w+) \\| ([\\w.]+) \\| ([1?*+]) \\|".r.findAllMatchIn(sections(name)).map { m =>
           Json.obj("name" -> Json.fromString(m.group(1)), "type" -> Json.fromString(m.group(2)),

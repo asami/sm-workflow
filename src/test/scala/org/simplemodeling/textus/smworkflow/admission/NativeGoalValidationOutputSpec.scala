@@ -19,7 +19,8 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Public projection of actual retained validation facts, without runtime effects.
   * @since   Oct. 16, 2026
   *  version Oct. 25, 2026
-  * @version Nov.  2, 2026
+  *  version Nov.  2, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -101,7 +102,7 @@ final class NativeGoalValidationOutputSpec extends AnyWordSpec with Matchers wit
       actual.repositoryRepair shouldBe None
     }
 
-    "O2 preserve all eight canonical raw-zero TestOnly rejection reasons without selected-test success" in {
+    "O2 preserve every canonical raw-zero TestOnly rejection reason without selected-test success" in {
       Given("raw-zero TestOnly receipts with each actual CNCF rejection reason and no verified selection")
       val reasons = SbtTestSelectionFailure.values.toVector
       val payloads = reasons.map(reason => _retained(_payload(Vector(_focused),
@@ -113,7 +114,8 @@ final class NativeGoalValidationOutputSpec extends AnyWordSpec with Matchers wit
 
       Then("every exact refusal remains unverified despite its zero raw exit and no review is fabricated")
       outputs.map(_.validation.get.checks.head.sbt.get.reason.get) shouldBe
-        Vector("MissingSelection", "IncompleteCapture", "InvalidReport", "ZeroTests", "SuiteMismatch", "FailedTests", "ScenarioMismatch", "InventoryMismatch")
+        Vector("MissingSelection", "IncompleteCapture", "InvalidReport", "ZeroTests", "SuiteMismatch", "FailedTests", "ScenarioMismatch", "InventoryMismatch",
+          "ModeObservationMismatch", "DiscoveryUnavailable", "BatchSelectionMismatch")
       outputs.foreach { output =>
         output.kind shouldBe "Wait"
         output.condition shouldBe Some("phase.Decision")

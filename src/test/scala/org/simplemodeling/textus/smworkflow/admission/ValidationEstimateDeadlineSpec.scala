@@ -12,7 +12,8 @@ import org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration
 
 /** Selected leaf estimates and once-only overhead, without starting processes.
   * @since   Oct. 30, 2026
-  * @version Oct. 30, 2026
+  *  version Oct. 30, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 @ValidationSpecification(declaration = classOf[LocalTestDeclaration])
@@ -52,7 +53,7 @@ final class ValidationEstimateDeadlineSpec extends AnyWordSpec with Matchers {
       val root = java.nio.file.Path.of(fixture.getProtectionDomain.getCodeSource.getLocation.toURI).toRealPath()
       val scope = D.DiscoveryScope("registered-inputs", "1", Vector(D.ArtifactScope("component:fixture", "tests", "1",
         "source-1", root, "org.simplemodeling.textus.smworkflow.admission.registeredinputfixture")))
-      val inventory = D.discoverC(scope, fixture.getClassLoader).toOption.get
+      val inventory = D.discoverC(scope, fixture.getClassLoader, Set(fixture.getName)).toOption.get
       val operations = inventory.operations.filter(_.selector.suiteClassName == fixture.getName).sortBy(_.selector.testName)
       operations.size shouldBe 2
       val invocations = operations.map(operation => E.Invocation(operation, Map("count" -> Json.fromInt(

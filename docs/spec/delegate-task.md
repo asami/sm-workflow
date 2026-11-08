@@ -401,3 +401,31 @@ request and delegation fields retain their original comparison, including owners
 purpose, checks, conditions, operations and authority. The retained source
 reference identifies the producer's correction but does not authenticate another
 runtime's storage. The caller and existing effect boundary retain attribution.
+
+## Confirmed-ended selected validation continuation
+
+GoalTask and destination DelegateTask share explicit continuation for an actual
+exited-zero Unverified TestOnly result with a usable completed-test observation
+and no failed assertion. `describeDelegateTaskValidationContinuation` and
+`adoptDelegateTaskValidationContinuation` use the declared bounded typed inputs;
+GoalTask exposes the same common path as `describeGoalTaskUnverifiedValidationContinuation`
+and `adoptGoalTaskUnverifiedValidationContinuation`. Existing supplemental
+GoalTask operations and stored directions retain their original meaning.
+
+A description contains the existing Session/frontier, affected check and owned
+scope. `RetrySelectedCheck` admits a new intent only for the same candidate;
+`AdoptCurrentOwnedCandidate` permits native observation of the current selected
+owned changes, including necessary same-purpose inventory additions. `Defer`
+changes no state. Use `prepareEvidence`, family GoalTask/DelegateTask and kind
+`selected-validation-continuation`, with the actual Human direction and current
+host evidence admission. Preparation is passive, not consent.
+
+Adoption runs no source or SBT effect. Ordinary Advance owns the new check or
+candidate capture. The old unverified receipt and successful prefix remain in
+native history. Unchanged source reuses its applicable prefix and retries only
+the affected check before unstarted later checks. Changed production source
+requires new Compile coverage; old success is never relabelled. Conditions,
+check identities/order, original base, accepted implementation and repair
+counters are retained. This path does not admit unknown/live execution,
+permission/admission refusal or failed assertions, and creates no alternate
+runner, state store or receipt ledger.

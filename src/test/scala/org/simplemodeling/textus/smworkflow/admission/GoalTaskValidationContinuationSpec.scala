@@ -28,6 +28,38 @@ final class GoalTaskValidationContinuationSpec extends AnyWordSpec with GivenWhe
   private val payload = BoundedWorkRuntime.Payload(initial, "/fixture", "main", "a" * 40)
   private val target = C.Target("component", "session", "participant", 8, Json.obj("frontier" -> true.asJson), payload, C.missing(payload))
 
+  "The common selected-validation target" should {
+    "retain old receipts and distinguish unchanged and source-changing continuation" in {
+      Given("a GoalTask Wait and independently selected fixture direction")
+      val state = SelectedValidationFixture.state
+      val old = BoundedWorkRuntime.Payload(state, "/fixture", "main", state.candidate.get.head)
+      val r = BoundedSelectedValidationContinuation
+      val target = r.Target(r.schema, "component", "session", "participant", "GoalTask", 8,
+        old.baseHead, state.candidate.get.tree, "focused", state.input.ownedPaths, Vector.empty, false)
+      val reference = ContextReference("specification-direction", "1")
+      val direction = C.Direction(target.asJson, r.retry, "Correct selected automatic tests", "participant", reference)
+      When("the same candidate is admitted and the original typed binding is read")
+      val next = r.adoptedC(old, target, direction).toOption.get
+      Then("only the affected active receipt is removed, with the old state left intact")
+      next.state.receipts shouldBe old.state.receipts.dropRight(1)
+      next.state.semanticReference shouldBe old.state.semanticReference
+      next.state.input shouldBe old.state.input
+      next.state.selected shouldBe old.state.selected
+      next.state.repairControl shouldBe old.state.repairControl
+      C.retainedC(next, "component", "session", 9).isSuccess shouldBe true
+      val binding = r.bindingC(target, r.retry, "fixture", "participant", reference).toOption.get
+      C.selectBinding(binding).toOption shouldBe Some(binding)
+      val source = target.copy(additionalOwnedPaths = Vector("docs/contract.md"), refreshCandidate = true)
+      val changed = r.adoptedC(old, source, direction.copy(target = source.asJson, choice = r.refresh)).toOption.get
+      changed.state.stage shouldBe "SelectedValidationCandidateReady"
+      changed.state.receipts shouldBe old.state.receipts
+      changed.state.input.ownedPaths shouldBe state.input.ownedPaths :+ "docs/contract.md"
+      changed.state.candidate shouldBe old.state.candidate
+      changed.state.ordinaryCount shouldBe old.state.ordinaryCount
+      changed.state.automaticCount shouldBe old.state.automaticCount
+    }
+  }
+
   "A legacy GoalTask validation continuation" should {
     "retain its successful prefix and derive only the missing typed checks" in {
       Given("a completed FixCheck and full Test")

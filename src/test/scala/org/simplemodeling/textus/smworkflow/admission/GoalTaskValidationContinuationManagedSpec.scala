@@ -21,7 +21,10 @@ import StandaloneFixExecution.given
 import GoalTaskValidationContinuation as C
 
 /** Specification-owned receipt facts exercise native public admission only;
-  * they do not represent installed execution or a consumer's consent. */
+  * they do not represent installed execution or a consumer's consent.
+  * @since   Nov.  7, 2026
+  * @version Nov.  8, 2026
+  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 class GoalTaskValidationContinuationManagedSpec extends AnyWordSpec with GivenWhenThen with ThreeWorkflowManagedRepositoryFixture {
@@ -70,6 +73,30 @@ class GoalTaskValidationContinuationManagedSpec extends AnyWordSpec with GivenWh
   override protected def _setup_commands_(root: Path, scenario: String): Vector[Vector[String]] =
     super._setup_commands_(root, scenario).patch(2, Vector(Vector("-C", root.resolve("repository").toString,
       "--literal-pathspecs", "add", "--", ".gitignore", ".scalafix.conf", "build.sbt", "project", "src", "docs")), 0)
+
+  "Changed-source continuation coverage" should {
+    "retain the old candidate and Compile in history while requiring coverage of newly captured production source" in {
+      Given("a specification-owned unverified check and an admitted source-changing target")
+      val state = SelectedValidationFixture.state
+      val payload = BoundedWorkRuntime.Payload(state, "/fixture", "main", state.candidate.get.head)
+      val r = BoundedSelectedValidationContinuation
+      val target = r.Target(r.schema, "component", "session", "participant", "GoalTask", 8,
+        payload.baseHead, state.candidate.get.tree, "focused", state.input.ownedPaths, Vector("docs/contract.md"), true)
+      val direction = C.Direction(target.asJson, r.refresh, "Correct common continuation", "participant", ContextReference("fixture-direction", "1"))
+      val adopted = take(r.adoptedC(payload, target, direction))
+      When("normal candidate selection observes changed production inputs")
+      val candidate = state.candidate.get.copy(tree = "d" * 40, paths = Vector("src/Value.scala", "docs/contract.md"), diff = "changed fixture source")
+      val current = take(S.candidateC(adopted.state.copy(stage = "Inspect"), candidate))
+      Then("old successful Compile is not reused for different source and counters are unchanged")
+      payload.state.receipts.head.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Succeeded
+      payload.state.candidate shouldBe state.candidate
+      current.receipts shouldBe empty
+      current.selected shouldBe state.selected
+      current.stage shouldBe "Validate"
+      current.ordinaryCount shouldBe state.ordinaryCount
+      current.automaticCount shouldBe state.automaticCount
+    }
+  }
 
   "Native GoalTask validation continuation" should {
     "append a direction without an SBT effect and retain the original checkpoint" in {

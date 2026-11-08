@@ -19,7 +19,8 @@ import GoalPhaseValidationMetadata as V
 
 /** Actual local metadata discovery and bounded exact selection, without execution.
   * @since   Oct. 18, 2026
-  * @version Oct. 24, 2026
+  *  version Oct. 24, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -34,9 +35,22 @@ final class GoalPhaseValidationMetadataSpec extends AnyWordSpec with Matchers wi
   private val _unannotated_name = "metadata input should retain unannotated supplement"
 
   "Goal Phase validation metadata" should {
+    "discover an explicitly named hidden fixture while leaving ordinary discovery uninstantiated" in {
+      Given("the actual explicit-only fixture and its scoped query")
+      val request = _request()
+      When("discovery receives an ordinary query and a query naming that exact suite")
+      val ordinary = _take(V.discoverC(request.copy(query = request.query.copy(explicitSuites = Set.empty)), _loader))
+      val explicit = _take(V.discoverC(request, _loader))
+      Then("the ordinary inventory omits the helper and explicit discovery retains its actual registrations")
+      ordinary.inventory.operations shouldBe empty
+      explicit.inventory.operations.size shouldBe 3
+      explicit.inventory.operations.map(_.selector.suiteClassName).distinct shouldBe Vector(_fixture_class.getName)
+      explicit.inventory.operations.foreach(_.framework.map(_.explicitOnly) shouldBe Some(true))
+    }
+
     "discover the isolated typed registration and bind producer defaults before deduplicating candidates" in {
       Given("the typed fixture's actual code source and loader with a query legacy supplement and equal explicit defaults")
-      val request = V.Request(T.scope, D.SelectionQuery(), Vector(T.reference), _workspace,
+      val request = V.Request(T.scope, D.SelectionQuery(explicitSuites = Set(T.fixtureClass.getName)), Vector(T.reference), _workspace,
         Vector(V.Invocation(T.reference, Map("count" -> Json.fromInt(1), "enabled" -> Json.True,
           "label" -> Json.fromString("default case")))))
       When("actual discovery resolves the schema and binds every candidate before normalized deduplication")
@@ -55,7 +69,7 @@ final class GoalPhaseValidationMetadataSpec extends AnyWordSpec with Matchers wi
 
     "retain two same-reference variants with global inputs and explicit invocation precedence" in {
       Given("actual typed discovery with global values and one invocation overriding only count")
-      val request = V.Request(T.scope, D.SelectionQuery(), Vector.empty, _workspace,
+      val request = V.Request(T.scope, D.SelectionQuery(explicitSuites = Set(T.fixtureClass.getName)), Vector.empty, _workspace,
         Vector(V.Invocation(T.reference, Map("count" -> Json.fromInt(7)))),
         Map("count" -> Json.fromInt(3), "enabled" -> Json.False, "label" -> Json.fromString("shared case")))
       When("the producer binds the query candidate followed by the explicit invocation")
@@ -73,7 +87,7 @@ final class GoalPhaseValidationMetadataSpec extends AnyWordSpec with Matchers wi
 
     "propagate actual producer refusals for wrong kinds unknown global keys explicit null and missing required inputs" in {
       Given("a real typed inventory plus supplied bad values and an explicitly negative required-without-default schema")
-      val request = V.Request(T.scope, D.SelectionQuery(), Vector.empty, _workspace)
+      val request = V.Request(T.scope, D.SelectionQuery(explicitSuites = Set(T.fixtureClass.getName)), Vector.empty, _workspace)
       val actual = _take(V.discoverC(request, T.loader)).inventory
       val malformed = Vector(Map("count" -> Json.fromString("2")), Map("enabled" -> Json.fromInt(1)),
         Map("label" -> Json.True), Map("unknown" -> Json.fromInt(1)), Map("count" -> Json.Null))
@@ -91,7 +105,7 @@ final class GoalPhaseValidationMetadataSpec extends AnyWordSpec with Matchers wi
 
     "bound distinct normalized variants while deduplicating repeated invocations within input bounds" in {
       Given("one actual typed registration and at most sixteen explicitly supplied invocations")
-      val request = V.Request(T.scope, D.SelectionQuery(), Vector.empty, _workspace)
+      val request = V.Request(T.scope, D.SelectionQuery(explicitSuites = Set(T.fixtureClass.getName)), Vector.empty, _workspace)
       val actual = _take(V.discoverC(request, T.loader)).inventory
       val variants = (2 to 17).toVector.map(count => V.Invocation(T.reference, Map("count" -> Json.fromInt(count))))
       When("selection sees sixteen total variants seventeen total variants and sixteen duplicate default invocations")
@@ -109,7 +123,7 @@ final class GoalPhaseValidationMetadataSpec extends AnyWordSpec with Matchers wi
 
     "reject structurally missing or oversized invocation maps and vectors before producer binding" in {
       Given("a valid typed request and malformed JVM members or oversized finite inputs")
-      val request = V.Request(T.scope, D.SelectionQuery(), Vector.empty, _workspace)
+      val request = V.Request(T.scope, D.SelectionQuery(explicitSuites = Set(T.fixtureClass.getName)), Vector.empty, _workspace)
       val actual = _take(V.discoverC(request, T.loader)).inventory
       val invocation = V.Invocation(T.reference, Map.empty)
       val badmaps = Vector(null, Map(null.asInstanceOf[String] -> Json.True), Map("count" -> null.asInstanceOf[Json]),
@@ -402,7 +416,7 @@ final class GoalPhaseValidationMetadataSpec extends AnyWordSpec with Matchers wi
     val root = Path.of(_fixture_class.getProtectionDomain.getCodeSource.getLocation.toURI).toRealPath()
     val artifact = D.ArtifactScope("component:sm-workflow-fixture", "sm-workflow-fixture-tests", "artifact-1", "source-1",
       root, "org.simplemodeling.textus.smworkflow.admission.metafixture")
-    V.Request(D.DiscoveryScope("sm-workflow-metadata-fixture", "scope-1", Vector(artifact)), query, Vector.empty, _workspace)
+    V.Request(D.DiscoveryScope("sm-workflow-metadata-fixture", "scope-1", Vector(artifact)), query.copy(explicitSuites = query.explicitSuites + _fixture_class.getName), Vector.empty, _workspace)
   }
 
   private def _take[A](result: Consequence[A]): A = result match {

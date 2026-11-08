@@ -9,6 +9,7 @@ import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{ContinuationIdentity as _, *}
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.goldenport.protocol.Request
+import org.goldenport.record.Record
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.simplemodeling.textus.smworkflow.{SmWorkflowComponent, value as V}
@@ -19,7 +20,7 @@ import GoalTaskNativeRun as N
 /** Explicit supplemental validation for an actual completed legacy Assess batch.
   * The normal native checkpoint owns persistence; ordinary Advance owns checks.
   * @since Nov.  7, 2026
-  * @version Nov.  7, 2026
+  * @version Nov.  8, 2026
   */
 private[smworkflow] object GoalTaskValidationContinuation {
   val purpose = "goal-task-validation-continuation"
@@ -129,7 +130,9 @@ private[smworkflow] object GoalTaskValidationContinuation {
       }
     }
   def retainedC(payload: Payload, owner: String, session: String, revision: Long): Consequence[Unit] =
-    _retained(payload, owner, session, revision).fold(N.invalid(_), _ => Consequence.unit)
+    if (payload.validationContinuation.exists(d => BoundedSelectedValidationContinuation.isTarget(d.target)))
+      BoundedSelectedValidationContinuation.retainedC(payload, owner, session, revision)
+    else _retained(payload, owner, session, revision).fold(N.invalid(_), _ => Consequence.unit)
   def targetC(text: String): Consequence[Target] =
     if (text == null) N.invalid("Task continuation target is absent")
     else io.circe.parser.parse(text).left.map(_.message).flatMap(decodeTarget).fold(N.invalid(_), Consequence.success)
@@ -145,7 +148,10 @@ private[smworkflow] object GoalTaskValidationContinuation {
           "participant" -> participant.asJson, "reference" -> Json.obj("identity" -> reference.identity.asJson,
             "revision" -> reference.revision.asJson)))))
 
-  def selectBinding(value: Json): Either[String, Json] = for {
+  def selectBinding(value: Json): Either[String, Json] =
+    if (value.hcursor.downField("goalTaskValidationContinuation").downField("target").focus.exists(BoundedSelectedValidationContinuation.isTarget))
+      BoundedSelectedValidationContinuation.selectBinding(value)
+    else for {
     owner <- value.hcursor.get[String]("componentInstance").left.map(_.message)
     raw <- value.hcursor.downField("goalTaskValidationContinuation").get[Json]("target").left.map(_.message)
     target <- decodeTarget(raw)
@@ -271,4 +277,173 @@ private[smworkflow] object GoalTaskValidationContinuation {
   private def _output(target: Target, outcome: String, message: String): OperationResponse =
     NativeWorkflowOperationOutput.response(V.GoalTaskValidationContinuationDescriptionResult(target.sessionId,
       target.componentInstance, outcome, message, target.asJson.noSpaces, choices, resumeOperation))
+}
+
+/** Shared public continuation for a known-ended, unverified selected test.
+  * Uses the existing bounded checkpoint and validation-continuation evidence;
+  * historical supplemental GoalTask targets keep their original decoder.
+  * @since   Nov.  8, 2026
+  * @version Nov.  8, 2026
+  */
+private[smworkflow] object BoundedSelectedValidationContinuation {
+  import StandaloneFixExecution as S
+  import RepositorySyncManagedGitObservation as G
+  val schema = "sm-workflow.selected-validation-continuation.v1"
+  val retry = "RetrySelectedCheck"
+  val refresh = "AdoptCurrentOwnedCandidate"
+  val defer = "Defer"
+  final case class Target(schemaVersion: String, componentInstance: String, sessionId: String,
+    participant: String, family: String, frontierRevision: Long, baseHead: String, candidateTree: String,
+    checkIdentity: String, originalOwnedPaths: Vector[String], additionalOwnedPaths: Vector[String],
+    refreshCandidate: Boolean)
+  given Encoder[Target] = deriveEncoder
+  given Decoder[Target] = deriveDecoder
+  def isTarget(value: Json): Boolean = value.hcursor.get[String]("schemaVersion").toOption.contains(schema)
+  def choices(target: Target): Vector[String] = Vector(if (target.refreshCandidate) refresh else retry, defer)
+  def describeName(n: BoundedWorkNativeRun): String =
+    "describe" + n.entry + (if (n.delegation) "ValidationContinuation" else "UnverifiedValidationContinuation")
+  def adoptName(n: BoundedWorkNativeRun): String =
+    "adopt" + n.entry + (if (n.delegation) "ValidationContinuation" else "UnverifiedValidationContinuation")
+  private def _invalid[A](message: String): Consequence[A] = Consequence.stateConflict("Selected validation continuation: " + message)
+  def targetC(value: Json): Consequence[Target] = value.as[Target].fold(e => _invalid(e.message), t =>
+    if (t.asJson == value && t.schemaVersion == schema && Set("GoalTask", "DelegateTask")(t.family) &&
+      t.frontierRevision > 0 && t.frontierRevision < Long.MaxValue &&
+      Vector(t.componentInstance, t.sessionId, t.participant, t.baseHead, t.candidateTree, t.checkIdentity)
+        .forall(GoalPhaseRuntimeRepairControl.exact) && t.originalOwnedPaths.nonEmpty &&
+      (t.originalOwnedPaths ++ t.additionalOwnedPaths).distinct == (t.originalOwnedPaths ++ t.additionalOwnedPaths) &&
+      (t.originalOwnedPaths ++ t.additionalOwnedPaths).forall(GoalPhasePurposeRepair.path) &&
+      (t.refreshCandidate || t.additionalOwnedPaths.isEmpty)) Consequence.success(t)
+    else _invalid("incomplete or crossed target"))
+  def bindingC(target: Target, choice: String, rationale: String, participant: String,
+    reference: ContextReference): Consequence[Json] = for {
+    _ <- targetC(target.asJson)
+    _ <- if (choices(target).contains(choice) && participant == target.participant &&
+      GoalPhaseRuntimeRepairControl.exact(rationale) && reference != null &&
+      Vector(reference.identity, reference.revision).forall(GoalPhaseRuntimeRepairControl.exact)) Consequence.unit
+      else _invalid("direction does not match its target, choice or actual Human reference")
+  } yield Json.obj("componentInstance" -> target.componentInstance.asJson,
+    "goalTaskValidationContinuation" -> Json.obj("target" -> target.asJson,
+      "answer" -> Json.obj("source" -> "Human".asJson, "choice" -> choice.asJson,
+        "rationale" -> rationale.asJson, "participant" -> participant.asJson,
+        "reference" -> Json.obj("identity" -> reference.identity.asJson, "revision" -> reference.revision.asJson))))
+  def selectBinding(value: Json): Either[String, Json] = (for {
+    target <- targetC(value.hcursor.downField("goalTaskValidationContinuation").downField("target").focus.getOrElse(Json.Null))
+    answer = value.hcursor.downField("goalTaskValidationContinuation").downField("answer")
+    choice <- answer.get[String]("choice").fold(e => _invalid(e.message), Consequence.success)
+    rationale <- answer.get[String]("rationale").fold(e => _invalid(e.message), Consequence.success)
+    participant <- answer.get[String]("participant").fold(e => _invalid(e.message), Consequence.success)
+    id <- answer.downField("reference").get[String]("identity").fold(e => _invalid(e.message), Consequence.success)
+    revision <- answer.downField("reference").get[String]("revision").fold(e => _invalid(e.message), Consequence.success)
+    selected <- bindingC(target, choice, rationale, participant, ContextReference(id, revision))
+    _ <- if (selected == value) Consequence.unit else _invalid("foreign or unsupported direction fields")
+  } yield value).toOption.toRight("Invalid common selected-validation direction")
+
+  def retainedC(payload: Payload, owner: String, session: String, revision: Long): Consequence[Unit] =
+    payload.validationContinuation.filter(d => isTarget(d.target)).fold(Consequence.unit) { d => for {
+      t <- targetC(d.target)
+      _ <- if (t.componentInstance == owner && t.sessionId == session && t.participant == payload.state.participant &&
+        t.frontierRevision < revision && t.baseHead == payload.baseHead &&
+        (payload.state.input.delegation.nonEmpty == (t.family == "DelegateTask")) &&
+        (t.originalOwnedPaths ++ t.additionalOwnedPaths).forall(payload.state.input.ownedPaths.contains)) Consequence.unit
+        else _invalid("retained direction crosses its owner, Session, source or admitted scope")
+    } yield () }
+
+  def correctedInputC(input: S.Input, target: Target): Consequence[S.Input] = {
+    val next = input.copy(ownedPaths = input.ownedPaths ++ target.additionalOwnedPaths)
+    if (input.ownedPaths != target.originalOwnedPaths) _invalid("original owned scope differs")
+    else S.inputC(next).flatMap(_ => if (next.ownedPaths.forall(S.permitted(_, next))) Consequence.success(next)
+      else _invalid("new inventory crosses the original exclusions"))
+  }
+  def adoptedC(payload: Payload, target: Target, direction: GoalTaskValidationContinuation.Direction): Consequence[Payload] = for {
+    _ <- if (TerminatedValidationContinuation.unverified(payload.state) &&
+      payload.state.candidate.exists(_.tree == target.candidateTree) && payload.baseHead == target.baseHead &&
+      payload.state.receipts.last.identity == target.checkIdentity) Consequence.unit
+      else _invalid("target is not the current known-ended unverified check")
+    input <- correctedInputC(payload.state.input, target)
+    state <- if (target.refreshCandidate) Consequence.success(payload.state.copy(input = input,
+      stage = "SelectedValidationCandidateReady", message = "Admitted current owned candidate; ordinary Advance owns capture"))
+      else S.continueUnverifiedValidationC(payload.state)
+  } yield payload.copy(state = state.copy(evidenceReferences = (state.evidenceReferences :+ direction.reference).distinct),
+    unrelated = payload.unrelated.map(_.filterNot(d => S.owned(d.path, target.additionalOwnedPaths))),
+    validationContinuation = Some(direction))
+
+  def operations(host: Host, definition: DefinitionBinding, evidence: GoalTaskValidationContinuation.EvidencePort,
+    n: BoundedWorkNativeRun): Vector[spec.OperationDefinition] =
+    Vector(new Operation(false, host, definition, evidence, n), new Operation(true, host, definition, evidence, n))
+  private final class Operation(adopt: Boolean, host: Host, definition: DefinitionBinding,
+    evidence: GoalTaskValidationContinuation.EvidencePort, n: BoundedWorkNativeRun) extends spec.OperationDefinition {
+    private val _service = if (n.delegation) SmWorkflowComponent.DelegateTaskServiceService else SmWorkflowComponent.GoalTaskServiceService
+    val specification = NativeWorkflowDescriptionMetadata.operation(_service.operations.operations.find(_.name ==
+      (if (adopt) adoptName(n) else describeName(n))).get)
+    def createOperationRequest(incoming: Request): Consequence[OperationRequest] =
+      NativeWorkflowResourceInput.selectC[Record](incoming).map { source => new CommandAction {
+        val request = incoming
+        override def commandExecutionMode = CommandExecutionMode.Sync
+        def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
+          val core = c
+          def execute(): Consequence[OperationResponse] = for {
+            record <- NativeWorkflowResourceInput.readC(source, ref => read_resource_text(ref, Some(java.nio.charset.StandardCharsets.UTF_8)))
+            answer <- if (adopt) summon[org.goldenport.convert.ValueReader[V.BoundedValidationContinuationInput]].readC(record).map(Some(_))
+              else Consequence.success(Option.empty[V.BoundedValidationContinuationInput])
+            description <- if (!adopt) summon[org.goldenport.convert.ValueReader[V.BoundedValidationContinuationDescriptionInput]].readC(record).map(Some(_))
+              else Consequence.success(Option.empty[V.BoundedValidationContinuationDescriptionInput])
+            session = answer.map(_.sessionId).getOrElse(description.get.sessionId)
+            context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(session))
+            selected = core.copy(executionContext = context)
+            storage <- n.storageC(host, definition, selected)
+            instances <- storage.bindInstancesC()(using context)
+            current <- instances.loadC(InstanceIdentity(session))(using context).flatMap(_.map(Consequence.success)
+              .getOrElse(_invalid("existing Session is absent")))
+            _ <- WorkflowForceClosure.requireOpenC(current)
+            _ <- if (current.definition.workflowIdentity == definition.workflowIdentity &&
+              current.definition.workflowRevision == definition.workflowRevision &&
+              current.lifecycle == Lifecycle.Active && current.suspension.isEmpty)
+              Consequence.unit else _invalid("requires the same active unsuspended workflow")
+            payload <- n.loadPayloadC(storage, session, current.revision.value, selected)
+            _ <- GoalPhaseParticipantAdmission.admitC(payload.state.participant, context)
+            _ <- if (TerminatedValidationContinuation.unverified(payload.state)) Consequence.unit
+              else _invalid("not a confirmed ended unverified selected test without failed assertions")
+            supplied <- answer.fold(Consequence.success(Option.empty[Target]))(a => io.circe.parser.parse(a.target)
+              .fold(e => _invalid(e.message), targetC).map(Some(_)))
+            extra = supplied.map(_.additionalOwnedPaths).getOrElse(description.get.additionalOwnedPaths.toVector)
+            refreshcandidate = supplied.map(_.refreshCandidate).getOrElse(description.get.refreshCandidate)
+            target = Target(schema, core.component.get.core.instanceId.canonicalKey, session, payload.state.participant,
+              n.entry, current.revision.value, payload.baseHead, payload.state.candidate.get.tree,
+              payload.state.receipts.last.identity, payload.state.input.ownedPaths, extra, refreshcandidate)
+            _ <- targetC(target.asJson)
+            input <- correctedInputC(payload.state.input, target)
+            _ <- if (input.ownedPaths.forall(host.paths.contains) && payload.root == host.root &&
+              payload.branch == host.branch && input.repositoryIdentity == host.repository) Consequence.unit
+              else _invalid("scope exceeds the current admitted host")
+            response <- answer match {
+              case None => Consequence.success(_output(target, "decision-required", n))
+              case Some(a) => for {
+                _ <- if (supplied.contains(target) && a.sessionId == target.sessionId) Consequence.unit
+                  else _invalid("stale or crossed current target")
+                ref = ContextReference(a.reference.identity, a.reference.revision)
+                binding <- bindingC(target, a.choice, a.rationale, a.participant, ref)
+                _ <- evidence.admitC(selected, ref, binding)
+                result <- if (a.choice == defer) Consequence.success(_output(target, "deferred", n)) else for {
+                  root <- G.rootC(selected)
+                  observed <- G.observeC(selected)
+                  outside = observed.dirty.filterNot(d => S.owned(d.path, input.ownedPaths))
+                  expected = payload.unrelated.getOrElse(Vector.empty).filterNot(d => S.owned(d.path, extra))
+                  _ <- if (root == payload.root && observed.head == payload.baseHead && observed.branch == payload.branch &&
+                    outside == expected && observed.dirty.forall(!_.unmerged)) Consequence.unit
+                    else _invalid("current source crosses the retained base, scope or unrelated work")
+                  _ <- if (refreshcandidate) Consequence.unit else n.freshC(payload, selected)
+                  direction = GoalTaskValidationContinuation.Direction(target.asJson, a.choice, a.rationale, a.participant, ref)
+                  next <- adoptedC(payload, target, direction)
+                  _ <- n.saveC(host, storage, current, next, selected)
+                } yield _output(target, "resumed-awaiting-advance", n)
+              } yield result
+            }
+          } yield response
+        }
+      } }
+  }
+  private def _output(target: Target, outcome: String, n: BoundedWorkNativeRun): OperationResponse =
+    NativeWorkflowOperationOutput.response(V.BoundedValidationContinuationView(target.sessionId, target.componentInstance,
+      outcome, "Original unverified attempt retained; adoption alone executes no source or process effect", target.asJson.noSpaces,
+      choices(target), adoptName(n)))
 }

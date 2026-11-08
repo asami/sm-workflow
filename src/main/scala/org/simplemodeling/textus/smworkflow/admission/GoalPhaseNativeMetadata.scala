@@ -25,7 +25,8 @@ import GoalPhaseSliceValidationPlan as L
   * metadata interpretation, query semantics and exact operation binding.
   * @since   Oct. 18, 2026
   *  version Oct. 20, 2026
-  * @version Nov.  5, 2026
+  *  version Nov.  5, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeMetadata {
@@ -158,16 +159,29 @@ private[smworkflow] object GoalPhaseNativeMetadata {
   given Decoder[D.DiscoveryScope] = _strict(deriveDecoder[D.DiscoveryScope], Set("identity", "revision", "artifacts"))(_scope_valid)
   given Encoder[D.Diagnostic] = deriveEncoder
   given Decoder[D.Diagnostic] = _strict(deriveDecoder[D.Diagnostic], Set("code", "source", "message"))()
-  given Encoder[D.Operation] = deriveEncoder[D.Operation].mapJson(_omit(_, "metadata"))
+  given Encoder[D.FrameworkFacts] = deriveEncoder
+  given Decoder[D.FrameworkFacts] = _strict(deriveDecoder[D.FrameworkFacts], Set("tags", "explicitOnly"))()
+  given Encoder[D.Operation] = deriveEncoder[D.Operation].mapJson(_omit(_, "metadata", "framework"))
   given Decoder[D.Operation] = _strict(deriveDecoder[D.Operation],
-    Set("reference", "provenance", "selector", "metadata", "diagnostics"), Set("metadata"))()
+    Set("reference", "provenance", "selector", "metadata", "diagnostics", "framework"), Set("metadata", "framework"))()
   given Encoder[D.Inventory] = deriveEncoder
   given Decoder[D.Inventory] = _strict(deriveDecoder[D.Inventory], Set("scope", "completeness", "operations", "diagnostics"))(
     value => D.selectC(value, D.SelectionQuery()).isSuccess)
   given Encoder[D.SelectionQuery] = Encoder.instance(value => Json.obj(
     "purposes" -> value.purposes.toVector.sortBy(_.toString).asJson,
-    "features" -> value.features.toVector.sortBy(x => (x.scope, x.identity)).asJson))
-  given Decoder[D.SelectionQuery] = _strict(deriveDecoder[D.SelectionQuery], Set("purposes", "features"))(queryValid)
+    "features" -> value.features.toVector.sortBy(x => (x.scope, x.identity)).asJson,
+    "standardFramework" -> value.standardFramework.asJson,
+    "includeSlow" -> value.includeSlow.asJson,
+    "explicitSuites" -> value.explicitSuites.toVector.sorted.asJson))
+  given Decoder[D.SelectionQuery] = _strict(Decoder.instance(cursor => for {
+    purposes <- cursor.get[Set[M.Purpose]]("purposes")
+    features <- cursor.get[Set[M.FeatureReference]]("features")
+    standard <- optional[Boolean](cursor, "standardFramework").map(_.getOrElse(false))
+    slow <- optional[Boolean](cursor, "includeSlow").map(_.getOrElse(false))
+    suites <- optional[Set[String]](cursor, "explicitSuites").map(_.getOrElse(Set.empty))
+  } yield D.SelectionQuery(purposes, features, standard, slow, suites)),
+    Set("purposes", "features", "standardFramework", "includeSlow", "explicitSuites"),
+    Set("standardFramework", "includeSlow", "explicitSuites"))(queryValid)
 
   object Profile {
     given Encoder[Profile] = deriveEncoder[Profile].mapJson(_omit(_, "source"))

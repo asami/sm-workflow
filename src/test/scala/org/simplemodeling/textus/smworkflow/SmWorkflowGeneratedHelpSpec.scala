@@ -18,7 +18,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Oct.  5, 2026
  *  version Oct. 28, 2026
- * @version Nov.  6, 2026
+ *  version Nov.  6, 2026
+  * @version Nov.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -83,11 +84,14 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
     SmWorkflowComponent.StandaloneFixSemanticAdmissionServiceService -> Vector("admitStandaloneFixReview"),
     SmWorkflowComponent.GoalTaskServiceService -> Vector("startGoalTask", "advanceGoalTask", "submitGoalTaskWorkResult", "resolveGoalTaskDiagnosticInformation",
       "describeGoalTaskMalformedIssuedWorkRecovery", "recoverGoalTaskMalformedIssuedWork",
-      "describeGoalTaskRepairContinuation", "resumeGoalTaskRepair"),
+      "describeGoalTaskRepairContinuation", "resumeGoalTaskRepair",
+      "describeGoalTaskValidationContinuation", "adoptGoalTaskValidationContinuation",
+      "describeGoalTaskUnverifiedValidationContinuation", "adoptGoalTaskUnverifiedValidationContinuation"),
     SmWorkflowComponent.DelegateTaskServiceService -> Vector("startDelegateTask", "advanceDelegateTask",
       "submitDelegateTaskWorkResult", "resolveDelegateTaskDiagnosticInformation",
       "describeDelegateTaskScopeCorrection", "correctDelegateTaskScope",
-      "describeDelegateTaskCandidateContinuation", "recoverDelegateTaskCandidateContinuation"),
+      "describeDelegateTaskCandidateContinuation", "recoverDelegateTaskCandidateContinuation",
+      "describeDelegateTaskValidationContinuation", "adoptDelegateTaskValidationContinuation"),
     SmWorkflowComponent.DelegateTaskImplementationServiceService -> Vector("implementDelegateTask"),
     SmWorkflowComponent.DelegateTaskRepairServiceService -> Vector("repairDelegateTask"),
     SmWorkflowComponent.DelegateTaskReviewServiceService -> Vector("reviewDelegateTask"),

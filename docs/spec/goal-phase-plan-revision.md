@@ -438,3 +438,20 @@ recomputes it against the saved predecessor and requires exact equality with the
 captured Plan. The final strict inventory delta comparison is unchanged. Other
 revision scopes still require complete raw/captured equality. Decoding alone
 supplies neither source provenance nor authority.
+
+## Automatic E4 and explicit document-stage driver
+
+`NativeGoalPlanRevisionLiveSpec` retains the automated E4 public-Operation
+regression under its original suite identity. The explicitly staged external
+episode is `NativeGoalDocumentPlanRevisionManualSpec`, in the same source file,
+with standard ScalaTest Slow and DoNotDiscover annotations and its original
+runtime preparation declaration. Normal focused selection retains the original
+three automatic suite names and excludes this separate manual suite.
+
+Explicit manual execution still requires the original
+`smworkflow.spec.p62.planRevision.stage`, output/root and stage-specific actual
+semantic/Human/review/authority inputs. All stage assertions and saved outcomes
+remain. Selecting it without those inputs does not qualify; running `prepare`
+alone never establishes completion of the later stages. Standard explicit
+selection can name the manual suite. No custom test label or global suite table
+is introduced, and unrelated FULL/HEAVY metadata is unchanged.
