@@ -117,6 +117,20 @@ binding selects the current Step while preserving the original standing binding
 and all other existing source-boundary constraints. Decoded prefix references
 supply no native authority.
 
+An added current-Step dependency approval may name another opaque revision of
+the same Usage Contract identity as the inherited approvals. Each approval must
+come from the actual native Human decision history and retain its complete
+original Usage reference and acceptance. The requester and dependency Component
+and repository remain literal; every decision retains its complete acceptance
+and unchanged check coverage, and old coverage remains an ordered prefix. No
+numeric ordering or maximum is inferred from Usage revision text. The original
+source Direction and its accepted prefix keep their original references.
+Identity equality alone grants no execution or source selection: a foreign
+identity, missing approval or rewritten acceptance refuses. Adoption reconstructs
+and compares the exact current native target before independent source Human
+admission, so an unapproved revision supplied in a target refuses. This bounded
+relation adds no schema, operation or generic revision-forgetting fallback.
+
 These additions select target
 `sm-workflow.goal-phase-dependency-source-revision.v11` and capture
 `sm-workflow.goal-phase-dependency-source-capture.v12`. A v11 target requires at
@@ -169,6 +183,23 @@ Completed CLI operations and formally terminated fixture setup commands are
 recollected from their original files; unknown setup termination refuses.
 All old public logs remain byte-preserved. This qualification neither supplies
 real consumer authority nor establishes Phase or Terminal acceptance.
+
+The separate opt-in `smworkflow.spec.laterSourcePublicationUsageLineage=true`
+scenario uses a new caller locator and physical Session. The default is false
+and preserves the historical qualification. After actual Step1 closure and
+before Step2 implementation, it submits a normal dependency proposal and admits
+its specification-owned Human answer for `tiny-api-contract` revision2, leaving
+revision1 and its acceptance untouched. Its later source proposal appends the
+new decision's complete acceptance/check coverage. PREPARE_OLD retains the
+specific `scope-boundary.added-approvals` describe refusal separately from normal
+freshness refusal. After ordinary product publication, RESUME_CURRENT retains
+both native approvals, first refuses an unapproved Usage revision in the returned
+target without source Human admission, then uses exact independent source Human
+evidence and separate Advance. Old outputs, source/captures, repair reservation
+and accepted Step remain literal through fresh capture, checks and Step2 closure.
+The saved preparation records the actual proposal and answer reference and
+lineage flag. COLLECT remains read-only; fixture structure supplies no real
+consumer authority.
 
 `NativeGoalCanonicalDependencySourceSuccessionCliSpec` calls the bounded
 `qualifyCanonicalSource` fixture entry. Prepare uses the old installed product

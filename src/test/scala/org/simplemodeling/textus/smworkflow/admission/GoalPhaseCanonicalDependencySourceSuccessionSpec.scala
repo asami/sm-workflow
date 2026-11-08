@@ -227,11 +227,25 @@ private[admission] object LaterSourcePublicationSpecificationFixture {
   val candidate = fresh.copy(candidate = Some(O.Snapshot(validation.candidate.get.head, "5" * 40)),
     stagedPaths = fresh.selectedPaths, changedPaths = fresh.selectedPaths, diff = Some("SPECIFICATION-ONLY corrected source"),
     dependencySourceGuard = Some(guard), dependencySourceCapture = Some(capture))
+  val lineageApproval = {
+    val previous = origin.approvals.head.proposal
+    GoalPhaseDependencyValidation.Approval(target.step, previous.copy(identity = "later-usage-scope", revision = "2",
+      usageContract = previous.usageContract.copy(revision = "2"), paths = binding.paths,
+      acceptance = Vector("Consume the newly approved API revision", "Preserve the original caller obligation"),
+      dependentWork = Vector(ContextReference(target.step, "1"))), ContextReference("later-usage-human", "1"))
+  }
+  val lineageSource = proposal.source.copy(coverage = proposal.source.coverage :+
+    R.Coverage(lineageApproval.decision, lineageApproval.proposal.acceptance, binding.checks.map(_.identity)))
+  val lineageOrigin = origin.copy(approvals = origin.approvals :+ lineageApproval,
+    selection = proposal.copy(source = lineageSource))
+  val lineageTarget = target.copy(proposal = lineageSource, canonicalOrigin = Some(lineageOrigin))
+  val lineageDirection = direction.copy(target = lineageTarget)
+  val lineageCapture = capture.copy(direction = lineageDirection)
 }
 
 /** Canonical source contracts use specification-only observations and authority.
   * @since   Nov.  8, 2026
-  * @version Nov.  8, 2026
+  * @version Nov.  9, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -240,6 +254,83 @@ final class GoalPhaseCanonicalDependencySourceSuccessionSpec extends AnyWordSpec
   "LSR-01 Later source and genuine publication failure" should {
     import LaterSourcePublicationSpecificationFixture as L
     import GoalPhasePrerequisitePrimaryRepair as A
+    "retain complete independently approved Usage revisions within one identity across the accepted source prefix" in {
+      Given("a specification-only accepted Usage revision1 and a distinct current-Step approval of revision2 with its own full acceptance")
+      val oldcoverage = L.olddirection.target.proposal.coverage
+      val oldapprovals = L.origin.approvals
+      When("the exact later target direction and capture cross public and strict owner codecs")
+      val publictarget = R.targetC(GoalPhaseNativeMetadata.record(L.lineageTarget.asJson))
+      val directionwire = io.circe.parser.parse(take(GoalPhaseNativeMetadata.record(L.lineageDirection.asJson).toJsonStringC)).toOption.get
+      val publicdirection = R.decodePublicDirection(directionwire)
+      val capturewire = io.circe.parser.parse(take(GoalPhaseNativeMetadata.record(L.lineageCapture.asJson).toJsonStringC)).toOption.get
+      val publiccapture = for {
+        wire <- GoalPhaseNativeMetadata.normalizePublicJson(capturewire)
+        direction <- R.decodePublicDirection(wire.hcursor.downField("direction").focus.get)
+        capture <- wire.mapObject(_.add("direction", direction.asJson)).as[R.Capture].left.map(_.message)
+      } yield capture
+      val opaque = L.lineageApproval.copy(proposal = L.lineageApproval.proposal.copy(
+        usageContract = ContextReference("linked-api", "approved-next")))
+      val opaquevalid = R.targetValid(L.lineageTarget.copy(canonicalOrigin = Some(L.lineageOrigin.copy(
+        approvals = L.origin.approvals :+ opaque))))
+      Then("both literal refs and complete per-decision obligations survive without changing the cause prefix or repair reservation")
+      R.targetValid(L.lineageTarget) shouldBe true
+      take(publictarget) shouldBe L.lineageTarget
+      publicdirection shouldBe Right(L.lineageDirection)
+      publiccapture shouldBe Right(L.lineageCapture)
+      L.lineageTarget.asJson.as[R.Target] shouldBe Right(L.lineageTarget)
+      L.lineageDirection.asJson.as[R.Direction] shouldBe Right(L.lineageDirection)
+      L.lineageCapture.asJson.as[R.Capture] shouldBe Right(L.lineageCapture)
+      L.lineageOrigin.approvals.init shouldBe oldapprovals
+      oldapprovals.map(_.proposal.usageContract).distinct shouldBe Vector(ContextReference("linked-api", "1"))
+      L.lineageOrigin.approvals.last.proposal.usageContract shouldBe ContextReference("linked-api", "2")
+      L.lineageSource.coverage.startsWith(oldcoverage) shouldBe true
+      L.lineageSource.coverage.last shouldBe R.Coverage(L.lineageApproval.decision,
+        L.lineageApproval.proposal.acceptance, L.binding.checks.map(_.identity))
+      L.lineageOrigin.originalDirection shouldBe Some(L.olddirection)
+      L.lineageOrigin.historicalPublicationFailure shouldBe Some(L.historical)
+      L.lineageTarget.repairProgress shouldBe L.target.repairProgress
+      L.lineageTarget.repairProgress.ordinaryCount shouldBe 1
+      L.lineageTarget.repairProgress.limit shouldBe 10
+      opaquevalid shouldBe true
+    }
+    "refuse foreign boundaries and incomplete or rewritten approval acceptance while retaining literal inherited references" in {
+      Given("the exact same-identity revision lineage and the complete ordered old and new coverage")
+      val approval = L.lineageApproval
+      val scope = approval.proposal
+      def _target_(approvals: Vector[GoalPhaseDependencyValidation.Approval], coverage: Vector[R.Coverage]): R.Target = {
+        val source = L.lineageSource.copy(coverage = coverage)
+        L.lineageTarget.copy(proposal = source, canonicalOrigin = Some(L.lineageOrigin.copy(approvals = approvals,
+          selection = L.lineageOrigin.selection.copy(source = source))))
+      }
+      val foreign = Vector(scope.copy(usageContract = scope.usageContract.copy(identity = "foreign-usage")),
+        scope.copy(requester = scope.requester.copy(identity = "foreign-requester")),
+        scope.copy(dependency = scope.dependency.copy(identity = "foreign-component")),
+        scope.copy(dependency = scope.dependency.copy(repository = "foreign-repository")))
+      val coverage = L.lineageSource.coverage
+      val oldentry = coverage.head
+      val newentry = coverage.last
+      When("one boundary, native approval, original acceptance or inherited reference is removed or crossed")
+      val targets = foreign.map(value => _target_(L.origin.approvals :+ approval.copy(proposal = value), coverage)) ++ Vector(
+        _target_(L.origin.approvals, coverage),
+        _target_(L.lineageOrigin.approvals, coverage.tail),
+        _target_(L.lineageOrigin.approvals, coverage.init),
+        _target_(L.lineageOrigin.approvals, coverage.updated(0, oldentry.copy(acceptance = Vector("Replaced old obligation")))),
+        _target_(L.lineageOrigin.approvals, coverage.updated(0, oldentry.copy(acceptance = oldentry.acceptance.dropRight(1)))),
+        _target_(L.lineageOrigin.approvals, coverage.updated(coverage.size - 1, newentry.copy(acceptance = Vector("Replaced new obligation")))),
+        _target_(L.lineageOrigin.approvals, coverage.updated(coverage.size - 1, newentry.copy(acceptance = newentry.acceptance.dropRight(1)))),
+        _target_(L.lineageOrigin.approvals.updated(0, L.origin.approvals.head.copy(proposal =
+          L.origin.approvals.head.proposal.copy(usageContract = ContextReference("linked-api", "2")))), coverage),
+        L.lineageTarget.copy(canonicalOrigin = Some(L.lineageOrigin.copy(originalDirection = Some(
+          L.olddirection.copy(directive = ContextReference("replacement-original-human", "1")))))))
+      Then("the structural codecs refuse every crossed target without claiming native Human authentication")
+      targets.foreach { target =>
+        R.targetValid(target) shouldBe false
+        target.asJson.as[R.Target].isLeft shouldBe true
+      }
+      R.targetValid(L.target) shouldBe true
+      F.target.asJson.as[R.Target] shouldBe Right(F.target)
+      F.capture.asJson.as[R.Capture] shouldBe Right(F.capture)
+    }
     "resolve current same-core routes without reinterpreting retained predecessor registrations as future extensions" in {
       Given("the actual old and current fixture captures with one source core and different fixed current-Step routes")
       val old = R.consumptionOf(L.oldcapture)

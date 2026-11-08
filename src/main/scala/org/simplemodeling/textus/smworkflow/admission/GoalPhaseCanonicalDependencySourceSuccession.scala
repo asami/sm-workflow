@@ -288,7 +288,7 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
         step = if (o.acceptedSourcePrefix.nonEmpty) old.step else v.binding.step) == old),
       _clause("scope-boundary.added-approvals")(added.forall(a => a.proposal.requester == old.requester &&
         a.proposal.dependency.identity == old.dependency.identity && a.proposal.dependency.repository == old.dependency.repository &&
-        inherited.map(_.proposal.usageContract).distinct == Vector(a.proposal.usageContract))),
+        inherited.map(_.proposal.usageContract.identity).distinct == Vector(a.proposal.usageContract.identity))),
       _clause("scope-boundary.coverage.approvals")(v.proposal.coverage.map(_.approval).toSet == coverage.map(_.decision).toSet),
       _clause("scope-boundary.coverage.obligations")(coverage.forall(a => v.proposal.coverage.contains(
         R.Coverage(a.decision, a.proposal.acceptance, old.checks.map(_.identity))))),
