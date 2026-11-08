@@ -3711,6 +3711,11 @@ on = source-history-automatic-selected
 
 ##### TRANSITION
 
+to = Decision
+on = source-history-repair-required
+
+##### TRANSITION
+
 to = InspectCandidate
 on = documents-selected
 

@@ -282,7 +282,7 @@ final class NativeGoalSourceHistoryAutomaticCliSpec extends NativeGoalSourceHist
 
   "E7 ADMISSION concurrent ambiguity after selection" should afterWord(
     "in spec:goal-phase-source-history-recovery, example:E7, rules:SHR-AUTO-01, phase:common-repair") {
-    "stop before a write and retain the new failed reconciliation without automatic retry or checks" in {
+    "retain the strict failed reconciliation and issue one ordinary repair without another writer or check" in {
       Given("docs/spec/goal-phase-source-history-recovery.md SHR-AUTO-01 E7: the exact associated terminal observation selected in a tiny existing episode")
       val (episode, failed) = _episode("automatic-history-ambiguous")
       val fixture = episode.fixture
@@ -296,14 +296,22 @@ final class NativeGoalSourceHistoryAutomaticCliSpec extends NativeGoalSourceHist
       val index = indexBytes(fixture.scenario)
       When("another owner makes the managed comment ambiguous before the automatic writer reads it")
       val stopped = _advance(fixture).business[V.GoalPhaseAdvanceResult]
-      Then("the actual new failed result records the concrete cause without overwriting either owner or staging and checking")
-      stopped.kind shouldBe "Wait"
+      Then("the actual new failed result supplies ordinary same-Step repair while leaving source staging and checks untouched")
+      stopped.kind shouldBe "Request"
+      stopped.work.get.kind shouldBe "RepairStep"
+      stopped.work.get.stepIdentity shouldBe Some(target.recovery.step)
+      stopped.work.get.selectedPlan shouldBe fixture.request.work.get.selectedPlan
+      stopped.work.get.originalBase shouldBe fixture.request.work.get.originalBase
+      stopped.work.get.completed shouldBe fixture.request.work.get.completed
+      stopped.repairProgress.get.automaticCount shouldBe 1
+      stopped.repairProgress.get.ordinaryCount shouldBe 1
       stopped.human shouldBe None
-      stopped.message should include("duplicate since or latest version")
+      stopped.work.get.repairDirective.get.reason should include("duplicate since or latest version")
+      stopped.work.get.repairDirective.get.reason should include(sourcePath)
       _automatic_result(fixture, target).outcome shouldBe Some("failed")
       _old_unknown(fixture, target)
       val after = _current(fixture)
-      _advance(fixture).business[V.GoalPhaseAdvanceResult].kind shouldBe "Wait"
+      _advance(fixture).business[V.GoalPhaseAdvanceResult] shouldBe stopped
       _current(fixture) shouldBe after
       Files.readString(fixture.source) shouldBe ambiguous
       Files.getLastModifiedTime(fixture.source) shouldBe modified

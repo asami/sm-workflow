@@ -14,7 +14,8 @@ import GoalPhaseOrderedProgression as O
 /** Actual selected semantic review context and independent host admission.
   * A worker's identity/accept string alone never establishes independence.
   * @since   Oct.  6, 2026
-  * @version Oct. 26, 2026
+  *  version Oct. 26, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeReview {
@@ -64,12 +65,15 @@ private[smworkflow] object GoalPhaseNativeReview {
 
   /** Called only after the native completion owner has admitted the real reply. */
   private[admission] def retainPriorC(existing: Vector[Prior], request: S.Request,
-    submitted: ContinuationResult[S.Result]): Consequence[Vector[Prior]] = for {
+    submitted: ContinuationResult[S.Result],
+    sourceHistoryFailure: Option[(GoalPhaseSourceHistoryAutomatic.Observed, O.State)] = None): Consequence[Vector[Prior]] = for {
     _ <- _check(_priors_valid(existing), "retained prior reviews are malformed or duplicated")
     _ <- _check(request != null && submitted != null && submitted.result != null &&
       submitted.result.typeIdentity == S.resultCodec.typeIdentity && submitted.result.value != null &&
       submitted.resultReference != null && _reference(submitted.resultReference.identity) &&
       _reference(submitted.resultReference.revision), "actual completion input or result reference is invalid")
+    _ <- _check(sourceHistoryFailure != null && sourceHistoryFailure.forall(value => value != null && request.kind == "RepairStep"),
+      "source-history failure provenance belongs only to its actual RepairStep")
     retained <- request.kind match {
       case "ReviewStep" | "ReviewPhase" => for {
         _ <- _check(request.candidate != null && request.candidate.nonEmpty &&
@@ -83,6 +87,9 @@ private[smworkflow] object GoalPhaseNativeReview {
         _ <- _check(_priors_valid(next), "prior review history exceeds the bounded Step and Phase reports")
       } yield next
       case "TriageStep" => GoalPhaseStepTriage.admitC(request, submitted.result.value).map(_ => existing)
+      case "RepairStep" if sourceHistoryFailure.nonEmpty =>
+        val (observed, controller) = sourceHistoryFailure.get
+        S.admitSourceHistoryRepairResultC(request, submitted.result.value, observed, controller).map(_ => existing)
       case "ImplementStep" | "RepairStep" => S.admitSemanticResultC(request, submitted.result.value).map(_ => existing)
       case _ => F.invalid("completion has no assigned implementation, repair or review kind")
     }

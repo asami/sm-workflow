@@ -9,6 +9,8 @@ import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import GoalPhaseOrderedProgression as O
 import GoalPhaseNativeRun as F
+import GoalPhaseSourceHistoryAutomatic as T
+import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import GoalPhaseDependencyValidation.given
 import IncrementalSbtDiagnosisRepair.given
 
@@ -17,7 +19,7 @@ import IncrementalSbtDiagnosisRepair.given
   * only after their actual native predecessor has been connected.
   * @since   Oct.  6, 2026
   *  version Oct. 29, 2026
-  * @version Nov.  7, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWork {
@@ -285,6 +287,75 @@ private[smworkflow] object GoalPhaseNativeWork {
     } yield ()
 
   def admitSemanticResultC(request: Request, result: Result): Consequence[Unit] =
+    _admit_semantic_result_c(request, result, false)
+
+  /** Only the native completion/reconstruction owner supplies this retained
+    * failed fact and its current controller; semantic payloads carry no proof. */
+  private[admission] def admitSourceHistoryRepairResultC(request: Request, result: Result,
+    observed: T.Observed, controller: O.State): Consequence[Unit] = for {
+    _ <- _source_history_repair_request_c(request, observed, controller)
+    _ <- _admit_semantic_result_c(request, result, true)
+  } yield ()
+
+  private def _source_history_repair_request_c(request: Request, observed: T.Observed,
+    controller: O.State): Consequence[Unit] = for {
+    _ <- if (request != null && observed != null && observed.record != null &&
+        observed.reconciliation != null && controller != null) Consequence.unit
+      else F.invalid("source-history repair requires the actual failed native fact and current controller")
+    payload <- T.reconciliationCodec.decode(T.reconciliationCodec.encode(observed.reconciliation))
+      .fold(F.invalid, Consequence.success)
+    record <- observed.record.validateC
+    target = payload.selection.target
+    recovery = target.recovery
+    _ <- if (payload == observed.reconciliation && payload.outcome.contains("failed") &&
+        payload.diagnostic.exists(_bounded_text) && record.identity.value == recovery.sessionId &&
+        record.definition.workflowIdentity.value == recovery.definitionIdentity &&
+        record.definition.workflowRevision.value == recovery.definitionRevision &&
+        BigInt(record.revision.value) == BigInt(target.frontierRevision) + 3 &&
+        record.causation.value == T.causePrefix + "reconciliation:result" &&
+        record.lifecycle == Lifecycle.Active && record.suspension.isEmpty &&
+        record.currentProgression.contains(ProgressionReference("phase.InspectCandidate"))) Consequence.unit
+      else F.invalid("source-history repair requires its exact canonical failed reconciliation result")
+    selected <- GoalPhaseNativeHistory.prefixC(record, InstanceRevision(record.revision.value - 2))
+    _ <- if (selected.causation.value == T.cause(target)) Consequence.unit
+      else F.invalid("source-history repair has a crossed native selection predecessor")
+    intended <- GoalPhaseNativeHistory.prefixC(record, selected.revision.next)
+    _ <- GoalPhaseSourceHistoryRecovery._adjacent_c(record, selected, intended, T.causePrefix + "reconciliation:intent")
+    _ <- GoalPhaseSourceHistoryRecovery._adjacent_c(record, intended, record, T.causePrefix + "reconciliation:result")
+    _ <- if (controller.stage == O.Stage.Repair && controller.cursor == controller.completed.size &&
+        controller.cursor < controller.plan.steps.size &&
+        controller.completed.map(_.step) == controller.plan.steps.take(controller.cursor).map(_.identity) &&
+        controller.completed.forall(O.validStepAcceptance) &&
+        controller.plan.identity == recovery.planIdentity && controller.plan.revision == recovery.planRevision &&
+        controller.plan.steps(controller.cursor).identity == recovery.step &&
+        controller.base == recovery.base && controller.tipSnapshot == recovery.controllerTip &&
+        controller.candidate.isEmpty && controller.checksReceipt.isEmpty && controller.reviewEvidence.isEmpty &&
+        controller.closureIntent.isEmpty && controller.decision.isEmpty && controller.decisionSource.isEmpty &&
+        !controller.documentDecision && controller.pendingRepair.isEmpty && !controller.policyRepairPending &&
+        controller.phaseReviewedCandidate.isEmpty && controller.phaseRecordingPaths.isEmpty &&
+        controller.candidateParent.isEmpty && controller.stepAdmission.isEmpty &&
+        controller.repositoryReceipt.isEmpty && controller.releaseCommit.isEmpty) Consequence.unit
+      else F.invalid("source-history repair crosses its clean ordinary current-Step repair frontier")
+    semantic <- controller.next match {
+      case value: O.Semantic if value.key.kind == O.WorkKind.RepairStep => Consequence.success(value)
+      case _ => F.invalid("source-history repair has no assigned RepairStep")
+    }
+    directive = O.RepairDirective("Source-history normalization failed for " + recovery.intent.path + ": " + payload.diagnostic.get,
+      Vector(recovery.intent.path + ": " + payload.diagnostic.get))
+    _ <- if (request.instanceIdentity == recovery.sessionId &&
+        Option(request.sourceRevision).flatMap(_.toLongOption).exists(_ >= record.revision.value) &&
+        request.kind == "RepairStep" && request.stepIdentity == Some(recovery.step) &&
+        request.selectedPlan == controller.plan && request.originalBase == controller.base &&
+        request.completed == controller.completed && request.generation == semantic.key.generation &&
+        request.purpose == semantic.purpose && request.repairDirective == semantic.repairDirective &&
+        request.repairDirective.contains(directive) && request.candidate == None && request.checksReceipt == None &&
+        request.review == None && request.checkFailure == None && request.publicationFailure == None) Consequence.unit
+      else F.invalid("source-history repair request crosses its actual Session, Step, Plan, generation or failed source")
+    _ <- GoalPhaseRepairProgress.retainedC(request.repairProgress, controller)
+  } yield ()
+
+  private def _admit_semantic_result_c(request: Request, result: Result,
+    sourcehistoryrepair: Boolean): Consequence[Unit] =
     if (request == null || !_publication_request_valid(request) || !GoalPhasePurposeRepair.validateRequestC(request).isSuccess || !GoalPhaseRepairProgress.validateOptionC(request.repairProgress).isSuccess)
       F.invalid("assigned request or progress is invalid")
     else if (request.kind == "TriageStep") GoalPhaseStepTriage.admitC(request, result)
@@ -292,7 +363,7 @@ private[smworkflow] object GoalPhaseNativeWork {
     else if (request.kind != "RepairStep" || request.repairDirective == null ||
         !request.repairDirective.exists(value => value != null && _bounded_text(value.reason) &&
           value.findings != null && value.findings.nonEmpty && value.findings.forall(_bounded_text)) ||
-        !_repair_source(request) ||
+        (!sourcehistoryrepair && !_repair_source(request)) ||
         request.candidate.nonEmpty || request.checksReceipt.nonEmpty || result == null ||
         result.repairFindingSources == null || result.repairFindingSources.nonEmpty ||
         result.completionConditions == null || result.completionConditions.nonEmpty ||

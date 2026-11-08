@@ -8,7 +8,8 @@ import org.simplemodeling.textus.smworkflow.value as V
 
 /** Bounded AI claims about one actual repair, never execution or acceptance authority.
   * @since   Oct. 18, 2026
-  * @version Oct. 26, 2026
+  *  version Oct. 26, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseFixAssessment {
@@ -66,10 +67,19 @@ private[smworkflow] object GoalPhaseFixAssessment {
     * No class label or public command parameter can refund an ordinary batch.
     */
   def ordinaryCountExemptC(request: GoalPhaseNativeWork.Request,
-    result: GoalPhaseNativeWork.Result): Consequence[Boolean] =
-    GoalPhaseNativeWork.admitSemanticResultC(request, result).map { _ =>
+    result: GoalPhaseNativeWork.Result,
+    sourceHistoryFailure: Option[(GoalPhaseSourceHistoryAutomatic.Observed, GoalPhaseOrderedProgression.State)] = None): Consequence[Boolean] = {
+    val admitted = if (sourceHistoryFailure == null) _invalid[Unit]("source-history failure provenance option is null")
+      else sourceHistoryFailure match {
+        case Some(value) if value != null =>
+          GoalPhaseNativeWork.admitSourceHistoryRepairResultC(request, result, value._1, value._2)
+        case Some(_) => _invalid[Unit]("source-history failure provenance is null")
+        case None => GoalPhaseNativeWork.admitSemanticResultC(request, result)
+      }
+    admitted.map { _ =>
       request.kind == "RepairStep" && result.outcome == "completed" && result.fixAssessment.exists(ordinaryCountExempt)
     }
+  }
 
   /** Shared classification predicate; callers first admit the actual semantic result. */
   def ordinaryCountExempt(report: Report): Boolean = {

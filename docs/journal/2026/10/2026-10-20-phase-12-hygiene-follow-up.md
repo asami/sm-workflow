@@ -76,3 +76,22 @@ Proposed maintenance boundary: Existing private/local declarations and their ref
 Dependency/resume: separately selected specification naming-maintenance task. Prohibited workaround: no incidental cleanup during Phase 12 acceptance or repair.
 Source review: /root/p12_catalog_rereview. Final Phase commit: recorded by the containing release history.
 <!-- cncf-phase-finding:HYG-P12-CATALOG-TEST-NAMING-01:end -->
+
+### 2026-11-08 observation for HYG-P12-APP-PRIVATE-NAMING-01
+
+The independent SHF-01 maintenance review observed the same pre-existing
+private-member naming debt in `GoalPhaseOrderedProgression` (`phaseWide`,
+`tip`, `checks`, `key`, `semantic`, `success` and validation helpers), its
+`GoalPhaseOrderedProgressionSpec` helpers, and the existing
+`NativeWorkflowCliFixture.ProducerClient` descriptor, original and index fields.
+These observations predate the repair base `e6fdcc1`; the review's grouped
+`HYG-SHF-01-NAMING-001` observation is retained under this existing maintenance
+item rather than opening a duplicate controller-naming task.
+
+Status remains OPEN, with low-priority maintenance/readability impact and no
+demonstrated source-history continuation defect. A separately selected naming
+cleanup may update these private declarations and their callers while preserving
+public labels, generated references and serialized fields. No naming cleanup,
+Phase 12 reopening, additional test gate or repair-window change is authorized
+by this observation. Source review: `/root/formal_history_failure_review`,
+`P611-SM-FORMAL-SOURCE-HISTORY-FAILURE-CONTINUATION-01`.

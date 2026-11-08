@@ -11,7 +11,8 @@ import GoalPhaseOrderedProgression.*
 /**
  * Pure controller evidence, not native Git/SBT, permission, storage or CLI proof.
  * @since   Oct.  6, 2026
- * @version Oct. 28, 2026
+ *  version Oct. 28, 2026
+ * @version Nov.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -42,6 +43,96 @@ final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers wi
     val pending = take(accepted.acceptC(ClosureIntentSaved(accepted.candidate.get, "intent-" + id)))
     take(pending.acceptC(StepCommitObserved("intent-" + id,
       Commit(id, pending.candidate.get.head, tree))))
+  }
+
+  "Formal source-history failure at current-Step inspection" should {
+    "reserve one ordinary repair from the exact accepted prefix without admitting other frontiers" in {
+      Given("SHF-01: synthetic controller facts with a closed first Step and an accepted second implementation; no native authority")
+      val first = close(initial, oid('c'), oid('d'))
+      val inspecting = take(first.acceptC(SemanticCompleted(work(first), "Second implementation accepted")))
+      val finding = RepairDirective("Source-history failure for src/two.scala", Vector("src/two.scala: multiple managed block comments"))
+      When("the native owner supplies its separate formal-failure receipt to the pure eligibility connection")
+      val repair = take(inspecting.continueSourceHistoryRepairC("synthetic-formal-failure:61", finding))
+      Then("one ordinary reservation preserves Plan base closed prefix and actual controller tip")
+      repair.stage shouldBe Stage.Repair
+      repair.repairs shouldBe 1
+      repair.ordinaryRepairs shouldBe 1
+      repair.generation shouldBe inspecting.generation + 1
+      repair.plan shouldBe inspecting.plan
+      repair.base shouldBe inspecting.base
+      repair.completed shouldBe inspecting.completed
+      repair.tipSnapshot shouldBe inspecting.tipSnapshot
+      repair.cursor shouldBe inspecting.cursor
+      repair.repairDirective shouldBe Some(finding)
+      repair.candidate shouldBe None
+      When("the same connection is attempted at unaccepted, already reserved, candidate or phase-wide frontiers")
+      val validation = take(inspecting.acceptC(CandidateObserved(Snapshot(first.tipSnapshot.head, oid('e')))))
+      val phase = close(first, oid('e'), oid('f'))
+      val refused = Vector(initial, first, repair, validation, phase).map(_.continueSourceHistoryRepairC("synthetic-formal-failure:61", finding))
+      Then("eligibility rejects every other frontier and missing receipt or directive without charging a batch")
+      refused.foreach(_.isSuccess shouldBe false)
+      inspecting.continueSourceHistoryRepairC("", finding).isSuccess shouldBe false
+      inspecting.continueSourceHistoryRepairC("synthetic-formal-failure:61", RepairDirective("", Vector.empty)).isSuccess shouldBe false
+      inspecting.repairs shouldBe 0
+      inspecting.ordinaryRepairs shouldBe 0
+    }
+
+    "require the existing Human repair continuation at a positive exhausted inspection window and stop a zero window" in {
+      Given("SHF-01: synthetic inspection with the selected one-repair window already consumed")
+      val inspecting = take(initial.acceptC(SemanticCompleted(work(initial), "First implementation accepted")))
+      val reserved = take(inspecting.continueSourceHistoryRepairC("synthetic-first-failure", directive))
+      val next = take(reserved.acceptC(SemanticCompleted(work(reserved), "Reserved repair completed")))
+      When("another exact formal failure reaches the same controller window")
+      val stopped = take(next.continueSourceHistoryRepairC("synthetic-later-failure", directive))
+      Then("ordinary Decision preserves both counts and the pending directive without a second reservation")
+      stopped.stage shouldBe Stage.Decision
+      stopped.repairs shouldBe 1
+      stopped.ordinaryRepairs shouldBe 1
+      stopped.pendingRepair shouldBe Some(directive)
+      stopped.base shouldBe next.base
+      stopped.completed shouldBe next.completed
+      stopped.continueSourceHistoryRepairC("synthetic-later-failure", directive).isSuccess shouldBe false
+      GoalPhaseOrderedHumanDecision.choicesFor(stopped) shouldBe Vector("ContinueRepairs", "Defer", "Cancel")
+      stopped.acceptC(DecisionResumptionAdmitted("synthetic-forged-resume")).isSuccess shouldBe false
+      When("the native Human owner supplies verified ContinueRepairs eligibility to this synthetic controller")
+      val continued = take(stopped.acceptC(RepairContinuationAdmitted("synthetic-verified-human-direction")))
+      Then("the existing positive-window policy reserves its first new batch and assigns current-Step repair")
+      continued.stage shouldBe Stage.Repair
+      continued.generation shouldBe stopped.generation + 1
+      continued.repairs shouldBe 1
+      continued.ordinaryRepairs shouldBe 1
+      continued.pendingRepair shouldBe None
+      continued.repairDirective shouldBe Some(directive)
+      continued.base shouldBe stopped.base
+      continued.plan shouldBe stopped.plan
+      continued.completed shouldBe stopped.completed
+      work(continued).kind shouldBe WorkKind.RepairStep
+      work(continued).step shouldBe work(reserved).step
+      stopped.acceptC(RepairContinuationAdmitted("")).isSuccess shouldBe false
+      continued.acceptC(RepairContinuationAdmitted("synthetic-repeated-direction")).isSuccess shouldBe false
+      Given("the same synthetic inspection under a zero selected limit")
+      val zero = take(startC(plan.copy(repairLimit = 0), base))
+      val zeroready = take(zero.acceptC(SemanticCompleted(work(zero), "Accepted implementation")))
+      When("the first formal failure reaches that explicitly closed window")
+      val zerostop = take(zeroready.continueSourceHistoryRepairC("synthetic-zero-failure", directive))
+      Then("the existing zero-limit Decision consumes no repair and creates no allowance")
+      zerostop.stage shouldBe Stage.Decision
+      zerostop.repairs shouldBe 0
+      zerostop.ordinaryRepairs shouldBe 0
+      zerostop.pendingRepair shouldBe None
+      GoalPhaseOrderedHumanDecision.choicesFor(zerostop) shouldBe Vector("Defer", "Cancel")
+      When("a fabricated Resume or Continue is attempted without a positive pending repair window")
+      val refused = Vector(zerostop.acceptC(RepairContinuationAdmitted("synthetic-forged-continue")),
+        zerostop.acceptC(DecisionResumptionAdmitted("synthetic-forged-resume")),
+        initial.acceptC(RepairContinuationAdmitted("synthetic-foreign-implementation")),
+        reserved.acceptC(RepairContinuationAdmitted("synthetic-foreign-repair")),
+        close(close(initial, oid('c'), oid('d')), oid('e'), oid('f'))
+          .acceptC(RepairContinuationAdmitted("synthetic-foreign-phase-inspection")))
+      Then("all ineligible continuations refuse without changing the zero-window count or accepted work")
+      refused.foreach(_.isSuccess shouldBe false)
+      zerostop.repairs shouldBe 0
+      zerostop.ordinaryRepairs shouldBe 0
+    }
   }
 
   "Requested precommit Step review" should {

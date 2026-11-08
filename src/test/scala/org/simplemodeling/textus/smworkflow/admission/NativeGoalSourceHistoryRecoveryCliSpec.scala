@@ -22,7 +22,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * Optional installed-command qualification uses the same isolated host.
   * @since   Oct. 21, 2026
   *  version Oct. 26, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] abstract class NativeGoalSourceHistoryRecoveryCliSupport extends AnyWordSpec with NativeGoalSourceHistoryCliFixture {
@@ -217,7 +217,8 @@ private[admission] abstract class NativeGoalSourceHistoryRecoveryCliSupport exte
       .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
   }
   protected def _document_episode(name: String, later: Boolean = false, canonicalHost: Boolean = false,
-    virtualStartAt: Option[String] = None, currentSourceReconstruction: Boolean = false): DocumentEpisode = {
+    virtualStartAt: Option[String] = None, currentSourceReconstruction: Boolean = false,
+    malformedSource: Option[String] = None, repairLimit: Option[Int] = None): DocumentEpisode = {
     Given("CB1,CB2: a fresh normal source-history host with two document-selected Steps and fixed closure programs")
     val scenario = F.fresh(name, sbtRepair = Some(TypedSbtHostPlanFixture.normalExecutable), sourceHistory = true)
     val repository = Path.of(scenario.host.target.root)
@@ -231,7 +232,8 @@ private[admission] abstract class NativeGoalSourceHistoryRecoveryCliSupport exte
     val candidatepaths = (if (later) _prefix_paths :+ sourcePath else scenario.host.goal.candidatePaths) ++ documentpaths
     val firststep = scenario.plan.steps.head.copy(ownedPaths = scenario.plan.steps.head.ownedPaths ++ documentpaths)
     val plan = scenario.plan.copy(steps = Vector(firststep) ++ Vector(scenario.plan.steps.head.copy(
-      identity = "step-2", purpose = "Retain the selected compiled value and maintain its source", ownedPaths = candidatepaths)))
+      identity = "step-2", purpose = "Retain the selected compiled value and maintain its source", ownedPaths = candidatepaths)),
+      repairLimit = repairLimit.getOrElse(scenario.plan.repairLimit))
     _write_documents(phase, checklist, plan)
     if (currentSourceReconstruction) {
       val progress = GoalPhaseDocumentProgress.Projection(plan.phase, Vector.empty)
@@ -312,13 +314,13 @@ private[admission] abstract class NativeGoalSourceHistoryRecoveryCliSupport exte
     if (later) _prefix_paths.zipWithIndex.foreach { (path, index) =>
       Files.writeString(repository.resolve(path), _prefix_text(index + 1, 42))
     }
-    Files.writeString(next.source, "/**\n * @version Oct. 20, 2026\n * @version Oct. 21, 2026\n */\n" +
-      (if (later) _later_corrected_text else changedText))
+    Files.writeString(next.source, malformedSource.getOrElse("/**\n * @version Oct. 20, 2026\n * @version Oct. 21, 2026\n */\n" +
+      (if (later) _later_corrected_text else changedText)))
     _submit(next, second, name + "-implementation-2")
     When("a normal Advance reaches the second Step's first source-history interpretation failure")
     _advance(next).exitCode should not be 0
     Then("the actual unresolved history intent follows its completed native Step and source-history prefixes")
-    _current(next).causation.value shouldBe "ordered-candidate:source-history-intent-" + (if (later) 4 else 0)
+    _current(next).causation.value shouldBe "ordered-candidate:source-history-intent-" + (if (later) _prefix_paths.size else 0)
     executions(scenario).size shouldBe 1
     DocumentEpisode(next, plan, phase, checklist, second)
   }

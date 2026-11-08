@@ -321,6 +321,20 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           text(failedReceipt) && _valid_directive(directive))
         _reserve_repair_c(directive, failedReceipt, "Primary publication repair requires ContinueRepairs")
       else invalid("primary publication repair requires its exact unstarted Step Validation frontier")
+
+    /** The native owner proves the separate formal source-history failure.
+      * This pure connection reserves the ordinary current-Step repair window. */
+    private[admission] def continueSourceHistoryRepairC(failedReceipt: String,
+      directive: RepairDirective): Consequence[State] =
+      if (stage == Stage.InspectCandidate && cursor < plan.steps.size && cursor == completed.size &&
+          completed.map(_.step) == plan.steps.take(cursor).map(_.identity) && completed.forall(validStepAcceptance) &&
+          candidate.isEmpty && checksReceipt.isEmpty && reviewEvidence.isEmpty && closureIntent.isEmpty &&
+          decision.isEmpty && decisionSource.isEmpty && !documentDecision && pendingRepair.isEmpty &&
+          repositoryReceipt.isEmpty && releaseCommit.isEmpty && phaseReviewedCandidate.isEmpty &&
+          phaseRecordingPaths.isEmpty && candidateParent.isEmpty && stepAdmission.isEmpty && !policyRepairPending &&
+          text(failedReceipt) && _valid_directive(directive))
+        _reserve_repair_c(directive, failedReceipt, "Source-history repair requires ContinueRepairs")
+      else invalid("source-history repair requires its exact unstarted current-Step inspection frontier")
     private def _observed_repair(directive: RepairDirective, reference: String, comparable: Boolean): Vector[R.Observation] =
       if (comparable) R.Context(R.version, selectedRepairLimit, repairObservations)
         .observe(_repair_scope, reference, directive.findings).observations
@@ -936,7 +950,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           !documentDecision && effectiveRepairLimit > 0 &&
           (repairs >= effectiveRepairLimit || repairControl.flatMap(_.stop).nonEmpty) &&
           generation < Long.MaxValue && pendingRepair.exists(_valid_directive) &&
-          decisionSource.exists(Set(Stage.Validation, Stage.Review, Stage.PhaseValidation, Stage.PhaseReview)) =>
+          (decisionSource.exists(Set(Stage.Validation, Stage.Review, Stage.PhaseValidation, Stage.PhaseReview)) ||
+            (decisionSource.contains(Stage.InspectCandidate) && cursor < plan.steps.size && cursor == completed.size)) =>
         success(Stage.Repair, newGeneration = generation + 1, newRepairs = 1,
           newOrdinaryRepairs = 1, newDirective = pendingRepair, newPendingRepair = None,
           reason = None, newcontrol = repairControl.map(_.copy(observations = Vector.empty)),

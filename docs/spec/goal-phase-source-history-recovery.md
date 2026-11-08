@@ -1,5 +1,152 @@
 # Source-history recovery through the ordinary Human Decision
 
+## SHF-01 — Formal automatic failure continues ordinary Step repair
+
+A retained automatic reconciliation with `outcome = failed` is a separate
+actual failure fact. Its canonical selection, exact caller observation, native
+selection/intent/result adjacency and causes, Session, selected Step, Plan
+identity/revision, original base and controller tip must all match the retained
+current-Step inspection. This branch applies only before a candidate, checks,
+review, closure, Decision, pending repair or Phase evidence exists. It does not
+apply to whole-Phase inspection. A missing reconciliation result remains an
+unresolved writer and returns `Wait`; live, unknown, crossed and stale caller
+observations remain refused by the original target guards.
+
+Ordinary Advance reconstructs the current Step's normal repair reservation from
+that exact failure and issues `RepairStep`, with the concrete reason and source
+path in its directive. The existing automatic and ordinary counters each advance
+once, using the existing repair policy; an exhausted window produces the normal
+Decision. Reconstructing the immutable failure does not spend another batch.
+Repeated Advance recollects the same native pending work without another writer,
+staging operation or selected check. No public DTO, schema, Operation, choice,
+persistence contract, new Human answer type or extra automatic repair allowance
+is introduced.
+
+CB-SHF-01-001 adds one internal lifecycle edge for a stopped inspection window:
+`InspectCandidate --source-history-repair-required--> Decision`. A positive
+ordinary repair reservation needs no extra native transition. When the existing
+policy instead stops at Decision, separate dispatch appends one bookkeeping
+receipt under the existing automatic reconciliation codec, with the exact
+formal-failed payload and reference suffix `:repair-decision`. The original
+failed result retains `phase.InspectCandidate`; it is never relabelled. Read-only
+reconstruction accepts only the exact adjacent native successor, matching full
+definition, Session, linkage, failure payload, cause and `phase.Decision`.
+Reconstruction never writes this transition, and dispatch recollects its retained
+receipt instead of duplicating it. A missing receipt with advanced history fails
+closed. No File, Git, SBT or approval effect follows this bookkeeping edge.
+
+The ordinary Human owner requires the actual native `phase.Decision`. A positive
+exhausted current-Step inspection window offers the existing `ContinueRepairs`,
+`Defer`, `Cancel` choices, and only independently admitted Human direction may
+renew that existing window. A stopped zero window offers exactly `Defer`,
+`Cancel`; `ResumeAssignedWork` cannot replay the already accepted implementation,
+and `ContinueRepairs` cannot create a positive allowance from zero. Repeated
+Advance recollects the same genuine question without another receipt, reservation,
+writer or check. The pure controller/Human-choice examples cover positive-window
+continuation eligibility and refusal at zero and foreign stages; they do not
+claim an executed native positive-window Human Submit.
+
+Private cursor provenance retains only the formal failure authenticated by the
+native loader and controller connection. Its exact selection, continuation,
+Step, Plan, base, tip and repair stage permit this pre-review `RepairStep` to
+have no prior independent-review context. Text in a directive or a public DTO
+cannot supply that provenance. It survives the normal exhausted-budget
+Decision/Human continuation and clears when the actual newly assigned repair
+completes or its Step closes. Fresh checked candidates still require the normal
+independent `ReviewStep` context and evidence.
+
+The native completion owner carries that private failed-fact proof through
+prepared work into semantic admission, prior-report retention and ordinary-count
+assessment, including read-only reconstruction. Each gate authenticates the
+canonical failed reconciliation and native predecessor chain against the current
+ordinary Repair controller and exact Request Session, Step, Plan/revision,
+base/tip, generation, directive and source revision. This internal variant
+requires absent review, check-failure and publication-failure contexts. Default
+semantic admission still rejects a context-free repair. The proof supplies no
+prior review, bypasses no semantic result validator and changes no count-exemption
+predicate, counter or public contract.
+
+The original File intent remains UNKNOWN. Its successful completed prefix remains
+exact and supplies the ordinary source-history continuation across the new
+semantic repair. The fresh candidate verifies that prefix and excludes those
+completed history paths from new writes. Only the previously failed path receives
+fresh history work after its new repair is submitted. A failed reconciliation
+does not attach successful normalization provenance or replay either old writer.
+The ordinary candidate-to-validation transition clears this continuation. Existing
+explicit Human normalization and legacy recovery routes retain their contracts.
+
+`GoalPhaseSourceHistoryAutomaticSpec` and `GoalPhaseOrderedProgressionSpec` author
+pure, explicitly synthetic eligibility, failed/missing/success distinction,
+crossed-boundary refusal and ordinary/exhausted budget cases. They establish no
+native authority. The E7 installed automatic specification now requires the
+ordinary repair request after strict ambiguity failure, retaining the original
+UNKNOWN and identical repeated pending work without a write or check.
+
+`NativeGoalSourceHistoryFailureContinuationCliSpec` is an explicit-only
+`@DoNotDiscover` Runtime specification with one finite paired leaf. Select
+`smworkflow.spec.sourceHistoryFailureMode=capture-old|continue-new`, an absolute
+normalized `smworkflow.spec.sourceHistoryFailureLocator`, and the existing normal
+`smworkflow.spec.installedCommand` and `smworkflow.spec.componentFile` properties.
+It uses the normal assembly descriptor and component binding; it adds no
+runtime-root, image, installation override or product main. Its isolated host is
+a direct child of `target/sm-workflow/work/native-cli`, with exactly thirteen
+prefix sources and the failing source, two document-selected Steps and normal
+runtime-owned typed SBT checks. The default four-prefix fixtures are unchanged.
+For an installed fixture, MCR-SHF-FIXTURE-01 forwards an explicitly supplied
+absolute normalized existing `smworkflow.spec.componentFile` through the standard
+`textus.component.file` host setting. The property stays optional in shared
+fixtures, and source fixtures and normal command/assembly arguments retain their
+existing route. The failed pre-Start capture and its diagnostic logs remain
+evidence; this configuration repair does not erase or qualify that attempt.
+
+`capture-old` must finish before product publication. The old published CLI
+performs public Start, accepts the first actual Step commit and second semantic
+implementation once, records thirteen actual source-history successes, then
+retains the later original UNKNOWN caused by two genuine managed block comments
+around two executable declarations. An exact caller observation refers to the
+actual returned invocation stderr and termination. Public selection and a
+separate strict reconciliation retain its actual formal failure as the old
+runtime's `Wait`. A `CREATE_NEW` locator stores caller routing, actual output
+paths, prefix reference identities and the accepted Step OID only; it duplicates
+no configuration, source bodies, byte snapshots or native payloads.
+
+`continue-new` reopens that same physical host and Session at unused log indices.
+It requires genuine same-Step repair reservation one and identical repeated
+pending work before any new effect. A previously rejected Submit may leave the
+exact corrected tiny source unsubmitted. Before the first public Advance the
+qualifier requires either the exact original malformed text or that exact
+correction, then retains the captured text, mtime, index, checks and native facts
+across repeated pending collection. It writes the correction only when absent,
+preserving an already performed correction and its mtime. Only the exact pending
+RepairStep can be submitted; a later stage fails closed without replaying an
+accepted Submit or starting another Session. The single file-managed header
+preserves both declaration histories and behavior. The qualifier submits that
+pending repair once and verifies the thirteen original
+prefix receipts remain exact. Normal selected Step validation, specification-owned
+independent review preparation/import/Submit and separate closure authority
+produce the actual second Step commit. The first Step check is retained and the
+second Step check executes once. If normal closure Advance also performs the
+already declared whole-Phase check, that distinct Phase scope is counted
+separately; its fresh counters do not reset the historical Step reservation.
+Repeated collection must add no duplicate check, closure or history effect.
+
+The additional finite `qualify-exhausted` mode uses a fresh qualification-only
+tiny host with its selected repair limit set to zero before Start. It creates
+the thirteen successful prefixes and actual formal failure through public
+operations, then requires the exact bookkeeping Decision and genuine Human
+question with only `Defer`, `Cancel`, zero repair counts and no extra check. Two
+further Advances must recollect that question with all prefix, UNKNOWN, formal
+failure and native frontier facts unchanged. It supplies no Human answer and
+changes no actual consumer Session. The optional fixture repair-limit selector
+leaves existing fixture defaults unchanged.
+
+These modes are authored qualification procedures, not a claim that either mode
+has passed. Their review metadata is specification-owned, not an actual Human or
+product independent review. They create no actual consumer Goal or Session and
+grant no consumer continuation, accepted-Submit replay, successful-effect replay,
+counter reset, private-store edit, wrapper fallback, bootstrap, push or publication
+authority. Actual validation and publication evidence belongs to the parent.
+
 ## R5-SH04 — Current Wait normalization and retained declaration append
 
 `NativeGoalSourceHistoryAppendContinuationCliSpec` is a separate explicit-only
@@ -230,13 +377,16 @@ through File UoW first. Already conformant current text records
 `observed-current-postcondition` with zero writes. One unique retained-rule
 correction updates only the managed comment using `UpdateExisting` with the
 exact observed text. Unrelated current text is preserved. A concurrent conflict,
-ambiguous ownership or failed read stops explicitly. An unresolved new intent
-is never automatically retried. The original File intent remains UNKNOWN.
+ambiguous ownership or failed read records an explicit formal failure. SHF-01
+continues an exact current-Step formal failure through ordinary semantic repair;
+an unresolved new intent still waits and is never automatically retried. The
+original File intent remains UNKNOWN.
 Success reuses the existing source-history continuation and normalization
 candidate route with normal selected checks and independent review; a repeated
-Advance recollects actual results without repeating writes or checks. No reset,
-reStart, accepted semantic Submit replay, Plan/base change or repair-count use
-is introduced.
+Advance recollects actual results without repeating writes or checks. Successful
+mechanical reconciliation consumes no repair batch. The formal-failed branch
+uses the existing Step repair window once; neither branch resets counts,
+reStarts, replays accepted semantic Submit or changes Plan/base.
 
 `GoalPhaseSourceHistoryAutomaticSpec` covers v1 byte stability, v2 provenance,
 closed finite observations, exact matching and refusals, legacy missing

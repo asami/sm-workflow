@@ -45,6 +45,7 @@ private[smworkflow] object GoalPhaseSourceHistoryAutomatic {
   final case class Reconciliation(selection: Selection, outcome: Option[String], diagnostic: Option[String])
   final case class Observed(record: InstanceRecord, reconciliation: Reconciliation) {
     def succeeded: Boolean = reconciliation.outcome.exists(Set("observed-current-postcondition", "updated-current"))
+    def failed: Boolean = reconciliation.outcome.contains("failed")
   }
   private def _exact(value: String): Boolean = value != null && value.nonEmpty && value.trim == value && !value.exists(_.isControl)
   def validInvocation(value: Invocation): Boolean = value != null && _exact(value.componentInstance) &&
@@ -235,6 +236,104 @@ private[smworkflow] object GoalPhaseSourceHistoryAutomatic {
       } yield Some(actual)
     }
   } yield observed
+
+  /** Pure eligibility over the exact retained native facts supplied by
+    * retainedObservationC. A missing result never supplies a repair receipt. */
+  private[admission] def failedRepairStateC(saved: Saved, observed: Observed,
+    controller: O.State): Consequence[O.State] = for {
+    selected <- codec.decode(codec.encode(saved.selection)).fold(F.invalid, Consequence.success)
+    result <- reconciliationCodec.decode(reconciliationCodec.encode(observed.reconciliation)).fold(F.invalid, Consequence.success)
+    target = selected.target
+    recovery = target.recovery
+    _ <- if (observed.failed && result.selection == selected && saved.record.identity.value == recovery.sessionId &&
+        saved.record.causation.value == cause(target) &&
+        BigInt(saved.record.revision.value) == BigInt(target.frontierRevision) + 1 &&
+        controller.plan.identity == recovery.planIdentity && controller.plan.revision == recovery.planRevision &&
+        controller.plan.steps.lift(controller.cursor).exists(_.identity == recovery.step) &&
+        controller.base == recovery.base && controller.tipSnapshot == recovery.controllerTip)
+      Consequence.unit else F.invalid("Formal source-history failure crosses its original selection, Step, Plan, base or native target")
+    original <- GoalPhaseNativeHistory.prefixC(observed.record, saved.record.revision)
+    _ <- if (original == saved.record) Consequence.unit else F.invalid("Formal source-history failure has a crossed selection predecessor")
+    intended <- GoalPhaseNativeHistory.prefixC(observed.record, saved.record.revision.next)
+    _ <- R._adjacent_c(observed.record, saved.record, intended, _reconciliation_cause("intent"))
+    actual <- R._adjacent_c(observed.record, intended, observed.record, _reconciliation_cause("result"))
+    diagnostic = "Source-history normalization failed for " + recovery.intent.path + ": " + result.diagnostic.get
+    state <- controller.continueSourceHistoryRepairC(actual.identity.value + ":" + actual.revision.value,
+      O.RepairDirective(diagnostic, Vector(recovery.intent.path + ": " + result.diagnostic.get)))
+  } yield state
+
+  private val _failure_decision_cause = causePrefix + "repair-decision"
+  private def _failure_decision_reference(observed: Observed): WorkflowMechanicalTransition.Reference =
+    WorkflowMechanicalTransition.Reference(reference(observed.reconciliation.selection.target).identity + ":repair-decision", "1")
+  private def _failure_decision_source_c(observed: Observed): Consequence[Reconciliation] = for {
+    payload <- reconciliationCodec.decode(reconciliationCodec.encode(observed.reconciliation)).fold(F.invalid, Consequence.success)
+    record <- observed.record.validateC
+    target = payload.selection.target
+    _ <- if (observed.failed && record.identity.value == target.recovery.sessionId &&
+        record.definition.workflowIdentity.value == target.recovery.definitionIdentity &&
+        record.definition.workflowRevision.value == target.recovery.definitionRevision &&
+        record.causation.value == _reconciliation_cause("result") &&
+        BigInt(record.revision.value) == BigInt(target.frontierRevision) + 3 &&
+        record.lifecycle == Lifecycle.Active && record.suspension.isEmpty &&
+        record.currentProgression.contains(ProgressionReference("phase.InspectCandidate"))) Consequence.unit
+      else F.invalid("Source-history repair Decision requires the exact formal failed inspection result")
+  } yield payload
+
+  /** Internal pure guard for this one progression-changing bookkeeping edge.
+    * The source remains the exact old record, never a relabelled copy. */
+  private[admission] def failureDecisionRecordC(current: InstanceRecord, observed: Observed,
+    saved: InstanceRecord, payload: Reconciliation): Consequence[InstanceRecord] = for {
+    expected <- _failure_decision_source_c(observed)
+    _ <- if (payload == expected) Consequence.unit else F.invalid("Source-history repair Decision payload differs from the actual failure")
+    previous <- GoalPhaseNativeHistory.prefixC(current, observed.record.revision)
+    _ <- if (previous == observed.record) Consequence.unit else F.invalid("Source-history repair Decision crosses its original failure")
+    following <- GoalPhaseNativeHistory.nextC(current, previous)
+    actual <- GoalPhaseNativeHistory.prefixC(current, saved.revision)
+    _ <- if (actual == saved && following.exists(_.revision == saved.revision) &&
+        saved.identity == previous.identity && saved.definition == previous.definition &&
+        previous.revision.value < Long.MaxValue && saved.revision == previous.revision.next &&
+        saved.history.dropRight(1) == previous.history && saved.causation.value == _failure_decision_cause &&
+        previous.currentProgression.contains(ProgressionReference("phase.InspectCandidate")) &&
+        saved.currentProgression.contains(ProgressionReference("phase.Decision")) &&
+        previous.lifecycle == Lifecycle.Active && saved.lifecycle == Lifecycle.Active &&
+        previous.suspension.isEmpty && saved.suspension.isEmpty && saved.correlation == previous.correlation &&
+        saved.derivedCompositeOccurrence == previous.derivedCompositeOccurrence &&
+        saved.committedPredecessor == previous.committedPredecessor) Consequence.unit
+      else F.invalid("Source-history repair Decision has a crossed cause, progression or immediate native predecessor")
+  } yield actual
+
+  def retainedFailureDecisionC(session: F.Session, core: ActionCall.Core,
+    observed: Observed): Consequence[Option[InstanceRecord]] = for {
+    _ <- _failure_decision_source_c(observed)
+    adapter <- session.storage.bindMechanicalC(F.advanceOperation, reconciliationCodec)
+    retained <- adapter.loadRetainedC(_failure_decision_reference(observed))(using core.executionContext)
+    result <- retained match {
+      case None => Consequence.success(Option.empty[InstanceRecord])
+      case Some(value) => failureDecisionRecordC(session.current, observed, value.receipt.next,
+        value.receipt.payload.value).map(Some(_))
+    }
+  } yield result
+
+  /** Bookkeeping only. The ordinary Human owner issues any subsequent question;
+    * this transition grants no repair continuation or external effect. */
+  def failureDecisionC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
+    observed: Observed): Consequence[InstanceRecord] = for {
+    retained <- retainedFailureDecisionC(session, core, observed)
+    record <- retained match {
+      case Some(value) => Consequence.success(value)
+      case None => for {
+        payload <- _failure_decision_source_c(observed)
+        _ <- if (session.current == observed.record &&
+            domain.statemachine.GoalPhaseRunLifecycle.permits("InspectCandidate", "source-history-repair-required", "Decision"))
+          Consequence.unit else F.invalid("Source-history repair Decision requires its unchanged actual failed frontier and declared lifecycle edge")
+        adapter <- session.storage.bindMechanicalC(F.advanceOperation, reconciliationCodec)
+        saved <- adapter.executeC(WorkflowMechanicalTransition.Intent(d.configuration, _failure_decision_reference(observed),
+          observed.record, observed.record.revision, F.history(observed.record, "phase.Decision", _failure_decision_cause),
+          TypedValue(reconciliationCodec.typeIdentity, payload)), _pure)(using core.executionContext)
+      } yield saved.receipt.next
+    }
+  } yield record
+
   def reconcileC(session: F.Session, d: F.Declaration, core: ActionCall.Core, saved: Saved,
     acknowledgement: String => Consequence[Unit]): Consequence[Observed] = for {
     retained <- retainedObservationC(session, core, saved)

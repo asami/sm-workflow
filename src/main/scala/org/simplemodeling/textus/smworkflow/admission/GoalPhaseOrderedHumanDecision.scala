@@ -23,7 +23,7 @@ import GoalPhaseDevelopmentReconstruction as X
   * The older closure-Human contract is deliberately not used for ordered work.
   * @since   Oct.  7, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseOrderedHumanDecision {
@@ -33,10 +33,15 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
   val choices = Vector("ResumeAssignedWork", "ContinueRepairs", "AdoptPlanRevision", "RejectPlanRevision", "ApproveDependencyScope", "RejectDependencyScope", "AuthorizeNewAttempt", "Defer", "Cancel") ++ X.choices.filterNot(Set("Defer", "Cancel"))
   private val _ordinary_choices = Vector("ResumeAssignedWork", "Defer", "Cancel")
   private val _repair_choices = Vector("ContinueRepairs", "Defer", "Cancel")
+  private val _stopped_choices = Vector("Defer", "Cancel")
   private val _revision_choices = Vector("AdoptPlanRevision", "RejectPlanRevision", "Defer", "Cancel")
   private val _dependency_choices = Vector("ApproveDependencyScope", "RejectDependencyScope", "Defer", "Cancel")
   def choicesFor(controller: O.State): Vector[String] =
-    if (controller.pendingRepair.nonEmpty) _repair_choices else _ordinary_choices
+    if (controller.pendingRepair.nonEmpty) _repair_choices
+    else if (controller.stage == O.Stage.Decision && !controller.documentDecision &&
+      controller.decisionSource.contains(O.Stage.InspectCandidate) && controller.cursor < controller.plan.steps.size)
+      _stopped_choices
+    else _ordinary_choices
   private def _choices(controller: O.State, input: Input): Vector[String] =
     if (input.developmentReconstruction.nonEmpty) X.choicesFor(input.developmentReconstruction.get)
     else if (input.sourceHistoryRecovery.nonEmpty) GoalPhaseSourceHistoryRecovery.choices
@@ -55,7 +60,8 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
         input <- value.request.input.map(_.value).toRight("ordered Human input is absent")
         admitted <- Either.cond(if (input.developmentReconstruction.nonEmpty) values == X.choicesFor(input.developmentReconstruction.get)
           else if (input.sourceHistoryRecovery.nonEmpty) values == GoalPhaseSourceHistoryRecovery.choices
-          else values == _ordinary_choices || values == _repair_choices || values == _revision_choices || values == _dependency_choices, values,
+          else values == _ordinary_choices || values == _repair_choices || values == _stopped_choices ||
+            values == _revision_choices || values == _dependency_choices, values,
           "ordered Human issued choices differ from a declared question")
       } yield admitted
       case _ => Left("ordered Human issued choices require an actual Decision")
@@ -378,6 +384,8 @@ private[smworkflow] object GoalPhaseOrderedHumanDecision {
           if (source.controller.documentDecision) stage != O.Stage.Decision && stage != O.Stage.Closed
           else (source.controller.pendingRepair.nonEmpty && Set(O.Stage.Validation, O.Stage.Review,
             O.Stage.PhaseValidation, O.Stage.PhaseReview)(stage)) ||
+            (stage == O.Stage.InspectCandidate && source.controller.cursor < source.controller.plan.steps.size &&
+              source.controller.cursor == source.controller.completed.size) ||
             Set(O.Stage.Implementation, O.Stage.Repair, O.Stage.Review, O.Stage.PhaseReview)(stage)) &&
           source.from.currentProgression.contains(ProgressionReference("phase.Decision")) && source.from.suspension.isEmpty) Consequence.unit
         else F.invalid("ordered Human source is not a retained semantic decision")

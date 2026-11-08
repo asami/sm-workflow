@@ -2104,7 +2104,10 @@ private[admission] object NativeWorkflowCliFixture {
     * The explicit excluded-document variant retains the original five source
     * paths and ignored document inputs instead of the default owned seven paths.
     */
-  def reopenSourceHistoryPrefix(root: Path, documentInputsOwned: Boolean = true): Scenario = {
+  def reopenSourceHistoryPrefix(root: Path, documentInputsOwned: Boolean = true,
+    prefixSize: Int = 4): Scenario = {
+    require(prefixSize == 4 || (prefixSize == 13 && !documentInputsOwned),
+      "Select the existing four-prefix fixture or the finite excluded-document thirteen-prefix qualifier")
     val parent = _primary.resolve("target/sm-workflow/work/native-cli")
     require(root.isAbsolute && root.normalize == root && root.getParent == parent &&
       Files.isDirectory(root) && root.toRealPath() == root, "Select the same physical isolated prefix episode")
@@ -2120,7 +2123,7 @@ private[admission] object NativeWorkflowCliFixture {
     val plan = imported.plan
     val documentpaths = Vector("verification-inputs/phase.md", "verification-inputs/checklist.md")
     val source = "src/main/scala/HistoryExample.scala"
-    val prefixpaths = (1 to 4).map(index => "src/main/scala/ARecovery" + index + ".scala").toVector :+ source
+    val prefixpaths = (1 to prefixSize).map(index => "src/main/scala/ARecovery" + index + ".scala").toVector :+ source
     val paths = prefixpaths ++ (if (documentInputsOwned) documentpaths else Vector.empty[String])
     val firstpaths = Vector(source) ++ (if (documentInputsOwned) documentpaths else Vector.empty[String])
     val declaration = _take(GoalPhaseDocumentSource.decodeDeclarationC(Files.readString(root.resolve("goal-plan.json"))),
@@ -2194,7 +2197,14 @@ private[admission] object NativeWorkflowCliFixture {
       "instance-collection" -> ThreeWorkflowNormalHostFixture.collection("instances"),
       "continuation-collection" -> ThreeWorkflowNormalHostFixture.collection("continuations"))
       .map((key, value) => ("sm-workflow.goal-phase.persistence." + key) -> value)
-    val values = ThreeWorkflowNormalHostFixture.values(root) ++ persistence ++ Map(
+    val componentfile = if (sys.props.contains("smworkflow.spec.installedCommand"))
+      sys.props.get("smworkflow.spec.componentFile").map { value =>
+        val path = Path.of(value)
+        require(path.isAbsolute && path.normalize == path && Files.isRegularFile(path),
+          "Select an explicit absolute normalized existing component CAR for the installed fixture")
+        "textus.component.file" -> path.toString
+      }.toVector else Vector.empty
+    val values = ThreeWorkflowNormalHostFixture.values(root) ++ persistence ++ componentfile ++ Map(
       ThreeWorkflowRuntimeParameters.completionPolicy.name -> GoalPhasePostCompletionSync.strictPolicy,
       "sm-workflow.runtime.definition" -> ThreeWorkflowRuntimeParameters.encode(host).noSpaces,
       "textus.subsystem.user-mode" -> "standalone", "textus.datastore.kind" -> "sqlite",
