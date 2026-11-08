@@ -457,8 +457,11 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
           "canonical source policy correction lacks its exact native host Direction relation")
           .map(_ => correction.get.correctedProcessPolicy)
     }
-    _ <- _check(guard == target.preStageGuard && process == expected,
+    _ <- _check(guard == target.preStageGuard,
       "canonical source or actual consumption policy changed")
+    basis <- GoalPhaseCanonicalCheckConsumption.basisC(direction)
+    _ <- GoalPhaseCanonicalCheckConsumption.policyC(basis, expected, process,
+      d.dependencySourceConsumptions, d.phaseValidationPolicy)
   } yield ()
 
   def adoptC(source: Source, d: F.Declaration, core: ActionCall.Core, input: V.GoalPhaseDependencySourceRevisionAdoptionInput):

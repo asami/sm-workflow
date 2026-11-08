@@ -616,3 +616,112 @@ dependency capture whose snapshot exactly matches the original successful
 publication source. It never synthesizes historical file hashes. The selected
 new binding retains old paths and acceptance; an explicit added-path delta is
 covered by the new exact source Human selection, without inventing old approval.
+
+# Effective consumption of later canonical checks
+
+A trusted normal host may retain the captured v2 consumption and register one
+current effective entry in the existing `goal.dependencySourceConsumptions`
+list. The effective entry has exactly the same primary workspace, adopted
+source root, exclusions and expected modes, and starts with the entire original
+ordered program vector. Its only additions are distinct checks from Steps after
+the adopted source Step and from the original Plan's Phase checks. Earlier or
+current Step obligations cannot be newly granted this way. The current Plan
+must equal the canonical Direction's Plan for fresh routing selection.
+
+For example, given an adopted `b2`, a later `b3` and a Phase check `phase-test`,
+the normal declaration retains the original entry and appends the effective
+entry below. All shown fixed programs and their ordinal workspaces must already
+exist in the captured process plan. The captured Step validation policy selects
+the exact `b3` kind and ordinal; the independently declared Phase validation
+policy selects the exact `phase-test` kind and ordinal.
+
+```json
+{
+  "goal": {
+    "dependencySourceConsumptions": [
+      {
+        "schemaVersion": "sm-workflow.goal-phase-dependency-source-consumption.v2",
+        "primaryWorkspace": "primary",
+        "sourceRoot": "/example/canonical-source",
+        "nonInputExclusions": [],
+        "expectedModes": [{"path": "src/input.scala", "mode": "100644"}],
+        "programs": [
+          {"check": "b2", "workspace": "sm-workflow-repository-validation-2", "kind": "test", "program": "primary-test-2"}
+        ]
+      },
+      {
+        "schemaVersion": "sm-workflow.goal-phase-dependency-source-consumption.v2",
+        "primaryWorkspace": "primary",
+        "sourceRoot": "/example/canonical-source",
+        "nonInputExclusions": [],
+        "expectedModes": [{"path": "src/input.scala", "mode": "100644"}],
+        "programs": [
+          {"check": "b2", "workspace": "sm-workflow-repository-validation-2", "kind": "test", "program": "primary-test-2"},
+          {"check": "b3", "workspace": "sm-workflow-repository-validation-9", "kind": "test-only", "program": "primary-test-9"},
+          {"check": "phase-test", "workspace": "sm-workflow-repository-validation-14", "kind": "test", "program": "primary-test-14"}
+        ]
+      }
+    ]
+  }
+}
+```
+
+Derive one common environment selector key from all captured selected-primary
+base programs and all added fixed programs. The base programs already select
+the adopted root. Each added program must select either the actual previous
+root or that same adopted root under this unique key. The only compatible live
+policy change replaces that value on the added programs with the adopted root;
+an already correct value stays unchanged. The key is derived, never named by
+application convention. The actual previous root comes from the canonical
+origin's previous/original Direction, or its predecessor binding when neither
+Direction exists. An unavailable or identical previous root cannot establish
+this selector relation.
+
+Each added route uses the existing default primary ordinal workspace and an
+exact captured program with its original primary workspace root, manage grant
+and Component capability. No new executor, program, alias or grant is appended.
+Commands, executable, limits, test selection, program ordering, other environment
+values, workspace definitions and the rest of the process policy remain exact.
+Conflicting same-core registrations, reordered or replaced base programs,
+multiple extensions, unknown checks, wrong kinds/ordinals and ambiguous
+programs/selectors refuse. Unrelated consumption entries grant no compatibility
+to this base.
+
+Registration and external host value correction are passive configuration work.
+They change no canonical capture, source Direction, pending semantic context,
+generation, repair accounting, Plan, usage obligation or accepted receipt. The
+original binding and base consumption remain independently declared. Existing
+native source authentication and exact source guard checks remain mandatory.
+The v3/v4 primary-publisher correction still requires its own actual saved host
+Direction and independently admitted authority. Later-check registration
+preserves that already selected expected publisher policy and grants no
+publisher correction, retry or successor authority.
+
+Before fresh validation, retain the original base if it already covers all
+selected primary checks. Otherwise require the actual canonical basis and one
+declared effective entry covering those checks. Store that entry in the
+existing validation payload's `sourceConsumption` before the first check. A
+present same-Step capture still requires literal equality to its original
+consumption; extension does not weaken the existing codec or capture equality.
+
+For retained validation, read the ordinary same-frontier selection, first
+intent/result and validation records through the existing authenticated native
+prefix loader before resolving current routing. No record differs from a
+retained record with `sourceConsumption=None`. Retained None is compatible only
+when actual native captures supply no original base; a nonempty actual base
+refuses this source-less binding. Contradictory retained fields refuse. An older
+admitted effective vector remains literal even when the host
+now registers a larger extension; its base core, ordered prefix, remaining
+Plan identities and captured fixed definitions still must match. Completed
+historical reconstruction neither launches checks nor requires the newest
+registration to reproduce its old complete vector.
+
+Immediately before any new launch using extended routing, the existing
+preconditions boundary additionally requires the needed selected routes to
+remain in the current effective registration and their actual fixed programs
+to retain the permitted selector values. Removing a registration or resetting
+a selected program to the previous root refuses the unfinished effect. Intent,
+attempt, receipt reconciliation, typed SBT/UoW ownership and all source and
+candidate checks remain unchanged. Successful checks are never replayed to
+create replacement receipts. Actual installed same-Session qualification
+remains pending until the parent records its normal runtime results.
