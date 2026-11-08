@@ -1,4 +1,4 @@
-# Primary publication after host capacity correction
+# Primary publication after exact host correction
 
 Failure identity: `P611-B2-HOST-PUBLICATION-01`.
 
@@ -173,3 +173,158 @@ original failure/latest/source, genuine host correction, independent concrete
 Human direction and one ordinary successor. V1 encoding and all UNKNOWN
 contracts remain unchanged. Selecting the new explicit installed suite never
 reruns the earlier host-only episode.
+
+## R6 — Canonical publisher source selector and v3
+
+Failure identity: `P611-SM-CANONICAL-DEPENDENCY-CONSUMPTION-01`.
+
+The closed `sm-workflow.goal-phase-prerequisite-publication-host-recovery.v3`
+variant covers the first formal primary prerequisite failure after a genuinely
+adopted canonical source. Its actual candidate must contain an authenticated
+v11 source capture and an actual previous/original source Direction for the
+same logical dependency. The previous binding supplies the old root; the
+current binding and declared consumption supply the adopted root. An initial
+source selection without that Direction lineage is outside this branch.
+
+Derive the old process policy from
+`candidate.dependencySourceCapture.direction.target.canonicalOrigin.processPolicy`.
+Exactly one fixed primary `beforeChecks` `publish-local` program must match
+the failed process identity and workspace. Exactly one of its declared
+environment keys must have the previous root as its old value while all
+already selected primary check routes declare the adopted root under that
+same key. Retained unselected historical check programs do not participate.
+Missing, blank, ambiguous or crossed mappings refuse. No application-specific
+variable name, directory, version or error-text parser selects the correction.
+
+The v3 target adds `canonicalProgramCorrection`; v1 and v2 omit it and retain
+their exact encodings and meaning. V3 excludes `publishedDependencyAdoptions`.
+The correction contains old and corrected process policies, fixed program
+identity, source environment key, old/new roots, native capture source reference and Direction
+directive references, and previous/current binding references. These causal
+references remain authenticated by native traversal. They are not certificates
+against configuration tampering. The corrected policy changes only that one
+publisher environment **value**. Executable, identity, workspace/cwd, limits,
+capabilities, other environment values, checks and their selection, validation,
+other programs, grants and diff budget remain exact. No file bodies, hashes,
+runtime images or unrelated storage snapshots are added.
+
+The formal failed request is precisely the normal prerequisite base followed
+by its owner's `:prerequisite:0` suffix. It must retain actual nonzero `Exited`,
+complete untruncated valid UTF-8 stdout/stderr and no `nextPreparation`, and
+match Session, participant, primary target, candidate source and fixed program.
+UNKNOWN, timeout, cancellation, NotStarted, termination-unconfirmed, success,
+truncation and unrelated/native-crossed results refuse. The next failed
+`:host:` successor is a distinct failure and cannot requalify as this mismatch.
+
+Description is passive and works before or after the exact external host
+correction: live policy must equal the captured old policy or its uniquely
+derived corrected policy. `Defer` remains passive at the old declaration.
+`AuthorizePrimaryPublicationAfterHostCorrectionOnce` requires the corrected
+host declaration, the whole exact target, an attributable `hostCorrection`
+observation and the existing independently authenticated Human evidence.
+Neither a source choice nor a correction observation grants publication.
+sm-workflow never mutates host configuration. Recovery appends only the
+existing mechanical Direction; a separate ordinary Advance rechecks the
+corrected policy, exact source, candidate, targets, latest failure and retained
+successful dependency prefix immediately before the existing finite successor.
+
+Native historical reconstruction derives the relation from the saved capture
+and policy and retains the saved target unchanged without requiring the live
+host to resemble its old declaration. The independently admitted native v3
+Direction also supplies narrowly typed policy compatibility to the canonical
+source owner at later ordinary semantic frontiers. That owner still observes
+the original exact canonical guard, binding and consumption. This allows
+ReviewStep and review after a legitimate Step commit without equating the old
+failed primary HEAD with the new committed HEAD, and grants no future
+publication authority. All original failures, UNKNOWN facts, requesting result,
+Plan/base/prefix, candidate, generation, repair counters and artifact facts
+remain. Successful producer publication is provenance, never a new consumer
+dependency effect. Dependencies are collected, never republished by recovery.
+
+`GoalPhaseCanonicalPublicationProgramCorrectionSpec` E8–E13 use supplied pure
+specification data for derivation, closed wire/public projection, exclusions,
+exact Human binding and finite successor collection. They confer no real
+Human or native execution authority. The explicit-only
+`NativeGoalCanonicalPublicationHostCorrectionCliSpec` uses
+`smworkflow.spec.canonicalHostCorrectionMode=PREPARE_OLD|RESUME_CURRENT` and an
+absolute `smworkflow.spec.canonicalHostCorrectionEpisode` path. Both stages
+select the normal `installedCommand` and `componentFile`. Prepare retains the
+old public refusal and real failed attempt in its tiny isolated native Session;
+it first obtains genuine accepted Step1 and Step2 failed Repair, normally
+publishes/collects each distinct committed tiny source target, independently
+adopts the committed old-root Direction, and then independently adopts the new
+canonical root while retaining the pending same-Step Repair. These are two
+actual public source choices with distinct specification Human references;
+neither prior Direction nor native rows are manufactured. Per-target producer
+counts remain one after recovery. Existing UNKNOWN facts, when present, remain
+literal; this fixture creates no synthetic UNKNOWN fact.
+resume reopens that same physical Session after normal product replacement,
+changes only the declared publisher selector value as external test host owner,
+provisions independent specification-only evidence, then uses ordinary Advance,
+selected checks, independent fixture review and Step commit. Counters and
+retained outputs demonstrate no successful dependency/producer replay or
+duplicate successor. Qualification stops at subsequent review work and claims
+no terminal Phase or real consumer acceptance.
+
+## R7 — Canonical continuation with literal historical adoptions and v4
+
+The closed `sm-workflow.goal-phase-prerequisite-publication-host-recovery.v4`
+target combines `canonicalProgramCorrection` with nonempty
+`historicalPublishedDependencyAdoptions`. It never contains the v2 wire field
+`publishedDependencyAdoptions`. V1, v2 and v3 retain their literal wire and
+meaning; v3 continues to exclude historical facts. Missing, null, unknown,
+ambiguous aliases and mixed-version fields refuse.
+
+Historical facts come only from the actual native retained-artifact traversal.
+Every fact must be valid, uniquely referenced, ordered, and belong to the same
+Component, participant and physical Session. Its record precedes the current
+capture, candidate and frontier. Its published source capture and source
+reference remain exact. The entire old typed source Direction must occur in
+the current valid canonical capture's original/previous Direction ancestry.
+Logical binding, dependency Component and repository stay the same; root and
+revision changes are governed by the existing canonical scope and ancestry.
+Old Plan, controller, generation, candidate and policies remain old facts;
+they need not equal the current ones. Native authentication and exact target
+reconstruction remain separate from structural JSON validity.
+
+The v4 `dependencyPrefix` is collected from each current applicable target's
+ordinary prerequisite namespace for the current candidate source revision.
+It must be an actual ready `published` result with `Exited(0)`, exact target,
+Session, participant and request namespace. Immutable collection, current
+latest result and current source equality must all still hold. An old prefix,
+external producer qualification or historical artifact cannot substitute for
+this current readiness. Description and recovery never ensure or execute a
+dependency. Old prefixes remain literal inside the historical fact wire.
+
+The failed primary is exclusively R6's current first formal prerequisite
+failure, with the exact current canonical capture, Plan, controller, root and
+fixed program. An old capacity failure or host successor supplies no new grant.
+The existing independent Human and host-correction evidence must bind the
+complete new v4 target. `Defer` is passive. Recovery only appends the existing
+Direction; separate Advance owns one existing finite primary successor and
+all immediate source/policy/latest checks. The saved v4 Direction provides
+the same narrowly scoped canonical policy compatibility as v3 for that exact
+canonical Direction during ordinary review and Step closure. It grants no
+global retry or future publication authority.
+
+Reconstruction of an older source Direction evaluates accepted-source
+predecessors at that Direction's actual original frontier, using only closure
+revisions supplied by admitted native traversal. Earlier accepted sources keep
+their existing equality checks. A later canonical Step closure remains a later
+fact and is not required to equal the older Direction.
+
+Boolean validity and description diagnostics use one ordered lazy predicate
+path. Refusals expose only the first failed clause name, never payload or path
+contents. Read guards distinguish missing immutable results, changed latest
+results, changed source and fixed policy mismatch. Description remains passive.
+
+`GoalPhaseCanonicalPublicationHistorySpec` E15–E20 supplies pure specification
+data for old Plan1/current Plan2, strict wire, ancestry, current-prefix reads,
+independent evidence and one finite successor. Installed qualification uses the
+existing tiny Session and normal installed public operations. It preserves
+actual v9 source/artifact/v2 capacity facts and same-Step Repair, then requires
+prospective canonical succession, a fresh current dependency prefix, one
+primary successor and normal Step closure. Supplied Human, host-correction and
+review data are specification-only. Qualification remains pending until actual
+retained results establish these steps. No whole-Phase success or real consumer
+Human consent is claimed.

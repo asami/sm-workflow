@@ -189,7 +189,8 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           (target.predecessor.acceptedPrefix.nonEmpty || _legacy.exists(e => e.admission == target.predecessor && e.session == target.sessionId &&
             e.plan == ContextReference(target.plan.identity, target.plan.revision) && e.step == target.step &&
             e.primaryBase == target.primaryBase && e.completionRevision <= target.sourceRevision.toLong)) &&
-          acceptedSources.forall(previous => previous.capture.direction == direction ||
+          acceptedSources.filter(previous => BigInt(previous.closureRevision) <= BigInt(target.sourceRevision))
+            .forall(previous => previous.capture.direction == direction ||
             target.publishedOrigin.exists(_.historical.candidate.dependencySourceCapture.exists(old =>
               previous.capture.direction == old.direction)))) Consequence.unit
       else V.invalid("revised dependency has no actual retained predecessor and accepted native lineage")
@@ -1513,7 +1514,11 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           case Some(failed) => _host_publication_source_c(source, cursor).flatMap { selected =>
             B.processPolicyC(d, core).flatMap { process =>
               if (HostPublication.hostFailure(failed, failed.request.target, source.current.identity.value,
-                  source.participantIdentity, failed.request.source, process))
+                  source.participantIdentity, failed.request.source, process) ||
+                  GoalPhaseCanonicalPublicationProgramCorrection.derive(selected.native.candidate.payload, failed.request.target).exists(c =>
+                    (process == c.oldProcessPolicy || process == c.correctedProcessPolicy) &&
+                    GoalPhaseCanonicalPublicationProgramCorrection.failure(failed, failed.request.target,
+                      source.current.identity.value, source.participantIdentity, selected.native.candidate.payload, c)))
                 HostPublication.targetForC(selected, failed, d, core).map(t => Some(HostPublication.description(t)))
               else Consequence.success(Option.empty[org.simplemodeling.textus.smworkflow.value.GoalPhasePrerequisitePublicationRecoveryDescriptionResult])
             }
@@ -3329,7 +3334,14 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         _wait_cursor_c(cursor, "Actual native checks are retained; independent review installation remains unavailable.")
       else for {
         _ <- cursor.dependencySourceDirection.filter(_.target.canonicalOrigin.nonEmpty)
-          .fold(Consequence.unit)(CanonicalSource.currentC(_, d, core))
+          .fold(Consequence.unit) { direction =>
+            cursor.hostPublicationDirections.reverse.find(saved =>
+              HostPublication.isCanonicalTargetSchema(saved.direction.target.schemaVersion) &&
+                saved.direction.target.candidate.dependencySourceCapture.exists(_.direction == direction)) match {
+              case Some(saved) => CanonicalSource.currentC(direction, d, core, saved)
+              case None => CanonicalSource.currentC(direction, d, core)
+            }
+          }
         semantic <- cursor.controller.next match {
           case value: O.Semantic => Consequence.success(value)
           case _ => F.invalid("current frontier has no assigned semantic work")

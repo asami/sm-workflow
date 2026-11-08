@@ -20,18 +20,22 @@ import GoalPhasePrerequisitePublicationRecovery as B
 import GoalPhaseDependencySourceRevision as R
 import GoalPhasePrerequisitePublicationUnknownRecovery as W
 import GoalPhasePublishedDependencySourceAdoption as P
+import GoalPhaseCanonicalPublicationProgramCorrection as K
 import GoalPhaseDependencyValidation.given
 
 /** An independently directed, finite successor of a retained packaging capacity
   * failure. A correction observation is an attestation, never retry authority.
   * @since   Nov.  7, 2026
-  * @version Nov.  7, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhasePrerequisitePublicationHostRecovery {
   val schema = "sm-workflow.goal-phase-prerequisite-publication-host-recovery.v1"
   val schemaV2 = "sm-workflow.goal-phase-prerequisite-publication-host-recovery.v2"
-  def isTargetSchema(value: String): Boolean = value == schema || value == schemaV2
+  val schemaV3 = "sm-workflow.goal-phase-prerequisite-publication-host-recovery.v3"
+  val schemaV4 = "sm-workflow.goal-phase-prerequisite-publication-host-recovery.v4"
+  def isCanonicalTargetSchema(value: String): Boolean = value == schemaV3 || value == schemaV4
+  def isTargetSchema(value: String): Boolean = value == schema || value == schemaV2 || isCanonicalTargetSchema(value)
   val causationPrefix = "ordered-primary-publication-host-recovery:"
   val authorize = "AuthorizePrimaryPublicationAfterHostCorrectionOnce"
   val choices = Vector(authorize, "Defer")
@@ -52,7 +56,8 @@ private[smworkflow] object GoalPhasePrerequisitePublicationHostRecovery {
     targets: Vector[LocalPublication.Target], publicationPolicy: String, processPolicy: String,
     failed: LocalPublication.Result, dependencyPrefix: Vector[LocalPublication.Result],
     priorDirections: Vector[ContextReference], lineage: Lineage,
-    publishedDependencyAdoptions: Vector[P.ArtifactFact] = Vector.empty)
+    publishedDependencyAdoptions: Vector[P.ArtifactFact] = Vector.empty,
+    canonicalProgramCorrection: Option[K.Correction] = None)
   object Target {
     given Encoder[Target] = Encoder.instance[Target](value => _public(Json.obj(
       "schemaVersion" -> value.schemaVersion.asJson,
@@ -76,7 +81,10 @@ private[smworkflow] object GoalPhasePrerequisitePublicationHostRecovery {
       "dependencyPrefix" -> value.dependencyPrefix.asJson,
       "priorDirections" -> value.priorDirections.asJson,
       "lineage" -> value.lineage.asJson).mapObject(fields =>
-        if (value.schemaVersion == schemaV2) fields.add("publishedDependencyAdoptions", value.publishedDependencyAdoptions.asJson)
+        if (value.schemaVersion == schemaV4) fields.add("canonicalProgramCorrection", value.canonicalProgramCorrection.asJson)
+          .add("historicalPublishedDependencyAdoptions", value.publishedDependencyAdoptions.asJson)
+        else if (value.schemaVersion == schemaV3) fields.add("canonicalProgramCorrection", value.canonicalProgramCorrection.asJson)
+        else if (value.schemaVersion == schemaV2) fields.add("publishedDependencyAdoptions", value.publishedDependencyAdoptions.asJson)
         else fields)))
     private val _decoder: Decoder[Target] = Decoder.instance { cursor => for {
       schemaversion <- cursor.get[String]("schemaVersion")
@@ -101,10 +109,13 @@ private[smworkflow] object GoalPhasePrerequisitePublicationHostRecovery {
       priordirections <- cursor.get[Vector[ContextReference]]("priorDirections")
       lineage <- cursor.get[Lineage]("lineage")
       published <- if (schemaversion == schemaV2) cursor.get[Vector[P.ArtifactFact]]("publishedDependencyAdoptions")
+        else if (schemaversion == schemaV4) cursor.get[Vector[P.ArtifactFact]]("historicalPublishedDependencyAdoptions")
         else Right(Vector.empty[P.ArtifactFact])
+      canonical <- if (isCanonicalTargetSchema(schemaversion)) cursor.get[K.Correction]("canonicalProgramCorrection").map(Some(_))
+        else Right(None)
     } yield Target(schemaversion, componentinstance, participant, sessionid, frontierrevision, controller,
       plan, base, generation, completed, repairprogress, candidaterecordrevision, candidate, requestingresult,
-      targets, publicationpolicy, processpolicy, failed, dependencyprefix, priordirections, lineage, published) }
+      targets, publicationpolicy, processpolicy, failed, dependencyprefix, priordirections, lineage, published, canonical) }
     given Decoder[Target] = _closed(_decoder, targetValid)
   }
   final case class Correction(failedRequestIdentity: String, programIdentity: String,
@@ -188,7 +199,8 @@ private[smworkflow] object GoalPhasePrerequisitePublicationHostRecovery {
   private def _dependency_request_matches(value: LocalPublication.Result, target: Target): Boolean =
     _request_scope_matches(value, target) &&
     value.request.input.requestIdentity.startsWith(target.sessionId + ":publication:" +
-      target.publishedDependencyAdoptions.headOption.map(_.direction.target.origin.historical.candidate.sourceRevision)
+      target.publishedDependencyAdoptions.headOption.filter(_ => target.schemaVersion != schemaV4)
+        .map(_.direction.target.origin.historical.candidate.sourceRevision)
         .getOrElse(target.candidate.sourceRevision) +
       ":" + value.request.target.identity + ":")
   private def _successor_input(target: Target, reference: ContextReference): LocalPublication.Input = {
@@ -196,7 +208,9 @@ private[smworkflow] object GoalPhasePrerequisitePublicationHostRecovery {
     base.copy(requestIdentity = base.requestIdentity + ":host:" + reference.identity + ":" + reference.revision)
   }
   private def _primary_request_matches(value: LocalPublication.Result, target: Target): Boolean =
-    if (target.schemaVersion == schema) _dependency_request_matches(value, target)
+    if (isCanonicalTargetSchema(target.schemaVersion))
+      value.request.input == K.firstInput(target.sessionId, target.candidate, value.request.target)
+    else if (target.schemaVersion == schema) _dependency_request_matches(value, target)
     else _request_scope_matches(value, target) && target.publishedDependencyAdoptions.headOption.exists { fact =>
       P.factValid(fact) && (value == fact.direction.target.origin.historical.failed ||
         target.priorDirections != null && target.priorDirections.exists(reference =>
@@ -214,7 +228,8 @@ private[smworkflow] object GoalPhasePrerequisitePublicationHostRecovery {
     "stepAdmission", "releaseCommit", "repairControl", "policyRepairPending", "repairObservations", "stepReviewRequired")
 
   private def _published_valid(value: Target): Boolean =
-    value.publishedDependencyAdoptions != null && (if (value.schemaVersion == schema) value.publishedDependencyAdoptions.isEmpty
+    value.publishedDependencyAdoptions != null && (if (value.schemaVersion == schemaV4) _historical_published_valid(value)
+    else if (value.schemaVersion == schema || value.schemaVersion == schemaV3) value.publishedDependencyAdoptions.isEmpty
     else value.schemaVersion == schemaV2 && value.publishedDependencyAdoptions.size == 1 &&
       value.publishedDependencyAdoptions.forall(P.factValid) &&
       value.publishedDependencyAdoptions.forall { fact =>
@@ -229,35 +244,75 @@ private[smworkflow] object GoalPhasePrerequisitePublicationHostRecovery {
           old.requestingResult == value.requestingResult && old.lineage == value.lineage &&
           value.generation == old.generation + 1 && old.processPolicy == value.processPolicy && old.publicationPolicy == value.publicationPolicy
       })
-  def targetValid(value: Target): Boolean = value != null && isTargetSchema(value.schemaVersion) &&
-    _text(value.componentInstance) && _text(value.participant) && _text(value.sessionId) &&
-    _revision(value.frontierRevision) && _revision(value.candidateRecordRevision) &&
-    BigInt(value.candidateRecordRevision) <= BigInt(value.frontierRevision) &&
-    value.plan != null && O.validatePlanC(value.plan).isSuccess && value.base != null && value.completed != null &&
-    value.completed.size < value.plan.steps.size && value.completed.forall(O.validStepAcceptance) &&
-    value.completed.map(_.step) == value.plan.steps.take(value.completed.size).map(_.identity) && value.generation > 0 &&
-    value.repairProgress != null && GoalPhaseRepairProgress.validateC(value.repairProgress).isSuccess &&
-    R.referenceValid(value.requestingResult) && value.candidate != null && value.candidate.candidate.nonEmpty &&
-    value.candidate.diff.nonEmpty && value.candidate.step == value.plan.steps(value.completed.size).identity &&
-    value.candidate.changedPaths.nonEmpty && GoalPhaseNativeCandidateBoundary.pathsOwned(value.candidate.changedPaths,
-      value.plan.steps(value.completed.size).ownedPaths) && value.targets != null && value.targets.nonEmpty &&
-    value.targets.map(_.identity).distinct.size == value.targets.size && value.failed != null && value.failed.request != null &&
-    value.targets.last == value.failed.request.target && value.targets.dropRight(1).forall(_.dependency.nonEmpty) &&
-    hostFailure(value.failed, value.targets.last, value.sessionId, value.participant, value.failed.request.source, value.processPolicy) &&
-    _primary_request_matches(value.failed, value) && value.candidate.candidate.exists(c =>
-      c.head == value.failed.request.source.head && c.tree == value.failed.request.source.tree) &&
-    value.dependencyPrefix != null && value.dependencyPrefix.forall(p => p != null && p.request != null) &&
-    value.dependencyPrefix.map(_.request.target) == value.targets.dropRight(1) &&
-    value.dependencyPrefix.forall(p => p.status == "published" && p.ready && p.process != null && p.nextPreparation != null &&
-      p.process.exists(raw => WorkflowSbtCapture.decode(raw).toOption.exists(p => WorkflowSbtCapture.exitCode(p).contains(0))) &&
-      p.nextPreparation.isEmpty && p.request.target.dependency == _dependency(value.candidate) && _dependency_request_matches(p, value)) &&
-    _json(value.publicationPolicy).flatMap(_.hcursor.get[Vector[LocalPublication.Target]]("targets").toOption)
-      .map(_.filter(t => t.beforeChecks && t.dependency.forall(_dependency(value.candidate).contains))).contains(value.targets) &&
-    _published_valid(value) && value.priorDirections != null && value.priorDirections.forall(r => R.referenceValid(r) && r.identity == value.sessionId &&
-      _revision(r.revision) && BigInt(r.revision) <= BigInt(value.frontierRevision)) &&
-    value.priorDirections.distinct.size == value.priorDirections.size &&
-    value.priorDirections.map(r => BigInt(r.revision)) == value.priorDirections.map(r => BigInt(r.revision)).sorted && lineageValid(value.lineage) &&
-    _json(value.controller).exists { raw =>
+  private def _historical_published_valid(value: Target): Boolean = {
+    val facts = value.publishedDependencyAdoptions
+    facts.nonEmpty && facts.forall(P.factValid) && facts.map(_.record).distinct.size == facts.size &&
+      facts.map(f => BigInt(f.record.revision)) == facts.map(f => BigInt(f.record.revision)).sorted &&
+      value.candidate.dependencySourceCapture.exists { current =>
+        R.captureValid(current) && facts.forall { fact =>
+          val selected = fact.direction.target
+          selected.componentInstance == value.componentInstance && selected.participant == value.participant &&
+            selected.sessionId == value.sessionId && fact.record.identity == value.sessionId &&
+            BigInt(fact.record.revision) < BigInt(value.candidateRecordRevision) &&
+            BigInt(fact.record.revision) < BigInt(current.sourceRevision) &&
+            BigInt(fact.record.revision) < BigInt(value.frontierRevision) &&
+            selected.candidate.dependencySourceCapture.exists { old =>
+              old.schemaVersion == R.publishedCaptureSchema && R.captureValid(old) &&
+                old.sessionId == value.sessionId &&
+                selected.sourceDirection == ContextReference(old.sessionId, old.sourceRevision) &&
+                old.direction.target.binding.identity == current.direction.target.binding.identity &&
+                old.direction.target.binding.dependency.identity == current.direction.target.binding.dependency.identity &&
+                old.direction.target.binding.dependency.repository == current.direction.target.binding.dependency.repository &&
+                K.hasHistoricalAncestor(current, old.direction)
+            }
+        }
+      }
+  }
+  private def _clause(label: String)(valid: => Boolean): () => Option[String] =
+    () => if (valid) None else Some(label)
+  def targetValid(value: Target): Boolean = targetFailure(value).isEmpty
+  /** One lazy ordered predicate path serves codecs and description diagnostics. */
+  private[admission] def targetFailure(value: Target): Option[String] =
+    if (value == null) Some("schema.target") else Vector(
+      _clause("schema.version")(isTargetSchema(value.schemaVersion)),
+      _clause("schema.actor-fields")(_text(value.componentInstance) && _text(value.participant) && _text(value.sessionId)),
+      _clause("native-frontier.revisions")(_revision(value.frontierRevision) && _revision(value.candidateRecordRevision) &&
+        BigInt(value.candidateRecordRevision) <= BigInt(value.frontierRevision)),
+      _clause("native-plan")(value.plan != null && O.validatePlanC(value.plan).isSuccess && value.base != null),
+      _clause("native-prefix")(value.completed != null && value.completed.size < value.plan.steps.size &&
+        value.completed.forall(O.validStepAcceptance) && value.completed.map(_.step) ==
+          value.plan.steps.take(value.completed.size).map(_.identity) && value.generation > 0),
+      _clause("repair-accounting")(value.repairProgress != null && GoalPhaseRepairProgress.validateC(value.repairProgress).isSuccess),
+      _clause("requesting-result")(R.referenceValid(value.requestingResult)),
+      _clause("candidate.ownership")(value.candidate != null && value.candidate.candidate.nonEmpty &&
+        value.candidate.diff.nonEmpty && value.candidate.step == value.plan.steps(value.completed.size).identity &&
+        value.candidate.changedPaths.nonEmpty && GoalPhaseNativeCandidateBoundary.pathsOwned(value.candidate.changedPaths,
+          value.plan.steps(value.completed.size).ownedPaths)),
+      _clause("publication-targets")(value.targets != null && value.targets.nonEmpty &&
+        value.targets.map(_.identity).distinct.size == value.targets.size && value.failed != null && value.failed.request != null &&
+        value.targets.last == value.failed.request.target && value.targets.dropRight(1).forall(_.dependency.nonEmpty)),
+      _clause("schema.adoption-fields")(value.publishedDependencyAdoptions != null),
+      _clause("primary.formal-classification")(_failure_valid(value)),
+      _clause("primary.current-request")(_primary_request_matches(value.failed, value)),
+      _clause("primary.current-source")(value.candidate.candidate.exists(c =>
+        c.head == value.failed.request.source.head && c.tree == value.failed.request.source.tree)),
+      _clause("dependency-prefix.targets")(value.dependencyPrefix != null &&
+        value.dependencyPrefix.forall(p => p != null && p.request != null) &&
+        value.dependencyPrefix.map(_.request.target) == value.targets.dropRight(1)),
+      _clause("dependency-prefix.completed-result")(value.dependencyPrefix.forall(p => p.status == "published" && p.ready &&
+        p.process != null && p.nextPreparation != null && p.process.exists(raw => WorkflowSbtCapture.decode(raw).toOption
+          .exists(p => WorkflowSbtCapture.exitCode(p).contains(0))) && p.nextPreparation.isEmpty)),
+      _clause("dependency-prefix.current-request")(value.dependencyPrefix.forall(p =>
+        p.request.target.dependency == _dependency(value.candidate) && _dependency_request_matches(p, value))),
+      _clause("publication-policy")(_json(value.publicationPolicy).flatMap(_.hcursor.get[Vector[LocalPublication.Target]]("targets").toOption)
+        .map(_.filter(t => t.beforeChecks && t.dependency.forall(_dependency(value.candidate).contains))).contains(value.targets)),
+      _clause("historical-adoption.ancestry")(_published_valid(value)),
+      _clause("prior-directions")(value.priorDirections != null && value.priorDirections.forall(r => R.referenceValid(r) &&
+        r.identity == value.sessionId && _revision(r.revision) && BigInt(r.revision) <= BigInt(value.frontierRevision)) &&
+        value.priorDirections.distinct.size == value.priorDirections.size && value.priorDirections.map(r => BigInt(r.revision)) ==
+          value.priorDirections.map(r => BigInt(r.revision)).sorted),
+      _clause("lineage")(lineageValid(value.lineage)),
+      _clause("controller-projection")(_json(value.controller).exists { raw =>
       val c = raw.hcursor
       raw.asObject.exists(_.keys.toSet == _controller_fields) &&
         c.get[String]("stage").contains("Validation") && c.get[O.Plan]("plan").contains(value.plan) &&
@@ -270,7 +325,19 @@ private[smworkflow] object GoalPhasePrerequisitePublicationHostRecovery {
           control.map(_.policy) == value.repairProgress.runtimePolicy && control.map(_.selectedLimit) == value.repairProgress.selectedLimit &&
             control.map(_.effectiveLimit) == value.repairProgress.effectiveLimit
         } && c.downField("pendingRepair").focus.contains(Json.Null) && c.downField("closureIntent").focus.contains(Json.Null)
-    }
+    })).iterator.map(clause => clause()).find(_.nonEmpty).flatten
+
+  private def _failure_valid(value: Target): Boolean = value.canonicalProgramCorrection != null &&
+    (if (isCanonicalTargetSchema(value.schemaVersion)) value.canonicalProgramCorrection.exists(c =>
+      value.processPolicy == c.correctedProcessPolicy && K.failure(value.failed, value.targets.last, value.sessionId,
+        value.participant, value.candidate, c) && value.candidate.dependencySourceCapture.exists(capture =>
+          capture.sessionId == value.sessionId && capture.step == value.candidate.step && capture.primaryBase == value.base &&
+            capture.plan == ContextReference(value.plan.identity, value.plan.revision) &&
+            capture.generation == value.generation && capture.sourceRevision == value.candidate.sourceRevision &&
+            capture.direction.target.canonicalOrigin.exists(origin => origin.componentInstance == value.componentInstance &&
+              origin.participant == value.participant)))
+    else value.canonicalProgramCorrection.isEmpty && hostFailure(value.failed, value.targets.last, value.sessionId,
+      value.participant, value.failed.request.source, value.processPolicy))
 
   def correctionValid(value: Correction): Boolean = value != null && _text(value.failedRequestIdentity) &&
     _text(value.programIdentity) && R.referenceValid(value.observationReference) && _rationale(value.summary) &&
@@ -379,26 +446,37 @@ private[smworkflow] object GoalPhasePrerequisitePublicationHostRecovery {
     core: ActionCall.Core, retained: Option[Target], selected: Option[LocalPublication.Target]): Consequence[Target] = for {
     _ <- _eligible_c(source)
     policy <- d.localPublication.map(Consequence.success).getOrElse(F.invalid("Host recovery publication policy is absent"))
-    process <- retained.map(t => Consequence.success(t.processPolicy)).getOrElse(B.processPolicyC(d, core))
     n = source.native
     targets = _applicable(policy, n.candidate.payload)
-    prefix <- retained.orElse(source.publishedAdoptions.headOption.map(_.direction.target.origin.historical))
+    canonical = if (retained.exists(t => !isCanonicalTargetSchema(t.schemaVersion))) None
+      else targets.lastOption.flatMap(K.derive(n.candidate.payload, _))
+    process <- canonical.map(c => Consequence.success(c.correctedProcessPolicy))
+      .orElse(retained.map(t => Consequence.success(t.processPolicy))).getOrElse(B.processPolicyC(d, core))
+    _ <- if (canonical.isEmpty) Consequence.unit else n.candidate.payload.dependencySourceCapture
+      .map(n.chain.sourceCaptureC).getOrElse(F.invalid("Canonical host correction lost its actual native capture"))
+    targetversion = retained.map(_.schemaVersion).getOrElse(if (canonical.nonEmpty && source.publishedAdoptions.nonEmpty) schemaV4
+      else if (canonical.nonEmpty) schemaV3 else if (source.publishedAdoptions.nonEmpty) schemaV2 else schema)
+    prefix <- retained.orElse(source.publishedAdoptions.headOption.filter(_ => targetversion != schemaV4)
+      .map(_.direction.target.origin.historical))
       .map(t => Consequence.success(t.dependencyPrefix)).getOrElse(
       targets.dropRight(1).foldLeft(Consequence.success(Vector.empty[LocalPublication.Result])) { (prior, target) => for {
         values <- prior
         value <- LocalPublication.collectPrerequisiteC(LocalPublicationRuntime.prerequisiteInput(n.from.identity.value,
           n.candidate.payload, target), target, n.session.participantIdentity, LocalPublicationRuntime._port(core, policy))
-        actual <- value.map(Consequence.success).getOrElse(F.invalid("Dependency has no genuine completed publication"))
+        actual <- value.map(Consequence.success).getOrElse(F.invalid(
+          "Dependency has no genuine completed publication [clause=dependency-prefix.current-collection]"))
       } yield values :+ actual })
-    target = Target(if (source.publishedAdoptions.nonEmpty) schemaV2 else schema,
+    target = Target(targetversion,
       core.component.get.core.instanceId.canonicalKey, n.session.participantIdentity, n.from.identity.value,
       n.from.revision.value.toString, _sorted(B.controller(n.controller)), n.controller.plan, n.controller.base,
       n.controller.generation, n.controller.completed, GoalPhaseRepairProgress.snapshot(n.controller),
       n.candidate.record.revision.value.toString, n.candidate.payload, source.requestingResult, targets,
       B.publicationPolicy(policy), process, failed, prefix, source.directions.map(_.reference), source.lineage,
-      source.publishedAdoptions.map(_.fact))
-    _ <- if (targetValid(target) && retained.forall(_ == target)) Consequence.unit
-      else F.invalid("Host recovery crosses its exact candidate, source, dependency prefix or fixed policy")
+      source.publishedAdoptions.map(_.fact), canonical)
+    _ <- targetFailure(target).orElse(Option.when(!retained.forall(_ == target))("retained-target.exact-reconstruction")) match {
+      case None => Consequence.unit
+      case Some(clause) => F.invalid("Host recovery crosses its exact candidate, source, dependency prefix or fixed policy [clause=" + clause + "]")
+    }
     _ <- if (target.schemaVersion == schemaV2) publishedFailureC(target, source.directions, LocalPublicationRuntime._port(core, policy))
       else Consequence.unit
     _ <- if (retained.nonEmpty) Consequence.unit else for {
@@ -411,11 +489,12 @@ private[smworkflow] object GoalPhasePrerequisitePublicationHostRecovery {
             if (actual == target.processPolicy) checkOriginPublicationsC(target, value, LocalPublicationRuntime._port(core, policy))
             else F.invalid("Historical publication process policy changed"))
         case Some(_) => F.invalid("Selected historical dependency is absent from the actual successful prefix")
-        case None => currentC(target, d, core)
+        case None => _current_c(target, d, core, allowold = true)
       }
       latest <- LocalPublication.collectLatestC(LocalPublication.LatestCollectionInput(failed.request.target.identity,
         target.sessionId), failed.request.target, target.participant, LocalPublicationRuntime._port(core, policy))
-      _ <- if (latest.contains(failed)) Consequence.unit else F.invalid("Host failure is no longer the latest exact primary attempt")
+      _ <- if (latest.contains(failed)) Consequence.unit
+        else F.invalid("Host failure is no longer the latest exact primary attempt [clause=primary.latest-result]")
     } yield ()
     _ <- LocalPublicationRuntime.retainedFailureC(core, policy, failed)
     _ <- prefix.foldLeft(Consequence.unit)((prior, p) => prior.flatMap(_ =>
@@ -453,12 +532,23 @@ private[smworkflow] object GoalPhasePrerequisitePublicationHostRecovery {
   } yield ()
 
   /** These reads are also performed immediately before the primary effect. */
-  def currentC(target: Target, d: F.Declaration, core: ActionCall.Core): Consequence[Unit] = for {
+  def currentC(target: Target, d: F.Declaration, core: ActionCall.Core): Consequence[Unit] =
+    _current_c(target, d, core, allowold = false)
+  private def _current_c(target: Target, d: F.Declaration, core: ActionCall.Core,
+    allowold: Boolean): Consequence[Unit] = for {
     policy <- d.localPublication.map(Consequence.success).getOrElse(F.invalid("Host recovery publication policy is absent"))
     process <- B.processPolicyC(d, core)
-    _ <- if (targetValid(target) && process == target.processPolicy && B.publicationPolicy(policy) == target.publicationPolicy &&
+    _ <- if (targetValid(target) && (process == target.processPolicy || allowold &&
+        target.canonicalProgramCorrection.exists(_.oldProcessPolicy == process)) && B.publicationPolicy(policy) == target.publicationPolicy &&
         _applicable(policy, target.candidate) == target.targets) Consequence.unit
-      else F.invalid("Host recovery fixed program or publication policy changed")
+      else F.invalid("Host recovery fixed program or publication policy changed [clause=current-policy.fixed-program]")
+    _ <- target.canonicalProgramCorrection.fold(Consequence.unit) { correction =>
+      val capture = target.candidate.dependencySourceCapture.get
+      if (K.matches(correction, target.candidate, target.failed.request.target) &&
+          d.dependencySourceRevisions.contains(R.bindingOf(capture)) &&
+          d.dependencySourceConsumptions.contains(R.consumptionOf(capture))) Consequence.unit
+      else F.invalid("Canonical host correction crosses its declared current source binding or consumption [clause=current-policy.source-binding]")
+    }
     _ <- target.candidate.dependencySourceCapture.fold(Consequence.unit)(R.freshnessC(core, _))
     _ <- checkPublicationsC(target, LocalPublicationRuntime._port(core, policy))
   } yield ()
@@ -469,15 +559,21 @@ private[smworkflow] object GoalPhasePrerequisitePublicationHostRecovery {
       latest <- LocalPublication.collectLatestC(LocalPublication.LatestCollectionInput(p.request.target.identity,
         target.sessionId), p.request.target, target.participant, port)
       source <- port.sourceC(p.request.target)
-      adoption = target.publishedDependencyAdoptions.find(_.direction.target.origin.selectedTarget == p.request.target)
-      _ <- if (retained.contains(p) && latest.contains(p) && p.status == "published" && p.ready &&
+      adoption = target.publishedDependencyAdoptions.find(f => target.schemaVersion != schemaV4 &&
+        f.direction.target.origin.selectedTarget == p.request.target)
+      _ <- if (retained.contains(p)) Consequence.unit else F.invalid(
+        "Successful dependency publication changed [clause=dependency-prefix.immutable-result]")
+      _ <- if (latest.contains(p)) Consequence.unit else F.invalid(
+        "Successful dependency publication changed [clause=dependency-prefix.latest-result]")
+      _ <- if (p.status == "published" && p.ready &&
           adoption.fold(source == p.request.source)(fact => P.factValid(fact) &&
             fact.direction.target.origin.historical.dependencyPrefix.contains(p) &&
             fact.direction.target.candidate == target.candidate && source == P.sourceOf(fact.direction.target.guard)))
-        Consequence.unit else F.invalid("Successful dependency publication changed; no dependency replay is authorized")
+        Consequence.unit else F.invalid("Successful dependency publication changed; no dependency replay is authorized [clause=dependency-prefix.current-source]")
     } yield () }
     source <- port.sourceC(target.failed.request.target)
-    _ <- if (source == target.failed.request.source) Consequence.unit else F.invalid("Host recovery primary source changed")
+    _ <- if (source == target.failed.request.source) Consequence.unit
+      else F.invalid("Host recovery primary source changed [clause=primary.current-source]")
   } yield ()
   def checkOriginPublicationsC(target: Target, selected: LocalPublication.Target, port: LocalPublication.Port): Consequence[Unit] = for {
     _ <- if (targetValid(target) && target.schemaVersion == schema && target.dependencyPrefix.exists(_.request.target == selected))
@@ -502,7 +598,10 @@ private[smworkflow] object GoalPhasePrerequisitePublicationHostRecovery {
   } yield ()
   def description(target: Target): V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult =
     V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult(target.sessionId, "direction-required",
-      "The retained primary packaging capacity failure may have partial publication effects. An independent Human may authorize one whole-primary successor after an attributable host correction. Successful dependencies are retained. Ordinary Advance owns execution.",
+      (if (isCanonicalTargetSchema(target.schemaVersion))
+        "The retained first primary publication selected the actual previous source root despite an adopted canonical source. Correct exactly the described fixed publisher source environment value externally. "
+      else "The retained primary packaging capacity failure may have partial publication effects. ") +
+        "An independent Human may authorize one whole-primary successor after an attributable host correction, accepting possible partial effects. Successful dependencies and original failures remain retained. Ordinary Advance owns execution.",
       target.componentInstance, GoalPhaseNativeMetadata.record(target.asJson), choices, B.recoveryOperation)
   private def _reference(from: InstanceRecord) = WorkflowMechanicalTransition.Reference(
     from.identity.value + ":" + causationPrefix + from.revision.value, "1")
@@ -517,6 +616,7 @@ private[smworkflow] object GoalPhasePrerequisitePublicationHostRecovery {
     _ <- inputC(input)
     supplied <- targetC(input.target)
     _ <- if (supplied == actual && matches(actual, source)) Consequence.unit else F.invalid("Host recovery target is stale or crossed")
+    _ <- if (input.choice == "Defer" || !isCanonicalTargetSchema(actual.schemaVersion)) Consequence.unit else currentC(actual, d, core)
     correction <- correctionC(input.hostCorrection)
     reference = ContextReference(input.reference.identity, input.reference.revision)
     binding <- bindingC(actual.componentInstance, actual, input.choice, input.rationale, actual.participant, reference, correction)

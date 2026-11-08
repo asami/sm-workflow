@@ -21,7 +21,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** All supplied process/host observations here are specification data. These
   * pure examples are not native execution or real consumer Human evidence.
   * @since   Nov.  7, 2026
-  * @version Nov.  7, 2026
+  * @version Nov.  8, 2026
   */
 private[admission] object PublicationHostRecoverySpecificationFixture {
   val output = "[error] java.io.IOException: No space left on device\n[error] (cozyBuildCar) packaging failure\n"
@@ -95,6 +95,16 @@ final class GoalPhasePrerequisitePublicationHostRecoverySpec extends AnyWordSpec
       target.repairProgress shouldBe GoalPhaseRepairProgress.snapshot(P.controller)
       target.failed shouldBe F.failed
       target.asJson.mapObject(_.add("unknown", Json.True)).as[H.Target].isLeft shouldBe true
+      target.asJson.hcursor.downField("canonicalProgramCorrection").focus shouldBe None
+      val published = PublishedDependencySourceSpecificationFixture.host
+      published.asJson.as[H.Target] shouldBe Right(published)
+      published.asJson.hcursor.downField("canonicalProgramCorrection").focus shouldBe None
+      published.asJson.hcursor.downField("publishedDependencyAdoptions").focus shouldBe Some(published.publishedDependencyAdoptions.asJson)
+      Vector(target, published).foreach { legacy =>
+        legacy.asJson.mapObject(_.add("canonicalProgramCorrection", Json.Null)).as[H.Target].isLeft shouldBe true
+        legacy.asJson.mapObject(_.add("canonicalProgramCorrection",
+          CanonicalPublicationProgramCorrectionSpecificationFixture.correction.asJson)).as[H.Target].isLeft shouldBe true
+      }
       H.targetValid(target.copy(controller = P.sorted(io.circe.parser.parse(target.controller).toOption.get
         .mapObject(_.remove("repairObservations"))))) shouldBe false
       H.targetValid(target.copy(frontierRevision = "11")) shouldBe false
