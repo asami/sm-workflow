@@ -179,7 +179,7 @@ Acceptance: a reviewer can close the rename against its finding and diff; a
 one-line authority change still receives a contract review. Distinguish diagnosis
 of an unknown failure from repair of an established cause. Keep issued Requests,
 independent review and runtime validation unchanged. Assess reopened findings
-and handoffs returned for missing evidence. Model comparisons remain in Phase 9.
+and handoffs returned for missing evidence. Broader model benchmarking remains in Phase 9.
 See the [work classification journal](../journal/2026/11/2026-11-06-work-classification-precision.md).
 
 Use Terra by default for ordinary implementation and repair, including
@@ -198,7 +198,30 @@ Retain Luna for established non-coding work such as waiting for a matching
 cross-chat result. Terra unavailability does not introduce a new Luna coding
 fallback. The rename pilot is evidence for this planning choice, not a general
 model benchmark. Preserve existing mappings, review requirements and already
-issued Requests; comparative model evaluation belongs to Phase 9.
+issued Requests.
+
+For a focused re-review with a stated finding or question, identifiable evidence
+and a clear pass/fail criterion, choose **Sol Medium first**. This includes
+questions requiring several receipts. Keep **Sol High** for reviews that search
+for unknown problems, including integration reviews with no predefined finding.
+If the question changes from checking a finding to discovering what else is
+wrong, use High for that new assignment. If a receipt is missing, report what
+remains unverified and obtain the evidence. A Medium result does not require a
+second review by High. The Terra examples above cover ordinary implementation
+and repair checks; this rule selects effort for independent Sol reviews.
+
+The November 8 pilots used fresh Sol agents with identical handoffs and evidence
+within each pair, one run per effort. Total tokens include cached input.
+
+| Focused re-review | Medium: seconds / total tokens | High: seconds / total tokens | Result at both efforts |
+| --- | ---: | ---: | --- |
+| Publication after interruption, before and after the fix | 13.33 / 60,914 | 12.45 / 60,527 | Found the duplicate-publication path before the fix and correctly closed the finding afterward; source review only. |
+| Three publication attempts in one Session | 12.32 / 58,112 | 17.08 / 57,979 | Distinguished requests and commit HEADs; the count alone did not establish replay. Reaching ReviewPhase did not establish Phase acceptance. |
+
+Across the two cases, neither effort missed an expected finding, raised a false
+finding or required a follow-up. Medium was faster in aggregate but not in
+both cases, and did not use fewer total tokens. These pilots support the focused
+routing choice only; they did not test discovery review or measure credits.
 
 When evaluating classification, distinguish a follow-up assignment or
 continuation after a validation wait from a correction prompted by a finding
@@ -237,6 +260,49 @@ was actually performed. A publish receipt alone must not imply consumer
 acceptance. Apply this to the presentation of existing results, without adding
 a runtime stage or replaying successful work.
 
+## Repository synchronization: uncommitted-change policy (2026-11-08)
+
+Selected bounded enhancement: expose `uncommittedPolicy` through the normal
+RepositorySync public input/configuration route. The reported use case required
+preserving uncommitted work, but the caller substituted `cncf-repository-sync`
+when the current automatic-commit route did not fit. Keep synchronization and
+continuation owned by sm-workflow, with these three selectable behaviors:
+
+| Value | Planned behavior |
+| --- | --- |
+| `auto-commit` (default) | Preserve the existing purpose-based preparation: classify intended changes, apply the required acceptance, commit coherent purposes in dependency order, then synchronize. |
+| `confirm` | Present the actual blocking changes and a concrete proposed resolution to Human. Apply the authorized resolution through the existing runtime route, perform required checks/commits, and continue synchronization in the same Session. |
+| `error` | Report the blocking uncommitted changes and finish the invocation with an explicit error, preserving local changes and completed work without automatic correction or dirty-change commits. |
+
+Omission preserves today's default. Apply the same policy to single-repository
+and directory-list entry points, resolve and retain the effective selection in
+the existing Session context, and reject unsupported values as configuration
+errors. This parameter concerns uncommitted local changes; it is independent of
+`syncMode` and does not prohibit a merge commit needed to synchronize committed
+history. A clean repository needs no dirty-change question under any policy.
+
+`auto-commit` covers intended authorized work only. Preserve partial staging,
+excluded work and another owner's ongoing changes. In `confirm`, use the actual
+inventory to explain what is blocked and what the proposed action changes;
+record the real answer and resolve the admitted blocker rather than merely
+reporting another stop. A choice to preserve changes that still prevent safe
+integration remains an explicit unfinished outcome. This policy does not promise
+a dirty-tree merge or authorize stash, discard or excluded-change commits.
+
+Reuse existing Human-answer and continuation operations. Preserve the Goal,
+Session, accepted results, history, repair counts and successful checks; continue
+only unfinished work without repeating accepted effects or the same approval.
+Retain actual handling of live/unknown effects and genuinely new decisions.
+Do not substitute another synchronization skill or direct Git commands for a
+missing parameter or continuation capability, and do not add a second approval
+ledger or per-repository confirmation loop for ordinary default synchronization.
+
+The public contract, normal entry instructions and executable specifications
+must distinguish these behaviors before delivery. Detailed scenario coverage
+and the current implementation gap are recorded in the
+[planning handoff](../journal/2026/11/2026-11-08-repository-sync-uncommitted-policy.md).
+This is planned work, not a change to the currently supported public API.
+
 ## Selection and execution
 
 Carry forward Phase 6 command ownership and live Phase-document synchronization
@@ -272,7 +338,18 @@ scenarios and retains its owning project's responsibilities.
       Executable Specifications and required regressions pass.
 - [ ] Independent review has no unresolved blockers for the supported scope;
       known supported-use failures are not relabeled optional to claim closure.
+- [ ] Work classification distinguishes a focused re-review (Sol Medium first)
+      from a search for unknown problems (Sol High). Check missed and false
+      findings and follow-up work before comparing time or token totals.
 - [ ] Real-use instructions match the available normal entry routes and outcomes.
+- [ ] RepositorySync exposes `uncommittedPolicy`: omitted/default `auto-commit`,
+      explicit `confirm`, and `error`, consistently for single and directory-list
+      callers; clean input and invalid values have specified outcomes.
+- [ ] `confirm` applies an actual Human-authorized resolution and continues in
+      the same Session; tests retain excluded work, accepted effects, checks,
+      history and repair counts without repeating approval or switching skills.
+- [ ] `error` preserves dirty changes and returns a concrete error without
+      automatic dirty-change commits; default purpose-based acceptance remains.
 - [ ] The context compaction coordination framework covers the selected
       boundary/continuation/handoff/outcome behavior. Actual automatic desktop
       compaction is reported separately as best effort and does not block closure.
