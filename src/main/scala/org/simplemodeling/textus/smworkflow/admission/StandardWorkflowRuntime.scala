@@ -102,6 +102,8 @@ private[smworkflow] object StandardWorkflowRuntime {
       GoalPhaseDevelopmentReconstruction.inputForCallC(request, core).map(Some(_))
       else Consequence.success(Option.empty[GoalPhaseDevelopmentReconstructionInput])
     session <- if (request.operation == "startGoalPhase") Consequence.success(Option.empty[String])
+      else if (request.operation == GoalPhasePrerequisitePublicationRecovery.describeOperation)
+        GoalPhasePrerequisitePublicationRecovery.descriptionForCallC(request, core).map(value => Some(value.sessionId))
       else if (request.operation == GoalPhaseSourceHistoryNormalization.adoptionOperation)
         GoalPhaseSourceHistoryNormalization.inputForCallC(request, core).map(value => Some(value.sessionId))
       else reconstruction.map(value => Consequence.success(Some(value.sessionId))).getOrElse(

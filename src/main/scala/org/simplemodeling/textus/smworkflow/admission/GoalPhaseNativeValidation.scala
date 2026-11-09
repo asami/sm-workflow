@@ -255,15 +255,16 @@ private[smworkflow] object GoalPhaseNativeValidation {
     existingArtifactAdoption: Option[GoalPhasePrerequisitePublicationUnknownRecovery.ExistingArtifactAdoption] = None,
     confirmedFailureSuccessor: Option[LocalPublication.ConfirmedFailureSuccessor] = None,
     primaryRepairPublication: Option[LocalPublication.ConfirmedFailureSuccessor] = None,
-    hostRecovery: Option[GoalPhasePrerequisitePublicationHostRecovery.Permit] = None):
+    hostRecovery: Option[GoalPhasePrerequisitePublicationHostRecovery.Permit] = None,
+    sourceAlignment: Option[GoalPhaseDependencyPublicationSourceAlignment.Permit] = None):
       Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
     store <- _store_c(session, d, core, candidate, controller, acknowledgement, from, documentPolicy, recordingPaths, dependencyChain)
     retained <- store.loadC("validation")
     existingintent <- store.loadC("check-intent-0")
-    _ <- if ((prerequisiteRecovery || qualifiedSuccessor.nonEmpty || existingArtifactAdoption.nonEmpty || confirmedFailureSuccessor.nonEmpty || primaryRepairPublication.nonEmpty || hostRecovery.nonEmpty) &&
+    _ <- if ((prerequisiteRecovery || qualifiedSuccessor.nonEmpty || existingArtifactAdoption.nonEmpty || confirmedFailureSuccessor.nonEmpty || primaryRepairPublication.nonEmpty || hostRecovery.nonEmpty || sourceAlignment.nonEmpty) &&
         retained.isEmpty && existingintent.isEmpty) store.preconditionsC else Consequence.unit
     prerequisite <- if (retained.isEmpty && existingintent.isEmpty) LocalPublicationRuntime.beforeChecksC(session, d, core, candidate,
-      qualifiedSuccessor, prerequisiteWait, existingArtifactAdoption, confirmedFailureSuccessor, primaryRepairPublication, hostRecovery)
+      qualifiedSuccessor, prerequisiteWait, existingArtifactAdoption, confirmedFailureSuccessor, primaryRepairPublication, hostRecovery, sourceAlignment)
       else Consequence.success(None)
     response <- prerequisite match {
       case Some(waiting) => Consequence.success(waiting)

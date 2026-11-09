@@ -19,7 +19,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * There is no shell, external AI execution runner or caller-selected argv here.
   * @since   Oct. 26, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  7, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object LocalPublicationRuntime {
@@ -182,10 +182,11 @@ private[smworkflow] object LocalPublicationRuntime {
     existingArtifactAdoption: Option[GoalPhasePrerequisitePublicationUnknownRecovery.ExistingArtifactAdoption] = None,
     confirmedFailureSuccessor: Option[LocalPublication.ConfirmedFailureSuccessor] = None,
     primaryRepairPublication: Option[LocalPublication.ConfirmedFailureSuccessor] = None,
-    hostRecovery: Option[GoalPhasePrerequisitePublicationHostRecovery.Permit] = None):
+    hostRecovery: Option[GoalPhasePrerequisitePublicationHostRecovery.Permit] = None,
+    sourceAlignment: Option[GoalPhaseDependencyPublicationSourceAlignment.Permit] = None):
       Consequence[Option[V.GoalPhaseAdvanceResult]] =
     d.localPublication match {
-      case None if existingArtifactAdoption.nonEmpty || primaryRepairPublication.nonEmpty || hostRecovery.nonEmpty =>
+      case None if existingArtifactAdoption.nonEmpty || primaryRepairPublication.nonEmpty || hostRecovery.nonEmpty || sourceAlignment.nonEmpty =>
         Consequence.stateConflict("Artifact adoption or primary repair publication requires its publication policy")
       case None => Consequence.success(None)
       case Some(policy) =>
@@ -194,6 +195,17 @@ private[smworkflow] object LocalPublicationRuntime {
         val targets = policy.targets.filter(t => t.beforeChecks && t.dependency.forall(dependency.contains))
         for {
         _ <- validateC(policy)
+        mismatches <- GoalPhaseDependencyPublicationSourceAlignment.mismatchesC(candidate.payload, targets,
+          GoalPhaseDependencyPublicationSourceAlignment.rootC(core, _))
+        _ <- sourceAlignment.fold(Consequence.unit)(permit => GoalPhaseDependencyPublicationSourceAlignment.currentC(
+          permit, candidate, session.current.identity.value, session.participantIdentity, d, core))
+        blocked = mismatches.filterNot(m => sourceAlignment.exists(_.skips(m.target)))
+        sourcewait = Option.when(blocked.nonEmpty)(NativeWorkflowOperationOutput.goalWait(session.current.identity.value,
+          GoalPhaseDependencyPublicationSourceAlignment.message + " Binding " +
+            candidate.payload.dependencySourceCapture.map(c => GoalPhaseDependencySourceRevision.bindingOf(c).identity).getOrElse("") +
+            " selects " + candidate.payload.dependencySourceCapture.map(c => GoalPhaseDependencySourceRevision.bindingOf(c).root).getOrElse("") +
+            "; configured targets: " + blocked.map(m => m.target.identity + "@" + m.target.workspace + "=" + m.actualRoot).mkString(", "),
+          "dependency-publication-source-mismatch"))
         _ <- hostRecovery.fold(Consequence.unit) { permit => for {
           _ <- if (qualifiedSuccessor.isEmpty && prerequisiteWait.isEmpty && existingArtifactAdoption.isEmpty &&
               confirmedFailureSuccessor.isEmpty && primaryRepairPublication.isEmpty &&
@@ -215,8 +227,17 @@ private[smworkflow] object LocalPublicationRuntime {
                 c.schemaVersion == GoalPhaseDependencySourceRevision.primaryCaptureSchema &&
                 c.direction.target.primaryFailureOrigin.exists(_.failed.request.target == p.previous.request.target)) && qualifiedSuccessor.isEmpty)) Consequence.unit
           else Consequence.stateConflict("Artifact adoption crosses its exact prerequisite target or publication choice")
-        result <- targets.foldLeft(Consequence.success(Option.empty[V.GoalPhaseAdvanceResult])) { (prior, target) => prior.flatMap {
+        _ <- if (sourcewait.nonEmpty || sourceAlignment.isEmpty) Consequence.unit else GoalPhaseDependencyPublicationSourceAlignment.canonicalCapture(candidate.payload)
+          .fold(Consequence.unit) { capture =>
+            GoalPhasePrerequisitePublicationRecovery.processPolicyC(d, core).flatMap { process =>
+              if (targets.filter(_.dependency.isEmpty).forall(target => GoalPhasePrerequisitePublicationRecovery.primaryProgramMatches(
+                  process, target, GoalPhaseDependencySourceRevision.consumptionOf(capture)))) Consequence.unit
+              else Consequence.stateConflict("Fixed primary PublishLocal environment does not select the captured canonical dependency sourceRoot")
+            }
+          }
+        result <- targets.foldLeft(Consequence.success(sourcewait)) { (prior, target) => prior.flatMap {
           case some @ Some(_) => Consequence.success(some)
+          case None if sourceAlignment.exists(_.skips(target)) => Consequence.success(Option.empty[V.GoalPhaseAdvanceResult])
           case None =>
             hostRecovery match {
             case Some(permit) if target.dependency.nonEmpty =>

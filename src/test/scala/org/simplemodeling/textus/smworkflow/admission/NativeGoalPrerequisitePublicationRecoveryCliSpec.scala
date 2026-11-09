@@ -37,7 +37,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * and host provisioning are SPECIFICATION-OWNED. No consumer store is read or
   * seeded, and no full sm-workflow source tree is copied.
   * @since   Nov.  1, 2026
-  * @version Nov.  7, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.scalatest.DoNotDiscover
@@ -2428,8 +2428,8 @@ abstract class NativeGoalPrerequisitePublicationRecoveryCliSpecification extends
   }
 
   if (!host_recovery_only) {
-  "Installed Session-only prerequisite description" should {
-    "E12 reach business admission with bare sessionId while retaining explicit credential rejection" in {
+  "Installed prerequisite description selectors" should {
+    "E12 reach business admission with bare or structured Session input while retaining explicit credential rejection" in {
       Given("an explicitly installed command, its normal component file and a fresh fixed-subject host without native Start")
       val executable = Path.of(sys.props.getOrElse("smworkflow.spec.installedCommand",
         cancel("Explicitly select smworkflow.spec.installedCommand for this installed-only scenario")))
@@ -2460,12 +2460,22 @@ abstract class NativeGoalPrerequisitePublicationRecoveryCliSpecification extends
         _response_(described) should not include ("requires a service authentication provider")
       }
 
-      When("the installed description receives missing Session input or the old input-only wrapper")
+      When("the installed description receives its declared structured Session input")
+      val input = json(V.GoalPhasePrerequisitePublicationRecoveryDescriptionInput(session, None).toRecord()).noSpaces
+      val structured = _describe_(Vector("--input", input))
+      Then("structured input reaches the same absent-Start business admission as the bare selector")
+      withClue(structured.invocation.logs) {
+        structured.exitCode should not be 0
+        _response_(structured) should include ("no actual native ordered Start")
+        _response_(structured) should not include ("403")
+        _response_(structured) should not include ("requires a service authentication provider")
+      }
+
+      When("the installed description receives missing Session input or mixed bare and structured selectors")
       val missing = _describe_(Vector.empty)
-      val oldinput = _describe_(Vector("--input",
-        json(V.GoalPhasePrerequisitePublicationRecoveryDescriptionInput(session).toRecord()).noSpaces))
-      Then("both invalid requests refuse before business Start admission without acting as aliases")
-      Vector(missing, oldinput).foreach { refused =>
+      val mixed = _describe_(Vector("--sessionId", session, "--input", input))
+      Then("both invalid requests refuse before business Start admission")
+      Vector(missing, mixed).foreach { refused =>
         withClue(refused.invocation.logs) {
           refused.exitCode should not be 0
           _response_(refused) should not include ("no actual native ordered Start")

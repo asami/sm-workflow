@@ -754,6 +754,7 @@ OperationResult
 | name | type | multiplicity |
 |------+------|--------------|
 | sessionId | string | 1 |
+| publicationObservation | record | ? |
 
 ## GoalPhasePrerequisitePublicationRecoveryDescriptionResult
 
@@ -7920,7 +7921,11 @@ GoalPhaseSourceHistoryRecoveryResult
 
 ##### DESCRIPTION
 
-Supply the bare sessionId business parameter for this Session-only description. Structured recovery judgments use their declared typed input or inputResource.
+Supply exactly one of bare sessionId, typed input, or inputResource. A structured description input contains sessionId and optional publicationObservation; Resource acquisition uses the executing call's ordinary UTF-8 UoW reader with raw duplicate/null rejection. Legacy session-only descriptions retain their behavior.
+
+The separate sm-workflow.goal-phase-dependency-publication-source-alignment.v1 target binds the actual unstarted ordinary Validation controller, candidate/native revision, authenticated canonical source capture/Direction/guard, every precise obsolete dependency publisher/root and fixed process/publication policy. Before any publication intent, scan every selected dependency target's actual typed Git Root; a primary-first policy cannot execute before discovering a mismatch. Same physical-root aliases are allowed. Another root returns dependency-publication-source-mismatch without dependency or primary SBT. An accepted Repair first needs its owner's ordinary Advance for normal candidate/source capture; describe/adopt performs no capture, stage, check, publication or commit.
+
+Session-only mismatch description exposes only Defer and the actual needed producer proposal. A supplied publicationObservation reuses the independently recollected normal successful collect result, preserving producer owner/participant/target/workspace/program, process policy, source, destination, artifact and recollection references. Producer and consumer names may differ, but publisher workspace root and Component must exactly match the current canonical dependency and its fresh typed File/Git source guard. Inapplicable evidence offers only Defer with concrete applicabilityIssues. The positive AdoptRecollectedPublishedDependencyArtifact choice requires independent existing PrerequisitePublicationRecovery Human proof for the whole target/answer/participant. It appends one adjacent same-stage native Direction and changes only applicability of its exact obsolete dependency publisher. No host/program/grant mutation or primary permission follows; separate ordinary Advance revalidates freshness and continues the existing primary/check/review/closure owners. Old Published success, failed/UNKNOWN, accepted prefix, original coverage and all counters remain literal. The actual primary program must still consume the selected source.
 
 The closed primary host-recovery v3 target describes only the first formal prerequisite Exited(nonzero) whose authenticated canonical v11 or v12 source capture proves an actual old-root Direction lineage and exactly one fixed publisher source environment value left at that previous root while its declared selected primary checks select the adopted root under the same key. Keep the complete old failure, Plan/base/prefix, candidate, generation, counters and source facts. The target's processPolicy is the uniquely derived corrected policy; canonicalProgramCorrection retains the old policy, exact one-value relation, program identity and source Direction/binding references. Description accepts exactly the old or corrected current policy and grants no effect. Unknown, null, mixed schemas, ambiguous selectors, changed commands/limits/grants, incomplete captures and successor failures refuse. Existing host v1/v2 packaging capacity meanings and wire remain literal.
 
@@ -7946,7 +7951,9 @@ GoalPhasePrerequisitePublicationRecoveryDescriptionInput
 
 | name | type | multiplicity |
 |------+------|--------------|
-| sessionId | string | 1 |
+| sessionId | string | ? |
+| input | GoalPhasePrerequisitePublicationRecoveryDescriptionInput | ? |
+| inputResource | string | ? |
 
 ##### OUTPUT
 

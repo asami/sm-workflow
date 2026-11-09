@@ -93,7 +93,7 @@ private[admission] object PrimaryPublicationContinuationSpecificationFixture {
 /** Pure bounded contract evidence; supplied _process observations and byte
   * identities are specification data. Installed qualification is separate.
   * @since   Nov.  1, 2026
-  * @version Nov.  7, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -169,25 +169,25 @@ final class GoalPhasePrerequisitePublicationRecoverySpec extends AnyWordSpec wit
       }
     }
 
-    "refuse the old input-only shape and missing or nontext Session parameters" in {
+    "refuse mixed selectors and missing or nontext Session parameters" in {
       Given("the same normal owning host and no Session or native store data")
       withPreparation() { episode =>
         import org.goldenport.protocol.{Property, Request}
-        val oldinput = take(V.GoalPhasePrerequisitePublicationRecoveryDescriptionInput("description-absent-session")
+        val input = take(V.GoalPhasePrerequisitePublicationRecoveryDescriptionInput("description-absent-session", None)
           .toRecord().toJsonStringC)
         val cases = Vector(
-          List(Property("input", oldinput, None)),
+          List(Property("sessionId", "description-absent-session", None), Property("input", input, None)),
           List.empty[Property],
           List(Property("sessionId", 42, None)))
-        When("each undeclared input-only, missing or nontext request reaches its normal owning Operation")
+        When("each mixed-selector, missing or nontext request reaches its normal owning Operation")
         val failures = cases.map { properties =>
           episode.owner.executeOperationResponseInContext(Request.of(component = episode.component.name,
             service = "GoalPhaseService", operation = R.describeOperation, properties = properties), episode.actor) match {
             case Consequence.Failure(conclusion) => conclusion.toString
-            case _ => fail("Only a declared text sessionId can enter Session business admission")
+            case _ => fail("Only one declared text Session selector can enter native business admission")
           }
         }
-        Then("every invalid shape refuses before native Start admission and none acts as a compatibility alias")
+        Then("every invalid selector shape refuses before native Start admission")
         failures.foreach { failure =>
           failure should not include ("no actual native ordered Start")
           failure should not include ("403")
@@ -483,6 +483,59 @@ final class GoalPhasePrerequisitePublicationRecoverySpec extends AnyWordSpec wit
         R.validateBusinessTextC("{\"a\":1,\"\\u0061\":2}").isSuccess shouldBe false
         R.validateBusinessTextC("{\"target\":{\"nested\":[{},[],null]}}").isSuccess shouldBe false
         R.validateBusinessTextC("{\"emptyObject\":{},\"emptyArray\":[],\"text\":\"null\"}").isSuccess shouldBe true
+      }
+    }
+  }
+
+  "Prerequisite publication description transports" should {
+    "retain session-only input and accept exactly one structured inline or Resource proposal" in {
+      Given("the existing public description Operation with its legacy session selector or one full typed input")
+      import org.goldenport.protocol.{Property, Request}
+      def _request_(properties: List[Property]) = Request.of(component = "SmWorkflow", service = "GoalPhaseService",
+        operation = R.describeOperation, properties = properties)
+      val raw = "{\"sessionId\":\"same-session\"}"
+      When("the owning input selector receives one transport or crossed selectors")
+      val session = R.descriptionSourceC(_request_(List(Property("sessionId", "same-session", None))))
+      val inlineResult = R.descriptionSourceC(_request_(List(Property("input", raw, None))))
+      val resource = R.descriptionSourceC(_request_(List(Property("inputResource", "file:///specification/description.json", None))))
+      Then("the legacy call and shared Resource path remain available while ambiguous transport refuses")
+      session.isSuccess shouldBe true
+      inlineResult.isSuccess shouldBe true
+      resource.isSuccess shouldBe true
+      R.descriptionSourceC(_request_(List(Property("sessionId", "same-session", None), Property("input", raw, None))))
+        .isSuccess shouldBe false
+      R.descriptionSourceC(_request_(List(Property("input", raw, None),
+        Property("inputResource", "file:///specification/description.json", None)))).isSuccess shouldBe false
+      R.descriptionSourceC(_request_(List.empty)).isSuccess shouldBe false
+    }
+    "acquire the complete typed publication observation through the actual Resource call before native admission" in {
+      withPreparation(cap = 1048576) { episode =>
+        Given("a full independently supplied normal collect observation and no actual native Session")
+        import org.goldenport.protocol.{Property, Request}
+        val observation = CanonicalDependencySourceSpecificationFixture.publication
+        val input = V.GoalPhasePrerequisitePublicationRecoveryDescriptionInput("same-session",
+          Some(GoalPhaseNativeMetadata.record(observation.asJson)))
+        val raw = take(input.toRecord().toJsonStringC)
+        def _failure_(properties: List[Property]): String = episode.owner.executeOperationResponseInContext(Request.of(
+          component = episode.component.name, service = "GoalPhaseService", operation = R.describeOperation,
+          properties = properties), episode.actor) match {
+          case Consequence.Failure(conclusion) => conclusion.toString
+          case _ => fail("Transport fixture owns no native Session or artifact authority")
+        }
+        When("the executing Operation reads the same business input inline and through its authorized UTF-8 Resource reader")
+        val inlineFailure = _failure_(List(Property("input", raw, None)))
+        val resource = _failure_(List(Property("inputResource", episode.save("alignment-description", raw), None)))
+        Then("both reach the native admission boundary with the complete observation and malformed input refuses earlier")
+        inlineFailure should include("no actual native ordered Start")
+        resource should include("no actual native ordered Start")
+        val decoded = take(R.descriptionRecordC(input.toRecord()))
+        take(R.descriptionObservationC(decoded)) shouldBe Some(observation)
+        Vector("{\"sessionId\":\"same-session\",\"sessionId\":\"crossed\"}",
+          "{\"sessionId\":\"same-session\",\"publicationObservation\":null}",
+          "{\"sessionId\":\"same-session\",\"undeclared\":true}").zipWithIndex.foreach { (invalid, index) =>
+          val failure = _failure_(List(Property("inputResource", episode.save("alignment-invalid-" + index, invalid), None)))
+          failure should not include("no actual native ordered Start")
+        }
       }
     }
   }

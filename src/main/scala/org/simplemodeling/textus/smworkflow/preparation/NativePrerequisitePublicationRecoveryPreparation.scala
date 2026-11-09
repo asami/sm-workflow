@@ -9,6 +9,7 @@ import org.simplemodeling.textus.smworkflow.admission.{GoalPhasePrerequisitePubl
   GoalPhasePrerequisitePrimaryRepair as P,
   GoalPhasePrerequisitePublicationHostRecovery as H,
   GoalPhasePublishedDependencySourceAdoption as Published,
+  GoalPhaseDependencyPublicationSourceAlignment as Alignment,
   GoalPhasePrerequisitePublicationUnknownRecovery as U, NativeExternalEvidence,
   ThreeWorkflowExternalEvidencePorts}
 import org.simplemodeling.textus.smworkflow.value as V
@@ -16,7 +17,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Passive conversion of an independently supplied answer. Provisioning and
   * guarded recovery remain with their normal owners.
   * @since   Nov.  1, 2026
-  * @version Nov.  7, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 object NativePrerequisitePublicationRecoveryPreparation {
@@ -37,9 +38,23 @@ object NativePrerequisitePublicationRecoveryPreparation {
     artifact <- A.isTargetC(description.target)
     host <- H.isTargetC(description.target)
     published <- Published.isArtifactTargetC(description.target)
+    alignment <- Alignment.isTargetC(description.target)
     _ <- if (host || input.hostCorrection != null && input.hostCorrection.isEmpty) Consequence.unit
       else Consequence.stateConflict("Host correction cannot be supplied to a legacy recovery target")
-    binding <- if (host) for {
+    binding <- if (alignment) for {
+      target <- Alignment.targetC(description.target)
+      supplied <- Alignment.targetC(input.target)
+      _ <- if (target == supplied && description.choices == Alignment.choices(target) && target.sessionId == input.sessionId &&
+          target.participant == participant && target.componentInstance == description.componentInstance &&
+          description.outcome == "direction-required" && execution.references != null && execution.references.contains(reference) &&
+          target.publication.filter(Published.observationValid).forall(observation => execution.references.contains(V.WorkflowArtifactReference(
+            observation.recollectionReference.identity, observation.recollectionReference.revision)) &&
+            execution.references.contains(V.WorkflowArtifactReference(observation.artifact.identity, observation.artifact.revision)) &&
+            !Instant.parse(observation.observedAt).isAfter(occurredAt))) Consequence.unit
+        else Consequence.stateConflict("Alignment preparation requires the whole current target, independent Human and actual producer references")
+      binding <- Alignment.bindingC(description.componentInstance, target, input.choice, input.rationale, participant,
+        ContextReference(reference.identity, reference.revision))
+    } yield binding else if (host) for {
       target <- H.targetC(description.target)
       supplied <- H.targetC(input.target)
       correction <- H.correctionC(input.hostCorrection)

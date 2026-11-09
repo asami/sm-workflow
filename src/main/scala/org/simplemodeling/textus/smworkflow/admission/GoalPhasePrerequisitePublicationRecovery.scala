@@ -32,7 +32,7 @@ import GoalPhasePrerequisitePublicationUnknownRecovery as W
   * publication. Direction appends no Git or SBT effect; Advance owns the bounded
   * effect chain and the ordinary prerequisite owner owns publication.
   * @since   Nov.  1, 2026
-  * @version Nov.  7, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhasePrerequisitePublicationRecovery {
@@ -507,6 +507,9 @@ private[smworkflow] object GoalPhasePrerequisitePublicationRecovery {
 
   def selectBinding(value: Json): Either[String, Json] =
     if (Option(value).exists(_.hcursor.downField("prerequisitePublicationRecovery").downField("target")
+        .get[String]("schemaVersion").contains(GoalPhaseDependencyPublicationSourceAlignment.targetSchema)))
+      GoalPhaseDependencyPublicationSourceAlignment.selectBinding(value)
+    else if (Option(value).exists(_.hcursor.downField("prerequisitePublicationRecovery").downField("target")
         .get[String]("schemaVersion").toOption.exists(GoalPhasePrerequisitePublicationHostRecovery.isTargetSchema)))
       GoalPhasePrerequisitePublicationHostRecovery.selectBinding(value)
     else if (Option(value).exists(_.hcursor.downField("prerequisitePublicationRecovery").downField("target")
@@ -1019,8 +1022,7 @@ private[smworkflow] object GoalPhasePrerequisitePublicationRecovery {
     def createOperationRequest(request: Request): Consequence[OperationRequest] =
       if (request == null || !request.service.contains("GoalPhaseService") ||
           request.operation != (if (describe) describeOperation else recoveryOperation)) F.invalid("Prerequisite recovery Operation identity differs")
-      else if (describe) NativeWorkflowOperationInput.textC(request, "sessionId")
-        .map(identity => Action(request, identity, true, None, port))
+      else if (describe) descriptionSourceC(request).map(source => Action(request, "", true, Some(source), port))
       else resourceInputC(request).map(source => Action(request, "", false, Some(source), port))
   }
   private final case class Action(request: Request, sessionId: String, describe: Boolean,
@@ -1029,9 +1031,13 @@ private[smworkflow] object GoalPhasePrerequisitePublicationRecovery {
     def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
       val core = c
       def execute(): Consequence[OperationResponse] = if (describe) for {
-        context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(sessionId))
+        record <- NativeWorkflowResourceInput.readC(recovery.get, reference => read_resource_text(reference,
+          Some(java.nio.charset.StandardCharsets.UTF_8)).flatMap(validateBusinessTextC))
+        input <- descriptionRecordC(record)
+        publication <- descriptionObservationC(input)
+        context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(input.sessionId))
         selected = core.copy(executionContext = context)
-        result <- port.describePrerequisitePublicationRecoveryC(sessionId, selected).map(NativeWorkflowOperationOutput.response(_))
+        result <- port.describePrerequisitePublicationRecoveryC(input.sessionId, selected, publication).map(NativeWorkflowOperationOutput.response(_))
       } yield result else for {
         record <- NativeWorkflowResourceInput.readC(recovery.get, reference => read_resource_text(reference,
           Some(java.nio.charset.StandardCharsets.UTF_8)).flatMap(validateBusinessTextC))
@@ -1041,6 +1047,47 @@ private[smworkflow] object GoalPhasePrerequisitePublicationRecovery {
         result <- port.recoverPrerequisitePublicationC(input, core.copy(executionContext = context)).map(NativeWorkflowOperationOutput.response(_))
       } yield result
     }
+  }
+  /** Exactly one transport. Legacy session-only calls remain the same public
+    * Operation; structured proposals use the existing Resource/UoW reader. */
+  private[admission] def descriptionSourceC(request: Request): Consequence[NativeWorkflowResourceInput.Source[Record]] = for {
+    _ <- if (request != null && DevelopmentOperationalView.uniqueFields(request.toRecord)) Consequence.unit
+      else F.invalid("Description input contains duplicate fields")
+    session <- NativeWorkflowOperationInput.optionalTextC(request, "sessionId")
+    structured = request.toRecord.getAny("input").nonEmpty || request.toRecord.getAny("inputResource").nonEmpty
+    source <- session match {
+      case Some(value) if !structured => Consequence.success(NativeWorkflowResourceInput.Inline(Record.data("sessionId" -> value)))
+      case Some(_) => F.invalid("Prerequisite description requires exactly one of sessionId, input or inputResource")
+      case None => resourceInputC(request)
+    }
+  } yield source
+  private[admission] def descriptionRecordC(record: Record): Consequence[V.GoalPhasePrerequisitePublicationRecoveryDescriptionInput] = for {
+    json <- W.jsonC(record)
+    keys <- json.asObject.map(v => Consequence.success(v.keys.toSet)).getOrElse(F.invalid("Description input requires an object"))
+    _ <- if (keys == Set("sessionId") || keys == Set("sessionId", "publicationObservation")) Consequence.unit
+      else F.invalid("Description input contains missing or undeclared fields")
+    value <- businessRecordC[V.GoalPhasePrerequisitePublicationRecoveryDescriptionInput](record, keys)
+    _ <- if (_exact(value.sessionId) && value.publicationObservation != null) Consequence.unit
+      else F.invalid("Description requires its actual non-null session and optional observation")
+    _ <- descriptionObservationC(value)
+  } yield value
+  private[admission] def descriptionObservationC(input: V.GoalPhasePrerequisitePublicationRecoveryDescriptionInput):
+    Consequence[Option[GoalPhasePublishedDependencySourceAdoption.PublicationObservation]] = input.publicationObservation match {
+    case None => Consequence.success(None)
+    case Some(record) => GoalPhaseDependencyPublicationSourceAlignment.observationC(record).map(Some(_))
+  }
+  def descriptionForCallC(incoming: Request, call: ActionCall.Core): Consequence[V.GoalPhasePrerequisitePublicationRecoveryDescriptionInput] = {
+    final class Reader extends ProcedureActionCall {
+      val core = call
+      def readInputC = for {
+        source <- descriptionSourceC(incoming)
+        record <- NativeWorkflowResourceInput.readC(source, reference => read_resource_text(reference,
+          Some(java.nio.charset.StandardCharsets.UTF_8)).flatMap(validateBusinessTextC))
+        input <- descriptionRecordC(record)
+      } yield input
+      def execute(): Consequence[OperationResponse] = F.invalid("Prerequisite description reader is not an Operation")
+    }
+    new Reader().readInputC
   }
   /** Owning operations keep raw duplicate validation before Record conversion. */
   def resourceInputC(request: Request): Consequence[NativeWorkflowResourceInput.Source[Record]] = for {
@@ -1105,6 +1152,8 @@ private[smworkflow] object GoalPhasePrerequisitePublicationRecovery {
       else if (input.hostCorrection != null && input.hostCorrection.isEmpty) Consequence.unit
       else F.invalid("Host correction is not a field of this legacy recovery target")
     expected <- json.hcursor.get[String]("schemaVersion").toOption match {
+      case Some(version) if version == GoalPhaseDependencyPublicationSourceAlignment.targetSchema =>
+        GoalPhaseDependencyPublicationSourceAlignment.targetC(input.target).map(GoalPhaseDependencyPublicationSourceAlignment.choices)
       case Some(version) if GoalPhasePrerequisitePublicationHostRecovery.isTargetSchema(version) =>
         GoalPhasePrerequisitePublicationHostRecovery.targetC(input.target).map(_ => GoalPhasePrerequisitePublicationHostRecovery.choices)
       case Some(version) if version == GoalPhasePublishedDependencySourceAdoption.artifactSchema =>

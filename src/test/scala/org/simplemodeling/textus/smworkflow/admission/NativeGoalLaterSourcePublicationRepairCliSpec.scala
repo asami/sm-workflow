@@ -25,6 +25,7 @@ import GoalPhaseDependencyValidation as D
 import GoalPhaseOrderedProgression as O
 import GoalPhasePrerequisitePublicationRecovery as B
 import GoalPhasePublishedDependencySourceAdoption as P
+import GoalPhaseDependencyPublicationSourceAlignment as Alignment
 import NativeWorkflowCliFixture as F
 import SplitPhaseExplicitPartitionFixture.take
 
@@ -50,7 +51,14 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     case Some("true") => true
     case _ => throw new IllegalArgumentException("laterSourcePublicationCoverageLineage must be true or false")
   }
+  private val _root_lineage = sys.props.get("smworkflow.spec.laterSourcePublicationRootLineage") match {
+    case None | Some("false") => false
+    case Some("true") => true
+    case _ => throw new IllegalArgumentException("laterSourcePublicationRootLineage must be true or false")
+  }
   require(!_coverage_lineage || _usage_lineage, "CoverageLineage=true requires explicitly selected UsageLineage=true")
+  require(!_root_lineage || _coverage_lineage && _usage_lineage,
+    "RootLineage=true requires explicitly selected CoverageLineage=true and UsageLineage=true")
   private val _source = "src/main/scala/Consumer.scala"
   private val _api = "src/main/scala/Api.scala"
   private val _export_doc = "docs/export-contract.md"
@@ -60,6 +68,10 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     GoalPhaseNativeValidation.Check("primary-test", 15, WorkflowSbtValidation.Kind.TestOnly))
   private val _primary = LocalPublication.Target("tiny-primary-publication", "specification.primary", "sm-workflow-repository", beforeChecks = true)
   private val _producer = LocalPublication.Target("tiny-api-publication", "specification.api", "tiny-api-source")
+  private val _canonical_producer = LocalPublication.Target("separately-owned-canonical-api-publication", _producer.component,
+    "separate-canonical-producer")
+  private val _canonical_workspace = "tiny-api-canonical-source"
+  private val _source_environment = "SM_WORKFLOW_LSR_SOURCE_ROOT"
   private def _read(path: Path): Json = parse(Files.readString(path)).fold(error => fail(error.message), identity)
   private def _json(value: Record): Json = parse(take(value.toJsonStringC)).fold(error => fail(error.message), identity)
   private def _json(value: RecordPresentable): Json = _json(value.toRecord())
@@ -115,7 +127,7 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       parameters, assemblyDescriptor = Some(scenario.root.resolve(".textus/assembly.yaml"))))
   private def _input(scenario: F.Scenario, label: String, service: String, operation: String, input: RecordPresentable): F.Result =
     _call(scenario, label, service, operation,
-      if (service == "GoalPhaseService" && Set(R.describeOperation, R.adoptionOperation, B.recoveryOperation)(operation))
+      if (service == "GoalPhaseService" && Set(R.describeOperation, R.adoptionOperation, B.recoveryOperation, B.describeOperation)(operation))
         Vector("--inputResource", _save(scenario.root, label, _json(input))) else Vector("--input", _json(input).noSpaces))
   private def _advance(scenario: F.Scenario, task: Path, label: String): F.Result =
     _call(scenario, label, "GoalPhaseService", GoalPhaseNativeRun.advanceOperation.operation,
@@ -217,12 +229,18 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       "IO.append(file(\"../publication-count.txt\"), \"published\\n\"); result }\n")
     val base = _commit(root, dependency, "tiny-api-baseline", Vector("build.sbt", _api) ++
       (if (_coverage_lineage) Vector(_export_doc, _later_doc) else Vector.empty))
+    if (_root_lineage) {
+      Files.createDirectories(root.resolve("canonical-dependency"))
+      _git(root, root, "canonical-baseline-clone", "clone", "--no-hardlinks", "--", dependency.toString,
+        root.resolve("canonical-dependency/repository").toString)
+    }
     Files.createDirectories(repository.resolve("src/main/scala"))
     Files.createDirectories(repository.resolve("src/test/scala/fixture"))
     Files.writeString(repository.resolve(_source), _consumer("0"))
     Files.writeString(repository.resolve("build.sbt"), "scalaVersion := \"2.12.20\"\norganization := \"org.example.smworkflow.specification\"\n" +
       "name := " + ("tiny-primary-" + root.getFileName.toString).asJson.noSpaces + "\nversion := \"0.0.1-SNAPSHOT\"\n" +
-      "lazy val root = project.in(file(\".\")).dependsOn(ProjectRef(file(" + dependency.toString.asJson.noSpaces + "), \"root\"))\n" +
+      "lazy val root = project.in(file(\".\")).dependsOn(ProjectRef(file(" +
+      (if (_root_lineage) "sys.env(\"" + _source_environment + "\")" else dependency.toString.asJson.noSpaces) + "), \"root\"))\n" +
       "libraryDependencies += \"org.scalatest\" %% \"scalatest\" % \"3.2.19\" % Test\n" +
       "publishLocal := { val result = publishLocal.value; IO.append(file(\"../primary-publications.txt\"), \"published\\n\"); result }\n")
     Files.writeString(repository.resolve("src/test/scala/fixture/LaterSourceSpec.scala"), """package fixture
@@ -305,6 +323,38 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     val process = combined.mapObject(_.add("gitPrograms", gitprograms.asJson).add("sbtPrograms", sbt.asJson)
       .add("grants", Json.arr(Json.obj("componentId" -> SmWorkflowComponent.componentId.name.asJson,
         "capabilities" -> (gitprograms ++ sbt).map(_.hcursor.get[String]("capability").toOption.get).distinct.asJson))))
+    val dependencytarget = _producer.copy(dependency = Some(binding.identity), beforeChecks = true)
+    val selectedprocess = if (!_root_lineage) process else {
+      val aliases = Vector(_canonical_workspace, _canonical_producer.workspace)
+      val canonicalroot = root.resolve("canonical-dependency/repository").toRealPath().toString
+      val extra = aliases.flatMap { alias => gitprograms.filter(_.hcursor.get[String]("target").contains(_producer.workspace)).map { program =>
+        val identity = (if (alias == _canonical_workspace) "canonical-" else "producer-") +
+          program.hcursor.get[String]("identity").toOption.get.replace("sm-workflow-git-", "")
+        program.mapObject(_.add("target", alias.asJson).add("identity", identity.asJson).add("capability", identity.asJson))
+      }}
+      val canonicalcheck = sbt.filter(p => p.hcursor.get[String]("target").contains(_producer.workspace) &&
+        !p.hcursor.get[String]("operation").contains("publish-local")).map { program =>
+        val identity = _canonical_workspace + "-compile"
+        program.mapObject(_.add("target", _canonical_workspace.asJson).add("identity", identity.asJson).add("capability", identity.asJson))
+      }
+      val canonicalpublisher = publications.filter(_.hcursor.get[String]("target").contains(_producer.workspace)).map(
+        _.mapObject(_.add("target", _canonical_producer.workspace.asJson).add("identity", _canonical_producer.identity.asJson)
+          .add("capability", _canonical_producer.identity.asJson)))
+      val selectedsbt = (sbt ++ canonicalcheck ++ canonicalpublisher).map { program =>
+        if (program.hcursor.get[String]("target").toOption.exists(p => p == _primary.workspace || p.startsWith("sm-workflow-repository-validation-"))) {
+          val environment = program.hcursor.get[Json]("environment").toOption.getOrElse(Json.obj())
+          program.mapObject(_.add("environment", environment.mapObject(_.add(_source_environment, canonicalroot.asJson))))
+        } else program
+      }
+      val allgit = gitprograms ++ extra
+      process.mapObject(_.add("gitPrograms", allgit.asJson).add("sbtPrograms", selectedsbt.asJson)
+        .add("workspaces", (_array(process, "workspaces") ++ aliases.map(alias => Json.obj("identity" -> alias.asJson,
+          "root" -> canonicalroot.asJson))).asJson)
+        .add("workspaceGrants", (_array(process, "workspaceGrants") ++ aliases.map(alias => Json.obj(
+          "componentId" -> SmWorkflowComponent.componentId.name.asJson, "workspaceId" -> alias.asJson, "access" -> "manage".asJson))).asJson)
+        .add("grants", Json.arr(Json.obj("componentId" -> SmWorkflowComponent.componentId.name.asJson,
+          "capabilities" -> (allgit ++ selectedsbt).map(_.hcursor.get[String]("capability").toOption.get).distinct.asJson))))
+    }
     _config(root) { config =>
       val storage = parse(config.hcursor.get[String]("textus.subsystem.storage.plan").toOption.get).toOption.get
       val collection = ThreeWorkflowNormalHostFixture.collection("later_source_publications")
@@ -312,11 +362,13 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
         "storeName" -> "workflow".asJson, "collection" -> collection.asJson)
       config.mapObject(_.add("sm-workflow.runtime.definition", ThreeWorkflowRuntimeParameters.encode(host).noSpaces.asJson)
         .add("textus.assembly.descriptor", root.resolve(".textus/assembly.yaml").toString.asJson)
-        .add("textus.subsystem.process-execution.plan", process.noSpaces.asJson)
+        .add("textus.subsystem.process-execution.plan", selectedprocess.noSpaces.asJson)
         .add("textus.subsystem.storage.plan", storage.mapObject(_.add("records", records.asJson)).noSpaces.asJson)
         .add(LocalPublicationRuntime.declaration.name, Json.obj("storeName" -> "workflow".asJson,
-          "collection" -> collection.asJson, "targets" -> Vector(_primary, _producer).asJson).noSpaces.asJson))
+          "collection" -> collection.asJson, "targets" ->
+            (if (_root_lineage) Vector(_primary, dependencytarget, _canonical_producer) else Vector(_primary, _producer)).asJson).noSpaces.asJson))
     }
+    if (_root_lineage) _config(root)(_.mapObject(_.add("textus.resource.read.max-bytes", "16777216".asJson)))
     F.reopenCanonicalSource(root, host, plan, 1000)
   }
   private def _consumption(binding: D.Binding): R.Consumption = {
@@ -336,7 +388,8 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     if (_coverage_lineage) _config(root) { config =>
       val process = parse(config.hcursor.get[String]("textus.subsystem.process-execution.plan").toOption.get).toOption.get
       val programs = _array(process, "gitPrograms").map { program =>
-        if (program.hcursor.get[String]("identity").contains("later-source-inventory"))
+        if (program.hcursor.get[String]("identity").toOption.exists(identity => identity == "later-source-inventory" ||
+            _root_lineage && identity.endsWith("-later-source-inventory")))
           program.mapObject(_.add("selectedPaths", binding.paths.asJson)) else program
       }
       programs.count(_.hcursor.get[String]("identity").contains("later-source-inventory")) shouldBe 1
@@ -344,12 +397,13 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
         process.mapObject(_.add("gitPrograms", programs.asJson)).noSpaces.asJson))
     }
   }
-  private def _publish(scenario: F.Scenario, label: String): P.PublicationObservation = {
-    val input = V.LocalPublicationInput("specification-" + label, _producer.identity, None, true, None)
+  private def _publish(scenario: F.Scenario, label: String,
+    publisher: LocalPublication.Target = _producer): P.PublicationObservation = {
+    val input = V.LocalPublicationInput("specification-" + label, publisher.identity, None, true, None)
     _input(scenario, label + "-publish", "LocalPublicationService", "ensureLocalPublication", input)
       .business[V.LocalPublicationResult].status shouldBe "published"
     val collected = _input(scenario, label + "-collect", "LocalPublicationService", "collectLocalPublication",
-      V.LocalPublicationCollectionInput(input.requestIdentity, _producer.identity, None, true))
+      V.LocalPublicationCollectionInput(input.requestIdentity, publisher.identity, None, true))
     val value = collected.business[V.LocalPublicationResult]
     val publication = take(GoalPhasePrerequisitePublicationUnknownRecovery.jsonC(value.publication.get)).as[LocalPublication.Result].toOption.get
     val process = WorkflowSbtCapture.decode(publication.process.get).toOption.get
@@ -436,6 +490,7 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       val saved = _read(preparedlocator)
       saved.hcursor.get[Boolean]("usageLineage").getOrElse(false) shouldBe _usage_lineage
       saved.hcursor.get[Boolean]("coverageLineage").getOrElse(false) shouldBe _coverage_lineage
+      saved.hcursor.get[Boolean]("rootLineage").getOrElse(false) shouldBe _root_lineage
       _preserved(saved)
       return
     }
@@ -444,12 +499,12 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       val initial = F.freshDependency("later-source-publication", dependencyChecks = Some(Vector(
         GoalPhaseNativeValidation.Check("dependency-compile", 2, WorkflowSbtValidation.Kind.Compile))))
       _write(locator, Json.obj("stage" -> "PREPARING_OLD".asJson, "root" -> initial.root.toString.asJson,
-        "usageLineage" -> _usage_lineage.asJson, "coverageLineage" -> _coverage_lineage.asJson))
+        "usageLineage" -> _usage_lineage.asJson, "coverageLineage" -> _coverage_lineage.asJson, "rootLineage" -> _root_lineage.asJson))
       val selectedbinding = _build(initial)
       val selected = _configure(initial, selectedbinding)
       _write(setupfile, Json.obj("root" -> selected.root.toString.asJson, "binding" -> selectedbinding.asJson,
         "plan" -> selected.plan.asJson, "oldComponent" -> sys.props("smworkflow.spec.componentFile").asJson,
-        "usageLineage" -> _usage_lineage.asJson, "coverageLineage" -> _coverage_lineage.asJson))
+        "usageLineage" -> _usage_lineage.asJson, "coverageLineage" -> _coverage_lineage.asJson, "rootLineage" -> _root_lineage.asJson))
       selected -> selectedbinding
     } else {
       val point = sys.props.getOrElse("smworkflow.spec.laterSourcePublicationResumePoint",
@@ -460,6 +515,7 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       val setup = _read(setupfile)
       setup.hcursor.get[Boolean]("usageLineage").getOrElse(false) shouldBe _usage_lineage
       setup.hcursor.get[Boolean]("coverageLineage").getOrElse(false) shouldBe _coverage_lineage
+      setup.hcursor.get[Boolean]("rootLineage").getOrElse(false) shouldBe _root_lineage
       setup.hcursor.get[String]("oldComponent").toOption.get shouldBe sys.props("smworkflow.spec.componentFile")
       val actualroot = Path.of(setup.hcursor.get[String]("root").toOption.get)
       actualroot.toString shouldBe _read(locator).hcursor.get[String]("root").toOption.get
@@ -500,6 +556,15 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       Files.writeString(Path.of(binding.root).resolve(_api), "object Api { def oldApi: Int = 42; def sourceRevision: Int = 1 }\n")
       _commit(root, Path.of(binding.root), "old-canonical-api", Vector(_api)).asJson
     }.as[O.Snapshot].toOption.get
+    if (_root_lineage) {
+      val canonical = root.resolve("canonical-dependency/repository")
+      val currenthead = _git(root, canonical, "canonical-old-ancestry-head-" + java.util.UUID.randomUUID().toString,
+        "rev-parse", "HEAD")
+      if (currenthead != oldbase.head) {
+        _git(root, canonical, "canonical-old-ancestry-fetch", "fetch", "--no-tags", "origin", oldbase.head)
+        _git(root, canonical, "canonical-old-ancestry-select", "merge", "--ff-only", oldbase.head)
+      }
+    }
     When("the genuine committed base movement is recovered through the existing public ReviseWork owner before canonical selection")
     _advance(scenario, task, "initial-stale-source").exitCode should not be 0
     val recovery = _call(scenario, "initial-source-recovery-description", "GoalPhaseService", GoalPhaseCandidateRecovery.describeOperation,
@@ -616,17 +681,34 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     failed.repairProgress.get.automaticCount shouldBe 1
     failed.repairProgress.get.limit shouldBe 10
     _lines(root.resolve("selected-tests.txt")) shouldBe oldtests
+    val olddependency = if (!_root_lineage) None else {
+      val result = oldpublication.result.publication
+      result.status shouldBe "published"
+      result.request.target.workspace shouldBe binding.dependency.workspace
+      result.request.source shouldBe P.sourceOf(oldtarget.preStageGuard)
+      val workspaces = parse(oldpublication.publisherProcessPolicy).toOption.get.hcursor.downField("processPlan")
+        .get[Vector[Json]]("workspaces").toOption.get.filter(_.hcursor.get[String]("identity").contains(result.request.target.workspace))
+      workspaces.size shouldBe 1
+      workspaces.head.hcursor.get[String]("root").toOption.get shouldBe binding.root
+      WorkflowSbtCapture.exitCode(WorkflowSbtCapture.decode(result.process.get).toOption.get) shouldBe Some(0)
+      Some(result)
+    }
+    val newroot = if (_root_lineage) root.resolve("canonical-dependency/repository") else Path.of(binding.root)
     val newbase = _saved_value(root, "new-canonical-base") {
-      Files.writeString(Path.of(binding.root).resolve(_api), "object Api { def newApi(value: Int): Int = value * 2 + 2; def sourceRevision: Int = 2 }\n")
-      _commit(root, Path.of(binding.root), "new-canonical-api", Vector(_api)).asJson
+      Files.writeString(newroot.resolve(_api), "object Api { def newApi(value: Int): Int = value * 2 + 2; def sourceRevision: Int = 2 }\n")
+      _commit(root, newroot, "new-canonical-api", Vector(_api)).asJson
     }.as[O.Snapshot].toOption.get
     val newbinding = oldbinding.copy(revision = 3, step = "step-2", base = newbase,
+      root = newroot.toRealPath().toString,
+      dependency = if (_root_lineage) oldbinding.dependency.copy(workspace = _canonical_workspace) else oldbinding.dependency,
       paths = oldbinding.paths ++ (if (_coverage_lineage) Vector(_later_doc) else Vector.empty))
     _register(root, newbinding)
-    val newpublication = _saved_value(root, "new-api-publication")(_publish(scenario, "new-api").asJson).as[P.PublicationObservation].toOption.get
+    val newpublication = _saved_value(root, "new-api-publication")(_publish(scenario, "new-api",
+      if (_root_lineage) _canonical_producer else _producer).asJson).as[P.PublicationObservation].toOption.get
     val lineagecoverage = lineageproposal.toVector.map(scope => R.Coverage(
       ContextReference(lineagereference.identity, lineagereference.revision), scope.acceptance, newbinding.checks.map(_.identity)))
     val newproposal = _proposal(newbinding, newpublication, locator.toUri.toASCIIString, extracoverage ++ lineagecoverage)
+    if (!_root_lineage) {
     val stale = _advance(scenario, task, "old-ordinary-freshness-refusal")
     val unsupported = _describe(scenario, started.sessionId, "old-publication-cause-refusal", newproposal)
     // Preserve the historical default oracle. The opt-in lineage episode uses
@@ -640,6 +722,14 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     else if (_usage_lineage) unsupported.invocation.logs should include("clause=scope-boundary.added-approvals")
     else unsupported.invocation.logs should include("Canonical check consumption refuses unchanged base core and ordered routes")
     _lines(root.resolve("dependency/publication-count.txt")).size shouldBe 2
+    } else {
+      Then("the separately owned canonical repository retains the accepted old ancestry while the obsolete publisher still selects the unchanged old physical root")
+      newroot.toRealPath().toString should not be binding.root
+      _git(root, newroot, "canonical-accepted-ancestry", "merge-base", "--is-ancestor", oldbase.head, newbase.head) shouldBe ""
+      newpublication.result.publication.request.target shouldBe _canonical_producer
+      newpublication.result.publication.request.source.head shouldBe newbase.head
+      _lines(root.resolve("canonical-dependency/publication-count.txt")).size shouldBe 1
+    }
     val logs = Files.list(root.resolve("logs"))
     val paths = try logs.iterator.asScala.toVector.filter(Files.isRegularFile(_)).sortBy(_.toString) finally logs.close()
     val saved = Json.obj("stage" -> "PREPARED_OLD".asJson, "root" -> root.toString.asJson,
@@ -648,6 +738,9 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       "binding" -> newbinding.asJson, "proposal" -> newproposal.asJson, "oldTarget" -> oldtarget.asJson,
       "usageLineage" -> _usage_lineage.asJson, "usageLineageProposal" -> lineageproposal.asJson,
       "coverageLineage" -> _coverage_lineage.asJson, "oldExtraScopeProposal" -> extraproposal.asJson,
+      "rootLineage" -> _root_lineage.asJson, "oldDependencyPublication" -> olddependency.asJson,
+      "oldDependencyPublicationCount" -> _lines(root.resolve("dependency/publication-count.txt")).size.asJson,
+      "oldRoot" -> binding.root.asJson,
       "oldExtraAnswerReference" -> (if (_coverage_lineage) _json(extrareference) else Json.Null),
       "oldAcceptedCapture" -> oldcapture.asJson,
       "usageLineageAnswerReference" -> (if (_usage_lineage) _json(lineagereference) else Json.Null),
@@ -665,7 +758,111 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       Files.readString(Path.of(output.hcursor.get[String]("path").toOption.get)) shouldBe output.hcursor.get[String]("bytes").toOption.get
     }
     Files.isRegularFile(root.resolve("workflow.sqlite")) shouldBe true
-    _lines(root.resolve("dependency/publication-count.txt")).size shouldBe 2
+    _lines(root.resolve("dependency/publication-count.txt")).size shouldBe
+      (if (_root_lineage) saved.hcursor.get[Int]("oldDependencyPublicationCount").toOption.get else 2)
+  }
+  private def _align_current(scenario: F.Scenario, task: Path, saved: Json, waiting: F.Result): F.Result = {
+    val root = scenario.root
+    val session = scenario.retrieve(task)
+    Given("the updated ordinary Advance has captured the genuine source successor and reached the all-target publication guard")
+    val mismatch = waiting.business[V.GoalPhaseAdvanceResult]
+    When("the old dependency publisher is encountered after the primary-first target")
+    mismatch.condition shouldBe Some("dependency-publication-source-mismatch")
+    Then("neither old dependency nor primary publisher nor any later check has executed")
+    mismatch.validation shouldBe None
+    _preserved(saved)
+    _lines(root.resolve("primary-publications.txt")) shouldBe saved.hcursor.get[Vector[String]]("oldPrimaryPublications").toOption.get
+    _lines(root.resolve("selected-tests.txt")) shouldBe saved.hcursor.get[Vector[String]]("oldTests").toOption.get
+    val sessiononly = _call(scenario, "alignment-session-description", "GoalPhaseService", B.describeOperation,
+      Vector("--sessionId", session))
+    val empty = sessiononly.business[V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult]
+    val emptytarget = take(Alignment.targetC(empty.target))
+    empty.choices shouldBe Vector("Defer")
+    emptytarget.publication shouldBe None
+    emptytarget.targets.map(_.actualRoot).distinct shouldBe Vector(saved.hcursor.get[String]("oldRoot").toOption.get)
+    emptytarget.candidateRecordRevision.toLong should be <= emptytarget.frontierRevision.toLong
+    val observation = _saved_value(root, "current-canonical-artifact")(
+      _publish(scenario, "current-canonical-artifact", _canonical_producer).asJson).as[P.PublicationObservation].toOption.get
+    def _describe_(label: String, selected: P.PublicationObservation): F.Result =
+      _input(scenario, label, "GoalPhaseService", B.describeOperation,
+        V.GoalPhasePrerequisitePublicationRecoveryDescriptionInput(session, Some(GoalPhaseNativeMetadata.record(selected.asJson))))
+    val old = _read(root.resolve("caller-values/old-api-publication.json")).as[P.PublicationObservation].toOption.get
+    Given("the truthful old-root Published result and a separately recollected canonical producer result")
+    When("the existing typed Resource description qualifies each actual producer independently")
+    val wrong = _describe_("alignment-old-root-description", old).business[V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult]
+    val described = _describe_("alignment-current-description", observation)
+    val description = described.business[V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult]
+    val target = take(Alignment.targetC(description.target))
+    Then("old success remains truthful but offers only Defer; the new exact source has a separate artifact choice")
+    old.result.publication.status shouldBe "published"
+    wrong.choices shouldBe Vector("Defer")
+    take(Alignment.targetC(wrong.target)).applicabilityIssues should not be empty
+    target.publication shouldBe Some(observation)
+    target.targets shouldBe emptytarget.targets
+    target.frontierRevision shouldBe emptytarget.frontierRevision
+    target.controller shouldBe emptytarget.controller
+    description.choices shouldBe Vector(Alignment.adoptionChoice, "Defer")
+    val reference = V.WorkflowArtifactReference("specification-current-canonical-artifact-human", "1")
+    val input = V.GoalPhasePrerequisitePublicationRecoveryInput(session, description.target, Alignment.adoptionChoice,
+      "SPECIFICATION-ONLY independent exact current canonical artifact choice", reference, None)
+    Given("the correct target without any independently prepared Human artifact evidence")
+    When("the public recovery operation receives the otherwise complete artifact answer")
+    val missing = _input(scenario, "alignment-missing-human-refusal-full-resource", "GoalPhaseService", B.recoveryOperation, input)
+    Then("the absent actual Human proof refuses without changing the frontier or executing a publisher")
+    missing.exitCode should not be 0
+    missing.invocation.logs should not include("resource exceeds the runtime byte limit")
+    val unchanged = _describe_("alignment-after-missing-human", observation).business[V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult]
+    take(Alignment.targetC(unchanged.target)) shouldBe target
+    val wronganswer = input.copy(target = wrong.target)
+    val wrongrefusal = _input(scenario, "alignment-old-root-adoption-refusal-full-resource", "GoalPhaseService", B.recoveryOperation, wronganswer)
+    wrongrefusal.exitCode should not be 0
+    wrongrefusal.invocation.logs should not include("resource exceeds the runtime byte limit")
+    val stale = target.copy(frontierRevision = (target.frontierRevision.toLong + 1).toString)
+    val crossed = target.copy(publication = Some(observation.copy(publicationOwner = "crossed-owner")))
+    Vector("stale" -> stale, "crossed" -> crossed).foreach { (label, changed) =>
+      val refused = _input(scenario, "alignment-" + label + "-refusal-full-resource", "GoalPhaseService", B.recoveryOperation,
+        input.copy(target = GoalPhaseNativeMetadata.record(changed.asJson)))
+      refused.exitCode should not be 0
+      refused.invocation.logs should not include("resource exceeds the runtime byte limit")
+    }
+    val deferredreference = V.WorkflowArtifactReference("specification-defer-canonical-artifact", "1")
+    val deferred = input.copy(choice = "Defer", reference = deferredreference)
+    _evidence(scenario, described, "alignment-defer-human-full-resource", "goal-phase-prerequisite-publication-recovery", _json(deferred), deferredreference,
+      Vector(V.WorkflowArtifactReference(observation.recollectionReference.identity, observation.recollectionReference.revision),
+        V.WorkflowArtifactReference(observation.artifact.identity, observation.artifact.revision)))
+    _input(scenario, "alignment-defer", "GoalPhaseService", B.recoveryOperation, deferred)
+      .business[V.GoalPhasePrerequisitePublicationRecoveryResult].accepted shouldBe false
+    take(Alignment.targetC(_describe_("alignment-after-defer", observation)
+      .business[V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult].target)) shouldBe target
+    val crossedobservations = Vector(
+      "owner" -> observation.copy(publicationOwner = "crossed-owner"),
+      "destination" -> observation.copy(destination = root.resolve("crossed-destination").toUri.toASCIIString),
+      "artifact" -> observation.copy(artifact = observation.artifact.copy(revision = "crossed-artifact-revision")),
+      "recollection" -> observation.copy(recollectionReference = observation.recollectionReference.copy(revision = "crossed-recollection")))
+    Given("the genuinely prepared fixture Human proof for only the original full producer observation")
+    _evidence(scenario, described, "alignment-human", "goal-phase-prerequisite-publication-recovery", _json(input), reference,
+      Vector(V.WorkflowArtifactReference(observation.recollectionReference.identity, observation.recollectionReference.revision),
+        V.WorkflowArtifactReference(observation.artifact.identity, observation.artifact.revision)))
+    When("an otherwise qualifying owner, destination, artifact or recollection is crossed under that same Human reference")
+    crossedobservations.foreach { (label, changed) =>
+      _input(scenario, "alignment-crossed-admitted-" + label, "GoalPhaseService", B.recoveryOperation,
+        input.copy(target = GoalPhaseNativeMetadata.record(target.copy(publication = Some(changed)).asJson)))
+        .exitCode should not be 0
+    }
+    Then("the exact independent Human binding refuses every crossed artifact without publishing or changing the native frontier")
+    _preserved(saved)
+    take(Alignment.targetC(_describe_("alignment-after-crossed-admitted", observation)
+      .business[V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult].target)) shouldBe target
+    Given("the exact full source/artifact target and its independent specification-only Human proof with both producer references")
+    When("the public recovery appends only that artifact Direction")
+    val adopted = _input(scenario, "alignment-adopt", "GoalPhaseService", B.recoveryOperation, input)
+      .business[V.GoalPhasePrerequisitePublicationRecoveryResult]
+    Then("only the adjacent Direction is retained; ordinary Advance still owns every effect")
+    adopted.accepted shouldBe true
+    _preserved(saved)
+    _lines(root.resolve("primary-publications.txt")) shouldBe saved.hcursor.get[Vector[String]]("oldPrimaryPublications").toOption.get
+    _lines(root.resolve("selected-tests.txt")) shouldBe saved.hcursor.get[Vector[String]]("oldTests").toOption.get
+    _advance(scenario, task, "alignment-ordinary-continuation")
   }
   private def _resume_current(locator: Path): Unit = {
     Given("the explicit old-stage locator and the normally published current product, retaining the same physical Session and original logs")
@@ -675,8 +872,10 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     usagelineage shouldBe _usage_lineage
     val coveragelineage = saved.hcursor.get[Boolean]("coverageLineage").getOrElse(false)
     coveragelineage shouldBe _coverage_lineage
+    saved.hcursor.get[Boolean]("rootLineage").getOrElse(false) shouldBe _root_lineage
     val root = Path.of(saved.hcursor.get[String]("root").toOption.get)
     require(root.toRealPath() == root && root.getParent == Path.of("").toAbsolutePath.normalize.resolve("target/sm-workflow/work/native-cli"))
+    if (_root_lineage) _config(root)(_.mapObject(_.add("textus.resource.read.max-bytes", "16777216".asJson)))
     val task = Path.of(saved.hcursor.get[String]("task").toOption.get)
     val host = _host(root)
     val plan = saved.hcursor.get[O.Plan]("plan").toOption.get
@@ -790,14 +989,24 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     When("only the newly issued Repair returns a real API correction for fresh capture and necessary new managed publication")
     _completed(scenario, repair, "current-repair-submit")
     val observed = _advance(scenario, task, "current-candidate-and-publication")
-    val current = observed.business[V.GoalPhaseAdvanceResult]
-    val review = if (current.work.exists(_.kind == "ReviewStep")) observed else {
+    val aligned = if (_root_lineage) _align_current(scenario, task, saved, observed) else observed
+    val current = aligned.business[V.GoalPhaseAdvanceResult]
+    val review = if (current.work.exists(_.kind == "ReviewStep")) aligned else {
+      if (_root_lineage) {
+        Given("the authenticated artifact Direction and an ordinary Advance still requiring separate primary authority")
+        When("the bare Session-only prerequisite description continues through the existing primary route")
+      }
       val description = _call(scenario, "new-primary-authority-description", "GoalPhaseService", B.describeOperation, Vector("--sessionId", session))
       val value = description.business[V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult]
+      if (_root_lineage) {
+        Then("the remaining primary authority target is reachable without offering another alignment artifact choice")
+        take(Alignment.isTargetC(value.target)) shouldBe false
+        value.choices should contain("AuthorizePrimaryPublicationOnce")
+      }
       val reference = V.WorkflowArtifactReference("specification-new-primary-authority", "1")
       val input = V.GoalPhasePrerequisitePublicationRecoveryInput(session, value.target, "AuthorizePrimaryPublicationOnce",
         "SPECIFICATION-ONLY necessary new candidate publication", reference, hostCorrection = None)
-      _evidence(scenario, description, "new-primary-authority", "prerequisite-publication-recovery", _json(input), reference,
+      _evidence(scenario, description, "new-primary-authority", "goal-phase-prerequisite-publication-recovery", _json(input), reference,
         references = Vector.empty, reviewer = false)
       _input(scenario, "new-primary-authority-adopt", "GoalPhaseService", B.recoveryOperation, input)
         .business[V.GoalPhasePrerequisitePublicationRecoveryResult].accepted shouldBe true
@@ -830,6 +1039,7 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     _lines(root.resolve("selected-tests.txt")).last shouldBe "later"
     _lines(root.resolve("primary-publications.txt")).size shouldBe saved.hcursor.get[Vector[String]]("oldPrimaryPublications").toOption.get.size + 1
     val closed = _close(scenario, task, review, "current").business[V.GoalPhaseAdvanceResult]
+    if (_root_lineage) closed.work.get.kind shouldBe "ReviewPhase"
     closed.sessionId shouldBe session
     val expected = saved.hcursor.get[Json]("laterImplementation").toOption.get
     val completed = closed.work.get.completed

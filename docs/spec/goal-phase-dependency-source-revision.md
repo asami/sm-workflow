@@ -869,3 +869,63 @@ attempt, receipt reconciliation, typed SBT/UoW ownership and all source and
 candidate checks remain unchanged. Successful checks are never replayed to
 create replacement receipts. Actual installed same-Session qualification
 remains pending until the parent records its normal runtime results.
+
+# Canonical source and dependency publication routing
+
+An authenticated canonical source capture selects its effective binding through
+`bindingOf(capture)`, including an admitted scope successor. Dependency identity
+alone does not establish that a configured publisher uses that source. Before
+any prerequisite publication intent or SBT call, the runtime resolves every
+selected dependency publisher's workspace through typed Git `Root`. It scans
+the complete target list before executing any target, including a primary-first
+list. A workspace alias resolving to the same physical root remains valid.
+Another root returns `dependency-publication-source-mismatch`, naming the actual
+binding, configured target, workspace and root, and the existing prerequisite
+publication description operation. It runs neither dependency nor primary
+publication. The old root's genuine Published/Exited-zero result remains a
+truthful immutable historical success.
+
+Source choice, artifact qualification and publication permission are separate.
+At an actual unstarted ordinary Validation frontier the existing prerequisite
+publication operations can describe and adopt the closed
+`sm-workflow.goal-phase-dependency-publication-source-alignment.v1` target.
+They bind the entire controller, original Plan/base/completed prefix/counters,
+exact candidate and native revision, authenticated capture/Direction/guard,
+literal obsolete publisher, actual root, and fixed process/publication policy.
+Controller, candidate, capture and process policy retain canonical opaque text
+where public Record conversion could lose names or null facts. A pending Repair
+is not a Validation candidate: its owner first uses one ordinary Advance for
+normal accepted-Repair candidate/source capture, which then reaches the guard.
+Describe and adopt never capture, stage, check, publish, issue work or commit.
+
+The proposed artifact must be an independently recollected normal successful
+`LocalPublicationService.collectLocalPublication` result for this exact current
+source. Producer owner, participant, target, workspace and program remain the
+producer's own facts. Its qualified process policy must resolve its publisher
+workspace to the canonical dependency root and its Component must match the
+selected dependency Component. Complete successful process output, source,
+destination, artifact and recollection references remain literal. Typed native
+File/Git freshness must match the authenticated capture. Old-root success,
+failed/nonterminal/truncated/crossed publication, stale source, class presence,
+or an older mutable-SNAPSHOT receipt cannot qualify a current artifact.
+
+A genuine independently admitted Human answer for the exact target and
+participant appends one adjacent same-stage Direction. Only the private native
+history walk authenticates the retained fact and obtains its permit. This
+permit skips only its exact obsolete dependency publisher; it cannot retarget
+programs, rewrite host registration/grants/limits, impersonate a producer, renew
+a primary attempt, replay success, or clear failure/UNKNOWN. A separate ordinary
+Advance rechecks freshness and continues existing primary/check/review/closure
+owners. The configured primary program must still select the current source.
+Accepted prefix, all original approval coverage and repair accounting remain
+unchanged.
+
+`GoalPhaseDependencyPublicationSourceAlignmentSpec` supplies semantic fixture
+examples. The opt-in `smworkflow.spec.laterSourcePublicationRootLineage=true`
+episode in `NativeGoalLaterSourcePublicationRepairCliSpec` additionally requires
+CoverageLineage and UsageLineage. PREPARE_OLD and RESUME_CURRENT share one physical
+locator/Session and distinct tiny dependency roots with shared accepted ancestry.
+The episode retains old success/failure and logs, tests no publication before
+artifact authority, then follows actual checks, independent fixture review and
+Step2 closure to ReviewPhase. Fixture Human/review evidence is not live consent
+or a real provider success; authored examples are not execution results.

@@ -727,3 +727,76 @@ uses a fresh normal fixture without native Start or nested SBT: bare
 `--sessionId` reaches the absent-Start business refusal, missing and old
 `--input`-only shapes refuse, and an explicit authorization credential retains
 the fixed-profile provider's 403. It preserves the earlier heavy E11 evidence.
+
+# Canonical dependency publisher source alignment
+
+The existing `describeGoalPhasePrerequisitePublicationRecovery` operation also
+describes the strictly discriminated target
+`sm-workflow.goal-phase-dependency-publication-source-alignment.v1`. It addresses
+a literal dependency publisher whose typed Git root differs from the effective
+authenticated canonical source. This is an applicability correction, with an
+independently qualified existing artifact; no host program or permission is
+changed. Every historical Published, failed and UNKNOWN result remains intact.
+
+Description accepts exactly one transport:
+
+- Legacy `--sessionId SESSION` for a Session-only description.
+- `--input` with the complete `{sessionId, publicationObservation}` business
+  record, or a Session-only business record.
+- `--inputResource file:///absolute/path` for that same typed business record.
+
+The shared Resource reader belongs to the executing ProcedureActionCall/UoW and
+uses UTF-8 and the existing raw duplicate-key/null checks. Mixed transports,
+unknown fields, explicit nulls and crossed schemas refuse; no CLI shell parser,
+fallback selector or arbitrary input-size cap is added. Session-only mismatch
+description returns its actual target and the required producer proposal, with
+only `Defer`; it never invents a publication. A complete supplied observation
+regenerates the exact target for an independent Human. Wrong root/Component or
+stale source remains disclosed in `applicabilityIssues` and offers only `Defer`.
+
+The optional `publicationObservation` reuses the full
+`GoalPhasePublishedDependencySourceAdoption.PublicationObservation` contract:
+normal successful collect, original producer owner/participant/target/workspace,
+complete untruncated Exited-zero process, its actual program/process policy,
+source, destination, artifact and recollection references. Producer and consumer
+names may differ. Qualification checks the producer workspace's declared root
+against the current canonical root, its Component against the dependency
+Component and its honest request source against the fresh native guard. A
+wrong-root success stays successful historical evidence and is inapplicable.
+An older mutable SNAPSHOT or a class-presence observation is insufficient.
+
+Available positive choice is `AdoptRecollectedPublishedDependencyArtifact`;
+`Defer` is passive and saves no Direction. The existing recovery input and its
+`--input`/`--inputResource` transports remain unchanged. Positive recovery
+requires actual independent `Purpose.PrerequisitePublicationRecovery` evidence
+for the full exact target/answer/participant/reference. Passive preparation
+also binds the actual recollection and artifact references. A caller-supplied
+record or fixture answer alone grants no native authority.
+
+The existing private native walk must authenticate the unstarted ordinary
+Validation candidate, complete accepted chain and canonical capture before
+describing/adopting. Accepted Repair must first complete its normal candidate
+capture through the owner's ordinary Advance; description never performs it.
+Recovery appends only one adjacent mechanical Direction at the same Validation
+stage using managed storage/CAS, preserving Plan/base/candidate/completed prefix,
+all approvals, accepted results, counters and original check obligations. Its
+retained-history branch revalidates the exact predecessor, source and causation.
+Only that authenticated saved Direction can provide the private permit to
+ordinary native validation.
+
+The permit skips the precisely bound obsolete dependency publisher. It supplies
+no new primary permission. Before primary effects the actual configured program
+must still select the current source and all existing authority gates apply.
+A later separate ordinary Advance owns primary publication, checks, review and
+Step commit. Target/policy/source drift refuses; no program rewriting, target
+mutation, owner impersonation, successful-effect replay or intent/UNKNOWN
+clearing is supported. This repair producer never operates the real consumer.
+
+Focused semantic examples live in the alignment and prerequisite specifications.
+The existing small installed later-source fixture adds only the opt-in
+RootLineage mode (requiring CoverageLineage and UsageLineage), using the same
+physical PREPARE_OLD/RESUME_CURRENT locator with distinct old/canonical tiny Git
+roots. Its retained results test truthful old publication, no effects before
+artifact authority, missing Human/wrong-root/stale/crossed refusal, passive Defer,
+ordinary continuation and Step2 closure to ReviewPhase. Fixture evidence does
+not establish live Human consent, provider success or whole-Phase acceptance.
