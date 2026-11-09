@@ -52,6 +52,122 @@ selection and synchronization, reusing that route. Do not add these queue/three-
 requirements to ongoing 6.6/6.7 acceptance. Existing GoalPhase execution is reused.
 Phase 17 retains optional Task/FIX breadth and is not an initial dependency.
 
+### AI cost in managed dependency development — 2026-11-09
+
+The user confirmed the managed-development scenario: A needs a B change; develop,
+validate and commit B in A's explicitly managed area; publish B's JARs and metadata
+into the selected development repository; A selects that exact result and runs
+affected consumer checks; synchronize both registered A/B source targets under
+existing authority. The [cost-planning journal](../journal/2026/11/2026-11-09-phase-7-managed-dependency-ai-cost.md)
+records why this may reduce AI management cost compared with the assigned-chat
+route. This is an expected benefit, not a measured saving or a change to the
+three configured modes, FIFO ownership or revised delivery order below.
+
+Connect the cost objective to the existing managed-subtree/overlay route:
+
+- Runtime owns worktree preparation, managed build/publication, artifact
+  selection, waiting/result collection and synchronization through existing
+  CNCF resources and typed owners. The parent handles actual semantic work,
+  conflicts, review and material Human decisions; do not reconstruct an AI
+  command/confirmation loop for every mechanical operation.
+- Keep a bounded B assignment and references to its existing contracts, code,
+  decisions and evidence. Avoid repeatedly restating the request or importing
+  the whole B development chat. Return usable result/artifact references and
+  unresolved issues so A can continue without manual JSON or log transcription.
+  Context isolation is not permission to discard knowledge and rediscover B.
+- Preserve exact producer-result selection and reuse applicable producer
+  validation at its actual scope. A still owns required generation, compilation
+  and integration checks. Do not reduce cost by skipping review, required tests
+  or actual effect admission, or claim producer publication proves A acceptance.
+- Worktree setup and repeated builds can add cost. Use the standard
+  `.textus/sm-workflow/work.d/` layout and explicit resource bindings; worktrees
+  and artifact repositories are separate resources, and A consumes a selected
+  publication rather than copying or finding the newest JAR. Git synchronization
+  does not silently rebuild, republish or change A's artifact selection.
+
+During the existing P7-DD-09 and A/C/D connected scenarios, record available
+management/parent responses, cross-chat dispatch/wait/result handoffs, Human
+prompts, control-transfer/context usage and actual implementation/review/rework
+alongside successful producer delivery and consumer integration. Include setup
+and both projects' attributable work; do not count moving work to a subagent or
+another chat as eliminating its cost. Compare equivalent outcomes and required
+checks with assigned-chat observations where available; mark gaps unknown.
+
+Keep development, local publication/selection, A acceptance and A/B GitHub
+synchronization separately attributable. Attempt the selected synchronization
+through the existing policy; a failed/deferred sync does not invalidate usable
+local delivery or become a false synchronized result. No new benchmark,
+accounting subsystem, fixed savings threshold or dependency on completed
+Phase 8/9/13 is added. The historical 67% per-Step observation is not a forecast
+for this mode. Phase 8 retains broader round-trip/context improvements and
+Phase 13 systematic usage collection. This planning selects no new worktree or
+dependency mode for an active Session and changes no current ownership.
+
+### Runtime-managed A/B dependency execution — 2026-11-09
+
+For the selected managed-development scenario, the user explicitly requests:
+**park A's work -> execute B in a dedicated subagent -> await B's result ->
+resume A**, with that lifecycle owned by the runtime. Parking means waiting on
+the dependency in the active Goal and existing A Session, not ending the Goal,
+cancelling the work or requiring a new Start. A does not continue its dependent
+implementation while B is unresolved. This synchronous composition does not
+serialize unrelated projects or replace the three configured dependency modes.
+
+Reuse the existing Workflow, WorkOrder/Continuation, native host dispatch,
+execution and evidence owners for this connected sequence:
+
+1. Retain A's current continuation, accepted work, owned changes and required
+   dependency outcome. Issue one bounded B assignment associated with A's
+   actual request/Session and selected B worktree. Pass relevant B contracts,
+   source and acceptance/evidence references rather than A/B chat histories.
+2. Dispatch the dedicated B semantic worker through the registered host route.
+   The selected model/effort can still be Sol High; context isolation does not
+   require a cheaper model. Runtime retains lifecycle ownership and actual
+   agent/result identities; the host owns concrete agent creation/transport.
+   If dispatch requires a caller operation, use the existing typed dispatch
+   handoff rather than introducing another coordinator or pretending an agent
+   started before its actual host result. Independent review and managed effects
+   retain their existing owners; B's implementer cannot self-accept its work.
+3. Await the actual B result and any runtime-owned checks/publication without
+   repeated parent inference, an additional LLM wait monitor, or AI status
+   polling. Existing lifecycle events/result collection retain progress and
+   activity visibility. A needs no inference merely because a timer fired or
+   another unchanged status/log fragment is available.
+4. Retain B's actual outcome, source/commit, exact published artifact and
+   validation/review references. An acknowledgement or agent termination alone
+   is not successful dependency delivery. Missing/failed publication, failed
+   required checks and live/unknown effects remain distinct. Return to the
+   parent when a semantic judgment, genuinely new Human decision or exception
+   needs it, instead of silently treating unresolved B work as success.
+5. On successful delivery, schedule A's original continuation through the
+   existing host/Goal integration. A receives a compact result with resolvable
+   references, selects that B artifact and performs affected consumer checks.
+   Preserve A's Goal/Session, accepted work, history and repair accounting;
+   reuse applicable B results without re-Start, accepted re-Submit or successful
+   effect replay. A/B source synchronization retains its separate existing
+   policy and outcomes.
+
+Prove the sequence in the existing P7-DD-09/A/C/D route: A is waiting while its
+dedicated B worker runs; pure waiting causes no periodic parent/monitor inference;
+the matching successful result resumes the same A continuation and reaches actual
+consumer integration. Also exercise a B failure or decision-needed outcome and
+stop/defer handling without false A success, lost pending work or duplicate B
+execution. Confirm actual automatic Goal continuation through the selected host;
+a saved result or notification alone is not acceptance of automatic A resumption.
+If that host capability is unavailable, report the unsupported behavior and retain
+the supported route rather than claiming this scenario delivered.
+
+Keep sufficient scoped B knowledge and short result references so isolation does
+not cause repeated discovery. Compare management/waiting inference and total A/B
+work, including subagent setup/context costs. Dedicated workers are not themselves
+an access-control boundary: worktree/resource authority and verification remain
+enforced by their normal owners. Eliminating the worker is not an assumed cost
+saving or a substitute for those controls. The earlier observed 17.5% cost for
+parent waiting responses spans other work too; it is not a savings forecast for
+this A/B route. The [journal](../journal/2026/11/2026-11-09-phase-7-managed-dependency-ai-cost.md#follow-up-runtime-managed-a-stop-b-subagent-wait-and-a-resumption)
+records this clarification. No active Session or present CNCF development owner
+is changed by this plan.
+
 ### Revised main-route order
 
 This order takes precedence over the older overlay-first sequence below.

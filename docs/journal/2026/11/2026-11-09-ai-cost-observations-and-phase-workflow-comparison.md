@@ -376,3 +376,57 @@ UNKNOWN/failure history and repair1/10. After a genuinely necessary answer,
 ordinary adoption/Advance should proceed without another confirmation for each
 mechanical operation. No live adoption, Advance, new publication, Session change
 or implementation was performed while recording this example.
+
+## Follow-up example: RepositorySync input classification at frontier44
+
+The user requested this second concrete Human-question example for Phase 8.
+Synchronization Session `9d01b91080ca146bf2aee9a46e16aa4e`, public target
+frontier44, offered `AdoptInputClassificationAndContinueReview`. The prompt
+reported successful Compile, FULL (2,692 tests) and FixCheck and proposed retaining
+two purpose-based commits, all successes/history/repair counts and the existing
+non-force GitHub main authorization. The intended next work was independent
+review in the same Session, without repeating tests. These are the described
+historical target and reported validation, not new checks executed by this chat.
+
+Read the two public descriptions under the local diagnostic directory
+`/Users/asami/src/dev2026/sm-workflow/target/sm-workflow/repository-sync-20261109/`:
+
+- `classification-description01.stdout.json`: same Session/frontier44; six
+  applicability issues, each refusing a selected consumed program input proposed
+  as a document; only Defer offered.
+- `classification-description02.stdout.json`: same Session/frontier44; the six
+  paths retained as consumed inputs; zero applicability issues; adoption and
+  Defer offered. The earlier refused proposal remains historical.
+
+The six paths were:
+
+- `docs/journal/2026/10/2026-10-20-phase-12-hygiene-follow-up.md`;
+- `docs/spec/goal-phase-current-inventory-continuation.md`;
+- `docs/spec/goal-phase-plan-revision.md`;
+- `docs/spec/goal-phase-prerequisite-publication-recovery.md`;
+- `docs/spec/goal-phase-published-dependency-source-adoption.md`;
+- `docs/spec/goal-phase-source-history-recovery.md`.
+
+The retained [v3 public contract](../../../spec/repository-sync-validation-continuation.md#retained-review-input-classification-continuation-v3)
+currently demands exact independent Human evidence. That describes today's API,
+not an intrinsic user decision: classifying actual build/packaging/skill inputs
+and determining whether existing successful checks still apply is ordinary
+semantic assessment and runtime consistency work within the authorized purpose.
+The selected Phase 8 correction removes a new Human prompt solely for that
+classification after the public route is changed and qualified. It does not
+weaken checks or relabel all Markdown files as non-input documents.
+
+Acceptance retains candidate identity, exact selected check applicability and
+genuine receipt provenance before reusing successful validation. Corrected
+classification then proceeds to fresh independent review, with purpose commits,
+history and repair counts preserved. Zero applicability issues is not review
+PASS. Consumed-input demotion, changed candidates/checks or missing evidence
+must instead trigger the necessary investigation/checks; Human is needed only
+for an actual unresolved acceptance, compatibility, ownership or authority
+choice. Previously authorized non-force synchronization keeps its normal review
+and effect gates and receives no new authority from classification adoption.
+
+Record the unnecessary prompt and associated preparation/resumption work as an
+additional cost candidate; this incident's incremental credits were not measured.
+Only Phase 8 planning and this journal were edited. No adoption, Advance, test,
+review submission, Git mutation or live synchronization was performed here.

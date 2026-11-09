@@ -460,6 +460,45 @@ incremental credits have not been measured, so record no invented saving. The
 selected correction removes unnecessary decisions rather than merely shortening
 the question or batching multiple artificial approvals into one.
 
+**RepositorySync input classification example (2026-11-09).** Session
+`9d01b91080ca146bf2aee9a46e16aa4e`, public frontier44, offered
+`AdoptInputClassificationAndContinueReview` for six previously unknown documents.
+The prompt reported successful Compile, FULL (2,692 tests) and FixCheck, two
+purpose-based commits and already authorized non-force GitHub main synchronization.
+The proposed continuation retained those successes/history/repair counts without
+rerunning tests and sent the same candidate to fresh independent review.
+
+The retained first description refused a proposal that treated six selected
+consumed program inputs as documents. The corrected description retained all
+six as consumed inputs and reported zero applicability issues. These observations
+support the correction's applicability, not review acceptance or a new validation
+result. The [case journal](../journal/2026/11/2026-11-09-ai-cost-observations-and-phase-workflow-comparison.md#follow-up-example-repositorysync-input-classification-at-frontier44)
+records the paths and retained descriptions. The
+[current v3 contract](../spec/repository-sync-validation-continuation.md#retained-review-input-classification-continuation-v3)
+requires exact independent Human adoption; that current implementation boundary
+is not evidence that classification inherently requires a Human decision.
+
+Selected correction: let the owning semantic assessment and runtime establish
+input classification from actual build/packaging/skill consumption, candidate
+identity and selected check coverage within existing authority. Correcting an
+unknown classification is ordinary technical work when it changes no accepted
+behavior, required checks, purpose, ownership or effect authority. Do not request
+Human confirmation solely to adopt that technical result. The runtime preserves
+actual receipts and proves their applicability; the independent reviewer still
+assesses the candidate. Zero applicability issues cannot substitute for that
+review, and a `.md` suffix cannot remove a consumed input from coverage.
+
+Acceptance: the equivalent corrected classification continues to independent
+review with the same candidate, successful check receipts, purpose commits and
+repair/history records, without a new Human answer or test rerun solely for the
+classification. A proposal that hides consumed inputs, changes the candidate or
+check applicability, or lacks evidence must not reuse those receipts as proof;
+investigate or run the necessary checks through the owner. Ask only if resolution
+needs an actual acceptance, compatibility, ownership or authority decision.
+Preserve the original refused description and subsequent correction. Qualify the
+owning public route before changing automatic behavior; no live Session adoption,
+review acceptance, push or replay is authorized by this planning example.
+
 **B4 delegation example (operator-reported prompt).** A CML generation
 failure reportedly missed the route back to ordinary repair in the same Step.
 The prompt bundled assignment to the sm-workflow owner, testing, review,
@@ -658,6 +697,12 @@ scenarios and retains its owning project's responsibilities.
       acceptance, ownership or effect-authority changes retain the actual
       decision. Existing explicit exclusions and historical answers are not
       rewritten; the owning public contract is qualified before automation.
+- [ ] The RepositorySync frontier44 example classifies unknown inputs through
+      semantic assessment and runtime coverage checks, retaining applicable
+      successful validation and proceeding to independent review without an
+      extra Human answer solely for classification. Consumed-input demotion,
+      changed candidates/check applicability and missing evidence cannot reuse
+      old receipts as proof; no review PASS or new push authority is inferred.
 - [ ] Ordinary and derived verification plans stop unfinished repairs only on
       evidenced divergence or at 10 cumulative attempts. Demonstrate an early
       divergence stop, continuation at 2/10 and 9/10 without divergence, and

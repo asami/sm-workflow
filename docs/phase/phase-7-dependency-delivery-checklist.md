@@ -34,6 +34,14 @@ evidence. A checkbox is a delivery obligation, not a separate review ceremony.
 - [ ] P7-DD-09: A resource-managed development subtree retains origin, selected
   branch/area and synchronization destination; validated committed work becomes
   a synchronization target without touching canonical or unrelated work.
+  In the selected A/B scenario, runtime parks A in its active Goal/existing
+  Session, dispatches a dedicated B subagent with scoped context, awaits the
+  actual result without periodic parent/LLM-monitor inference, and resumes the
+  matching A continuation through actual host integration. Retain applicable
+  producer results, exact artifact selection and required A integration checks;
+  exercise B failure/decision-needed and stop/defer without false success or
+  duplicate execution. Notification/result storage alone does not establish
+  automatic Goal resumption. Existing review/effect ownership and counters remain.
 - [ ] P7-DD-10: Existing pending dependency/Human records reconcile through
   public continuation with genuine existing direction; all Sessions/history/
   counts/results survive. Real authority expansion retains Human admission.
