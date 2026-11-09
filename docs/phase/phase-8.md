@@ -578,6 +578,35 @@ and the current implementation gap are recorded in the
 [planning handoff](../journal/2026/11/2026-11-08-repository-sync-uncommitted-policy.md).
 This is planned work, not a change to the currently supported public API.
 
+## Repository synchronization: local main before GitHub main (2026-11-09)
+
+Expose the String property `sm-workflow.repository-sync.main-integration`:
+`local-first` is the default when absent; `direct` selects synchronization from
+the working checkout to the requested GitHub main without an automatic update
+of the separate canonical main checkout. Reuse normal configuration resolution,
+reject invalid values before route-dependent effects and retain the effective
+selection in the existing Session. No automatic mode switch follows a failure.
+`confirm` asks Human to choose the actual route before synchronization mutation,
+explaining the selected targets and effects. Record the real answer and continue
+in the same Session, retaining it across operations/continuations without asking
+again for the same decision. Defer/cancel and absent answers do not select a
+route automatically; dirty-change decisions remain independent.
+
+Selected default for a main-directed request from a working worktree:
+integrate the admitted source contribution into the canonical local main
+worktree first, then synchronize that main with the selected GitHub main.
+Reuse the existing RepositorySync/typed Git, purpose acceptance, conflict and
+continuation routes. Resolve the real canonical checkout; do not infer it from
+this machine's directory layout or bypass it with a direct source-to-remote push.
+
+A request from main skips the local hop. Explicit non-main tracking targets
+retain their meaning. Preserve source branch identity, excluded dirty work,
+successful checks, local integration and existing Session/history/counters;
+remote failure resumes only the unfinished work. This is an adopted target,
+not a claim that the current public input/installed runtime supports both hops.
+See the [target contract and acceptance scenarios](../spec/repository-sync-local-main-integration.md)
+and [decision journal](../journal/2026/11/2026-11-09-repository-sync-local-main-first.md).
+
 ## Selection and execution
 
 Carry forward Phase 6 command ownership and live Phase-document synchronization
@@ -634,6 +663,15 @@ scenarios and retains its owning project's responsibilities.
       divergence stop, continuation at 2/10 and 9/10 without divergence, and
       no eleventh attempt or counter reset on resume.
 - [ ] Real-use instructions match the available normal entry routes and outcomes.
+- [ ] Main-directed worktree synchronization integrates through canonical local
+      main before GitHub main, with direct-main/non-main cases, dirty ownership,
+      two-hop failure continuation and batch shared-target behavior covered.
+- [ ] `sm-workflow.repository-sync.main-integration` covers omitted/default and
+      explicit `local-first`, `direct`, `confirm`, normal configuration overrides,
+      invalid values and retained active-Session selection in both entry routes.
+- [ ] Human route selection precedes synchronization mutation, applies the
+      chosen route in the same Session, and covers defer/cancel, unanswered
+      questions and shared-target batching without repeated approval.
 - [ ] RepositorySync exposes `uncommittedPolicy`: omitted/default `auto-commit`,
       explicit `confirm`, and `error`, consistently for single and directory-list
       callers; clean input and invalid values have specified outcomes.
