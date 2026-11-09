@@ -125,6 +125,110 @@ initial delivery and its six SimpleModeler acceptance scenarios belong to
 Phase 7. Record only optional later expansion here; do not defer core publication,
 selection, native operation integration or consumer verification to Phase 8.
 
+## Parent round trips and context transfer (2026-11-09)
+
+Selected operational improvements from the
+[AI cost investigation](../journal/2026/11/2026-11-09-ai-cost-observations-and-phase-workflow-comparison.md).
+Completed sm-workflow examples show about 67% fewer credits per declared Step
+and 64% fewer parent responses under the native route, but different work,
+review policy and unfinished/recovery costs prevent a causal or whole-operation
+savings claim. Use the observed repeated calls and context transfer to select
+bounded improvements; the historical percentage is not an acceptance target.
+Implementation and installed acceptance remain pending.
+
+### Selected behavior
+
+1. **Request a coherent unit of work.** Let the existing runtime advance through
+   deterministic work, execution, retained-result collection and ordinary
+   continuation until the next actual semantic assignment, Human decision,
+   authority boundary or terminal outcome. Do not return to the parent merely
+   to transcribe the next control argument or collect another unchanged status.
+   Preserve independent review and required validation as distinct obligations;
+   a larger orchestration unit neither enlarges effect authority nor combines
+   unrelated implementation into an unbounded worker assignment.
+2. **Pass evidence by reference in both directions.** Use existing typed
+   result/artifact references for detailed validation, review, logs and history.
+   Keep request/target association, the result summary, unresolved decisions
+   and the next action in the compact exchange. Return changes since the last
+   collected state instead of repeating the full Session or unchanged output.
+   The consuming parent/worker must be able to resolve the relevant evidence
+   for the selected target; missing, mismatched or inaccessible evidence remains
+   unverified. Retain actual outcomes and detailed diagnostics at their existing
+   owner rather than truncating them to manufacture a successful small response.
+3. **Isolate substantial implementation context.** Delegate a substantial
+   implementation or repair assignment to a scoped subagent even when the
+   selected execution requirement calls for Sol High. Higher capability alone
+   is not a reason to perform all editing inline in the parent. Use the bounded
+   task, relevant contracts/source references, owned changes and acceptance
+   criteria as the handoff; return the result, change/evidence references and
+   remaining issues without importing the worker's full conversation. Small
+   bounded edits may remain inline. Use task/context needs rather than a fixed
+   file-count threshold, retain existing model/effort selection, and preserve
+   independent review. Connect this to the existing assignment and review-handoff
+   rules instead of adding a competing agent coordinator.
+4. **Internalize waiting and mechanical continuation.** Use existing runtime
+   and host execution/lifecycle owners for pure process/agent waiting, status
+   collection and deterministic continuation. Resume the parent for meaningful
+   results, decisions or exceptions that need its judgment, retaining actual
+   progress visibility. Preserve active Goal continuation, matching request and
+   result, cursors, stop/defer behavior and live/unknown outcomes. A notification
+   without continued Goal execution does not meet this behavior. Where the host
+   cannot supply equivalent continuation, retain the supported waiting route,
+   state the limitation and do not claim that optimization delivered.
+5. **Reuse applicable successful work.** Within supported ordinary continuation,
+   consume existing accepted results and validation at their actual target,
+   scope and authority rather than repeating successful work after every wait
+   or repair. Recheck affected work when changes invalidate that evidence.
+   Preserve failed attempts and the same Session/history/repair budget. This
+   does not restore the withdrawn intermediate-recovery guarantees or permit
+   replay of an uncertain external effect; the existing fresh-start boundary
+   still applies when abandoning an unsuccessful run.
+6. **Check mechanical inputs before dispatch.** Validate control JSON, required
+   arguments and evidence references through existing input/effect owners before
+   launching semantic work or external effects. Handle already-supported
+   deterministic preparation within its existing authority; report invalid
+   input as such rather than inventing a semantic repair attempt. Missing
+   authority, live/unknown effects and genuinely new decisions retain their
+   existing handling. Do not introduce another preflight approval loop.
+
+### Connected acceptance and ownership
+
+Exercise a bounded normal development assignment through implementation,
+required validation/review and completion, including a substantial assignment
+whose selected requirement is Sol High. Also exercise a waiting continuation
+and a known failed check repaired through the same supported Session. Verify:
+
+- The runtime completes consecutive deterministic operations without a parent
+  AI response for each mechanical transition; it returns at the real semantic
+  or Human boundary and never crosses it under inferred authority.
+- Compact requests/results resolve the actual detailed evidence. Recollection
+  does not repeat unchanged history; missing or wrong-target references cannot
+  establish validation or review success. Subagents receive sufficient scoped
+  context and the parent receives a usable outcome without the full worker log.
+- Waiting preserves active Goal continuation and stop/error detection. Relevant
+  activity/progress remains visible even when parent inference is unnecessary;
+  unsupported host behavior is reported separately from delivered behavior.
+- A repair retains valid earlier results and rechecks what it affects. Invalid
+  control inputs do not launch effects or consume a semantic repair attempt.
+  Human answers, independent review, live/unknown outcomes, accepted effects,
+  history and cumulative repair counts retain their existing semantics.
+
+Compare equivalent scenario boundaries and required checks before/after using
+available parent/runtime round trips, response counts, control JSON sizes,
+context/usage observations and rework or missing-evidence reports. Record
+unavailable measurements honestly; a byte count alone does not establish lower
+cost or quality. Phase 8 owns these operational changes and proportionate
+scenario observations. [Phase 13](phase-13.md) owns systematic parent/child
+usage collection and aggregation; [Phase 9](phase-9.md) owns broader model
+comparison and observed provider rerouting. Neither Phase's full delivery is a
+new prerequisite here. Do not create a new accounting or workflow ledger.
+
+Prioritize runtime round trips/waiting, compact evidence exchange, scoped worker
+context, then avoiding repeated successful work. Local-LLM replacement of the
+Luna chat waiter remains a deferred candidate, not a Phase 8 completion gate.
+Reuse existing runtime/evidence owners; no management hashes, new approval
+mechanism or automatic change to issued Requests/active Sessions is selected.
+
 ## Context compaction coordination framework (2026-11-07)
 
 Selected bounded enhancement: long-running development chats should be able to
@@ -260,6 +364,177 @@ was actually performed. A publish receipt alone must not imply consumer
 acceptance. Apply this to the presentation of existing results, without adding
 a runtime stage or replaying successful work.
 
+### Human decisions in normal operation
+
+Inventory recent Human stops before changing their routes. For each distinct
+request in the selected GoalPhase, GoalTask and RepositorySync episodes, cite
+the Session/request or retained record, the question and evidence actually
+shown (mark unavailable fields unknown), prior authority, what was still
+undecided, and the disposition: proceed, investigate first, or ask. Separate
+actual answers from fixture decisions and planned policies. Count repeated
+prompts separately from distinct decisions; do not infer redundant approvals
+from a stop or a resume alone.
+
+Initial cases from November 5–8:
+
+| Record | What the record establishes | Phase 8 disposition |
+| --- | --- | --- |
+| November 8 formal source-history incident, `P611-SM-FORMAL-SOURCE-HISTORY-FAILURE-CONTINUATION-01`, retained `incident-brief.json` | Actual approval covered bounded repair, verification and continuation; the formal failure had been reported as Wait, as had a missing outcome. | For a known failure within that scope and the remaining repair allowance, continue ordinary repair without another answer. For a live or missing outcome, collect status; do not treat it as a terminated failure. |
+| [GoalTask repair-trend record](../journal/2026/11/2026-11-05-goal-task-human-repair-continuation.md) | A Human approved producer re-entry in a defined scope after NotAccepted. The separately stopped consumer did not thereby receive authority. | Reuse the decision only for the named producer work. Check its target and remaining allowance mechanically; neither reset the budget nor transfer consent to the consumer. |
+| [Primary publication recovery](../spec/goal-phase-prerequisite-publication-host-recovery.md), November 8 fixture `canonical-primary-host-episode.json.directed.json` | The contract requires a separate Human direction for a whole-primary successor with possible partial effects. The fixture is not live consent. | Inspect the destination and retained request under existing read authority first. Reuse confirmed success. Retry only when the effect is known absent or repetition is demonstrably safe **and** existing authority covers it. Change and verify the owning contract before enabling any newly automatic route. |
+
+A failure alone is not a question for Human. Exhaust available, authorized
+investigation before escalating. Preserve the Session, evidence, limits and
+successful effects. If evidence is unavailable and no safe action is possible,
+report what is blocked and what observation would unblock it; a generic
+approval cannot establish a missing fact. Ask only for a decision the workflow
+cannot make, such as accepting a specific residual risk, changing scope, or
+choosing how to handle conflicting local work under explicitly selected
+RepositorySync `confirm`.
+
+A repair may create or edit source files needed for its authorized objective.
+An initial path estimate is not a Human-imposed restriction: update the planned
+paths with the reason and continue without asking solely because a file was
+added. Respect explicit exclusions and ownership. If investigation identifies
+a concrete risk that the existing authority and checks do not resolve (for
+example, overwriting another contributor's changes or breaking compatibility
+for a consumer), ask about that consequence before making the affected edit.
+
+Exercise both branches using the user-reported Workbench example: adding
+`CandidateProposal.scala` as the 27th repair path needs no confirmation on
+path count alone. In a variant where that edit would break an existing consumer
+contract, show the affected consumer and the compatibility choice. Keep the
+checkpoint, Session history, repair count and required checks intact in both
+cases; do not bundle them into a generic request to continue.
+
+**B5 canonical dependency source example (2026-11-09).** Public response187
+proposed `AdoptCanonicalDependencySourceRevision` for Session
+`3585e04191dce0bc0f70e394b6745767`, Plan2/P611-B5, source/frontier3148,
+generation31, repair1/10. It selected already published/recollected CNCF main
+`c6c6f09bcf94e5ac1b116a59d189dc563cebf64c`, binding4 to5, retaining the original
+30 paths plus nine approved paths, B2 conditions, B5 approval and accepted work.
+Adoption would record Direction; ordinary Advance would issue the same B5
+Repair. It did not grant a new primary publication attempt.
+
+The retained prior channel record shows that the AI-written maintenance question
+itself excluded real-Session source adoption and new publication, with a separate
+decision promised after repair. Human approved that bounded maintenance request;
+this is not evidence that Human independently requested a prohibition on normal
+dependency adoption. The subsequent explanation initially treated that split as
+a sufficient reason to ask again without examining whether the split served an
+actual user decision. See the
+[record, analysis and selected correction](../journal/2026/11/2026-11-09-ai-cost-observations-and-phase-workflow-comparison.md#follow-up-example-unnecessary-human-boundaries-in-p611-b5).
+
+For new work, frame the authorized development objective to include necessary
+same-purpose file additions, target-inventory updates, incorporation of approved
+dependency delivery and ordinary source/binding updates. A reference revision,
+file count, changed failure reason or public API's current Human requirement is
+not alone a material decision. Distinguish the original requester's authority
+from a helper's limited maintenance assignment: limiting the helper does not by
+itself revoke authority already held by the requester. Keep implementation,
+validation and independent review at their required boundaries without requiring
+a new Human answer at every internal transition.
+
+Ask when the proposed action actually changes the objective, supported consumer
+behavior/compatibility, acceptance conditions, Component/ownership boundary or
+external-effect authority beyond what was authorized, or when a concrete residual
+risk remains for Human to decide. A required filename or source revision alone
+does not establish such a change. Continue to honor real explicit restrictions
+and live/unknown effects. Correct the owning public contract before enabling a
+new automatic route; do not reinterpret the historical answer, fabricate source
+adoption evidence or bypass the actual current Session gate.
+
+Acceptance: in a prospective equivalent scenario, approved dependency delivery
+and its necessary same-purpose source/file updates proceed through the existing
+owners into normal Repair without a new source-choice prompt solely because
+binding/path inventory changed. A variant with genuinely unapproved ownership,
+consumer compatibility or publication effects presents that specific decision.
+Both retain accepted work, all B2/B5 conditions, UNKNOWN/failure history and the
+same repair count. After a genuine answer, mechanical adoption/Advance does not
+create a second confirmation or parent handoff for each control argument.
+
+Observe avoidable prompts and their associated parent responses, target
+recollection, evidence preparation and context/transfer cost alongside completion
+and rework. Human waiting time itself is not an inference charge. This case's
+incremental credits have not been measured, so record no invented saving. The
+selected correction removes unnecessary decisions rather than merely shortening
+the question or batching multiple artificial approvals into one.
+
+**B4 delegation example (operator-reported prompt).** A CML generation
+failure reportedly missed the route back to ordinary repair in the same Step.
+The prompt bundled assignment to the sm-workflow owner, testing, review,
+isolated recovery, commit, local publication and integration into one yes/no
+question. It called the fix a public contract change without identifying any
+consumer-visible choice. A different cause from a previous repair is not by
+itself a new decision; 1/10 is not a repair stop.
+
+Check the existing contract first: if this is a known formal failure that
+should already return to ordinary repair, route the scoped fix and its checks
+under existing authority. Keep UNKNOWN distinct, retain the same Session and
+13 successful history updates, and resume B4 after verified delivery without
+replaying accepted work. Report progress instead of requesting a blanket
+approval. If a new behavior or effect needs a Human decision, name the caller,
+show what it observes today and under the proposal, and ask only about the
+unresolved consequence. Do not infer commit, publication or integration
+authority from an answer about failure classification.
+
+**SuiteMismatch after generation recovery (operator-reported prompt).** The
+earlier generation repair reportedly succeeded in the real Session. A newly
+encountered validation result is not by itself a new material purpose under
+the delegation contract. Compare the original objective and authorized effects
+with the proposed change. If the objective already covers recovering B4 in
+the same Step, route a verified mismatch back to ordinary repair within that
+scope and report progress. Keep the completed generation repair closed.
+[SuiteMismatch](../spec/sbt-validation-runtime.md) is an unverified test
+selection: preserve that negative result and require evidence that the selected
+suite actually ran before accepting validation. Do not substitute another suite
+or treat incomplete capture as a confirmed mismatch. If the proposal instead
+requires changing the accepted suite or the original authorization expressly
+covers generation failures only, identify that exact difference and its impact
+before asking. Acceptance: varying only the failure reason must not introduce
+a Human prompt; changing what counts as passing must not inherit approval.
+
+**Repair-window example — verification Session `09311fb5…`, Human 29.**
+The November 8 capture (`formal-source-history-failure-continuation-20261108/
+capture-host/11-validation.stdout.json` under the run artifacts) records
+`sm-workflow.repair-trend.v1`, automatic/ordinary counts 2/2, limit 2, and
+choices ContinueRepairs, Defer and Cancel. The operator reported that the
+remaining issue was a test comparing entire initial and recollected Wait
+responses, with 63 earlier successes. Those details are the operator's
+diagnosis, not facts inferred from the counter.
+
+In this capture, the fixture's `goal-plan.json` selected `repairLimit: 2`.
+Runtime used the smaller of that selected value and its ceiling of 10. The
+denominator was therefore a real limit for this historical Session, not a
+Human-selected limit or a display of two out of ten.
+
+For unfinished ordinary repair, the workflow stops the repair loop only for
+**observed divergence** or **10 cumulative repair attempts**. Apply the same
+rule to derived verification plans. For divergence, cite comparable repair
+results showing sustained non-convergence (for example oscillating findings
+or a growing set of failures). A single failed check or an internal progress
+checkpoint does not establish divergence. Without such evidence, continue at
+2/10 and at 9/10; stop at 10/10 before an eleventh repair. Retain the count
+across reopen and continuation; do not renew it through a new plan or Session.
+
+Exercise the Wait expectation against its contract. A decision about changing
+that contract is separate from repair-loop accounting. Use the historical 2/2
+receipt as evidence of the current gap, not as a lower-limit exception.
+This plan does not retroactively change the Session or answer Human 29.
+
+For each retained question, show the target and operation, what is known and
+unknown, evidence supporting that distinction, the limits of prior authority,
+and the concrete options (including deferral) with their consequences. Explain
+what the answer will permit. Record the answer through the existing route and
+resume without asking again for the same decision.
+
+Acceptance: exercise automatic continuation after a known authorized failure,
+collection/reuse after an interrupted publication, and an unresolved partial
+effect where a new decision really is needed. Check the actual user-visible
+question against the record: can the user tell what will happen if they agree
+or decline? On reopen, verify no duplicate question, repeated successful
+effect or silent expansion of authority.
+
 ## Repository synchronization: uncommitted-change policy (2026-11-08)
 
 Selected bounded enhancement: expose `uncommittedPolicy` through the normal
@@ -341,6 +616,23 @@ scenarios and retains its owning project's responsibilities.
 - [ ] Work classification distinguishes a focused re-review (Sol Medium first)
       from a search for unknown problems (Sol High). Check missed and false
       findings and follow-up work before comparing time or token totals.
+- [ ] Recent Human stops have evidence-backed dispositions. Authorized
+      investigation and recovery proceed without a prompt; any remaining
+      question shows the decision, evidence, uncertainty and consequences.
+      A necessary source addition proceeds without confirmation on path count
+      alone; a concrete unresolved compatibility or ownership risk is presented
+      before the affected edit. Reopening does not repeat a decision or effect.
+- [ ] The B5 response187 example has a prospective ordinary-continuation case:
+      necessary same-purpose file/target additions and approved dependency
+      source updates do not create a Human decision solely from path/binding
+      changes or an AI-authored maintenance split. Genuine objective, consumer,
+      acceptance, ownership or effect-authority changes retain the actual
+      decision. Existing explicit exclusions and historical answers are not
+      rewritten; the owning public contract is qualified before automation.
+- [ ] Ordinary and derived verification plans stop unfinished repairs only on
+      evidenced divergence or at 10 cumulative attempts. Demonstrate an early
+      divergence stop, continuation at 2/10 and 9/10 without divergence, and
+      no eleventh attempt or counter reset on resume.
 - [ ] Real-use instructions match the available normal entry routes and outcomes.
 - [ ] RepositorySync exposes `uncommittedPolicy`: omitted/default `auto-commit`,
       explicit `confirm`, and `error`, consistently for single and directory-list
@@ -353,6 +645,24 @@ scenarios and retains its owning project's responsibilities.
 - [ ] The context compaction coordination framework covers the selected
       boundary/continuation/handoff/outcome behavior. Actual automatic desktop
       compaction is reported separately as best effort and does not block closure.
+- [ ] A coherent runtime-owned work unit advances through mechanical operations
+      without parent AI handoffs at each transition, returning at actual semantic,
+      Human and authority boundaries while retaining required validation/review.
+- [ ] Compact control exchanges use resolvable evidence references and changed
+      state summaries; missing/wrong-target evidence cannot establish success.
+      A substantial selected Sol High assignment uses scoped subagent context
+      and returns a usable summary with references rather than its full history.
+- [ ] Selected waiting and ordinary repair scenarios retain active Goal/Session
+      continuation, progress visibility, actual outcomes, applicable earlier
+      results, required affected rechecks and the original repair allowance.
+      Unsupported host integration is explicit; notification alone is not
+      accepted as automatic Goal continuation.
+- [ ] Mechanical input failures are detected before effects/semantic dispatch
+      without consuming a semantic repair attempt or adding an approval loop.
+- [ ] Before/after observations cover comparable scenario boundaries, round
+      trips, exchange/context size and rework at their available evidence scope.
+      No universal 67% savings, local-LLM adoption or completed Phase 9/13 is
+      required or claimed by these operational improvements.
 - [ ] Normal closing work for the delivered scope is complete, with history
       retained and no claim that unimplemented optional features were delivered.
 
