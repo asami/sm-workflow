@@ -1847,10 +1847,11 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
             _resource_(scenario, label + "-reference", json(reference.toRecord())),
             _resource_(scenario, label + "-execution", json(execution.toRecord())), "normal-development-host",
             Instant.now().minusSeconds(60).toString, "entity:smworkflow.cli.host_evidence", Some("participant"))
-          scenario.prepareHostInput("prepareEvidence", evidence.toRecord())
+          val actual = scenario.prepareHostInput("prepareEvidence", evidence.toRecord())
+          if (actual.exitCode == 0) scenario.selectPreparedImport(actual)
+          actual
         }
         prepared.exitCode shouldBe 0
-        scenario.selectPreparedImport(prepared)
         _once_(scenario, label + "-answer")(scenario.call("command", question.submitOperation.get,
           Vector("--sessionId", question.submitSessionId.get, "--answer", json(answer.toRecord()).noSpaces,
             "--resultReference", json(reference.toRecord()).noSpaces, "--executionEvidence", json(execution.toRecord()).noSpaces)))
@@ -2056,10 +2057,11 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
             _resource_(scenario, "source-human-answer", json(input.toRecord())), _resource_(scenario, "source-human-reference", json(reference.toRecord())),
             _resource_(scenario, "source-human-execution", json(execution.toRecord())), "normal-development-host", Instant.now().toString,
             "entity:smworkflow.cli.host_evidence", Some("participant"))
-          scenario.prepareHostInput("prepareEvidence", evidence.toRecord())
+          val actual = scenario.prepareHostInput("prepareEvidence", evidence.toRecord())
+          if (actual.exitCode == 0) scenario.selectPreparedImport(actual)
+          actual
         }
         prepared.exitCode shouldBe 0
-        scenario.selectPreparedImport(prepared)
         val adopted = _once_(scenario, "source-adopt")(_adopt_())
         adopted.business[V.GoalPhaseDependencySourceRevisionAdoptionResult].accepted shouldBe true
         reporter.When("a separate normal Advance issues the fresh intended Repair without completing or checking it")

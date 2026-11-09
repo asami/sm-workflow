@@ -530,10 +530,16 @@ final class GoalPhaseCanonicalDependencySourceSuccessionSpec extends AnyWordSpec
           direction <- R.decodePublicDirection(wire.hcursor.downField("direction").focus.get)
           capture <- wire.mapObject(_.add("direction", direction.asJson)).as[R.Capture].left.map(_.message)
         } yield capture
+        val reversedsource = target.proposal.copy(coverage = target.proposal.coverage.reverse)
+        val reversedtarget = target.copy(proposal = reversedsource,
+          canonicalOrigin = Some(origin.copy(selection = origin.selection.copy(source = reversedsource))))
         Then("only that dependency's complete paths and obligations append while the literal global approval vector survives")
         approvals.foreach(a => GoalPhaseDependencyValidation.approvalValid(a) shouldBe true)
         R.targetValid(target) shouldBe true
         target.asJson.as[R.Target] shouldBe Right(target)
+        origin.originalDirection shouldBe None
+        R.targetValid(reversedtarget) shouldBe true
+        reversedtarget.asJson.as[R.Target] shouldBe Right(reversedtarget)
         take(publictarget) shouldBe target
         fixture.direction.asJson.as[R.Direction] shouldBe Right(fixture.direction)
         R.decodePublicDirection(directionwire) shouldBe Right(fixture.direction)
@@ -593,7 +599,6 @@ final class GoalPhaseCanonicalDependencySourceSuccessionSpec extends AnyWordSpec
           _target_(entries = coverage :+ borrowed),
           _target_(paths = target.binding.paths ++ fixture.other.proposal.paths, entries = coverage :+ borrowed),
           _target_(entries = coverage.init),
-          _target_(entries = coverage.reverse),
           _target_(entries = coverage.init :+ own.copy(acceptance = own.acceptance.dropRight(1))),
           _target_(entries = coverage.init :+ own.copy(acceptance = Vector("Changed selected obligation"))),
           _target_(entries = coverage.init :+ own.copy(checks = Vector.empty)),
