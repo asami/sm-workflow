@@ -1851,6 +1851,12 @@
               "type": "GoalPhaseStepCommitChain",
               "multiplicity": "?",
               "required": false
+            },
+            {
+              "name": "qualifiedCheckpoint",
+              "type": "org.goldenport.record.Record",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },

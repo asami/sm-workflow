@@ -23,7 +23,8 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Pure specification input and admitted controller examples, never native effect proof.
   * @since   Oct. 18, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 25, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -76,6 +77,28 @@ final class GoalPhaseFindingRecordingSpec extends AnyWordSpec with Matchers with
         Vector(SmWorkflowComponent.GoalPhaseStepReviewServiceService)
       })
     factory.primaryFactory.createPrimaryC(creation).map(_ => selected)
+  }
+
+  "Qualified checkpoint recording prefix" should {
+    "validate the original accepted tip while preserving a real multi-checkpoint immediate parent" in {
+      Given("P611-CHECKPOINT-A-01: a pure qualified closed Step spanning two checkpoint commits")
+      import CommittedStepWorkSpecificationFixture as F
+      val closed = _closed.copy(commit = F.commit, qualifiedCheckpoint = Some(F.proof))
+      val request = _request.copy(originalBase = F.base, completed = Vector(closed))
+      When("the recording owner validates the accepted prefix and round trips its request")
+      val valid = R.validateRequestC(request)
+      val restored = R.inputCodec.decode(R.inputCodec.encode(request))
+      Then("the proof connects to the exact accepted tip without rewriting the actual immediate parent")
+      valid.isSuccess shouldBe true
+      restored shouldBe Right(request)
+      restored.toOption.get.completed.head.commit.parent shouldBe F.intermediate.head
+      restored.toOption.get.completed.head.qualifiedCheckpoint shouldBe Some(F.proof)
+      R.validateRequestC(request.copy(originalBase = F.intermediate)).isSuccess shouldBe false
+      R.validateRequestC(request.copy(completed = Vector(closed.copy(commit = F.commit.copy(parent = F.base.head))))).isSuccess shouldBe false
+      val publicvalue = NativeWorkflowOperationOutput.goalClosedStep(closed)
+      publicvalue.commit.parent shouldBe F.intermediate.head
+      publicvalue.qualifiedCheckpoint should not be empty
+    }
   }
 
   "E1 review observations" should afterWord("in spec:goal-phase-finding-recording, rules:R1,R5") {

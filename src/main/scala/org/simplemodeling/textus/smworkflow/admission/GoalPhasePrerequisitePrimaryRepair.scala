@@ -376,8 +376,9 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
     value.componentInstance == value.failure.componentInstance && value.participant == value.failure.participant &&
     value.sessionId == value.failure.sessionId && _revision(value.frontierRevision) && _revision(value.candidateRecordRevision) &&
     _json(value.controller) && value.scope == scope(value.failure) && value.candidate != null && value.candidate.candidate.nonEmpty &&
-    value.candidate.step == value.scope.step.identity && value.candidate.changedPaths.nonEmpty &&
-    GoalPhaseNativeCandidateBoundary.pathsOwned(value.candidate.changedPaths, value.scope.step.ownedPaths) &&
+    value.candidate.step == value.scope.step.identity && C.workPaths(value.candidate).nonEmpty &&
+    value.candidate.committedWork.forall(work => GoalPhaseCommittedStepWork.bound(value.candidate, work)) &&
+    GoalPhaseNativeCandidateBoundary.pathsOwned(C.workPaths(value.candidate), value.scope.step.ownedPaths) &&
     value.repair != null && value.repair.forall(R.referenceValid) && _text(value.missingAuthority) &&
     BigInt(value.candidateRecordRevision) <= BigInt(value.frontierRevision) && {
       val controller = io.circe.parser.parse(value.controller).toOption.get.hcursor
@@ -400,7 +401,7 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
   def authorityCovers(value: Failure, current: Scope, directions: Vector[Direction], candidate: C.Payload,
     candidateRecordRevision: String): Boolean = failureValid(value) && current == scope(value) &&
     candidate != null && candidate.step == current.step.identity &&
-    GoalPhaseNativeCandidateBoundary.pathsOwned(candidate.changedPaths, current.step.ownedPaths) &&
+    GoalPhaseNativeCandidateBoundary.pathsOwned(C.workPaths(candidate), current.step.ownedPaths) &&
     (!narrowed(value) || directions.exists(d => directionValid(d) && d.target.scope == current &&
       (broad(d) || d.choice == "AuthorizePrimaryPublicationOnce" && d.target.candidate == candidate &&
         d.target.candidateRecordRevision == candidateRecordRevision)))

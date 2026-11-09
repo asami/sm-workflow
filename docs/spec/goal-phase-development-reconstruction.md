@@ -5,6 +5,40 @@ an existing native Session. The current Phase/checklist documents and source
 determine remaining development; native history retains accepted results and
 supports their reuse. Reconstruction does not start another Goal or Session.
 
+## Acceptance of existing committed Step work
+
+For P611-CHECKPOINT-A-01, actual existing committed Step work is accepted only
+after current required checks and independent review in the same Session. The
+ordinary Advance owns qualification at the existing unchecked Validation
+frontier. Reconstruction and read-only Describe/history paths do not append a
+qualification or treat a checkpoint as acceptance.
+
+The original candidate's pending paths/diff remain literal. A separate adjacent
+candidate v6 supplement retains complete owned work from the immutable accepted
+tip to the current clean checkpoint, the original native candidate reference,
+and actual linear ancestry metadata. It preserves the selected Plan, Step,
+accepted prefix, generation and repair accounting. It does not replay work or
+candidate capture. The complete work supplies current validation assessment,
+triage, Review/Repair and whole-Phase evidence, and qualification requires an
+independent ReviewStep even under conditional admission.
+
+Native Closing verifies the exact supplemented candidate, current successful
+checks, independent review, existing host authority, actual clean selected
+checkpoint and complete ancestry/work. Pending/UNKNOWN commit attempts and
+competing closure records refuse. Configured Step completion records must
+already require no additional file delta. The distinct v5 accepted-existing
+receipt closes the Step with its real checkpoint Commit and qualifiedCheckpoint
+proof; it creates no new Git commit or commit intent/execution result.
+
+The original accepted tip remains the ancestry anchor even when several real
+checkpoint commits intervene. The checkpoint Commit keeps its actual immediate
+parent. ClosedStep, public projection, whole-Phase StepEvidence and
+FindingRecording preserve the qualification proof. Later history traversal
+verifies immutable retained commit/tree facts without requiring later HEAD/index
+to equal an old checkpoint; recording-only traversal uses retained native facts
+without live Git. Source, artifact, local publication and synchronization
+authority remain separate from this Step acceptance.
+
 ## Business input
 
 `GoalPhaseDevelopmentReconstructionInput` contains exactly these required fields:

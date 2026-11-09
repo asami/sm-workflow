@@ -15,7 +15,8 @@ import GoalPhaseOrderedProgression as O
 /** Finite nonblocking review observations and assigned recording replies.
   * Source references and these pure values grant no native-history or effect authority.
   * @since   Oct. 18, 2026
-  * @version Oct. 27, 2026
+  *  version Oct. 27, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseFindingRecording {
@@ -110,7 +111,7 @@ private[smworkflow] object GoalPhaseFindingRecording {
           val previous = value.completed(index - 1).commit
           O.Snapshot(previous.identity, previous.tree)
         }
-        closed.partialCompletion.fold(closed.commit.parent == predecessor.head)(_.originalParent == predecessor)
+        O.acceptedPredecessorValid(closed, predecessor)
       },
       "completed Steps must form the selected ordered commit prefix")
     _ <- _check(value.items != null && value.items.nonEmpty && value.items.size <= 256 && value.items.forall(_item) &&

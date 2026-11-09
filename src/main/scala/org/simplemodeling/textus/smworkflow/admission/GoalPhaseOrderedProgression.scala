@@ -61,7 +61,15 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     given Decoder[Snapshot] = deriveDecoder
   }
   final case class HistoryCommit(identity: String, tree: String, parents: Vector[String])
+  object HistoryCommit {
+    given Encoder[HistoryCommit] = deriveEncoder
+    given Decoder[HistoryCommit] = deriveDecoder
+  }
   final case class CandidateContinuation(parent: Snapshot, lineage: Vector[HistoryCommit])
+  object CandidateContinuation {
+    given Encoder[CandidateContinuation] = deriveEncoder
+    given Decoder[CandidateContinuation] = deriveDecoder
+  }
   /** A retained proof is interpreted against the immutable accepted Step tip. */
   def continuationValid(anchor: Snapshot, value: CandidateContinuation): Boolean =
     validSnapshot(anchor) && value != null && validSnapshot(value.parent) && value.parent.head != anchor.head &&
@@ -80,6 +88,19 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     given Encoder[Commit] = deriveEncoder
     given Decoder[Commit] = deriveDecoder
   }
+  /** The actual checkpoint retains its immediate parent, including when the
+    * immutable accepted tip is several linear checkpoints earlier. */
+  def qualifiedCheckpointValid(anchor: Snapshot, proof: CandidateContinuation, commit: Commit): Boolean =
+    continuationValid(anchor, proof) && validCommit(commit) &&
+      proof.parent == Snapshot(commit.identity, commit.tree) &&
+      proof.lineage.head.parents == Vector(commit.parent) &&
+      proof.lineage.sliding(2).forall(pair => pair.head.parents == Vector(pair.last.identity))
+
+  def acceptedPredecessorValid(value: ClosedStep, anchor: Snapshot): Boolean =
+    validStepAcceptance(value) && (value.qualifiedCheckpoint match {
+      case Some(proof) => qualifiedCheckpointValid(anchor, proof, value.commit)
+      case None => value.partialCompletion.fold(value.commit.parent == anchor.head)(_.originalParent == anchor)
+    })
   final case class StepCommitChain(originalParent: Snapshot, partial: Commit, completion: Commit)
   object StepCommitChain {
     given Encoder[StepCommitChain] = deriveEncoder
@@ -92,20 +113,26 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     value.partial.tree != value.completion.tree
   final case class ClosedStep(step: String, commit: Commit, review: Option[String],
     admission: Option[GoalPhaseStepAssessment.Admission] = None,
-    partialCompletion: Option[StepCommitChain] = None)
+    partialCompletion: Option[StepCommitChain] = None,
+    qualifiedCheckpoint: Option[CandidateContinuation] = None)
   object ClosedStep {
     def apply(step: String, commit: Commit, review: String): ClosedStep = new ClosedStep(step, commit, Some(review))
     given Encoder[ClosedStep] = deriveEncoder[ClosedStep].mapJson(_.mapObject(_.filter {
-      case ("admission" | "partialCompletion", value) => !value.isNull
+      case ("admission" | "partialCompletion" | "qualifiedCheckpoint", value) => !value.isNull
       case _ => true
     }))
     private val _decoder: Decoder[ClosedStep] = deriveDecoder
     given Decoder[ClosedStep] = Decoder.instance(cursor => _decoder(cursor).flatMap(value =>
-      if (!cursor.downField("partialCompletion").focus.exists(_.isNull) && value.partialCompletion.forall(c =>
-          validStepCommitChain(c) && c.completion == value.commit)) Right(value)
+      if (!Vector("partialCompletion", "qualifiedCheckpoint").exists(name => cursor.downField(name).focus.exists(_.isNull)) &&
+          value.partialCompletion.forall(c => validStepCommitChain(c) && c.completion == value.commit) &&
+          value.qualifiedCheckpoint.forall(p => value.partialCompletion.isEmpty && p.lineage != null &&
+            p.lineage.lastOption.exists(a => qualifiedCheckpointValid(Snapshot(a.identity, a.tree), p, value.commit)))) Right(value)
       else Left(io.circe.DecodingFailure("Closed Step partial chain is malformed or crossed", cursor.history))))
   }
   def validStepAcceptance(step: ClosedStep): Boolean = step != null && step.review != null && step.admission != null &&
+    step.qualifiedCheckpoint != null && step.qualifiedCheckpoint.forall(p => step.partialCompletion.isEmpty &&
+      step.review.exists(text) && p != null && p.lineage != null && p.lineage.lastOption.exists(a =>
+        a != null && qualifiedCheckpointValid(Snapshot(a.identity, a.tree), p, step.commit))) &&
     step.partialCompletion != null && step.partialCompletion.forall(chain => validStepCommitChain(chain) &&
       chain.completion == step.commit) &&
     ((step.review.exists(text) && step.admission.isEmpty) || (step.review.isEmpty &&
@@ -161,6 +188,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
   final case class StepPartialCompletionObserved(intent: String, chain: StepCommitChain,
     expectedTree: String, eofCorrections: Vector[String]) extends Event
   final case class StepCommitObserved(intent: String, commit: Commit) extends Event
+  final case class ExistingStepWorkAccepted(commit: Commit, proof: CandidateContinuation,
+    paths: Vector[String]) extends Event
   final case class StepPreparedCommitObserved(intent: String, commit: Commit, paths: Vector[String]) extends Event
   final case class StepEofCorrectionCommitObserved(intent: String, commit: Commit, paths: Vector[String]) extends Event
   /** tip is the reviewed ordered-Step tip; a native child may subsequently
@@ -207,6 +236,11 @@ private[smworkflow] object GoalPhaseOrderedProgression {
     val repairObservations: Vector[R.Observation] = Vector.empty,
     val stepReviewRequired: Boolean = false,
     private val _reconstruction_repair_scope: Option[String] = None) {
+    private[admission] def requireCommittedWorkReviewC: Consequence[State] =
+      if (stage == Stage.Validation && cursor < plan.steps.size && candidate.nonEmpty &&
+          checksReceipt.isEmpty && reviewEvidence.isEmpty && closureIntent.isEmpty && stepAdmission.isEmpty)
+        success(stage, newstepreviewrequired = true)
+      else invalid("committed work qualification requires the unchecked selected Step Validation frontier")
     def selectedRepairLimit: Int = repairControl.map(_.selectedLimit).getOrElse(plan.repairLimit)
     def effectiveRepairLimit: Int = repairControl.map(_.effectiveLimit).getOrElse(plan.repairLimit)
     private[admission] def reconstructionStoppedRepairReservation: Boolean =
@@ -569,8 +603,8 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           decisionSource.contains(Stage.PhaseReview) && cursor == plan.steps.size && cursor == completed.size &&
           completed.map(_.step) == plan.steps.map(_.identity) && completed.forall(s =>
             validStepAcceptance(s) && validCommit(s.commit)) &&
-          completed.zipWithIndex.forall { (s, i) => s.partialCompletion.map(_.originalParent.head).getOrElse(s.commit.parent) ==
-            (if (i == 0) base.head else completed(i - 1).commit.identity) } &&
+          completed.zipWithIndex.forall { (s, i) => acceptedPredecessorValid(s,
+            if (i == 0) base else Snapshot(completed(i - 1).commit.identity, completed(i - 1).commit.tree)) } &&
           validSnapshot(base) && candidate.exists(validSnapshot) && checksReceipt.exists(text) &&
           !documentDecision && pendingRepair.isEmpty && closureIntent.isEmpty && phaseReviewedCandidate.isEmpty &&
           phaseRecordingPaths.isEmpty && releaseCommit.isEmpty && !policyRepairPending &&
@@ -894,6 +928,13 @@ private[smworkflow] object GoalPhaseOrderedProgression {
           closureIntent.contains(intent) && validCommit(commit) && commit.parent == candidateBase.head &&
           candidate.exists(_.tree == commit.tree) && commit.identity != candidateBase.head && generation < Long.MaxValue =>
         _close_step_c(commit)
+      case ExistingStepWorkAccepted(commit, proof, paths) if stage == Stage.Closing && !phaseWide &&
+          closureIntent.isEmpty && checksReceipt.exists(text) && reviewEvidence.exists(text) && stepAdmission.isEmpty &&
+          qualifiedCheckpointValid(tipSnapshot, proof, commit) && candidateBase == proof.parent &&
+          candidate.contains(proof.parent) && paths != null && paths.nonEmpty &&
+          paths.distinct == paths && paths.forall(p => path(p) && step.ownedPaths.exists(owner =>
+            p == owner || p.startsWith(owner + "/"))) && generation < Long.MaxValue =>
+        _close_step_c(commit, checkpoint = Some(proof))
       case StepPartialCompletionObserved(intent, chain, expected, paths) if stage == Stage.Closing && !phaseWide &&
           closureIntent.contains(intent) && checksReceipt.nonEmpty && (reviewEvidence.nonEmpty || stepAdmission.nonEmpty) &&
           validStepCommitChain(chain) && chain.originalParent == candidateBase &&
@@ -970,8 +1011,9 @@ private[smworkflow] object GoalPhaseOrderedProgression {
       case _ => invalid("event differs from the Workflow-assigned ordered Phase frontier")
     }
 
-    private def _close_step_c(commit: Commit, chain: Option[StepCommitChain] = None): Consequence[State] = {
-      val closed = completed :+ ClosedStep(step.identity, commit, reviewEvidence, stepAdmission, chain)
+    private def _close_step_c(commit: Commit, chain: Option[StepCommitChain] = None,
+      checkpoint: Option[CandidateContinuation] = None): Consequence[State] = {
+      val closed = completed :+ ClosedStep(step.identity, commit, reviewEvidence, stepAdmission, chain, checkpoint)
       val nextcursor = cursor + 1
       Consequence.success(new State(plan,
         if (nextcursor == plan.steps.size) Stage.PhaseInspection else Stage.Implementation,

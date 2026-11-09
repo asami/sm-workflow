@@ -15,7 +15,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * outcome. No extra store read, result verifier or transport envelope.
   * @since   Oct. 12, 2026
   *  version Oct. 29, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationOutput {
@@ -291,7 +291,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
       value.review, value.admission.map(a => GoalPhaseNativeMetadata.record(a.asJson)), value.partialCompletion.map(c =>
         V.GoalPhaseStepCommitChain(_goal_snapshot(c.originalParent),
           V.GoalPhaseNativeCommit(c.partial.identity, c.partial.parent, c.partial.tree),
-          V.GoalPhaseNativeCommit(c.completion.identity, c.completion.parent, c.completion.tree))))
+          V.GoalPhaseNativeCommit(c.completion.identity, c.completion.parent, c.completion.tree))),
+      value.qualifiedCheckpoint.map(proof => GoalPhaseNativeMetadata.record(proof.asJson)))
   private def _goal_closed(value: GoalPhaseOrderedProgression.ClosedStep): V.GoalPhaseClosedStep = goalClosedStep(value)
   private def _goal_result(value: GoalPhaseNativeWork.Result): V.GoalPhaseWorkResult =
     V.GoalPhaseWorkResult(value.outcome, value.summary, value.findings, GoalPhaseAcceptanceBoundary.publicReport(value.acceptance),

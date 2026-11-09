@@ -1,5 +1,57 @@
 # GoalPhase dependency source revision
 
+## Existing committed Step work after a clean checkpoint
+
+P611-CHECKPOINT-A-01 uses the ordinary same-Session Advance to qualify existing
+committed Step work before current checks and independent review. A checkpoint
+alone accepts no work. This route requires an unchecked nonwhole Step, an empty
+literal pending delta, nonempty owned committed work, and actual clean
+HEAD/tree/index equal to the retained candidate. Every observed parent edge from
+that checkpoint to the immutable previously accepted tip must be linear and
+match native commit metadata. Binary, unowned, crossed, drifted or uncertain
+subjects refuse.
+
+The original candidate remains unchanged. One adjacent managed
+`ordered-candidate:committed-work` transition stays in Validation and retains a
+candidate v6 supplement: original candidate ContextReference, accepted tip,
+exact CandidateContinuation, and complete accepted-tip-to-checkpoint paths and
+diff. It performs typed Git observation and managed storage only. It neither
+stages nor recreates work, issues another candidate, or starts a Session.
+Recording/history replay loads the actual retained supplement without Git or
+new appends. Retained live closure replay verifies immutable commit metadata and
+tree changes; later Step or Phase progress need not keep HEAD/index at the old
+checkpoint. The exact managed supplement retains the complete original diff.
+
+Validation assessment, semantic triage, independent Review/Repair and whole-Phase
+Step evidence use that complete work. The original pending fields remain literal
+for native effect comparisons. Independent ReviewStep remains required even
+when conditional formal admission or clean triage would otherwise close a Step.
+No previous check or review is relabeled as covering the qualified subject.
+
+Current primary publication Targets may use qualified complete committed work
+when their pending paths are empty. The original publication Failure keeps its
+literal nonempty candidate. All existing source direction, repair, actual Human,
+artifact and publication authority checks remain independently required.
+Qualification or Step acceptance grants no source-effect or publication authority.
+
+After actual current required checks and independent review, existing host Step
+closure authority may retain the separate v5
+`ordered-step-closure:accepted-existing` receipt. It contains the actual
+checkpoint Commit, whose parent remains its real immediate parent, plus the
+qualifiedCheckpoint ancestry proof. There is no commit intent, execution result,
+StepCommitObserved event or Git write for this acceptance. Any pending/UNKNOWN
+attempt or competing committed closure refuses. Configured completion records
+must already need no new recorded file delta; their obligations are not skipped.
+
+ClosedStep and whole-Phase StepEvidence retain the same qualifiedCheckpoint.
+Ordered-prefix and FindingRecording checks validate it against the actual
+previous accepted tip rather than changing the checkpoint's parent. Public
+ClosedStep projects this proof explicitly. Candidate v6 is required whenever
+top-level committedWork or StepEvidence qualification is present; v2-v5 cannot
+carry either new meaning. Absent extensions remain omitted, and old candidate
+and v3/v4 closure semantics remain literal. Explicit null, crossed proof and
+coexistence with partialCompletion refuse.
+
 ## Canonical committed source continuation (v10/v11 targets, v11/v12 captures)
 
 R10. The existing describe/adopt source Operations accept the distinct closed

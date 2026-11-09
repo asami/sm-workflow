@@ -12,7 +12,7 @@ import GoalPhaseOrderedProgression.*
  * Pure controller evidence, not native Git/SBT, permission, storage or CLI proof.
  * @since   Oct.  6, 2026
  *  version Oct. 28, 2026
- * @version Nov.  8, 2026
+ * @version Nov.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -43,6 +43,94 @@ final class GoalPhaseOrderedProgressionSpec extends AnyWordSpec with Matchers wi
     val pending = take(accepted.acceptC(ClosureIntentSaved(accepted.candidate.get, "intent-" + id)))
     take(pending.acceptC(StepCommitObserved("intent-" + id,
       Commit(id, pending.candidate.get.head, tree))))
+  }
+
+  "Acceptance of existing committed Step work" should {
+    "require current checks and independent review and retain the literal checkpoint parent and proof" in {
+      Given("P611-CHECKPOINT-A-01: pure linear checkpoint ancestry spanning two commits")
+      import CommittedStepWorkSpecificationFixture as F
+      val event = ExistingStepWorkAccepted(F.commit, F.proof, F.paths)
+      val checked = take(F.requiredReview.acceptC(ChecksObserved(F.checkpoint, Vector("focused"), "checked", true)))
+      When("acceptance is attempted before checks, before independent review, and after a commit intent")
+      val pending = take(F.reviewed.acceptC(ClosureIntentSaved(F.checkpoint, "different-commit-intent")))
+      val invalid = Vector(F.validation.acceptC(event), checked.acceptC(event), pending.acceptC(event),
+        F.reviewed.acceptC(event.copy(commit = F.commit.copy(parent = F.base.head))),
+        F.reviewed.acceptC(event.copy(paths = Vector.empty)),
+        F.reviewed.acceptC(event.copy(paths = Vector("docs/unowned.md"))))
+      Then("every ineligible event refuses; current independent review permits only the exact existing checkpoint")
+      invalid.foreach(_.isSuccess shouldBe false)
+      val accepted = take(F.reviewed.acceptC(event))
+      accepted.completed.map(_.commit) shouldBe Vector(F.commit)
+      accepted.completed.head.commit.parent shouldBe F.intermediate.head
+      accepted.completed.head.qualifiedCheckpoint shouldBe Some(F.proof)
+      accepted.completed.head.partialCompletion shouldBe None
+      accepted.completed.head.review shouldBe Some("spec-independent-review")
+      accepted.base shouldBe F.base
+      accepted.plan shouldBe F.plan
+      accepted.cursor shouldBe F.reviewed.cursor + 1
+      accepted.generation shouldBe F.reviewed.generation + 1
+      accepted.closureIntent shouldBe None
+      accepted.stage shouldBe Stage.Implementation
+      accepted.next.asInstanceOf[Semantic].key.step shouldBe Some("S2")
+      GoalPhaseOrderedProgression.acceptedPredecessorValid(accepted.completed.head, F.base) shouldBe true
+      GoalPhaseOrderedProgression.acceptedPredecessorValid(accepted.completed.head, F.intermediate) shouldBe false
+    }
+
+    "force independent review when a conditional policy would otherwise admit the committed subject" in {
+      Given("a pure committed candidate whose unchanged conditional policy permits formal admission")
+      import CommittedStepWorkSpecificationFixture as F
+      val policy = GoalPhaseStepAssessment.Policy("checkpoint-conditional", "documentation", "conditional", "off", "off", Vector.empty)
+      val selected = F.plan.copy(steps = F.plan.steps.updated(0, F.plan.steps.head.copy(actionPolicy = Some(policy))))
+      val initial = take(startC(selected, F.base))
+      val ready = take(initial.acceptC(SemanticCompleted(work(initial), "Specification work")))
+      val seen = take(ready.acceptC(CandidateContinuationObserved(F.checkpoint, F.proof)))
+      val required = take(seen.requireCommittedWorkReviewC)
+      val assessment = GoalPhaseStepAssessment.Result(policy, F.checkpoint, "current-checks", Vector("focused"),
+        "admit", "Actual current checks passed", "not-selected", "not-executed")
+      When("the unchanged formal assessment is admitted after qualification")
+      val reviewed = take(required.acceptC(StepAssessed(assessment)))
+      Then("the next assigned work is independent ReviewStep and formal admission supplies no acceptance")
+      reviewed.stage shouldBe Stage.Review
+      reviewed.next.asInstanceOf[Semantic].key.kind shouldBe WorkKind.ReviewStep
+      reviewed.stepAdmission shouldBe None
+      reviewed.stepReviewRequired shouldBe true
+      required.generation shouldBe seen.generation
+      required.repairs shouldBe seen.repairs
+      required.ordinaryRepairs shouldBe seen.ordinaryRepairs
+      required.base shouldBe seen.base
+      required.completed shouldBe seen.completed
+      reviewed.acceptC(ExistingStepWorkAccepted(F.commit, F.proof, F.paths)).isSuccess shouldBe false
+    }
+
+    "retain the independent review requirement after clean semantic triage" in {
+      Given("a pure qualified subject whose conditional policy requires semantic triage")
+      import CommittedStepWorkSpecificationFixture as F
+      val observation = GoalPhaseStepAssessment.Observation("checkpoint-observation", ContextReference("observation", "1"),
+        "Check current committed work", "immediate", "Resolve the selected uncertainty", None)
+      val policy = GoalPhaseStepAssessment.Policy("checkpoint-triage", "documentation", "conditional", "off", "off",
+        Vector(observation), semanticTriage = "conditional")
+      val selected = F.plan.copy(steps = F.plan.steps.updated(0, F.plan.steps.head.copy(actionPolicy = Some(policy))))
+      val initial = take(startC(selected, F.base))
+      val ready = take(initial.acceptC(SemanticCompleted(work(initial), "Specification work")))
+      val seen = take(ready.acceptC(CandidateContinuationObserved(F.checkpoint, F.proof)))
+      val required = take(seen.requireCommittedWorkReviewC)
+      val assessment = GoalPhaseStepAssessment.Result(policy, F.checkpoint, "triage-check", Vector("focused"),
+        "triage", "Current uncertainty requires judgment", "required", "not-executed")
+      val triage = take(required.acceptC(StepAssessed(assessment)))
+      val judgment = GoalPhaseStepTriage.Judgment(ContextReference("checkpoint-triage-result", "1"),
+        "clean", "Selected uncertainty resolved", Vector.empty)
+      When("the actual pure triage result resolves that uncertainty")
+      val reviewed = take(triage.acceptC(TriageAdmitted(work(triage), assessment, judgment)))
+      Then("independent ReviewStep remains required and there is no formal acceptance")
+      reviewed.stage shouldBe Stage.Review
+      reviewed.next.asInstanceOf[Semantic].key.kind shouldBe WorkKind.ReviewStep
+      reviewed.stepAdmission shouldBe None
+      reviewed.stepReviewRequired shouldBe true
+      reviewed.base shouldBe F.base
+      reviewed.completed shouldBe empty
+      reviewed.generation shouldBe seen.generation
+      reviewed.repairs shouldBe seen.repairs
+    }
   }
 
   "Formal source-history failure at current-Step inspection" should {

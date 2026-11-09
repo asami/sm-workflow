@@ -279,14 +279,14 @@ private[smworkflow] object GoalPhaseNativeValidation {
       inspected <- if (controller.candidate.contains(actual.payload.candidate)) Consequence.success(controller)
         else GoalPhaseNativeCandidate.observedStateC(controller, candidate.payload, documentPolicy, recordingPaths)
       reference = session.current.identity.value + ":ordered-validation:" + actual.payload.sourceRevision + ":validation"
-      state <- observedStateC(inspected, actual.payload, reference, candidate.payload.changedPaths)
+      state <- observedStateC(inspected, actual.payload, reference, GoalPhaseNativeCandidate.workPaths(candidate.payload))
       recorded <- GoalPhaseRuntimeRepairControl.recordC(d, core, session.current.identity.value,
         ContextReference(reference, "1"), "failed", GoalPhaseRuntimeRepairControl.facts(state))
     } yield recorded else Consequence.success(Vector.empty[org.simplemodeling.textus.smworkflow.value.EvidenceRecordingState])
     journal <- DevelopmentJournalAssessment.recordC(d, core, session.current.identity.value, actual.payload)
     wire <- F.waitC(actual.record, if (controller.cursor == controller.plan.steps.size)
       "Whole-Phase native validation" else "Ordered Step native validation", actual.payload.outcome match {
-      case Some("passed") if actual.payload.assessment.exists(_.branch == "admit") =>
+      case Some("passed") if actual.payload.assessment.exists(_.branch == "admit") && !controller.stepReviewRequired =>
         "Actual checks passed and formal Step admission is retained. Triage and detailed review were not executed; native commit authority and closure remain separate."
       case Some("passed") if actual.payload.assessment.exists(_.branch == "triage") =>
         "Actual required native checks passed; selected semantic uncertainty requires bounded triage. Independent review and closure are not accepted."
@@ -715,10 +715,10 @@ private[smworkflow] object GoalPhaseNativeValidation {
         } else "failed"
         completed = current.payload.copy(outcome = Some(outcome))
         assessment <- if (passed && !store.whole && inspected.plan.steps(inspected.cursor).actionPolicy.nonEmpty)
-          GoalPhaseStepAssessment.assessC(inspected, completed, store.reference("validation").identity, store.candidate.payload.changedPaths).map(Some(_))
+          GoalPhaseStepAssessment.assessC(inspected, completed, store.reference("validation").identity, GoalPhaseNativeCandidate.workPaths(store.candidate.payload)).map(Some(_))
           else Consequence.success(Option.empty[GoalPhaseStepAssessment.Result])
         payload = completed.copy(assessment = assessment)
-        validated <- observedStateC(inspected, payload, store.reference("validation").identity, store.candidate.payload.changedPaths)
+        validated <- observedStateC(inspected, payload, store.reference("validation").identity, GoalPhaseNativeCandidate.workPaths(store.candidate.payload))
         target = validated.stage.toString
         event = (if (store.whole) "phase-" else "") + (outcome match {
           case "passed" if assessment.exists(_.branch == "admit") && validated.stage == O.Stage.Closing => "checks-admitted"
@@ -957,11 +957,14 @@ private[smworkflow] object GoalPhaseNativeValidation {
       inspected <- if (controller.stage.toString == validationStage && controller.candidate.contains(initial.candidate))
         Consequence.success(controller)
         else GoalPhaseNativeCandidate.observedStateC(controller, candidate.payload, documentPolicy, recordingPaths)
-      state <- observedStateC(inspected, saved.payload, reference("validation").identity, candidate.payload.changedPaths)
+      state <- observedStateC(inspected, saved.payload, reference("validation").identity, GoalPhaseNativeCandidate.workPaths(candidate.payload))
       _ <- _adjacent_record_c(prefix.record, saved.record, "ordered-validation:validation",
         Some(ProgressionReference("phase." + state.stage.toString)))
     } yield saved
     def preconditionsC: Consequence[Unit] = for {
+      _ <- candidate.payload.committedWork.fold(Consequence.unit)(work =>
+        GoalPhaseCommittedStepWork.authenticateC(session, core, candidate, controller).flatMap(_ =>
+          GoalPhaseCommittedStepWork.observeC(d, core, work)))
       _ <- GoalPhaseDependencySourceRevision.chainFreshnessC(core, dependencyChain,
         initial.dependency.toVector, initial.dependencySource.toVector)
       consumptionbase <- admittedSourceConsumptionC(candidate.payload.dependencySourceCapture, dependencyChain)

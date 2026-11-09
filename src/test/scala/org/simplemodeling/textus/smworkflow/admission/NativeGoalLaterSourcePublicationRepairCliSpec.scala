@@ -987,7 +987,7 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     info("LATER_SOURCE_CHECKPOINT_PREPARED=" + checkpointfile)
   }
 
-  private def _preserved_unknown_checkpoint(locator: Path): Option[Json] =
+  private def _preserved_unknown_checkpoint(locator: Path, retainedonly: Boolean = false): Option[Json] =
     sys.props.get("smworkflow.spec.laterSourcePublicationUnknownLocator").map { selected =>
       val unknownlocator = Path.of(selected)
       val canonical = Path.of("").toAbsolutePath.normalize
@@ -1025,8 +1025,19 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       payload.hcursor.downField("payload").downField("assessment").get[Vector[String]]("uncertainEffects").toOption.get should not be empty
       _business[V.GoalPhaseWorkSubmissionResult](repairpath).accepted shouldBe true
       _preserved(saved)
-      When("the updated installed product receives only a fresh read-only canonical source description for that original uncertain Session")
-      val refused = _describe(scenario, session, "checkpoint-current-unknown-source-refusal",
+      When(if (retainedonly) "the actual retained source-description refusal is recollected without invoking the installed product"
+        else "the updated installed product receives only a fresh read-only canonical source description for that original uncertain Session")
+      val refused = if (retainedonly) {
+        val refusallocator = root.resolve("caller-results/checkpoint-current-unknown-source-refusal.json")
+        require(Files.isRegularFile(refusallocator), "Completed collection requires the existing UNKNOWN-source refusal locator")
+        val retained = _read(refusallocator)
+        val stdout = Path.of(retained.hcursor.get[String]("stdout").toOption.get)
+        val stderr = Path.of(retained.hcursor.get[String]("stderr").toOption.get)
+        require(stdout.startsWith(root.resolve("logs")) && stderr.startsWith(root.resolve("logs")) &&
+          Files.isRegularFile(stdout) && Files.isRegularFile(stderr), "Retained UNKNOWN refusal outputs must exist in the original logs")
+        F.Result(retained.hcursor.get[Int]("exit").toOption.get, F.Invocation(
+          retained.hcursor.get[Vector[String]]("argv").toOption.get, retained.hcursor.get[Long]("pid").toOption.get, stdout, stderr))
+      } else _describe(scenario, session, "checkpoint-current-unknown-source-refusal",
         saved.hcursor.get[C.Proposal]("proposal").toOption.get)
       Then("native Human ownership refuses source eligibility without answering the Human, advancing or replaying any old effect")
       refused.exitCode should not be 0
@@ -1043,6 +1054,212 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
         "sourceDescriptionRefusal" -> refused.invocation.stderr.toString.asJson,
         "sourceEligibility" -> "refused-actual-native-unknown".asJson)
     }
+
+  private def _collect_checkpoint_acceptance(locator: Path, saved: Json, scenario: F.Scenario,
+    session: String, repair: V.GoalPhaseAdvanceResult, unknown: Option[Json]): Unit = {
+    val root = scenario.root
+    val repository = root.resolve("repository")
+    val checkpoint = saved.hcursor.get[O.Snapshot]("checkpointPrimary").toOption.get
+    def _retained_(label: String): F.Result = {
+      val path = root.resolve("caller-results/" + label + ".json")
+      require(Files.isRegularFile(path), "Completed collection requires actual retained result: " + label)
+      val retained = _read(path)
+      retained.hcursor.get[Int]("exit").toOption shouldBe Some(0)
+      val stdout = Path.of(retained.hcursor.get[String]("stdout").toOption.get)
+      val stderr = Path.of(retained.hcursor.get[String]("stderr").toOption.get)
+      require(stdout.startsWith(root.resolve("logs")) && stderr.startsWith(root.resolve("logs")) &&
+        Files.isRegularFile(stdout) && Files.isRegularFile(stderr), "Completed collection requires original regular output files")
+      F.Result(retained.hcursor.get[Int]("exit").toOption.get, F.Invocation(
+        retained.hcursor.get[Vector[String]]("argv").toOption.get, retained.hcursor.get[Long]("pid").toOption.get, stdout, stderr))
+    }
+    def _argument_(result: F.Result, name: String): String = {
+      val index = result.invocation.argv.indexOf(name)
+      require(index >= 0 && index + 1 < result.invocation.argv.size, "Retained invocation requires " + name)
+      result.invocation.argv(index + 1)
+    }
+    Given("the same physical checkpoint Session with actual successful review, Submit and closure outputs already retained")
+    session shouldBe saved.hcursor.get[String]("session").toOption.get
+    repair.sessionId shouldBe session
+    repair.work.get.completed.map(_.step) shouldBe Vector("step-1")
+    repair.repairProgress.get.automaticCount shouldBe 1
+    repair.repairProgress.get.ordinaryCount shouldBe 1
+    unknown should not be empty
+    _preserved(saved)
+    val repairpath = Path.of(saved.hcursor.get[String]("acceptedRepairSubmitOutput").toOption.get)
+    Files.readString(repairpath) shouldBe saved.hcursor.get[String]("acceptedRepairSubmitBytes").toOption.get
+    val repairsubmit = _business[V.GoalPhaseWorkSubmissionResult](repairpath)
+    repairsubmit.sessionId shouldBe session
+    repairsubmit.accepted shouldBe true
+    val describedoutput = _retained_("checkpoint-current-description")
+    val description = _business[V.GoalPhaseDependencySourceRevisionDescriptionResult](describedoutput.invocation.stdout)
+    val target = take(R.targetC(description.target))
+    val origin = target.canonicalOrigin.get
+    val frontier = origin.inspectionFrontier.get
+    val reviewlabel = if (Files.isRegularFile(root.resolve("caller-results/checkpoint-current-checked-review.json")))
+      "checkpoint-current-checked-review" else "alignment-ordinary-continuation"
+    val reviewoutput = _retained_(reviewlabel)
+    val reviewed = _business[V.GoalPhaseAdvanceResult](reviewoutput.invocation.stdout)
+    val submittedoutput = _retained_("checkpoint-current-review-submit")
+    val submitted = _business[V.GoalPhaseWorkSubmissionResult](submittedoutput.invocation.stdout)
+    val closingoutput = _retained_("checkpoint-current-closing")
+    val closing = _business[V.GoalPhaseAdvanceResult](closingoutput.invocation.stdout)
+    val closedoutput = _retained_("checkpoint-current-closed")
+    val closed = _business[V.GoalPhaseAdvanceResult](closedoutput.invocation.stdout)
+    When("read-only collection derives the complete checkpoint work, actual ancestry and current clean repository without another native operation")
+    val acceptedtip = repair.work.get.completed.last.commit
+    val anchor = O.Snapshot(acceptedtip.identity, acceptedtip.tree)
+    val workpaths = _git(root, repository, "checkpoint-collection-work-paths", "diff", "--name-only",
+      acceptedtip.identity, checkpoint.head, "--").linesIterator.toVector
+    val workdiff = _git(root, repository, "checkpoint-collection-work-diff", "diff", "--no-ext-diff", "--no-textconv",
+      acceptedtip.identity, checkpoint.head, "--")
+    val lineage = (_git(root, repository, "checkpoint-collection-work-lineage", "log", "--format=%H%x09%T%x09%P",
+      acceptedtip.identity + ".." + checkpoint.head) + "\n" +
+      _git(root, repository, "checkpoint-collection-work-anchor", "show", "-s", "--format=%H%x09%T%x09%P", acceptedtip.identity))
+      .linesIterator.map { line =>
+        val fields = line.split("\t", -1)
+        O.HistoryCommit(fields(0), fields(1), fields(2).split(" ").filter(_.nonEmpty).toVector)
+      }.toVector
+    val qualification = O.CandidateContinuation(checkpoint, lineage)
+    val primaryafter = _snapshot(root, repository, "checkpoint-collection-current")
+    val clean = _git(root, repository, "checkpoint-collection-current-clean", "status", "--porcelain=v1")
+    val pending = _git(root, repository, "checkpoint-collection-current-index-diff", "diff", "--cached", "--no-ext-diff",
+      "--no-textconv", checkpoint.head, "--")
+    val currentdiff = _git(root, repository, "checkpoint-collection-current-worktree-diff", "diff", "--no-ext-diff",
+      "--no-textconv", checkpoint.head, "--")
+    Then("actual retained Step checks, independent review and existing-commit acceptance retain the exact prefix, source and old window")
+    description.sessionId shouldBe session
+    target.sessionId shouldBe session
+    description.choices shouldBe Vector(C.choice, "Defer")
+    origin.controller.stage shouldBe "InspectCandidate"
+    origin.pending shouldBe None
+    origin.historicalFailure shouldBe None
+    origin.historicalPublicationFailure shouldBe None
+    frontier.record shouldBe ContextReference(session, target.sourceRevision)
+    frontier.reconstruction.observation.head shouldBe checkpoint.head
+    frontier.reconstruction.observation.tree shouldBe checkpoint.tree
+    frontier.reconstruction.observation.indexTree shouldBe checkpoint.tree
+    frontier.reconstruction.observation.dirty shouldBe Vector.empty
+    frontier.reconstruction.documents.captured.plan shouldBe target.plan
+    target.binding shouldBe saved.hcursor.get[D.Binding]("binding").toOption.get
+    target.completed.map(_.step) shouldBe Vector("step-1")
+    target.completed.head.commit shouldBe O.Commit(acceptedtip.identity, acceptedtip.parent, acceptedtip.tree)
+    target.primaryBase.asJson shouldBe saved.hcursor.downField("acceptedRepairWork").downField("work").get[Json]("originalBase").toOption.get
+    workpaths shouldBe Vector("docs/phase.md", _source)
+    workdiff should include("-object Consumer { val value: Int = Api.oldApi }")
+    workdiff should include("+object Consumer { val value: Int = Api.newApi(20) }")
+    workdiff should include("+++ b/docs/phase.md")
+    O.continuationValid(anchor, qualification) shouldBe true
+    lineage.sliding(2).foreach(pair => pair.head.parents shouldBe Vector(pair.last.identity))
+    primaryafter shouldBe checkpoint
+    clean shouldBe ""
+    pending shouldBe ""
+    currentdiff shouldBe ""
+    reviewed.sessionId shouldBe session
+    reviewed.work.get.kind shouldBe "ReviewStep"
+    reviewed.work.get.stepIdentity shouldBe Some("step-2")
+    reviewed.submitSessionId shouldBe Some(session)
+    reviewed.validation.get.outcome shouldBe Some("passed")
+    reviewed.validation.get.selectedChecks.map(c => (c.identity, c.kind)) shouldBe _checks.map(c => (c.identity, c.kind.wire))
+    reviewed.validation.get.checks.map(_.identity) shouldBe _checks.map(_.identity)
+    reviewed.validation.get.checks.foreach(_.exitCode shouldBe Some(0))
+    reviewed.validation.get.candidate.head shouldBe checkpoint.head
+    reviewed.validation.get.candidate.tree shouldBe checkpoint.tree
+    reviewed.work.get.candidate shouldBe Some(reviewed.validation.get.candidate)
+    reviewed.work.get.checksReceipt should not be empty
+    reviewed.work.get.completed shouldBe repair.work.get.completed
+    reviewed.work.get.completed.map(_json) shouldBe repair.work.get.completed.map(_json)
+    reviewed.work.get.selectedPlan shouldBe repair.work.get.selectedPlan
+    reviewed.work.get.originalBase shouldBe repair.work.get.originalBase
+    reviewed.work.get.review.get.changedPaths shouldBe workpaths
+    reviewed.work.get.review.get.diff.trim shouldBe workdiff
+    reviewed.work.get.review.get.checks shouldBe reviewed.validation.get.checks
+    reviewed.repairProgress shouldBe repair.repairProgress
+    val captures = reviewed.work.get.review.get.dependencyValidations.flatMap(record =>
+      GoalPhaseNativeMetadata.normalizePublicJson(_json(record)).toOption.toVector.flatMap(_.hcursor.get[R.Capture]("capture").toOption))
+      .filter(_.step == "step-2")
+    captures.size shouldBe 1
+    captures.head.direction.target shouldBe target
+    captures.head.direction.target.canonicalOrigin.get.inspectionFrontier shouldBe Some(frontier)
+    captures.head.generation shouldBe target.generation + 1
+    reviewed.completion shouldBe None
+    submitted.sessionId shouldBe session
+    submitted.accepted shouldBe true
+    _argument_(submittedoutput, "--sessionId") shouldBe session
+    submittedoutput.invocation.argv(1) shouldBe ("org.simplemodeling.textus.SmWorkflow.GoalPhaseService." + reviewed.submitOperation.get)
+    val reviewreference = V.WorkflowArtifactReference("specification-checkpoint-current-review-submit", "1")
+    parse(_argument_(submittedoutput, "--resultReference")).toOption.get shouldBe _json(reviewreference)
+    val reviewresult = parse(_argument_(submittedoutput, "--result")).toOption.get
+    reviewresult.hcursor.get[String]("outcome").toOption shouldBe Some("accept")
+    reviewresult.hcursor.get[Vector[String]]("findings").toOption shouldBe Some(Vector.empty)
+    closing.sessionId shouldBe session
+    closing.authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
+    val closingscope = GoalPhaseNativeMetadata.normalizePublicJson(_json(closing.authorityContext.get.scope)).toOption.get
+    closingscope.hcursor.get[String]("kind").toOption shouldBe Some("step-closure")
+    val closinginput = closingscope.mapObject(_.remove("kind")).as[GoalPhaseNativeClosure.Input].toOption.get
+    closinginput.instance shouldBe session
+    closinginput.plan shouldBe target.plan.identity
+    closinginput.planRevision shouldBe target.plan.revision
+    closinginput.step shouldBe "step-2"
+    closinginput.parent shouldBe checkpoint
+    closinginput.candidate shouldBe checkpoint
+    closinginput.reviewEvidence shouldBe Some(reviewreference.identity)
+    closinginput.admission shouldBe None
+    closinginput.committedWork.get.originalCandidate.identity shouldBe session
+    closinginput.committedWork.get.acceptedTip shouldBe anchor
+    closinginput.committedWork.get.continuation shouldBe qualification
+    closinginput.committedWork.get.paths shouldBe workpaths
+    closinginput.committedWork.get.diff.trim shouldBe workdiff
+    closing.repairProgress shouldBe repair.repairProgress
+    closing.repairProgress.get.automaticCount shouldBe 1
+    closing.repairProgress.get.ordinaryCount shouldBe 1
+    closing.completion shouldBe None
+    closed.sessionId shouldBe session
+    closed.work.get.kind shouldBe "ReviewPhase"
+    closed.work.get.stepIdentity shouldBe None
+    closed.work.get.completed.map(_.step) shouldBe Vector("step-1", "step-2")
+    closed.work.get.completed.head shouldBe repair.work.get.completed.head
+    _json(closed.work.get.completed.head) shouldBe _json(repair.work.get.completed.head)
+    val accepted = closed.work.get.completed.last
+    accepted.commit.identity shouldBe checkpoint.head
+    accepted.commit.tree shouldBe checkpoint.tree
+    accepted.commit.parent shouldBe lineage.head.parents.head
+    accepted.review shouldBe Some(reviewreference.identity)
+    accepted.partialCompletion shouldBe None
+    accepted.qualifiedCheckpoint should not be empty
+    val qualified = GoalPhaseNativeMetadata.normalizePublicJson(_json(accepted.qualifiedCheckpoint.get))
+      .toOption.get.as[O.CandidateContinuation].toOption.get
+    qualified shouldBe qualification
+    O.qualifiedCheckpointValid(anchor, qualified, O.Commit(accepted.commit.identity, accepted.commit.parent, accepted.commit.tree)) shouldBe true
+    closed.work.get.selectedPlan shouldBe repair.work.get.selectedPlan
+    closed.work.get.originalBase shouldBe repair.work.get.originalBase
+    closed.repairProgress shouldBe Some(repair.repairProgress.get.copy(automaticCount = 0, ordinaryCount = 0))
+    closed.validation.get.outcome shouldBe Some("passed")
+    closed.validation.get.selectedChecks.map(c => (c.identity, c.kind)) shouldBe _checks.map(c => (c.identity, c.kind.wire))
+    closed.validation.get.checks.map(_.identity) shouldBe _checks.map(_.identity)
+    closed.validation.get.checks.foreach(_.exitCode shouldBe Some(0))
+    closed.validation.get.candidate.head shouldBe checkpoint.head
+    closed.validation.get.candidate.tree shouldBe checkpoint.tree
+    closed.work.get.checksReceipt should not be empty
+    closed.work.get.review.get.checks shouldBe closed.validation.get.checks
+    closed.completion shouldBe None
+    val oldpublications = saved.hcursor.get[Vector[String]]("oldPrimaryPublications").toOption.get
+    val publications = _lines(root.resolve("primary-publications.txt"))
+    publications.take(oldpublications.size) shouldBe oldpublications
+    publications.size shouldBe oldpublications.size + 1
+    _lines(root.resolve("selected-tests.txt")) shouldBe saved.hcursor.get[Vector[String]]("oldTests").toOption.get ++ Vector("later", "later")
+    _lines(root.resolve("canonical-dependency/publication-count.txt")) shouldBe
+      saved.hcursor.get[Vector[String]]("checkpointCanonicalPublications").toOption.get
+    Files.readString(repairpath) shouldBe saved.hcursor.get[String]("acceptedRepairSubmitBytes").toOption.get
+    _preserved(saved)
+    _write(locator.resolveSibling(locator.getFileName.toString + ".checkpoint-result.json"), Json.obj(
+      "session" -> session.asJson, "source" -> target.binding.base.asJson, "sourceTarget" -> target.asJson,
+      "checkpoint" -> checkpoint.asJson, "acceptedRepair" -> repairpath.toString.asJson,
+      "stepAcceptance" -> "accepted-existing-commit".asJson, "primaryAfterAcceptance" -> primaryafter.asJson,
+      "qualifiedCheckpoint" -> qualified.asJson, "reviewedWorkPaths" -> workpaths.asJson, "reviewedWorkDiff" -> workdiff.asJson,
+      "completed" -> closed.work.get.completed.map(_json).asJson, "repairProgress" -> _json(repair.repairProgress.get),
+      "phaseRepairProgress" -> _json(closed.repairProgress.get), "preservedUnknownEpisode" -> unknown.asJson,
+      "phaseAccepted" -> false.asJson))
+  }
 
   private def _resume_checkpoint(locator: Path): Unit = {
     require(_checkpoint_lineage && _root_lineage && _coverage_lineage && _usage_lineage)
@@ -1062,9 +1279,16 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       .add("textus.resource.read.max-bytes", "16777216".asJson)))
     val proposal = saved.hcursor.get[C.Proposal]("proposal").toOption.get
     val checkpoint = saved.hcursor.get[O.Snapshot]("checkpointPrimary").toOption.get
+    val repository = root.resolve("repository")
     val repair = take(summon[ValueReader[V.GoalPhaseAdvanceResult]].readC(take(new RecordDecoder().json(
       saved.hcursor.get[Json]("acceptedRepairWork").toOption.get.noSpaces))))
-    val unknown = _preserved_unknown_checkpoint(locator)
+    val collection = sys.props.contains("smworkflow.spec.laterSourcePublicationResumePoint") &&
+      Files.isRegularFile(root.resolve("caller-results/checkpoint-current-closed.json"))
+    val unknown = _preserved_unknown_checkpoint(locator, retainedonly = collection)
+    if (collection) {
+      _collect_checkpoint_acceptance(locator, saved, scenario, session, repair, unknown)
+      return
+    }
     Given("the retained accepted Repair, ordinary primary checkpoint, docs-only dependency descendant and old source-guard failure")
     _preserved(saved)
     Files.readString(Path.of(saved.hcursor.get[String]("acceptedRepairSubmitOutput").toOption.get)) shouldBe
@@ -1094,6 +1318,31 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     repair.repairProgress.get.ordinaryCount shouldBe target.repairProgress.ordinaryCount
     repair.repairProgress.get.automaticCount shouldBe target.repairProgress.automaticCount
     repair.repairProgress.get.limit shouldBe target.repairProgress.limit
+    Given("the actual complete Step work from the accepted Step1 tip to the unchanged clean checkpoint")
+    val acceptedtip = target.completed.last.commit
+    val workpaths = _git(root, repository, "checkpoint-existing-work-paths", "diff", "--name-only",
+      acceptedtip.identity, checkpoint.head, "--").linesIterator.toVector
+    val workdiff = _git(root, repository, "checkpoint-existing-work-diff", "diff", "--no-ext-diff", "--no-textconv",
+      acceptedtip.identity, checkpoint.head, "--")
+    val lineage = (_git(root, repository, "checkpoint-existing-work-lineage", "log", "--format=%H%x09%T%x09%P",
+      acceptedtip.identity + ".." + checkpoint.head) + "\n" +
+      _git(root, repository, "checkpoint-existing-work-anchor", "show", "-s", "--format=%H%x09%T%x09%P", acceptedtip.identity))
+      .linesIterator.map { line =>
+        val fields = line.split("\t", -1)
+        O.HistoryCommit(fields(0), fields(1), fields(2).split(" ").filter(_.nonEmpty).toVector)
+      }.toVector
+    val qualification = O.CandidateContinuation(checkpoint, lineage)
+    val workbytes = Map(_source -> Files.readString(repository.resolve(_source)),
+      "docs/phase.md" -> Files.readString(repository.resolve("docs/phase.md")),
+      _checkpoint_checklist -> Files.readString(repository.resolve(_checkpoint_checklist)))
+    workpaths shouldBe Vector("docs/phase.md", _source)
+    workdiff should include("-object Consumer { val value: Int = Api.oldApi }")
+    workdiff should include("+object Consumer { val value: Int = Api.newApi(20) }")
+    workdiff should include("+++ b/docs/phase.md")
+    O.continuationValid(O.Snapshot(acceptedtip.identity, acceptedtip.tree), qualification) shouldBe true
+    _snapshot(root, repository, "checkpoint-before-native-acceptance") shouldBe checkpoint
+    _git(root, repository, "checkpoint-before-native-acceptance-clean", "status", "--porcelain=v1") shouldBe ""
+    _git(root, repository, "checkpoint-empty-pending-diff", "diff", "--no-ext-diff", "--no-textconv", checkpoint.head, "--") shouldBe ""
     val reference = V.WorkflowArtifactReference("specification-checkpoint-source-human", "1")
     val input = V.GoalPhaseDependencySourceRevisionAdoptionInput(session, description.target, C.choice,
       "SPECIFICATION-ONLY exact source choice after accepted Repair and checkpoint", reference)
@@ -1166,9 +1415,22 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       _advance(scenario, task, "checkpoint-current-checked-review")
     }
     val reviewed = review.business[V.GoalPhaseAdvanceResult]
-    Then("ordinary capture and the original required checks reach independent Review with one source generation change and preserved accounting")
+    Then("the actual required checks reach independent Review of the complete committed Step work with preserved accounting")
     reviewed.work.get.kind shouldBe "ReviewStep"
+    reviewed.work.get.stepIdentity shouldBe Some("step-2")
     reviewed.validation.get.outcome shouldBe Some("passed")
+    reviewed.validation.get.selectedChecks.map(_.identity) shouldBe _checks.map(_.identity)
+    reviewed.validation.get.checks.map(_.identity) shouldBe _checks.map(_.identity)
+    reviewed.validation.get.checks.foreach(_.exitCode shouldBe Some(0))
+    reviewed.validation.get.candidate.head shouldBe checkpoint.head
+    reviewed.validation.get.candidate.tree shouldBe checkpoint.tree
+    reviewed.work.get.checksReceipt should not be empty
+    reviewed.work.get.completed shouldBe repair.work.get.completed
+    reviewed.work.get.selectedPlan shouldBe repair.work.get.selectedPlan
+    reviewed.work.get.originalBase shouldBe repair.work.get.originalBase
+    reviewed.work.get.review.get.changedPaths shouldBe workpaths
+    reviewed.work.get.review.get.diff.trim shouldBe workdiff
+    reviewed.work.get.review.get.checks shouldBe reviewed.validation.get.checks
     reviewed.repairProgress shouldBe repair.repairProgress
     val captures = reviewed.work.get.review.get.dependencyValidations.flatMap(record =>
       GoalPhaseNativeMetadata.normalizePublicJson(_json(record)).toOption.toVector.flatMap(_.hcursor.get[R.Capture]("capture").toOption))
@@ -1181,15 +1443,35 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       saved.hcursor.get[Vector[String]]("checkpointCanonicalPublications").toOption.get
     _lines(root.resolve("selected-tests.txt")).size shouldBe saved.hcursor.get[Vector[String]]("oldTests").toOption.get.size + 1
     _lines(root.resolve("selected-tests.txt")).last shouldBe "later"
+    reviewed.completion shouldBe None
+    _snapshot(root, repository, "checkpoint-before-independent-review-submit") shouldBe checkpoint
+    When("the actual independent reviewer submits acceptance and ordinary Advance closes the existing checked checkpoint")
     val closed = _close(scenario, task, review, "checkpoint-current").business[V.GoalPhaseAdvanceResult]
-    Then("actual Step2 closure retains Step1 and the checkpoint ancestry; Phase review remains a separate unaccepted obligation")
+    val closinglocator = _read(root.resolve("caller-results/checkpoint-current-closing.json"))
+    val closing = _business[V.GoalPhaseAdvanceResult](Path.of(closinglocator.hcursor.get[String]("stdout").toOption.get))
+    Then("Step2 acceptance preserves the physical commit, complete prefix, Plan, base and old-window history while the next Phase window starts at zero; Phase review remains unaccepted")
     closed.sessionId shouldBe session
     closed.work.get.kind shouldBe "ReviewPhase"
     closed.work.get.completed.map(_.step) shouldBe Vector("step-1", "step-2")
     closed.work.get.completed.head shouldBe repair.work.get.completed.head
-    closed.work.get.completed.last.commit.identity should not be checkpoint.head
-    _git(root, root.resolve("repository"), "checkpoint-retained-ancestry", "merge-base", "--is-ancestor",
-      checkpoint.head, closed.work.get.completed.last.commit.identity) shouldBe ""
+    val accepted = closed.work.get.completed.last
+    accepted.commit.identity shouldBe checkpoint.head
+    accepted.commit.tree shouldBe checkpoint.tree
+    accepted.commit.parent shouldBe lineage.head.parents.head
+    accepted.review shouldBe Some("specification-checkpoint-current-review-submit")
+    accepted.partialCompletion shouldBe None
+    accepted.qualifiedCheckpoint should not be empty
+    val qualified = GoalPhaseNativeMetadata.normalizePublicJson(_json(accepted.qualifiedCheckpoint.get))
+      .toOption.get.as[O.CandidateContinuation].toOption.get
+    qualified shouldBe qualification
+    closed.work.get.selectedPlan shouldBe repair.work.get.selectedPlan
+    closed.work.get.originalBase shouldBe repair.work.get.originalBase
+    closing.repairProgress shouldBe repair.repairProgress
+    closed.repairProgress shouldBe Some(repair.repairProgress.get.copy(automaticCount = 0, ordinaryCount = 0))
+    val primaryafter = _snapshot(root, repository, "checkpoint-after-native-acceptance")
+    primaryafter shouldBe checkpoint
+    _git(root, repository, "checkpoint-after-native-acceptance-clean", "status", "--porcelain=v1") shouldBe ""
+    workbytes.map { (path, _) => path -> Files.readString(repository.resolve(path)) } shouldBe workbytes
     closed.completion shouldBe None
     Files.readString(Path.of(saved.hcursor.get[String]("acceptedRepairSubmitOutput").toOption.get)) shouldBe
       saved.hcursor.get[String]("acceptedRepairSubmitBytes").toOption.get
@@ -1197,6 +1479,8 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     _write(locator.resolveSibling(locator.getFileName.toString + ".checkpoint-result.json"), Json.obj(
       "session" -> session.asJson, "source" -> target.binding.base.asJson, "sourceTarget" -> target.asJson,
       "checkpoint" -> checkpoint.asJson, "acceptedRepair" -> saved.hcursor.get[String]("acceptedRepairSubmitOutput").toOption.get.asJson,
+      "stepAcceptance" -> "accepted-existing-commit".asJson, "primaryAfterAcceptance" -> primaryafter.asJson,
+      "qualifiedCheckpoint" -> qualified.asJson, "reviewedWorkPaths" -> workpaths.asJson, "reviewedWorkDiff" -> workdiff.asJson,
       "completed" -> closed.work.get.completed.map(_json).asJson, "repairProgress" -> _json(repair.repairProgress.get),
       "preservedUnknownEpisode" -> unknown.asJson,
       "phaseAccepted" -> false.asJson))

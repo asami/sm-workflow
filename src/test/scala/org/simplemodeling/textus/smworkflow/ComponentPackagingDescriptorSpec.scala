@@ -13,8 +13,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /**
  * @since   Oct.  2, 2026
  *  version Oct. 28, 2026
- *  version Nov.  6, 2026
-  * @version Nov.  8, 2026
+ * @version Nov.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -39,7 +38,8 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
       val fields = array(chain, "fields")
       val closedFields = array(closed, "fields")
       val optional = closedFields.find(v => text(v, "name") == "partialCompletion").get
-      val ordinary = V.GoalPhaseClosedStep("S1", V.GoalPhaseNativeCommit("d", "p", "t"), Some("review"), None, None)
+      val ordinary = V.GoalPhaseClosedStep("S1", V.GoalPhaseNativeCommit("d", "p", "t"), Some("review"), None, None,
+        qualifiedCheckpoint = None)
       val legacy = summon[org.goldenport.convert.ValueReader[V.GoalPhaseClosedStep]].readC(
         org.goldenport.record.Record.data("step" -> "S1", "commit" -> ordinary.commit.toRecord()))
       val publicchain = V.GoalPhaseStepCommitChain(V.GoalPhaseNativeSnapshot("p", "pt"),
@@ -53,15 +53,18 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
         ("commit", "GoalPhaseNativeCommit", "1", true),
         ("review", "string", "?", false),
         ("admission", "org.goldenport.record.Record", "?", false),
-        ("partialCompletion", "GoalPhaseStepCommitChain", "?", false))
+        ("partialCompletion", "GoalPhaseStepCommitChain", "?", false),
+        ("qualifiedCheckpoint", "org.goldenport.record.Record", "?", false))
       optional.hcursor.get[Boolean]("required") shouldBe Right(false)
       text(optional, "type") shouldBe "GoalPhaseStepCommitChain"
       ordinary.partialCompletion shouldBe None
+      ordinary.qualifiedCheckpoint shouldBe None
       ordinary.copy(partialCompletion = Some(publicchain)).partialCompletion shouldBe Some(publicchain)
       withClue(s"Legacy ClosedStep without optional fields must decode: $legacy. ") { legacy.isSuccess shouldBe true }
       legacy.toOption.get.review shouldBe None
       legacy.toOption.get.admission shouldBe None
       legacy.toOption.get.partialCompletion shouldBe None
+      legacy.toOption.get.qualifiedCheckpoint shouldBe None
       val admission = org.goldenport.record.Record.data("policy" -> "specification-passive-admission")
       val withAdmission = ordinary.copy(admission = Some(admission))
       summon[org.goldenport.convert.ValueReader[V.GoalPhaseClosedStep]].readC(withAdmission.toRecord())

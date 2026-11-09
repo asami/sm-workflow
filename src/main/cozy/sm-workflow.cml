@@ -1783,6 +1783,7 @@ OperationResult
 | review | string | ? |
 | admission | org.goldenport.record.Record | ? |
 | partialCompletion | GoalPhaseStepCommitChain | ? |
+| qualifiedCheckpoint | Record | ? |
 
 ## GoalPhaseRepairDirective
 

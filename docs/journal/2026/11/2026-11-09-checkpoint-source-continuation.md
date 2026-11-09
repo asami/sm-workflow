@@ -29,3 +29,16 @@ artifact acceptance and publication keep their separate authority.
 Existing controller and native-traversal size debt remains recorded in
 [the common development reconstruction journal](2026-11-05-common-development-reconstruction.md).
 It is not a reason to decompose the state machine during this repair.
+
+## Additional naming locations under the same hygiene item
+
+The option-A review also observed inherited private helper names in
+`GoalPhaseNativeValidation.scala` (`covers`, `id`),
+`GoalPhaseNativeClosure.scala` (`recordsBaseC`, `id`, `covers`),
+`ComponentPackagingDescriptorSpec.scala` (`readJson`, `array`, `text`), and
+`GoalPhaseOrderedProgressionSpec.scala` (existing private fixtures/helpers).
+Reconcile review candidate `HYG-P611-A-PRIVATE-NAMING-01` into the existing
+`HYG-P611-CHECKPOINT-LEGACY-NAMING` item above rather than creating a duplicate.
+Status remains OPEN, with the same naming-only boundary and low maintenance
+risk. The current repair changes only newly introduced nonconforming local
+names; it does not authorize this inherited cleanup.

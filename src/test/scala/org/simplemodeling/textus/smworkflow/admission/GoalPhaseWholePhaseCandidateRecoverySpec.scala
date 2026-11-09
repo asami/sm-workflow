@@ -22,7 +22,8 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Pure codec and independently supplied fixture evidence; no real invocation or Human proof.
   * @since   Oct. 22, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -61,6 +62,83 @@ final class GoalPhaseWholePhaseCandidateRecoverySpec extends AnyWordSpec with Na
       W.Policy(GoalPhaseNativeValidation.Policy("phase-test", 1, Vector(GoalPhaseNativeValidation.Check("test", 2))),
         1048576L, Json.obj("sbtPrograms" -> Json.arr(Json.obj("fixture" -> Json.fromString("opaque-host-definition"))))))
   }
+  "Qualified checkpoint recovery prefix" should {
+    "retain an otherwise-valid whole-Phase UNKNOWN target with exact committed work and real checkpoint ancestry" in {
+      Given("CB-P611-A-01: specification-owned completed Step work spanning two linear checkpoints")
+      import CommittedStepWorkSpecificationFixture as F
+      val original = _target
+      val initial = take(O.startC(original.controller.plan, _base))
+      val ready = take(initial.acceptC(O.SemanticCompleted(initial.next.asInstanceOf[O.Semantic].key, "Specification work")))
+      val observed = take(ready.acceptC(O.CandidateContinuationObserved(F.checkpoint, F.proof)))
+      val required = take(observed.requireCommittedWorkReviewC)
+      val checked = take(required.acceptC(O.ChecksObserved(F.checkpoint, Vector("compile"), "current-compile", true)))
+      val reviewed = take(checked.acceptC(O.ReviewAdmitted(checked.next.asInstanceOf[O.Semantic].key,
+        F.checkpoint, "current-compile", "independent-checkpoint-review", O.ReviewOutcome.Accept)))
+      val closed = take(reviewed.acceptC(O.ExistingStepWorkAccepted(F.commit, F.proof, Vector("value.txt"))))
+      val work = F.work.copy(originalCandidate = ContextReference(original.sessionId, "12"),
+        paths = Vector("value.txt"), diff = "diff --git a/value.txt b/value.txt\n-old\n+new\n")
+      val candidate = original.completedCandidates.head.copy(candidate = Some(F.checkpoint), changedPaths = Vector.empty,
+        diff = Some(""), continuation = Some(F.proof), committedWork = Some(work))
+      val target = original.copy(controller = R.controllerSnapshot(closed), completedCandidates = Vector(candidate),
+        repository = original.repository.copy(head = F.checkpoint.head, tree = F.checkpoint.tree, indexTree = F.checkpoint.tree))
+      When("the existing recovery owner validates and decodes the qualified UNKNOWN target and its direction")
+      val valid = W.validTarget(target)
+      val decoded = W.decodeTarget(target.asJson)
+      val direction = W.Direction(target, ContextReference(_reference.identity, "1"), "participant", "Fixture-only direction", true)
+      val restored = W.codec.decode(W.codec.encode(direction))
+      Then("complete work and proof survive without changing the literal empty pending delta or real commit parent")
+      valid shouldBe true
+      decoded shouldBe Right(target)
+      restored shouldBe Right(direction)
+      target.completedCandidates.head.changedPaths shouldBe empty
+      target.completedCandidates.head.diff shouldBe Some("")
+      C.workPaths(decoded.toOption.get.completedCandidates.head) shouldBe Vector("value.txt")
+      C.workDiff(decoded.toOption.get.completedCandidates.head) shouldBe Some(work.diff)
+      target.controller.completed.head.commit.parent shouldBe F.intermediate.head
+      target.controller.completed.head.qualifiedCheckpoint shouldBe Some(F.proof)
+      target.oldObservationOutcome shouldBe original.oldObservationOutcome
+      target.oldObservationTermination shouldBe original.oldObservationTermination
+
+      Given("the same otherwise-valid target with independently crossed proof, anchor, work ownership and commit parent")
+      val otherproof = O.CandidateContinuation(F.checkpoint, Vector(
+        O.HistoryCommit(F.checkpoint.head, F.checkpoint.tree, Vector(F.base.head)), F.proof.lineage.last))
+      val othercandidate = candidate.copy(continuation = Some(otherproof),
+        committedWork = Some(work.copy(continuation = otherproof)))
+      val wrongparent = target.controller.completed.head.copy(commit = F.commit.copy(parent = F.base.head))
+      val unowned = candidate.copy(committedWork = Some(work.copy(paths = Vector("outside.txt"))))
+      val invalid = Vector(target.copy(completedCandidates = Vector(othercandidate)),
+        target.copy(controller = target.controller.copy(base = F.intermediate)),
+        target.copy(completedCandidates = Vector(unowned)),
+        target.copy(controller = target.controller.copy(completed = Vector(wrongparent))),
+        target.copy(completedCandidates = Vector(candidate.copy(committedWork = None))))
+      When("each crossed completed-prefix subject is admitted through the same existing Target boundary")
+      val refused = invalid.map(W.validTarget)
+      Then("none can recover UNKNOWN by crossing its accepted snapshot, exact proof or owned complete work")
+      refused.foreach(_ shouldBe false)
+      invalid.foreach(value => W.decodeTarget(value.asJson).isLeft shouldBe true)
+    }
+
+    "preserve the literal ordinary and partial completed-candidate predicates" in {
+      Given("an ordinary old target and a specification-owned partial completion using its original candidate-parent shape")
+      import CommittedStepWorkSpecificationFixture as F
+      val ordinary = _target
+      val chain = O.StepCommitChain(F.base, O.Commit(F.intermediate.head, F.base.head, F.intermediate.tree), F.commit)
+      val closed = ordinary.controller.completed.head.copy(commit = F.commit, partialCompletion = Some(chain))
+      val partial = ordinary.copy(controller = ordinary.controller.copy(completed = Vector(closed), tip = F.checkpoint),
+        completedCandidates = ordinary.completedCandidates.map(_.copy(candidate = Some(O.Snapshot(F.intermediate.head, F.checkpoint.tree)))),
+        repository = ordinary.repository.copy(head = F.checkpoint.head, tree = F.checkpoint.tree, indexTree = F.checkpoint.tree))
+      val emptydiff = ordinary.copy(completedCandidates = ordinary.completedCandidates.map(_.copy(diff = Some(""))))
+      When("old ordinary and partial subjects pass through the completed-candidate branch")
+      val admitted = Vector(ordinary, partial, emptydiff).map(W.validTarget)
+      Then("the existing predicates stay literal and no new complete-work qualification is inferred")
+      admitted shouldBe Vector(true, true, true)
+      Vector(ordinary, partial, emptydiff).foreach(value => W.decodeTarget(value.asJson) shouldBe Right(value))
+      partial.controller.completed.head.qualifiedCheckpoint shouldBe None
+      partial.completedCandidates.head.committedWork shouldBe None
+      ordinary.completedCandidates.head.committedWork shouldBe None
+    }
+  }
+
   private def _description(t: W.Target): V.GoalPhaseWholePhaseCandidateRecoveryDescriptionResult =
     V.GoalPhaseWholePhaseCandidateRecoveryDescriptionResult(t.sessionId, "decision-required", W.message,
       "component", W.targetRecord(t), W.choices, W.recoveryOperation)

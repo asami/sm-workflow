@@ -19,7 +19,8 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Synthetic Storage and pure business values test immutable append semantics.
   * They are not native receipts, real commit evidence or production review proof.
   * @since   Oct. 20, 2026
-  * @version Oct. 24, 2026
+  *  version Oct. 24, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -45,6 +46,61 @@ final class DevelopmentJournalFindingSpec extends AnyWordSpec with Matchers with
       creates += 1
       if (!failCreate || retainOnFailure) row = Some(value)
       if (failCreate) Consequence.stateConflict("SPECIFICATION-OWNED failed create") else Consequence.unit
+    }
+  }
+
+  "Qualified checkpoint Finding context" should {
+    "retain a multi-checkpoint accepted prefix in its actual entry and storage codec" in {
+      Given("CB-P611-A-02: a specification-owned accepted checkpoint whose immediate parent is later than the original tip")
+      import CommittedStepWorkSpecificationFixture as F
+      val closed = _context.completed.head.copy(commit = F.commit, qualifiedCheckpoint = Some(F.proof))
+      val context = _context.copy(originalBase = F.base, completed = Vector(closed))
+      val now = Instant.parse("2026-11-09T00:00:00Z")
+      When("the existing Journal Finding owner validates the context and creates and encodes its entry")
+      val valid = K.validateContextC(context)
+      val entry = take(K.entryC(context, _pending, now))
+      val raw = take(K.encodeStorageC(entry))
+      val restored = take(K.decodeStorageC(raw, entry.identity))
+      val row = take(K.rowC(entry))
+      Then("the exact qualification, source, content and literal immediate parent survive the canonical storage roundtrip")
+      valid.isSuccess shouldBe true
+      restored shouldBe entry
+      restored.context.completed.head.qualifiedCheckpoint shouldBe Some(F.proof)
+      restored.context.completed.head.commit.parent shouldBe F.intermediate.head
+      restored.context.originalBase shouldBe F.base
+      restored.sourceReference shouldBe _source
+      restored.observation shouldBe _observation
+      take(K.storedC(row, entry.identity)) shouldBe entry
+      K.publicEntry(restored).finding.get.completed.head.commit.parent shouldBe F.intermediate.head
+
+      Given("the same context with an independently wrong anchor or falsified immediate parent")
+      val invalid = Vector(context.copy(originalBase = F.intermediate),
+        context.copy(completed = Vector(closed.copy(commit = F.commit.copy(parent = F.base.head)))))
+      When("each crossed context reaches eligibility and actual Finding entry creation")
+      val contexts = invalid.map(K.validateContextC)
+      val entries = invalid.map(K.entryC(_, _pending, now))
+      Then("neither can create or encode a Finding entry with a rewritten ancestry claim")
+      contexts.foreach(_.isSuccess shouldBe false)
+      entries.foreach(_.isSuccess shouldBe false)
+      invalid.foreach(value => K.encodeStorageC(entry.copy(context = value)).isSuccess shouldBe false)
+    }
+
+    "preserve ordinary and partial accepted-prefix eligibility without inferring qualification" in {
+      Given("the original ordinary context and a specification-owned partial completion chain")
+      import CommittedStepWorkSpecificationFixture as F
+      val chain = O.StepCommitChain(F.base, O.Commit(F.intermediate.head, F.base.head, F.intermediate.tree), F.commit)
+      val closed = _context.completed.head.copy(commit = F.commit, partialCompletion = Some(chain))
+      val partial = _context.copy(originalBase = F.base, completed = Vector(closed))
+      When("the unchanged ordinary and partial subjects are validated and stored")
+      val valid = Vector(_context, partial).map(K.validateContextC)
+      val entries = Vector(_context, partial).map(value => take(K.entryC(value, _pending, Instant.EPOCH)))
+      val restored = entries.map(value => take(K.decodeStorageC(take(K.encodeStorageC(value)), value.identity)))
+      Then("both remain eligible and their original closure evidence survives without a qualified checkpoint")
+      valid.foreach(_.isSuccess shouldBe true)
+      restored shouldBe entries
+      restored.foreach(_.context.completed.head.qualifiedCheckpoint shouldBe None)
+      restored(1).context.completed.head.partialCompletion shouldBe Some(chain)
+      K.validateContextC(partial.copy(originalBase = F.intermediate)).isSuccess shouldBe false
     }
   }
 

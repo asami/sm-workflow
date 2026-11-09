@@ -22,7 +22,8 @@ import GoalPhaseOrderedProgression as O
 /** Immutable Findings derived only at the native accepted business frontier.
   * Storage is the current call's fixed declared Journal, never a file fallback.
   * @since   Oct. 20, 2026
-  * @version Oct. 27, 2026
+  *  version Oct. 27, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object DevelopmentJournalFinding {
@@ -105,7 +106,7 @@ private[smworkflow] object DevelopmentJournalFinding {
             val previous = value.completed(index - 1).commit
             O.Snapshot(previous.identity, previous.tree)
           }
-          closed.partialCompletion.fold(closed.commit.parent == predecessor.head)(_.originalParent == predecessor)
+          O.acceptedPredecessorValid(closed, predecessor)
         } &&
         value.candidate != null && value.candidate.forall(_snapshot) && value.checksReceipt != null &&
         value.checksReceipt.forall(_exact) && value.reviewEvidence != null && value.reviewEvidence.forall(_exact) &&

@@ -309,6 +309,39 @@ private[admission] object PrimaryPublicationRepairSpecificationFixture {
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhasePrerequisitePrimaryRepairSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import PrimaryPublicationRepairSpecificationFixture as F
+  "Committed primary publication target" should {
+    "use complete qualified work without rewriting the original nonempty failure or granting publication" in {
+      Given("P611-CHECKPOINT-A-01: the original literal publication failure and a later clean repaired checkpoint")
+      val checkpoint = O.Snapshot("e" * 40, "f" * 40)
+      val proof = O.CandidateContinuation(checkpoint, Vector(
+        O.HistoryCommit(checkpoint.head, checkpoint.tree, Vector(F.base.head)),
+        O.HistoryCommit(F.base.head, F.base.tree, Vector.empty)))
+      val raw = F.repairedCandidate.copy(candidate = Some(checkpoint), continuation = Some(proof),
+        changedPaths = Vector.empty, diff = Some(""))
+      val work = GoalPhaseCommittedStepWork.Work(ContextReference("primary-session", "17"), F.base, proof,
+        F.candidate.changedPaths, F.candidate.diff.get)
+      val qualified = raw.copy(committedWork = Some(work))
+      val inspecting = take(F.repair.acceptC(O.SemanticCompleted(F.repair.next.asInstanceOf[O.Semantic].key,
+        "Specification corrected work already committed")))
+      val current = take(inspecting.acceptC(O.CandidateContinuationObserved(checkpoint, proof)))
+      val target = A.Target(A.targetSchema, F.failure.componentInstance, F.failure.participant, F.failure.sessionId,
+        "18", F.sorted(B.controller(current)), current.generation, "18", qualified, F.failure,
+        Some(F.reuse.repair), A.scope(F.failure), "existing-primary-publication-authority")
+      When("the current Target is validated using its qualified complete work")
+      val valid = A.targetValid(target)
+      Then("the Target remains eligible while the original failure keeps its literal nonempty candidate")
+      valid shouldBe true
+      A.targetValid(target.copy(candidate = raw)) shouldBe false
+      A.targetValid(target.copy(candidate = qualified.copy(committedWork = Some(work.copy(paths = Vector("foreign.scala")))))) shouldBe false
+      A.targetValid(target.copy(scope = target.scope.copy(processPolicy = "{\"crossed\":true}"))) shouldBe false
+      A.failureValid(F.failure) shouldBe true
+      A.failureValid(F.failure.copy(candidate = qualified)) shouldBe false
+      target.failure.candidate.changedPaths shouldBe F.candidate.changedPaths
+      target.failure.candidate.diff shouldBe F.candidate.diff
+      C.workPaths(target.candidate) shouldBe F.candidate.changedPaths
+      target.candidate.changedPaths shouldBe empty
+    }
+  }
   private def _inspection_source_fixture: (O.State, GoalPhaseDependencySourceRevision.Direction,
     GoalPhaseDependencySourceRevision.Capture, C.Payload) = {
     import GoalPhaseDependencySourceRevision as R

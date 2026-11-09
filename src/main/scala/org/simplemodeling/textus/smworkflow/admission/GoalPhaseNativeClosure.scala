@@ -23,7 +23,7 @@ import GoalPhasePartialCommitClosure as P
   * storage and an intent without a recorded result is never automatically rerun.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  2, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeClosure {
@@ -37,16 +37,24 @@ private[smworkflow] object GoalPhaseNativeClosure {
   }
   final case class Input(instance: String, sourceRevision: String, plan: String, planRevision: String,
     step: String, generation: Long, parent: O.Snapshot, candidate: O.Snapshot, reviewEvidence: Option[String],
-    admission: Option[GoalPhaseStepAssessment.Admission] = None)
+    admission: Option[GoalPhaseStepAssessment.Admission] = None,
+    committedWork: Option[GoalPhaseCommittedStepWork.Work] = None)
   object Input {
     def apply(instance: String, sourceRevision: String, plan: String, planRevision: String,
       step: String, generation: Long, parent: O.Snapshot, candidate: O.Snapshot, reviewEvidence: String): Input =
       new Input(instance, sourceRevision, plan, planRevision, step, generation, parent, candidate, Some(reviewEvidence))
     given Encoder[Input] = io.circe.generic.semiauto.deriveEncoder[Input].mapJson(_.mapObject(_.filter {
-      case ("admission", value) => !value.isNull
+      case ("admission" | "committedWork", value) => !value.isNull
       case _ => true
     }))
-    given Decoder[Input] = io.circe.generic.semiauto.deriveDecoder
+    private val _decoder: Decoder[Input] = io.circe.generic.semiauto.deriveDecoder
+    given Decoder[Input] = Decoder.instance(cursor => _decoder(cursor).flatMap(value =>
+      if (!cursor.downField("committedWork").focus.exists(_.isNull) && value.committedWork.forall(w =>
+          GoalPhaseCommittedStepWork.valid(w) && w.originalCandidate.identity == value.instance &&
+          value.sourceRevision != null && value.sourceRevision.toLongOption.exists(_ > w.originalCandidate.revision.toLong) &&
+          w.continuation.parent == value.parent && value.candidate == value.parent &&
+          value.reviewEvidence.exists(_text) && value.admission.isEmpty)) Right(value)
+      else Left(io.circe.DecodingFailure("invalid committed work closure input", cursor.history))))
   }
   trait AuthorityPort {
     /** Observe host-recorded authority for this actual current call. Never
@@ -64,7 +72,8 @@ private[smworkflow] object GoalPhaseNativeClosure {
     check: Option[Precheck] = None, changes: Vector[Change] = Vector.empty,
     partialCompletion: Option[O.StepCommitChain] = None,
     hygiene: Option[CommitHygiene.Record] = None,
-    records: Option[CompletionRecords.Plan] = None)
+    records: Option[CompletionRecords.Plan] = None,
+    qualifiedCheckpoint: Option[O.CandidateContinuation] = None)
   object Payload {
     given Encoder[Payload] = Encoder.instance { value =>
       Json.obj((Vector("input" -> value.input.asJson, "ordinal" -> value.ordinal.asJson,
@@ -74,7 +83,8 @@ private[smworkflow] object GoalPhaseNativeClosure {
         (if (value.changes.isEmpty) Vector.empty else Vector("changes" -> value.changes.asJson)) ++
         value.partialCompletion.toVector.map(chain => "partialCompletion" -> chain.asJson) ++
         value.hygiene.toVector.map(hygiene => "hygiene" -> hygiene.asJson) ++
-        value.records.toVector.map(records => "records" -> records.asJson))*)
+        value.records.toVector.map(records => "records" -> records.asJson) ++
+        value.qualifiedCheckpoint.toVector.map(proof => "qualifiedCheckpoint" -> proof.asJson))*)
     }
     given Decoder[Payload] = Decoder.instance { cursor =>
       for {
@@ -90,13 +100,18 @@ private[smworkflow] object GoalPhaseNativeClosure {
         chain <- cursor.get[Option[O.StepCommitChain]]("partialCompletion")
         hygiene <- cursor.get[Option[CommitHygiene.Record]]("hygiene")
         records <- cursor.get[Option[CompletionRecords.Plan]]("records")
+        checkpoint <- cursor.get[Option[O.CandidateContinuation]]("qualifiedCheckpoint")
         _ <- Either.cond(attempt >= 0 && check.forall(_valid_precheck) && _valid_changes(changes) &&
           !cursor.downField("partialCompletion").focus.exists(_.isNull) &&
           !cursor.downField("hygiene").focus.exists(_.isNull) && hygiene.forall(CommitHygiene.valid) &&
           !cursor.downField("records").focus.exists(_.isNull) && records.forall(CompletionRecords.valid) &&
+          !cursor.downField("qualifiedCheckpoint").focus.exists(_.isNull) && checkpoint.forall(p =>
+            chain.isEmpty && attempt == 0 && check.isEmpty && changes.isEmpty && hygiene.isEmpty &&
+            input.committedWork.exists(w => p == w.continuation && commit.exists(c =>
+              O.qualifiedCheckpointValid(w.acceptedTip, p, c)))) &&
           chain.forall(c => O.validStepCommitChain(c) && c.originalParent == input.parent && commit.contains(c.completion)), (),
           io.circe.DecodingFailure("invalid native Step closure attempt facts", cursor.history))
-      } yield Payload(input, ordinal, commit, attempt, check, changes, chain, hygiene, records)
+      } yield Payload(input, ordinal, commit, attempt, check, changes, chain, hygiene, records, checkpoint)
     }
   }
   final case class Saved(record: InstanceRecord, payload: Payload, controller: O.State,
@@ -113,16 +128,20 @@ private[smworkflow] object GoalPhaseNativeClosure {
   private[admission] val codec = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "GoalPhaseNativeStepClosureReceipt"
     def encode(value: Payload) = Json.obj("schemaVersion" -> Json.fromString(
-      if (value.partialCompletion.nonEmpty) "sm-workflow.goal-phase-native-step-closure.v4"
+      if (value.qualifiedCheckpoint.nonEmpty) "sm-workflow.goal-phase-native-step-closure.v5"
+      else if (value.partialCompletion.nonEmpty) "sm-workflow.goal-phase-native-step-closure.v4"
       else "sm-workflow.goal-phase-native-step-closure.v3"),
       "payload" -> value.asJson)
     def decode(value: Json): Either[String, Payload] = for {
       wire <- Option(value).toRight("native Step closure is missing")
       schema <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
-      _ <- Either.cond(Set("sm-workflow.goal-phase-native-step-closure.v3", "sm-workflow.goal-phase-native-step-closure.v4")(schema), (), "native Step closure schema differs")
+      _ <- Either.cond(Set("sm-workflow.goal-phase-native-step-closure.v3", "sm-workflow.goal-phase-native-step-closure.v4", "sm-workflow.goal-phase-native-step-closure.v5")(schema), (), "native Step closure schema differs")
       payload <- wire.hcursor.get[Payload]("payload").left.map(_.message)
-      _ <- Either.cond((schema.endsWith(".v4") && payload.partialCompletion.nonEmpty) ||
-        (schema.endsWith(".v3") && payload.partialCompletion.isEmpty), (), "native Step closure schema and chain differ")
+      _ <- Either.cond((schema.endsWith(".v5") && payload.qualifiedCheckpoint.nonEmpty &&
+        payload.input.committedWork.nonEmpty && encode(payload) == wire && _valid_input(payload.input)) ||
+        (payload.qualifiedCheckpoint.isEmpty && payload.input.committedWork.isEmpty &&
+          ((schema.endsWith(".v4") && payload.partialCompletion.nonEmpty) ||
+            (schema.endsWith(".v3") && payload.partialCompletion.isEmpty))), (), "native Step closure schema and qualification differ")
     } yield payload
   }
 
@@ -132,10 +151,11 @@ private[smworkflow] object GoalPhaseNativeClosure {
       F.invalid("Step commit result is not recorded")))
 
   def retainedOptionC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
-    from: InstanceRecord, controller: O.State): Consequence[Option[Saved]] = for {
-    store <- _store_c(session, d, core, from, controller, _ => Consequence.unit)
+    from: InstanceRecord, controller: O.State,
+    candidate: Option[GoalPhaseNativeCandidate.Saved] = None): Consequence[Option[Saved]] = for {
+    store <- _store_c(session, d, core, from, controller, _ => Consequence.unit, candidate = candidate)
     result <- store.loadC("committed")
-    saved <- result match {
+    saved <- if (store.input.committedWork.nonEmpty) store.retainedExistingC(result, live = true) else result match {
       case Some(value) => store.completedC(value).map(Some(_))
       case None => for {
         progress <- store.progressC
@@ -150,10 +170,11 @@ private[smworkflow] object GoalPhaseNativeClosure {
 
   /** Recording Submit reconstructs canonical history without observing live Git. */
   def retainedRecordingHistoryOptionC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
-    from: InstanceRecord, controller: O.State): Consequence[Option[Saved]] = for {
-    store <- _store_c(session, d, core, from, controller, _ => Consequence.unit)
+    from: InstanceRecord, controller: O.State,
+    candidate: Option[GoalPhaseNativeCandidate.Saved] = None): Consequence[Option[Saved]] = for {
+    store <- _store_c(session, d, core, from, controller, _ => Consequence.unit, candidate = candidate)
     result <- store.loadC("committed")
-    saved <- result match {
+    saved <- if (store.input.committedWork.nonEmpty) store.retainedExistingC(result, live = false) else result match {
       case Some(value) => store.completedRecordingHistoryC(value).map(Some(_))
       case None => for {
         progress <- store.recordingProgressC
@@ -165,11 +186,12 @@ private[smworkflow] object GoalPhaseNativeClosure {
 
   def advanceC(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     from: InstanceRecord, controller: O.State, acknowledge: String => Consequence[Unit],
-    dependencyPreconditions: () => Consequence[Unit] = () => Consequence.unit): Consequence[Option[Saved]] = for {
+    dependencyPreconditions: () => Consequence[Unit] = () => Consequence.unit,
+    candidate: Option[GoalPhaseNativeCandidate.Saved] = None): Consequence[Option[Saved]] = for {
     _ <- dependencyPreconditions()
-    store <- _store_c(session, d, core, from, controller, acknowledge, dependencyPreconditions)
+    store <- _store_c(session, d, core, from, controller, acknowledge, dependencyPreconditions, candidate)
     result <- store.loadC("committed")
-    saved <- result match {
+    saved <- if (store.input.committedWork.nonEmpty) store.acceptExistingC(result) else result match {
       case Some(value) => store.completedC(value).map(Some(_))
       case None => for {
         granted <- store.installation.authority.isGrantedC(core, store.input)
@@ -217,7 +239,7 @@ private[smworkflow] object GoalPhaseNativeClosure {
             payload = Payload(store.input, store.ordinal, None, attempt, Some(check),
               if (check.findings.isEmpty) changes else Vector.empty, hygiene = Some(effective), records = prepared.flatMap(_.payload.records))
             checked <- store.saveC(_attempt_key("check-result", attempt), progress.record, "Closing", payload)
-            saved <- if (hygiene.outcome == "planned") advanceC(session, d, core, from, controller, acknowledge, dependencyPreconditions)
+            saved <- if (hygiene.outcome == "planned") advanceC(session, d, core, from, controller, acknowledge, dependencyPreconditions, candidate)
               else if (check.findings.nonEmpty) Consequence.success(Some(Saved(checked, payload, controller)))
               else store.commitC(checked, payload).map(Some(_))
           } yield saved
@@ -255,7 +277,8 @@ private[smworkflow] object GoalPhaseNativeClosure {
 
   /** The owning Closing frontier supplies the same target to authority lookup
     * and the public missing-authority Wait projection. */
-  def inputC(from: InstanceRecord, controller: O.State): Consequence[Input] = for {
+  def inputC(from: InstanceRecord, controller: O.State,
+    candidate: Option[GoalPhaseNativeCandidate.Saved] = None): Consequence[Input] = for {
     _ <- if (controller.stage == O.Stage.Closing && controller.cursor < controller.plan.steps.size &&
         controller.candidate.nonEmpty && controller.checksReceipt.nonEmpty &&
         O.validStepAcceptance(O.ClosedStep(controller.plan.steps(controller.cursor).identity,
@@ -266,26 +289,109 @@ private[smworkflow] object GoalPhaseNativeClosure {
         controller.checksReceipt.contains(a.assessment.validationReference))) Consequence.unit
       else F.invalid("formal Step admission differs from the exact closure candidate or checks")
     step = controller.plan.steps(controller.cursor)
+    work = candidate.flatMap(_.payload.committedWork)
+    _ <- if (work.forall(w => candidate.exists(c => GoalPhaseCommittedStepWork.bound(c.payload, w) &&
+        c.record.identity == from.identity && w.originalCandidate.identity == from.identity.value &&
+        c.record.revision.value < from.revision.value && c.payload.step == step.identity && c.payload.candidate == controller.candidate &&
+        w.acceptedTip == controller.tipSnapshot && w.continuation.parent == controller.candidateBase &&
+        GoalPhaseNativeCandidateBoundary.pathsOwned(w.paths, step.ownedPaths)) &&
+        controller.reviewEvidence.exists(_text) && controller.stepAdmission.isEmpty && controller.closureIntent.isEmpty))
+      Consequence.unit else F.invalid("existing work closure crosses its exact reviewed candidate or independent acceptance")
   } yield Input(from.identity.value, from.revision.value.toString, controller.plan.identity, controller.plan.revision,
-    step.identity, controller.generation, controller.candidateBase, controller.candidate.get, controller.reviewEvidence, controller.stepAdmission)
+    step.identity, controller.generation, controller.candidateBase, controller.candidate.get, controller.reviewEvidence, controller.stepAdmission, work)
 
   private def _store_c(session: F.Session, d: F.Declaration, core: ActionCall.Core,
     from: InstanceRecord, controller: O.State, acknowledge: String => Consequence[Unit],
-    dependencyPreconditions: () => Consequence[Unit] = () => Consequence.unit): Consequence[Store] = for {
-    input <- inputC(from, controller)
+    dependencyPreconditions: () => Consequence[Unit] = () => Consequence.unit,
+    candidate: Option[GoalPhaseNativeCandidate.Saved] = None): Consequence[Store] = for {
+    input <- inputC(from, controller, candidate)
     installation <- d.closureInstallation.map(Consequence.success).getOrElse(F.invalid("Step closure installation is missing"))
     _ <- installation.validateC
     step = controller.plan.steps(controller.cursor)
     ordinal <- installation.policy.programs.find(_.step == step.identity).map(p => Consequence.success(p.ordinal))
       .getOrElse(F.invalid("Step has no host-fixed commit program"))
     adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
-  } yield new Store(adapter, session, d, core, from, controller, installation, ordinal, input, acknowledge, dependencyPreconditions)
+    accepted <- adapter.loadRetainedC(WorkflowMechanicalTransition.Reference(from.identity.value +
+      ":ordered-step-closure:" + from.revision.value + ":accepted-existing", "1"))(using core.executionContext)
+    _ <- if (accepted.isEmpty || input.committedWork.nonEmpty) Consequence.unit
+      else F.invalid("accepted-existing closure requires its exact supplemented candidate input")
+  } yield new Store(adapter, session, d, core, from, controller, installation, ordinal, input, acknowledge, dependencyPreconditions, candidate)
 
   private final class Store(adapter: WorkflowManagedMechanicalTransition[Payload], session: F.Session,
     d: F.Declaration, core: ActionCall.Core, from: InstanceRecord, controller: O.State,
     val installation: Installation, val ordinal: Int, val input: Input, acknowledge: String => Consequence[Unit],
-    dependencyPreconditions: () => Consequence[Unit]) {
+    dependencyPreconditions: () => Consequence[Unit], candidate: Option[GoalPhaseNativeCandidate.Saved]) {
     private val _owned_paths = controller.plan.steps(controller.cursor).ownedPaths
+    private def _existing_progress_c: Consequence[Unit] = for {
+      selected <- candidate.map(Consequence.success).getOrElse(F.invalid("existing work has no exact supplemented candidate"))
+      _ <- GoalPhaseCommittedStepWork.authenticateC(session, core, selected, controller)
+      progress <- recordingProgressC
+      prepared <- loadC("records-prepared")
+      _ <- if (progress.record == from && progress.failed.isEmpty && progress.pending.isEmpty &&
+          progress.execution.isEmpty && progress.direction.isEmpty && progress.continuation.isEmpty &&
+          progress.completionIntent.isEmpty && progress.completionExecution.isEmpty && prepared.isEmpty &&
+          controller.closureIntent.isEmpty && controller.checksReceipt.exists(_text) && controller.reviewEvidence.exists(_text))
+        Consequence.unit else F.invalid("existing work acceptance cannot replace any pending, UNKNOWN or competing closure attempt")
+    } yield ()
+    private def _existing_records_valid(records: Option[CompletionRecords.Plan]): Boolean = {
+      val paths = CompletionRecords.selected(d.completionRecords, "step", input.step)
+      if (paths.isEmpty) records.isEmpty else records.exists(p => CompletionRecords.valid(p) &&
+        p.session == input.instance && p.family == "step" && p.scope == input.step && p.acceptedTree == input.candidate.tree &&
+        p.evidence == (controller.checksReceipt.toVector ++ controller.reviewEvidence.toVector).distinct &&
+        p.files.map(_.path) == paths && p.files.forall(f => f.before == f.after &&
+          StandaloneFixExecution.owned(f.path, _owned_paths) && d.candidatePaths.lift(f.stagingOrdinal - 1).contains(f.path)))
+    }
+    private def _completed_existing_c(result: Saved, live: Boolean): Consequence[Saved] = for {
+      _ <- _existing_progress_c
+      work <- input.committedWork.map(Consequence.success).getOrElse(F.invalid("existing work closure has no work"))
+      checkpoint = work.continuation.lineage.head
+      commit = O.Commit(checkpoint.identity, checkpoint.parents.head, checkpoint.tree)
+      expected = Payload(input, ordinal, Some(commit), records = result.payload.records,
+        qualifiedCheckpoint = Some(work.continuation))
+      _ <- if (result.payload == expected && _existing_records_valid(result.payload.records)) Consequence.unit
+        else F.invalid("accepted existing work changes its exact qualified checkpoint, source input or configured completion records")
+      next <- controller.acceptC(O.ExistingStepWorkAccepted(commit, work.continuation, work.paths))
+      _ <- _successor_c(from, result.record, "accepted-existing", next.stage.toString)
+      _ <- if (live) GoalPhaseCommittedStepWork.verifyCommittedFactsC(core, work) else Consequence.unit
+    } yield Saved(result.record, result.payload, next)
+    def retainedExistingC(committed: Option[Saved], live: Boolean): Consequence[Option[Saved]] = for {
+      _ <- if (committed.isEmpty) Consequence.unit else F.invalid("existing work acceptance cannot coexist with committed closure")
+      retained <- loadC("accepted-existing")
+      result <- retained match {
+        case Some(value) => _completed_existing_c(value, live).map(Some(_))
+        case None => _existing_progress_c.map(_ => Option.empty[Saved])
+      }
+    } yield result
+    def acceptExistingC(committed: Option[Saved]): Consequence[Option[Saved]] = for {
+      retained <- retainedExistingC(committed, live = true)
+      result <- retained match {
+        case Some(value) => Consequence.success(Some(value))
+        case None => for {
+          _ <- latestC(from)
+          granted <- installation.authority.isGrantedC(core, input)
+          accepted <- if (!granted) Consequence.success(Option.empty[Saved]) else for {
+            work <- input.committedWork.map(Consequence.success).getOrElse(F.invalid("existing work closure has no qualification"))
+            _ <- dependencyPreconditions()
+            _ <- GoalPhaseCommittedStepWork.observeC(d, core, work)
+            paths = CompletionRecords.selected(d.completionRecords, "step", input.step)
+            records <- if (paths.isEmpty) Consequence.success(Option.empty[CompletionRecords.Plan]) else
+              CompletionRecords.captureC(core, input.instance, "step", input.step, input.candidate.tree,
+                (controller.checksReceipt.toVector ++ controller.reviewEvidence.toVector).distinct,
+                paths, _owned_paths, d.candidatePaths).map(Some(_))
+            _ <- if (_existing_records_valid(records)) Consequence.unit
+              else F.invalid("configured Step completion records require a new file delta; existing checkpoint acceptance is unavailable")
+            checkpoint = work.continuation.lineage.head
+            commit = O.Commit(checkpoint.identity, checkpoint.parents.head, checkpoint.tree)
+            next <- controller.acceptC(O.ExistingStepWorkAccepted(commit, work.continuation, work.paths))
+            payload = Payload(input, ordinal, Some(commit), records = records, qualifiedCheckpoint = Some(work.continuation))
+            _ <- GoalPhaseCommittedStepWork.observeC(d, core, work)
+            _ <- latestC(from)
+            record <- saveC("accepted-existing", from, next.stage.toString, payload)
+            _ <- ackC("goal-step-existing-work-accepted")
+          } yield Some(Saved(record, payload, next))
+        } yield accepted
+      }
+    } yield result
     private def _intent_identity(attempt: Int) = reference(_attempt_key("intent", attempt)).identity
     def reference(key: String) = WorkflowMechanicalTransition.Reference(from.identity.value +
       ":ordered-step-closure:" + from.revision.value + ":" + key, "1")
@@ -303,6 +409,9 @@ private[smworkflow] object GoalPhaseNativeClosure {
       adapter.loadRetainedC(reference(key))(using core.executionContext).flatMap {
         case None => Consequence.success(None)
         case Some(value) => for {
+          accepted <- if (key == "committed") adapter.loadRetainedC(reference("accepted-existing"))(using core.executionContext)
+            else Consequence.success(None)
+          _ <- if (accepted.isEmpty) Consequence.unit else F.invalid("committed and accepted-existing closure receipts coexist")
           current <- _actual_record_c
           admitted <- GoalPhaseNativeHistory.prefixC(current, value.receipt.next.revision)
           _ <- if (admitted == value.receipt.next && admitted.identity == from.identity && admitted.definition == from.definition)
@@ -924,6 +1033,9 @@ private[smworkflow] object GoalPhaseNativeClosure {
     _text(value.plan) && _text(value.planRevision) && _text(value.step) && value.generation > 0 &&
     value.parent != null && value.candidate != null && _oid(value.parent.head) && _oid(value.parent.tree) &&
     value.candidate.head == value.parent.head && _oid(value.candidate.tree) &&
+    value.committedWork != null && value.committedWork.forall(w => GoalPhaseCommittedStepWork.valid(w) &&
+      w.originalCandidate.identity == value.instance && value.sourceRevision.toLong > w.originalCandidate.revision.toLong &&
+      value.parent == w.continuation.parent && value.candidate == value.parent && value.reviewEvidence.exists(_text) && value.admission.isEmpty) &&
     O.validStepAcceptance(O.ClosedStep(value.step, O.Commit("", "", ""), value.reviewEvidence, value.admission)) &&
     value.admission.forall(_.assessment.candidate == value.candidate)
   private def _text(value: String): Boolean = value != null && value.trim.nonEmpty &&

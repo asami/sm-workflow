@@ -31,7 +31,8 @@ import RepositorySyncManagedGitObservation as G
 /** One independently authorized remaining observation of an original whole-Phase inspection.
   * Retained UNKNOWN history is immutable. Failed new intents have no retry contract.
   * @since   Oct. 22, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseWholePhaseCandidateRecovery {
@@ -183,11 +184,26 @@ private[smworkflow] object GoalPhaseWholePhaseCandidateRecovery {
     GoalPhaseNativeFindingRecording.validatePathsC(t.recordingPaths, t.controller.plan, t.candidatePaths).isSuccess &&
     t.managementPaths == (t.documentPolicy.toVector.flatMap(_.paths) ++ t.recordingPaths).distinct &&
     t.completedCandidates != null && t.completedCandidates.size == t.controller.completed.size &&
-    t.completedCandidates.zip(t.controller.completed).forall { (p, s) => p != null &&
+    t.completedCandidates.zip(t.controller.completed).zipWithIndex.forall { case ((p, s), index) => p != null &&
       C.codec.decode(C.codec.encode(p)).isRight && p.step == s.step && p.candidate.nonEmpty && p.diff.nonEmpty &&
-      p.selectedPaths == p.stagedPaths && p.candidate.exists(c => _snapshot(c) && c.head == s.commit.parent) &&
+      p.selectedPaths == p.stagedPaths &&
       p.stepEvidence.isEmpty && p.changedPaths != null && p.changedPaths.distinct == p.changedPaths &&
-      B.pathsOwned((p.selectedPaths ++ p.changedPaths).distinct, t.controller.plan.steps.find(_.identity == s.step).get.ownedPaths) } &&
+      (s.qualifiedCheckpoint match {
+        case None => p.committedWork.isEmpty && p.candidate.exists(c => _snapshot(c) && c.head == s.commit.parent) &&
+          B.pathsOwned((p.selectedPaths ++ p.changedPaths).distinct, t.controller.plan.steps.find(_.identity == s.step).get.ownedPaths)
+        case Some(proof) =>
+          val predecessor = if (index == 0) t.controller.base else {
+            val previous = t.controller.completed(index - 1).commit
+            O.Snapshot(previous.identity, previous.tree)
+          }
+          O.acceptedPredecessorValid(s, predecessor) &&
+            p.candidate.contains(proof.parent) && proof.parent == O.Snapshot(s.commit.identity, s.commit.tree) &&
+            p.committedWork.exists(work => GoalPhaseCommittedStepWork.bound(p, work) &&
+              work.continuation == proof && work.acceptedTip == predecessor) &&
+            C.workPaths(p).nonEmpty && C.workDiff(p).exists(_.trim.nonEmpty) &&
+            B.pathsOwned((p.selectedPaths ++ C.workPaths(p)).distinct,
+              t.controller.plan.steps.find(_.identity == s.step).get.ownedPaths)
+      }) } &&
     t.inspection != null && C.codec.decode(C.codec.encode(t.inspection)).isRight &&
     t.inspection.sourceRevision == t.sourceRevision && t.inspection.step == "phase:" + t.controller.plan.phase &&
     t.inspection.selectedPaths != null && t.inspection.selectedPaths.distinct == t.inspection.selectedPaths &&

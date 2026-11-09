@@ -3,6 +3,7 @@ package org.simplemodeling.textus.smworkflow.admission
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Path
 import io.circe.Json
+import io.circe.syntax.*
 import org.goldenport.cncf.processexecution.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.scalatest.GivenWhenThen
@@ -15,7 +16,8 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Pure native-shaped records and typed blob facts; no installed effect or authority proof.
   * @since   Oct. 19, 2026
-  * @version Oct. 27, 2026
+  *  version Oct. 27, 2026
+  * @version Nov.  9, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -33,6 +35,57 @@ final class GoalPhaseNativeClosureSpec extends AnyWordSpec with Matchers with Gi
     val checked = take(seen.acceptC(O.ChecksObserved(_candidate, Vector("test"), "checks-original", true)))
     take(checked.acceptC(O.ReviewAdmitted(checked.next.asInstanceOf[O.Semantic].key, _candidate,
       "checks-original", "review-original", O.ReviewOutcome.Accept)))
+  }
+  "Qualified existing work closure v5" should {
+    "bind the exact reviewed supplement without introducing commit intent or execution facts" in {
+      Given("P611-CHECKPOINT-A-01: specification-owned adjacent supplement, checks and independent review history")
+      import CommittedStepWorkSpecificationFixture as F
+      def _append_(from: InstanceRecord, stage: String, cause: String): InstanceRecord =
+        take(from.appendC(from.revision, GoalPhaseNativeRun.history(from, "phase." + stage, cause)))
+      val supplemented = _append_(F.originalRecord, "Validation", "ordered-candidate:committed-work")
+      val checked = _append_(supplemented, "Review", "ordered-validation:validation")
+      val frontier = _append_(checked, "Closing", "ordered-review:accepted")
+      val candidate = GoalPhaseNativeCandidate.Saved(supplemented, F.qualified)
+      val input = take(K.inputC(frontier, F.reviewed, Some(candidate)))
+      val payload = K.Payload(input, 1, Some(F.commit), qualifiedCheckpoint = Some(F.proof))
+      When("the distinct closure codec retains acceptance of the actual existing checkpoint")
+      val wire = K.codec.encode(payload)
+      val restored = K.codec.decode(wire)
+      Then("v5 retains the real immediate parent, exact original work and proof, with no commit attempt")
+      restored shouldBe Right(payload)
+      wire.hcursor.get[String]("schemaVersion").toOption shouldBe Some("sm-workflow.goal-phase-native-step-closure.v5")
+      input.committedWork shouldBe Some(F.work)
+      payload.commit.get.parent shouldBe F.intermediate.head
+      payload.attempt shouldBe 0
+      payload.check shouldBe None
+      payload.partialCompletion shouldBe None
+      F.reviewed.closureIntent shouldBe None
+      val invalid = Vector(payload.copy(commit = Some(F.commit.copy(parent = F.base.head))),
+        payload.copy(input = input.copy(reviewEvidence = None)),
+        payload.copy(input = input.copy(instance = "crossed-session")),
+        payload.copy(input = input.copy(candidate = F.checkpoint.copy(tree = F.base.tree))))
+      invalid.foreach(p => K.codec.decode(K.codec.encode(p)).isLeft shouldBe true)
+      K.codec.decode(wire.mapObject(_.add("schemaVersion", Json.fromString("sm-workflow.goal-phase-native-step-closure.v3")))).isLeft shouldBe true
+      val nullproof = wire.mapObject(o => o.add("payload", o("payload").get.mapObject(_.add("qualifiedCheckpoint", Json.Null))))
+      K.codec.decode(nullproof).isLeft shouldBe true
+      val pending = take(F.reviewed.acceptC(O.ClosureIntentSaved(F.checkpoint, "pending-intent")))
+      K.inputC(frontier, pending, Some(candidate)).isSuccess shouldBe false
+    }
+
+    "retain checkpoint ancestry after later progress without changing the literal commit parent" in {
+      Given("a pure closed Step with a qualified checkpoint and a later distinct current candidate")
+      import CommittedStepWorkSpecificationFixture as F
+      val started = take(F.closed.acceptC(O.SemanticCompleted(F.closed.next.asInstanceOf[O.Semantic].key, "Later implementation")))
+      val later = take(started.acceptC(O.CandidateObserved(O.Snapshot(F.commit.identity, "9" * 40))))
+      When("the accepted prefix is encoded and replayed while later work has another index tree")
+      val restored = later.completed.head.asJson.as[O.ClosedStep]
+      Then("the old checkpoint stays accepted against its original tip, independently of the later candidate")
+      later.candidate.get.tree should not be F.checkpoint.tree
+      restored shouldBe Right(F.closed.completed.head)
+      O.acceptedPredecessorValid(restored.toOption.get, F.base) shouldBe true
+      restored.toOption.get.commit.parent shouldBe F.intermediate.head
+      restored.toOption.get.qualifiedCheckpoint shouldBe Some(F.proof)
+    }
   }
   private def _frontier: InstanceRecord = {
     val initial = take(InstanceRecord(InstanceIdentity("closure-native"),

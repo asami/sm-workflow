@@ -44,24 +44,28 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     dependencySourceScope: Option[GoalPhaseDependencySourceRevision.ScopeSuccessor] = None,
     hygiene: Option[CommitHygiene.Record] = None,
     primaryPublicationRepair: Option[GoalPhasePrerequisitePrimaryRepair.CaptureReuse] = None,
-    initialSourceEffects: Option[ContextReference] = None)
+    initialSourceEffects: Option[ContextReference] = None,
+    committedWork: Option[GoalPhaseCommittedStepWork.Work] = None)
   final case class StepEvidence(step: String, candidate: O.Snapshot, changedPaths: Vector[String], diff: String,
-    commit: O.Commit, eofCorrections: Vector[String], partialCompletion: Option[O.StepCommitChain] = None)
+    commit: O.Commit, eofCorrections: Vector[String], partialCompletion: Option[O.StepCommitChain] = None,
+    qualifiedCheckpoint: Option[O.CandidateContinuation] = None)
   object StepEvidence {
     given Encoder[StepEvidence] = deriveEncoder[StepEvidence].mapJson(_.mapObject(_.filter {
-      case ("partialCompletion", value) => !value.isNull
+      case ("partialCompletion" | "qualifiedCheckpoint", value) => !value.isNull
       case _ => true
     }))
     private val _decoder: Decoder[StepEvidence] = deriveDecoder
     given Decoder[StepEvidence] = Decoder.instance(cursor => _decoder(cursor).flatMap(value =>
-      if (!cursor.downField("partialCompletion").focus.exists(_.isNull) && value.partialCompletion.forall(c =>
-          O.validStepCommitChain(c) && c.completion == value.commit)) Right(value)
+      if (!Vector("partialCompletion", "qualifiedCheckpoint").exists(name => cursor.downField(name).focus.exists(_.isNull)) &&
+          value.partialCompletion.forall(c => O.validStepCommitChain(c) && c.completion == value.commit) &&
+          value.qualifiedCheckpoint.forall(p => value.partialCompletion.isEmpty && p.lineage != null &&
+            p.lineage.lastOption.exists(a => O.qualifiedCheckpointValid(O.Snapshot(a.identity, a.tree), p, value.commit)))) Right(value)
       else Left(DecodingFailure("Step evidence partial chain is malformed or crossed", cursor.history))))
   }
   object Payload {
     given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
       case ("continuation" | "stepEvidence" | "dependencyAdmission" | "dependency" | "dependencyOrigin" |
-          "dependencySourceDirection" | "dependencySourceGuard" | "dependencySourceCapture" | "dependencySourceScope" | "hygiene" | "primaryPublicationRepair" | "initialSourceEffects", value) => !value.isNull
+          "dependencySourceDirection" | "dependencySourceGuard" | "dependencySourceCapture" | "dependencySourceScope" | "hygiene" | "primaryPublicationRepair" | "initialSourceEffects" | "committedWork", value) => !value.isNull
       case ("dependencyStaged" | "dependencySourceStages", value) => !value.asArray.exists(_.isEmpty)
       case _ => true
     }))
@@ -75,8 +79,9 @@ private[smworkflow] object GoalPhaseNativeCandidate {
       val valid = cursor.value.asObject.exists(_.keys.forall(Set("sourceRevision", "step", "selectedPaths",
         "stagedPaths", "candidate", "changedPaths", "diff", "continuation", "stepEvidence", "dependencyAdmission",
         "dependencyStaged", "dependency", "dependencyOrigin", "dependencySourceDirection", "dependencySourceGuard",
-        "dependencySourceStages", "dependencySourceCapture", "dependencySourceScope", "hygiene", "primaryPublicationRepair", "initialSourceEffects"))) && !Vector("continuation", "stepEvidence", "dependencyAdmission", "dependency", "dependencyOrigin",
-          "dependencySourceDirection", "dependencySourceGuard", "dependencySourceCapture", "dependencySourceScope", "hygiene", "primaryPublicationRepair", "initialSourceEffects").exists(name => cursor.downField(name).focus.exists(_.isNull)) &&
+        "dependencySourceStages", "dependencySourceCapture", "dependencySourceScope", "hygiene", "primaryPublicationRepair", "initialSourceEffects", "committedWork"))) && !Vector("continuation", "stepEvidence", "dependencyAdmission", "dependency", "dependencyOrigin",
+          "dependencySourceDirection", "dependencySourceGuard", "dependencySourceCapture", "dependencySourceScope", "hygiene", "primaryPublicationRepair", "initialSourceEffects", "committedWork").exists(name => cursor.downField(name).focus.exists(_.isNull)) &&
+        value.committedWork != null && value.committedWork.forall(GoalPhaseCommittedStepWork.bound(value, _)) &&
         value.hygiene != null && value.hygiene.forall(CommitHygiene.valid) &&
         cursor.downField("hygiene").focus.forall(_candidate_hygiene_valid) &&
         sourceCaptureValid(value) &&
@@ -98,11 +103,15 @@ private[smworkflow] object GoalPhaseNativeCandidate {
               value != null && value.matches("(?:[0-9a-f]{40}|[0-9a-f]{64})")) && e.changedPaths != null &&
             e.changedPaths.distinct == e.changedPaths && e.diff != null && e.eofCorrections != null &&
             e.eofCorrections.distinct == e.eofCorrections && e.partialCompletion != null &&
-            e.partialCompletion.forall(chain => O.validStepCommitChain(chain) && chain.completion == e.commit)))
+            e.partialCompletion.forall(chain => O.validStepCommitChain(chain) && chain.completion == e.commit) &&
+            e.qualifiedCheckpoint != null && e.qualifiedCheckpoint.forall(p => e.partialCompletion.isEmpty &&
+              p.lineage != null && p.lineage.lastOption.exists(a => O.qualifiedCheckpointValid(O.Snapshot(a.identity, a.tree), p, e.commit)))))
       if (valid) Right(value) else Left(DecodingFailure("Invalid native candidate extension", cursor.history))
       })
     })
   }
+  def workPaths(payload: Payload): Vector[String] = payload.committedWork.fold(payload.changedPaths)(_.paths)
+  def workDiff(payload: Payload): Option[String] = payload.committedWork.fold(payload.diff)(work => Some(work.diff))
   /** Public nesting delegates to the Direction owner; persisted Payload decoding
     * remains the unchanged strict domain reader. */
   private[admission] def decodePublicPayload(value: Json): Either[String, Payload] = for {
@@ -232,25 +241,31 @@ private[smworkflow] object GoalPhaseNativeCandidate {
 
   private[admission] val codec = new WorkflowResultJsonV1.PayloadCodec[Payload] {
     val typeIdentity = "GoalPhaseNativeCandidateReceipt"
+    private def _qualified(value: Payload): Boolean = value.committedWork.nonEmpty ||
+      value.stepEvidence.exists(_.exists(_.qualifiedCheckpoint.nonEmpty))
     def encode(value: Payload): Json = Json.obj("schemaVersion" -> Json.fromString(
-      if (value.initialSourceEffects.nonEmpty) "sm-workflow.goal-phase-native-candidate.v5"
+      if (_qualified(value)) "sm-workflow.goal-phase-native-candidate.v6"
+      else if (value.initialSourceEffects.nonEmpty) "sm-workflow.goal-phase-native-candidate.v5"
       else if (value.primaryPublicationRepair.nonEmpty) "sm-workflow.goal-phase-native-candidate.v4"
       else if (value.dependencySourceScope.nonEmpty) "sm-workflow.goal-phase-native-candidate.v3" else "sm-workflow.goal-phase-native-candidate.v2"),
       "payload" -> value.asJson)
     def decode(value: Json): Either[String, Payload] = for {
       wire <- Option(value).toRight("ordered candidate is missing")
       schema <- wire.hcursor.get[String]("schemaVersion").left.map(_.message)
-      _ <- Either.cond(Set("sm-workflow.goal-phase-native-candidate.v2", "sm-workflow.goal-phase-native-candidate.v3", "sm-workflow.goal-phase-native-candidate.v4", "sm-workflow.goal-phase-native-candidate.v5")(schema), (), "ordered candidate schema differs")
+      _ <- Either.cond(Set("sm-workflow.goal-phase-native-candidate.v2", "sm-workflow.goal-phase-native-candidate.v3", "sm-workflow.goal-phase-native-candidate.v4", "sm-workflow.goal-phase-native-candidate.v5", "sm-workflow.goal-phase-native-candidate.v6")(schema), (), "ordered candidate schema differs")
       _ <- Either.cond(schema != "sm-workflow.goal-phase-native-candidate.v3" ||
         wire.asObject.exists(_.keys.toSet == Set("schemaVersion", "payload")), (), "ordered candidate scope envelope has unknown fields")
       payload <- wire.hcursor.get[Payload]("payload").left.map(_.message)
-      _ <- Either.cond((schema == "sm-workflow.goal-phase-native-candidate.v5") == payload.initialSourceEffects.nonEmpty &&
+      _ <- Either.cond((schema == "sm-workflow.goal-phase-native-candidate.v6") == _qualified(payload) &&
+        (schema == "sm-workflow.goal-phase-native-candidate.v6" || ((schema == "sm-workflow.goal-phase-native-candidate.v5") == payload.initialSourceEffects.nonEmpty &&
         (schema == "sm-workflow.goal-phase-native-candidate.v4") == payload.primaryPublicationRepair.nonEmpty &&
         (Set("sm-workflow.goal-phase-native-candidate.v4", "sm-workflow.goal-phase-native-candidate.v5")(schema) ||
-          (schema == "sm-workflow.goal-phase-native-candidate.v3") == payload.dependencySourceScope.nonEmpty),
+          (schema == "sm-workflow.goal-phase-native-candidate.v3") == payload.dependencySourceScope.nonEmpty))),
         (), "ordered candidate scope version differs")
-      _ <- Either.cond(!Set("sm-workflow.goal-phase-native-candidate.v4", "sm-workflow.goal-phase-native-candidate.v5")(schema) || encode(payload) == wire,
+      _ <- Either.cond(!Set("sm-workflow.goal-phase-native-candidate.v4", "sm-workflow.goal-phase-native-candidate.v5", "sm-workflow.goal-phase-native-candidate.v6")(schema) || encode(payload) == wire,
         (), "Primary repair candidate envelope is noncanonical")
+      _ <- if (schema.endsWith(".v6")) decode(encode(payload.copy(committedWork = None,
+        stepEvidence = payload.stepEvidence.map(_.map(_.copy(qualifiedCheckpoint = None)))))).map(_ => ()) else Right(())
     } yield payload
   }
   final case class Saved(record: InstanceRecord, payload: Payload)
@@ -823,8 +838,10 @@ private[smworkflow] object GoalPhaseNativeCandidate {
         completedCandidates.size == values.size && values.zipWithIndex.forall { (value, index) =>
           val actual = completedCandidates(index)
           val closed = controller.completed(index)
-          value.step == closed.step && value.commit == closed.commit && value.partialCompletion == closed.partialCompletion && actual.step == closed.step &&
-            actual.candidate.contains(value.candidate) && actual.changedPaths == value.changedPaths && actual.diff.contains(value.diff) &&
+          value.step == closed.step && value.commit == closed.commit && value.partialCompletion == closed.partialCompletion &&
+            value.qualifiedCheckpoint == closed.qualifiedCheckpoint && O.acceptedPredecessorValid(closed,
+              if (index == 0) controller.base else O.Snapshot(controller.completed(index - 1).commit.identity, controller.completed(index - 1).commit.tree)) && actual.step == closed.step &&
+            actual.candidate.contains(value.candidate) && workPaths(actual) == value.changedPaths && workDiff(actual).contains(value.diff) &&
             B.pathsOwned(value.eofCorrections, controller.plan.steps(index).ownedPaths) &&
             (value.eofCorrections.isEmpty == (value.candidate.tree == closed.commit.tree))
         } =>
@@ -942,9 +959,10 @@ private[smworkflow] object GoalPhaseNativeCandidate {
             after <- GitObjectId.parseC(closed.commit.tree)
             changes <- E.executeGitC(core, GitOperation.TreeChanges(before, after)).flatMap(_.valueC)
             corrections = changes.map(_.path.value)
-            _ <- if (B.pathsOwned(corrections, plan.steps(values.size).ownedPaths) && payload.diff.nonEmpty)
+            _ <- if (B.pathsOwned(corrections, plan.steps(values.size).ownedPaths) && workDiff(payload).nonEmpty)
               Consequence.unit else F.invalid("successful Step correction crosses retained ownership")
-          } yield values :+ StepEvidence(closed.step, snapshot, payload.changedPaths, payload.diff.get, closed.commit, corrections, closed.partialCompletion)
+          } yield values :+ StepEvidence(closed.step, snapshot, workPaths(payload), workDiff(payload).get, closed.commit, corrections,
+            closed.partialCompletion, closed.qualifiedCheckpoint)
         }
       } yield Some(evidence)
     private def _evidence_c(payload: Payload): Consequence[Unit] =

@@ -11,7 +11,8 @@ import RepositorySyncManagedGitObservation as G
 
 /** Pure retained proof, compatibility and ownership evidence; no Git effect authority.
   * @since   Oct. 21, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -38,6 +39,61 @@ final class GoalPhaseNativeCandidateBoundarySpec extends AnyWordSpec with Matche
     val original = GoalPhaseNativeCandidate.codec.encode(GoalPhaseNativeCandidate.Payload("1", "S1",
       Vector("src"), Vector("src"), Some(_anchor), Vector("src/model.cml"), Some("selected diff")))
     original.mapObject(fields => fields.add("payload", fields("payload").get.mapObject(_.add("hygiene", hygiene))))
+  }
+
+  "Qualified checkpoint Step evidence" should {
+    "bind whole-Phase evidence to the actual closed Step and complete qualified candidate work" in {
+      Given("a pure one-Step Phase closed by the distinct existing-work acceptance event")
+      import CommittedStepWorkSpecificationFixture as F
+      val plan = F.plan.copy(steps = Vector(F.plan.steps.head))
+      val initial = O.startC(plan, F.base).toOption.get
+      val inspecting = initial.acceptC(O.SemanticCompleted(initial.next.asInstanceOf[O.Semantic].key, "Specification work")).toOption.get
+      val validation = inspecting.acceptC(O.CandidateContinuationObserved(F.checkpoint, F.proof)).toOption.get
+      val required = validation.requireCommittedWorkReviewC.toOption.get
+      val checked = required.acceptC(O.ChecksObserved(F.checkpoint, Vector("focused"), "current-checks", true)).toOption.get
+      val reviewed = checked.acceptC(O.ReviewAdmitted(checked.next.asInstanceOf[O.Semantic].key, F.checkpoint,
+        "current-checks", "independent-review", O.ReviewOutcome.Accept)).toOption.get
+      val whole = reviewed.acceptC(O.ExistingStepWorkAccepted(F.commit, F.proof, F.paths)).toOption.get
+      val evidence = GoalPhaseNativeCandidate.StepEvidence("S1", F.checkpoint, F.paths, F.diff, F.commit,
+        Vector.empty, qualifiedCheckpoint = Some(F.proof))
+      val payload = F.original.copy(step = "phase:CHECKPOINT-A", continuation = None,
+        changedPaths = F.paths, diff = Some(F.diff), stepEvidence = Some(Vector(evidence)))
+      When("the whole-Phase owner compares evidence with its exact successful candidate and ClosedStep")
+      val valid = GoalPhaseNativeCandidate.retainedEvidenceC(payload, whole, Vector(F.qualified), Vector.empty)
+      val crossed = Vector(evidence.copy(qualifiedCheckpoint = None), evidence.copy(changedPaths = Vector.empty),
+        evidence.copy(diff = "unrelated work"))
+      Then("only the complete work and exact retained proof are accepted")
+      valid.isSuccess shouldBe true
+      crossed.foreach(value => GoalPhaseNativeCandidate.retainedEvidenceC(payload.copy(stepEvidence = Some(Vector(value))),
+        whole, Vector(F.qualified), Vector.empty).isSuccess shouldBe false)
+      GoalPhaseNativeCandidate.retainedEvidenceC(payload, whole, Vector(F.original), Vector.empty).isSuccess shouldBe false
+    }
+
+    "retain complete work in a v6 whole-Phase envelope and reject old-version proof smuggling" in {
+      Given("P611-CHECKPOINT-A-01: a pure accepted Step whose pending candidate delta was empty")
+      import CommittedStepWorkSpecificationFixture as F
+      val evidence = GoalPhaseNativeCandidate.StepEvidence("S1", F.checkpoint, F.paths, F.diff, F.commit,
+        Vector.empty, qualifiedCheckpoint = Some(F.proof))
+      val payload = F.original.copy(step = "phase:CHECKPOINT-A", candidate = Some(F.checkpoint),
+        continuation = None, changedPaths = F.paths, diff = Some(F.diff), stepEvidence = Some(Vector(evidence)))
+      val wire = GoalPhaseNativeCandidate.codec.encode(payload)
+      When("whole-Phase evidence is encoded and consumed")
+      val restored = GoalPhaseNativeCandidate.codec.decode(wire)
+      Then("proof is explicit only in v6, while the complete committed paths and diff survive")
+      wire.hcursor.get[String]("schemaVersion").toOption shouldBe Some("sm-workflow.goal-phase-native-candidate.v6")
+      restored shouldBe Right(payload)
+      restored.toOption.get.stepEvidence.get.head.qualifiedCheckpoint shouldBe Some(F.proof)
+      Vector("v2", "v3", "v4", "v5").foreach { version =>
+        GoalPhaseNativeCandidate.codec.decode(wire.mapObject(_.add("schemaVersion",
+          Json.fromString("sm-workflow.goal-phase-native-candidate." + version)))).isLeft shouldBe true
+      }
+      val crossed = evidence.copy(commit = F.commit.copy(parent = F.base.head))
+      crossed.asJson.as[GoalPhaseNativeCandidate.StepEvidence].isLeft shouldBe true
+      evidence.asJson.mapObject(_.add("qualifiedCheckpoint", Json.Null)).as[GoalPhaseNativeCandidate.StepEvidence].isLeft shouldBe true
+      val legacy = evidence.copy(qualifiedCheckpoint = None)
+      legacy.asJson.hcursor.downField("qualifiedCheckpoint").focus shouldBe None
+      legacy.asJson.as[GoalPhaseNativeCandidate.StepEvidence] shouldBe Right(legacy)
+    }
   }
 
   "Retained descendant proof" should {
