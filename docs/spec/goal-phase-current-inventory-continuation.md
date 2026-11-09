@@ -27,16 +27,29 @@ actual concerns. Fixed hosts retain their explicit capabilities. Standard runtim
 appends invocation-local candidate paths, preserving prior staging ordinals and
 closed-Step selections, and authenticates every receipt during history restore.
 Malformed retained receipts fail; they never become absent-source fallback.
-The result must contain the inventory proposal and its reason with no unresolved
-adjunct judgment: findings must be empty and every acceptance, issue, review,
-completion, repair-source, dependency or diagnostic adjunct must be absent.
+The result must contain the inventory proposal and its reason with no separate
+typed adjunct judgment. Configured acceptance still requires its complete valid
+report. Its unsatisfied/not-evaluated observations, advisories and descriptive
+findings remain in the original native result; none are removed, resolved or
+changed to satisfied by inventory continuation. An unconfigured legacy result
+with nonempty findings remains Human. A real current-Step Repair may retain its
+mandatory exact assigned issue report only with every disposition BLOCKED. Those
+issues stay unresolved; FIXED/DECLINED or an unassigned issue cannot qualify this
+inventory-only branch. Review, completion, repair-source,
+dependency and diagnostic adjunct judgments remain excluded.
 An optional valid fix assessment is concern-free only when requirementChanged
 and contractChanged are both false and convergence is PROGRESSING. Its actual
 metadata remains retained. A null Option is invalid, never absence. Mixed
-findings, BLOCKED/STALLED/REGRESSING assessments, requirement or contract change
-claims and other reports remain Human judgments with their actual semantic
-result and history intact; automatic inventory never discards or supersedes
-those judgments.
+typed concerns, BLOCKED/STALLED/REGRESSING assessments, requirement or contract
+change claims remain Human judgments with their actual semantic result and
+history intact; automatic inventory never discards or supersedes those judgments.
+Routing consumes the complete typed Plan delta and decision fields, not keywords
+or a semantic classifier of arbitrary prose. Producers must express a business,
+ownership or effect decision through those existing structured channels. A report
+does not certify the truth or completeness of a finding. The successor retains
+the required effective conditions and must report them honestly again; original
+observations remain available in native history, not automatically copied into
+the successor Request. Fresh validation and independent review still own acceptance.
 
 R4. An existing unanswered exact inventory-only question may be superseded by
 the ordinary native DecisionSupersession adapter under the same standing purpose.
@@ -53,7 +66,9 @@ count; subsequent candidate/check/review/Step closure includes the source file.
 E2. A proposal changing purpose, acceptance, another Component or future Step
 ownership remains a Human concern; executing/unknown semantic work cannot be
 selected by the inventory helper. An otherwise exact inventory proposal with
-unresolved findings or another adjunct judgment also remains Human.
+an explicit typed adjunct judgment also remains Human. Configured descriptive
+findings and honest unmet observations alone do not require another file grant;
+the actual required-report admission remains effective.
 
 E3. A reserved current repair preserves its existing accounting; unsafe,
 duplicate and overlapping paths refuse independently of finite inventory size.

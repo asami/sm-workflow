@@ -23,7 +23,8 @@ import org.simplemodeling.textus.smworkflow.value.{GoalPhaseDevelopmentReconstru
   * only when its Operation executes, within that call's ordinary storage/UoW.
   * @since   Oct. 27, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  7, 2026
+  *  version Nov.  7, 2026
+  * @version Nov.  9, 2026
   */
 private[smworkflow] object StandardWorkflowRuntime {
   private final case class Shared(persistence: GoalPhaseRuntimeParameters.Persistence,
@@ -31,7 +32,7 @@ private[smworkflow] object StandardWorkflowRuntime {
     origin: Option[GoalPhaseNativeExecution.Origin], journal: Option[DevelopmentJournal.Policy],
     evidence: Option[CommonEvidence.Policy], operatingcontext: GoalPhaseOperatingProfiles.Context,
     publication: Option[LocalPublicationRuntime.Policy], hygienemode: String,
-    completionrecords: Option[CompletionRecords.Policy])
+    completionrecords: Option[CompletionRecords.Policy], validation: WorkflowValidationInitialization.Context)
 
   def bindForCallC(creation: ComponentCreate, parameters: ComponentInitializationParameters,
     request: Request, core: ActionCall.Core): Consequence[Vector[spec.ServiceDefinition]] = for {
@@ -77,7 +78,7 @@ private[smworkflow] object StandardWorkflowRuntime {
     journal <- DevelopmentJournal.resolvePolicyC(parameters, persistence.instances, persistence.continuations)
     evidence <- CommonEvidence.resolvePolicyC(parameters, Vector(persistence.instances, persistence.continuations) ++ journal.map(_.collection))
   } yield Shared(persistence, new ThreeWorkflowExternalEvidencePorts(reader), profiles, origin, journal, evidence,
-    operatingcontext, publication, hygiene, records)
+    operatingcontext, publication, hygiene, records, WorkflowValidationInitialization.Context(creation.configuration, parameters))
 
   private def splitC(creation: ComponentCreate, parameters: ComponentInitializationParameters,
     shared: Shared, core: ActionCall.Core): Consequence[spec.ServiceDefinition] = {
@@ -192,8 +193,9 @@ private[smworkflow] object StandardWorkflowRuntime {
         selected.trackingBranch, selected.remoteEndpointIdentity, selected.syncMode), StandardRepositorySyncIntent.owns(selected))
     input = selectedInput._1
     classifications <- RepositorySyncNativeExecution.resolveC(parameters)
-    documentInputs <- RepositorySyncDocumentInputs.resolveC(parameters)
-    programInputs <- RepositorySyncProgramImpact.resolveC(parameters)
+    initialized <- shared.validation.repositoryC(target.root, core)
+    documentInputs = initialized.documents
+    programInputs = initialized.program
     purposePolicy <- RepositorySyncPurpose.resolveC(parameters)
     publication = shared.publication
     validation = if (selectedInput._2) programInputs.fold(documentValidation)(p => documentValidation.copy(

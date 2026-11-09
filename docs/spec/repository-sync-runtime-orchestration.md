@@ -391,3 +391,30 @@ converged keys use that authenticated scope, including after repair. Completed
 result collection selects the same scope and remains read-only. It never
 replays an accepted Submit, resets original keys, infers a prior failure from
 diagnostic byte counts, force-pushes, or manufactures terminal convergence.
+# Common validation initialization
+
+The standard runtime shares validation initialization with its service composition.
+For RepositorySync it reads the existing managed process profile and the ordinary
+`build.sbt` / `project.yaml` declarations. No caller-authored per-run
+`program-inputs` JSON is required for a conventional SBT project. Initialization
+does not execute a build, create a grant or claim a successful result.
+
+Available checks retain their actual operation, ordinal, repository workspace and
+component grants. The standard fallback selects Compile, available FixCheck and
+Test (FULL); it never guesses a TestOnly selector or a suite's precise consumption
+scope. Source/build scopes and a declared `cml.source` are consumed inputs.
+README, LICENSE, CHANGELOG and development notes/journals are standard document
+scopes; explicit project consumption overrides these defaults. Other paths remain
+unknown and require FULL coverage when integrated in a merge.
+
+Explicit `document-inputs` and `program-inputs` each take precedence independently.
+An unknown project or unavailable declaration does not create authority, a PASS,
+or an initialization refusal for a light sync. Actual fetched parent/index deltas
+still determine whether a merge needs product validation. Equal, local-ahead and
+fast-forward retain their existing structural-only integration policy.
+
+Existing configured prior-evidence references retain their native reader and
+actual input-applicability checks. There is no new evidence ledger or claim of
+global discovery of historical Sessions. Inferred defaults do not attach unknown
+historical results to incomplete consumption scopes: without applicable retained
+evidence the selected checks execute normally.

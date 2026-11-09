@@ -101,6 +101,16 @@ repair, preserving Session/base/prefix/history and the unanswered old question.
 This source update still requires parent-owned focused validation, independent
 review and isolated installed qualification before delivery.
 
+Updated 2026-11-09: the ordinary automatic
+[current-Step necessary-file continuation](goal-phase-current-inventory-continuation.md)
+preserves configured acceptance reports and descriptive findings. An honest
+unsatisfied report is compatible with an unchanged-purpose literal file append;
+it does not accept the Step or settle findings. Required report coverage remains
+mandatory. Typed purpose, condition, ownership, effect and independent judgment
+changes remain outside that automatic branch. Standard runtime composition
+extends exact invocation-local stage/read selections; the manual RemainingPlan
+route above remains available without becoming a prerequisite for file-only work.
+
 `GoalPhasePlanRevision` owns the pure proposal/capture/adoption boundary for
 PHASE-6.2 TS03. H2/H3 connect it to ordinary semantic Submit, actual saved Human
 questions, independent evidence admission, atomic Human completion and the sole

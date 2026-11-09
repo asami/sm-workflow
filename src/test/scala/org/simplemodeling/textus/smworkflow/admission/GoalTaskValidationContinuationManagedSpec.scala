@@ -23,7 +23,8 @@ import GoalTaskValidationContinuation as C
 /** Specification-owned receipt facts exercise native public admission only;
   * they do not represent installed execution or a consumer's consent.
   * @since   Nov.  7, 2026
-  * @version Nov.  8, 2026
+  *  version Nov.  8, 2026
+  * @version Nov.  9, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
@@ -77,7 +78,8 @@ class GoalTaskValidationContinuationManagedSpec extends AnyWordSpec with GivenWh
   "Changed-source continuation coverage" should {
     "retain the old candidate and Compile in history while requiring coverage of newly captured production source" in {
       Given("a specification-owned unverified check and an admitted source-changing target")
-      val state = SelectedValidationFixture.state
+      val original = SelectedValidationFixture.state
+      val state = original.copy(receipts = original.receipts.dropRight(1) :+ SelectedValidationFixture.zeroReceipt())
       val payload = BoundedWorkRuntime.Payload(state, "/fixture", "main", state.candidate.get.head)
       val r = BoundedSelectedValidationContinuation
       val target = r.Target(r.schema, "component", "session", "participant", "GoalTask", 8,

@@ -406,7 +406,10 @@ runtime's storage. The caller and existing effect boundary retain attribution.
 
 GoalTask and destination DelegateTask share explicit continuation for an actual
 exited-zero Unverified TestOnly result with a usable completed-test observation
-and no failed assertion. `describeDelegateTaskValidationContinuation` and
+and no failed assertion, including a complete `ZeroTests` observation with zero
+tests and zero completed suites. `ZeroTests` stays unsuccessful: it permits an
+explicit new attempt after correction, never acceptance or a fabricated PASS.
+`describeDelegateTaskValidationContinuation` and
 `adoptDelegateTaskValidationContinuation` use the declared bounded typed inputs;
 GoalTask exposes the same common path as `describeGoalTaskUnverifiedValidationContinuation`
 and `adoptGoalTaskUnverifiedValidationContinuation`. Existing supplemental
@@ -429,3 +432,15 @@ check identities/order, original base, accepted implementation and repair
 counters are retained. This path does not admit unknown/live execution,
 permission/admission refusal or failed assertions, and creates no alternate
 runner, state store or receipt ledger.
+
+With the current ordinary typed `testOnly <classes>` execution route,
+`@DoNotDiscover` can suppress even a named suite and produce an accurately
+reported zero-test selection. Correct the producer's suite classification or
+supported build selection before admitting the new attempt. Where an explicitly
+selected private-input suite must stay out of normal full validation, use the
+existing standard `Slow` classification with a full-test-only tag exclusion and
+an explicit TestOnly selection that admits that suite. Removing `DoNotDiscover`
+alone must not silently add private tests to full validation. No CNCF execution
+contract change or alternative test runner is implied. A changed build or test
+source uses `AdoptCurrentOwnedCandidate` so fresh Compile and affected checks
+cover the new candidate; the old zero-test result remains in its native history.
