@@ -6,8 +6,8 @@ Delivery: Phase 8 RepositorySync extensions
 
 ## Selected behavior
 
-When the user requests synchronization with `main` from a working worktree,
-the default order is:
+For ordinary integration, when the user requests synchronization with `main`
+from a working worktree, the default order is:
 
 ```text
 Selected working worktree
@@ -89,6 +89,38 @@ active Session. A genuinely selected route change uses the existing public
 continuation/adoption boundary and retains completed effects and history.
 Failure in `local-first` never automatically falls back to `direct`.
 
+## Phase 7 managed dependency route
+
+The [Phase 7 managed dependency contract](dependency-development-delivery.md#managed-dependency-synchronization-isolation--2026-11-09)
+explicitly selects direct remote synchronization for an A-owned dependency B
+worktree. That route is distinct from ordinary local-main integration:
+
+```text
+A's registered B worktree <-> selected B GitHub branch
+```
+
+When the selected target is GitHub main, the dependency synchronization context
+sets the existing `main-integration` property to `direct` through normal
+resolution. This is an explicit scoped route selection, not a new global
+default or precedence mechanism. Non-main targets keep their configured branch.
+Do not silently inherit ordinary `local-first` behavior into this isolated route
+or silently override a conflicting explicit selection; resolve an inconsistent
+managed-dependency configuration before route-dependent effects. Deliberate
+canonical-main consolidation uses a separate normal integration request.
+
+No other local B worktree or canonical main checkout becomes a participant.
+Its dirty changes, unpublished branch commits and cleanliness do not enter the
+selected sync. Do not update its working tree or local main branch as a side
+effect. Normal Git fetch metadata and actual shared-resource protections still
+apply. Reconcile the selected remote branch normally with required acceptance,
+non-force push and honest conflict/failure outcomes, without falling back to
+another local checkout. Retain this target and route in the existing Session;
+a planning/configuration update does not retarget an active execution.
+
+This allocation clarifies the Phase 7/8 planning boundary. It changes no issued
+request or currently installed behavior and adds no routine Human route question
+when the managed dependency purpose/configuration already selects direct.
+
 ## Checkout and target resolution
 
 For `local-first`, retain the source checkout/branch, canonical main checkout
@@ -163,6 +195,12 @@ new behavior; the default does not silently retarget active work.
 - [ ] An absent property and explicit `local-first` select the same two-hop
       route. Explicit `direct` selects the requested remote main without a
       separate main checkout or implicit canonical-main update.
+- [ ] A Phase 7 managed B worktree explicitly selects direct for remote main,
+      or keeps its configured non-main branch. Another local B worktree may
+      contain dirty changes and unpublished commits without becoming a sync
+      input, being updated or imposing a cleanliness gate. Ordinary main
+      integration still uses local-first; a contradictory explicit route is
+      resolved as configuration before effects, not silently replaced.
 - [ ] `confirm` presents attributable targets/effects before synchronization
       mutation, follows the actual chosen route in the same Session, and retains
       defer/cancel without an automatic choice or synchronization.

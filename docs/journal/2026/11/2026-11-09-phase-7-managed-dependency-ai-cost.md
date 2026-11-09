@@ -168,3 +168,55 @@ the full chat or forcing new discovery.
 Only the Phase 7 plan, its existing dependency checklist and this journal were
 updated. No worker was dispatched and no Goal, Session, mode, ownership, runtime,
 worktree, publication or synchronization was changed.
+
+## Follow-up: two synchronization routes for parallel development
+
+The user clarified that Phase 7's managed dependency completion should synchronize
+the selected B worktree only with GitHub, leaving other machine-local worktrees
+out of the operation to preserve parallel-development independence. The user
+confirmed that this and ordinary main consolidation are two different purposes
+and requested explicit documentation of the distinction.
+
+| Purpose | Planned route |
+| --- | --- |
+| Ordinary integration into main | Working checkout -> canonical local main checkout -> selected GitHub main; `local-first` remains the default. |
+| Managed dependency B developed for A | A's registered B worktree <-> explicitly selected B GitHub branch; no separate local-main hop. |
+
+The managed dependency request/configuration explicitly selects the existing
+`sm-workflow.repository-sync.main-integration=direct` for a remote-main target.
+A non-main dependency target keeps its configured tracking branch. This is
+scoped selection through existing configuration, not a machine-wide override,
+new configuration precedence or automatic change to A/root's own route.
+Inconsistent explicit route selection must be resolved before affected effects;
+neither silent override nor fallback to a different checkout is permitted.
+
+Other B worktrees, including its canonical local main checkout, are not sync
+participants. Their dirty files and unpublished branch commits are not gathered,
+merged or committed; those checkouts/local branches are not updated, and their
+cleanliness is not a prerequisite. Normal Git fetch/object/remote-tracking
+bookkeeping and protection of genuinely shared resources remain with the
+existing owner. This source-level independence adds no global lock, new clone
+requirement or parallel synchronization engine.
+
+Fetch and reconcile the selected GitHub target normally, retaining conflicts,
+required validation/review and permitted non-force push. A dependency's direct
+route is not unconditional overwrite of GitHub. A later explicit request can
+integrate B into canonical local main through the normal route; that is separate
+work, not an automatic Phase 7 completion side effect. Artifact selection and
+producer/consumer acceptance remain separate from source synchronization, and
+the existing best-effort sync policy reports failed/deferred/unknown outcomes
+without revoking usable local delivery.
+
+Updated the [Phase 7 plan](../../../phase/phase-7.md#dependency-synchronization-routes--2026-11-09),
+[P7-DD-09](../../../phase/phase-7-dependency-delivery-checklist.md),
+[dependency delivery specification](../../../spec/dependency-development-delivery.md#managed-dependency-synchronization-isolation--2026-11-09),
+[main integration specification](../../../spec/repository-sync-local-main-integration.md#phase-7-managed-dependency-route)
+and the corresponding Phase 8 planning/unchecked acceptance. Qualification
+must contrast ordinary local-first integration with the explicit managed direct
+route, including an unrelated dirty/ahead B worktree, unchanged non-main targets
+and actual remote conflict/failure handling through existing scenarios.
+
+These are planned contracts; implementation/installed qualification remains
+pending. No current request, Goal, Session, route setting or project ownership
+was changed. No worktree was created, and no Git source integration, publication,
+commit, push or synchronization was performed while recording this decision.

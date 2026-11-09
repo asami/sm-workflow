@@ -52,6 +52,35 @@ selection and synchronization, reusing that route. Do not add these queue/three-
 requirements to ongoing 6.6/6.7 acceptance. Existing GoalPhase execution is reused.
 Phase 17 retains optional Task/FIX breadth and is not an initial dependency.
 
+### Dependency synchronization routes — 2026-11-09
+
+Keep two purposes and their routes distinct. Ordinary integration into main
+uses working checkout -> canonical local main -> GitHub main (`local-first`).
+For Phase 7's managed dependency B developed for A, synchronize only A's selected
+B worktree <-> the explicitly configured B GitHub branch. No other local B
+worktree or canonical main checkout participates; do not collect its dirty work,
+merge its unpublished commits, update it or require it to be clean. This
+preserves independence between parallel development efforts.
+
+Use the existing scoped route/configuration owner. For a managed B request to
+remote main, explicitly select `main-integration=direct` in that dependency's
+synchronization context. A non-main target retains its configured branch.
+Do not change ordinary defaults, force every A/root request to direct, infer a
+target from directory proximity, or fall back to another checkout on failure.
+Reconcile the selected GitHub changes with normal checks/review and permitted
+non-force push; retain actual conflicts and separate local delivery/sync results.
+Ordinary shared Git metadata/resource handling is not inclusion of another
+worktree's source, and no new global locking or isolation machinery is required.
+
+The [dependency contract](../spec/dependency-development-delivery.md#managed-dependency-synchronization-isolation--2026-11-09),
+[main-route contract](../spec/repository-sync-local-main-integration.md#phase-7-managed-dependency-route)
+and [decision journal](../journal/2026/11/2026-11-09-phase-7-managed-dependency-ai-cost.md#follow-up-two-synchronization-routes-for-parallel-development)
+define this planned allocation. Exercise the distinction in P7-DD-09 and the
+existing C workspace scenarios, including an unrelated B worktree with dirty
+and unpublished work. Preserve its source and existing active Sessions; this
+planning change does not authorize current worktree creation or a route change
+for an already issued request.
+
 ### AI cost in managed dependency development — 2026-11-09
 
 The user confirmed the managed-development scenario: A needs a B change; develop,

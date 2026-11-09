@@ -36,6 +36,48 @@ Component resources and Phase 7 workspace/artifact contracts. Keep the canonical
 source and intended synchronization destination explicit. Isolated development
 must not implicitly publish into the ordinary cross-chat delivery route.
 
+## Managed dependency synchronization isolation — 2026-11-09
+
+Use two synchronization routes for their distinct purposes:
+
+| Selected purpose | Source integration and remote route |
+| --- | --- |
+| Ordinary integration into main | Working checkout -> canonical local main checkout -> selected GitHub main, using the normal `local-first` default. |
+| Phase 7 managed development of dependency B for A | A's selected B worktree <-> explicitly configured B GitHub branch, using direct synchronization without another local checkout. |
+
+The managed dependency route preserves parallel development independence.
+Its completion synchronization includes only that registered B checkout and
+its explicit remote/branch. It must not gather other machine-local worktrees,
+merge their unpublished branches or dirty content, update their local main
+checkout/branch, or require those worktrees to be clean before B can synchronize.
+This includes B's separate canonical development checkout. A's root route keeps
+its own declared purpose and target; B's isolation does not silently retarget A.
+
+Bind this route explicitly to the existing dependency-edge/request configuration
+when preparing the selected synchronization. If B targets remote main, select
+`sm-workflow.repository-sync.main-integration=direct` for that dependency's
+synchronization context through the normal configuration/input route. Do not
+change the machine-wide or ordinary project default. For a non-main target,
+retain the configured tracking branch; the main-integration property does not
+redirect it. See the [main integration contract](repository-sync-local-main-integration.md#phase-7-managed-dependency-route).
+
+Fetch and reconcile the selected GitHub branch normally, with applicable checks,
+review and permitted non-force push. Remote conflicts and genuinely shared Git
+resource conflicts keep their existing owners; isolation is not permission to
+overwrite remote work or update a branch underneath another checked-out worktree.
+Normal shared Git object/remote-tracking bookkeeping is not synchronization of
+another worktree's source. Do not add a machine-wide lock or a new checkout
+isolation mechanism to enforce this planning rule.
+
+Retain the selected route, checkout, remote/branch and actual results in the
+existing Session. Do not fall back to local-main integration on failure or
+retarget a running Session because configuration changed. A later explicitly
+requested normal integration may consolidate B into its canonical checkout; it
+is separate work, not an automatic dependency-completion effect. Existing
+best-effort synchronization and distinct artifact-publication/adoption outcomes
+remain unchanged. This is a planned contract, not current runtime qualification
+or authority to change present project ownership.
+
 ## Request and completion contract
 
 Retain one request identity and its requester Task/Session, destination chat and

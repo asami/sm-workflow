@@ -631,7 +631,7 @@ in the same Session, retaining it across operations/continuations without asking
 again for the same decision. Defer/cancel and absent answers do not select a
 route automatically; dirty-change decisions remain independent.
 
-Selected default for a main-directed request from a working worktree:
+Selected default for an ordinary main-directed request from a working worktree:
 integrate the admitted source contribution into the canonical local main
 worktree first, then synchronize that main with the selected GitHub main.
 Reuse the existing RepositorySync/typed Git, purpose acceptance, conflict and
@@ -645,6 +645,16 @@ remote failure resumes only the unfinished work. This is an adopted target,
 not a claim that the current public input/installed runtime supports both hops.
 See the [target contract and acceptance scenarios](../spec/repository-sync-local-main-integration.md)
 and [decision journal](../journal/2026/11/2026-11-09-repository-sync-local-main-first.md).
+
+Phase 7 managed dependency worktrees use the distinct
+[isolated dependency route](../spec/repository-sync-local-main-integration.md#phase-7-managed-dependency-route):
+the selected B worktree synchronizes directly with its explicit GitHub branch,
+without another local main checkout. Main-directed dependency requests explicitly
+select `direct` in their scoped context; non-main targets keep their branch.
+Ordinary main integration retains the `local-first` default. Do not include other
+B worktrees' dirty or unpublished work, require their cleanliness, or switch
+routes on failure. This allocation preserves parallel-development independence
+and does not silently retarget existing Sessions or add routine Human prompts.
 
 ## Selection and execution
 
@@ -714,6 +724,12 @@ scenarios and retains its owning project's responsibilities.
 - [ ] `sm-workflow.repository-sync.main-integration` covers omitted/default and
       explicit `local-first`, `direct`, `confirm`, normal configuration overrides,
       invalid values and retained active-Session selection in both entry routes.
+- [ ] Phase 7 managed dependency synchronization explicitly selects the isolated
+      direct route for remote main, preserving other local B worktrees even
+      when dirty or ahead of GitHub. Non-main targets and A's own route retain
+      their meaning; ordinary main integration remains local-first. Conflicting
+      explicit route configuration is resolved before effects without a silent
+      override or local-checkout fallback.
 - [ ] Human route selection precedes synchronization mutation, applies the
       chosen route in the same Session, and covers defer/cancel, unanswered
       questions and shared-target batching without repeated approval.

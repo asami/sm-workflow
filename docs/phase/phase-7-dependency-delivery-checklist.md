@@ -34,6 +34,11 @@ evidence. A checkbox is a delivery obligation, not a separate review ceremony.
 - [ ] P7-DD-09: A resource-managed development subtree retains origin, selected
   branch/area and synchronization destination; validated committed work becomes
   a synchronization target without touching canonical or unrelated work.
+  Synchronize this B worktree directly with its explicitly selected GitHub
+  branch (`main-integration=direct` when targeting main), without a separate
+  local-main hop. A dirty/unpublished sibling or canonical B worktree stays
+  outside the inputs and receives no source update or cleanliness gate.
+  Ordinary main integration retains local-first, and A's own route is unchanged.
   In the selected A/B scenario, runtime parks A in its active Goal/existing
   Session, dispatches a dedicated B subagent with scoped context, awaits the
   actual result without periodic parent/LLM-monitor inference, and resumes the
