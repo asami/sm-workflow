@@ -23,7 +23,8 @@ import GoalPhaseDependencyValidation.given
   * @since   Oct. 24, 2026
   *  version Oct. 28, 2026
   *  version Nov.  8, 2026
-  * @version Nov.  9, 2026
+  *  version Nov.  9, 2026
+  * @version Nov. 10, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.scalatest.DoNotDiscover
@@ -1692,6 +1693,16 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
     val executable = Path.of(sys.props.getOrElse("smworkflow.spec.installedCommand", cancel("Select the installed CLI")))
     val component = sys.props.getOrElse("smworkflow.spec.componentFile", cancel("Select the normally published component CAR"))
     val applicability = sys.props.get("smworkflow.spec.canonicalCommittedNoninput").contains("true")
+    val mixed = sys.props.get("smworkflow.spec.canonicalMixedDependencyApprovals") match {
+      case None | Some("false") => false
+      case Some("true") => true
+      case _ => fail("canonicalMixedDependencyApprovals must be absent, false or true")
+    }
+    if (Files.exists(episode)) {
+      val retained = parse(Files.readString(episode)).toOption.get
+      retained.hcursor.get[Boolean]("canonicalMixedDependencyApprovals").toOption.getOrElse(false) shouldBe mixed
+    }
+    require(!mixed || !applicability, "Select the same-dependency R11 episode independently of committed-noninput qualification")
     def _host_(scenario: F.Scenario): ThreeWorkflowRuntimeParameters.Definition = {
       val config = parse(Files.readString(scenario.root.resolve(".textus/config.json"))).toOption.get
       SplitPhaseExplicitPartitionFixture.take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(
@@ -1722,6 +1733,362 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
           "capabilities" -> (_array_(selected, "gitPrograms") ++ sbt).map(_.hcursor.get[String]("capability").toOption.get).distinct.asJson))))
         Files.writeString(path, configured.mapObject(_.add("textus.subsystem.process-execution.plan", retained.noSpaces.asJson)).noSpaces)
       }
+    }
+    if (mixed) {
+      require(executable.isAbsolute && Files.isExecutable(executable) && Path.of(component).isAbsolute &&
+        Files.isRegularFile(Path.of(component)), "R11 requires the normal installed command and published CAR")
+      require(episode.startsWith(Path.of("target").toRealPath()) && Files.isDirectory(episode.getParent) &&
+        episode.getParent.toRealPath().startsWith(Path.of("target").toRealPath()), "Keep the R11 episode inside this checkout's target")
+      def _read_(path: Path): Json = parse(Files.readString(path)).toOption.get
+      def _resource_(scenario: F.Scenario, name: String, value: Json): String = {
+        val path = scenario.root.resolve("mixed-canonical-" + name + ".json")
+        if (Files.exists(path)) _read_(path) shouldBe value
+        else Files.writeString(path, value.noSpaces, StandardOpenOption.CREATE_NEW)
+        path.toUri.toASCIIString
+      }
+      // A started call without its retained actual result is a stop, never a retry.
+      // Labels below are the finite business calls in this one specification.
+      def _once_(scenario: F.Scenario, label: String)(operation: => F.Result): F.Result = {
+        val directory = Files.createDirectories(scenario.root.resolve("mixed-canonical-calls"))
+        val path = directory.resolve(label + ".json")
+        if (Files.exists(path)) {
+          val saved = _read_(path)
+          require(saved.hcursor.get[Boolean]("completed").toOption.contains(true),
+            "Preserve the incomplete actual call; do not replay " + label)
+          F.Result(saved.hcursor.get[Int]("exitCode").toOption.get,
+            F.Invocation(saved.hcursor.get[Vector[String]]("argv").toOption.get,
+              saved.hcursor.get[Long]("pid").toOption.get,
+              Path.of(saved.hcursor.get[String]("stdout").toOption.get),
+              Path.of(saved.hcursor.get[String]("stderr").toOption.get)))
+        } else {
+          Files.writeString(path, Json.obj("completed" -> false.asJson).noSpaces, StandardOpenOption.CREATE_NEW)
+          val actual = operation
+          Files.writeString(path, Json.obj("completed" -> true.asJson, "argv" -> actual.invocation.argv.asJson,
+            "pid" -> actual.invocation.pid.asJson, "stdout" -> actual.invocation.stdout.toString.asJson,
+            "stderr" -> actual.invocation.stderr.toString.asJson, "exitCode" -> actual.exitCode.asJson).noSpaces)
+          actual
+        }
+      }
+      def _save_episode_(value: Json): Unit = Files.writeString(episode, value.noSpaces)
+      val fresh = if (mode == "PREPARE_OLD" && !Files.exists(episode)) {
+        val started = episode.resolveSibling(episode.getFileName.toString + ".started")
+        require(!Files.exists(started), "Preserve partial prefix setup; it has no reopenable checkpoint and must not be replayed")
+        Files.writeString(started, "SPECIFICATION-OWNED original prefix setup started\n", StandardOpenOption.CREATE_NEW)
+        reporter.Given("R11: a tiny installed fixture with actual accepted Step1 and the original failed Step2 Repair")
+        val prefix = _accepted_prefix("canonical-mixed-dependency-approvals", overlap = true, sourceRevisionFixture = true)
+        val selected = _adopt_prefix(prefix)
+        _complete_prefix(selected, overlap = true, failCheck = true)
+        val repairoutput = _once_(selected.scenario, "original-repair")(selected.scenario.advance(selected.task))
+        val repair = repairoutput.business[V.GoalPhaseAdvanceResult]
+        repair.work.get.kind shouldBe "RepairStep"
+        repair.work.get.checkFailure.get.validation.outcome shouldBe Some("repair-required")
+        repair.work.get.completed.map(_.step) shouldBe Vector("step-1")
+        _save_episode_(Json.obj("schemaVersion" -> "specification.canonical-source-episode.v1".asJson,
+          "canonicalMixedDependencyApprovals" -> true.asJson, "root" -> selected.scenario.root.toString.asJson,
+          "task" -> selected.task.toString.asJson, "original" -> json(selected.original.toRecord()),
+          "resumed" -> json(selected.resumed.toRecord()), "selection" -> selected.selection.asJson,
+          "originalRepair" -> json(repair.toRecord()), "standingBinding" -> prefix.binding.asJson,
+          "acceptedPaths" -> prefix.first.changedPaths.asJson, "oldComponent" -> component.asJson,
+          "installedCommand" -> executable.toString.asJson, "phaseAccepted" -> false.asJson,
+          "callsRoot" -> selected.scenario.root.resolve("mixed-canonical-calls").toString.asJson,
+          "consumerAuthorityClaimed" -> false.asJson))
+        Some(selected)
+      } else None
+      var saved = _read_(episode)
+      saved.hcursor.get[Boolean]("canonicalMixedDependencyApprovals").toOption shouldBe Some(true)
+      saved.hcursor.get[String]("installedCommand").toOption shouldBe Some(executable.toString)
+      val root = Path.of(saved.hcursor.get[String]("root").toOption.get)
+      val task = Path.of(saved.hcursor.get[String]("task").toOption.get)
+      val scenario = fresh.map(_.scenario).getOrElse {
+        val logindex = sys.props.get("smworkflow.spec.canonicalResumeLogIndex").fold(10000)(value =>
+          value.toIntOption.filter(_ > 0).getOrElse(fail("canonicalResumeLogIndex must be an actual positive Int")))
+        val plan = _read_(root.resolve("goal-plan.json")).as[O.Plan].toOption.get
+        val config = _read_(root.resolve(".textus/config.json"))
+        val host = SplitPhaseExplicitPartitionFixture.take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(
+          parse(config.hcursor.get[String]("sm-workflow.runtime.definition").toOption.get).toOption.get))
+        F.reopenCanonicalSource(root, host, plan, logindex)
+      }
+      val original = _advance_(saved.hcursor.get[Json]("original").toOption.get)
+      val originalrepair = _advance_(saved.hcursor.get[Json]("originalRepair").toOption.get)
+      val selected = fresh.getOrElse(Selected(scenario, task, original,
+        _advance_(saved.hcursor.get[Json]("resumed").toOption.get), saved.hcursor.get[D.Selection]("selection").toOption.get))
+      val standing = saved.hcursor.get[D.Binding]("standingBinding").toOption.get
+      val ownpaths = Vector("docs/selected-one.md", "docs/selected-two.md", "docs/selected-three.md",
+        "docs/selected-four.md", "docs/selected-five.md")
+      val otherpaths = Vector("docs/other-one.md", "docs/other-two.md", "docs/other-three.md",
+        "docs/other-four.md", "docs/other-five.md", "docs/other-six.md")
+      val ownproposal = _second_proposal(standing).copy(identity = "specification-mixed-selected-proposal", discovery = "REPAIR",
+        paths = ownpaths, reason = "SPECIFICATION-OWNED same dependency additional source",
+        acceptance = Vector("Validate the five selected additional files through the same dependency checks"))
+      val otherproposal = ownproposal.copy(identity = "specification-mixed-other-proposal",
+        dependency = GoalPhaseDependencyScope.Component("specification-other-component", "specification-other-repository", "specification-other-workspace"),
+        usageContract = ContextReference("specification-other-usage", "1"), paths = otherpaths,
+        reason = "SPECIFICATION-OWNED distinct fixture Component scope; no operations are registered or executed",
+        acceptance = Vector("Retain the other Component's complete independent acceptance"))
+      val ownreference = V.WorkflowArtifactReference("specification-mixed-selected-approval", "1")
+      val otherreference = V.WorkflowArtifactReference("specification-mixed-other-approval", "1")
+      def _approve_(request: V.GoalPhaseAdvanceResult, proposal: GoalPhaseDependencyScope.Proposal,
+        reference: V.WorkflowArtifactReference, label: String): V.GoalPhaseAdvanceResult = {
+        val dispositions = request.work.get.issues.toVector.flatMap(_.issues).filter(_.status != "RESOLVED").map(issue =>
+          V.GoalPhaseIssueDisposition(issue.identity, "BLOCKED", "SPECIFICATION-OWNED additional dependency scope request", None))
+        val result = Json.obj("outcome" -> "decision-needed".asJson, "summary" -> proposal.reason.asJson,
+          "findings" -> Json.arr(), "dependencyProposal" -> proposal.asJson,
+          "issueReport" -> json(V.GoalPhaseIssueReport(dispositions).toRecord()))
+        _once_(scenario, label + "-request")(_submit(scenario, request, result,
+          V.WorkflowArtifactReference(label + "-request", "1"))).business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+        val questionoutput = _once_(scenario, label + "-question")(scenario.advance(task))
+        val question = questionoutput.business[V.GoalPhaseAdvanceResult]
+        question.kind shouldBe "Human"
+        val answer = V.GoalPhaseOrderedDecisionAnswer("ApproveDependencyScope", "SPECIFICATION-OWNED exact additional scope for " + label)
+        val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("participant"), None, None)
+        val prepared = _once_(scenario, label + "-prepare") {
+          val evidence = V.WorkflowEvidencePreparationInput("GoalPhase", "human", questionoutput.invocation.stdout.toUri.toASCIIString,
+            _resource_(scenario, label + "-answer", json(answer.toRecord())),
+            _resource_(scenario, label + "-reference", json(reference.toRecord())),
+            _resource_(scenario, label + "-execution", json(execution.toRecord())), "normal-development-host",
+            Instant.now().minusSeconds(60).toString, "entity:smworkflow.cli.host_evidence", Some("participant"))
+          scenario.prepareHostInput("prepareEvidence", evidence.toRecord())
+        }
+        prepared.exitCode shouldBe 0
+        scenario.selectPreparedImport(prepared)
+        _once_(scenario, label + "-answer")(scenario.call("command", question.submitOperation.get,
+          Vector("--sessionId", question.submitSessionId.get, "--answer", json(answer.toRecord()).noSpaces,
+            "--resultReference", json(reference.toRecord()).noSpaces, "--executionEvidence", json(execution.toRecord()).noSpaces)))
+          .business[V.GoalPhaseOrderedDecisionSubmissionResult].accepted shouldBe true
+        val resumed = _once_(scenario, label + "-resumed")(scenario.advance(task)).business[V.GoalPhaseAdvanceResult]
+        resumed.sessionId shouldBe originalrepair.sessionId
+        resumed.work.get.kind shouldBe "RepairStep"
+        resumed.work.get.stepIdentity shouldBe originalrepair.work.get.stepIdentity
+        resumed.work.get.selectedPlan shouldBe originalrepair.work.get.selectedPlan
+        resumed.work.get.originalBase shouldBe originalrepair.work.get.originalBase
+        resumed.work.get.completed shouldBe originalrepair.work.get.completed
+        resumed.work.get.checkFailure shouldBe originalrepair.work.get.checkFailure
+        resumed.repairProgress shouldBe originalrepair.repairProgress
+        resumed
+      }
+      if (mode == "PREPARE_OLD") {
+        saved.hcursor.get[String]("oldComponent").toOption shouldBe Some(component)
+        reporter.When("ordinary installed Submit, Human evidence preparation and ApproveDependencyScope add five selected files, then six files in a distinct Component in the same Step")
+        val ownrepair = _approve_(originalrepair, ownproposal, ownreference, "selected")
+        val repair = _approve_(ownrepair, otherproposal, otherreference, "other")
+        if (!saved.hcursor.downField("binding").succeeded) {
+          val canonicalroot = root.resolve("canonical-dependency")
+          require(!Files.exists(canonicalroot), "Preserve incomplete canonical setup; do not replay Git setup or manufacture a producer checkpoint")
+          Files.createDirectories(canonicalroot)
+          val repository = canonicalroot.resolve("repository")
+          _setup_("clone", "--no-local", "--", standing.root, repository.toString)
+          TypedSbtHostPlanFixture.build(canonicalroot, true)
+          _setup_("-C", repository.toString, "checkout", "-b", "canonical")
+          Files.writeString(repository.resolve("value.txt"), "expected\n")
+          Files.writeString(repository.resolve("inherited.txt"), "accepted first-Step input\n")
+          Files.writeString(repository.resolve("current.txt"), "qualified canonical current input\n")
+          Files.createDirectories(repository.resolve("src/main/scala"))
+          Files.writeString(repository.resolve("src/main/scala/SourceRevisionMarker.scala"),
+            "object SourceRevisionMarker { def source: String = " + repository.toRealPath().toString.asJson.noSpaces + " }\n")
+          ownpaths.foreach { path =>
+            Files.createDirectories(repository.resolve(path).getParent)
+            Files.writeString(repository.resolve(path), "SPECIFICATION-OWNED selected dependency source\n", StandardOpenOption.CREATE_NEW)
+          }
+          otherpaths.foreach(path => Files.exists(repository.resolve(path)) shouldBe false)
+          val module = "canonical-mixed-source-" + root.getFileName.toString
+          Files.writeString(repository.resolve("build.sbt"), "\norganization := \"org.example.smworkflow.specification\"\n" +
+            "name := " + module.asJson.noSpaces + "\nversion := \"0.0.1-SNAPSHOT\"\n" +
+            "lazy val root = project.in(file(\".\"))\n" +
+            "publishLocal := { val result = publishLocal.value; IO.append(file(\"../publication-count.txt\"), \"published\\n\"); result }\n",
+            StandardOpenOption.APPEND)
+          _setup_((Vector("-C", repository.toString, "add", "--", "build.sbt", "value.txt", "inherited.txt", "current.txt",
+            "src/main/scala/SourceRevisionMarker.scala") ++ ownpaths)*)
+          _setup_("-C", repository.toString, "-c", "user.name=Canonical Source Specification", "-c", "user.email=canonical@example.invalid",
+            "commit", "--no-verify", "--no-gpg-sign", "-m", "Specification-only selected canonical dependency additions")
+          val provisional = standing.copy(revision = standing.revision + 1, root = repository.toRealPath().toString,
+            branch = "canonical", dependency = standing.dependency.copy(workspace = "canonical-cncf-source"),
+            paths = (saved.hcursor.get[Vector[String]]("acceptedPaths").toOption.get ++ standing.paths ++ ownpaths).distinct)
+          val consumption = _initial_consumption(provisional)
+          _configure_(scenario, provisional, consumption)
+          val native = _native_fixture(scenario)(RepositorySyncManagedGitObservation.observeInWorkspaceC(_, provisional.dependency.workspace))
+          val binding = provisional.copy(base = O.Snapshot(native.head, native.tree))
+          _configure_(scenario, binding, consumption)
+          val configfile = root.resolve(".textus/config.json")
+          val config = _read_(configfile)
+          val process = parse(config.hcursor.get[String]("textus.subsystem.process-execution.plan").toOption.get).toOption.get
+          val program = _array_(TypedSbtHostPlanFixture.plan(canonicalroot, TypedSbtHostPlanFixture.normalExecutable,
+            Vector(1), operation = SbtOperation.PublishLocal, stdoutBytes = 1048576, stderrBytes = 131072), "sbtPrograms").head
+            .mapObject(_.add("target", binding.dependency.workspace.asJson).add("identity", "specification-canonical-publish".asJson)
+              .add("capability", "specification-canonical-publish".asJson))
+          val sbt = _array_(process, "sbtPrograms") :+ program
+          val processes = process.mapObject(_.add("sbtPrograms", sbt.asJson).add("grants", Json.arr(Json.obj(
+            "componentId" -> SmWorkflowComponent.componentId.name.asJson,
+            "capabilities" -> (_array_(process, "gitPrograms") ++ sbt).map(_.hcursor.get[String]("capability").toOption.get).distinct.asJson))))
+          val publicationtarget = LocalPublication.Target("specification-canonical-producer", binding.dependency.identity, binding.dependency.workspace)
+          val collection = ThreeWorkflowNormalHostFixture.collection("local_publication")
+          val storage = parse(config.hcursor.get[String]("textus.subsystem.storage.plan").toOption.get).toOption.get
+          val storageplan = storage.mapObject(_.add("records", (_array_(storage, "records") :+ Json.obj(
+            "componentId" -> SmWorkflowComponent.componentId.name.asJson, "storeName" -> "workflow".asJson, "collection" -> collection.asJson)).distinct.asJson))
+          val policy = Json.obj("storeName" -> "workflow".asJson, "collection" -> collection.asJson, "targets" -> Vector(publicationtarget).asJson)
+          Files.writeString(configfile, config.mapObject(_.add("textus.subsystem.process-execution.plan", processes.noSpaces.asJson)
+            .add("textus.subsystem.storage.plan", storageplan.noSpaces.asJson).add(LocalPublicationRuntime.declaration.name, policy.noSpaces.asJson)).noSpaces)
+          val processpolicy = _native_fixture(scenario) { core => org.goldenport.cncf.processexecution.GitDiffParameters.resolveC(core.executionContext)
+            .map(maximum => io.circe.Printer.noSpaces.copy(sortKeys = true).print(Json.obj("processPlan" -> processes,
+              "maximumDiffBytes" -> maximum.asJson, "validation" -> _host_(scenario).goal.stepValidation.asJson))) }
+          saved = saved.mapObject(_.add("binding", binding.asJson).add("consumption", consumption.asJson)
+            .add("repair", json(repair.toRecord())).add("ownProposal", ownproposal.asJson).add("otherProposal", otherproposal.asJson)
+            .add("ownReference", json(ownreference.toRecord())).add("otherReference", json(otherreference.toRecord()))
+            .add("module", module.asJson).add("publisherProcessPolicy", processpolicy.asJson)
+            .add("publisherPolicyProvenance", "Actual fixture host policy observed after both native approvals and canonical setup".asJson)
+            .add("publicationPolicy", policy).add("oldPrimaryExecutions", _executions(root).asJson)
+            .add("oldDependencyExecutions", _executions(root.resolve("dependency")).asJson))
+          _save_episode_(saved)
+        }
+      } else {
+        require(saved.hcursor.get[Boolean]("oldRefusalQualified").toOption.contains(true), "Resume only the actual qualified old refusal")
+        val configfile = root.resolve(".textus/config.json")
+        Files.writeString(configfile, _read_(configfile).mapObject(_.add("textus.component.file", component.asJson)).noSpaces)
+      }
+      val binding = saved.hcursor.get[D.Binding]("binding").toOption.get
+      val consumption = saved.hcursor.get[R.Consumption]("consumption").toOption.get
+      val repair = _advance_(saved.hcursor.get[Json]("repair").toOption.get)
+      val publicationinput = V.LocalPublicationInput("specification-canonical-published", "specification-canonical-producer", None, true, None)
+      if (mode == "PREPARE_OLD") {
+        reporter.When("the old installed producer publishes once and normal collection retains the actual result")
+        _once_(scenario, "producer-publish")(scenario.callInstalled(executable, "LocalPublicationService", "ensureLocalPublication",
+          Vector("--input", json(publicationinput.toRecord()).noSpaces), assemblyDescriptor = Some(root.resolve(".textus/assembly.yaml"))))
+          .business[V.LocalPublicationResult].status shouldBe "published"
+        val output = _once_(scenario, "producer-collect")(scenario.callInstalled(executable, "LocalPublicationService", "collectLocalPublication",
+          Vector("--input", json(V.LocalPublicationCollectionInput(publicationinput.requestIdentity, publicationinput.targetIdentity, None, true).toRecord()).noSpaces),
+          assemblyDescriptor = Some(root.resolve(".textus/assembly.yaml"))))
+        output.business[V.LocalPublicationResult].status shouldBe "published"
+        if (!saved.hcursor.downField("collectOutput").succeeded) {
+          saved = saved.mapObject(_.add("collectOutput", output.invocation.stdout.toString.asJson)
+            .add("publicationObservedAt", Instant.now().toString.asJson))
+          _save_episode_(saved)
+        }
+      }
+      val collectedpath = Path.of(saved.hcursor.get[String]("collectOutput").toOption.get)
+      val collected = SplitPhaseExplicitPartitionFixture.take(summon[ValueReader[V.LocalPublicationResult]].readC(
+        SplitPhaseExplicitPartitionFixture.take(new RecordDecoder().json(Files.readString(collectedpath)))))
+      val publication = SplitPhaseExplicitPartitionFixture.take(GoalPhasePrerequisitePublicationUnknownRecovery.jsonC(collected.publication.get))
+        .as[LocalPublication.Result].toOption.get
+      val processresult = WorkflowSbtCapture.decode(publication.process.get).toOption.get
+      val module = saved.hcursor.get[String]("module").toOption.get
+      val jarprefix = "published " + module + "_2.12 to "
+      val jars = WorkflowSbtCapture.text(processresult.stdout).value.replaceAll("\u001b\\[[0-9;]*m", "").linesIterator
+        .map(_.trim.stripPrefix("[info] ").trim).filter(line => line.startsWith(jarprefix) && line.endsWith("/jars/" + module + "_2.12.jar"))
+        .map(line => Path.of(line.stripPrefix(jarprefix)).toAbsolutePath.normalize).toVector.distinct
+      jars.size shouldBe 1
+      Files.isRegularFile(jars.head) shouldBe true
+      _count_(root)
+      val observation = P.PublicationObservation(P.CollectionResult(collected.status, collected.reason, publication, None), P.collectOperation,
+        ContextReference(collectedpath.toUri.toASCIIString, "1"), root.toUri.toASCIIString,
+        saved.hcursor.get[String]("publicationObservedAt").toOption.get, saved.hcursor.get[String]("publisherProcessPolicy").toOption.get,
+        jars.head.getParent.getParent.toUri.toASCIIString, ContextReference(jars.head.toUri.toASCIIString, "0.0.1-SNAPSHOT"))
+      val coverage = Vector(
+        R.Coverage(ContextReference("specification-dependency-approval", "1"), Vector("Validate the exact dependency candidate"), binding.checks.map(_.identity)),
+        R.Coverage(ContextReference("specification-approval-step-2", "1"), Vector("Integrate with the genuinely accepted predecessor"), binding.checks.map(_.identity)),
+        R.Coverage(ContextReference(ownreference.identity, ownreference.revision), ownproposal.acceptance, binding.checks.map(_.identity)))
+      val source = R.Proposal(R.sourceSchema, ContextReference(binding.identity, binding.revision.toString), "committed", Vector.empty, coverage, consumption)
+      val proposal = C.Proposal(C.proposalSchema, source, observation, ContextReference(episode.toUri.toASCIIString, "1"), Some(C.WorkerLifecycle(true, true)))
+      val descriptioninput = V.GoalPhaseDependencySourceRevisionDescriptionInput(original.sessionId, GoalPhaseNativeMetadata.record(proposal.asJson))
+      val resource = _resource_(scenario, "description-input", json(descriptioninput.toRecord()))
+      if (mode == "PREPARE_OLD") {
+        reporter.When("the old installed product describes this exact typed proposal from a fixture-owned inputResource")
+        val refusal = _once_(scenario, "old-describe")(scenario.call("command", R.describeOperation, Vector("--inputResource", resource)))
+        reporter.Then("it refuses specifically scope-boundary.paths, leaves stdout empty and performs no source adoption")
+        withClue(refusal.invocation.logs) {
+          refusal.exitCode shouldBe 1
+          Files.readString(refusal.invocation.stdout).trim shouldBe empty
+          Files.readString(refusal.invocation.stderr) should include("[clause=scope-boundary.paths]")
+        }
+        saved = saved.mapObject(_.add("oldRefusalQualified", true.asJson).add("proposal", proposal.asJson)
+          .add("descriptionInputResource", resource.asJson).add("artifact", jars.head.toString.asJson)
+          .add("oldRefusalCall", root.resolve("mixed-canonical-calls/old-describe.json").toString.asJson))
+        _save_episode_(saved)
+      } else {
+        reporter.Given("the same physical native store, Session, original failure and actual approvals retained by PREPARE_OLD")
+        proposal.asJson shouldBe saved.hcursor.get[Json]("proposal").toOption.get
+        val current = _once_(scenario, "current-recollect")(scenario.advance(task)).business[V.GoalPhaseAdvanceResult]
+        current.issuedWorkContext shouldBe repair.issuedWorkContext
+        current.repairProgress shouldBe repair.repairProgress
+        reporter.When("the newly installed product describes the identical inputResource with all literal approvals retained")
+        val described = _once_(scenario, "current-describe")(scenario.call("command", R.describeOperation, Vector("--inputResource", resource)))
+        val description = described.business[V.GoalPhaseDependencySourceRevisionDescriptionResult]
+        val target = SplitPhaseExplicitPartitionFixture.take(R.targetC(description.target))
+        val origin = target.canonicalOrigin.get
+        val ownapproval = origin.approvals.find(_.decision == ContextReference(ownreference.identity, ownreference.revision)).get
+        val otherapproval = origin.approvals.find(_.decision == ContextReference(otherreference.identity, otherreference.revision)).get
+        reporter.Then("literal history keeps both actual decisions and full acceptance; selected paths and coverage include only this dependency")
+        ownapproval.proposal shouldBe ownproposal
+        otherapproval.proposal shouldBe otherproposal
+        ownapproval.step shouldBe standing.step
+        otherapproval.step shouldBe standing.step
+        origin.approvals.map(_.decision).toSet shouldBe Set(ContextReference("specification-dependency-approval", "1"),
+          ContextReference("specification-approval-step-2", "1"), ownapproval.decision, otherapproval.decision)
+        target.binding shouldBe binding
+        target.proposal.coverage shouldBe coverage
+        target.binding.paths.toSet shouldBe (saved.hcursor.get[Vector[String]]("acceptedPaths").toOption.get ++ standing.paths ++ ownpaths).toSet
+        target.binding.paths.exists(otherpaths.contains) shouldBe false
+        target.proposal.coverage.exists(_.approval == otherapproval.decision) shouldBe false
+        consumption.expectedModes.map(_.path) shouldBe binding.paths
+        target.completed.map(_.step) shouldBe Vector("step-1")
+        origin.historicalFailure should not be empty
+        origin.pending.get.continuation.identity shouldBe repair.issuedWorkContext.get.continuationId
+        origin.pending.get.request.kind shouldBe "RepairStep"
+        origin.pending.get.request.selectedPlan shouldBe target.plan
+        origin.pending.get.request.originalBase shouldBe target.primaryBase
+        origin.pending.get.request.completed shouldBe target.completed
+        origin.pending.get.request.stepIdentity shouldBe Some(target.step)
+        origin.pending.get.request.checkFailure.get.validation.outcome shouldBe Some("repair-required")
+        val reference = V.WorkflowArtifactReference("specification-mixed-canonical-human", "1")
+        val input = V.GoalPhaseDependencySourceRevisionAdoptionInput(original.sessionId, description.target, C.pendingChoice,
+          "SPECIFICATION-ONLY prior worker ended; accept unknown effects and select this exact canonical dependency", reference)
+        val adoptionresource = _resource_(scenario, "adoption-input", json(input.toRecord()))
+        def _adopt_(): F.Result = scenario.call("command", R.adoptionOperation, Vector("--inputResource", adoptionresource))
+        reporter.When("adoption is attempted without independent Human proof")
+        val refused = _once_(scenario, "missing-source-human")(_adopt_())
+        refused.exitCode should not be 0
+        Files.readString(refused.invocation.stdout).trim shouldBe empty
+        reporter.When("normal prepareEvidence supplies genuine specification-owned Human proof for the exact described target")
+        val execution = V.WorkflowExecutionEvidence(Vector(reference,
+          V.WorkflowArtifactReference(observation.recollectionReference.identity, observation.recollectionReference.revision),
+          V.WorkflowArtifactReference(observation.artifact.identity, observation.artifact.revision),
+          V.WorkflowArtifactReference(episode.toUri.toASCIIString, "1")), Some("participant"), None, None)
+        val prepared = _once_(scenario, "source-human-prepare") {
+          val evidence = V.WorkflowEvidencePreparationInput("GoalPhase", "dependency-source-revision", described.invocation.stdout.toUri.toASCIIString,
+            _resource_(scenario, "source-human-answer", json(input.toRecord())), _resource_(scenario, "source-human-reference", json(reference.toRecord())),
+            _resource_(scenario, "source-human-execution", json(execution.toRecord())), "normal-development-host", Instant.now().toString,
+            "entity:smworkflow.cli.host_evidence", Some("participant"))
+          scenario.prepareHostInput("prepareEvidence", evidence.toRecord())
+        }
+        prepared.exitCode shouldBe 0
+        scenario.selectPreparedImport(prepared)
+        val adopted = _once_(scenario, "source-adopt")(_adopt_())
+        adopted.business[V.GoalPhaseDependencySourceRevisionAdoptionResult].accepted shouldBe true
+        reporter.When("a separate normal Advance issues the fresh intended Repair without completing or checking it")
+        val nextoutput = _once_(scenario, "next-repair")(scenario.advance(task))
+        val next = nextoutput.business[V.GoalPhaseAdvanceResult]
+        reporter.Then("Plan, original base, accepted prefix and repair counts survive while the old issued work remains historical")
+        next.sessionId shouldBe original.sessionId
+        next.work.get.kind shouldBe "RepairStep"
+        next.work.get.stepIdentity shouldBe repair.work.get.stepIdentity
+        next.work.get.selectedPlan shouldBe repair.work.get.selectedPlan
+        next.work.get.originalBase shouldBe repair.work.get.originalBase
+        next.work.get.completed shouldBe repair.work.get.completed
+        next.repairProgress shouldBe repair.repairProgress
+        next.issuedWorkContext.get.continuationId should not be repair.issuedWorkContext.get.continuationId
+        next.issuedWorkContext.get.expectedRevision.toLong should be > repair.issuedWorkContext.get.expectedRevision.toLong
+        val result = saved.mapObject(_.add("currentComponent", component.asJson).add("target", target.asJson)
+          .add("humanReference", json(reference.toRecord())).add("adoptionInput", json(input.toRecord()))
+          .add("descriptionOutput", described.invocation.stdout.toString.asJson).add("adoptionOutput", adopted.invocation.stdout.toString.asJson)
+          .add("nextWorkOutput", nextoutput.invocation.stdout.toString.asJson).add("next", json(next.toRecord()))
+          .add("phaseAccepted", false.asJson).add("consumerAuthorityClaimed", false.asJson))
+        val resultpath = episode.resolveSibling(episode.getFileName.toString + ".result.json")
+        if (Files.exists(resultpath)) _read_(resultpath) shouldBe result
+        else Files.writeString(resultpath, result.noSpaces, StandardOpenOption.CREATE_NEW)
+      }
+      _executions(root) shouldBe saved.hcursor.get[Vector[String]]("oldPrimaryExecutions").toOption.get
+      _executions(root.resolve("dependency")) shouldBe saved.hcursor.get[Vector[String]]("oldDependencyExecutions").toOption.get
+      _count_(root)
+      reporter.Then("R11 retains its actual calls and explicit test-owned cutover locator at " + episode.toUri.toASCIIString)
+      return episode
     }
     if (mode == "PREPARE_OLD") {
       require(!Files.exists(episode), "Preserve any existing cutover episode; never replay old successes")
