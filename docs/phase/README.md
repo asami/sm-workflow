@@ -17,6 +17,10 @@ only. Old source-history keys are removed without compatibility aliases. Project
 work; progress is recorded solely in the [checklist](phase-6.12-checklist.md).
 See the [specification](../spec/scala-lint-profiles.md) and
 [English handoff](../journal/2026/11/2026-11-01-shared-scala-lint-profiles-handoff.md).
+The [cross-project delivery plan](sm-workflow-6.12-dependencies.md) now identifies
+the Core API, SimpleModeler/Cozy generation, model compatibility, build/runtime
+qualification and shared AI-instruction handoffs. All remain planned; existing
+Phase/checklist states and active work are unchanged.
 
 Directory-list RepositorySync adopted 2026-10-31:
 [Phase 6.11](phase-6.11.md) follows active 6.10 and precedes 6.12, then Phase 7. One normal
