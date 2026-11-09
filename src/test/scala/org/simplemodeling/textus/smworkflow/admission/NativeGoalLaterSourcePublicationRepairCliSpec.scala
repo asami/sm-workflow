@@ -32,7 +32,10 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Explicit finite installed qualification over two tiny real projects. The
   * locator and all independent Human/review evidence are specification-owned.
   * PREPARE_OLD must precede producer product publication; RESUME_CURRENT uses
-  * the same physical native Session. No consumer or product source is copied.
+  * the same physical native Session. The opt-in PREPARE_CHECKPOINT and
+  * RESUME_CHECKPOINT stages retain an accepted Repair and ordinary checkpoint
+  * across the same public source-selection boundary. No consumer or product
+  * source is copied.
   * @since   Nov.  9, 2026
   * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
@@ -56,13 +59,21 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     case Some("true") => true
     case _ => throw new IllegalArgumentException("laterSourcePublicationRootLineage must be true or false")
   }
+  private val _checkpoint_lineage = sys.props.get("smworkflow.spec.laterSourcePublicationCheckpointLineage") match {
+    case None | Some("false") => false
+    case Some("true") => true
+    case _ => throw new IllegalArgumentException("laterSourcePublicationCheckpointLineage must be true or false")
+  }
   require(!_coverage_lineage || _usage_lineage, "CoverageLineage=true requires explicitly selected UsageLineage=true")
   require(!_root_lineage || _coverage_lineage && _usage_lineage,
     "RootLineage=true requires explicitly selected CoverageLineage=true and UsageLineage=true")
+  require(!_checkpoint_lineage || _root_lineage,
+    "CheckpointLineage=true requires explicitly selected RootLineage=true")
   private val _source = "src/main/scala/Consumer.scala"
   private val _api = "src/main/scala/Api.scala"
   private val _export_doc = "docs/export-contract.md"
   private val _later_doc = "docs/later-contract.md"
+  private val _checkpoint_checklist = "docs/checkpoint-checklist.md"
   private val _suite = "fixture.LaterSourceSpec"
   private val _checks = Vector(GoalPhaseNativeValidation.Check("primary-compile", 14, WorkflowSbtValidation.Kind.Compile),
     GoalPhaseNativeValidation.Check("primary-test", 15, WorkflowSbtValidation.Kind.TestOnly))
@@ -127,7 +138,8 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       parameters, assemblyDescriptor = Some(scenario.root.resolve(".textus/assembly.yaml"))))
   private def _input(scenario: F.Scenario, label: String, service: String, operation: String, input: RecordPresentable): F.Result =
     _call(scenario, label, service, operation,
-      if (service == "GoalPhaseService" && Set(R.describeOperation, R.adoptionOperation, B.recoveryOperation, B.describeOperation)(operation))
+      if (service == "GoalPhaseService" && Set(R.describeOperation, R.adoptionOperation, B.recoveryOperation, B.describeOperation,
+          GoalPhaseDevelopmentReconstruction.operation)(operation))
         Vector("--inputResource", _save(scenario.root, label, _json(input))) else Vector("--input", _json(input).noSpaces))
   private def _advance(scenario: F.Scenario, task: Path, label: String): F.Result =
     _call(scenario, label, "GoalPhaseService", GoalPhaseNativeRun.advanceOperation.operation,
@@ -262,7 +274,13 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       |  }
       |}
       |""".stripMargin)
-    _commit(root, repository, "tiny-primary-baseline", Vector("build.sbt", _source, "src/test/scala/fixture/LaterSourceSpec.scala"))
+    if (_checkpoint_lineage) {
+      Files.createDirectories(repository.resolve("docs"))
+      Files.writeString(repository.resolve("docs/phase.md"), "# Tiny current source continuation\nPreserve both Steps, their checks and the original repair policy.\n")
+      Files.writeString(repository.resolve(_checkpoint_checklist), "- [ ] current: Preserve required checks and independent review before actual Step closure\n")
+    }
+    _commit(root, repository, "tiny-primary-baseline", Vector("build.sbt", _source, "src/test/scala/fixture/LaterSourceSpec.scala") ++
+      (if (_checkpoint_lineage) Vector("docs/phase.md", _checkpoint_checklist) else Vector.empty))
     initial.host.goal.dependencyValidation.get.copy(identity = "later-source-api", paths = Vector(_api), base = base,
       requester = initial.host.goal.dependencyValidation.get.requester.copy(identity = _primary.component),
       dependency = GoalPhaseDependencyScope.Component(_producer.component, "tiny-api", _producer.workspace),
@@ -270,7 +288,7 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
   }
   private def _configure(initial: F.Scenario, binding: D.Binding): F.Scenario = {
     val root = initial.root
-    val paths = Vector(_source, "docs/phase.md")
+    val paths = Vector(_source, "docs/phase.md") ++ (if (_checkpoint_lineage) Vector(_checkpoint_checklist) else Vector.empty)
     val host = initial.host.copy(goal = initial.host.goal.copy(candidatePaths = paths, dependencyValidation = Some(binding),
       stepValidation = initial.host.goal.stepValidation.copy(checks = _checks), phaseValidation = initial.host.goal.phaseValidation.copy(checks = _checks)))
     val policy = Some(GoalPhaseStepAssessment.Policy("later-source-independent-review", "code", "required", "off", "off", Vector.empty))
@@ -465,14 +483,19 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
 
   "LSR-01 Same physical Session later source publication repair" should {
     "retain an accepted earlier source and the real primary failure through explicit old and current stages" in {
-      val mode = sys.props.getOrElse("smworkflow.spec.laterSourcePublicationMode", cancel("Select PREPARE_OLD, RESUME_CURRENT or COLLECT"))
+      val mode = sys.props.getOrElse("smworkflow.spec.laterSourcePublicationMode",
+        cancel("Select PREPARE_OLD, RESUME_CURRENT, PREPARE_CHECKPOINT, RESUME_CHECKPOINT or COLLECT"))
       val locator = Path.of(sys.props.getOrElse("smworkflow.spec.laterSourcePublicationLocator", cancel("Select the explicit caller locator")))
       val canonical = Path.of("").toAbsolutePath.normalize
       require(locator.isAbsolute && locator.normalize == locator && locator.startsWith(canonical.resolve("target")))
-      require(Set("PREPARE_OLD", "RESUME_CURRENT", "COLLECT")(mode))
+      require(Set("PREPARE_OLD", "RESUME_CURRENT", "PREPARE_CHECKPOINT", "RESUME_CHECKPOINT", "COLLECT")(mode))
+      require(!Set("PREPARE_CHECKPOINT", "RESUME_CHECKPOINT")(mode) || _checkpoint_lineage,
+        "Checkpoint modes require explicitly selected CheckpointLineage=true")
       require(sys.props.contains("smworkflow.spec.installedCommand") && sys.props.contains("smworkflow.spec.componentFile"))
       if (mode == "PREPARE_OLD") _prepare_old(locator)
       else if (mode == "RESUME_CURRENT") _resume_current(locator)
+      else if (mode == "PREPARE_CHECKPOINT") _resume_current(locator, preparecheckpoint = true)
+      else if (mode == "RESUME_CHECKPOINT") _resume_checkpoint(locator)
       else {
         Given("the explicit retained caller locator; collection supplies no native authority or effects")
         When("its original output locations and frozen source identities are read")
@@ -491,6 +514,7 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       saved.hcursor.get[Boolean]("usageLineage").getOrElse(false) shouldBe _usage_lineage
       saved.hcursor.get[Boolean]("coverageLineage").getOrElse(false) shouldBe _coverage_lineage
       saved.hcursor.get[Boolean]("rootLineage").getOrElse(false) shouldBe _root_lineage
+      saved.hcursor.get[Boolean]("checkpointLineage").getOrElse(false) shouldBe _checkpoint_lineage
       _preserved(saved)
       return
     }
@@ -499,12 +523,14 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       val initial = F.freshDependency("later-source-publication", dependencyChecks = Some(Vector(
         GoalPhaseNativeValidation.Check("dependency-compile", 2, WorkflowSbtValidation.Kind.Compile))))
       _write(locator, Json.obj("stage" -> "PREPARING_OLD".asJson, "root" -> initial.root.toString.asJson,
-        "usageLineage" -> _usage_lineage.asJson, "coverageLineage" -> _coverage_lineage.asJson, "rootLineage" -> _root_lineage.asJson))
+        "usageLineage" -> _usage_lineage.asJson, "coverageLineage" -> _coverage_lineage.asJson, "rootLineage" -> _root_lineage.asJson,
+        "checkpointLineage" -> _checkpoint_lineage.asJson))
       val selectedbinding = _build(initial)
       val selected = _configure(initial, selectedbinding)
       _write(setupfile, Json.obj("root" -> selected.root.toString.asJson, "binding" -> selectedbinding.asJson,
         "plan" -> selected.plan.asJson, "oldComponent" -> sys.props("smworkflow.spec.componentFile").asJson,
-        "usageLineage" -> _usage_lineage.asJson, "coverageLineage" -> _coverage_lineage.asJson, "rootLineage" -> _root_lineage.asJson))
+        "usageLineage" -> _usage_lineage.asJson, "coverageLineage" -> _coverage_lineage.asJson, "rootLineage" -> _root_lineage.asJson,
+        "checkpointLineage" -> _checkpoint_lineage.asJson))
       selected -> selectedbinding
     } else {
       val point = sys.props.getOrElse("smworkflow.spec.laterSourcePublicationResumePoint",
@@ -516,6 +542,7 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       setup.hcursor.get[Boolean]("usageLineage").getOrElse(false) shouldBe _usage_lineage
       setup.hcursor.get[Boolean]("coverageLineage").getOrElse(false) shouldBe _coverage_lineage
       setup.hcursor.get[Boolean]("rootLineage").getOrElse(false) shouldBe _root_lineage
+      setup.hcursor.get[Boolean]("checkpointLineage").getOrElse(false) shouldBe _checkpoint_lineage
       setup.hcursor.get[String]("oldComponent").toOption.get shouldBe sys.props("smworkflow.spec.componentFile")
       val actualroot = Path.of(setup.hcursor.get[String]("root").toOption.get)
       actualroot.toString shouldBe _read(locator).hcursor.get[String]("root").toOption.get
@@ -739,6 +766,7 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       "usageLineage" -> _usage_lineage.asJson, "usageLineageProposal" -> lineageproposal.asJson,
       "coverageLineage" -> _coverage_lineage.asJson, "oldExtraScopeProposal" -> extraproposal.asJson,
       "rootLineage" -> _root_lineage.asJson, "oldDependencyPublication" -> olddependency.asJson,
+      "checkpointLineage" -> _checkpoint_lineage.asJson,
       "oldDependencyPublicationCount" -> _lines(root.resolve("dependency/publication-count.txt")).size.asJson,
       "oldRoot" -> binding.root.asJson,
       "oldExtraAnswerReference" -> (if (_coverage_lineage) _json(extrareference) else Json.Null),
@@ -761,7 +789,8 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     _lines(root.resolve("dependency/publication-count.txt")).size shouldBe
       (if (_root_lineage) saved.hcursor.get[Int]("oldDependencyPublicationCount").toOption.get else 2)
   }
-  private def _align_current(scenario: F.Scenario, task: Path, saved: Json, waiting: F.Result): F.Result = {
+  private def _align_current(scenario: F.Scenario, task: Path, saved: Json, waiting: F.Result,
+    suppliedpublication: Option[P.PublicationObservation] = None): F.Result = {
     val root = scenario.root
     val session = scenario.retrieve(task)
     Given("the updated ordinary Advance has captured the genuine source successor and reached the all-target publication guard")
@@ -782,7 +811,8 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     emptytarget.targets.map(_.actualRoot).distinct shouldBe Vector(saved.hcursor.get[String]("oldRoot").toOption.get)
     emptytarget.candidateRecordRevision.toLong should be <= emptytarget.frontierRevision.toLong
     val observation = _saved_value(root, "current-canonical-artifact")(
-      _publish(scenario, "current-canonical-artifact", _canonical_producer).asJson).as[P.PublicationObservation].toOption.get
+      suppliedpublication.getOrElse(_publish(scenario, "current-canonical-artifact", _canonical_producer)).asJson)
+      .as[P.PublicationObservation].toOption.get
     def _describe_(label: String, selected: P.PublicationObservation): F.Result =
       _input(scenario, label, "GoalPhaseService", B.describeOperation,
         V.GoalPhasePrerequisitePublicationRecoveryDescriptionInput(session, Some(GoalPhaseNativeMetadata.record(selected.asJson))))
@@ -864,7 +894,315 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     _lines(root.resolve("selected-tests.txt")) shouldBe saved.hcursor.get[Vector[String]]("oldTests").toOption.get
     _advance(scenario, task, "alignment-ordinary-continuation")
   }
-  private def _resume_current(locator: Path): Unit = {
+  private def _prepare_checkpoint(locator: Path, scenario: F.Scenario, task: Path, saved: Json,
+    repair: V.GoalPhaseAdvanceResult): Unit = {
+    require(_checkpoint_lineage && _root_lineage && _coverage_lineage && _usage_lineage)
+    val checkpointfile = locator.resolveSibling(locator.getFileName.toString + ".checkpoint.json")
+    if (Files.exists(checkpointfile)) {
+      val retained = _read(checkpointfile)
+      retained.hcursor.get[String]("session").toOption.get shouldBe scenario.retrieve(task)
+      retained.hcursor.get[Boolean]("checkpointLineage").toOption shouldBe Some(true)
+      _preserved(retained)
+      return
+    }
+    val root = scenario.root
+    val repository = root.resolve("repository")
+    val session = scenario.retrieve(task)
+    val oldbinding = saved.hcursor.get[D.Binding]("binding").toOption.get
+    val oldproposal = saved.hcursor.get[C.Proposal]("proposal").toOption.get
+    val repairsubmit = _read(root.resolve("caller-results/current-repair-submit.json"))
+    val repairoutput = Path.of(repairsubmit.hcursor.get[String]("stdout").toOption.get)
+    Given("the actual accepted Repair and the original accepted Step1, with no candidate or successful later check")
+    _business[V.GoalPhaseWorkSubmissionResult](repairoutput).accepted shouldBe true
+    val primary = _saved_value(root, "checkpoint-primary-snapshot") {
+      Files.writeString(repository.resolve("docs/phase.md"),
+        "# Tiny current source continuation\nThe accepted Repair is saved as a nonacceptance checkpoint; original checks and independent review remain owed.\n")
+      _commit(root, repository, "current-repair-nonacceptance-checkpoint", Vector(_source, "docs/phase.md", _checkpoint_checklist)).asJson
+    }.as[O.Snapshot].toOption.get
+    _git(root, repository, "checkpoint-primary-clean", "status", "--porcelain=v1") shouldBe ""
+    val dependency = Path.of(oldbinding.root)
+    val apibytes = _saved_value(root, "checkpoint-unchanged-api")(Files.readString(dependency.resolve(_api)).asJson).as[String].toOption.get
+    When("the separately owned tiny canonical dependency advances by one approved documentation-only commit")
+    val nextbase = _saved_value(root, "checkpoint-dependency-docs-base") {
+      Files.writeString(dependency.resolve(_later_doc), "Later tiny API contract.\nThe accepted API implementation is unchanged; this is a documentation-only canonical descendant.\n")
+      _commit(root, dependency, "canonical-documentation-only-descendant", Vector(_later_doc)).asJson
+    }.as[O.Snapshot].toOption.get
+    val binding = oldbinding.copy(revision = oldbinding.revision + 1, base = nextbase)
+    _register(root, binding)
+    val publication = _saved_value(root, "checkpoint-dependency-publication")(
+      _publish(scenario, "checkpoint-dependency", _canonical_producer).asJson).as[P.PublicationObservation].toOption.get
+    val proposal = _proposal(binding, publication, checkpointfile.toUri.toASCIIString, oldproposal.source.coverage.drop(1))
+    val primarypublications = _lines(root.resolve("primary-publications.txt"))
+    val tests = _lines(root.resolve("selected-tests.txt"))
+    val dependencypublications = _lines(root.resolve("canonical-dependency/publication-count.txt"))
+    val retainedinput = _business[V.GoalPhaseDependencySourceRevisionAdoptionInput](
+      root.resolve("caller-inputs/current-source-human-adopt.json"))
+    val refused = _input(scenario, "checkpoint-old-source-recollection-guard", "GoalPhaseService", R.adoptionOperation, retainedinput)
+    Then("recollection of the actual retained source Direction refuses its obsolete exact source before any candidate intent, primary publication or SBT check")
+    refused.exitCode should not be 0
+    refused.invocation.logs should include("canonical source requires its exact clean committed root, branch, HEAD, index and tree")
+    _lines(root.resolve("primary-publications.txt")) shouldBe primarypublications
+    _lines(root.resolve("selected-tests.txt")) shouldBe tests
+    _lines(root.resolve("canonical-dependency/publication-count.txt")) shouldBe dependencypublications
+    Files.readString(dependency.resolve(_api)) shouldBe apibytes
+    _git(root, dependency, "checkpoint-document-only-diff", "diff", "--name-only", oldbinding.base.head, nextbase.head) shouldBe _later_doc
+    _git(root, dependency, "checkpoint-dependency-descendant", "merge-base", "--is-ancestor", oldbinding.base.head, nextbase.head) shouldBe ""
+    val projection = GoalPhasePlanRevision.Proposal("checkpoint-current-development", "1",
+      "SPECIFICATION-ONLY same Plan, accepted Repair and nonacceptance checkpoint", scenario.plan)
+    val input = V.GoalPhaseDevelopmentReconstructionInput(session, "docs/phase.md", _checkpoint_checklist,
+      GoalPhaseNativeMetadata.record(projection.asJson), "Select the same current tiny development after its ordinary checkpoint")
+    When("the existing common operation selects the same Plan and checkpoint in the same physical Session")
+    val reconstruction = _input(scenario, "checkpoint-common-reconstruction", "GoalPhaseService",
+      GoalPhaseDevelopmentReconstruction.operation, input)
+    val reconstructed = reconstruction.business[V.GoalPhaseAdvanceResult]
+    Then("the native selection retains the accepted prefix and charged repair accounting while leaving source adoption unresolved")
+    reconstructed.kind shouldBe "Wait"
+    reconstructed.sessionId shouldBe session
+    reconstructed.repairProgress shouldBe repair.repairProgress
+    reconstructed.message should include("Current development selection retained")
+    val unsupported = _describe(scenario, session, "checkpoint-old-source-description", proposal)
+    unsupported.exitCode should not be 0
+    unsupported.invocation.logs should include("canonical source")
+    unsupported.invocation.logs should include("Implementation or Repair")
+    _lines(root.resolve("primary-publications.txt")) shouldBe primarypublications
+    _lines(root.resolve("selected-tests.txt")) shouldBe tests
+    _lines(root.resolve("canonical-dependency/publication-count.txt")) shouldBe dependencypublications
+    val listing = Files.list(root.resolve("logs"))
+    val outputs = try listing.iterator.asScala.toVector.filter(Files.isRegularFile(_)).sortBy(_.toString) finally listing.close()
+    val checkpoint = saved.mapObject(_.add("stage", "PREPARED_CHECKPOINT".asJson)
+      .add("binding", binding.asJson).add("proposal", proposal.asJson)
+      .add("checkpointLineage", true.asJson).add("checkpointPrimary", primary.asJson)
+      .add("checkpointDependencyBase", nextbase.asJson).add("checkpointPriorBinding", oldbinding.asJson)
+      .add("checkpointPublication", publication.asJson).add("acceptedRepairWork", _json(repair))
+      .add("acceptedRepairSubmitOutput", repairoutput.toString.asJson)
+      .add("acceptedRepairSubmitBytes", Files.readString(repairoutput).asJson)
+      .add("checkpointGuardOperation", R.adoptionOperation.asJson)
+      .add("checkpointGuardOutput", refused.invocation.stderr.toString.asJson)
+      .add("checkpointReconstructionOutput", reconstruction.invocation.stdout.toString.asJson)
+      .add("oldPrimaryPublications", primarypublications.asJson).add("oldTests", tests.asJson)
+      .add("checkpointCanonicalPublications", dependencypublications.asJson)
+      .add("originalOutputs", outputs.map(path => Json.obj("path" -> path.toString.asJson,
+        "bytes" -> Files.readString(path).asJson)).asJson))
+    _write(checkpointfile, checkpoint)
+    info("LATER_SOURCE_CHECKPOINT_PREPARED=" + checkpointfile)
+  }
+
+  private def _preserved_unknown_checkpoint(locator: Path): Option[Json] =
+    sys.props.get("smworkflow.spec.laterSourcePublicationUnknownLocator").map { selected =>
+      val unknownlocator = Path.of(selected)
+      val canonical = Path.of("").toAbsolutePath.normalize
+      require(unknownlocator.isAbsolute && unknownlocator.normalize == unknownlocator &&
+        unknownlocator.startsWith(canonical.resolve("target")) && unknownlocator != locator,
+        "Select a distinct existing absolute first-episode base locator for UNKNOWN refusal")
+      val saved = _read(unknownlocator.resolveSibling(unknownlocator.getFileName.toString + ".prepared.json"))
+      saved.hcursor.get[Boolean]("checkpointLineage").toOption shouldBe Some(true)
+      val root = Path.of(saved.hcursor.get[String]("root").toOption.get)
+      require(root.toRealPath() == root && root.getParent == canonical.resolve("target/sm-workflow/work/native-cli"))
+      val scenario = F.reopenCanonicalSource(root, _host(root), saved.hcursor.get[O.Plan]("plan").toOption.get, _next_log(root))
+      val task = Path.of(saved.hcursor.get[String]("task").toOption.get)
+      val session = scenario.retrieve(task)
+      session shouldBe saved.hcursor.get[String]("session").toOption.get
+      val reconstructionlocator = _read(root.resolve("caller-results/checkpoint-common-reconstruction.json"))
+      reconstructionlocator.hcursor.get[Int]("exit").toOption shouldBe Some(0)
+      val reconstructionpath = Path.of(reconstructionlocator.hcursor.get[String]("stdout").toOption.get)
+      require(reconstructionpath.startsWith(root.resolve("logs")))
+      val reconstructionbytes = Files.readString(reconstructionpath)
+      val reconstruction = _business[V.GoalPhaseAdvanceResult](reconstructionpath)
+      val repairlocator = _read(root.resolve("caller-results/current-repair-submit.json"))
+      repairlocator.hcursor.get[Int]("exit").toOption shouldBe Some(0)
+      val repairpath = Path.of(repairlocator.hcursor.get[String]("stdout").toOption.get)
+      require(repairpath.startsWith(root.resolve("logs")))
+      val repairbytes = Files.readString(repairpath)
+      val primarypublications = _lines(root.resolve("primary-publications.txt"))
+      val tests = _lines(root.resolve("selected-tests.txt"))
+      val dependencypublications = _lines(root.resolve("canonical-dependency/publication-count.txt"))
+      Given("the separate original physical episode with an actual candidate UNKNOWN and its unanswered reconstruction Human")
+      reconstruction.kind shouldBe "Human"
+      reconstruction.sessionId shouldBe session
+      reconstruction.human.get.choices shouldBe Vector("Defer", "Cancel")
+      reconstruction.message should include("actual partial or unknown result")
+      val payload = GoalPhaseNativeMetadata.normalizePublicJson(_json(reconstruction.human.get.developmentReconstruction.get)).toOption.get
+      payload.hcursor.downField("payload").downField("assessment").get[Vector[String]]("uncertainEffects").toOption.get should not be empty
+      _business[V.GoalPhaseWorkSubmissionResult](repairpath).accepted shouldBe true
+      _preserved(saved)
+      When("the updated installed product receives only a fresh read-only canonical source description for that original uncertain Session")
+      val refused = _describe(scenario, session, "checkpoint-current-unknown-source-refusal",
+        saved.hcursor.get[C.Proposal]("proposal").toOption.get)
+      Then("native Human ownership refuses source eligibility without answering the Human, advancing or replaying any old effect")
+      refused.exitCode should not be 0
+      refused.invocation.logs should include("canonical source requires actual current")
+      refused.invocation.logs should include("Human remains with its owning operation")
+      refused.invocation.logs should not include("resource exceeds the runtime byte limit")
+      Files.readString(reconstructionpath) shouldBe reconstructionbytes
+      Files.readString(repairpath) shouldBe repairbytes
+      _lines(root.resolve("primary-publications.txt")) shouldBe primarypublications
+      _lines(root.resolve("selected-tests.txt")) shouldBe tests
+      _lines(root.resolve("canonical-dependency/publication-count.txt")) shouldBe dependencypublications
+      _preserved(saved)
+      Json.obj("session" -> session.asJson, "unansweredHuman" -> reconstructionpath.toString.asJson,
+        "sourceDescriptionRefusal" -> refused.invocation.stderr.toString.asJson,
+        "sourceEligibility" -> "refused-actual-native-unknown".asJson)
+    }
+
+  private def _resume_checkpoint(locator: Path): Unit = {
+    require(_checkpoint_lineage && _root_lineage && _coverage_lineage && _usage_lineage)
+    val checkpointfile = locator.resolveSibling(locator.getFileName.toString + ".checkpoint.json")
+    val saved = _read(checkpointfile)
+    saved.hcursor.get[String]("stage").toOption shouldBe Some("PREPARED_CHECKPOINT")
+    Vector("usageLineage", "coverageLineage", "rootLineage", "checkpointLineage").foreach { field =>
+      saved.hcursor.get[Boolean](field).toOption shouldBe Some(true)
+    }
+    val root = Path.of(saved.hcursor.get[String]("root").toOption.get)
+    require(root.toRealPath() == root && root.getParent == Path.of("").toAbsolutePath.normalize.resolve("target/sm-workflow/work/native-cli"))
+    val task = Path.of(saved.hcursor.get[String]("task").toOption.get)
+    val scenario = F.reopenCanonicalSource(root, _host(root), saved.hcursor.get[O.Plan]("plan").toOption.get, _next_log(root))
+    val session = scenario.retrieve(task)
+    session shouldBe saved.hcursor.get[String]("session").toOption.get
+    _config(root)(_.mapObject(_.add("textus.component.file", sys.props("smworkflow.spec.componentFile").asJson)
+      .add("textus.resource.read.max-bytes", "16777216".asJson)))
+    val proposal = saved.hcursor.get[C.Proposal]("proposal").toOption.get
+    val checkpoint = saved.hcursor.get[O.Snapshot]("checkpointPrimary").toOption.get
+    val repair = take(summon[ValueReader[V.GoalPhaseAdvanceResult]].readC(take(new RecordDecoder().json(
+      saved.hcursor.get[Json]("acceptedRepairWork").toOption.get.noSpaces))))
+    val unknown = _preserved_unknown_checkpoint(locator)
+    Given("the retained accepted Repair, ordinary primary checkpoint, docs-only dependency descendant and old source-guard failure")
+    _preserved(saved)
+    Files.readString(Path.of(saved.hcursor.get[String]("acceptedRepairSubmitOutput").toOption.get)) shouldBe
+      saved.hcursor.get[String]("acceptedRepairSubmitBytes").toOption.get
+    When("the updated installed description reconstructs the exact unstarted inspection source target")
+    val described = _describe(scenario, session, "checkpoint-current-description", proposal)
+    val description = described.business[V.GoalPhaseDependencySourceRevisionDescriptionResult]
+    val target = take(R.targetC(description.target))
+    val origin = target.canonicalOrigin.get
+    val frontier = origin.inspectionFrontier.get
+    Then("the target binds the actual managed selection and checkpoint without converting it to Repair, validation or Step acceptance")
+    description.choices shouldBe Vector(C.choice, "Defer")
+    origin.controller.stage shouldBe "InspectCandidate"
+    origin.pending shouldBe None
+    origin.historicalFailure shouldBe None
+    origin.historicalPublicationFailure shouldBe None
+    frontier.record shouldBe ContextReference(session, target.sourceRevision)
+    frontier.reconstruction.observation.head shouldBe checkpoint.head
+    frontier.reconstruction.observation.tree shouldBe checkpoint.tree
+    frontier.reconstruction.observation.indexTree shouldBe checkpoint.tree
+    frontier.reconstruction.observation.dirty shouldBe Vector.empty
+    frontier.reconstruction.documents.captured.plan shouldBe target.plan
+    target.binding shouldBe saved.hcursor.get[D.Binding]("binding").toOption.get
+    target.completed.map(_.step) shouldBe Vector("step-1")
+    target.completed.head.commit.identity shouldBe repair.work.get.completed.head.commit.identity
+    target.primaryBase.asJson shouldBe saved.hcursor.downField("acceptedRepairWork").downField("work").get[Json]("originalBase").toOption.get
+    repair.repairProgress.get.ordinaryCount shouldBe target.repairProgress.ordinaryCount
+    repair.repairProgress.get.automaticCount shouldBe target.repairProgress.automaticCount
+    repair.repairProgress.get.limit shouldBe target.repairProgress.limit
+    val reference = V.WorkflowArtifactReference("specification-checkpoint-source-human", "1")
+    val input = V.GoalPhaseDependencySourceRevisionAdoptionInput(session, description.target, C.choice,
+      "SPECIFICATION-ONLY exact source choice after accepted Repair and checkpoint", reference)
+    Given("the exact source target with no independently prepared source Human evidence")
+    When("source adoption receives missing Human proof or caller-supplied stale checkpoint/frontier claims")
+    val missing = _input(scenario, "checkpoint-missing-human-refusal", "GoalPhaseService", R.adoptionOperation, input)
+    missing.exitCode should not be 0
+    missing.invocation.logs should not include("resource exceeds the runtime byte limit")
+    val observed = frontier.reconstruction.observation
+    val crossedfrontier = frontier.copy(reconstruction = frontier.reconstruction.copy(
+      observation = observed.copy(head = "a" * 40, tree = "b" * 40, indexTree = "b" * 40)))
+    val stalerevision = (target.sourceRevision.toLong + 1).toString
+    val stale = target.copy(sourceRevision = stalerevision, pendingRevision = stalerevision,
+      canonicalOrigin = Some(origin.copy(inspectionFrontier = Some(frontier.copy(
+        record = frontier.record.copy(revision = stalerevision), reconstruction = frontier.reconstruction.copy(
+          fromRevision = (frontier.reconstruction.fromRevision.toLong + 1).toString))))))
+    val crossed = target.copy(canonicalOrigin = Some(origin.copy(inspectionFrontier = Some(crossedfrontier))))
+    Vector("stale-frontier" -> stale, "crossed-checkpoint" -> crossed).foreach { (label, changed) =>
+      R.targetValid(changed) shouldBe true
+      val refused = _input(scenario, "checkpoint-" + label + "-refusal", "GoalPhaseService", R.adoptionOperation,
+        input.copy(target = R.targetRecord(changed)))
+      refused.exitCode should not be 0
+      refused.invocation.logs should include("canonical source target is stale or changed")
+      refused.invocation.logs should not include("resource exceeds the runtime byte limit")
+    }
+    val pending = proposal.copy(workerLifecycle = Some(C.WorkerLifecycle(true, true)))
+    val pendingrefusal = _describe(scenario, session, "checkpoint-pending-worker-refusal", pending)
+    pendingrefusal.exitCode should not be 0
+    pendingrefusal.invocation.logs should include("pending work requires explicit prior-worker termination")
+    val wrongbinding = proposal.copy(source = proposal.source.copy(binding = ContextReference(target.binding.identity,
+      saved.hcursor.get[D.Binding]("checkpointPriorBinding").toOption.get.revision.toString)))
+    val wrongsource = _describe(scenario, session, "checkpoint-wrong-source-refusal", wrongbinding)
+    wrongsource.exitCode should not be 0
+    wrongsource.invocation.logs should include("canonical source requires its exact clean committed root, branch, HEAD, index and tree")
+    val uncertain = target.copy(canonicalOrigin = Some(origin.copy(inspectionFrontier = Some(frontier.copy(
+      reconstruction = frontier.reconstruction.copy(assessment = frontier.reconstruction.assessment.copy(
+        uncertainEffects = Vector("SPECIFICATION-ONLY caller claims an unresolved effect"))))))))
+    R.targetValid(uncertain) shouldBe false
+    _input(scenario, "checkpoint-uncertain-effect-refusal", "GoalPhaseService", R.adoptionOperation,
+      input.copy(target = R.targetRecord(uncertain))).exitCode should not be 0
+    val unchanged = _describe(scenario, session, "checkpoint-description-after-refusals", proposal)
+    Then("negative claims leave the native source frontier, accepted prefix and all existing successful effects unchanged")
+    take(R.targetC(unchanged.business[V.GoalPhaseDependencySourceRevisionDescriptionResult].target)) shouldBe target
+    _lines(root.resolve("primary-publications.txt")) shouldBe saved.hcursor.get[Vector[String]]("oldPrimaryPublications").toOption.get
+    _lines(root.resolve("selected-tests.txt")) shouldBe saved.hcursor.get[Vector[String]]("oldTests").toOption.get
+    _preserved(saved)
+    When("the exact independent source Human choice is admitted without reissuing or resubmitting accepted Repair")
+    _adopt(scenario, described, "checkpoint-source-human") shouldBe target
+    val advancelabel = sys.props.getOrElse("smworkflow.spec.laterSourcePublicationCheckpointAdvanceLabel",
+      "checkpoint-current-candidate-and-publication")
+    require(advancelabel == "checkpoint-current-candidate-and-publication" ||
+      advancelabel.matches("checkpoint-current-candidate-and-publication-[1-9][0-9]*"),
+      "Select the default or one explicit canonical positive-decimal remaining checkpoint Advance label")
+    val observedoutput = _advance(scenario, task, advancelabel)
+    val publication = saved.hcursor.get[P.PublicationObservation]("checkpointPublication").toOption.get
+    val aligned = _align_current(scenario, task, saved, observedoutput, Some(publication))
+    val checked = aligned.business[V.GoalPhaseAdvanceResult]
+    val review = if (checked.work.exists(_.kind == "ReviewStep")) aligned else {
+      val authoritydescription = _call(scenario, "checkpoint-primary-authority-description", "GoalPhaseService", B.describeOperation,
+        Vector("--sessionId", session))
+      val offered = authoritydescription.business[V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult]
+      offered.choices should contain("AuthorizePrimaryPublicationOnce")
+      val authorityreference = V.WorkflowArtifactReference("specification-checkpoint-primary-authority", "1")
+      val authorityinput = V.GoalPhasePrerequisitePublicationRecoveryInput(session, offered.target, "AuthorizePrimaryPublicationOnce",
+        "SPECIFICATION-ONLY necessary new checkpoint candidate publication", authorityreference, None)
+      _evidence(scenario, authoritydescription, "checkpoint-primary-authority", "goal-phase-prerequisite-publication-recovery",
+        _json(authorityinput), authorityreference)
+      _input(scenario, "checkpoint-primary-authority-adopt", "GoalPhaseService", B.recoveryOperation, authorityinput)
+        .business[V.GoalPhasePrerequisitePublicationRecoveryResult].accepted shouldBe true
+      _advance(scenario, task, "checkpoint-current-checked-review")
+    }
+    val reviewed = review.business[V.GoalPhaseAdvanceResult]
+    Then("ordinary capture and the original required checks reach independent Review with one source generation change and preserved accounting")
+    reviewed.work.get.kind shouldBe "ReviewStep"
+    reviewed.validation.get.outcome shouldBe Some("passed")
+    reviewed.repairProgress shouldBe repair.repairProgress
+    val captures = reviewed.work.get.review.get.dependencyValidations.flatMap(record =>
+      GoalPhaseNativeMetadata.normalizePublicJson(_json(record)).toOption.toVector.flatMap(_.hcursor.get[R.Capture]("capture").toOption))
+      .filter(_.step == "step-2")
+    captures.size shouldBe 1
+    captures.head.direction.target shouldBe target
+    captures.head.direction.target.canonicalOrigin.get.inspectionFrontier shouldBe Some(frontier)
+    captures.head.generation shouldBe target.generation + 1
+    _lines(root.resolve("canonical-dependency/publication-count.txt")) shouldBe
+      saved.hcursor.get[Vector[String]]("checkpointCanonicalPublications").toOption.get
+    _lines(root.resolve("selected-tests.txt")).size shouldBe saved.hcursor.get[Vector[String]]("oldTests").toOption.get.size + 1
+    _lines(root.resolve("selected-tests.txt")).last shouldBe "later"
+    val closed = _close(scenario, task, review, "checkpoint-current").business[V.GoalPhaseAdvanceResult]
+    Then("actual Step2 closure retains Step1 and the checkpoint ancestry; Phase review remains a separate unaccepted obligation")
+    closed.sessionId shouldBe session
+    closed.work.get.kind shouldBe "ReviewPhase"
+    closed.work.get.completed.map(_.step) shouldBe Vector("step-1", "step-2")
+    closed.work.get.completed.head shouldBe repair.work.get.completed.head
+    closed.work.get.completed.last.commit.identity should not be checkpoint.head
+    _git(root, root.resolve("repository"), "checkpoint-retained-ancestry", "merge-base", "--is-ancestor",
+      checkpoint.head, closed.work.get.completed.last.commit.identity) shouldBe ""
+    closed.completion shouldBe None
+    Files.readString(Path.of(saved.hcursor.get[String]("acceptedRepairSubmitOutput").toOption.get)) shouldBe
+      saved.hcursor.get[String]("acceptedRepairSubmitBytes").toOption.get
+    _preserved(saved)
+    _write(locator.resolveSibling(locator.getFileName.toString + ".checkpoint-result.json"), Json.obj(
+      "session" -> session.asJson, "source" -> target.binding.base.asJson, "sourceTarget" -> target.asJson,
+      "checkpoint" -> checkpoint.asJson, "acceptedRepair" -> saved.hcursor.get[String]("acceptedRepairSubmitOutput").toOption.get.asJson,
+      "completed" -> closed.work.get.completed.map(_json).asJson, "repairProgress" -> _json(repair.repairProgress.get),
+      "preservedUnknownEpisode" -> unknown.asJson,
+      "phaseAccepted" -> false.asJson))
+  }
+
+  private def _resume_current(locator: Path, preparecheckpoint: Boolean = false): Unit = {
     Given("the explicit old-stage locator and the normally published current product, retaining the same physical Session and original logs")
     val saved = _read(locator.resolveSibling(locator.getFileName.toString + ".prepared.json"))
     saved.hcursor.get[String]("stage").toOption.get shouldBe "PREPARED_OLD"
@@ -873,6 +1211,7 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     val coveragelineage = saved.hcursor.get[Boolean]("coverageLineage").getOrElse(false)
     coveragelineage shouldBe _coverage_lineage
     saved.hcursor.get[Boolean]("rootLineage").getOrElse(false) shouldBe _root_lineage
+    saved.hcursor.get[Boolean]("checkpointLineage").getOrElse(false) shouldBe _checkpoint_lineage
     val root = Path.of(saved.hcursor.get[String]("root").toOption.get)
     require(root.toRealPath() == root && root.getParent == Path.of("").toAbsolutePath.normalize.resolve("target/sm-workflow/work/native-cli"))
     if (_root_lineage) _config(root)(_.mapObject(_.add("textus.resource.read.max-bytes", "16777216".asJson)))
@@ -988,6 +1327,10 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     if (!Files.exists(submittedpath)) Files.writeString(root.resolve("repository").resolve(_source), _consumer("Api.newApi(20)"))
     When("only the newly issued Repair returns a real API correction for fresh capture and necessary new managed publication")
     _completed(scenario, repair, "current-repair-submit")
+    if (preparecheckpoint) {
+      _prepare_checkpoint(locator, scenario, task, saved, repair)
+      return
+    }
     val observed = _advance(scenario, task, "current-candidate-and-publication")
     val aligned = if (_root_lineage) _align_current(scenario, task, saved, observed) else observed
     val current = aligned.business[V.GoalPhaseAdvanceResult]

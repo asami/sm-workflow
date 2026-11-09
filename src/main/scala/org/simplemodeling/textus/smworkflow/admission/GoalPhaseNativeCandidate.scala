@@ -25,7 +25,6 @@ import GoalPhaseDependencyValidation.given
   * An intent without its actual recorded result is retained, never replayed.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  *  version Nov.  6, 2026
   * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
@@ -124,8 +123,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
       case None => GoalPhaseDependencySourceRevision.candidateValid(value)
       case Some(reuse) => GoalPhasePrerequisitePrimaryRepair.reuseValid(reuse) &&
         value.sourceRevision.toLongOption.exists(_ > reuse.repair.revision.toLong) &&
-        (value.dependencySourceDirection.exists(_.target.canonicalOrigin.exists(_.historicalPublicationFailure.exists(h =>
-          GoalPhasePrerequisitePrimaryRepair.canonicalSourceSuccessorValid(h.fact.failure.candidate, value)))) ||
+        (value.dependencySourceDirection.exists(direction => GoalPhasePrerequisitePrimaryRepair.canonicalPublicationFailure(direction)
+          .exists(h => GoalPhasePrerequisitePrimaryRepair.canonicalSourceSuccessorValid(h.fact.failure.candidate, value))) ||
           value.dependencySourceScope.exists(_.consumptionDirection.exists(_.target.sourceSuccession.nonEmpty)) &&
           GoalPhaseDependencySourceRevision.candidateValid(value) ||
           GoalPhaseDependencySourceRevision.candidateValid(_historical_source_view(value, reuse)))
