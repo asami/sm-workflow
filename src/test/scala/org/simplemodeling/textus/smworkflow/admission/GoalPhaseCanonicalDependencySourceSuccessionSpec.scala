@@ -282,9 +282,71 @@ private[admission] object PriorCoveredSourceSpecificationFixture {
   val capture = L.capture.copy(direction = direction, preStageGuard = guard, postStageGuard = guard)
 }
 
+/** Mixed Component approvals are structural data, never authenticated history.
+  * @since   Nov. 10, 2026
+  * @version Nov. 10, 2026
+  */
+private[admission] object MixedDependencySourceSpecificationFixture {
+  import CanonicalDependencySourceSpecificationFixture as F
+  import GoalPhaseDependencyScope as Scope
+  import GoalPhaseDependencyValidation as D
+  val cncf = F.predecessor.binding.dependency
+  val launcher = cncf.copy(identity = "org.goldenport.launcher", repository = "cncf-launcher", workspace = "launcher-source")
+  val cncfPaths = Vector.tabulate(5)(index => "src/main/scala/CncfContinuation" + index + ".scala")
+  val launcherPaths = Vector.tabulate(6)(index => "src/main/scala/LauncherContinuation" + index + ".scala")
+  val oldPaths = Vector.tabulate(39)(index => "src/main/scala/RetainedContract" + index + ".scala")
+  final case class Selection(target: R.Target, direction: R.Direction, capture: R.Capture,
+    standing: D.Approval, selected: D.Approval, other: D.Approval)
+
+  private def _fixture(selected: Scope.Component, other: Scope.Component,
+    selectedpaths: Vector[String], otherpaths: Vector[String]): Selection = {
+    val oldbinding = F.predecessor.binding.copy(dependency = selected, paths = oldPaths)
+    val standing = F.predecessor.approvals.head.copy(proposal = F.predecessor.approvals.head.proposal.copy(
+      identity = selected.repository + "-standing", dependency = selected, paths = oldPaths,
+      reason = "SPECIFICATION-ONLY retained Component contract", acceptance = Vector("Preserve all retained caller obligations")),
+      decision = ContextReference(selected.repository + "-standing-human", "1"))
+    val added = standing.copy(proposal = standing.proposal.copy(identity = selected.repository + "-current-scope",
+      dependency = selected.copy(workspace = selected.workspace + "-approved"),
+      usageContract = standing.proposal.usageContract.copy(revision = "2"), paths = selectedpaths,
+      reason = "SPECIFICATION-ONLY current Step continuation for " + selected.repository,
+      acceptance = Vector("Preserve existing callers", "Complete the selected Component continuation")),
+      decision = ContextReference(selected.repository + "-current-human", "1"))
+    val unrelated = added.copy(proposal = added.proposal.copy(identity = other.repository + "-current-scope", dependency = other,
+      usageContract = ContextReference(other.repository + "-usage", "1"), paths = otherpaths,
+      reason = "SPECIFICATION-ONLY independently approved continuation for " + other.repository,
+      acceptance = Vector("Preserve the other Component callers", "Complete the other Component continuation")),
+      decision = ContextReference(other.repository + "-current-human", "1"))
+    val predecessor = D.Admission(oldbinding, Vector(standing))
+    val binding = F.binding.copy(dependency = selected.copy(workspace = F.binding.dependency.workspace),
+      paths = oldPaths ++ selectedpaths)
+    val consumption = F.consumption.copy(expectedModes = binding.paths.map(R.ExpectedMode(_, "100644")))
+    val source = F.source.copy(coverage = Vector(standing, added).map(a =>
+      R.Coverage(a.decision, a.proposal.acceptance, binding.checks.map(_.identity))), consumption = consumption)
+    val publication = {
+      val result = F.publication.result
+      val request = result.publication.request
+      F.publication.copy(result = result.copy(publication = result.publication.copy(request = request.copy(
+        target = request.target.copy(component = selected.identity)))))
+    }
+    val guard = F.guard.copy(committedInventory = Some(F.guard.committedInventory.get.copy(selected = binding.paths.map(path =>
+      R.CommittedEntry(path, Some(R.CommittedObject("100644", "7" * 40)))))))
+    val origin = F.origin.copy(approvals = Vector(standing, added, unrelated), originalDirection = None,
+      selection = F.proposal.copy(source = source, publication = publication), baseLineage = Vector(
+        O.HistoryCommit(binding.base.head, binding.base.tree, Vector(oldbinding.base.head)),
+        O.HistoryCommit(oldbinding.base.head, oldbinding.base.tree, Vector.empty)))
+    val target = F.target.copy(predecessor = predecessor, ancestors = Vector.empty, proposal = source,
+      binding = binding, predecessorGuard = None, preStageGuard = guard, canonicalOrigin = Some(origin))
+    val direction = F.direction.copy(target = target)
+    val capture = F.capture.copy(direction = direction, preStageGuard = guard, postStageGuard = guard)
+    Selection(target, direction, capture, standing, added, unrelated)
+  }
+  def selections: Vector[Selection] = Vector(_fixture(cncf, launcher, cncfPaths, launcherPaths),
+    _fixture(launcher, cncf, launcherPaths, cncfPaths))
+}
+
 /** Canonical source contracts use specification-only observations and authority.
   * @since   Nov.  8, 2026
-  * @version Nov.  9, 2026
+  * @version Nov. 10, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -452,6 +514,103 @@ final class GoalPhaseCanonicalDependencySourceSuccessionSpec extends AnyWordSpec
   "LSR-01 Later source and genuine publication failure" should {
     import LaterSourcePublicationSpecificationFixture as L
     import GoalPhasePrerequisitePrimaryRepair as A
+    "R11 append only the selected Component approval while retaining both current Step approval records" in {
+      Given("two valid specification-only Component approvals in the same unfinished Step; pure fixtures authenticate no native Human history")
+      import MixedDependencySourceSpecificationFixture as M
+      M.selections.foreach { fixture =>
+        val target = fixture.target
+        val origin = target.canonicalOrigin.get
+        val approvals = origin.approvals
+        When("either Component is selected and the target Direction and capture cross strict and public DTO codecs")
+        val publictarget = R.targetC(GoalPhaseNativeMetadata.record(target.asJson))
+        val directionwire = io.circe.parser.parse(take(GoalPhaseNativeMetadata.record(fixture.direction.asJson).toJsonStringC)).toOption.get
+        val capturewire = io.circe.parser.parse(take(GoalPhaseNativeMetadata.record(fixture.capture.asJson).toJsonStringC)).toOption.get
+        val publiccapture = for {
+          wire <- GoalPhaseNativeMetadata.normalizePublicJson(capturewire)
+          direction <- R.decodePublicDirection(wire.hcursor.downField("direction").focus.get)
+          capture <- wire.mapObject(_.add("direction", direction.asJson)).as[R.Capture].left.map(_.message)
+        } yield capture
+        Then("only that dependency's complete paths and obligations append while the literal global approval vector survives")
+        approvals.foreach(a => GoalPhaseDependencyValidation.approvalValid(a) shouldBe true)
+        R.targetValid(target) shouldBe true
+        target.asJson.as[R.Target] shouldBe Right(target)
+        take(publictarget) shouldBe target
+        fixture.direction.asJson.as[R.Direction] shouldBe Right(fixture.direction)
+        R.decodePublicDirection(directionwire) shouldBe Right(fixture.direction)
+        fixture.capture.asJson.as[R.Capture] shouldBe Right(fixture.capture)
+        publiccapture shouldBe Right(fixture.capture)
+        take(publictarget).canonicalOrigin.get.approvals shouldBe Vector(fixture.standing, fixture.selected, fixture.other)
+        target.binding.paths shouldBe M.oldPaths ++ fixture.selected.proposal.paths
+        target.binding.paths.intersect(fixture.other.proposal.paths) shouldBe empty
+        target.proposal.coverage shouldBe Vector(fixture.standing, fixture.selected).map(a =>
+          R.Coverage(a.decision, a.proposal.acceptance, target.binding.checks.map(_.identity)))
+        fixture.selected.step shouldBe target.step
+        fixture.other.step shouldBe target.step
+        fixture.selected.proposal.requester shouldBe fixture.other.proposal.requester
+        fixture.selected.proposal.dependency.identity shouldBe target.binding.dependency.identity
+        fixture.selected.proposal.dependency.repository shouldBe target.binding.dependency.repository
+        fixture.selected.proposal.dependency.workspace should not be target.predecessor.binding.dependency.workspace
+        fixture.selected.proposal.dependency.workspace should not be target.binding.dependency.workspace
+        target.repairProgress shouldBe F.target.repairProgress
+        target.completed shouldBe F.target.completed
+        if (target.binding.dependency.identity == M.cncf.identity) {
+          M.oldPaths.size shouldBe 39
+          fixture.selected.proposal.paths.size shouldBe 5
+          fixture.other.proposal.paths.size shouldBe 6
+          target.binding.paths.size shouldBe 44
+          (target.binding.paths ++ fixture.other.proposal.paths).size shouldBe 50
+        } else target.binding.paths.size shouldBe 45
+      }
+    }
+    "R11 refuse borrowed unrelated scope and crossed selected approvals without filtering global conflicts" in {
+      Given("both same-Step Component approvals plus retained39 and the complete selected acceptance and check obligations")
+      import MixedDependencySourceSpecificationFixture as M
+      M.selections.foreach { fixture =>
+        val target = fixture.target
+        val origin = target.canonicalOrigin.get
+        val approval = fixture.selected
+        val coverage = target.proposal.coverage
+        def _target_(approvals: Vector[GoalPhaseDependencyValidation.Approval] = origin.approvals,
+          paths: Vector[String] = target.binding.paths, entries: Vector[R.Coverage] = coverage): R.Target = {
+          val source = target.proposal.copy(coverage = entries,
+            consumption = F.consumption.copy(expectedModes = paths.map(R.ExpectedMode(_, "100644"))))
+          val guard = target.preStageGuard.copy(committedInventory = Some(target.preStageGuard.committedInventory.get.copy(
+            selected = paths.map(path => R.CommittedEntry(path, Some(R.CommittedObject("100644", "7" * 40)))))))
+          target.copy(binding = target.binding.copy(paths = paths), proposal = source, preStageGuard = guard,
+            canonicalOrigin = Some(origin.copy(approvals = approvals, selection = origin.selection.copy(source = source))))
+        }
+        val crossed = Vector(approval.copy(step = "another-step"),
+          approval.copy(proposal = approval.proposal.copy(requester = approval.proposal.requester.copy(identity = "foreign-requester"))),
+          approval.copy(proposal = approval.proposal.copy(usageContract = ContextReference("foreign-usage", "2"))),
+          approval.copy(proposal = approval.proposal.copy(dependency = approval.proposal.dependency.copy(identity = fixture.other.proposal.dependency.identity))),
+          approval.copy(proposal = approval.proposal.copy(dependency = approval.proposal.dependency.copy(repository = fixture.other.proposal.dependency.repository))))
+        val borrowed = R.Coverage(fixture.other.decision, fixture.other.proposal.acceptance, target.binding.checks.map(_.identity))
+        val own = coverage.last
+        When("own approval scope or coverage is crossed or another Component's approval is used to expand the selected binding")
+        val invalid = crossed.map(a => _target_(approvals = Vector(fixture.standing, a, fixture.other))) ++ Vector(
+          _target_(approvals = Vector(fixture.standing, fixture.other)),
+          _target_(paths = target.binding.paths ++ fixture.other.proposal.paths),
+          _target_(entries = coverage :+ borrowed),
+          _target_(paths = target.binding.paths ++ fixture.other.proposal.paths, entries = coverage :+ borrowed),
+          _target_(entries = coverage.init),
+          _target_(entries = coverage.reverse),
+          _target_(entries = coverage.init :+ own.copy(acceptance = own.acceptance.dropRight(1))),
+          _target_(entries = coverage.init :+ own.copy(acceptance = Vector("Changed selected obligation"))),
+          _target_(entries = coverage.init :+ own.copy(checks = Vector.empty)),
+          _target_(entries = coverage.init :+ own.copy(checks = Vector("foreign-check"))),
+          _target_(approvals = origin.approvals :+ fixture.other.copy(decision = approval.decision)),
+          _target_(paths = target.binding.paths.updated(0, target.binding.paths(1)).updated(1, target.binding.paths.head)),
+          target.copy(binding = target.binding.copy(dependency = target.binding.dependency.copy(identity = fixture.other.proposal.dependency.identity))),
+          target.copy(binding = target.binding.copy(dependency = target.binding.dependency.copy(repository = fixture.other.proposal.dependency.repository))),
+          target.copy(preStageGuard = target.preStageGuard.copy(head = "9" * 40)))
+        Then("every crossing refuses and unrelated valid approval records remain literal without granting selected paths")
+        invalid.foreach { value =>
+          R.targetValid(value) shouldBe false
+          value.asJson.as[R.Target].isLeft shouldBe true
+        }
+        origin.approvals shouldBe Vector(fixture.standing, approval, fixture.other)
+      }
+    }
     "retain only uniquely resolved prior covered approvals and append the later Step approval with its exact path" in {
       Given("structural predecessor1 plus old canonical extra1 and later Usage revision2 approval1; these records supply no native authority")
       import PriorCoveredSourceSpecificationFixture as P

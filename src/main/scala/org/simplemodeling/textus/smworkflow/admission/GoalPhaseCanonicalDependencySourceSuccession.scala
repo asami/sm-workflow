@@ -28,7 +28,7 @@ import GoalPhaseDevelopmentReconstruction as X
   * Native traversal, not these records, supplies historical authority. External
   * publication is provenance; no artifact adoption or publication happens here.
   * @since   Nov.  8, 2026
-  * @version Nov.  9, 2026
+  * @version Nov. 10, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
@@ -338,7 +338,9 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
     val priorcovered = prior.map(d => _prior_covered_approvals(v, d.target)).getOrElse(Some(Vector.empty))
     val inherited = (v.predecessor.approvals ++ v.ancestors.flatMap(_.capture.admission.approvals) ++
       priorcovered.toVector.flatten).distinct
-    val added = o.approvals.filter(a => a.step == v.step && !inherited.exists(_.decision == a.decision))
+    val added = o.approvals.filter(a => a.step == v.step && !inherited.exists(_.decision == a.decision) &&
+      a.proposal.dependency.identity == old.dependency.identity &&
+      a.proposal.dependency.repository == old.dependency.repository)
     val paths = oldpaths ++ added.flatMap(_.proposal.paths).filterNot(oldpaths.contains).distinct
     val coverage = (inherited ++ added).distinct
     val original = o.originalDirection
