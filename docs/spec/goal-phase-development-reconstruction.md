@@ -127,6 +127,35 @@ generation and chronology. Shape-valid JSON alone supplies no native authority.
 Fresh capture derives this reference from the native chain; callers cannot
 provide it. The original Direction is unchanged.
 
+An exact clean dependency source advance may be selected through the existing
+`describeGoalPhaseDependencySourceRevision` / `adoptGoalPhaseDependencySourceRevision`
+operations while the current reconstructed Step is still unstarted
+`InspectCandidate`. This does not return to Implementation or Repair. The native
+walker must authenticate the immediately preceding common reconstruction,
+its literal selected controller and original semantic result, and the absence of
+candidate, validation, recording, source-history work or unresolved worker intent.
+The reconstruction assessment must contain no incompatible meaning, unanswered
+question or uncertain effect. A stopped repair reservation is not eligible.
+
+The canonical target's optional `inspectionFrontier` retains the exact native
+record reference and opaque owner-encoded reconstruction Payload. It binds the
+current Session/frontier, Component/participant, Plan, original requesting result
+and selected primary checkpoint. Describe and adopt compare actual typed primary
+HEAD, committed tree, index tree and clean status with that saved observation;
+the index tree must equal the committed tree. A nonacceptance checkpoint does
+not become a completed Step, change the original base/tip or reset repair counts.
+Changing that primary observation requires the normal reconstruction owner,
+not a forged source proof or an implicit latest-source substitution.
+
+The actual independent source Human choice appends the usual single native
+Direction and advances its generation once. Separate ordinary Advance performs
+remaining candidate capture, required checks, independent review and closure.
+Accepted implementation/Repair results are not reissued or resubmitted. Old
+guards, source Directions, failed and UNKNOWN results remain literal history;
+artifact adoption and publication require their own applicable actual authority.
+An existing pending WorkOrder, active candidate or uncertainty remains with its
+owning continuation rather than using this unstarted connection.
+
 Capture v1-v8 omit `planSelection` and keep their existing exact Plan meaning.
 Explicit null, unknown fields, crossed references and version/metadata mismatch
 refuse. V9 is a common provenance variant, with no incident-specific operation or

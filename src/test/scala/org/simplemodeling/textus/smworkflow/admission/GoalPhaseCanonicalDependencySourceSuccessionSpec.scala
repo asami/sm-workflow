@@ -14,7 +14,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** All observations and Human references here are specification-only data.
   * @since   Nov.  8, 2026
-  * @version Nov.  8, 2026
+  * @version Nov.  9, 2026
   */
 private[admission] object CanonicalDependencySourceSpecificationFixture {
   import DependencyValidationSpecificationFixture as D
@@ -290,6 +290,114 @@ private[admission] object PriorCoveredSourceSpecificationFixture {
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseCanonicalDependencySourceSuccessionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import CanonicalDependencySourceSpecificationFixture as F
+  private def _inspection_fixture: (O.State, C.InspectionFrontier, R.Target) = {
+    import GoalPhaseDevelopmentReconstruction as X
+    import GoalPhasePlanRevision as PlanRevision
+    val accepted = take(F.controller.acceptC(O.SemanticCompleted(F.controller.next.asInstanceOf[O.Semantic].key,
+      "SPECIFICATION-ONLY accepted current Repair")))
+    val selected = take(accepted.reconstructDevelopmentC(accepted.plan, changed = true, sourceTargetGeneration = None))
+    val proposal = PlanRevision.Proposal("specification-current-development", "1", "Keep accepted work after checkpoint",
+      selected.plan.copy(effectiveAcceptance = None))
+    val payload = X.Payload(F.target.sessionId, "29", F.origin.participant, F.origin.componentInstance,
+      ContextReference("specification-goal-definition", "1"),
+      X.Documents("docs/phase.md", "docs/checklist.md", "Current development", "Current acceptance",
+        PlanRevision.Captured(proposal, selected.plan)),
+      X.Observation(F.primaryRoot, "main", "a" * 40, "b" * 40, "b" * 40, Vector.empty),
+      X.Assessment(Vector.empty, Vector.empty, Vector.empty, freshCapture = true, retainEvidence = false),
+      "SPECIFICATION-ONLY nonacceptance checkpoint; native history supplies actual authority", None,
+      Some(F.target.requestingResult), None, None, selected.plan.phaseOwnedPaths)
+    val frontier = C.InspectionFrontier(ContextReference(F.target.sessionId, "30"), payload)
+    val origin = F.origin.copy(controller = GoalPhaseCandidateRecovery.controllerSnapshot(selected),
+      inspectionFrontier = Some(frontier))
+    val target = F.target.copy(generation = selected.generation,
+      repairProgress = GoalPhaseRepairProgress.snapshot(selected), canonicalOrigin = Some(origin))
+    (selected, frontier, target)
+  }
+  "Reconstructed inspection source selection" should {
+    "preserve accepted Repair and prefix while selecting one source generation before candidate capture" in {
+      Given("an accepted current Repair and clean nonacceptance checkpoint selected by native reconstruction")
+      val (current, frontier, target) = _inspection_fixture
+      When("one independently admitted source Direction advances only the existing inspection generation")
+      val next = take(current.adoptCanonicalDependencySourceC(F.direction.directive))
+      Then("the stage remains inspection, accepted work stays literal and the checkpoint is not a Step acceptance")
+      C.inspectionFrontierValid(frontier) shouldBe true
+      R.targetValid(target) shouldBe true
+      next.stage shouldBe O.Stage.InspectCandidate
+      next.next shouldBe a[O.Inspect]
+      next.plan shouldBe current.plan
+      next.base shouldBe current.base
+      next.tipSnapshot shouldBe current.tipSnapshot
+      next.completed shouldBe current.completed
+      next.completed shouldBe F.controller.completed
+      next.repairDirective shouldBe current.repairDirective
+      next.pendingRepair shouldBe current.pendingRepair
+      next.repairControl shouldBe current.repairControl
+      next.repairObservations shouldBe current.repairObservations
+      next.generation shouldBe current.generation + 1
+      GoalPhaseRepairProgress.snapshot(next) shouldBe GoalPhaseRepairProgress.snapshot(current)
+      next.tipSnapshot.head should not be frontier.reconstruction.observation.head
+    }
+    "roundtrip the exact opaque reconstruction while legacy origins omit the new optional field" in {
+      Given("a reconstructed inspection target and the unchanged legacy Repair target")
+      val (_, frontier, target) = _inspection_fixture
+      When("the targets cross owner and public Record codecs")
+      val publictarget = R.targetC(GoalPhaseNativeMetadata.record(target.asJson))
+      val owner = target.asJson.as[R.Target]
+      val frontierwire = frontier.asJson.as[C.InspectionFrontier]
+      Then("the new proof remains complete and absent legacy metadata remains absent")
+      owner shouldBe Right(target)
+      take(publictarget) shouldBe target
+      frontierwire shouldBe Right(frontier)
+      F.target.asJson.hcursor.downField("canonicalOrigin").downField("inspectionFrontier").succeeded shouldBe false
+      F.target.asJson.as[R.Target] shouldBe Right(F.target)
+    }
+    "refuse missing crossed stale uncertain or pending inspection proofs without changing the historical target" in {
+      Given("one exact inspection frontier with no unfinished candidate or worker")
+      import GoalPhaseDevelopmentReconstruction as X
+      val (_, frontier, target) = _inspection_fixture
+      val origin = target.canonicalOrigin.get
+      val payload = frontier.reconstruction
+      val pending = C.Pending(ContextReference(target.sessionId, target.sourceRevision), "1",
+        DependencyValidationSpecificationFixture.request.copy(kind = "RepairStep"))
+      val invalidorigins = Vector(
+        origin.copy(inspectionFrontier = None),
+        origin.copy(inspectionFrontier = Some(frontier.copy(record = ContextReference("foreign", "30")))),
+        origin.copy(inspectionFrontier = Some(frontier.copy(record = ContextReference(target.sessionId, "31")))),
+        origin.copy(inspectionFrontier = Some(frontier.copy(reconstruction = payload.copy(participant = "foreign")))),
+        origin.copy(inspectionFrontier = Some(frontier.copy(reconstruction = payload.copy(componentInstance = "foreign")))),
+        origin.copy(inspectionFrontier = Some(frontier.copy(reconstruction = payload.copy(semanticResult = Some(ContextReference("foreign", "1")))))),
+        origin.copy(inspectionFrontier = Some(frontier.copy(reconstruction = payload.copy(observation = payload.observation.copy(indexTree = "c" * 40))))),
+        origin.copy(inspectionFrontier = Some(frontier.copy(reconstruction = payload.copy(assessment = X.Assessment(
+          Vector.empty, Vector.empty, Vector("unresolved old effect"), freshCapture = true, retainEvidence = false))))),
+        origin.copy(pending = Some(pending), selection = origin.selection.copy(workerLifecycle = Some(C.WorkerLifecycle(true, true)))),
+        origin.copy(controller = origin.controller.copy(candidate = Some(F.inspected.candidate.get))),
+        origin.copy(controller = origin.controller.copy(checksReceipt = Some("not-unstarted"))),
+        origin.copy(controller = origin.controller.copy(closureIntent = Some("not-unstarted"))),
+        origin.copy(controller = origin.controller.copy(stage = "Decision")),
+        origin.copy(controller = origin.controller.copy(stage = "Repair")))
+      When("each crossed value is offered to the exact target and owner codec")
+      val candidates = invalidorigins.map(value => target.copy(canonicalOrigin = Some(value)))
+      val malformed = Vector(frontier.asJson.mapObject(_.add("reconstruction", Json.Null)),
+        frontier.asJson.mapObject(_.remove("record")), frontier.asJson.mapObject(_.add("authority", Json.True)))
+      Then("no value grants source selection and the original valid target remains readable")
+      candidates.foreach(value => R.targetValid(value) shouldBe false)
+      candidates.foreach(_.asJson.as[R.Target].isLeft shouldBe true)
+      malformed.foreach(_.as[C.InspectionFrontier].isLeft shouldBe true)
+      R.targetValid(target) shouldBe true
+    }
+    "refuse source selection once inspection has a candidate or a native Human decision" in {
+      Given("an unstarted inspection before any candidate or check result")
+      val (current, _, _) = _inspection_fixture
+      val inspected = take(current.acceptC(O.CandidateObserved(O.Snapshot(current.tipSnapshot.head, "c" * 40))))
+      val decision = take(current.acceptC(O.NativeFailure("SPECIFICATION-ONLY unresolved native decision")))
+      When("source selection is attempted beyond that unstarted boundary")
+      val active = inspected.adoptCanonicalDependencySourceC(F.direction.directive)
+      val unresolved = decision.adoptCanonicalDependencySourceC(F.direction.directive)
+      Then("both active candidate and unanswered Human frontiers retain their owning continuation")
+      active.isSuccess shouldBe false
+      unresolved.isSuccess shouldBe false
+    }
+  }
   "LSR-01 Later source and genuine publication failure" should {
     import LaterSourcePublicationSpecificationFixture as L
     import GoalPhasePrerequisitePrimaryRepair as A

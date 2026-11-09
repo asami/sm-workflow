@@ -46,6 +46,8 @@ remain with CNCF; literal path safety, uniqueness and native authority stay requ
 
 R12. Eligibility is actual current Implementation or Repair, at an unissued
 frontier or an AVAILABLE UNCLAIMED original ImplementStep/RepairStep WorkOrder.
+The reconstructed unstarted InspectCandidate connection below is a separate
+native frontier and never supersedes or reissues accepted semantic work.
 Review, active candidate/check/File/staging/closure intent, claimed or changed
 work and unadmitted lifecycle uncertainty refuse. An unanswered Plan Human stays
 with its Plan owner. Use RemainingPlan to adopt that Plan before ordinary Repair
@@ -71,13 +73,59 @@ existing mechanical transition. No private datastore write or parallel controlle
 supplies authority. Exact repeated adoption recollects the selected Direction;
 changed source/policy, stale targets or crossed references refuse.
 
-R13. The native pure continuation preserves semantic stage, Plan, original base,
+R13. The native pure continuation preserves current stage, Plan, original base,
 accepted prefix, pending repair, directives, repair scope, observations and every
 counter; generation advances once. Separate ordinary Advance issues the same
-semantic stage using the selected source. Its real result returns to existing
+semantic stage using the selected source, or continues the authenticated
+unstarted inspection without issuing another implementation or Repair. Its real result returns to existing
 candidate capture, fresh checks, independent review and closure. Canonical v11
 capture has zero dependency staging paths and equal clean pre/post guards.
 Old failures, UNKNOWN outcomes, requests and successful effects remain history.
+
+Capture and publication-policy reuse may retain an exact classified primary
+publication cause through a subsequently adopted reconstructed inspection
+Direction. One owning relation follows only the effective previous/original
+canonical Direction of a valid explicit inspection frontier. Each link preserves
+Session, participant/Component, Plan, current Step, original base, completed
+prefix, standing admission, repair counters/limit and checks. Source revision
+and generation descend strictly toward the original cause; there is no arbitrary
+depth limit or search through unrelated origins. Actual native traversal remains
+the authority, and the reached historical Fact/reference must equal the saved
+primary repair exactly. The current capture, source and process policy must
+still match their original owning validators.
+
+This historical capture relation does not re-activate a repaired failure.
+Active Repair guidance remains restricted to an immediate classified cause in
+the original Repair-stage source origin and its exact reservation/directive.
+Reconstructed inspection stays inspection: accepted Repair is not reissued,
+repair accounting is not charged or reset, and inherited provenance grants no
+new artifact acceptance, publication, check or commit authority.
+
+An unstarted current-Step `InspectCandidate` is eligible only after actual
+native common development reconstruction. Optional `canonicalOrigin.inspectionFrontier`
+contains its exact current native Session/revision reference and opaque
+`GoalPhaseDevelopmentReconstruction` owner-codec Payload. Native traversal proves
+that saved record/controller is the actual current predecessor and retains its
+semantic result, definition, participant, Plan, base, accepted prefix and repair
+scope. The public codec alone supplies no such authority. The proof is required
+for InspectCandidate and forbidden for Implementation/Repair, pending workers,
+historical active candidate/check causes or an uncertain reconstruction.
+
+The target binds the primary clean HEAD/committed-tree/index-tree observation
+from that reconstruction; describe and adopt compare it with actual typed Git
+observation before source selection. Index and committed tree must agree. The
+checkpoint is never Step acceptance and does not replace the original base/tip.
+Only the existing genuine source Human Direction changes source selection.
+Stage remains InspectCandidate, generation advances once, and the separate
+normal Advance captures/checks/reviews/closes the remaining work. No accepted
+semantic work, successful effect or submission is replayed. Existing source,
+artifact adoption and publication authority remain independent.
+
+Absent `inspectionFrontier` is omitted in every legacy origin. Exact old
+Implementation/Repair origins retain their codecs and validators. Explicit null,
+unknown fields, stale/crossed native references, different primary observation,
+active candidate/closure or unresolved lifecycle refuse. Old runtimes reject
+the unsupported inspection stage/proof rather than inventing compatibility.
 
 Publication and adopted delivery are provenance only. Passive
 `dependency-source-revision` preparation requires actual direction, recollection,

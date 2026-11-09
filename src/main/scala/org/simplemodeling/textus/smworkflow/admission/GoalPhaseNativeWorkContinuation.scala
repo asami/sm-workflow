@@ -1079,7 +1079,28 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           cursor.repositoryFrontier.isEmpty && cursor.legacyClosure.isEmpty) Consequence.unit
         else F.invalid("canonical source requires no active recording or repository closure")
       _ <- controller.adoptCanonicalDependencySourceC(ContextReference("canonical-native-eligibility", "1"))
-      publication <- _current_primary_repair_cause(cursor.copy(controller = controller)) match {
+      inspection <- if (controller.stage != O.Stage.InspectCandidate)
+        Consequence.success(Option.empty[CanonicalSource.InspectionFrontier])
+      else cursor.developmentReconstruction match {
+        case Some(saved) if saved.record == from && saved.controller == controller && pending.isEmpty &&
+            cursor.candidate.isEmpty && cursor.validation.isEmpty && cursor.candidateObservation.isEmpty &&
+            cursor.candidateObservationContinuation.isEmpty && cursor.inspectionSource.isEmpty &&
+            cursor.sourceHistoryAutomatic.isEmpty && cursor.sourceHistoryNormalization.isEmpty &&
+            saved.payload.assessment.reasons.isEmpty &&
+            saved.payload.sessionId == from.identity.value &&
+            saved.payload.participant == source.participantIdentity &&
+            saved.payload.componentInstance == core.component.get.core.instanceId.canonicalKey &&
+            saved.payload.definition == ContextReference(from.definition.workflowIdentity.value, from.definition.workflowRevision.value) &&
+            saved.payload.documents.captured.plan == controller.plan &&
+            saved.payload.semanticResult == cursor.lastresult.map(_._2.resultReference) =>
+          val frontier = CanonicalSource.InspectionFrontier(
+            ContextReference(from.identity.value, from.revision.value.toString), saved.payload)
+          if (CanonicalSource.inspectionFrontierValid(frontier)) Consequence.success(Some(frontier))
+          else F.invalid("canonical inspection source requires its clean native reconstruction checkpoint")
+        case _ => F.invalid("canonical inspection source requires its exact unstarted authenticated reconstruction frontier")
+      }
+      publication <- (if (controller.stage == O.Stage.Repair)
+        _current_primary_repair_cause(cursor.copy(controller = controller)) else None) match {
         case None => Consequence.success(Option.empty[CanonicalSource.HistoricalPublicationFailure])
         case Some(saved) => for {
           actual <- GoalPhaseNativeHistory.prefixC(source.current, saved.record.revision)
@@ -1130,7 +1151,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     } yield CanonicalSource.Source(source, from, controller, predecessor,
       cursor.dependencyChain.accepted.map(a => GoalPhaseDependencySourceRevision.Ancestor(a.capture, a.closureRevision)),
       cursor.dependencyApprovals, cursor.dependencySourceDirection, cursor.consumptionDirection, requesting, pending, failure,
-      publication, prefix)
+      publication, prefix, inspection)
 
     private def _canonical_pending_source_c(source: F.Session, cursor: Cursor, prepared: Prepared,
       core: ActionCall.Core, historical: Option[CanonicalSource.Pending] = None): Consequence[CanonicalSource.Source] = for {
@@ -1172,7 +1193,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           }
           selected <- _canonical_pending_source_c(source, cursor, prepared, core)
         } yield selected
-        case _ => F.invalid("canonical source requires the actual current Implementation or Repair; Human remains with its owning operation")
+        case _ => F.invalid("canonical source requires actual current Implementation, Repair or reconstructed InspectCandidate; Human remains with its owning operation")
       }
     } yield selected
 
@@ -2261,7 +2282,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       soughtwork: Option[ContinuationIdentity], soughthuman: Option[ContinuationIdentity],
       soughtrecording: Option[ContinuationIdentity],
       core: ActionCall.Core, historyonly: Boolean): Consequence[Located] = cursor.controller.stage match {
-      case O.Stage.Implementation | O.Stage.Repair if entry.causation.value.startsWith(CanonicalSource.causation) => for {
+      case O.Stage.Implementation | O.Stage.Repair | O.Stage.InspectCandidate if entry.causation.value.startsWith(CanonicalSource.causation) => for {
         selected <- _canonical_native_source_c(source, cursor, cursor.from, cursor.controller, None, core)
         retained <- CanonicalSource.retainedC(selected, d, core)
           .flatMap(_.map(Consequence.success).getOrElse(F.invalid("canonical source transition has no retained native Direction")))
