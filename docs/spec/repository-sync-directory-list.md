@@ -170,6 +170,44 @@ or atomic remote transaction: completed repositories remain completed if another
 fails. A new synchronization intent against later repository changes is distinct
 from collecting a previous terminal result.
 
+## B1 configured clean-batch entry — 2026-11-05
+
+`RepositorySyncService.syncRepositoryDirectories` accepts only explicit
+`syncMode: FULL_STATE` business intent and an optional aggregate `sessionId`.
+The optional Component setting `sm-workflow.repository-sync.directories` is a
+JSON array of absolute checkout paths. Normal configuration resolution owns its
+selection; an absent setting is an explicit setup failure. Runtime resolves
+each normalized distinct checkout against the already admitted host process
+plan's workspace and Git repository declarations. Validation workspaces without
+a Git destination do not create ambiguity. Missing or multiple destinations
+fail before a native batch starts. Distinct worktrees remain separate entries.
+Source `localBranch`, remote, `remoteBranch` and endpoint remain the configured
+values, including no-upstream work branches and non-main destinations.
+
+The batch invokes the existing native Start/Advance owner per selected binding;
+each typed Git call still passes the current CNCF workspace, capability and
+program admission. It creates no executables, grants or upstream writes.
+Equal, local-ahead and fast-forward entries need no semantic call or product
+test. Dirty or merge targets retain their existing native semantic/validation
+owner and return concise unfinished summaries; B2–B4 own their expanded batch
+continuation behavior.
+
+Native mechanical retention stores the original participant, resolved members,
+per-checkout Session relations, attempt frontier and concise actual results.
+The typed `RepositoryDirectoryBatchResult` references its original native
+identity/revision. `readRepositoryDirectoryResult(sessionId, revision)` reads
+that exact revision with the original participant. Same-Session recollection
+does not repeat completed or indeterminate native calls. An unfinished attempt
+remains indeterminate; storage loss or a foreign Session fails explicitly.
+Sources, native snapshots and child capture bodies are not rearchived into a
+parallel store. Missing target configuration, an unobserved child result and
+actual nonterminal work do not become aggregate success.
+
+Executable contract: `RepositorySyncDirectoryListSpec`. It authors a mixed
+clean batch, duplicate/path resolution, distinct worktrees, non-main/no-upstream
+destinations, missing/ambiguous settings and fresh-runtime exact result reads.
+Authorship is not installed qualification or Phase acceptance.
+
 ## Workflow artifact acquisition budget — 2026-11-04
 
 Public recovery targets and semantic/evidence artifacts may exceed ordinary

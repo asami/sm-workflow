@@ -15,7 +15,7 @@ import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseNativeMetadata, 
 /**
  * @since   Oct.  6, 2026
  *  version Oct. 28, 2026
- * @version Nov.  4, 2026
+ * @version Nov.  5, 2026
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -38,7 +38,9 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
     SmWorkflowComponent.RepositorySyncServiceService.DescribeRepositorySyncRepairBudgetContinuationOperation,
     SmWorkflowComponent.RepositorySyncServiceService.AdoptRepositorySyncRepairBudgetContinuationOperation,
     SmWorkflowComponent.RepositorySyncServiceService.DescribeRepositorySyncPushContinuationOperation,
-    SmWorkflowComponent.RepositorySyncServiceService.AdoptRepositorySyncPushContinuationOperation)
+    SmWorkflowComponent.RepositorySyncServiceService.AdoptRepositorySyncPushContinuationOperation,
+    SmWorkflowComponent.RepositorySyncServiceService.SyncRepositoryDirectoriesOperation,
+    SmWorkflowComponent.RepositorySyncServiceService.ReadRepositoryDirectoryResultOperation)
   private def _request(operation: OperationDefinition, properties: List[Property]): Request =
     Request.of(component = SmWorkflowComponent.componentId.name, service = "RepositorySyncService",
       operation = operation.specification.name, arguments = Nil, switches = Nil,
@@ -109,7 +111,9 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
         "describeRepositorySyncRepairBudgetContinuation" -> Some("RepositorySyncRepairBudgetContinuationDescriptionInput"),
         "adoptRepositorySyncRepairBudgetContinuation" -> Some("RepositorySyncRepairBudgetContinuationAdoptionInput"),
         "describeRepositorySyncPushContinuation" -> Some("RepositorySyncPushContinuationDescriptionInput"),
-        "adoptRepositorySyncPushContinuation" -> Some("RepositorySyncPushContinuationAdoptionInput"))
+        "adoptRepositorySyncPushContinuation" -> Some("RepositorySyncPushContinuationAdoptionInput"),
+        "syncRepositoryDirectories" -> Some("RepositoryDirectorySyncInput"),
+        "readRepositoryDirectoryResult" -> None)
     }
 
     "expose only the session description and typed adoption transports for finite repair budget direction" in {
