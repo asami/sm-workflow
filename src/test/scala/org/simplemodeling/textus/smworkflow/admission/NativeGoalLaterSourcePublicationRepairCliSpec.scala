@@ -37,7 +37,8 @@ import SplitPhaseExplicitPartitionFixture.take
   * across the same public source-selection boundary. No consumer or product
   * source is copied.
   * @since   Nov.  9, 2026
-  * @version Nov.  9, 2026
+  *  version Nov.  9, 2026
+  * @version Nov. 10, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
@@ -45,6 +46,13 @@ import SplitPhaseExplicitPartitionFixture.take
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.DependencyValidationTestDeclaration])
 final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _noninput_lineage = sys.props.get("smworkflow.spec.laterSourcePublicationMode").contains("QUALIFY_NONINPUT_LINEAGE")
+  private val _repeated_primary_failure = sys.props.get("smworkflow.spec.laterSourcePublicationRepeatedPrimaryFailure") match {
+    case None | Some("false") => false
+    case Some("true") => true
+    case _ => throw new IllegalArgumentException("laterSourcePublicationRepeatedPrimaryFailure must be true or false")
+  }
+  require(!_repeated_primary_failure || _noninput_lineage,
+    "RepeatedPrimaryFailure=true belongs only to QUALIFY_NONINPUT_LINEAGE")
   private val _reconstruction_label = sys.props.getOrElse("smworkflow.spec.laterSourcePublicationReconstructionLabel",
     "checkpoint-common-reconstruction")
   require(_reconstruction_label == "checkpoint-common-reconstruction" ||
@@ -95,6 +103,12 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
   private val _canonical_workspace = "tiny-api-canonical-source"
   private val _source_environment = "SM_WORKFLOW_LSR_SOURCE_ROOT"
   private def _read(path: Path): Json = parse(Files.readString(path)).fold(error => fail(error.message), identity)
+  private def _bind_repeated_primary(value: Json): Json =
+    if (_repeated_primary_failure) value.mapObject(_.add("repeatedPrimaryFailure", Json.True)) else value
+  private def _require_repeated_primary(value: Json): Unit = value.hcursor.downField("repeatedPrimaryFailure").focus match {
+    case None => _repeated_primary_failure shouldBe false
+    case Some(_) => value.hcursor.get[Boolean]("repeatedPrimaryFailure").fold(error => fail(error.message), identity) shouldBe _repeated_primary_failure
+  }
   private def _json(value: Record): Json = parse(take(value.toJsonStringC)).fold(error => fail(error.message), identity)
   private def _json(value: RecordPresentable): Json = _json(value.toRecord())
   private def _array(value: Json, key: String): Vector[Json] = value.hcursor.get[Vector[Json]](key).toOption.get
@@ -500,6 +514,7 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       val locator = Path.of(sys.props.getOrElse("smworkflow.spec.laterSourcePublicationLocator", cancel("Select the explicit caller locator")))
       val canonical = Path.of("").toAbsolutePath.normalize
       require(locator.isAbsolute && locator.normalize == locator && locator.startsWith(canonical.resolve("target")))
+      if (Files.exists(locator)) _require_repeated_primary(_read(locator))
       require(Set("PREPARE_OLD", "RESUME_CURRENT", "PREPARE_CHECKPOINT", "RESUME_CHECKPOINT", "QUALIFY_NONINPUT_LINEAGE", "COLLECT")(mode))
       require(!Set("PREPARE_CHECKPOINT", "RESUME_CHECKPOINT")(mode) || _checkpoint_lineage,
         "Checkpoint modes require explicitly selected CheckpointLineage=true")
@@ -549,15 +564,15 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     val (scenario, binding) = if (!Files.exists(locator)) {
       val initial = F.freshDependency(if (_noninput_lineage) "noninput-source-lineage" else "later-source-publication", dependencyChecks = Some(Vector(
         GoalPhaseNativeValidation.Check("dependency-compile", 2, WorkflowSbtValidation.Kind.Compile))))
-      _write(locator, Json.obj("stage" -> "PREPARING_OLD".asJson, "root" -> initial.root.toString.asJson,
+      _write(locator, _bind_repeated_primary(Json.obj("stage" -> "PREPARING_OLD".asJson, "root" -> initial.root.toString.asJson,
         "usageLineage" -> _usage_lineage.asJson, "coverageLineage" -> _coverage_lineage.asJson, "rootLineage" -> _root_lineage.asJson,
-        "checkpointLineage" -> _checkpoint_lineage.asJson))
+        "checkpointLineage" -> _checkpoint_lineage.asJson)))
       val selectedbinding = _build(initial)
       val selected = _configure(initial, selectedbinding)
-      _write(setupfile, Json.obj("root" -> selected.root.toString.asJson, "binding" -> selectedbinding.asJson,
+      _write(setupfile, _bind_repeated_primary(Json.obj("root" -> selected.root.toString.asJson, "binding" -> selectedbinding.asJson,
         "plan" -> selected.plan.asJson, "oldComponent" -> sys.props("smworkflow.spec.componentFile").asJson,
         "usageLineage" -> _usage_lineage.asJson, "coverageLineage" -> _coverage_lineage.asJson, "rootLineage" -> _root_lineage.asJson,
-        "checkpointLineage" -> _checkpoint_lineage.asJson))
+        "checkpointLineage" -> _checkpoint_lineage.asJson)))
       selected -> selectedbinding
     } else {
       val point = sys.props.getOrElse("smworkflow.spec.laterSourcePublicationResumePoint",
@@ -566,6 +581,7 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
         "OLD_REFUSALS" -> "later-primary-failure-collect")
       require(required.contains(point) && Files.isRegularFile(setupfile), "Select a retained fixture setup and finite resume point")
       val setup = _read(setupfile)
+      _require_repeated_primary(setup)
       setup.hcursor.get[Boolean]("usageLineage").getOrElse(false) shouldBe _usage_lineage
       setup.hcursor.get[Boolean]("coverageLineage").getOrElse(false) shouldBe _coverage_lineage
       setup.hcursor.get[Boolean]("rootLineage").getOrElse(false) shouldBe _root_lineage
@@ -807,10 +823,11 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       "oldPrimaryPublications" -> _lines(root.resolve("primary-publications.txt")).asJson,
       "originalOutputs" -> paths.map(path => Json.obj("path" -> path.toString.asJson, "bytes" -> Files.readString(path).asJson)).asJson)
     _write(locator.resolveSibling(locator.getFileName.toString + ".prepared.json"),
-      if (_noninput_lineage) saved.mapObject(_.add("noninputLineage", Json.True)) else saved)
+      _bind_repeated_primary(if (_noninput_lineage) saved.mapObject(_.add("noninputLineage", Json.True)) else saved))
     info("LATER_SOURCE_PUBLICATION_PREPARED=" + locator)
   }
   private def _preserved(saved: Json): Unit = {
+    _require_repeated_primary(saved)
     val root = Path.of(saved.hcursor.get[String]("root").toOption.get)
     saved.hcursor.get[Vector[Json]]("originalOutputs").toOption.get.foreach { output =>
       Files.readString(Path.of(output.hcursor.get[String]("path").toOption.get)) shouldBe output.hcursor.get[String]("bytes").toOption.get
@@ -950,6 +967,22 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
   private def _noninput_primary_authority(scenario: F.Scenario, task: Path, waiting: F.Result): F.Result = {
     val current = waiting.business[V.GoalPhaseAdvanceResult]
     if (current.work.exists(_.kind == "RepairStep")) waiting
+    else if (_repeated_primary_failure && current.kind == "Wait" && current.condition.contains("local-publication")) {
+      Given("the actual retained failed primary publication Wait with its already charged second ordinary repair")
+      val publication = GoalPhaseNativeMetadata.normalizePublicJson(_json(current.localPublication.get)).fold(fail(_), identity)
+      publication.hcursor.get[String]("status").toOption shouldBe Some("failed")
+      current.repairProgress.get.automaticCount shouldBe 2
+      current.repairProgress.get.ordinaryCount shouldBe 2
+      current.repairProgress.get.limit shouldBe 10
+      When("one ordinary Advance continues that retained reservation without another publication permission")
+      val issued = _advance(scenario, task, "noninput-second-primary-repair-issued")
+      val repair = issued.business[V.GoalPhaseAdvanceResult]
+      Then("the actual second Repair request is issued in the same Session with unchanged repair accounting")
+      repair.work.get.kind shouldBe "RepairStep"
+      repair.sessionId shouldBe current.sessionId
+      repair.repairProgress shouldBe current.repairProgress
+      issued
+    }
     else {
       val session = scenario.retrieve(task)
       val described = _call(scenario, "noninput-first-primary-authority-description", "GoalPhaseService", B.describeOperation,
@@ -966,6 +999,38 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     }
   }
 
+  private def _second_primary_failure(repair: V.GoalPhaseAdvanceResult, direction: R.Target): Json = {
+    repair.work.get.checkFailure shouldBe None
+    repair.work.get.publicationFailure should not be empty
+    val context = GoalPhaseNativeMetadata.normalizePublicJson(_json(repair.work.get.publicationFailure.get))
+      .fold(fail(_), identity)
+    context.hcursor.get[Boolean]("testsExecuted").toOption shouldBe Some(false)
+    val reference = context.hcursor.get[ContextReference]("repair").fold(error => fail(error.message), identity)
+    val publication = context.hcursor.get[LocalPublication.Result]("publication").fold(error => fail(error.message), identity)
+    val original = direction.canonicalOrigin.get.historicalPublicationFailure.get
+    reference should not be original.repair
+    reference.identity shouldBe repair.sessionId
+    publication.status shouldBe "failed"
+    publication.request.target shouldBe _primary
+    publication.request.input.ownerSessionId shouldBe Some(repair.sessionId)
+    publication.request.input.requestIdentity should not be original.fact.failure.failed.request.input.requestIdentity
+    publication should not be original.fact.failure.failed
+    val process = WorkflowSbtCapture.decode(publication.process.get).fold(fail(_), identity)
+    WorkflowSbtCapture.exitCode(process) shouldBe Some(1)
+    val compiler = WorkflowSbtCapture.text(process.stdout).value + WorkflowSbtCapture.text(process.stderr).value
+    compiler should include("[error]")
+    compiler.toLowerCase(java.util.Locale.ROOT) should include("type mismatch")
+    repair.repairProgress.get.automaticCount shouldBe 2
+    repair.repairProgress.get.ordinaryCount shouldBe 2
+    repair.repairProgress.get.limit shouldBe 10
+    GoalPhaseNativeMetadata.normalizePublicJson(_json(repair.work.get.selectedPlan)).toOption.get.as[O.Plan].toOption.get shouldBe direction.plan
+    repair.work.get.originalBase.head shouldBe direction.primaryBase.head
+    repair.work.get.originalBase.tree shouldBe direction.primaryBase.tree
+    repair.work.get.completed.map(_.commit.identity) shouldBe direction.completed.map(_.commit.identity)
+    Json.obj("repair" -> reference.asJson, "publication" -> publication.asJson,
+      "process" -> publication.process.get, "response" -> _json(repair))
+  }
+
   private def _prepare_noninput_second_repair(locator: Path, scenario: F.Scenario, task: Path, saved: Json,
     firstrepair: V.GoalPhaseAdvanceResult, direction: R.Target): Unit = {
     val root = scenario.root
@@ -976,27 +1041,33 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     direction.repairProgress.ordinaryCount shouldBe 1
     direction.canonicalOrigin.get.historicalPublicationFailure.get.fact.failure.failed shouldBe
       saved.hcursor.get[LocalPublication.Result]("publicationFailure").toOption.get
-    When("a compiling but semantically incorrect Consumer receives ordinary artifact and primary choices and real selected tests")
+    When(if (_repeated_primary_failure) "a type-incorrect Consumer receives the ordinary artifact and primary choices before a real second Compile failure"
+      else "a compiling but semantically incorrect Consumer receives ordinary artifact and primary choices and real selected tests")
     val observed = _advance(scenario, task, "noninput-first-candidate")
     val originalpublication = saved.hcursor.get[C.Proposal]("proposal").toOption.get.publication
     val aligned = _align_current(scenario, task, saved, observed, Some(originalpublication))
     val failedoutput = _noninput_primary_authority(scenario, task, aligned)
     val repair = failedoutput.business[V.GoalPhaseAdvanceResult]
     _saved_value(root, "noninput-real-check-repair") {
-      Json.obj("request" -> _json(repair), "output" -> failedoutput.invocation.stdout.toString.asJson,
+      val actual = Json.obj("request" -> _json(repair), "output" -> failedoutput.invocation.stdout.toString.asJson,
         "sourceDirection" -> direction.asJson, "originalPublished" -> originalpublication.asJson)
+      _bind_repeated_primary(if (_repeated_primary_failure) actual.mapObject(_.add("secondPrimaryFailure",
+        _second_primary_failure(repair, direction))) else actual)
     }
-    Then("the real failing check issues ordinary Repair two while the original Direction still carries repair one")
+    Then(if (_repeated_primary_failure) "the real second primary Compile failure issues Repair two while the original publication cause remains repair one"
+      else "the real failing check issues ordinary Repair two while the original Direction still carries repair one")
     repair.sessionId shouldBe firstrepair.sessionId
     repair.work.get.kind shouldBe "RepairStep"
-    repair.work.get.checkFailure.get.validation.outcome shouldBe Some("repair-required")
+    if (_repeated_primary_failure) _second_primary_failure(repair, direction)
+    else repair.work.get.checkFailure.get.validation.outcome shouldBe Some("repair-required")
     repair.repairProgress.get.automaticCount shouldBe 2
     repair.repairProgress.get.ordinaryCount shouldBe 2
     repair.work.get.selectedPlan shouldBe firstrepair.work.get.selectedPlan
     repair.work.get.originalBase shouldBe firstrepair.work.get.originalBase
     repair.work.get.completed shouldBe firstrepair.work.get.completed
     repair.issuedWorkContext.get.continuationId should not be firstrepair.issuedWorkContext.get.continuationId
-    _lines(root.resolve("selected-tests.txt")).last shouldBe "later"
+    if (_repeated_primary_failure) _lines(root.resolve("selected-tests.txt")) shouldBe saved.hcursor.get[Vector[String]]("oldTests").toOption.get
+    else _lines(root.resolve("selected-tests.txt")).last shouldBe "later"
     _lines(root.resolve("canonical-dependency/publication-count.txt")) shouldBe Vector("published")
     _checkpoint_noninput_repair(locator, scenario, task, saved, repair, direction, failedoutput.invocation.stdout)
   }
@@ -1005,7 +1076,11 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     repair: V.GoalPhaseAdvanceResult, direction: R.Target, failedoutput: Path): Unit = {
     val root = scenario.root
     repair.work.get.kind shouldBe "RepairStep"
-    repair.work.get.checkFailure.get.validation.outcome shouldBe Some("repair-required")
+    if (_repeated_primary_failure) {
+      _second_primary_failure(repair, direction)
+      _lines(root.resolve("selected-tests.txt")) shouldBe saved.hcursor.get[Vector[String]]("oldTests").toOption.get
+    }
+    else repair.work.get.checkFailure.get.validation.outcome shouldBe Some("repair-required")
     repair.repairProgress.get.automaticCount shouldBe 2
     repair.repairProgress.get.ordinaryCount shouldBe 2
     repair.sessionId shouldBe scenario.retrieve(task)
@@ -1025,7 +1100,9 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       .add("oldTests", _lines(root.resolve("selected-tests.txt")).asJson)
       .add("noninputFirstSourceDirection", direction.asJson)
       .add("noninputFailedChecksOutput", failedoutput.toString.asJson))
-    _prepare_checkpoint(locator, scenario, task, current, repair)
+    val retained = if (_repeated_primary_failure) current.mapObject(_.add("secondPrimaryFailure", _second_primary_failure(repair, direction))
+      .add("secondPrimaryFailureOutput", failedoutput.toString.asJson)) else current
+    _prepare_checkpoint(locator, scenario, task, _bind_repeated_primary(retained), repair)
   }
 
   private def _require_noninput_checkpoint(locator: Path): Unit = {
@@ -1034,6 +1111,7 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     val preparedfile = locator.resolveSibling(locator.getFileName.toString + ".prepared.json")
     require(Files.isRegularFile(preparedfile), "NONINPUT_CHECKPOINT requires the existing prepared new-mode record")
     val prepared = _read(preparedfile)
+    _require_repeated_primary(prepared)
     prepared.hcursor.get[Boolean]("noninputLineage").toOption shouldBe Some(true)
     val root = Path.of(prepared.hcursor.get[String]("root").toOption.get)
     require(root.isAbsolute && root.normalize == root && root.toRealPath() == root &&
@@ -1058,13 +1136,19 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       path
     }
     val retained = _retained_("caller-values/noninput-real-check-repair.json")
+    _require_repeated_primary(retained)
+    val direction = retained.hcursor.get[R.Target]("sourceDirection").toOption.get
     val failedoutput = Path.of(retained.hcursor.get[String]("output").toOption.get)
     require(failedoutput.getParent == root.resolve("logs") && Files.isRegularFile(failedoutput),
       "Retain the real failed-check Repair response")
     val repair = _business[V.GoalPhaseAdvanceResult](failedoutput)
     repair.sessionId shouldBe session
     repair.work.get.kind shouldBe "RepairStep"
-    repair.work.get.checkFailure.get.validation.outcome shouldBe Some("repair-required")
+    if (_repeated_primary_failure) {
+      val actual = _second_primary_failure(repair, direction)
+      retained.hcursor.get[Json]("secondPrimaryFailure").toOption shouldBe Some(actual)
+      _lines(root.resolve("selected-tests.txt")) shouldBe prepared.hcursor.get[Vector[String]]("oldTests").toOption.get
+    } else repair.work.get.checkFailure.get.validation.outcome shouldBe Some("repair-required")
     repair.repairProgress.get.automaticCount shouldBe 2
     repair.repairProgress.get.ordinaryCount shouldBe 2
     _json(repair) shouldBe retained.hcursor.get[Json]("request").toOption.get
@@ -1095,14 +1179,19 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       original.destination, original.artifact, Vector(_later_doc))
     val policy = parse(_read(root.resolve(".textus/config.json")).hcursor.get[String](LocalPublicationRuntime.declaration.name).toOption.get).toOption.get
     policy.hcursor.get[Vector[LocalPublicationSourceApplicability.Declaration]]("artifactInputs").toOption shouldBe Some(Vector(declaration))
-    val direction = retained.hcursor.get[R.Target]("sourceDirection").toOption.get
     direction.repairProgress.automaticCount shouldBe 1
     direction.repairProgress.ordinaryCount shouldBe 1
     val historical = direction.canonicalOrigin.get.historicalPublicationFailure.get.fact.failure
     historical.sessionId shouldBe session
     parse(historical.publicationPolicy).toOption.get.hcursor.downField("artifactInputs").focus shouldBe None
     historical.failed shouldBe prepared.hcursor.get[LocalPublication.Result]("publicationFailure").toOption.get
-    _retained_("caller-results/checkpoint-common-reconstruction.json").hcursor.get[Int]("exit").toOption.get should not be 0
+    if (_repeated_primary_failure) {
+      val reconstructed = _business[V.GoalPhaseAdvanceResult](_output_("checkpoint-common-reconstruction"))
+      reconstructed.sessionId shouldBe session
+      reconstructed.kind shouldBe "Wait"
+      reconstructed.condition shouldBe Some("canonical-source-selection-needed")
+      reconstructed.message should include("Current development selection retained")
+    } else _retained_("caller-results/checkpoint-common-reconstruction.json").hcursor.get[Int]("exit").toOption.get should not be 0
     _lines(root.resolve("canonical-dependency/publication-count.txt")) shouldBe Vector("published")
     _preserved(prepared)
   }
@@ -1118,6 +1207,7 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       val actualrepair = root.resolve("caller-values/noninput-real-check-repair.json")
       if (Files.exists(actualrepair)) {
         val retained = _read(actualrepair)
+        _require_repeated_primary(retained)
         val task = Path.of(prepared.hcursor.get[String]("task").toOption.get)
         val scenario = F.reopenCanonicalSource(root, _host(root), prepared.hcursor.get[O.Plan]("plan").toOption.get, _next_log(root))
         val repair = take(summon[ValueReader[V.GoalPhaseAdvanceResult]].readC(take(new RecordDecoder().json(
@@ -1197,7 +1287,9 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     _lines(root.resolve("canonical-dependency/publication-count.txt")) shouldBe Vector("published")
     _preserved(saved)
     val result = locator.resolveSibling(locator.getFileName.toString + ".noninput-lineage.result.json")
-    if (!Files.exists(result)) _write(result, Json.obj("session" -> session.asJson, "target" -> target.asJson,
+    if (Files.exists(result)) _require_repeated_primary(_read(result))
+    else {
+      val value = Json.obj("session" -> session.asJson, "target" -> target.asJson,
       "checkpoint" -> checkpointfile.toString.asJson,
       "acceptedRepairSubmitOutput" -> saved.hcursor.get[String]("acceptedRepairSubmitOutput").toOption.get.asJson,
       "realFailedChecksOutput" -> saved.hcursor.get[String]("noninputFailedChecksOutput").toOption.get.asJson,
@@ -1208,7 +1300,12 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       "originalPublication" -> publication.result.publication.asJson,
       "currentSource" -> publication.result.applicability.get.current.asJson,
       "producerPublications" -> _lines(root.resolve("canonical-dependency/publication-count.txt")).asJson,
-      "phaseAccepted" -> Json.False, "consumerAuthorityClaimed" -> Json.False))
+        "phaseAccepted" -> Json.False, "consumerAuthorityClaimed" -> Json.False)
+      val retained = if (_repeated_primary_failure) value.mapObject(_.add("secondPrimaryFailure",
+        saved.hcursor.get[Json]("secondPrimaryFailure").toOption.get).add("secondPrimaryFailureOutput",
+        saved.hcursor.get[String]("secondPrimaryFailureOutput").toOption.get.asJson)) else value
+      _write(result, _bind_repeated_primary(retained))
+    }
     info("NONINPUT_LINEAGE_RESULT=" + result)
   }
 
@@ -1320,7 +1417,7 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       .add("checkpointCanonicalPublications", dependencypublications.asJson)
       .add("originalOutputs", outputs.map(path => Json.obj("path" -> path.toString.asJson,
         "bytes" -> Files.readString(path).asJson)).asJson))
-    _write(checkpointfile, checkpoint)
+    _write(checkpointfile, _bind_repeated_primary(checkpoint))
     info("LATER_SOURCE_CHECKPOINT_PREPARED=" + checkpointfile)
   }
 
@@ -1946,7 +2043,8 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     _advance(scenario, task, "current-repair-recollection").business[V.GoalPhaseAdvanceResult].issuedWorkContext shouldBe repair.issuedWorkContext
     val submittedpath = root.resolve("caller-results/current-repair-submit.json")
     if (!Files.exists(submittedpath)) Files.writeString(root.resolve("repository").resolve(_source),
-      _consumer(if (_noninput_lineage) "Api.newApi(19)" else "Api.newApi(20)"))
+      _consumer(if (_repeated_primary_failure) "Api.newApi(\"wrong-type\")"
+        else if (_noninput_lineage) "Api.newApi(19)" else "Api.newApi(20)"))
     When("only the newly issued Repair returns a real API correction for fresh capture and necessary new managed publication")
     _completed(scenario, repair, "current-repair-submit")
     if (_noninput_lineage) {
