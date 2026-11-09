@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+import tomllib
 import unittest
 from unittest import mock
 
@@ -50,6 +51,39 @@ class DispatchSpec(unittest.TestCase):
 
     def prepare(self, facts=None):
         return A.prepare(self.request, self.mapping, self.facts if facts is None else facts, ROOT, ROOT)
+
+    def test_bounded_roles_preserve_the_actual_request_context_and_observation(self):
+        # Given the three bounded semantic names and the existing versioned policy.
+        for kind, role in (('Implement', 'implementation'), ('Repair', 'repair'), ('Review', 'review'),
+                           ('DeliveryAcceptance', 'implementation')):
+            with self.subTest(kind=kind):
+                request = copy.deepcopy(self.request)
+                request['work']['kind'] = kind
+                original = copy.deepcopy(request)
+                # When the finite adapter binds a real tool return and semantic result.
+                state = A.prepare(request, self.mapping, self.facts, ROOT, ROOT)
+                self.assertEqual(state['role'], role)
+                self.assertEqual(state['contract'], tomllib.loads((ROOT / 'agents' / ('sm_workflow_' + role + '.toml'))
+                                 .read_text())['developer_instructions'])
+                worker = '/root/bounded-' + role
+                state = A.launched(state, state['launch'], {'task_name': worker})
+                result = {'outcome': 'accept' if kind in ('Review', 'DeliveryAcceptance') else 'completed', 'summary': 'Specification-owned return'}
+                state = A.complete(state, worker, result)
+                evidence = A.execution_evidence(state, [dict(identity='bounded-result', revision='1')])
+                # Then public context, actual worker and logical candidate remain exact.
+                self.assertEqual(state['request'], original)
+                self.assertEqual(request, original)
+                self.assertEqual(A.restore(state, original), state)
+                self.assertEqual(evidence['workerIdentity'], worker)
+                self.assertEqual(evidence['execution']['originContextIdentity'], 'fixture-parent')
+                self.assertEqual(evidence['execution']['executorContextIdentity'], worker)
+                self.assertEqual(evidence['execution']['profileIdentity'], 'mechanical')
+                self.assertNotIn('modelIdentity', evidence)
+        for unsupported in ('Inspect', 'Dispatch', 'Publish', 'implement'):
+            request = copy.deepcopy(self.request)
+            request['work']['kind'] = unsupported
+            with self.assertRaisesRegex(ValueError, 'Unsupported semantic role'):
+                A.prepare(request, self.mapping, self.facts, ROOT, ROOT)
 
     def test_all_edges_and_exhaustion_preserve_exact_effort(self):
         # Given each configured route and progressively unavailable prefixes.
