@@ -49,13 +49,70 @@ typed admission/configuration result, never an implicit fallback.
   immutable for its participant, target, purpose and observed source.
 - `LocalPublicationService.collectLocalPublication`: the same identifying
   fields, without an answer. It reads retained outcomes only. It cannot inspect
-  source, launch SBT, recover a consumer or advance a Session.
+  source for a publication effect, launch SBT, recover a consumer or advance a Session.
+  When the producer declares artifact inputs, it may perform typed current Git
+  observation to return a separate nonexecuting applicability fact.
 
 Responses contain `status`, `reason`, and the actual publication facts. The
 facts identify the logical target, observed native source, issued question,
 actual process capture when available, and confirmed preparation successor.
 Request/source facts use normal Git revisions and managed records; no new
 content hash or manual artifact enrollment is introduced.
+
+## Declared committed non-input source applicability
+
+The optional producer `artifactInputs` vector defaults to empty. Each entry has
+exactly `schemaVersion=sm-workflow.local-publication-artifact-inputs.v1`,
+`identity`, positive canonical string `revision`, `targetIdentity`, absolute URI
+`destination`, artifact ContextReference, and distinct exact repository-relative
+file `nonInputPaths`. One declaration is permitted per existing producer target.
+The declaration resolves through the normal Component parameter and the
+selected fixed `publish-local` program. It supplies no arbitrary command or
+process authority. Consumer `nonInputExclusions` never create a producer declaration.
+
+Declarations cannot classify `src/`, `project/`, `build.sbt`, `version.sbt`,
+`project.yaml`, `.cozy/`, `.textus/`, `.git*` controls, `.jvmopts` or `.sbtopts`
+as non-inputs. Globs and recursive directories are not declarations. Unknown or
+undeclared paths do not qualify, including documentation paths not explicitly
+selected by the producer.
+
+Only the latest actual successful, Exited-zero, complete and untruncated
+publication can apply to a changed clean committed source. Typed native Git
+observes the canonical root, branch, raw status, HEAD/tree and index equality,
+verifies both original and current commits and their real ancestry, and reads
+the complete tree delta. All actual changes must be declared regular-file A/M/D
+entries with consistent modes and blobs; modification cannot change mode.
+Renames, special entries, binary content, dirty/index mismatch, nonancestor and
+undeclared inputs refuse reuse. Typed I/O, incomplete and contradictory native
+observations propagate failure and never authorize another effect as fallback.
+Current observations repeat before a retained applicability decision skips work.
+
+`sm-workflow.local-publication-source-applicability.v1` retains the literal
+original Request, clean current Source, canonical root/branch, producer
+declaration, actual selected program JSON, native HistoryCommit ancestry and
+complete StageChange delta. It binds to the original actual successful result,
+its participant, optional owner Session, target/workspace/component, artifact,
+destination and safeProgramIdentity. The external observation's publicationOwner
+remains its independent owner locator, not a Session identifier.
+
+Ordinary nonexplicit ensure may retain `Unnecessary` for the current source with
+an optional applicability fact. It adds no actual target publication attempt and
+does not replace the original latest Published result. Repeated prerequisites
+reuse the current decision only while fresh applicability remains valid.
+Explicit publication retains ordinary execution semantics. A newer failed,
+UNKNOWN, incomplete or nonstarted actual writer blocks reuse of the old success;
+collection never searches past it. Historical collect keeps original results
+literal and performs no publication or progression.
+
+Public `LocalPublicationResult` and successful `CollectionResult` carry optional
+`applicability` separately from `publication`. Normal collect/collectLatest
+reassess the latest actual result; undeclared, dirty or input-changing sources
+return no applicability. The original publication remains literal Published.
+New unnecessary LP.Result may retain applicability only with no process or
+preparation and its exact current source. It never qualifies as Published.
+Absent new fields are omitted, preserving old JSON; explicit null, malformed
+facts and applicability attached to Published fail closed. Nonempty producer
+declarations are retained in publicationPolicy; empty policy text stays literal.
 
 ## Necessity and continuation
 
@@ -93,7 +150,8 @@ missing or binary text, unrecognized catalogs and meaningful catalog changes
 are not projected. Crossed or extra selected tree entries fail. HEAD and index
 tree remain exact, and unknown publication intent remains unreplayed. Hosts
 without this policy keep their previous source comparison. Persisted Target,
-Source, Request and Result schemas and equality are unchanged; no hash, second
+Source and Request schemas and equality are unchanged; absent Result extensions
+retain their literal old representation. No hash, second
 publication ledger or general ignored path is introduced. Projection proves
 only the difference from the actual indexed catalog. An older retained source
 that already contains ambiguous catalog dirtiness is preserved conservatively;

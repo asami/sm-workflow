@@ -26,7 +26,8 @@ import LocalPublication.*
   * data; actual CLI/UoW execution is qualified separately.
   * @since   Oct. 26, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  1, 2026
+  *  version Nov.  1, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -67,6 +68,8 @@ final class LocalPublicationSpec extends AnyWordSpec with Matchers with GivenWhe
     var starts = 0
     var ids = 0
     var sourceObservations = 0
+    var reuse = false
+    var applicabilityFailure = false
     var next: SbtExecutionAttempt = _observed(ProcessExecutionTermination.Exited(0))
     def loadC(key: String) = Consequence.success(rows.get(key))
     def createC(key: String, value: Json): Consequence[Unit] = {
@@ -76,6 +79,9 @@ final class LocalPublicationSpec extends AnyWordSpec with Matchers with GivenWhe
     def sourceC(t: Target) = { sourceObservations += 1; Consequence.success(source) }
     def executeC(t: Target) = { starts += 1; Consequence.success(next) }
     def newIdentity() = { ids += 1; "runtime-issued-" + ids }
+    override def sourceApplicabilityC(t: Target, previous: Result, current: Source) =
+      if (applicabilityFailure) Consequence.stateConflict("SPECIFICATION-ONLY typed Git observation failure")
+      else Consequence.success(Option.when(reuse)(CommittedNoninputApplicabilitySpecificationFixture.fact(previous, current)))
   }
   private def _ensure(m: Memory, identity: String = "request", explicit: Boolean = false,
     answer: Option[Answer] = None): Result = take(LocalPublication.ensureC(
@@ -102,6 +108,106 @@ final class LocalPublicationSpec extends AnyWordSpec with Matchers with GivenWhe
   private def _failure_permit(previous: Result, revision: String = "30"): ConfirmedFailureSuccessor =
     ConfirmedFailureSuccessor(ContextReference("same-retained-session", revision), previous, _clean,
       ContextReference("same-retained-session", "27"), "{\"program\":1}", "{\"targets\":2}")
+
+  "Declared committed non-input applicability" should {
+    "decode only explicit producer declarations and preserve empty legacy policy text" in {
+      Given("the ordinary host Component policy and one explicit versioned producer artifact declaration")
+      val base = Json.obj("storeName" -> "publication".asJson,
+        "collection" -> ThreeWorkflowNormalHostFixture.collection("artifact_inputs").asJson,
+        "targets" -> Vector(_target).asJson)
+      val declaration = CommittedNoninputApplicabilitySpecificationFixture.applicability.declaration.copy(targetIdentity = _target.identity)
+      When("the Component parameter selects absent, empty, declared, null or crossed artifact inputs")
+      val legacy = take(_policy(base))
+      val empty = take(_policy(base.mapObject(_.add("artifactInputs", Json.arr()))))
+      val declared = take(_policy(base.mapObject(_.add("artifactInputs", Vector(declaration).asJson))))
+      val invalid = Vector(Json.Null, Vector(declaration.copy(targetIdentity = "unknown")).asJson,
+        Vector(declaration, declaration).asJson,
+        Json.arr(declaration.asJson.mapObject(_.add("argv", Json.arr()))))
+      Then("only a closed producer declaration is retained and empty historical policy stays literal")
+      legacy.artifactInputs shouldBe empty.artifactInputs
+      legacy.artifactInputs shouldBe Vector.empty
+      declared.artifactInputs shouldBe Vector(declaration)
+      GoalPhasePrerequisitePublicationRecovery.publicationPolicy(legacy) shouldBe
+        GoalPhasePrerequisitePublicationRecovery.publicationPolicy(empty)
+      io.circe.parser.parse(GoalPhasePrerequisitePublicationRecovery.publicationPolicy(declared)).toOption.get
+        .hcursor.get[Vector[LocalPublicationSourceApplicability.Declaration]]("artifactInputs") shouldBe Right(Vector(declaration))
+      all(invalid.map(j => _policy(base.mapObject(_.add("artifactInputs", j))).isSuccess)) shouldBe false
+    }
+    "retain one actual publication while repeat prerequisites reuse one current nonexecuting decision" in {
+      Given("one actual successful target attempt followed by a declared clean documentation descendant")
+      val memory = new Memory
+      val input = Input("declared-prerequisite", _target.identity, Some("same-retained-session"))
+      val original = take(ensurePrerequisiteC(input, _target, "actor", memory))
+      val literal = original.asJson
+      memory.source = Source("e" * 40, "f" * 40, Vector.empty)
+      memory.reuse = true
+      When("ordinary prerequisites repeat and original collection remains passive")
+      val decision = take(ensurePrerequisiteC(input, _target, "actor", memory))
+      val rows = memory.rows.toMap
+      val repeated = take(ensurePrerequisiteC(input, _target, "actor", memory))
+      val collected = take(collectC(original.request.input, _target, "actor", memory)).get
+      val fresh = take(collectApplicabilityC(collected, memory))
+      Then("the original stays literal Published and only one decision describes the new source without another target attempt")
+      decision.status shouldBe "unnecessary"
+      decision.request.source shouldBe memory.source
+      decision.applicability.map(_.original) shouldBe Some(original.request)
+      repeated shouldBe decision
+      memory.rows.toMap shouldBe rows
+      collected.asJson shouldBe literal
+      fresh shouldBe decision.applicability
+      take(collectLatestC(LatestCollectionInput(_target.identity, "same-retained-session"), _target, "actor", memory)) shouldBe Some(original)
+      memory.rows.keys.count(_.startsWith("local-publication-target:")) shouldBe 1
+      memory.starts shouldBe 1
+      take(collectC(decision.request.input, _target, "actor", memory)) shouldBe Some(decision)
+    }
+    "refuse an older success after a newer failed or incomplete actual writer" in {
+      Given("a retained success and a changed clean source with declared non-input applicability")
+      val outcomes = Vector(ProcessExecutionTermination.Exited(9), ProcessExecutionTermination.TerminationUnconfirmed,
+        ProcessExecutionTermination.NotStarted)
+      When("an explicit ordinary attempt supersedes the earlier artifact")
+      val results = outcomes.map { outcome =>
+        val memory = new Memory
+        val original = _ensure(memory)
+        memory.source = Source("e" * 40, "f" * 40, Vector.empty)
+        memory.reuse = true
+        memory.next = _observed(outcome)
+        _ensure(memory, "later-explicit", explicit = true)
+        (take(collectApplicabilityC(original, memory)), memory.starts)
+      }
+      Then("collection never scans past the newer actual writer to revive the old success")
+      all(results.map(_._1)) shouldBe None
+      all(results.map(_._2)) shouldBe 2
+    }
+    "propagate typed assessment failure before storing a new request or executing" in {
+      Given("one success followed by a changed clean source and an admitted typed Git failure")
+      val memory = new Memory
+      _ensure(memory)
+      memory.source = Source("e" * 40, "f" * 40, Vector.empty)
+      memory.applicabilityFailure = true
+      val rows = memory.rows.toMap
+      When("necessity asks the ordinary owner for current native applicability")
+      val result = ensureC(Input("failed-assessment", _target.identity, Some("same-retained-session")), _target, "actor", memory)
+      Then("the failure propagates without authorizing a replacement publication")
+      result.isSuccess shouldBe false
+      memory.rows.toMap shouldBe rows
+      memory.starts shouldBe 1
+    }
+    "reassess a retained skip and refuse it when its current relation disappears" in {
+      Given("one actual success and a retained nonexecuting decision for a clean descendant")
+      val memory = new Memory
+      _ensure(memory)
+      memory.source = Source("e" * 40, "f" * 40, Vector.empty)
+      memory.reuse = true
+      val decision = _ensure(memory, "current-decision")
+      memory.reuse = false
+      When("the same ensure identity tries to skip again without current applicability")
+      val result = ensureC(decision.request.input, _target, "actor", memory)
+      Then("the retained history remains readable but cannot skip a new effect")
+      result.isSuccess shouldBe false
+      take(collectC(decision.request.input, _target, "actor", memory)) shouldBe Some(decision)
+      memory.starts shouldBe 1
+    }
+  }
 
   "Terminated primary failure continuation" should afterWord(
     "in spec:goal-phase-prerequisite-publication-recovery, example:E1,E2,E3,E4,E5, rules:R1,R2,R3, phase:M3-PRIMARY-CONTINUATION-409") {

@@ -25,7 +25,8 @@ import GoalPhasePrerequisitePublicationUnknownRecovery as W
 /** Explicit adoption of repaired source and an independently recollected normal
   * publication. The historical successful consumer request is never replaced.
   * @since   Nov.  7, 2026
-  * @version Nov.  7, 2026
+  *  version Nov.  7, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhasePublishedDependencySourceAdoption {
@@ -43,7 +44,8 @@ private[smworkflow] object GoalPhasePublishedDependencySourceAdoption {
     "Artifact adoption publishes nothing and grants no primary attempt. The later concrete host-correction target requires genuine Human evidence."
 
   /** The exact successful normal collect DTO, not an ensure/publication claim. */
-  final case class CollectionResult(status: String, reason: String, publication: LocalPublication.Result)
+  final case class CollectionResult(status: String, reason: String, publication: LocalPublication.Result,
+    applicability: Option[LocalPublicationSourceApplicability.Fact] = None)
   object CollectionResult {
     given Encoder[CollectionResult] = deriveEncoder[CollectionResult].mapJson(publicJson)
     given Decoder[CollectionResult] = _closed(deriveDecoder, collectionValid)
@@ -113,6 +115,8 @@ private[smworkflow] object GoalPhasePublishedDependencySourceAdoption {
     _text(value.publication.request.participant) && _text(value.publication.request.input.requestIdentity) &&
     value.publication.request.input.targetIdentity == value.publication.request.target.identity &&
     value.publication.process != null && value.publication.nextPreparation != null && value.publication.nextPreparation.isEmpty &&
+    value.applicability != null && value.applicability.forall(f => LocalPublicationSourceApplicability.binds(f, value.publication, f.current)) &&
+    value.publication.applicability != null && value.publication.applicability.isEmpty &&
     value.publication.process.exists(raw => WorkflowSbtCapture.decode(raw).toOption.exists(p =>
       WorkflowSbtCapture.exitCode(p).contains(0) && !p.stdout.truncated && !p.stderr.truncated &&
         WorkflowSbtCapture.text(p.stdout).textStatus == "complete" && WorkflowSbtCapture.text(p.stderr).textStatus == "complete"))
@@ -125,17 +129,20 @@ private[smworkflow] object GoalPhasePublishedDependencySourceAdoption {
       val programs = policy.hcursor.downField("processPlan").get[Vector[Json]]("sbtPrograms").toOption
         .getOrElse(Vector.empty).filter(p => p.hcursor.get[String]("target").contains(target.workspace) &&
           p.hcursor.get[String]("operation").contains("publish-local"))
-      programs.size == 1 && value.result.publication.process.flatMap(WorkflowSbtCapture.decode(_).toOption)
+      programs.size == 1 && value.result.applicability.forall(f => LocalPublicationSourceApplicability.matches(
+        f, value, f.current, f.root, f.branch, f.original.target.component)) &&
+      value.result.publication.process.flatMap(WorkflowSbtCapture.decode(_).toOption)
         .exists(p => programs.head.hcursor.get[String]("identity").contains(p.safeProgramIdentity))
     }
   def proposalValid(value: SourceProposal): Boolean = value != null && value.schemaVersion == proposalSchema &&
     R.proposalValid(value.source) && value.source.schemaVersion == R.sourceSchema &&
-    value.source.consumption.isInstanceOf[R.Consumption] && observationValid(value.publication)
+    value.source.consumption.isInstanceOf[R.Consumption] && observationValid(value.publication) && value.publication.result.applicability.isEmpty
   def predecessorOf(candidate: C.Payload): Option[D.Admission] = candidate.dependencySourceCapture
     .map(_.direction.target.predecessor).orElse(candidate.dependency.map(_.admission)).orElse(candidate.dependencyAdmission)
   def originValid(value: SourceOrigin): Boolean = value != null && H.targetValid(value.historical) &&
     value.historical.schemaVersion == H.schema && value.historical.publishedDependencyAdoptions.isEmpty &&
-    observationValid(value.publication) && value.selectedTarget != null && value.selectedTarget.dependency.nonEmpty &&
+    observationValid(value.publication) && value.publication.result.applicability.isEmpty &&
+    value.selectedTarget != null && value.selectedTarget.dependency.nonEmpty &&
     value.historical.dependencyPrefix.exists(_.request.target == value.selectedTarget) &&
     value.publication.result.publication.request.target == value.selectedTarget && D.admissionValid(value.predecessor) &&
     predecessorOf(value.historical.candidate).contains(value.predecessor) &&

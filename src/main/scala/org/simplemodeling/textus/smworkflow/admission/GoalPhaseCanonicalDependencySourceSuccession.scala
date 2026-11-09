@@ -33,6 +33,7 @@ import GoalPhaseDevelopmentReconstruction as X
   */
 private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
   val proposalSchema = "sm-workflow.goal-phase-canonical-dependency-source-proposal.v1"
+  val applicabilityProposalSchema = "sm-workflow.goal-phase-canonical-dependency-source-proposal.v2"
   val causation = "ordered-canonical-dependency-source:"
   val choice = "AdoptCanonicalDependencySourceRevision"
   val pendingChoice = "AdoptCanonicalDependencySourceRevisionAcceptingUnknownEffects"
@@ -204,17 +205,19 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
   private def _first_failure(clauses: Vector[() => Option[String]]): Option[String] =
     clauses.iterator.map(clause => clause()).find(_.nonEmpty).flatten
 
-  def proposalValid(v: Proposal): Boolean = v != null && v.schemaVersion == proposalSchema &&
+  def proposalValid(v: Proposal): Boolean = v != null && Set(proposalSchema, applicabilityProposalSchema)(v.schemaVersion) &&
     R.proposalValid(v.source) && v.source.schemaVersion == R.sourceSchema &&
     v.source.mode == "committed" && v.source.consumption.isInstanceOf[R.Consumption] &&
-    P.observationValid(v.publication) && R.referenceValid(v.adoptedDelivery) &&
+    P.observationValid(v.publication) &&
+    ((v.schemaVersion == applicabilityProposalSchema) == v.publication.result.applicability.nonEmpty) &&
+    R.referenceValid(v.adoptedDelivery) &&
     v.workerLifecycle != null && v.workerLifecycle.forall(w => w != null && w.priorWorkerEnded && w.acceptsUnknownExternalEffects)
   def proposalC(value: Record): Consequence[Proposal] =
     if (value == null) D.invalid("canonical source proposal is absent") else value.toJsonStringC.flatMap(raw =>
       io.circe.parser.parse(raw).left.map(_.message).flatMap(GoalPhaseNativeMetadata.normalizePublicJson)
         .flatMap(_.as[Proposal].left.map(_.message)).fold(D.invalid(_), Consequence.success))
   def isProposal(value: Record): Boolean = value != null && value.toJsonStringC.toOption.exists(raw =>
-    io.circe.parser.parse(raw).toOption.exists(_.hcursor.get[String]("schemaVersion").contains(proposalSchema)))
+    io.circe.parser.parse(raw).toOption.exists(_.hcursor.get[String]("schemaVersion").exists(Set(proposalSchema, applicabilityProposalSchema))))
   def choicesFor(v: R.Target): Vector[String] =
     Vector(if (v.canonicalOrigin.exists(_.pending.nonEmpty)) pendingChoice else choice, "Defer")
 
@@ -292,7 +295,12 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
     P.observationValid(v) && D.bindingValid(binding) && {
       val request = v.result.publication.request
       request.target.component == binding.dependency.identity && request.source.clean &&
-        request.source.head == binding.base.head && request.source.tree == binding.base.tree &&
+        (v.result.applicability match {
+          case None => request.source.head == binding.base.head && request.source.tree == binding.base.tree
+          case Some(fact) => LocalPublicationSourceApplicability.matches(fact, v,
+            LocalPublication.Source(binding.base.head, binding.base.tree, Vector.empty), binding.root,
+            binding.branch, binding.dependency.identity)
+        }) &&
         io.circe.parser.parse(v.publisherProcessPolicy).toOption.exists(policy =>
           policy.hcursor.downField("processPlan").get[Vector[Json]]("workspaces").toOption.exists(workspaces => {
             val selected = workspaces.filter(_.hcursor.get[String]("identity").contains(request.target.workspace))
@@ -393,8 +401,10 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
         val clauses: Vector[() => Option[String]] = Vector(
           () => _origin_failure(o),
           _clause("native-origin.schema")(R.isCanonicalSchema(v.schemaVersion) &&
-            (v.schemaVersion == R.canonicalSuccessorSchema) ==
-              (o.historicalPublicationFailure.nonEmpty || o.acceptedSourcePrefix.nonEmpty)),
+            Set(R.canonicalSuccessorSchema, R.canonicalApplicabilitySuccessorSchema)(v.schemaVersion) ==
+              (o.historicalPublicationFailure.nonEmpty || o.acceptedSourcePrefix.nonEmpty) &&
+            Set(R.canonicalApplicabilitySchema, R.canonicalApplicabilitySuccessorSchema)(v.schemaVersion) ==
+              (o.selection.schemaVersion == applicabilityProposalSchema)),
           _clause("native-origin.accepted-source-prefix")(o.acceptedSourcePrefix.isEmpty || _accepted_prefix_matches(v, o)),
           _clause("native-origin.discriminators")(v.runtime == None && v.sourceSuccession == None &&
             v.exclusionSuccession == None && v.committedBaseSuccession == None && v.waitOrigin == None &&
@@ -535,6 +545,7 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
     }
     _ <- _check(d.dependencySourceConsumptions.contains(proposal.source.consumption), "canonical consumption is not declared by this host")
     guard <- observeC(core, binding, proposal.source.excludedPaths)
+    _ <- LocalPublicationSourceApplicability.currentC(core, proposal.publication, binding, d.localPublication)
     old = source.previousDirection.orElse(source.originalDirection).map(_.target.binding).getOrElse(source.predecessor.binding)
     lineage <- _ancestry_c(core, binding, old.base)
     process <- GoalPhasePrerequisitePublicationRecovery.processPolicyC(d, core)
@@ -547,8 +558,11 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
       GoalPhaseCandidateRecovery.controllerSnapshot(source.controller), source.approvals,
       source.originalDirection, source.previousDirection, source.pending, proposal, primaryroot, process, lineage,
       source.historicalFailure, source.historicalPublicationFailure, source.acceptedSourcePrefix, source.inspectionFrontier)
-    target = R.Target(if (source.historicalPublicationFailure.nonEmpty || source.acceptedSourcePrefix.nonEmpty)
-      R.canonicalSuccessorSchema else R.canonicalSchema, source.session.current.identity.value, "", source.from.revision.value.toString,
+    target = R.Target(if (proposal.schemaVersion == applicabilityProposalSchema) {
+      if (source.historicalPublicationFailure.nonEmpty || source.acceptedSourcePrefix.nonEmpty)
+        R.canonicalApplicabilitySuccessorSchema else R.canonicalApplicabilitySchema
+      } else if (source.historicalPublicationFailure.nonEmpty || source.acceptedSourcePrefix.nonEmpty)
+        R.canonicalSuccessorSchema else R.canonicalSchema, source.session.current.identity.value, "", source.from.revision.value.toString,
       source.from.revision.value.toString, source.controller.plan, source.controller.plan.steps(source.controller.cursor).identity,
       source.controller.generation, source.controller.base, source.controller.completed,
       GoalPhaseRepairProgress.snapshot(source.controller), source.requestingResult, source.predecessor, source.ancestors,
@@ -582,7 +596,8 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
     Consequence[Vector[R.ConsumptionRecord]] = {
     def _children_(current: R.Direction): Vector[R.Direction] = current.target.canonicalOrigin.toVector.flatMap(origin =>
       origin.originalDirection.toVector ++ origin.previousDirection.toVector).distinct
-    def _has_successor_(current: R.Direction): Boolean = current.target.schemaVersion == R.canonicalSuccessorSchema ||
+    def _has_successor_(current: R.Direction): Boolean = Set(R.canonicalSuccessorSchema,
+      R.canonicalApplicabilitySuccessorSchema)(current.target.schemaVersion) ||
       _children_(current).exists(_has_successor_)
     def _same_boundary_(child: R.Direction, parent: R.Direction): Boolean =
       child.target.sessionId == parent.target.sessionId && child.target.primaryBase == parent.target.primaryBase &&
@@ -617,6 +632,8 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
     _ <- _check(d.dependencySourceRevisions.contains(target.binding) &&
       d.dependencySourceConsumptions.contains(target.proposal.consumption), "canonical host binding changed")
     guard <- observeC(core, target.binding, target.proposal.excludedPaths)
+    _ <- LocalPublicationSourceApplicability.currentC(core, target.canonicalOrigin.get.selection.publication,
+      target.binding, d.localPublication)
     process <- GoalPhasePrerequisitePublicationRecovery.processPolicyC(d, core)
     expected <- host match {
       case None => Consequence.success(target.canonicalOrigin.get.processPolicy)

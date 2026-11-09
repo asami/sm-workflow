@@ -252,6 +252,7 @@ OperationResult
 | status | string | 1 |
 | reason | string | 1 |
 | publication | org.goldenport.record.Record | ? |
+| applicability | org.goldenport.record.Record | ? |
 
 ## GoalPhaseAdvanceResult
 

@@ -464,7 +464,8 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
     Option[CanonicalSource.HistoricalPublicationFailure] = {
     def _retained_(current: R.Direction): Option[CanonicalSource.HistoricalPublicationFailure] =
       if (!R.directionValid(current)) None else current.target.canonicalOrigin.flatMap { origin =>
-        origin.historicalPublicationFailure.filter(_ => current.target.schemaVersion == R.canonicalSuccessorSchema)
+        origin.historicalPublicationFailure.filter(_ => Set(R.canonicalSuccessorSchema,
+          R.canonicalApplicabilitySuccessorSchema)(current.target.schemaVersion))
           .orElse {
             origin.inspectionFrontier.filter(CanonicalSource.inspectionFrontierValid).flatMap { _ =>
               origin.previousDirection.orElse(origin.originalDirection).filter { previous =>
@@ -604,7 +605,7 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
   private[admission] def canonicalCauseAt(saved: Saved, direction: Option[R.Direction], controller: O.State): Boolean =
     canonicalSelectionValid(saved, direction, None, controller) && controller.stage == O.Stage.Repair &&
       controller.repairDirective.contains(saved.fact.directive) && direction.exists(next =>
-        next.target.schemaVersion == R.canonicalSuccessorSchema && next.target.canonicalOrigin.exists(origin =>
+        Set(R.canonicalSuccessorSchema, R.canonicalApplicabilitySuccessorSchema)(next.target.schemaVersion) && next.target.canonicalOrigin.exists(origin =>
           origin.controller.stage == "Repair" && origin.inspectionFrontier.isEmpty &&
             origin.historicalPublicationFailure.contains(CanonicalSource.HistoricalPublicationFailure(saved.reference, saved.fact))))
 

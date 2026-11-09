@@ -290,6 +290,57 @@ private[admission] object PriorCoveredSourceSpecificationFixture {
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhaseCanonicalDependencySourceSuccessionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import CanonicalDependencySourceSpecificationFixture as F
+  "Declared non-input canonical source relation" should {
+    "require proposal v2, target v12 and capture v13 while keeping actual publication literal" in {
+      Given("an authenticated-shaped canonical target and an earlier actual publication with separate descendant applicability")
+      val observation = CommittedNoninputApplicabilitySpecificationFixture.observation
+      val proposal = F.proposal.copy(schemaVersion = C.applicabilityProposalSchema, publication = observation)
+      val target = F.target.copy(schemaVersion = R.canonicalApplicabilitySchema,
+        canonicalOrigin = Some(F.origin.copy(selection = proposal)))
+      val direction = F.direction.copy(target = target)
+      val capture = F.capture.copy(schemaVersion = R.canonicalApplicabilityCaptureSchema, direction = direction)
+      When("the new source and capture pass their version-specific closed contracts")
+      val decoded = target.asJson.as[R.Target]
+      Then("current clean binding and guard select the same fact and old schemas cannot acquire its meaning")
+      C.proposalValid(proposal) shouldBe true
+      C.publicationMatches(observation, F.binding) shouldBe true
+      R.targetValid(target) shouldBe true
+      decoded shouldBe Right(target)
+      R.captureValid(capture) shouldBe true
+      C.proposalValid(proposal.copy(schemaVersion = C.proposalSchema)) shouldBe false
+      R.targetValid(target.copy(schemaVersion = R.canonicalSchema)) shouldBe false
+      R.captureValid(capture.copy(schemaVersion = R.canonicalCaptureSchema)) shouldBe false
+      C.proposalValid(F.proposal.copy(schemaVersion = C.applicabilityProposalSchema)) shouldBe false
+      observation.result.publication shouldBe CommittedNoninputApplicabilitySpecificationFixture.previous
+    }
+    "version successor source and captures independently while refusing crossed source guards" in {
+      Given("a later native source target whose original accepted prefix remains unchanged")
+      val original = LaterSourcePublicationSpecificationFixture.target
+      val origin = original.canonicalOrigin.get
+      val publication = origin.selection.publication
+      val previous = publication.result.publication.copy(request = publication.result.publication.request.copy(
+        source = LocalPublication.Source("a" * 40, "b" * 40, Vector.empty)))
+      val fact = CommittedNoninputApplicabilitySpecificationFixture.fact(previous,
+        publication.result.publication.request.source, original.binding.root, original.binding.branch,
+        publication.destination, publication.artifact)
+      val observation = publication.copy(result = publication.result.copy(publication = previous, applicability = Some(fact)))
+      val target = original.copy(schemaVersion = R.canonicalApplicabilitySuccessorSchema,
+        canonicalOrigin = Some(origin.copy(selection = origin.selection.copy(schemaVersion = C.applicabilityProposalSchema,
+          publication = observation))))
+      val direction = LaterSourcePublicationSpecificationFixture.direction.copy(target = target)
+      When("the retained new successor capture is constructed without observing historical source again")
+      val capture = LaterSourcePublicationSpecificationFixture.capture.copy(schemaVersion = R.canonicalApplicabilitySuccessorCaptureSchema,
+        direction = direction)
+      Then("the successor has its explicit schema and immutable historical prefix while crossings refuse")
+      R.targetValid(target) shouldBe true
+      R.captureValid(capture) shouldBe true
+      R.canonicalCaptureSchemaFor(direction) shouldBe R.canonicalApplicabilitySuccessorCaptureSchema
+      R.targetValid(target.copy(schemaVersion = R.canonicalSuccessorSchema)) shouldBe false
+      R.captureValid(capture.copy(schemaVersion = R.canonicalSuccessorCaptureSchema)) shouldBe false
+      R.targetValid(target.copy(preStageGuard = target.preStageGuard.copy(head = "e" * 40))) shouldBe false
+      C.publicationMatches(observation, original.binding.copy(base = O.Snapshot("e" * 40, "f" * 40))) shouldBe false
+    }
+  }
   private def _inspection_fixture: (O.State, C.InspectionFrontier, R.Target) = {
     import GoalPhaseDevelopmentReconstruction as X
     import GoalPhasePlanRevision as PlanRevision

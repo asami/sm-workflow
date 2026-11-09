@@ -16,7 +16,8 @@ import org.simplemodeling.textus.smworkflow.value as V
   * Process selection, effect admission, completion and recollection are runtime work.
   * @since   Oct. 26, 2026
   *  version Oct. 27, 2026
-  * @version Nov.  2, 2026
+  *  version Nov.  2, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object LocalPublicationService {
@@ -56,10 +57,10 @@ private[smworkflow] object LocalPublicationService {
       def execute(): Consequence[OperationResponse] = for {
         _ <- owner(input.ownerSessionId, core)
         result <- policy match {
-          case None => Consequence.success(V.LocalPublicationResult("not-configured", "No publication target is configured", None))
-          case Some(policy) => LocalPublicationRuntime.collectLatestC(core, policy, input).map {
-            case Some(r) => V.LocalPublicationResult(r.status, r.reason, Some(GoalPhaseNativeMetadata.record(r.asJson)))
-            case None => V.LocalPublicationResult("not-found", "No publication attempt is retained for this target; no execution", None)
+          case None => Consequence.success(V.LocalPublicationResult("not-configured", "No publication target is configured", None, None))
+          case Some(policy) => LocalPublicationRuntime.collectLatestC(core, policy, input).flatMap {
+            case Some(r) => _result_c(core, policy, r, true)
+            case None => Consequence.success(V.LocalPublicationResult("not-found", "No publication attempt is retained for this target; no execution", None, None))
           }
         }
       } yield NativeWorkflowOperationOutput.response(result)
@@ -88,16 +89,21 @@ private[smworkflow] object LocalPublicationService {
       def execute(): Consequence[OperationResponse] = for {
         _ <- input.ownerSessionId.fold(Consequence.unit)(id => owner(id, core))
         result <- policy match {
-          case None => Consequence.success(V.LocalPublicationResult("not-configured", "No publication target is configured", None))
+          case None => Consequence.success(V.LocalPublicationResult("not-configured", "No publication target is configured", None, None))
           case Some(policy) =>
             val value = if (collect) LocalPublicationRuntime.collectC(core, policy, input)
               else LocalPublicationRuntime.ensureC(core, policy, input).map(Some(_))
-            value.map {
-              case Some(r) => V.LocalPublicationResult(r.status, r.reason, Some(GoalPhaseNativeMetadata.record(r.asJson)))
-              case None => V.LocalPublicationResult("not-found", "No publication request is retained; no execution", None)
+            value.flatMap {
+              case Some(r) => _result_c(core, policy, r, collect)
+              case None => Consequence.success(V.LocalPublicationResult("not-found", "No publication request is retained; no execution", None, None))
             }
         }
       } yield NativeWorkflowOperationOutput.response(result)
     }
   }
+  private def _result_c(core: ActionCall.Core, policy: LocalPublicationRuntime.Policy,
+    result: LocalPublication.Result, collect: Boolean): Consequence[V.LocalPublicationResult] =
+    (if (collect) LocalPublicationRuntime.collectApplicabilityC(core, policy, result)
+      else Consequence.success(result.applicability)).map(fact => V.LocalPublicationResult(result.status, result.reason,
+      Some(GoalPhaseNativeMetadata.record(result.asJson)), fact.map(f => GoalPhaseNativeMetadata.record(f.asJson))))
 }

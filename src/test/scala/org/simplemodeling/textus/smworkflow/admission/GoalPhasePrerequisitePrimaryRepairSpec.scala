@@ -396,6 +396,30 @@ final class GoalPhasePrerequisitePrimaryRepairSpec extends AnyWordSpec with Matc
   }
   "LSR-01 Canonical publication-failure succession" should {
     import LaterSourcePublicationSpecificationFixture as L
+    "retain the exact historical cause through the declared non-input applicability successor variant" in {
+      Given("the same retained classified failure and an explicitly versioned source applicability selection")
+      val previous = L.publication.result.publication.copy(request = L.publication.result.publication.request.copy(
+        source = LocalPublication.Source("a" * 40, "b" * 40, Vector.empty)))
+      val fact = CommittedNoninputApplicabilitySpecificationFixture.fact(previous,
+        L.publication.result.publication.request.source, L.binding.root, L.binding.branch,
+        L.publication.destination, L.publication.artifact)
+      val observation = L.publication.copy(result = L.publication.result.copy(publication = previous, applicability = Some(fact)))
+      val selection = L.proposal.copy(schemaVersion = GoalPhaseCanonicalDependencySourceSuccession.applicabilityProposalSchema,
+        publication = observation)
+      val target = L.target.copy(schemaVersion = GoalPhaseDependencySourceRevision.canonicalApplicabilitySuccessorSchema,
+        canonicalOrigin = Some(L.origin.copy(selection = selection)))
+      val direction = L.direction.copy(target = target)
+      When("the existing cause lookup and active Repair generation checks consume the new successor schema")
+      val inherited = A.canonicalPublicationFailure(direction)
+      val context = take(A.canonicalWorkContextC(L.saved, Some(direction), L.successor, "RepairStep"))
+      Then("cause identity, owner, generation and original publication remain exact without another reservation")
+      GoalPhaseDependencySourceRevision.directionValid(direction) shouldBe true
+      inherited shouldBe Some(L.historical)
+      A.canonicalCauseAt(L.saved, Some(direction), L.successor) shouldBe true
+      context.map(_.publication) shouldBe Some(L.failed)
+      A.canonicalCauseAt(L.saved.copy(record = F.nativeRecord(64)), Some(direction), L.successor) shouldBe false
+      A.canonicalCauseAt(L.saved, Some(direction), L.repair) shouldBe false
+    }
     "carry the exact historical failure through reconstructed inspection without creating another active Repair" in {
       Given("an accepted current Repair, same-Plan clean checkpoint and separately selected canonical inspection source")
       import GoalPhaseDependencySourceRevision as R

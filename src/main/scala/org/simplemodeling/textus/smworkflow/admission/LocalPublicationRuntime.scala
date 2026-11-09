@@ -25,9 +25,10 @@ import org.simplemodeling.textus.smworkflow.value as V
 private[smworkflow] object LocalPublicationRuntime {
   final case class CatalogOutput(targetIdentity: String, path: String, selection: String)
   final case class Policy(storeName: String, collection: DataStore.CollectionId,
-    targets: Vector[LocalPublication.Target], catalogOutputs: Vector[CatalogOutput] = Vector.empty)
+    targets: Vector[LocalPublication.Target], catalogOutputs: Vector[CatalogOutput] = Vector.empty,
+    artifactInputs: Vector[LocalPublicationSourceApplicability.Declaration] = Vector.empty)
   private final case class Wire(storeName: String, collection: String, targets: Vector[LocalPublication.Target],
-    catalogOutputs: Vector[CatalogOutput])
+    catalogOutputs: Vector[CatalogOutput], artifactInputs: Vector[LocalPublicationSourceApplicability.Declaration])
   val declaration = ComponentParameterKey.optional("sm-workflow.local-publication",
     ComponentParameterDecoder[Policy] { value =>
       def _json_(v: ConfigurationValue): Json = v match {
@@ -44,11 +45,11 @@ private[smworkflow] object LocalPublicationRuntime {
         case _ => Left("Publication configuration requires a structured object")
       }
       parsed.flatMap { raw =>
-        if (!raw.asObject.exists(_.keys.forall(Set("storeName", "collection", "targets", "catalogOutputs"))))
+        if (!raw.asObject.exists(_.keys.forall(Set("storeName", "collection", "targets", "catalogOutputs", "artifactInputs"))))
           Left("Publication configuration contains an undeclared field")
         else {
-          val normalized = if (raw.hcursor.downField("catalogOutputs").focus.isEmpty)
-            raw.mapObject(_.add("catalogOutputs", Json.arr())) else raw
+          val normalized = Vector("catalogOutputs", "artifactInputs").foldLeft(raw)((value, key) =>
+            if (value.hcursor.downField(key).focus.isEmpty) value.mapObject(_.add(key, Json.arr())) else value)
           normalized.hcursor.get[Vector[Json]]("catalogOutputs").left.map(_.message).flatMap { outputs =>
             if (outputs.exists(o => !o.asObject.exists(_.keys.toSet == Set("targetIdentity", "path", "selection"))))
               Left("Publication catalog output contains missing or undeclared fields")
@@ -62,7 +63,7 @@ private[smworkflow] object LocalPublicationRuntime {
           }
         }
       }.fold(Consequence.configurationInvalid(_), w => {
-        EntityCollectionId.parse(w.collection).toOption.map(id => Policy(w.storeName, DataStore.CollectionId.EntityStore(id), w.targets, w.catalogOutputs))
+        EntityCollectionId.parse(w.collection).toOption.map(id => Policy(w.storeName, DataStore.CollectionId.EntityStore(id), w.targets, w.catalogOutputs, w.artifactInputs))
           .map(p => validateC(p).map(_ => p)).getOrElse(Consequence.configurationInvalid("Publication collection is invalid"))
       })
     })
@@ -73,6 +74,9 @@ private[smworkflow] object LocalPublicationRuntime {
           t.identity != null && t.identity.nonEmpty && t.component != null && t.component.nonEmpty &&
           t.workspace != null && org.goldenport.cncf.workspace.WorkspaceId.parseC(t.workspace).isSuccess &&
           t.dependency != null) && policy.targets.map(_.identity).distinct.size == policy.targets.size &&
+        policy.artifactInputs != null && policy.artifactInputs.forall(LocalPublicationSourceApplicability.declarationValid) &&
+        policy.artifactInputs.map(_.targetIdentity).distinct.size == policy.artifactInputs.size &&
+        policy.artifactInputs.forall(d => policy.targets.exists(_.identity == d.targetIdentity)) &&
         policy.catalogOutputs != null && policy.catalogOutputs.size <= 16 && policy.catalogOutputs.forall(_ != null) &&
         policy.catalogOutputs.map(_.targetIdentity).distinct.size == policy.catalogOutputs.size &&
         policy.catalogOutputs.forall(o => o != null && o.targetIdentity != null &&
@@ -131,7 +135,28 @@ private[smworkflow] object LocalPublicationRuntime {
     } yield LocalPublication.Source(observed.head, tree.value, dirty)
     def executeC(target: LocalPublication.Target): Consequence[SbtExecutionAttempt] =
       WorkflowManagedProcessExecution.publishLocalAttemptC(core, target.workspace)
+    override def sourceApplicabilityC(target: LocalPublication.Target, previous: LocalPublication.Result,
+      current: LocalPublication.Source): Consequence[Option[LocalPublicationSourceApplicability.Fact]] =
+      policy.artifactInputs.find(_.targetIdentity == target.identity) match {
+        case None => Consequence.success(None)
+        case Some(declaration) => for {
+          plan <- LocalPublicationSourceApplicability.processPlanC(core)
+          program <- LocalPublicationSourceApplicability.selectedProgram(plan, target).map(Consequence.success)
+            .getOrElse(Consequence.configurationInvalid("Applicability requires the selected fixed PublishLocal program"))
+          root <- LocalPublicationSourceApplicability.selectedRoot(plan, target).map(Consequence.success)
+            .getOrElse(Consequence.configurationInvalid("Applicability requires the selected canonical workspace root"))
+          result <- LocalPublicationSourceApplicability.assessC(core, target.workspace, previous, current, declaration, program, root)
+        } yield result
+      }
   }
+
+  def collectApplicabilityC(core: ActionCall.Core, policy: Policy, result: LocalPublication.Result):
+    Consequence[Option[LocalPublicationSourceApplicability.Fact]] = for {
+    _ <- validateC(policy)
+    _ <- if (policy.targets.contains(result.request.target)) Consequence.unit
+      else Consequence.stateConflict("Applicability collection target is not declared")
+    fact <- LocalPublication.collectApplicabilityC(result, _port(core, policy))
+  } yield fact
 
   def ensureC(core: ActionCall.Core, policy: Policy, input: LocalPublication.Input): Consequence[LocalPublication.Result] = for {
     _ <- validateC(policy)

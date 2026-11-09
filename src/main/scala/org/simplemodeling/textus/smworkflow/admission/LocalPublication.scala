@@ -12,7 +12,8 @@ import org.goldenport.record.io.RecordDecoder
   * semantic answer; the runtime owns necessity, admission, execution and results.
   * @since   Oct. 26, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  2, 2026
+  *  version Nov.  2, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object LocalPublication {
@@ -74,8 +75,23 @@ private[smworkflow] object LocalPublication {
     } yield ConfirmedFailureSuccessor(direction, previous, source, sourcecapture, processpolicy, publicationpolicy) }
   }
   final case class Result(status: String, reason: String, request: Request,
-    process: Option[Json] = None, nextPreparation: Option[String] = None) {
+    process: Option[Json] = None, nextPreparation: Option[String] = None,
+    applicability: Option[LocalPublicationSourceApplicability.Fact] = None) {
     def ready: Boolean = status == "published" || status == "unnecessary"
+  }
+  object Result {
+    given Encoder[Result] = io.circe.generic.semiauto.deriveEncoder[Result].mapJson(_.mapObject(fields =>
+      if (fields("applicability").contains(Json.Null)) fields.remove("applicability") else fields))
+    private val _decoder: Decoder[Result] = io.circe.generic.semiauto.deriveDecoder
+    given Decoder[Result] = Decoder.instance(c =>
+      if (c.downField("applicability").focus.exists(_.isNull) ||
+          !c.value.asObject.exists(_.keys.forall(Set("status", "reason", "request", "process", "nextPreparation", "applicability"))))
+        Left(io.circe.DecodingFailure("Invalid publication applicability field", c.history))
+      else _decoder(c).flatMap(r => if (r.applicability.forall(f => r.status == "unnecessary" &&
+          r.process.isEmpty && r.nextPreparation.isEmpty && LocalPublicationSourceApplicability.valid(f) &&
+          r.request.source == f.current && r.request.target == f.original.target &&
+          r.request.participant == f.original.participant && r.request.input.ownerSessionId == f.original.input.ownerSessionId)) Right(r)
+        else Left(io.circe.DecodingFailure("Crossed publication applicability decision", c.history))))
   }
   enum Necessity {
     case Unnecessary(reason: String)
@@ -132,6 +148,8 @@ private[smworkflow] object LocalPublication {
     def sourceC(target: Target): Consequence[Source]
     def executeC(target: Target): Consequence[SbtExecutionAttempt]
     def newIdentity(): String
+    def sourceApplicabilityC(target: Target, previous: Result, current: Source):
+      Consequence[Option[LocalPublicationSourceApplicability.Fact]] = Consequence.success(None)
   }
 
   private def _source_path(path: String): Boolean =
@@ -198,7 +216,7 @@ private[smworkflow] object LocalPublication {
     value.as[A].fold(e => Consequence.stateConflict("Invalid retained publication fact: " + e.message), Consequence.success)
   private def _invalid[A](reason: String): Consequence[A] = Consequence.stateConflict("Local publication: " + reason)
 
-  private def _same_historical_target(left: Target, right: Target): Boolean =
+  private[admission] def sameHistoricalTarget(left: Target, right: Target): Boolean =
     left.identity == right.identity && left.component == right.component &&
       left.workspace == right.workspace && left.dependency == right.dependency
 
@@ -210,7 +228,7 @@ private[smworkflow] object LocalPublication {
     previous: Option[PublicationAttempt] = None): Consequence[(Long, Option[PublicationAttempt])] =
     port.loadC(_attempt_key(target, ordinal)).flatMap {
       case Some(value) => _decode_c[PublicationAttempt](value).flatMap(attempt =>
-        if (_same_historical_target(attempt.request.target, target) && ordinal < Long.MaxValue)
+        if (sameHistoricalTarget(attempt.request.target, target) && ordinal < Long.MaxValue)
           _latest_attempt_c(target, port, ordinal + 1L, Some(attempt))
         else _invalid("publication history belongs to a different target or exhausted its sequence"))
       case None => Consequence.success(ordinal -> previous)
@@ -227,6 +245,24 @@ private[smworkflow] object LocalPublication {
             "The latest target publication has no terminal result; no new effect", attempt.request)))
       }
     }}
+
+  /** Only the current latest actual successful attempt can supply provenance.
+    * Reading an older immutable result never scans past a newer writer. */
+  def sourceApplicabilityC(previous: Result, current: Source, port: Port):
+    Consequence[Option[LocalPublicationSourceApplicability.Fact]] =
+    if (!LocalPublicationSourceApplicability.successful(previous) || current == null || !current.clean ||
+        !previous.request.source.clean || previous.request.source.head == current.head) Consequence.success(None)
+    else _latest_c(previous.request.target, port).flatMap { latest =>
+      if (!latest._2.contains(previous)) Consequence.success(None)
+      else port.sourceApplicabilityC(previous.request.target, previous, current).flatMap { fact =>
+        if (fact.forall(LocalPublicationSourceApplicability.binds(_, previous, current))) Consequence.success(fact)
+        else _invalid("native applicability differs from its actual publication or current source")
+      }
+    }
+
+  def collectApplicabilityC(previous: Result, port: Port): Consequence[Option[LocalPublicationSourceApplicability.Fact]] =
+    if (!LocalPublicationSourceApplicability.successful(previous)) Consequence.success(None)
+    else port.sourceC(previous.request.target).flatMap(sourceApplicabilityC(previous, _, port))
 
   def decodeLatestCollectionInputC(value: Json): Consequence[LatestCollectionInput] =
     if (value == null || !value.asObject.exists(_.keys.toSet == Set("targetIdentity", "ownerSessionId")))
@@ -521,9 +557,14 @@ private[smworkflow] object LocalPublication {
           else _invalid("an answer or continuation has no actual issued request")
         source <- port.sourceC(target)
         latest <- _latest_c(target, port)
+        applicability <- if (input.explicit) Consequence.success(Option.empty[LocalPublicationSourceApplicability.Fact])
+          else latest._2.filter(r => r.request.participant == participant &&
+            r.request.input.ownerSessionId == input.ownerSessionId).fold(
+            Consequence.success(Option.empty[LocalPublicationSourceApplicability.Fact]))(sourceApplicabilityC(_, source, port))
         published = latest._2.exists(r => r.status == "published" && r.request.source.clean &&
           r.request.source.head == source.head)
-        decision = necessity(source, published, input.explicit)
+        decision = if (applicability.nonEmpty) Necessity.Unnecessary("The latest actual publication applies to this clean declared non-input descendant")
+          else necessity(source, published, input.explicit)
         reason = decision match {
           case Necessity.Unnecessary(r) => r
           case Necessity.Required(r) => r
@@ -542,7 +583,8 @@ private[smworkflow] object LocalPublication {
         _ <- if (latest._2.exists(_.status == "uncertain")) port.createC(key + ":result",
           Result("uncertain", "The latest target publication has unresolved effects; no new execution", request).asJson)
           else decision match {
-          case Necessity.Unnecessary(_) => port.createC(key + ":result", Result("unnecessary", reason, request).asJson)
+          case Necessity.Unnecessary(_) => port.createC(key + ":result", Result("unnecessary", reason, request,
+            applicability = applicability).asJson)
           case _ => Consequence.unit
         }
       } yield request
@@ -560,10 +602,13 @@ private[smworkflow] object LocalPublication {
         collectC(request.input, target, participant, port))
       latest <- _latest_c(target, port)
       source <- port.sourceC(target)
+      applicable <- retained.flatMap(_.applicability).fold(Consequence.success(false)) { fact =>
+        latest._2.fold(Consequence.success(false))(actual => sourceApplicabilityC(actual, source, port).map(_.contains(fact)))
+      }
       selected = prior._2 match {
-        case Some(request) if !(retryFailed && retained.exists(_confirmed_failed) && source == request.source) && (retained.forall(!_.ready) || (source == request.source && latest._2.exists(r =>
+        case Some(request) if !(retryFailed && retained.exists(_confirmed_failed) && source == request.source) && (retained.forall(!_.ready) || (source == request.source && (applicable || latest._2.exists(r =>
             r.request == request || (r.status == "published" && r.request.source.clean &&
-              r.request.source.head == request.source.head)))) => request.input.copy(answer = input.answer)
+              r.request.source.head == request.source.head))))) => request.input.copy(answer = input.answer)
         case _ => input.copy(requestIdentity = input.requestIdentity + ":prerequisite:" + prior._1)
       }
       result <- ensureC(selected, target, participant, port)
@@ -593,6 +638,7 @@ private[smworkflow] object LocalPublication {
     original <- collectC(input, target, participant, port)
     result <- original match {
       case Some(value) if _confirmed_failed(value) => ensurePrerequisiteC(input, target, participant, port, retryFailed = true)
+      case Some(value) if value.applicability.nonEmpty => ensureC(input, target, participant, port)
       case Some(value) => Consequence.success(value)
       case None => ensureC(input, target, participant, port)
     }
@@ -619,7 +665,18 @@ private[smworkflow] object LocalPublication {
     retained <- port.loadC(selected + ":result")
     result <- retained match {
       case Some(value) => _decode_c[Result](value).flatMap(r =>
-        if (r.request == request) Consequence.success(r) else _invalid("terminal result has a different owner"))
+        if (r.request != request) _invalid("terminal result has a different owner")
+        else r.applicability match {
+          case None => Consequence.success(r)
+          case Some(fact) => for {
+            source <- port.sourceC(request.target)
+            latest <- _latest_c(request.target, port)
+            current <- latest._2.fold(Consequence.success(Option.empty[LocalPublicationSourceApplicability.Fact]))(
+              sourceApplicabilityC(_, source, port))
+            _ <- if (current.contains(fact) && source == request.source) Consequence.unit
+              else _invalid("retained nonexecuting decision no longer has current native applicability")
+          } yield r
+        })
       case None => for {
         existinganswer <- port.loadC(key + ":answer")
         answer <- existinganswer match {
@@ -651,7 +708,15 @@ private[smworkflow] object LocalPublication {
           r.request.source.head == request.source.head)) {
         val result = Result("unnecessary", answer.rationale, request)
         port.createC(key + ":result", result.asJson).map(_ => result)
-      } else _execute_c(key, request, port)
+      } else latest._2.filter(r => r.request.participant == request.participant &&
+          r.request.input.ownerSessionId == request.input.ownerSessionId).fold(
+          Consequence.success(Option.empty[LocalPublicationSourceApplicability.Fact]))(
+          sourceApplicabilityC(_, request.source, port)).flatMap {
+        case Some(fact) =>
+          val result = Result("unnecessary", answer.rationale, request, applicability = Some(fact))
+          port.createC(key + ":result", result.asJson).map(_ => result)
+        case None => _execute_c(key, request, port)
+      }
     }
 
   /** Only actual confirmed nonstart advances preparation. Each ensure call may

@@ -68,10 +68,21 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
   val canonicalCaptureSchema = "sm-workflow.goal-phase-dependency-source-capture.v11"
   val canonicalSuccessorSchema = "sm-workflow.goal-phase-dependency-source-revision.v11"
   val canonicalSuccessorCaptureSchema = "sm-workflow.goal-phase-dependency-source-capture.v12"
-  def isCanonicalSchema(value: String): Boolean = Set(canonicalSchema, canonicalSuccessorSchema)(value)
-  def isCanonicalCaptureSchema(value: String): Boolean = Set(canonicalCaptureSchema, canonicalSuccessorCaptureSchema)(value)
+  val canonicalApplicabilitySchema = "sm-workflow.goal-phase-dependency-source-revision.v12"
+  val canonicalApplicabilitySuccessorSchema = "sm-workflow.goal-phase-dependency-source-revision.v13"
+  val canonicalApplicabilityCaptureSchema = "sm-workflow.goal-phase-dependency-source-capture.v13"
+  val canonicalApplicabilitySuccessorCaptureSchema = "sm-workflow.goal-phase-dependency-source-capture.v14"
+  def isCanonicalSchema(value: String): Boolean = Set(canonicalSchema, canonicalSuccessorSchema,
+    canonicalApplicabilitySchema, canonicalApplicabilitySuccessorSchema)(value)
+  def isCanonicalCaptureSchema(value: String): Boolean = Set(canonicalCaptureSchema, canonicalSuccessorCaptureSchema,
+    canonicalApplicabilityCaptureSchema, canonicalApplicabilitySuccessorCaptureSchema)(value)
   def canonicalCaptureSchemaFor(direction: Direction): String =
-    if (direction.target.schemaVersion == canonicalSuccessorSchema) canonicalSuccessorCaptureSchema else canonicalCaptureSchema
+    direction.target.schemaVersion match {
+      case `canonicalSuccessorSchema` => canonicalSuccessorCaptureSchema
+      case `canonicalApplicabilitySchema` => canonicalApplicabilityCaptureSchema
+      case `canonicalApplicabilitySuccessorSchema` => canonicalApplicabilitySuccessorCaptureSchema
+      case _ => canonicalCaptureSchema
+    }
   val initialChoice = "AdoptInitialDependencySourceRevisionAcceptingUnknownEffects"
   val initialGuardUnavailable = "not-recorded-before-first-dependency-capture"
   val combinedPrimaryChoice = "AdoptDependencySourceRevisionAndContinuePublicationWithUnknownEffects"
@@ -1761,8 +1772,9 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
   private def _qualified_observation_c(core: ActionCall.Core, direction: Direction,
     scope: Option[ScopeSuccessor]): Consequence[Guard] = {
     val target = qualificationOf(direction, scope).target
-    if (target.canonicalOrigin.nonEmpty) GoalPhaseCanonicalDependencySourceSuccession.observeC(core,
-      bindingOf(direction, scope), exclusionsOf(direction, scope))
+    if (target.canonicalOrigin.nonEmpty) LocalPublicationSourceApplicability.currentC(core,
+      target.canonicalOrigin.get.selection.publication, bindingOf(direction, scope), None).flatMap(_ =>
+        GoalPhaseCanonicalDependencySourceSuccession.observeC(core, bindingOf(direction, scope), exclusionsOf(direction, scope)))
     else target.committedBaseSuccession match {
       case None => observeC(core, bindingOf(direction, scope), exclusionsOf(direction, scope))
       case Some(succession) => _committed_observation_c(core, bindingOf(direction, scope),

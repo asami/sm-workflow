@@ -52,6 +52,39 @@ carry either new meaning. Absent extensions remain omitted, and old candidate
 and v3/v4 closure semantics remain literal. Explicit null, crossed proof and
 coexistence with partialCompletion refuse.
 
+## Committed non-input artifact applicability
+
+P611-SM-COMMITTED-NONINPUT-ARTIFACT-APPLICABILITY-01 extends only explicitly
+versioned canonical source and artifact alignment routes. Producer declarations,
+the shared applicability Fact, complete native assessment and latest-writer
+ordering are defined in [runtime-owned local publication](runtime-owned-local-publication.md).
+
+Canonical source proposal v1 and target v10/v11 with capture v11/v12 remain
+exact-source only. Proposal
+`sm-workflow.goal-phase-canonical-dependency-source-proposal.v2` requires a
+nonempty valid separate publication applicability. Target v12 (ordinary) or v13
+(successor) and capture v13 or v14 respectively carry this relation. New schemas
+require that exact relation against the selected clean binding and source guard;
+old schemas refuse it. Actual publication Request/Result remain literal at the
+original source. Source selection still requires independent Human judgment,
+preserves approvals, Direction references, completed Steps, accepted prefixes,
+Plan and repair accounting, and grants no artifact permission or publication.
+
+Artifact alignment target v1 remains exact-source only. Its v2 uses the same
+shared applicability matcher against the current captured source, canonical
+root/branch/component and observation program, artifact and destination. The
+separate Human artifact choice remains required. Description, adoption, source
+capture and live ordinary Advance freshly observe complete native applicability;
+where the host owns the producer policy they also check its current declaration,
+fixed program and latest actual writer. External independently recollected
+publications retain their owner and Human/context provenance without inventing
+cross-store access. Retained historical reconstruction reads stored facts
+without replaying source observation. Legacy noncanonical published-source
+proposals and origins refuse cross-source applicability.
+
+This extension leaves P611-CHECKPOINT-A-01/0758 committed-Step acceptance intact;
+no historical success, review or Step is re-executed or reattributed.
+
 ## Canonical committed source continuation (v10/v11 targets, v11/v12 captures)
 
 R10. The existing describe/adopt source Operations accept the distinct closed

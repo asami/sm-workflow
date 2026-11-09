@@ -425,7 +425,8 @@ private[smworkflow] object GoalPhasePrerequisitePublicationRecovery {
 
   def publicationPolicy(value: LocalPublicationRuntime.Policy): String = _sorted(Json.obj(
     "storeName" -> value.storeName.asJson, "collection" -> value.collection.print.asJson,
-    "targets" -> value.targets.asJson, "catalogOutputs" -> value.catalogOutputs.asJson))
+    "targets" -> value.targets.asJson, "catalogOutputs" -> value.catalogOutputs.asJson).mapObject(fields =>
+      if (value.artifactInputs.isEmpty) fields else fields.add("artifactInputs", value.artifactInputs.asJson)))
 
   private[admission] def processPolicyC(d: F.Declaration, core: ActionCall.Core): Consequence[String] = _process_policy_c(d, core)
   private def _process_policy_c(d: F.Declaration, core: ActionCall.Core): Consequence[String] = for {
@@ -507,7 +508,7 @@ private[smworkflow] object GoalPhasePrerequisitePublicationRecovery {
 
   def selectBinding(value: Json): Either[String, Json] =
     if (Option(value).exists(_.hcursor.downField("prerequisitePublicationRecovery").downField("target")
-        .get[String]("schemaVersion").contains(GoalPhaseDependencyPublicationSourceAlignment.targetSchema)))
+        .get[String]("schemaVersion").toOption.exists(GoalPhaseDependencyPublicationSourceAlignment.isTargetSchema)))
       GoalPhaseDependencyPublicationSourceAlignment.selectBinding(value)
     else if (Option(value).exists(_.hcursor.downField("prerequisitePublicationRecovery").downField("target")
         .get[String]("schemaVersion").toOption.exists(GoalPhasePrerequisitePublicationHostRecovery.isTargetSchema)))
@@ -1152,7 +1153,7 @@ private[smworkflow] object GoalPhasePrerequisitePublicationRecovery {
       else if (input.hostCorrection != null && input.hostCorrection.isEmpty) Consequence.unit
       else F.invalid("Host correction is not a field of this legacy recovery target")
     expected <- json.hcursor.get[String]("schemaVersion").toOption match {
-      case Some(version) if version == GoalPhaseDependencyPublicationSourceAlignment.targetSchema =>
+      case Some(version) if GoalPhaseDependencyPublicationSourceAlignment.isTargetSchema(version) =>
         GoalPhaseDependencyPublicationSourceAlignment.targetC(input.target).map(GoalPhaseDependencyPublicationSourceAlignment.choices)
       case Some(version) if GoalPhasePrerequisitePublicationHostRecovery.isTargetSchema(version) =>
         GoalPhasePrerequisitePublicationHostRecovery.targetC(input.target).map(_ => GoalPhasePrerequisitePublicationHostRecovery.choices)

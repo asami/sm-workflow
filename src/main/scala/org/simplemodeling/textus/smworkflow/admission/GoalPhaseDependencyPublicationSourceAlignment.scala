@@ -29,6 +29,8 @@ import GoalPhaseDependencyValidation.given
   */
 private[smworkflow] object GoalPhaseDependencyPublicationSourceAlignment {
   val targetSchema = "sm-workflow.goal-phase-dependency-publication-source-alignment.v1"
+  val applicabilityTargetSchema = "sm-workflow.goal-phase-dependency-publication-source-alignment.v2"
+  def isTargetSchema(value: String): Boolean = Set(targetSchema, applicabilityTargetSchema)(value)
   val causationPrefix = "ordered-dependency-publication-source-alignment:"
   val adoptionChoice = "AdoptRecollectedPublishedDependencyArtifact"
   val message = "The configured dependency publisher selects another repository. Supply an independently recollected normal publication for the exact current canonical source, then obtain its separate independent Human artifact choice through " +
@@ -47,6 +49,7 @@ private[smworkflow] object GoalPhaseDependencyPublicationSourceAlignment {
     status <- result.hcursor.get[String]("status")
     reason <- result.hcursor.get[String]("reason")
     publication <- result.hcursor.get[LocalPublication.Result]("publication")
+    applicability <- result.hcursor.get[Option[LocalPublicationSourceApplicability.Fact]]("applicability")
     operation <- cursor.get[String]("collectOperation")
     recollection <- cursor.get[ContextReference]("recollectionReference")
     owner <- cursor.get[String]("publicationOwner")
@@ -54,7 +57,7 @@ private[smworkflow] object GoalPhaseDependencyPublicationSourceAlignment {
     process <- cursor.get[String]("publisherProcessPolicy")
     destination <- cursor.get[String]("destination")
     artifact <- cursor.get[ContextReference]("artifact")
-  } yield P.PublicationObservation(P.CollectionResult(status, reason, publication), operation, recollection,
+  } yield P.PublicationObservation(P.CollectionResult(status, reason, publication, applicability), operation, recollection,
     owner, observed, process, destination, artifact)).flatMap(value =>
       if (value.asJson == cursor.value) Right(value)
       else Left(DecodingFailure("Publication proposal has undeclared, null or noncanonical fields", cursor.history))))
@@ -124,18 +127,23 @@ private[smworkflow] object GoalPhaseDependencyPublicationSourceAlignment {
         Option.unless(workspaces.size == 1 && workspaces.head.hcursor.get[String]("root").contains(binding.root))(
           "The actual publisher workspace must resolve to the selected canonical dependency root"),
         Option.unless(request.target.component == binding.dependency.identity)("The actual publisher Component must equal the selected dependency Component"),
-        Option.unless(request.source == P.sourceOf(capture.postStageGuard))(
+        Option.unless(value.result.applicability match {
+          case None => request.source == P.sourceOf(capture.postStageGuard)
+          case Some(fact) => LocalPublicationSourceApplicability.matches(fact, value, P.sourceOf(capture.postStageGuard),
+            binding.root, binding.branch, binding.dependency.identity)
+        })(
           "The actual publisher source must equal the current fresh canonical source guard")
       ).flatten
   }
 
-  def targetValid(value: Target): Boolean = value != null && value.schemaVersion == targetSchema &&
+  def targetValid(value: Target): Boolean = value != null && isTargetSchema(value.schemaVersion) &&
     Vector(value.componentInstance, value.participant, value.sessionId).forall(_text) &&
     _revision(value.frontierRevision) && _revision(value.candidateRecordRevision) &&
     BigInt(value.candidateRecordRevision) <= BigInt(value.frontierRevision) &&
     _opaque(value.processPolicy).nonEmpty && _opaque(value.publicationPolicy).nonEmpty &&
     value.targets != null && value.targets.nonEmpty && value.targets.distinct == value.targets &&
     value.publication != null && value.applicabilityIssues != null &&
+    ((value.schemaVersion == applicabilityTargetSchema) == value.publication.exists(_.result.applicability.nonEmpty)) &&
     (for {
       candidate <- _candidate(value)
       capture <- _capture(value)
@@ -160,7 +168,7 @@ private[smworkflow] object GoalPhaseDependencyPublicationSourceAlignment {
   def targetC(record: Record): Consequence[Target] = W.jsonC(record).flatMap(_.as[Target].left.map(_.message).fold(F.invalid, Consequence.success))
   def observationC(record: Record): Consequence[P.PublicationObservation] = W.jsonC(record).flatMap(
     _.as[P.PublicationObservation](using _observation_decoder).left.map(_.message).fold(F.invalid, Consequence.success))
-  def isTargetC(record: Record): Consequence[Boolean] = W.jsonC(record).map(_.hcursor.get[String]("schemaVersion").contains(targetSchema))
+  def isTargetC(record: Record): Consequence[Boolean] = W.jsonC(record).map(_.hcursor.get[String]("schemaVersion").exists(isTargetSchema))
   def bindingC(component: String, target: Target, choice: String, rationale: String,
     participant: String, reference: ContextReference): Consequence[Json] =
     if (targetValid(target) && component == target.componentInstance && participant == target.participant &&
@@ -205,7 +213,10 @@ private[smworkflow] object GoalPhaseDependencyPublicationSourceAlignment {
     roots <- if (observe) mismatchesC(native.candidate.payload, policy.targets.filter(_.beforeChecks), rootC(core, _))
       else retained.map(t => Consequence.success(t.targets)).getOrElse(F.invalid("Alignment history omitted its literal targets"))
     _ <- if (observe) R.freshnessC(core, capture) else Consequence.unit
-    target = Target(targetSchema, core.component.get.core.instanceId.canonicalKey, native.session.participantIdentity,
+    _ <- if (observe && publication.exists(_.result.applicability.nonEmpty) && observationIssues(capture, publication).isEmpty)
+      LocalPublicationSourceApplicability.currentC(core, publication.get, R.bindingOf(capture), Some(policy)) else Consequence.unit
+    target = Target(if (publication.exists(_.result.applicability.nonEmpty)) applicabilityTargetSchema else targetSchema,
+      core.component.get.core.instanceId.canonicalKey, native.session.participantIdentity,
       native.from.identity.value, native.from.revision.value.toString, _sorted(B.controller(native.controller)),
       native.candidate.record.revision.value.toString, _sorted(native.candidate.payload.asJson), _sorted(capture.asJson),
       roots, process, B.publicationPolicy(policy), publication, observationIssues(capture, publication))
@@ -215,7 +226,7 @@ private[smworkflow] object GoalPhaseDependencyPublicationSourceAlignment {
 
   val codec: WorkflowResultJsonV1.PayloadCodec[Direction] = new WorkflowResultJsonV1.PayloadCodec[Direction] {
     val typeIdentity = "GoalPhaseDependencyPublicationSourceAlignmentDirection"
-    def encode(value: Direction): Json = Json.obj("schemaVersion" -> targetSchema.asJson, "payload" -> value.asJson)
+    def encode(value: Direction): Json = Json.obj("schemaVersion" -> value.target.schemaVersion.asJson, "payload" -> value.asJson)
     def decode(value: Json): Either[String, Direction] = Option(value).toRight("Alignment Direction is absent").flatMap(
       _.hcursor.get[Direction]("payload").left.map(_.message)).flatMap(direction =>
       Either.cond(encode(direction) == value, direction, "Alignment Direction envelope is noncanonical"))
@@ -276,5 +287,6 @@ private[smworkflow] object GoalPhaseDependencyPublicationSourceAlignment {
     _ <- R.freshnessC(core, capture)
     _ <- if (observationIssues(capture, target.publication).isEmpty) Consequence.unit
       else F.invalid("Alignment publication no longer qualifies for the canonical source")
+    _ <- target.publication.fold(Consequence.unit)(LocalPublicationSourceApplicability.currentC(core, _, R.bindingOf(capture), Some(policy)))
   } yield ()
 }

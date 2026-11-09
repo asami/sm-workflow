@@ -26,7 +26,8 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Every process, file and Human reference below is specification-owned data.
   * These pure model examples establish no actual execution or consumer consent.
   * @since   Nov.  7, 2026
-  * @version Nov.  8, 2026
+  *  version Nov.  8, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object PublishedDependencySourceSpecificationFixture {
@@ -98,6 +99,23 @@ private[admission] object PublishedDependencySourceSpecificationFixture {
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalPhasePublishedDependencySourceAdoptionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  "Legacy published source semantics" should {
+    "retain optional collection applicability while refusing it in legacy source proposals and origins" in {
+      Given("one actual successful collection with a separate clean descendant applicability fact")
+      val observation = CommittedNoninputApplicabilitySpecificationFixture.observation
+      val legacy = PublishedDependencySourceSpecificationFixture.target
+      When("the collection is decoded and supplied to historical exact-source source adoption")
+      val collection = observation.result.asJson.as[P.CollectionResult]
+      val proposal = P.SourceProposal(P.proposalSchema, legacy.proposal, observation)
+      val origin = legacy.publishedOrigin.get.copy(publication = observation)
+      Then("collection preserves original Published provenance and legacy adoption stays exact-source only")
+      collection shouldBe Right(observation.result)
+      P.collectionValid(observation.result) shouldBe true
+      P.proposalValid(proposal) shouldBe false
+      P.originValid(origin) shouldBe false
+      P.collectionValid(observation.result.copy(status = "unnecessary")) shouldBe false
+    }
+  }
   import PublishedDependencySourceSpecificationFixture as F
   "E5 Canonical producer publication provenance" must afterWord(
     "in spec:goal-phase-published-dependency-source-adoption, example:E5, rules:R5, phase:6.11") {

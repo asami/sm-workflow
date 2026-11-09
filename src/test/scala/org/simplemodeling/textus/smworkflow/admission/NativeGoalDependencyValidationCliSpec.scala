@@ -22,7 +22,8 @@ import GoalPhaseDependencyValidation.given
   * SPECIFICATION-OWNED; no production adoption, installed qualification or acceptance is claimed.
   * @since   Oct. 24, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  8, 2026
+  *  version Nov.  8, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.scalatest.DoNotDiscover
@@ -1490,12 +1491,195 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
     episode
   }
 
+  def qualifyCommittedNoninputApplicability(reporter: GivenWhenThen): Path = {
+    sys.props.get("smworkflow.spec.committedNoninputResume") match {
+      case Some(value) => return _resume_committed_noninput(Path.of(value), reporter)
+      case None => ()
+    }
+    val episode = Path.of(sys.props.getOrElse("smworkflow.spec.committedNoninputFixture",
+      cancel("Select the absolute new test-owned committedNoninputFixture locator")))
+    val target = Path.of("target").toRealPath()
+    require(episode.isAbsolute && episode.normalize == episode && episode.startsWith(target) &&
+      Files.isDirectory(episode.getParent) && episode.getParent.toRealPath().startsWith(target) && !Files.exists(episode),
+      "Select a new episode locator inside this checkout's existing target directory")
+    val executable = Path.of(sys.props.getOrElse("smworkflow.spec.installedCommand", cancel("Select the actual installed CLI")))
+    val component = Path.of(sys.props.getOrElse("smworkflow.spec.componentFile", cancel("Select the normally published component CAR")))
+    require(executable.isAbsolute && Files.isExecutable(executable) && component.isAbsolute && Files.isRegularFile(component),
+      "The installed qualification requires its actual installed command and normally published component CAR")
+    val keys = Vector("smworkflow.spec.canonicalSourceFixture", "smworkflow.spec.canonicalSourceMode",
+      "smworkflow.spec.canonicalCommittedNoninput", "smworkflow.spec.canonicalAcceptedPrefixReview",
+      "smworkflow.spec.canonicalResumeLogIndex")
+    val previous = keys.map(key => key -> sys.props.get(key))
+    try {
+      sys.props.update("smworkflow.spec.canonicalSourceFixture", episode.toString)
+      sys.props.update("smworkflow.spec.canonicalCommittedNoninput", "true")
+      sys.props.remove("smworkflow.spec.canonicalAcceptedPrefixReview")
+      sys.props.remove("smworkflow.spec.canonicalResumeLogIndex")
+      sys.props.update("smworkflow.spec.canonicalSourceMode", "PREPARE_OLD")
+      qualifyCanonicalSource(reporter) shouldBe episode
+      sys.props.update("smworkflow.spec.canonicalSourceMode", "RESUME_CURRENT")
+      qualifyCanonicalSource(reporter) shouldBe episode
+      Files.isRegularFile(episode.resolveSibling(episode.getFileName.toString + ".result.json")) shouldBe true
+      episode
+    } finally previous.foreach { (key, value) => value match {
+      case Some(retained) => sys.props.update(key, retained)
+      case None => sys.props.remove(key)
+    } }
+  }
+
+  private def _resume_committed_noninput(locator: Path, reporter: GivenWhenThen): Path = {
+    import io.circe.generic.auto.*
+    import GoalPhaseDependencySourceRevision as R
+    import GoalPhaseCanonicalDependencySourceSuccession as C
+    import GoalPhasePublishedDependencySourceAdoption as P
+    import GoalPhaseOrderedProgression as O
+    import LocalPublicationSourceApplicability as A
+    import org.goldenport.convert.ValueReader
+    import org.goldenport.record.io.RecordDecoder
+    val targetroot = Path.of("target").toRealPath()
+    def _file_(value: String): Path = {
+      val path = Path.of(value)
+      require(path.isAbsolute && path.normalize == path && Files.isRegularFile(path) && path.toRealPath() == path,
+        "Select an exact existing absolute regular fixture file")
+      path
+    }
+    val resume = _file_(locator.toString)
+    require(resume.startsWith(targetroot), "The remaining-only input belongs to this checkout's test-owned target")
+    val input = parse(Files.readString(resume)).toOption.get
+    val keys = Set("episode", "initialAdvanceOutput", "sourceDescriptionOutput", "sourceAdoptionOutput",
+      "currentRepairOutput", "repairSubmitOutput", "waitingOutput")
+    val optional = Set("startingLogIndex", "resourceLabel")
+    require(input.asObject.exists(fields => keys.subsetOf(fields.keys.toSet) && fields.keys.toSet.subsetOf(keys ++ optional)),
+      "The remaining-only input requires its seven retained paths and accepts only explicit log and resource naming options")
+    val startinglogindex = if (input.hcursor.downField("startingLogIndex").focus.isEmpty) 20000
+      else input.hcursor.get[Int]("startingLogIndex").fold(_ => fail("startingLogIndex must be a non-null positive Int"), identity)
+    require(startinglogindex > 0, "startingLogIndex must be a positive Int")
+    val resourcelabel = if (input.hcursor.downField("resourceLabel").focus.isEmpty) "committed-noninput-artifact"
+      else input.hcursor.get[String]("resourceLabel").fold(_ => fail("resourceLabel must be a non-null safe file-name token"), identity)
+    require(resourcelabel.matches("[a-z][a-z0-9-]*"), "resourceLabel must be a safe literal file-name token")
+    val paths = keys.map(key => key -> _file_(input.hcursor.get[String](key).toOption.get)).toMap
+    val episode = paths("episode")
+    require(episode.startsWith(targetroot) && !Files.exists(episode.resolveSibling(episode.getFileName.toString + ".result.json")),
+      "Select this incomplete retained episode without replaying a completed qualification")
+    val saved = parse(Files.readString(episode)).toOption.get
+    saved.hcursor.get[Boolean]("committedNoninput").toOption shouldBe Some(true)
+    saved.hcursor.get[String]("schemaVersion").toOption shouldBe Some("specification.canonical-source-episode.v1")
+    val root = Path.of(saved.hcursor.get[String]("root").toOption.get)
+    require(root.isAbsolute && root.normalize == root && root.toRealPath() == root &&
+      root.getParent == targetroot.resolve("sm-workflow/work/native-cli") &&
+      root.getFileName.toString.startsWith("committed-noninput-applicability-"), "Select the same tiny test-owned physical episode")
+    val retainedlogs = Map("initialAdvanceOutput" -> "10000.stdout.json", "sourceDescriptionOutput" -> "10001.stdout.json",
+      "sourceAdoptionOutput" -> "10004.stdout.json", "currentRepairOutput" -> "10006.stdout.json",
+      "repairSubmitOutput" -> "10007.stdout.json", "waitingOutput" -> "10008.stdout.json")
+    retainedlogs.foreach { (key, name) => paths(key) shouldBe root.resolve("logs").resolve(name) }
+    val task = Path.of(saved.hcursor.get[String]("task").toOption.get)
+    task shouldBe root.resolve("target/sm-workflow/tasks/dependency-validation")
+    require(Files.isRegularFile(task.resolve("workflow-session.json")), "Retain the actual episode's Task routing")
+    val executable = Path.of(sys.props.getOrElse("smworkflow.spec.installedCommand", cancel("Select the actual installed CLI")))
+    val component = Path.of(sys.props.getOrElse("smworkflow.spec.componentFile", cancel("Select the normally published component CAR")))
+    require(executable.isAbsolute && Files.isExecutable(executable) && component.isAbsolute && Files.isRegularFile(component),
+      "The remaining-only qualification requires its actual installed command and normally published CAR")
+    def _business_[B](value: Json)(using reader: ValueReader[B]): B = SplitPhaseExplicitPartitionFixture.take(
+      reader.readC(SplitPhaseExplicitPartitionFixture.take(new RecordDecoder().json(value.noSpaces))))
+    def _read_[B](path: Path)(using ValueReader[B]): B = _business_[B](parse(Files.readString(path)).toOption.get)
+    reporter.Given("the same retained tiny episode, successful source choice and Repair Submit, and actual artifact-mismatch Wait")
+    val original = _business_[V.GoalPhaseAdvanceResult](saved.hcursor.get[Json]("original").toOption.get)
+    val resumed = _business_[V.GoalPhaseAdvanceResult](saved.hcursor.get[Json]("resumed").toOption.get)
+    val oldrepair = _business_[V.GoalPhaseAdvanceResult](saved.hcursor.get[Json]("repair").toOption.get)
+    val initial = _read_[V.GoalPhaseAdvanceResult](paths("initialAdvanceOutput"))
+    val description = _read_[V.GoalPhaseDependencySourceRevisionDescriptionResult](paths("sourceDescriptionOutput"))
+    val adopted = _read_[V.GoalPhaseDependencySourceRevisionAdoptionResult](paths("sourceAdoptionOutput"))
+    val currentrepair = _read_[V.GoalPhaseAdvanceResult](paths("currentRepairOutput"))
+    val submitted = _read_[V.GoalPhaseWorkSubmissionResult](paths("repairSubmitOutput"))
+    val waiting = _read_[V.GoalPhaseAdvanceResult](paths("waitingOutput"))
+    val sourceinput = _read_[V.GoalPhaseDependencySourceRevisionAdoptionInput](_file_(root.resolve("canonical-human-answer.json").toString))
+    val reference = _read_[V.WorkflowArtifactReference](_file_(root.resolve("canonical-human-reference.json").toString))
+    val sourcetarget = SplitPhaseExplicitPartitionFixture.take(R.targetC(description.target))
+    val binding = saved.hcursor.get[D.Binding]("binding").toOption.get
+    val consumption = saved.hcursor.get[R.Consumption]("consumption").toOption.get
+    Vector(resumed.sessionId, oldrepair.sessionId, initial.sessionId, description.sessionId, adopted.sessionId,
+      currentrepair.sessionId, submitted.sessionId, waiting.sessionId, sourceinput.sessionId).foreach(_ shouldBe original.sessionId)
+    initial.issuedWorkContext shouldBe oldrepair.issuedWorkContext
+    initial.repairProgress shouldBe oldrepair.repairProgress
+    adopted.accepted shouldBe true
+    adopted.outcome shouldBe "dependency-source-revision-adopted"
+    submitted.accepted shouldBe true
+    currentrepair.kind shouldBe "Request"
+    currentrepair.work.get.kind shouldBe "RepairStep"
+    currentrepair.work.get.selectedPlan shouldBe oldrepair.work.get.selectedPlan
+    currentrepair.work.get.originalBase shouldBe oldrepair.work.get.originalBase
+    currentrepair.work.get.completed shouldBe oldrepair.work.get.completed
+    currentrepair.repairProgress shouldBe oldrepair.repairProgress
+    currentrepair.issuedWorkContext.get.expectedRevision.toLong should be > oldrepair.issuedWorkContext.get.expectedRevision.toLong
+    currentrepair.issuedWorkContext.get.continuationId should not be oldrepair.issuedWorkContext.get.continuationId
+    waiting.kind shouldBe "Wait"
+    waiting.condition shouldBe Some("dependency-publication-source-mismatch")
+    waiting.repairProgress shouldBe None
+    SplitPhaseExplicitPartitionFixture.take(R.targetC(sourceinput.target)) shouldBe sourcetarget
+    sourceinput.reference shouldBe reference
+    sourceinput.choice shouldBe C.pendingChoice
+    sourcetarget.sessionId shouldBe original.sessionId
+    sourcetarget.binding shouldBe binding
+    sourcetarget.proposal.consumption shouldBe consumption
+    sourcetarget.completed.map(_.step) shouldBe Vector("step-1")
+    sourcetarget.canonicalOrigin.get.historicalFailure should not be empty
+    val config = parse(Files.readString(root.resolve(".textus/config.json"))).toOption.get
+    val host = SplitPhaseExplicitPartitionFixture.take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(
+      parse(config.hcursor.get[String]("sm-workflow.runtime.definition").toOption.get).toOption.get))
+    host.goal.dependencySourceRevisions.find(_.identity == binding.identity) shouldBe Some(binding)
+    host.goal.dependencySourceConsumptions should contain(consumption)
+    config.hcursor.get[String]("textus.component.file").toOption shouldBe Some(component.toString)
+    val plan = parse(Files.readString(root.resolve("goal-plan.json"))).toOption.get.as[O.Plan].toOption.get
+    plan shouldBe sourcetarget.plan
+    val scenario = F.reopenCanonicalSource(root, host, plan, startinglogindex)
+    scenario.retrieve(task) shouldBe original.sessionId
+    val selected = Selected(scenario, task, original, resumed, saved.hcursor.get[D.Selection]("selection").toOption.get)
+    val collectedpath = _file_(saved.hcursor.get[String]("collectOutput").toOption.get)
+    val collected = _read_[V.LocalPublicationResult](collectedpath)
+    val initialcollect = _read_[V.LocalPublicationResult](_file_(saved.hcursor.get[String]("originalCollectOutput").toOption.get))
+    val ensure = _read_[V.LocalPublicationResult](_file_(saved.hcursor.get[String]("automaticEnsureOutput").toOption.get))
+    val publication = SplitPhaseExplicitPartitionFixture.take(GoalPhasePrerequisitePublicationUnknownRecovery.jsonC(collected.publication.get))
+      .as[LocalPublication.Result].toOption.get
+    val oldpublication = SplitPhaseExplicitPartitionFixture.take(GoalPhasePrerequisitePublicationUnknownRecovery.jsonC(initialcollect.publication.get))
+      .as[LocalPublication.Result].toOption.get
+    val fact = SplitPhaseExplicitPartitionFixture.take(GoalPhasePrerequisitePublicationUnknownRecovery.jsonC(collected.applicability.get))
+      .as[A.Fact].toOption.get
+    val decision = SplitPhaseExplicitPartitionFixture.take(GoalPhasePrerequisitePublicationUnknownRecovery.jsonC(ensure.publication.get))
+      .as[LocalPublication.Result].toOption.get
+    collected.status shouldBe "published"
+    initialcollect.status shouldBe "published"
+    publication shouldBe oldpublication
+    publication shouldBe saved.hcursor.get[LocalPublication.Result]("originalPublication").toOption.get
+    fact.original shouldBe publication.request
+    fact.current.head shouldBe binding.base.head
+    fact.current.tree shouldBe binding.base.tree
+    fact.current.clean shouldBe true
+    fact.current should not be publication.request.source
+    ensure.status shouldBe "unnecessary"
+    decision.process shouldBe None
+    decision.applicability shouldBe Some(fact)
+    val artifact = Path.of(saved.hcursor.get[String]("artifact").toOption.get)
+    val observation = P.PublicationObservation(P.CollectionResult(collected.status, collected.reason, publication, Some(fact)),
+      P.collectOperation, ContextReference(collectedpath.toUri.toASCIIString, "1"), root.toUri.toASCIIString,
+      saved.hcursor.get[String]("publicationObservedAt").toOption.get,
+      saved.hcursor.get[String]("publisherProcessPolicy").toOption.get, artifact.getParent.getParent.toUri.toASCIIString,
+      ContextReference(artifact.toUri.toASCIIString, "0.0.1-SNAPSHOT"))
+    Files.readString(root.resolve("canonical-dependency/publication-count.txt")).linesIterator.toVector shouldBe Vector("published")
+    reporter.When("only the unperformed artifact choice, checks, independent review and Step closure continue from the actual Wait")
+    _finish_committed_noninput(selected, episode, saved.mapObject(_.add("remainingOnlyInput", input)), oldrepair, currentrepair,
+      binding, observation, sourcetarget, reference, sourceinput, paths("sourceDescriptionOutput"), paths("sourceAdoptionOutput"),
+      waiting, reporter, resourcelabel)
+    reporter.Then("the same Session's remaining installed qualification is retained without relabeling the earlier failed test")
+    episode
+  }
+
   def qualifyCanonicalSource(reporter: GivenWhenThen): Path = {
     import io.circe.generic.auto.*
     import GoalPhaseCanonicalDependencySourceSuccession as C
     import GoalPhaseDependencySourceRevision as R
     import GoalPhasePublishedDependencySourceAdoption as P
     import GoalPhaseOrderedProgression as O
+    import LocalPublicationSourceApplicability as A
     import org.goldenport.cncf.processexecution.{GitOperationKind, SbtOperation}
     import org.goldenport.convert.ValueReader
     import org.goldenport.record.io.RecordDecoder
@@ -1507,6 +1691,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
     require(episode.isAbsolute && episode.normalize == episode, "The episode must be one explicit absolute path")
     val executable = Path.of(sys.props.getOrElse("smworkflow.spec.installedCommand", cancel("Select the installed CLI")))
     val component = sys.props.getOrElse("smworkflow.spec.componentFile", cancel("Select the normally published component CAR"))
+    val applicability = sys.props.get("smworkflow.spec.canonicalCommittedNoninput").contains("true")
     def _host_(scenario: F.Scenario): ThreeWorkflowRuntimeParameters.Definition = {
       val config = parse(Files.readString(scenario.root.resolve(".textus/config.json"))).toOption.get
       SplitPhaseExplicitPartitionFixture.take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(
@@ -1518,10 +1703,31 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
     def _setup_(arguments: String*): Unit = SplitPhaseExplicitPartitionFixture.take(_run_setup_command_(
       Vector("--no-optional-locks", "--no-replace-objects", "-c", "core.hooksPath=/dev/null",
         "-c", "core.fsmonitor=false", "-c", "gc.auto=0") ++ arguments))
+    def _count_(root: Path): Unit =
+      Files.readString(root.resolve("canonical-dependency/publication-count.txt")).linesIterator.toVector shouldBe Vector("published")
+    def _configure_(scenario: F.Scenario, binding: D.Binding, consumption: R.Consumption): Unit = {
+      val path = scenario.root.resolve(".textus/config.json")
+      val prior = parse(Files.readString(path)).toOption.get
+      val process = parse(prior.hcursor.get[String]("textus.subsystem.process-execution.plan").toOption.get).toOption.get
+      val publishers = Option.when(applicability)(_array_(process, "sbtPrograms").filter(program =>
+        program.hcursor.get[String]("target").contains(binding.dependency.workspace) &&
+          program.hcursor.get[String]("operation").contains("publish-local"))).getOrElse(Vector.empty)
+      _configure_source_host(scenario, binding, consumption)
+      if (publishers.nonEmpty) {
+        val configured = parse(Files.readString(path)).toOption.get
+        val selected = parse(configured.hcursor.get[String]("textus.subsystem.process-execution.plan").toOption.get).toOption.get
+        val sbt = _array_(selected, "sbtPrograms") ++ publishers
+        val retained = selected.mapObject(_.add("sbtPrograms", sbt.asJson).add("grants", Json.arr(Json.obj(
+          "componentId" -> SmWorkflowComponent.componentId.name.asJson,
+          "capabilities" -> (_array_(selected, "gitPrograms") ++ sbt).map(_.hcursor.get[String]("capability").toOption.get).distinct.asJson))))
+        Files.writeString(path, configured.mapObject(_.add("textus.subsystem.process-execution.plan", retained.noSpaces.asJson)).noSpaces)
+      }
+    }
     if (mode == "PREPARE_OLD") {
       require(!Files.exists(episode), "Preserve any existing cutover episode; never replay old successes")
       reporter.Given("specification-only tiny primary and dependency with accepted Step1, then real Step2 check failure")
-      val prefix = _accepted_prefix("canonical-source-cutover", overlap = true, sourceRevisionFixture = true)
+      val prefix = _accepted_prefix(if (applicability) "committed-noninput-applicability" else "canonical-source-cutover",
+        overlap = true, sourceRevisionFixture = true)
       val selected = _adopt_prefix(prefix)
       _complete_prefix(selected, overlap = true, failCheck = true)
       val repairoutput = selected.scenario.advance(selected.task)
@@ -1554,11 +1760,11 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
         branch = "canonical", dependency = prefix.binding.dependency.copy(workspace = "canonical-cncf-source"),
         paths = (prefix.first.changedPaths ++ prefix.binding.paths).distinct)
       val consumption = _initial_consumption(provisional)
-      _configure_source_host(scenario, provisional, consumption)
+      _configure_(scenario, provisional, consumption)
       val native = _native_fixture(scenario)(RepositorySyncManagedGitObservation.observeInWorkspaceC(_,
         provisional.dependency.workspace))
       val binding = provisional.copy(base = O.Snapshot(native.head, native.tree))
-      _configure_source_host(scenario, binding, consumption)
+      _configure_(scenario, binding, consumption)
       val configfile = scenario.root.resolve(".textus/config.json")
       val config = parse(Files.readString(configfile)).toOption.get
       val process = parse(config.hcursor.get[String]("textus.subsystem.process-execution.plan").toOption.get).toOption.get
@@ -1602,23 +1808,99 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
         .map(line => Path.of(line.stripPrefix(jarprefix)).toAbsolutePath.normalize).toVector.distinct
       jars.size shouldBe 1
       Files.isRegularFile(jars.head) shouldBe true
+      val (selectedbinding, selectedcollect, selectedprocesses, ensuredoutput) = if (applicability) {
+        _count_(scenario.root)
+        reporter.Given("one actual successful producer publication and an exact producer-owned non-input file declaration")
+        val document = "docs/artifact-usage.md"
+        Files.createDirectories(repository.resolve("docs"))
+        Files.writeString(repository.resolve(document), "# Artifact usage\n\nSPECIFICATION-ONLY usage of the unchanged published artifact.\n",
+          StandardOpenOption.CREATE_NEW)
+        _setup_("-C", repository.toString, "add", "--", document)
+        _setup_("-C", repository.toString, "-c", "user.name=Canonical Source Specification",
+          "-c", "user.email=canonical@example.invalid", "commit", "--no-verify", "--no-gpg-sign",
+          "-m", "Specification-only declared non-input artifact usage")
+        val declaration = A.Declaration(A.declarationSchema, "specification-artifact-inputs", "1", publicationtarget.identity,
+          jars.head.getParent.getParent.toUri.toASCIIString, ContextReference(jars.head.toUri.toASCIIString, "0.0.1-SNAPSHOT"),
+          Vector(document))
+        val configured = parse(Files.readString(configfile)).toOption.get
+        val obsolete = LocalPublication.Target("specification-original-dependency-publisher", binding.dependency.identity,
+          prefix.binding.dependency.workspace, dependency = Some(binding.identity), beforeChecks = true)
+        val policy = publicationpolicy.mapObject(_.add("targets", Vector(publicationtarget, obsolete).asJson)
+          .add("artifactInputs", Vector(declaration).asJson))
+        Files.writeString(configfile, configured.mapObject(_.add(LocalPublicationRuntime.declaration.name, policy.noSpaces.asJson)).noSpaces)
+        val descendant = _native_fixture(scenario)(RepositorySyncManagedGitObservation.observeInWorkspaceC(_,
+          binding.dependency.workspace))
+        val currentbinding = binding.copy(base = O.Snapshot(descendant.head, descendant.tree))
+        currentbinding.base.head should not be publication.request.source.head
+        currentbinding.paths shouldBe binding.paths
+        _configure_(scenario, currentbinding, consumption)
+        reporter.When("normal installed collect re-observes the original immutable publication at the clean committed descendant")
+        val recollected = scenario.callInstalled(executable, "LocalPublicationService", "collectLocalPublication",
+          Vector("--input", json(V.LocalPublicationCollectionInput(publicationinput.requestIdentity, publicationtarget.identity, None, true)
+            .toRecord()).noSpaces), assemblyDescriptor = Some(scenario.root.resolve(".textus/assembly.yaml")))
+        val dto = recollected.business[V.LocalPublicationResult]
+        dto.status shouldBe "published"
+        val actual = SplitPhaseExplicitPartitionFixture.take(GoalPhasePrerequisitePublicationUnknownRecovery.jsonC(dto.publication.get))
+          .as[LocalPublication.Result].toOption.get
+        val fact = SplitPhaseExplicitPartitionFixture.take(GoalPhasePrerequisitePublicationUnknownRecovery.jsonC(dto.applicability.get))
+          .as[A.Fact].toOption.get
+        reporter.Then("Published request, source and process remain literal, with a separate versioned fact for the descendant")
+        actual shouldBe publication
+        fact.schemaVersion shouldBe A.schema
+        fact.original shouldBe publication.request
+        fact.current.head shouldBe currentbinding.base.head
+        fact.current.tree shouldBe currentbinding.base.tree
+        fact.current.clean shouldBe true
+        fact.root shouldBe currentbinding.root
+        fact.branch shouldBe currentbinding.branch
+        fact.declaration shouldBe declaration
+        fact.changes.map(_.path) shouldBe Vector(document)
+        fact.current should not be publication.request.source
+        _count_(scenario.root)
+        reporter.When("one fresh automatic ensure asks about that same producer without explicit publication authority")
+        val automatic = scenario.callInstalled(executable, "LocalPublicationService", "ensureLocalPublication",
+          Vector("--input", json(V.LocalPublicationInput("specification-canonical-unnecessary", publicationtarget.identity,
+            None, false, None).toRecord()).noSpaces), assemblyDescriptor = Some(scenario.root.resolve(".textus/assembly.yaml")))
+        val unnecessary = automatic.business[V.LocalPublicationResult]
+        val decision = SplitPhaseExplicitPartitionFixture.take(GoalPhasePrerequisitePublicationUnknownRecovery.jsonC(unnecessary.publication.get))
+          .as[LocalPublication.Result].toOption.get
+        reporter.Then("it retains an Unnecessary current-source decision and executes no second producer process")
+        unnecessary.status shouldBe "unnecessary"
+        decision.status shouldBe "unnecessary"
+        decision.request.source shouldBe fact.current
+        decision.process shouldBe None
+        decision.applicability shouldBe Some(fact)
+        SplitPhaseExplicitPartitionFixture.take(GoalPhasePrerequisitePublicationUnknownRecovery.jsonC(unnecessary.applicability.get))
+          .as[A.Fact].toOption.get shouldBe fact
+        _count_(scenario.root)
+        val actualconfig = parse(Files.readString(configfile)).toOption.get
+        (currentbinding, recollected, parse(actualconfig.hcursor.get[String]("textus.subsystem.process-execution.plan").toOption.get)
+          .toOption.get, Some(automatic.invocation.stdout.toString))
+      } else (binding, collectedoutput, processes, Option.empty[String])
       val publisherpolicy = _native_fixture(scenario) { core => org.goldenport.cncf.processexecution.GitDiffParameters.resolveC(core.executionContext)
-        .map(maximum => io.circe.Printer.noSpaces.copy(sortKeys = true).print(Json.obj("processPlan" -> processes,
+        .map(maximum => io.circe.Printer.noSpaces.copy(sortKeys = true).print(Json.obj("processPlan" -> selectedprocesses,
           "maximumDiffBytes" -> maximum.asJson, "validation" -> _host_(scenario).goal.stepValidation.asJson))) }
       reporter.Then("the actual old Repair and normal collect outputs are retained before source choice and product replacement")
-      Files.writeString(episode, Json.obj("schemaVersion" -> "specification.canonical-source-episode.v1".asJson,
+      val episodevalue = Json.obj("schemaVersion" -> "specification.canonical-source-episode.v1".asJson,
         "root" -> scenario.root.toString.asJson, "task" -> selected.task.toString.asJson,
         "original" -> json(selected.original.toRecord()), "resumed" -> json(selected.resumed.toRecord()),
         "repair" -> json(repair.toRecord()), "selection" -> selected.selection.asJson,
-        "binding" -> binding.asJson, "consumption" -> consumption.asJson,
-        "collectOutput" -> collectedoutput.invocation.stdout.toString.asJson, "artifact" -> jars.head.toString.asJson,
+        "binding" -> selectedbinding.asJson, "consumption" -> consumption.asJson,
+        "collectOutput" -> selectedcollect.invocation.stdout.toString.asJson, "artifact" -> jars.head.toString.asJson,
         "publisherProcessPolicy" -> publisherpolicy.asJson, "publicationObservedAt" -> Instant.now().toString.asJson,
         "oldPrimaryExecutions" -> _executions(scenario.root).asJson,
         "oldDependencyExecutions" -> _executions(scenario.root.resolve("dependency")).asJson,
-        "oldComponent" -> component.asJson).noSpaces, StandardOpenOption.CREATE_NEW)
+        "oldComponent" -> component.asJson)
+      val retainedepisode = if (applicability) episodevalue.mapObject(_.add("committedNoninput", Json.True)
+        .add("originalCollectOutput", collectedoutput.invocation.stdout.toString.asJson)
+        .add("originalPublication", publication.asJson).add("automaticEnsureOutput", ensuredoutput.asJson)
+        .add("publicationPolicy", parse(parse(Files.readString(configfile)).toOption.get.hcursor
+          .get[String](LocalPublicationRuntime.declaration.name).toOption.get).toOption.get)) else episodevalue
+      Files.writeString(episode, retainedepisode.noSpaces, StandardOpenOption.CREATE_NEW)
     } else {
       val saved = parse(Files.readString(episode)).toOption.get
       saved.hcursor.get[String]("schemaVersion").toOption.get shouldBe "specification.canonical-source-episode.v1"
+      if (applicability) saved.hcursor.get[Boolean]("committedNoninput").toOption shouldBe Some(true)
       val root = Path.of(saved.hcursor.get[String]("root").toOption.get)
       val configfile = root.resolve(".textus/config.json")
       val config = parse(Files.readString(configfile)).toOption.get
@@ -1703,7 +1985,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
       val consumption = savedconsumption.copy(expectedModes = orderedpaths.map(path =>
         savedconsumption.expectedModes.find(_.path == path).get))
       consumption.expectedModes.toSet shouldBe savedconsumption.expectedModes.toSet
-      _configure_source_host(scenario, binding, consumption)
+      _configure_(scenario, binding, consumption)
       val collectedpath = Path.of(saved.hcursor.get[String]("collectOutput").toOption.get)
       val collected = SplitPhaseExplicitPartitionFixture.take(summon[ValueReader[V.LocalPublicationResult]].readC(
         SplitPhaseExplicitPartitionFixture.take(new RecordDecoder().json(Files.readString(collectedpath)))))
@@ -1714,7 +1996,16 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
       current.repairProgress shouldBe oldrepair.repairProgress
       val processpolicy = saved.hcursor.get[String]("publisherProcessPolicy").toOption.get
       val artifact = Path.of(saved.hcursor.get[String]("artifact").toOption.get)
-      val observation = P.PublicationObservation(P.CollectionResult(collected.status, collected.reason, publication), P.collectOperation,
+      val fact = if (applicability) Some(SplitPhaseExplicitPartitionFixture.take(
+        GoalPhasePrerequisitePublicationUnknownRecovery.jsonC(collected.applicability.get)).as[A.Fact].toOption.get) else None
+      if (applicability) {
+        publication shouldBe saved.hcursor.get[LocalPublication.Result]("originalPublication").toOption.get
+        fact.get.current.head shouldBe binding.base.head
+        fact.get.current.tree shouldBe binding.base.tree
+        fact.get.original shouldBe publication.request
+        _count_(root)
+      }
+      val observation = P.PublicationObservation(P.CollectionResult(collected.status, collected.reason, publication, fact), P.collectOperation,
         ContextReference(collectedpath.toUri.toASCIIString, "1"), root.toUri.toASCIIString,
         saved.hcursor.get[String]("publicationObservedAt").toOption.get,
         processpolicy, artifact.getParent.getParent.toUri.toASCIIString, ContextReference(artifact.toUri.toASCIIString, "0.0.1-SNAPSHOT"))
@@ -1722,7 +2013,8 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
         Vector(R.Coverage(ContextReference("specification-dependency-approval", "1"), Vector("Validate the exact dependency candidate"), binding.checks.map(_.identity)),
           R.Coverage(ContextReference("specification-approval-step-2", "1"), Vector("Integrate with the genuinely accepted predecessor"), binding.checks.map(_.identity))), consumption)
       val delivery = ContextReference(episode.toUri.toASCIIString, "1")
-      val proposal = C.Proposal(C.proposalSchema, source, observation, delivery, Some(C.WorkerLifecycle(true, true)))
+      val proposal = C.Proposal(if (fact.nonEmpty) C.applicabilityProposalSchema else C.proposalSchema,
+        source, observation, delivery, Some(C.WorkerLifecycle(true, true)))
       val descriptioninput = V.GoalPhaseDependencySourceRevisionDescriptionInput(original.sessionId, GoalPhaseNativeMetadata.record(proposal.asJson))
       reporter.When("the current product describes the exact same native Repair using independently declared committed canonical source")
       val described = scenario.call("command", R.describeOperation, Vector("--input", json(descriptioninput.toRecord()).noSpaces))
@@ -1730,6 +2022,7 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
       val target = SplitPhaseExplicitPartitionFixture.take(R.targetC(description.target))
       target.completed.map(_.step) shouldBe Vector("step-1")
       target.canonicalOrigin.get.historicalFailure should not be empty
+      if (applicability) _count_(root)
       val reference = V.WorkflowArtifactReference("specification-canonical-source-human", "1")
       val input = V.GoalPhaseDependencySourceRevisionAdoptionInput(original.sessionId, description.target, C.pendingChoice,
         "SPECIFICATION-ONLY prior worker ended; accept unknown prior external effects and select this exact canonical source", reference)
@@ -1747,8 +2040,10 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
       val prepared = scenario.prepareHostInput("prepareEvidence", evidence.toRecord())
       prepared.exitCode shouldBe 0
       scenario.selectPreparedImport(prepared)
+      val sourceadopted = _adopt_()
+      sourceadopted.business[V.GoalPhaseDependencySourceRevisionAdoptionResult].accepted shouldBe true
       _adopt_().business[V.GoalPhaseDependencySourceRevisionAdoptionResult].accepted shouldBe true
-      _adopt_().business[V.GoalPhaseDependencySourceRevisionAdoptionResult].accepted shouldBe true
+      if (applicability) _count_(root)
       reporter.Then("source selection is passive and old checks are retained without replay")
       _executions(root) shouldBe saved.hcursor.get[Vector[String]]("oldPrimaryExecutions").toOption.get
       _executions(root.resolve("dependency")) shouldBe saved.hcursor.get[Vector[String]]("oldDependencyExecutions").toOption.get
@@ -1764,7 +2059,13 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
       _submit(scenario, next, Json.obj("outcome" -> "completed".asJson, "summary" -> "SPECIFICATION-ONLY canonical repair".asJson,
         "findings" -> Json.arr(), "issueReport" -> json(V.GoalPhaseIssueReport(dispositions).toRecord())),
         V.WorkflowArtifactReference("specification-canonical-repair-result", "1")).business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
-      val reviewed = scenario.advance(task)
+      val waiting = scenario.advance(task)
+      if (applicability) _finish_committed_noninput(selected, episode, saved, oldrepair, next, binding, observation,
+        target, reference, input, described.invocation.stdout, sourceadopted.invocation.stdout,
+        waiting.business[V.GoalPhaseAdvanceResult], reporter)
+      else {
+      reporter.When("ordinary Advance runs the genuinely selected consumer checks under the retained source and artifact choices")
+      val reviewed = waiting
       val review = reviewed.business[V.GoalPhaseAdvanceResult]
       review.work.get.kind shouldBe "ReviewStep"
       review.validation.get.outcome shouldBe Some("passed")
@@ -1778,21 +2079,171 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
       _executions(root.resolve("dependency")) shouldBe saved.hcursor.get[Vector[String]]("oldDependencyExecutions").toOption.get
       Files.readString(root.resolve("canonical-dependency/publication-count.txt")).linesIterator.toVector shouldBe Vector("published")
       reporter.When("a separate independent fixture review and ordinary Step closure accept the new checked candidate")
-      val closed = _close_step(selected, reviewed, "canonical-source-current").business[V.GoalPhaseAdvanceResult]
-      reporter.Then("both genuine accepted Steps and original base survive; source choice has adopted no consumer artifact")
+      val closedoutput = _close_step(selected, reviewed, "canonical-source-current")
+      val closed = closedoutput.business[V.GoalPhaseAdvanceResult]
+      reporter.Then("both genuine accepted Steps and original base survive the separate independent review and Step closure")
       closed.sessionId shouldBe original.sessionId
       closed.work.get.completed.map(_.step) shouldBe Vector("step-1", "step-2")
       closed.work.get.originalBase shouldBe original.work.get.originalBase
       _submit(scenario, oldrepair, Json.obj("outcome" -> "completed".asJson,
         "summary" -> "SPECIFICATION-ONLY late obsolete result".asJson, "findings" -> Json.arr()),
         V.WorkflowArtifactReference("specification-late-old-repair", "1")).exitCode should not be 0
-      Files.writeString(episode.resolveSibling(episode.getFileName.toString + ".result.json"), Json.obj(
+      val result = Json.obj(
         "sessionId" -> original.sessionId.asJson, "sourceDirection" -> reference.identity.asJson,
         "captureSchema" -> capture.schemaVersion.asJson, "closed" -> json(closed.toRecord()),
-        "consumerArtifactAdoption" -> "not-performed".asJson).noSpaces, StandardOpenOption.CREATE_NEW)
+        "consumerArtifactAdoption" -> "not-performed".asJson)
+      Files.writeString(episode.resolveSibling(episode.getFileName.toString + ".result.json"), result.noSpaces,
+        StandardOpenOption.CREATE_NEW)
+      }
     }
     reporter.Then("the explicit test-owned cutover locator is " + episode.toUri.toASCIIString)
     episode
+  }
+
+  private def _finish_committed_noninput(selected: Selected, episode: Path, saved: Json,
+    oldrepair: V.GoalPhaseAdvanceResult, currentrepair: V.GoalPhaseAdvanceResult, binding: D.Binding,
+    observation: GoalPhasePublishedDependencySourceAdoption.PublicationObservation,
+    target: GoalPhaseDependencySourceRevision.Target, reference: V.WorkflowArtifactReference,
+    input: V.GoalPhaseDependencySourceRevisionAdoptionInput, sourcedescription: Path, sourceadoption: Path,
+    mismatch: V.GoalPhaseAdvanceResult, reporter: GivenWhenThen,
+    resourcelabel: String = "committed-noninput-artifact"): Unit = {
+    import io.circe.generic.auto.*
+    import GoalPhaseDependencySourceRevision as R
+    import GoalPhaseOrderedProgression as O
+    val scenario = selected.scenario
+    val root = scenario.root
+    val task = selected.task
+    val original = selected.original
+    val publication = observation.result.publication
+    val fact = observation.result.applicability
+    def _count_(root: Path): Unit = {
+      Files.readString(root.resolve("canonical-dependency/publication-count.txt")).linesIterator.toVector shouldBe Vector("published")
+    }
+      val artifactdirection = {
+        import GoalPhasePrerequisitePublicationRecovery as B
+        import GoalPhaseDependencyPublicationSourceAlignment as Alignment
+        reporter.Then("ordinary Advance stops at the all-target obsolete-publisher guard before executing checks or publication")
+        mismatch.condition shouldBe Some("dependency-publication-source-mismatch")
+        mismatch.validation shouldBe None
+        mismatch.repairProgress shouldBe None
+        _executions(root) shouldBe saved.hcursor.get[Vector[String]]("oldPrimaryExecutions").toOption.get
+        _executions(root.resolve("dependency")) shouldBe saved.hcursor.get[Vector[String]]("oldDependencyExecutions").toOption.get
+        _count_(root)
+        val descriptioninput = V.GoalPhasePrerequisitePublicationRecoveryDescriptionInput(original.sessionId,
+          Some(GoalPhaseNativeMetadata.record(observation.asJson)))
+        def _describe_(name: String): F.Result = scenario.call("command", B.describeOperation,
+          Vector("--inputResource", _save(scenario, name,
+            json(descriptioninput.toRecord()).noSpaces)))
+        reporter.When("the public prerequisite recovery owner describes the separately recollected publication relation")
+        val described = _describe_(resourcelabel + "-description")
+        val description = described.business[V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult]
+        val alignment = SplitPhaseExplicitPartitionFixture.take(Alignment.targetC(description.target))
+        reporter.Then("only a separate artifact choice can skip the old-root publisher for this exact current source")
+        description.choices shouldBe Vector(Alignment.adoptionChoice, "Defer")
+        alignment.publication shouldBe Some(observation)
+        alignment.applicabilityIssues shouldBe empty
+        alignment.targets.map(_.actualRoot).distinct shouldBe Vector(root.resolve("dependency/repository").toRealPath().toString)
+        val captured = parse(alignment.capture).toOption.get.as[R.Capture].toOption.get
+        captured.schemaVersion shouldBe R.canonicalApplicabilityCaptureSchema
+        R.bindingOf(captured) shouldBe binding
+        captured.postStageGuard.head shouldBe fact.get.current.head
+        captured.postStageGuard.committedTree shouldBe fact.get.current.tree
+        val controller = parse(alignment.controller).toOption.get
+        controller.hcursor.get[Int]("repairs").toOption shouldBe Some(oldrepair.repairProgress.get.automaticCount)
+        controller.hcursor.get[Int]("ordinaryRepairs").toOption shouldBe Some(oldrepair.repairProgress.get.ordinaryCount)
+        controller.hcursor.downField("repairControl").get[Int]("selectedLimit").toOption shouldBe oldrepair.repairProgress.get.selectedLimit
+        controller.hcursor.get[O.Plan]("plan").toOption shouldBe Some(target.plan)
+        controller.hcursor.get[O.Snapshot]("base").toOption shouldBe Some(target.primaryBase)
+        controller.hcursor.get[Vector[O.ClosedStep]]("completed").toOption shouldBe Some(target.completed)
+        controller.hcursor.get[Long]("generation").toOption shouldBe Some(captured.generation)
+        captured.generation should be > target.generation
+        currentrepair.work.get.selectedPlan shouldBe oldrepair.work.get.selectedPlan
+        currentrepair.work.get.originalBase shouldBe oldrepair.work.get.originalBase
+        currentrepair.work.get.completed shouldBe oldrepair.work.get.completed
+        _count_(root)
+        val artifactreference = V.WorkflowArtifactReference("specification-committed-noninput-artifact-human", "1")
+        val artifactinput = V.GoalPhasePrerequisitePublicationRecoveryInput(original.sessionId, description.target,
+          Alignment.adoptionChoice, "SPECIFICATION-ONLY independent artifact choice for the declared committed non-input descendant",
+          artifactreference, None)
+        val answer = _save(scenario, resourcelabel + "-answer", json(artifactinput.toRecord()).noSpaces)
+        def _recover_(): F.Result = scenario.call("command", B.recoveryOperation, Vector("--inputResource", answer))
+        reporter.When("the complete artifact answer is submitted without its independent Human evidence")
+        val refused = _recover_()
+        reporter.Then("it refuses without effects and retains the exact target and producer count")
+        refused.exitCode should not be 0
+        val refusal = Files.readString(refused.invocation.stderr)
+        refusal should include("Action has no independently issued host evidence for its actual target")
+        refusal should not include "unknown closed target schema"
+        SplitPhaseExplicitPartitionFixture.take(Alignment.targetC(_describe_(resourcelabel + "-after-refusal-description")
+          .business[V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult].target)) shouldBe alignment
+        _count_(root)
+        reporter.Given("independent SPECIFICATION-ONLY Human evidence with the actual recollection and artifact references")
+        val artifactexecution = V.WorkflowExecutionEvidence(Vector(artifactreference,
+          V.WorkflowArtifactReference(observation.recollectionReference.identity, observation.recollectionReference.revision),
+          V.WorkflowArtifactReference(observation.artifact.identity, observation.artifact.revision)), Some("participant"), None, None)
+        val artifactevidence = V.WorkflowEvidencePreparationInput("GoalPhase", "goal-phase-prerequisite-publication-recovery",
+          described.invocation.stdout.toUri.toASCIIString, answer,
+          _save(scenario, resourcelabel + "-reference", json(artifactreference.toRecord()).noSpaces),
+          _save(scenario, resourcelabel + "-execution", json(artifactexecution.toRecord()).noSpaces),
+          "normal-development-host", Instant.now().toString, "entity:smworkflow.cli.host_evidence", Some("participant"))
+        val artifactprepared = scenario.prepareHostInput("prepareEvidence", artifactevidence.toRecord())
+        artifactprepared.exitCode shouldBe 0
+        scenario.selectPreparedImport(artifactprepared)
+        reporter.When("the normal recovery operation adopts that separately authorized artifact relation")
+        val adopted = _recover_()
+        reporter.Then("the artifact permit is retained without running a producer or consumer check")
+        adopted.business[V.GoalPhasePrerequisitePublicationRecoveryResult].accepted shouldBe true
+        _executions(root) shouldBe saved.hcursor.get[Vector[String]]("oldPrimaryExecutions").toOption.get
+        _count_(root)
+        Some(Json.obj("reference" -> json(artifactreference.toRecord()), "description" -> described.invocation.stdout.toString.asJson,
+          "refusal" -> refused.invocation.stderr.toString.asJson, "recovery" -> adopted.invocation.stdout.toString.asJson,
+          "target" -> alignment.asJson))
+      }
+      reporter.When("ordinary Advance runs the genuinely selected consumer checks under the retained source and artifact choices")
+      val reviewed = scenario.advance(task)
+      val review = reviewed.business[V.GoalPhaseAdvanceResult]
+      review.work.get.kind shouldBe "ReviewStep"
+      review.validation.get.outcome shouldBe Some("passed")
+      review.repairProgress shouldBe oldrepair.repairProgress
+      val validation = GoalPhaseNativeMetadata.normalizePublicJson(json(review.work.get.review.get.dependencyValidations.last)).toOption.get
+      val capture = validation.hcursor.get[R.Capture]("capture").toOption.get
+      capture.schemaVersion shouldBe R.canonicalApplicabilityCaptureSchema
+      capture.stagedPaths shouldBe empty
+      R.bindingOf(capture) shouldBe binding
+      capture.direction.target shouldBe target
+      _executions(root.resolve("dependency")) shouldBe saved.hcursor.get[Vector[String]]("oldDependencyExecutions").toOption.get
+      Files.readString(root.resolve("canonical-dependency/publication-count.txt")).linesIterator.toVector shouldBe Vector("published")
+      reporter.When("a separate independent fixture review and ordinary Step closure accept the new checked candidate")
+      val closedoutput = _close_step(selected, reviewed, "canonical-source-current")
+      val closed = closedoutput.business[V.GoalPhaseAdvanceResult]
+      reporter.Then("both genuine accepted Steps and original base survive the separate independent review and Step closure")
+      closed.sessionId shouldBe original.sessionId
+      closed.work.get.completed.map(_.step) shouldBe Vector("step-1", "step-2")
+      closed.work.get.originalBase shouldBe original.work.get.originalBase
+      closed.work.get.kind shouldBe "ReviewPhase"
+      _count_(root)
+      _submit(scenario, oldrepair, Json.obj("outcome" -> "completed".asJson,
+        "summary" -> "SPECIFICATION-ONLY late obsolete result".asJson, "findings" -> Json.arr()),
+        V.WorkflowArtifactReference("specification-late-old-repair", "1")).exitCode should not be 0
+      val result = Json.obj(
+        "sessionId" -> original.sessionId.asJson, "sourceDirection" -> reference.identity.asJson,
+        "captureSchema" -> capture.schemaVersion.asJson, "closed" -> json(closed.toRecord()),
+        "consumerArtifactAdoption" -> "not-performed".asJson)
+      val retainedresult = result.mapObject(_.add("consumerArtifactAdoption", "specification-only".asJson)
+        .add("sourceDirectionReference", json(reference.toRecord())).add("sourceAdoptionInput", json(input.toRecord()))
+        .add("sourceAdoptionOutput", sourceadoption.toString.asJson)
+        .add("sourceDescriptionOutput", sourcedescription.toString.asJson)
+        .add("originalPublication", publication.asJson).add("currentSource", fact.get.current.asJson)
+        .add("applicability", fact.get.asJson).add("artifactDirection", artifactdirection.get)
+        .add("checksAndReviewOutput", reviewed.invocation.stdout.toString.asJson)
+        .add("independentReviewResult", root.resolve("canonical-source-current-review-result.json").toUri.toASCIIString.asJson)
+        .add("independentReviewReference", root.resolve("canonical-source-current-review-reference.json").toUri.toASCIIString.asJson)
+        .add("stepClosureOutput", closedoutput.invocation.stdout.toString.asJson)
+        .add("producerPublicationCount", Vector("published").asJson).add("phaseAcceptanceClaimed", Json.False))
+      val recordedresult = saved.hcursor.get[Json]("remainingOnlyInput").toOption.fold(retainedresult)(value =>
+        retainedresult.mapObject(_.add("remainingOnlyInput", value).add("qualificationMode", "remaining-only".asJson)))
+      Files.writeString(episode.resolveSibling(episode.getFileName.toString + ".result.json"), recordedresult.noSpaces,
+        StandardOpenOption.CREATE_NEW)
   }
 
   def qualifyInitialSource(reporter: GivenWhenThen): Path = {

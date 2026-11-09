@@ -7143,6 +7143,12 @@
               "type": "Record",
               "multiplicity": "?",
               "required": false
+            },
+            {
+              "name": "applicability",
+              "type": "Record",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },
