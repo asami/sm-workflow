@@ -14,7 +14,8 @@ import org.goldenport.protocol.operation.OperationResponse
   * workflow progression. The owning workflow must persist intent and observe
   * uncertain effects before considering a later invocation.
   * @since   Oct.  6, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  5, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowManagedProcessExecution {
@@ -23,7 +24,7 @@ private[smworkflow] object WorkflowManagedProcessExecution {
     workspaceIdentity: String = "sm-workflow-repository"): Consequence[GitExecutionResult[A]] = for {
     _ <- if (core != null && core.executionContext != null && operation != null) Consequence.unit
       else Consequence.stateConflict("Workflow typed Git owning call or intent is absent")
-    workspace <- WorkspaceId.parseC(workspaceIdentity)
+    workspace <- WorkspaceId.parseC(RepositorySyncDirectoryList.workspace(core, workspaceIdentity))
     target = GitTarget(workspace, if (workspaceIdentity == "sm-workflow-repository")
       RuntimeGitSelections.selected(core, operation) else None)
     execution = new Execution(core)

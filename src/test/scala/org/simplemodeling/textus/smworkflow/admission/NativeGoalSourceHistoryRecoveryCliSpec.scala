@@ -21,11 +21,12 @@ import SplitPhaseExplicitPartitionFixture.take
   * standard native codec bytes; no private row is ever seeded or changed.
   * Optional installed-command qualification uses the same isolated host.
   * @since   Oct. 21, 2026
-  * @version Oct. 26, 2026
+  *  version Oct. 26, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] abstract class NativeGoalSourceHistoryRecoveryCliSupport extends AnyWordSpec with NativeGoalSourceHistoryCliFixture {
-  private lazy val _catalog = take(WorkflowInstanceRecordJsonV1.catalogC(Vector(take(GoalPhaseRuntimeCatalog.loadC()).definition)))
+  protected lazy val _catalog = take(WorkflowInstanceRecordJsonV1.catalogC(Vector(take(GoalPhaseRuntimeCatalog.loadC()).definition)))
   protected def _json(value: RecordPresentable): String = take(value.toRecord().toJsonStringC)
   protected def _call(fixture: Implemented, service: String, operation: String,
     arguments: Vector[String]): F.Result = sys.props.get("smworkflow.spec.installedCommand") match {
@@ -215,18 +216,27 @@ private[admission] abstract class NativeGoalSourceHistoryRecoveryCliSupport exte
       execution.toVector.flatMap(value => Vector("--executionEvidence", _json(value))))
       .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
   }
-  protected def _document_episode(name: String, later: Boolean = false): DocumentEpisode = {
+  protected def _document_episode(name: String, later: Boolean = false, canonicalHost: Boolean = false,
+    virtualStartAt: Option[String] = None, currentSourceReconstruction: Boolean = false): DocumentEpisode = {
     Given("CB1,CB2: a fresh normal source-history host with two document-selected Steps and fixed closure programs")
     val scenario = F.fresh(name, sbtRepair = Some(TypedSbtHostPlanFixture.normalExecutable), sourceHistory = true)
     val repository = Path.of(scenario.host.target.root)
     val documents = Files.createDirectories(repository.resolve("verification-inputs"))
-    Files.writeString(repository.resolve(".git/info/exclude"), "\n/verification-inputs/\n", StandardOpenOption.APPEND)
+    if (!currentSourceReconstruction)
+      Files.writeString(repository.resolve(".git/info/exclude"), "\n/verification-inputs/\n", StandardOpenOption.APPEND)
     val phase = documents.resolve("phase.md")
     val checklist = documents.resolve("checklist.md")
-    val candidatepaths = if (later) _prefix_paths :+ sourcePath else scenario.host.goal.candidatePaths
-    val plan = scenario.plan.copy(steps = scenario.plan.steps ++ Vector(scenario.plan.steps.head.copy(
+    val documentpaths = if (currentSourceReconstruction)
+      Vector("verification-inputs/phase.md", "verification-inputs/checklist.md") else Vector.empty[String]
+    val candidatepaths = (if (later) _prefix_paths :+ sourcePath else scenario.host.goal.candidatePaths) ++ documentpaths
+    val firststep = scenario.plan.steps.head.copy(ownedPaths = scenario.plan.steps.head.ownedPaths ++ documentpaths)
+    val plan = scenario.plan.copy(steps = Vector(firststep) ++ Vector(scenario.plan.steps.head.copy(
       identity = "step-2", purpose = "Retain the selected compiled value and maintain its source", ownedPaths = candidatepaths)))
     _write_documents(phase, checklist, plan)
+    if (currentSourceReconstruction) {
+      val progress = GoalPhaseDocumentProgress.Projection(plan.phase, Vector.empty)
+      Files.writeString(phase, "\n```sm-workflow-progress\n" + progress.asJson.spaces2 + "\n```\n", StandardOpenOption.APPEND)
+    }
     val host = scenario.host.copy(goal = scenario.host.goal.copy(candidatePaths = candidatepaths, closure = scenario.host.goal.closure.copy(
       programs = Vector(GoalPhaseNativeClosure.StepProgram("step-1", 1), GoalPhaseNativeClosure.StepProgram("step-2", 2)))))
     val selected = host.target
@@ -235,10 +245,18 @@ private[admission] abstract class NativeGoalSourceHistoryRecoveryCliSupport exte
     val git = TypedGitHostPlanFixture.plan(target, goalPaths = host.goal.candidatePaths,
       goalMessages = Vector("Complete first recovery fixture Step", "Complete second recovery fixture Step"),
       goalSelections = Vector.fill(2)(host.goal.candidatePaths))
-    val processplan = TypedSbtHostPlanFixture.plan(scenario.root, TypedSbtHostPlanFixture.normalExecutable, Vector(1), Some(git))
-    configure(scenario, enabledSettings ++ Map("sm-workflow.runtime.definition" ->
-      Json.fromString(ThreeWorkflowRuntimeParameters.encode(host).noSpaces), "textus.subsystem.process-execution.plan" ->
+    val processplan = if (canonicalHost) NativeCommonDelegateTaskFixture.processPlan(scenario.root, focused = false)
+      else TypedSbtHostPlanFixture.plan(scenario.root, TypedSbtHostPlanFixture.normalExecutable, Vector(1), Some(git))
+    val runtimesettings = if (canonicalHost) Map.empty[String, Json] else Map("sm-workflow.runtime.definition" ->
+      Json.fromString(ThreeWorkflowRuntimeParameters.encode(host).noSpaces))
+    configure(scenario, enabledSettings ++ runtimesettings ++ virtualStartAt.map(value =>
+      "textus.clock.virtual-start-at" -> Json.fromString(value)).toMap ++ Map("textus.subsystem.process-execution.plan" ->
       Json.fromString(processplan.noSpaces), "textus.resource.url.file.roots" -> Json.fromString(scenario.root.toString)))
+    if (canonicalHost) {
+      val config = scenario.root.resolve(".textus/config.json")
+      val current = parse(Files.readString(config)).toOption.get
+      Files.writeString(config, current.mapObject(_.remove("sm-workflow.runtime.definition")).noSpaces)
+    }
     Files.writeString(scenario.root.resolve("goal-plan.json"), Json.obj(
       "schemaVersion" -> Json.fromString(GoalPhaseDocumentSource.declarationSchema),
       "phasePath" -> Json.fromString("verification-inputs/phase.md"),
@@ -249,7 +267,7 @@ private[admission] abstract class NativeGoalSourceHistoryRecoveryCliSupport exte
     if (later) {
       val setup = Implemented(scenario, task, null, repository.resolve(sourcePath))
       _prefix_paths.zipWithIndex.foreach { (path, index) => Files.writeString(repository.resolve(path), _prefix_text(index + 1, 0)) }
-      _fixture_git(setup, Vector("--literal-pathspecs", "add", "--") ++ _prefix_paths)
+      _fixture_git(setup, Vector("--literal-pathspecs", "add", "--") ++ (_prefix_paths ++ documentpaths))
       _fixture_git(setup, Vector("commit", "--no-verify", "--no-gpg-sign", "-m", "Prepare test-owned prefix sources"))
     }
     val started = scenario.start().business[V.GoalPhaseStartResult]

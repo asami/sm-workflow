@@ -21,7 +21,8 @@ import GoalPhaseOrderedProgression as O
 /** Explicit HumanNewAttempt direction preserves an unknown historical outcome.
   * Description and authorization neither observe nor execute normalization.
   * @since   Oct. 21, 2026
-  * @version Oct. 26, 2026
+  *  version Oct. 26, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseSourceHistoryRecovery {
@@ -117,8 +118,16 @@ private[smworkflow] object GoalPhaseSourceHistoryRecovery {
   def targetC(value: Record): Consequence[RecoveryTarget] =
     if (value == null) _invalid("target is absent")
     else value.toJsonStringC.flatMap(text => io.circe.parser.parse(text)
-      .left.map(_.message).flatMap(GoalPhaseNativeMetadata.normalizePublicJson)
-      .flatMap(decodeTarget).fold(_invalid(_), Consequence.success))
+      .left.map(_.message).flatMap(decodePublicTarget).fold(_invalid(_), Consequence.success))
+  private[admission] def decodePublicTarget(value: Json): Either[String, RecoveryTarget] = for {
+    supplied <- Option(value).toRight("Public source history recovery target is absent")
+    wire <- GoalPhaseNativeMetadata.normalizePublicJson(supplied)
+    inspection <- GoalPhaseNativeCandidate.decodePublicPayload(
+      wire.hcursor.downField("inspection").focus.getOrElse(Json.Null))
+    target <- decodeTarget(wire.mapObject(_.add("inspection", inspection.asJson)))
+    _ <- GoalPhaseCandidateRecovery.exactPublicFragment(wire, target.asJson)
+  } yield target
+
   def decodeTarget(value: Json): Either[String, RecoveryTarget] = for {
     supplied <- Option(value).toRight("Source history recovery target is absent")
     target <- supplied.as[RecoveryTarget].left.map(_.message)

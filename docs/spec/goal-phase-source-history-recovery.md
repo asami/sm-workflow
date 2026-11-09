@@ -1,5 +1,190 @@
 # Source-history recovery through the ordinary Human Decision
 
+## SHR-AUTO-01 — Automatic same-authority continuation
+
+Ordinary `advanceGoalPhase` owns the common mechanical continuation when the
+same retained comment, complete rule, original date and ownership already admit
+one correction. It does not require a new Human policy answer merely to carry
+the factual observation that the prior caller invocation exited. Existing
+explicit recovery and normalization adoption remain available with their exact
+original Direction and Observation schemas.
+
+The executing Advance Action allocates one fresh invocation reference for the
+whole call, shared by every source-history path. The reference contains the
+actual Component instance, canonical Session, `GoalPhaseService.advanceGoalPhase`
+operation and unique invocation identity. One finite stderr JSON event named
+`goal-source-history-invocation` exposes that reference to the caller. It starts
+no monitor, timer, process scan or lifecycle engine. Direct fixture ports without
+this real Action keep the original v1 behavior.
+
+New associated source-history intent and result payloads use
+`sm-workflow.goal-phase-native-source-history.v2`, retaining both `invocation`
+and the complete closed `historyPolicy`. A result retains exactly its intent's
+association. Without these fields the encoder emits the original v1 field and
+byte shape; v1 never retrofits an invocation. Partial, explicit-null, malformed
+or crossed v2 associations refuse. Old successful v1 prefix entries remain
+historical facts and do not need fabricated invocation provenance.
+
+The existing Advance input and parameter declaration accept optional
+`sourceHistoryObservationResource`, an absolute local `file:` URI. Its executing
+Action acquires it using ordinary Resource authorization, UTF-8 decoding and
+finite read budgets, then decodes this closed factual contract:
+
+| Field | Contract |
+|-------|----------|
+| `schemaVersion` | `sm-workflow.goal-phase-source-history-caller-observation.v1` |
+| `target` | Complete exact current normalization target, including original inspection, affected intent, full rule/date/ownership, prefix and any genuine pending question |
+| `invocation` | Exact reference retained by that affected v2 intent |
+| `sourceReference` | Actual caller observation artifact identity and revision |
+| `observedAt` | Canonical instant of the caller observation |
+| `termination` | Exactly `exited`, `live` or `unknown` |
+| `exitCode` | Required only for `exited`; omitted for `live` and `unknown` |
+
+This observation transports facts, grants no Human consent and proves no outcome
+of the old File effect. The product reads no host chat logs. Typed call data is
+private invocation context and never configuration. Matching reconstructs the
+actual native original inspection and immediate frontier, checks Component,
+Session, purpose/operation, exact intent/invocation, retained full rule/date and
+ownership, and the complete original successful prefix. Only exact `exited`
+permits selection. Missing, live, unknown, stale or crossed observations cannot
+admit a writer, staging or checks.
+
+Before terminal observation, description and the common wait path may read the
+current managed postcondition through File UoW. They explicitly state that this
+does not prove the old outcome or termination. Known absence, denied/failed
+reads and ambiguous comment ownership retain concrete diagnostics. Associated
+new cases wait for the finite caller observation without issuing a technical
+Human question. Legacy UNKNOWN with no invocation association retains that
+precise missing fact; current content and a missing result cannot supply it.
+
+The automatic selection is a distinct
+`sm-workflow.goal-phase-source-history-automatic-selection.v1` native payload,
+containing target, invocation and factual observation. It contains no Human
+choice, rationale or answer. An exact genuinely saved unanswered source-history
+question can be disposed through native Decision supersession and remains
+unanswered; other pending work or questions are never accepted. An unsuspended
+frontier uses the managed mechanical transition. Every later traversal
+reconstructs the exact predecessor, question, target and automatic payload
+before the old Human-answer path; a loose stored record is insufficient.
+
+A separate automatic reconciliation intent/result uses
+`sm-workflow.goal-phase-source-history-automatic-reconciliation.v1`. It observes
+through File UoW first. Already conformant current text records
+`observed-current-postcondition` with zero writes. One unique retained-rule
+correction updates only the managed comment using `UpdateExisting` with the
+exact observed text. Unrelated current text is preserved. A concurrent conflict,
+ambiguous ownership or failed read stops explicitly. An unresolved new intent
+is never automatically retried. The original File intent remains UNKNOWN.
+Success reuses the existing source-history continuation and normalization
+candidate route with normal selected checks and independent review; a repeated
+Advance recollects actual results without repeating writes or checks. No reset,
+reStart, accepted semantic Submit replay, Plan/base change or repair-count use
+is introduced.
+
+`GoalPhaseSourceHistoryAutomaticSpec` covers v1 byte stability, v2 provenance,
+closed finite observations, exact matching and refusals, legacy missing
+association, distinct payloads and read-only postconditions. Its pending-target
+checks are pure provenance checks and do not qualify live native supersession.
+`NativeGoalSourceHistoryAutomaticCliSpec` is an explicit-only `@DoNotDiscover`
+RuntimeTestDeclaration suite labeled ADMISSION and requires the normal installed
+command selected by `smworkflow.spec.installedCommand`. It reuses tiny existing
+same-Session source-history fixtures, creates real failed associated invocations
+and returns actual process termination facts through Resource on ordinary
+Advance. It covers observation waits with no new Human/writes, zero-write
+conformance, unique correction preserving concurrent unrelated text, crossed and
+stale facts, ambiguous concurrent edits, original UNKNOWN and prefix/Plan/base/
+repair preservation, and repeated collection without effects. It seeds no
+storage rows and claims no live legacy supersession qualification: no actual
+associated pending legacy question is supplied by this qualification boundary.
+
+## Current-source applicability after a formal normalization failure
+
+The existing common development reconstruction Operation can select current
+source when a retained normalization Direction has admitted prior-ended
+evidence, its actual reconciliation result is formally `failed`, and at least
+one successful old prefix entry no longer satisfies its saved rule/date.
+This is a new candidate subject under the same existing authority. The original
+missing-result UNKNOWN, completed prefix receipts and formal failure stay
+unchanged. Resultless reconciliation remains an unresolved writer and cannot
+take this path. Missing current files are known absence; unreadable files,
+changed policy and ambiguous interpretation remain unresolved.
+
+The source-history owner assesses the full ordered prefix read-only through
+File/UoW under the same complete selected goldenport rule/provider and actual
+workspace ownership. A small v2 common selection retains the normalization
+Direction/result references, ordered reusable/fresh path partition, generations
+and optional exact stale technical question reference. It derives the complete
+recovery target from authenticated native normalization history rather than
+copying it. Legacy common v1 bytes and strict old prefix checks are unchanged.
+
+An already issued common reconstruction Human may be superseded only when its
+genuine saved context is the adjacent reconstruction after that same failed
+normalization, with empty incompatibilities/semantic questions and solely that
+normalization owner's uncertainty. Current Phase/checklist/proposal must also
+be determinate. Native DecisionSupersession preserves its prompt/body/history,
+leaves it unanswered and appends the new common selection. Other Human
+questions, unresolved effect owners and repair stops retain their boundaries.
+
+A separate ordinary Advance owns the new candidate generation. It verifies
+only the authenticated reusable subset against old saved rule/date and omits
+those paths from new history effects. Inapplicable prefix paths and the old
+affected path receive ordinary current-date preparation with fresh intent/result
+references. Successful candidate capture ends the transient reuse; ordinary
+later Repair receives no indefinite skips. Required staging, dependencies,
+checks, independent review and closure remain. No counter or allowance resets.
+The v2 classification replays saved facts; existing ancestor loaders retain
+their previous policy-resolution guards and require the same installed rule.
+
+The paired pure specs and the explicitly selected
+`NativeGoalSourceHistoryPrefixReconstructionCliSpec` are described in
+[common reconstruction](goal-phase-development-reconstruction.md). The installed
+leaf uses one absolute caller-owned locator and `capture-old`/`continue-new`
+modes across parent-owned normal LocalPublication. It retains the same physical
+tiny normal host, its first completed Step, four old-date prefix successes,
+UNKNOWN, formal failure and technical Human. Continue asserts unanswered
+supersession, only needed new current-date qualifications, preserved reusable
+source bytes/mtime and no repeated successes when Review is recollected.
+Fixture evidence establishes no consumer authority. Execution, independent
+review and actual qualification remain parent-owned.
+
+## Distinct current inspection after consumed history authority
+
+The Step-wide legacy consumed flag does not by itself consume a DIFFERENT new
+native inspection produced by accepted common current-source selection.
+Traversal preserves that Boolean and every native record, deriving consumed
+Session/source-revision subjects only from actual authenticated recovery targets,
+normalization directions and source-history Human completions. The set is never
+cleared by selection, Step progression or repair. An already consumed matching
+subject remains blocked; missing legacy provenance and crossed or malformed
+contexts fail closed.
+
+The existing public locators and ordinary Human recognizer use the exact current
+inspection record to scope consumption. Every existing target, native intent,
+Step/Plan/base/path, participant/evidence and no-staging/candidate guard remains.
+A different subject can obtain observation or its genuine Human only. No old
+unknown intent is replayed and no prior authority is silently reused. New
+normalization still needs an independently admitted current target and explicit
+prior-execution-ended judgment. No repair allowance or generation is changed.
+
+Candidate capture at the selected current generation can combine the original
+reconstruction's saved-rule/date reusable subset, the later current recovery's
+strictly verified successful prefix, and its separately qualified affected path.
+The later target must postdate the original frontier and retain exact current
+ownership/Plan/base checks. Overlapping old/current prefix claims or a changed
+old reusable postcondition refuse. Legacy full-prefix verification is unchanged.
+Original/current receipts and UNKNOWNs remain intact; only verified paths skip
+fresh effects, and fresh checks/independent review remain required.
+
+The separate pure subject leaf and constant installed current-stop leaf are
+specified in [common reconstruction](goal-phase-development-reconstruction.md).
+Their installed seed reuses the actual partial prior tiny fixture and its
+already successful first Step/check/commit/prefix, without setup or Start replay.
+Capture checkpoints actual selection and later stop evidence in the caller
+locator; continue after publication uses the same physical subject and fresh
+fixture-owned public evidence. These observations establish no consumer consent
+and carry no native-store repair authority. Parent-owned execution and review
+are required before a qualified result.
+
 ## Same-authority comment recovery — adopted 2026-10-26
 
 Status: target contract and delivery plan; implementation/installed qualification
@@ -256,6 +441,23 @@ authority. Description and recovery reconstruct prior completed Steps from
 canonical retained closure history, without observing live Git. Ordinary
 Advance continues to verify those actual commits through its normal Git path.
 
+Public target readers compose at the semantic owners: normalization delegates
+its recovery target to source-history recovery, which delegates inspection to
+the native candidate payload reader. A present dependency-source Direction
+delegates its target to dependency-source revision, including the initial-v8
+lineage's existing candidate-recovery reader. Each owner obtains typed values,
+checks the supplied fragment against its normal public Record projection, and
+canonically re-encodes the nested value before invoking its unchanged durable
+decoder. Candidate recovery applies the same composition to inspection,
+staging and dependency-prefix payloads. Public omission of absent options is
+supported; unknown fields, explicit nulls, missing required values, crossed
+lineage and property-name collisions remain refused before replacement can
+discard their wire meaning. Normalization retains its own deliberate omission
+of absent inspection candidate/diff and history outcome. Direct public recovery
+and normalization reads share these owner readers; durable history restoration,
+versions and persisted bytes remain unchanged. This pure wire interpretation
+performs no datastore observation or source-history, Git or SBT effect.
+
 For n = 0 the original explicit target encoding and its existing Human bindings
 remain byte compatible: no extension fields are emitted. Later targets require
 `prefixContract = sm-workflow.goal-phase-source-history-recovery-prefix.v2`,
@@ -455,12 +657,29 @@ The source implementation adds these ordinary `GoalPhaseService` Operations:
   `adoption-required`, the exact target, choices
   `AdoptSameAuthorityNormalization` and `Defer`, and
   `adoptionOperation = adoptGoalPhaseSourceHistoryNormalization`.
-- `adoptGoalPhaseSourceHistoryNormalization(input)` accepts
+- `adoptGoalPhaseSourceHistoryNormalization(input | inputResource)` accepts exactly one transport for
   `GoalPhaseSourceHistoryNormalizationAdoptionInput`: `sessionId`, `target`,
   `choice`, `rationale`, actual policy-direction `reference`, and Boolean
   `priorExecutionEnded`. It returns
-  `GoalPhaseSourceHistoryNormalizationAdoptionResult`. Adoption and description
-  use managed native storage only; neither calls File, Git, SBT or Advance.
+  `GoalPhaseSourceHistoryNormalizationAdoptionResult`. Description remains
+  sessionId-only and performs no Resource acquisition. Adoption reads its
+  complete DTO in the executing owning call, then uses managed native storage;
+  it performs no source File effect, Git, SBT or Advance.
+
+`input` carries the existing complete inline DTO. `inputResource` carries an
+absolute local file URI without authority, query or fragment. Exactly one is
+required. The existing Resource/UoW reader applies the actual executing call's
+authorization, allowed local roots, configured finite byte budget and strict
+UTF-8 decoding. Both transports use the same DTO reader and unchanged business
+validation, including the complete canonical target, choice, rationale and exact
+policy reference. Missing, conflicting, unreadable, outside-root, over-budget,
+malformed UTF-8 or invalid business input refuses before native adoption.
+There is no normalization-specific size or prefix-count ceiling and no
+shortening of the target to accommodate command arguments. Request binding
+performs no Resource read. Standard deferred runtime composition resolves only
+this adoption Operation's Session from that acquired business DTO through the
+same owning-call reader; no separate session hint or generic Resource fallback
+is introduced. Transport never attests termination, policy authority or consent.
 
 The canonical target contains the complete existing `recovery` target, exact
 current `frontierRevision` and `frontierCause`, the named policy
@@ -588,7 +807,11 @@ readable and retain their existing choices.
 `GoalPhaseSourceHistoryNormalizationSpec` covers the strict later-intent8 target,
 own-purpose binding and passive preparation, real managed File idempotence,
 read-only current observation, bounded update, ambiguous known failure and
-changed-rule refusal. `NativeGoalSourceHistoryNormalizationCliSpec` uses the
+changed-rule refusal. Its Resource examples also retain an identical complete
+DTO inline and through authorized local acquisition, decode a complete target
+over 500 KiB with many successful prefix entries, and exercise real root,
+UTF-8 and configured finite-budget refusals before native adoption.
+`NativeGoalSourceHistoryNormalizationCliSpec` uses the
 existing isolated normal CLI fixture with a completed Step, four actual prefix
 updates and an unresolved successor. It covers public adoption without an old
 Human answer, separate Advance through actual selected SBT to independent
@@ -610,3 +833,32 @@ policy metadata and terminal assertions; they establish no live Human consent.
 Generation, compilation, focused validation, independent review, publication
 and installed qualification remain parent-owned requirements. The source
 contract alone does not claim an installed product or live consumer adoption.
+
+`NativeGoalSourceHistoryNormalizationResourceCliSpec` is a separate explicitly
+selected `@DoNotDiscover` Runtime specification. With
+`smworkflow.spec.installedCommand`, its public GoalPhase and preparation calls
+use the existing isolated Scenario launcher and that Scenario's actual
+`.textus/assembly.yaml`. It selects no immutable image, old runtime, installation
+override or copied application. Without installedCommand it permits the normal
+source fixture route for focused development.
+
+The two cases obtain a real two-Step episode, completed first Step, four actual
+successful source-history prefix entries, original missing-result UNKNOWN and
+an actual pending legacy Human through ordinary public Operations. Independent
+specification-owned policy and terminal evidence are prepared normally, then
+adoption uses only inputResource with the unchanged complete target. Legal JSON
+whitespace makes each complete request representation exceed 500 KiB; this
+proves large-request transport, while the pure specification separately covers
+a large complete business target. One case retains the configured definition
+and requires actual same-rule/date normalization. The other removes only
+`sm-workflow.runtime.definition` after the existing question is created and
+requires standard deferred composition to recover the same Session from the
+Resource DTO, then observe an already satisfied postcondition without source
+replacement or mtime change. Separate ordinary Advance reaches a real selected
+native check and independent ReviewStep. Original UNKNOWN, successful prefix
+rows/content/mtime, accepted base/Plan/completed Steps and repair progress
+remain retained; recollection repeats no successful work. These fixture facts
+prove transport and program admission, never actual user consent. Authored
+examples require parent-owned generation, validation, independent review,
+normal local publication and isolated installed qualification before any PASS
+claim.

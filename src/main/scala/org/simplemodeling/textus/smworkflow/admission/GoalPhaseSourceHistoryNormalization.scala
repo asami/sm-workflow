@@ -4,6 +4,7 @@ import io.circe.{Decoder, Encoder, Json}
 import io.circe.generic.auto.*
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
+import java.nio.charset.StandardCharsets.UTF_8
 import java.time.LocalDate
 import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.{ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall}
@@ -26,7 +27,7 @@ import GoalPhaseSourceHistoryRecovery as R
 /** Append-only adoption of existing comment authority. Neither description nor
   * adoption answers the old Human question or performs a File effect.
   * @since   Oct. 26, 2026
-  * @version Oct. 26, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseSourceHistoryNormalization {
@@ -62,7 +63,7 @@ private[smworkflow] object GoalPhaseSourceHistoryNormalization {
     private def _omit_absent(value: Json, names: Set[String]): Json = value.mapObject(_.filter {
       case (name, field) => !names.contains(name) || !field.isNull
     })
-    private def _canonical_recovery(value: Json): Json = value.mapObject { fields =>
+    private[GoalPhaseSourceHistoryNormalization] def _canonical_recovery(value: Json): Json = value.mapObject { fields =>
       val intent = fields("intent").fold(fields)(value =>
         fields.add("intent", _omit_absent(value, Set("outcome"))))
       val inspection = fields("inspection").fold(intent)(value =>
@@ -131,8 +132,13 @@ private[smworkflow] object GoalPhaseSourceHistoryNormalization {
   def targetRecord(value: Target): Record = GoalPhaseNativeMetadata.record(value.asJson)
   def decodeTarget(value: Json): Either[String, Target] = Option(value).toRight("Normalization target is absent")
     .flatMap(_.as[Target].left.map(_.message))
-  def decodePublicTarget(value: Json): Either[String, Target] =
-    GoalPhaseNativeMetadata.normalizePublicJson(value).flatMap(decodeTarget)
+  def decodePublicTarget(value: Json): Either[String, Target] = for {
+    supplied <- Option(value).toRight("Public normalization target is absent")
+    wire <- GoalPhaseNativeMetadata.normalizePublicJson(supplied)
+    recovery <- R.decodePublicTarget(wire.hcursor.downField("recovery").focus.getOrElse(Json.Null))
+    target <- decodeTarget(wire.mapObject(_.add("recovery", Target._canonical_recovery(recovery.asJson))))
+    _ <- GoalPhaseCandidateRecovery.exactPublicFragment(wire, target.asJson)
+  } yield target
   def targetC(value: Record): Consequence[Target] = if (value == null) F.invalid("Normalization target is absent")
     else value.toJsonStringC.flatMap(raw => io.circe.parser.parse(raw).left.map(_.message)
       .flatMap(decodePublicTarget).fold(F.invalid, Consequence.success))
@@ -228,8 +234,12 @@ private[smworkflow] object GoalPhaseSourceHistoryNormalization {
   def describeC(source: Source, core: ActionCall.Core): Consequence[V.GoalPhaseSourceHistoryNormalizationDescriptionResult] = for {
     target <- currentTargetC(source, core)
     _ <- requireQuestionC(source.session, core, target, source.human)
+    observed <- GoalPhaseSourceHistoryAutomatic.currentObservationC(core, target)
   } yield V.GoalPhaseSourceHistoryNormalizationDescriptionResult(target.recovery.sessionId, "adoption-required",
-    message + (if (target.resumeFrom.nonEmpty) " This target binds the latest actual normalization invocation; refresh its independent terminal lifecycle evidence under the same retained policy direction."
+    message + " " + observed + (if (target.recovery.intent.invocation.isEmpty)
+      " Legacy UNKNOWN has no retained invocation association; automatic prior-termination proof is unavailable and no association is inferred."
+      else " The affected intent retains its exact Advance invocation; ordinary Advance accepts a finite caller terminal observation through sourceHistoryObservationResource.") +
+    (if (target.resumeFrom.nonEmpty) " This target binds the latest actual normalization invocation; refresh its independent terminal lifecycle evidence under the same retained policy direction."
       else if (target.pendingQuestion.nonEmpty) " The genuinely saved Human target supplies the full captured rule."
       else " The unsuspended legacy intent retained provider/date only; the complete rule is bound at adoption, and its old full-rule provenance is unavailable."),
     core.component.get.core.instanceId.canonicalKey, targetRecord(target), choices, adoptionOperation)
@@ -330,7 +340,7 @@ private[smworkflow] object GoalPhaseSourceHistoryNormalization {
 
   /** The old question's genuinely saved full policy target is provenance; the
     * provider/date fields of its original intent alone never prove an old full rule. */
-  private def requireQuestionC(session: F.Session, core: ActionCall.Core, target: Target,
+  private[admission] def requireQuestionC(session: F.Session, core: ActionCall.Core, target: Target,
     human: Option[H.Source]): Consequence[Unit] = human match {
     case None => if (target.pendingQuestion.isEmpty) Consequence.unit else F.invalid("Normalization lost its actual pending Human source")
     case Some(source) => for {
@@ -428,6 +438,19 @@ private[smworkflow] object GoalPhaseSourceHistoryNormalization {
       } yield Some(observed)
     }
   } yield result
+
+  /** A formal failed result is a completed observation, distinct from a live or
+    * resultless reconciliation. Its old direction and UNKNOWN remain unchanged.
+    */
+  def failedObservationC(session: F.Session, core: ActionCall.Core, saved: Saved): Consequence[Option[Observed]] = for {
+    _ <- codec.decode(codec.encode(saved.direction)).fold(F.invalid, _ => Consequence.unit)
+    observed <- retainedObservationC(session, core, saved)
+  } yield observed.filter(_.observation.outcome.contains("failed"))
+
+  def resultReference(saved: Saved): ContextReference = {
+    val reference = observationReference(saved, "result")
+    ContextReference(reference.identity, reference.revision)
+  }
   def reconcileC(session: F.Session, d: F.Declaration, core: ActionCall.Core, saved: Saved,
     acknowledgement: String => Consequence[Unit]): Consequence[Observed] = for {
     retained <- retainedObservationC(session, core, saved)
@@ -473,7 +496,7 @@ private[smworkflow] object GoalPhaseSourceHistoryNormalization {
         }.recoverWith(_ => Consequence.unit)
         catch { case scala.util.control.NonFatal(_) => Consequence.unit }
     }
-  private def normalizeC(core: ActionCall.Core, target: Target): Consequence[GoldenportSourceHistoryDriver.Normalization] = {
+  private[admission] def normalizeC(core: ActionCall.Core, target: Target): Consequence[GoldenportSourceHistoryDriver.Normalization] = {
     val recovery = target.recovery
     val prepared = for {
       selection <- WorkflowSourceHistoryParameters.resolveC(core.executionContext)
@@ -497,6 +520,25 @@ private[smworkflow] object GoalPhaseSourceHistoryNormalization {
         None, None, target.recovery.intent.dateUncertain))
   } yield target.recovery.intent.path
 
+  /** Acquisition and business validation belong to the actual executing call. */
+  def inputForCallC(incoming: Request, core: ActionCall.Core): Consequence[V.GoalPhaseSourceHistoryNormalizationAdoptionInput] = {
+    val call = core
+    final class Reader extends ProcedureActionCall {
+      val core = call
+      def readInputC: Consequence[V.GoalPhaseSourceHistoryNormalizationAdoptionInput] = for {
+        source <- NativeWorkflowResourceInput.selectC[V.GoalPhaseSourceHistoryNormalizationAdoptionInput](incoming)
+        input <- NativeWorkflowResourceInput.readC(source, reference => read_resource_text(reference, Some(UTF_8)))
+        _ <- if (input == null || !exact(input.sessionId) || input.reference == null || !choices.contains(input.choice) ||
+            !text(input.rationale) || !exact(input.reference.identity) || !exact(input.reference.revision))
+          F.invalid("Normalization requires an actual policy direction reference and typed answer")
+          else Consequence.unit
+        _ <- targetC(input.target)
+      } yield input
+      def execute(): Consequence[OperationResponse] = F.invalid("Normalization input reader is not an Operation")
+    }
+    new Reader().readInputC
+  }
+
   def operations(port: GoalPhaseNativeWorkContinuation.Port): Vector[spec.OperationDefinition] =
     Vector(new Operation(true, port), new Operation(false, port))
   private final class Operation(describe: Boolean, port: GoalPhaseNativeWorkContinuation.Port) extends spec.OperationDefinition {
@@ -506,24 +548,22 @@ private[smworkflow] object GoalPhaseSourceHistoryNormalization {
     def createOperationRequest(request: Request): Consequence[OperationRequest] =
       if (request == null || !request.service.contains("GoalPhaseService") ||
           request.operation != (if (describe) describeOperation else adoptionOperation)) F.invalid("Normalization Operation identity differs")
-      else if (describe) NativeWorkflowOperationInput.textC(request, "sessionId").map(identity => Action(request, identity, None, port))
-      else NativeWorkflowOperationInput.valueC[V.GoalPhaseSourceHistoryNormalizationAdoptionInput](request, "input").flatMap { input =>
-        if (input == null || !exact(input.sessionId) || input.reference == null || !choices.contains(input.choice) ||
-            !text(input.rationale) || !exact(input.reference.identity) || !exact(input.reference.revision))
-          F.invalid("Normalization requires an actual policy direction reference and typed answer")
-        else targetC(input.target).map(_ => Action(request, input.sessionId, Some(input), port))
-      }
+      else if (describe) NativeWorkflowOperationInput.textC(request, "sessionId").map(identity => Action(request, Some(identity), port))
+      else Consequence.success(Action(request, None, port))
   }
-  private final case class Action(request: Request, identity: String,
-    input: Option[V.GoalPhaseSourceHistoryNormalizationAdoptionInput], port: GoalPhaseNativeWorkContinuation.Port) extends CommandAction {
+  private final case class Action(request: Request, identity: Option[String],
+    port: GoalPhaseNativeWorkContinuation.Port) extends CommandAction {
     override def commandExecutionMode = CommandExecutionMode.Sync
     def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
       val core = c
       def execute(): Consequence[OperationResponse] = for {
-        context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(identity))
+        input <- identity.map(_ => Consequence.success(Option.empty[V.GoalPhaseSourceHistoryNormalizationAdoptionInput]))
+          .getOrElse(inputForCallC(Action.this.request, core).map(Some(_)))
+        session = identity.getOrElse(input.get.sessionId)
+        context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(session))
         selected = core.copy(executionContext = context)
         result <- input match {
-          case None => port.describeSourceHistoryNormalizationC(identity, selected).map(NativeWorkflowOperationOutput.response(_))
+          case None => port.describeSourceHistoryNormalizationC(session, selected).map(NativeWorkflowOperationOutput.response(_))
           case Some(value) => port.adoptSourceHistoryNormalizationC(value, selected).map(NativeWorkflowOperationOutput.response(_))
         }
       } yield result

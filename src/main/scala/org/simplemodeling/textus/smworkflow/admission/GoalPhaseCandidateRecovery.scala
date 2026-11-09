@@ -27,7 +27,8 @@ import D.given
 /** Independent Human direction for one new observation after fully recorded staging.
   * Old process settlement remains unknown; no completed effect is replayed.
   * @since   Oct. 22, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseCandidateRecovery {
@@ -143,19 +144,49 @@ private[smworkflow] object GoalPhaseCandidateRecovery {
     supplied <- Option(value).toRight("Public candidate recovery target is absent")
     wire <- GoalPhaseNativeMetadata.normalizePublicJson(supplied)
     controller <- publicController(wire.hcursor.downField("controller").focus.getOrElse(Json.Null))
-    _ <- publicCandidatePayload(wire.hcursor.downField("inspection").focus.getOrElse(Json.Null))
-    _ <- publicMembers(wire, "stagingPrefix", false)(p => for {
-      _ <- publicCandidatePayload(p.hcursor.downField("intent").focus.getOrElse(Json.Null))
-      _ <- publicCandidatePayload(p.hcursor.downField("result").focus.getOrElse(Json.Null))
-    } yield ())
-    _ <- publicMembers(wire, "historyPrefix", false)(p => for {
-      _ <- _public_history_payload(p.hcursor.downField("intent").focus.getOrElse(Json.Null))
-      _ <- _public_history_payload(p.hcursor.downField("result").focus.getOrElse(Json.Null))
-    } yield ())
-    _ <- publicMembers(wire, "dependencyPrefix", true)(p =>
-      publicCandidatePayload(p.hcursor.downField("payload").focus.getOrElse(Json.Null)))
-    target <- decodeTarget(wire.mapObject(_.add("controller", controller.asJson)))
+    inspection <- C.decodePublicPayload(wire.hcursor.downField("inspection").focus.getOrElse(Json.Null))
+    staging <- _public_members(wire, "stagingPrefix", false)(p =>
+      _public_candidate_fields(p, Vector("intent", "result")))
+    history <- _public_members(staging, "historyPrefix", false)(p => for {
+      intent <- _public_history_payload(p.hcursor.downField("intent").focus.getOrElse(Json.Null))
+      result <- _public_history_payload(p.hcursor.downField("result").focus.getOrElse(Json.Null))
+    } yield p.mapObject(_.add("intent", intent.asJson).add("result", result.asJson)))
+    dependency <- _public_members(history, "dependencyPrefix", true)(p =>
+      _public_candidate_fields(p, Vector("payload")))
+    target <- decodeTarget(dependency.mapObject(_.add("controller", controller.asJson)
+      .add("inspection", inspection.asJson)))
+    _ <- exactPublicFragment(wire, target.asJson)
   } yield target
+
+  /** Compare the owner's normal Record projection before canonical replacement
+    * can erase unknown fields, explicit nulls or contradictory nested data. */
+  private[admission] def exactPublicFragment(value: Json, canonical: Json): Either[String, Json] = for {
+    supplied <- GoalPhaseNativeMetadata.normalizePublicJson(value)
+    raw <- GoalPhaseNativeMetadata.record(canonical).toJsonStringC.map[Either[String, String]](Right(_))
+      .fold(error => Left(error.toString), identity)
+    parsed <- io.circe.parser.parse(raw).left.map(_.message)
+    expected <- GoalPhaseNativeMetadata.normalizePublicJson(parsed)
+    _ <- Either.cond(supplied == expected, (), "Public fragment has unknown or noncanonical fields")
+  } yield canonical
+
+  private def _public_candidate_fields(value: Json, names: Vector[String]): Either[String, Json] =
+    names.foldLeft[Either[String, Json]](Right(value)) { (result, name) => for {
+      previous <- result
+      payload <- C.decodePublicPayload(previous.hcursor.downField(name).focus.getOrElse(Json.Null))
+    } yield previous.mapObject(_.add(name, payload.asJson)) }
+
+  private def _public_members(value: Json, key: String, optional: Boolean)
+    (canonicalize: Json => Either[String, Json]): Either[String, Json] = value.hcursor.downField(key).focus match {
+    case None if optional => Right(value)
+    case Some(items) => for {
+      entries <- items.asArray.toRight("Public " + key + " must be an array")
+      canonical <- entries.foldLeft[Either[String, Vector[Json]]](Right(Vector.empty)) { (result, item) => for {
+        previous <- result
+        entry <- canonicalize(item)
+      } yield previous :+ entry }
+    } yield value.mapObject(_.add(key, canonical.asJson))
+    case None => Left("Public " + key + " is required")
+  }
 
   private val _public_controller_decoder: Decoder[Controller] = deriveDecoder[Controller]
   private val _controller_optional = Set("candidate", "candidateParent", "checksReceipt", "reviewEvidence",
@@ -172,15 +203,14 @@ private[smworkflow] object GoalPhaseCandidateRecovery {
     controller <- _public_controller_decoder(value.hcursor).left.map(_.message)
   } yield controller
 
-  private[admission] def publicCandidatePayload(value: Json): Either[String, Unit] = for {
-    _ <- publicNonNullObject(value, "candidate payload")
-    _ <- value.as[C.Payload].left.map(_.message)
-  } yield ()
+  private[admission] def publicCandidatePayload(value: Json): Either[String, Unit] =
+    C.decodePublicPayload(value).map(_ => ())
 
-  private def _public_history_payload(value: Json): Either[String, Unit] = for {
+  private def _public_history_payload(value: Json): Either[String, H.Payload] = for {
     _ <- publicNonNullObject(value, "source history payload")
-    _ <- value.as[H.Payload].left.map(_.message)
-  } yield ()
+    payload <- value.as[H.Payload].left.map(_.message)
+    _ <- exactPublicFragment(value, payload.asJson)
+  } yield payload
 
   private[admission] def publicNonNullObject(value: Json, subject: String): Either[String, Unit] =
     Either.cond(value.asObject.exists(_.values.forall(!_.isNull)), (), "Public " + subject + " must have non-null members")
@@ -484,7 +514,8 @@ private[smworkflow] object GoalPhaseCandidateRecovery {
       TypedValue(codec.typeIdentity, payload)), ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](()))(
       using core.executionContext)
   } yield ()
-  final case class Resumed(record: InstanceRecord, target: RecoveryTarget, controller: O.State, choice: String)
+  final case class Resumed(record: InstanceRecord, target: RecoveryTarget, controller: O.State, choice: String,
+    directionReference: ContextReference)
   def directionStateC(controller: O.State, from: InstanceRecord, direction: Direction): Consequence[O.State] =
     if (direction.choice == "AuthorizeNewObservation" && observationAllowed(direction.target)) Consequence.success(controller)
     else if (direction.choice == "ReviseWork" && choicesFor(direction.target).contains("ReviseWork"))
@@ -528,7 +559,7 @@ private[smworkflow] object GoalPhaseCandidateRecovery {
         _ <- if (direction.choice != "ReviseWork" || d.candidatePaths == actual.candidatePaths ||
             session.current.revision.value > next.revision.value) Consequence.unit
           else _invalid("pending revision work crosses its exact admitted candidate policy")
-      } yield Some(Resumed(next, actual, state, direction.choice))
+      } yield Some(Resumed(next, actual, state, direction.choice, direction.reference))
     }
   } yield result
 
@@ -563,7 +594,7 @@ private[smworkflow] object GoalPhaseCandidateRecovery {
       val core = c
       def execute(): Consequence[OperationResponse] = for {
         recovered <- input.fold(Consequence.success(Option.empty[V.GoalPhaseCandidateRecoveryInput]))(source =>
-          NativeWorkflowResourceInput.readC(source, reference => read_resource_text(reference,
+          NativeWorkflowResourceInput.readC(source, reference => WorkflowArtifactBudget.readTextC(core, reference,
             Some(java.nio.charset.StandardCharsets.UTF_8))).flatMap(recoveryInputC).flatMap { value =>
             if (value == null || !_exact(value.sessionId) || value.reference == null ||
                 !Vector("AuthorizeNewObservation", "ReviseWork", "Defer").contains(value.choice) ||

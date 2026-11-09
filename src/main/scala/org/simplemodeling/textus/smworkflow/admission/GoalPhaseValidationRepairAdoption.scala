@@ -26,7 +26,8 @@ import GoalPhaseValidationPriorInvocation as P
 /** One independently adopted corrective Plan; old incomplete/UNKNOWN facts
   * remain immutable. Adoption is a pure Direction, never execution or proof.
   * @since   Oct. 24, 2026
-  * @version Oct. 26, 2026
+  *  version Oct. 26, 2026
+  * @version Nov.  5, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseValidationRepairAdoption {
@@ -314,7 +315,7 @@ private[smworkflow] object GoalPhaseValidationRepairAdoption {
     def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
       val core = c
       def execute(): Consequence[OperationResponse] = for {
-        record <- NativeWorkflowResourceInput.readC(source, reference => read_resource_text(reference, Some(java.nio.charset.StandardCharsets.UTF_8)))
+        record <- NativeWorkflowResourceInput.readC(source, reference => WorkflowArtifactBudget.readTextC(core, reference, Some(java.nio.charset.StandardCharsets.UTF_8)))
         json <- _json_c(record)
         keys = if (describe) Set("sessionId", "proposal") else Set("sessionId", "target", "proposal", "choice", "rationale", "reference")
         _ <- if (json.asObject.exists(fields => keys.subsetOf(fields.keys.toSet) &&
@@ -333,7 +334,7 @@ private[smworkflow] object GoalPhaseValidationRepairAdoption {
         } yield NativeWorkflowOperationOutput.response(value)
       } yield result
       private def _read_source_c(uri: String): Consequence[String] = NativeWorkflowResourceInput.referenceC(uri)
-        .flatMap(reference => read_resource_text(reference, Some(java.nio.charset.StandardCharsets.UTF_8)))
+        .flatMap(reference => WorkflowArtifactBudget.readTextC(core, reference, Some(java.nio.charset.StandardCharsets.UTF_8)))
     }
   }
 

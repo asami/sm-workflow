@@ -14,7 +14,8 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Selected public context of the actual owning WorkOrder. Canonical CNCF
   * encoding owns the generic contracts; this view grants no execution authority.
   * @since   Oct. 14, 2026
-  * @version Oct. 29, 2026
+  *  version Oct. 29, 2026
+  * @version Nov.  5, 2026
   */
 private[smworkflow] object NativeWorkflowIssuedWorkContext {
   enum Mode(val value: String) {
@@ -72,6 +73,8 @@ private[smworkflow] object NativeWorkflowIssuedWorkContext {
   private def _profile_context(context: Record, order: WorkflowContinuation.WorkOrder[?]): Record =
     order.request.input.map(_.value) match {
       case Some(input: GoalPhaseNativeWork.Request) => input.operatingProfile.fold(context)(value =>
+        context ++ Record.data("operatingProfile" -> GoalPhaseNativeMetadata.record(value.asJson)))
+      case Some(input: StandaloneFixExecution.Work) => input.operatingProfile.fold(context)(value =>
         context ++ Record.data("operatingProfile" -> GoalPhaseNativeMetadata.record(value.asJson)))
       case _ => context
     }

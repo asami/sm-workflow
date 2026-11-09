@@ -102,7 +102,8 @@ private[admission] object LegacyDependencyHistoryFixture {
       references = families.flatMap { family =>
         val keys = current.history.map(_.causation.value).filter(_.startsWith(family + ":")).map(_.drop(family.length + 1)).distinct
         val sources = family match {
-          case "ordered-candidate" => current.history.filter(_.causation.value == "ordered-candidate:inspection").map(_.revision.value - 1)
+          case "ordered-candidate" => current.history.filter(e => e.causation.value == "ordered-candidate:inspection" ||
+            e.causation.value == "ordered-candidate:initial-source-primary-effects").map(_.revision.value - 1)
           case "ordered-validation" => current.history.filter(_.causation.value == "ordered-candidate:candidate").map(_.revision.value)
           case _ => current.history.filter(e => e.currentProgression.contains(ProgressionReference("phase.Closing")) &&
             e.suspension.isEmpty && current.history.exists(p => p.revision.next == e.revision && p.suspension.nonEmpty)).map(_.revision.value)
@@ -182,7 +183,7 @@ private[admission] object LegacyDependencyHistoryFixture {
   * They establish no actual Git/SBT execution or production Human authority.
   * @since   Oct. 24, 2026
   *  version Oct. 25, 2026
-  * @version Nov.  2, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

@@ -26,7 +26,8 @@ import RepositorySyncManagedGitObservation as G
   * Phase-review question without answering it or reinterpreting its review.
   * Recover records only the native disposition. Advance owns all later effects.
   * @since   Oct. 25, 2026
-  * @version Oct. 27, 2026
+  *  version Oct. 27, 2026
+  * @version Nov.  5, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseReleaseRepairContinuation {
@@ -341,9 +342,9 @@ private[smworkflow] object GoalPhaseReleaseRepairContinuation {
       val core = c
       def execute(): Consequence[OperationResponse] = for {
         described <- description.fold(Consequence.success(Option.empty[V.GoalPhaseReleaseRepairContinuationDescriptionInput]))(
-          source => NativeWorkflowResourceInput.readC(source, reference => read_resource_text(reference, Some(java.nio.charset.StandardCharsets.UTF_8))).map(Some(_)))
+          source => NativeWorkflowResourceInput.readC(source, reference => WorkflowArtifactBudget.readTextC(core, reference, Some(java.nio.charset.StandardCharsets.UTF_8))).map(Some(_)))
         recovered <- recovery.fold(Consequence.success(Option.empty[V.GoalPhaseReleaseRepairContinuationRecoveryInput]))(
-          source => NativeWorkflowResourceInput.readC(source, reference => read_resource_text(reference, Some(java.nio.charset.StandardCharsets.UTF_8))).map(Some(_)))
+          source => NativeWorkflowResourceInput.readC(source, reference => WorkflowArtifactBudget.readTextC(core, reference, Some(java.nio.charset.StandardCharsets.UTF_8))).map(Some(_)))
         session <- described.map(_.sessionId).orElse(recovered.map(_.sessionId)).filter(_exact)
           .map(Consequence.success).getOrElse(F.invalid("Release continuation requires an exact Session"))
         context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(session))

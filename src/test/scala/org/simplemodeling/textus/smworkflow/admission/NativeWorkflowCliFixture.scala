@@ -25,7 +25,7 @@ import GoalPhaseAcceptanceBoundary as A
   * No Workflow state is read or seeded by this caller.
   * @since   Oct. 13, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  2, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeWorkflowCliFixture {
@@ -467,7 +467,7 @@ private[admission] object NativeWorkflowCliFixture {
         val executable = Path.of(command)
         require(executable.isAbsolute && Files.isRegularFile(executable) && Files.isExecutable(executable),
           "Select an actual absolute installed command; no source-launcher fallback")
-        Vector(command)
+        Vector(command, s"--textus.assembly.descriptor=$_assembly")
       case None => Vector(_primary.resolve("bin/launcher").toString, "--classpath-file",
         _primary.resolve("target/cncf.d/runtime-classpath.txt").toString, "--main-class",
         "org.goldenport.cncf.CncfMain", "--", "--force-exit", "--component-dev-dir", _primary.toString,
@@ -1968,6 +1968,46 @@ private[admission] object NativeWorkflowCliFixture {
       sourceHistory = true)
     scenario.retrieve(root.resolve("target/sm-workflow/tasks/provider-source-history-task"))
     scenario
+  }
+
+  /** Passive caller reconstruction for the same tiny dated two-Step fixture.
+    * Reads existing host/documents and allocates unused logs; never restores state.
+    */
+  def reopenSourceHistoryPrefix(root: Path): Scenario = {
+    val parent = _primary.resolve("target/sm-workflow/work/native-cli")
+    require(root.isAbsolute && root.normalize == root && root.getParent == parent &&
+      Files.isDirectory(root) && root.toRealPath() == root, "Select the same physical isolated prefix episode")
+    val config = parse(Files.readString(root.resolve(".textus/config.json"))).fold(
+      error => throw new AssertionError(error.message), identity)
+    val raw = config.hcursor.get[String]("sm-workflow.runtime.definition").fold(
+      error => throw new AssertionError(error.message), identity)
+    val host = _take(ThreeWorkflowRuntimeParameters.decodeDefinitionC(parse(raw).fold(
+      error => throw new AssertionError(error.message), identity)), "Retained normal two-Step prefix host")
+    val repository = root.resolve("repository")
+    val imported = _take(GoalPhaseDocumentPlan.decodeC(Files.readString(repository.resolve("verification-inputs/phase.md")),
+      Files.readString(repository.resolve("verification-inputs/checklist.md"))), "Retained actual tiny Phase and checklist")
+    val plan = imported.plan
+    val documentpaths = Vector("verification-inputs/phase.md", "verification-inputs/checklist.md")
+    val source = "src/main/scala/HistoryExample.scala"
+    val paths = ((1 to 4).map(index => "src/main/scala/ARecovery" + index + ".scala").toVector :+ source) ++ documentpaths
+    val declaration = _take(GoalPhaseDocumentSource.decodeDeclarationC(Files.readString(root.resolve("goal-plan.json"))),
+      "Retained literal document source declaration")
+    require(host.target.root == repository.toString && repository.toRealPath() == repository &&
+      host.goal.input.repositoryIdentity == "smwf-p61-cli-source-history" && host.goal.candidatePaths == paths &&
+      plan.repository == host.goal.input.repositoryIdentity && plan.steps.map(_.identity) == Vector("step-1", "step-2") &&
+      plan.steps.head.ownedPaths == (Vector(source) ++ documentpaths) && plan.steps(1).ownedPaths == paths &&
+      plan.steps.forall(step => step.checks == Vector("test") && documentpaths.forall(step.ownedPaths.contains)) &&
+      declaration == GoalPhaseDocumentSource.Source(documentpaths.head, documentpaths(1)) &&
+      Files.isRegularFile(root.resolve("workflow.sqlite")) && Files.isRegularFile(root.resolve(".textus/assembly.yaml")),
+      "Reopen the existing document-owning source-history host without replacing its definition or data")
+    val logs = Files.list(root.resolve("logs"))
+    val indices = try logs.iterator().asScala.toVector.flatMap(path =>
+      path.getFileName.toString.takeWhile(_.isDigit).toIntOption) finally logs.close()
+    val next = indices.maxOption.getOrElse(0) + 1
+    require(next > 0 && !Files.exists(root.resolve(s"logs/$next.stdout.json")) &&
+      !Files.exists(root.resolve(s"logs/$next.stderr")), "Reopened calls require unused output indices")
+    new Scenario(root, host, plan, None, Some(TypedSbtHostPlanFixture.normalExecutable),
+      startingLogIndex = next, sourceHistory = true)
   }
 
   private def _host_files(scenario: Scenario, resourceroots: Vector[Path], bootstrapselectedinput: Boolean,

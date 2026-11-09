@@ -97,7 +97,7 @@ markers, missing markers and hybrid image/source payloads refuse. The host may
 retain explicit LegacyConsumption declarations for historical reconstruction;
 these do not authorize current execution.
 
-New initial proposals and targets use
+New proposals and ordinary initial targets use
 `sm-workflow.goal-phase-dependency-source-revision.v5`. Active scopes use
 `sm-workflow.goal-phase-dependency-source-scope.v5`, and active captures use
 `sm-workflow.goal-phase-dependency-source-capture.v5`, including an initial
@@ -197,7 +197,7 @@ filename suffix or prove arbitrary build noninterference. Reassess the affected
 boundary after source, helper, plugin, discovery or program changes. A missing
 suite or zero-test result cannot establish qualification.
 
-A changed dependency base requires explicit committed mode and the existing
+For ordinary post-Direction successors, a changed dependency base requires explicit committed mode and the existing
 committedBaseSuccession structure,
 `sm-workflow.goal-phase-committed-base-succession.v1`. It records parent,
 previousBase and nextBase native commit/tree pairs, complete ordered changes,
@@ -298,6 +298,170 @@ existing component-file bootstrap. Installed CLI selection uses
 smworkflow.spec.installedCommand. No manifest/image metadata is created or read,
 and no source-launcher fallback supplies an installed result. Fixture hooks and
 producer success do not establish real consumer adoption or deployment.
+## Initial pre-capture source/base succession (v8)
+
+I1. The existing describe/adopt/prepare route also supports one initial dependency
+source succession after genuine retained `ReviseWork`, before the first dependency
+stage, intent, observation or capture. It still requires the exact latest
+unanswered Implementation/Repair Human Decision, its standing dependency Admission,
+the same Step, Plan, original primary base, accepted prefix and repair accounting.
+The original failed candidate remains UNKNOWN with termination-unconfirmed.
+Wait, an arbitrary frontier, an earlier source Direction, any dependency effect
+prefix, or a later Phase does not supply this eligibility.
+
+The Proposal remains closed source-only v5 Consumption. The new Target is
+`sm-workflow.goal-phase-dependency-source-revision.v8`. Its predecessorGuard field
+is ABSENT: no predecessor dependency Guard was recorded. The closed InitialOrigin
+states `predecessorGuardAvailability=not-recorded-before-first-dependency-capture`
+and carries an authenticated InitialLineage, a CurrentPrimaryObservation, actual
+baseLineage and complete baseChanges. InitialLineage retains the real original
+CandidateRecovery target, optional genuine observation-continuation target, and
+the actual decoded ReviseWork direction reference and native completion record
+relation. Native traversal authenticates that exact relation on restart. A
+matching payload or a search for a recent arbitrary row cannot establish it.
+
+The current-primary observation is explicitly labelled
+`observed=current-at-description`. It records the current primary
+root/branch/HEAD/tree/index, selected staged inventory and diff, managed regular
+file observations, owned/candidate path policy, actual source-history selection,
+completed native effect references and the resolved process/check/grant policy.
+These are observations NOW. Old staging/history receipts prove completed EFFECTS;
+they do not prove that current semantic bytes equal old bytes. In particular,
+direct CandidateRecovery has no historical primary index/byte identity. No
+historical equality claim is manufactured.
+
+V1-v7 still encode predecessorGuard as their original required object. Missing
+or null legacy Guards, null v8 Guard, a fake v8 Guard, crossed/new fields, and a
+simultaneous unavailable-origin/present-Guard combination refuse. Existing stored
+Disposition envelopes retain their old encoding; the inner Target/Direction owns
+the v8 distinction. No historical record is rewritten or implicitly migrated.
+
+Public v8 Record transport may omit typed optional members. Its reader delegates
+the recovery, optional continuation and current repository fragments to their
+existing public owners, and decodes/re-encodes the known history selection and
+two StageChange arrays through their existing codecs before exact Target
+decoding. Required fields and unknown-field checks remain in force. This public
+projection handling does not change the exact durable codecs or legacy v1-v7
+records, and supplies no missing Guard or historical byte evidence.
+Before replacing recovery or optional-continuation fragments, the reader requires
+the supplied fragment to equal the existing Record projection of its canonical
+typed value. This pure shape check permits known optional omission while refusing
+unknown nested fields that an owning decoder could otherwise discard.
+
+I2. The successor must be independently declared with the exact current root,
+branch, HEAD/tree/index, selected paths, regular modes/removals, exclusions,
+check/program ownership and inherited approval/Usage/acceptance coverage. Native
+CommitMetadata at the successor workspace proves an actual parent path to the
+old commit and both exact commit/tree pairs. Native TreeChanges records the
+complete old-to-new committed delta. Missing objects, unrelated ancestry, or
+overlap between that committed delta and any selected pending path refuse. A
+distinct qualified checkout is permitted; neither checkout is moved or reset.
+Dirty selected work remains pending source, never committedBaseSuccession.
+
+The sole affirmative choice is
+`AdoptInitialDependencySourceRevisionAcceptingUnknownEffects`, plus `Defer`.
+Description and exact independent Human evidence explicitly select the CURRENT
+observed primary candidate together with the exact successor source, accepting
+unresolved prior effects. Maintenance approval, old ReviseWork, ResumeAssignedWork,
+host declarations and submitted semantic results provide none of this source
+permission. Passive preparation stores no Direction. Adoption reobserves current
+primary/source/ancestry/policies, independently admits the exact answer and
+appends only the existing Decision supersession. Repeating the same authenticated
+adoption is idempotent. Defer appends nothing. Description, preparation and
+adoption stage/check/publish nothing; separate ordinary Advance owns effects.
+
+I3. The first new candidate uses the newly adopted dependency binding. The
+candidate owner records `initial-source-primary-effects`, a provenance relation
+to the original completed prefix, with an explicit initialSourceEffects reference
+in the v5 native candidate envelope. This relation is not another successful
+history-write or stage receipt. It reuses only authenticated completed EFFECT
+facts and bypasses the old primary normalization/staging loops. It checks the
+exact currently selected primary index, managed bytes and staged scope and
+rechecks historical rule/date normalization READ ONLY. That idempotence check is
+not historical byte equality. Required new normalization, missing stage readiness,
+unselected staged input, post-target drift or a retained unknown new effect
+refuses; no write, restore or restage is inferred from the old receipts.
+
+A fresh source capture uses
+`sm-workflow.goal-phase-dependency-source-capture.v8`. New dependency staging,
+capture and required checks qualify the selected source. A distinct actual
+primary candidate observation records the newly selected current index/diff;
+fresh affected checks and independent review qualify those current semantic
+bytes. Old checks qualify none of them. The old UNKNOWN outcome and every old
+native record remain unchanged. The provenance relation, actual new capture
+and candidate transition are authenticated as a contiguous native history.
+
+Special primary prefix reuse ends when this first candidate completes. Later
+ordinary same-Step Repair performs normal fresh normalization/capture. Session,
+Plan, primary base, completed Steps and counters remain unchanged. V8 does not
+become an ordinary committed successor or authorize arbitrary future source
+changes: further unsupported source-base succession refuses explicitly.
+
+Executable examples I1-I3 in
+`org.simplemodeling.textus.smworkflow.admission.GoalPhaseInitialDependencySourceRevisionSpec`
+form one ordinary annotated three-case suite covering closed
+target/Direction/capture transport, legacy Guard compatibility, missing/fake
+Guards, crossed provenance/coverage, committed overlap, explicit Human choice
+and separate new-candidate provenance. They are pure specification data and
+grant no real Human authority.
+The existing
+`org.simplemodeling.textus.smworkflow.admission.GoalPhaseDependencySourceRevisionSpec`
+retains its legacy cases separately, without duplicated or removed legacy tests.
+
+The normal installed suite
+`org.simplemodeling.textus.smworkflow.admission.NativeInitialDependencySourceRevisionCliSpec`
+registers exactly one case. Its exact leaf name is unchanged:
+
+`Installed initial dependency source revision should retain an old installed episode and resume initial pre-capture source succession through fresh checks review and Step commit`
+
+Select that one-case suite with `smworkflow.spec.initialSourceMode=capture-old` and the old normal
+`smworkflow.spec.installedCommand`, its normally published
+`smworkflow.spec.componentFile`, the normal SBT executable, and an explicit
+absolute `smworkflow.spec.initialSourceEpisode` locator file that does not yet
+exist. This creates two small ordinary repositories under the existing
+native-cli fixture parent and retains their actual physical root, Session/task
+routing, actual failure logs, recovery target and immutable record snapshot in
+that caller-selected locator. It captures an actual old-runtime failure after
+primary history/staging and before any dependency prefix, genuine ReviseWork,
+diagnostic Submit and unanswered Human frontier. The unrelated committed base
+advance leaves the approved pending dependency path dirty.
+
+Before submitting the diagnostic, fresh capture retains actual public original,
+resumed and revised responses, the public recovery target and old failure log
+locators in the sibling `episode-filename.capture.json` checkpoint. If capture
+stops there, select `smworkflow.spec.initialSourceMode=capture-old-resume` with
+the same episode path and old installed CLI. The fixture checks the checkpoint's
+schema/stage and actual root/Session/Plan linkage, reopens that physical fixture,
+and retrieves its saved issued-work key through ordinary Advance. It submits the
+corrected decision-needed diagnostic once without `dependencyValidation`, or
+continues from the exact already-issued diagnostic Human frontier. It performs
+no new Start, prefix effects or ReviseWork, and creates the final episode only
+after the remaining public description and snapshot assertions succeed. Earlier
+failed aggregates and invocation logs remain retained failures. Reopened calls
+allocate the next unused numeric index in that fixture's own logs, with minimum
+1000 for capture resume and 10000 for new-runtime continuation; allocation refuses
+inherent Int overflow and never overwrites earlier logs.
+
+Select the SAME one-case suite and locator with `smworkflow.spec.initialSourceMode=continue-new`,
+the new normally published component and normal installed executable. Setup and
+old checks are not replayed. Existing normal CLI invocation is Operation directly
+with host cwd; there is no runtime-root, extra command token or source fallback.
+The fixture uses public describe/evidence/adopt/Advance, actual dependency Compile
+and fixed `fixture.SelectedDependencyCheck` TestOnly, primary consumption of the
+selected dependency's generated result, independent fixture review and Step
+commit. It asserts missing Human admission, post-description drift and late old
+result refusal, idempotent adoption, retained old records and no duplicate primary
+history/stage receipts. All directions/reviews remain SPECIFICATION-OWNED. The
+worker adds this executable scenario but does not claim it passed or grant any
+real consumer permission. Optional observation-continuation runtime qualification
+is not claimed by the direct-branch installed leaf.
+The installed suite invokes the existing `qualifyInitialSource` fixture method
+and receives its Given/When/Then narration. The support suite's legacy tests are
+registered during construction but are never run by this fixture invocation.
+Both new suites use ordinary ScalaTest registration and the existing validation
+annotations; no custom runner, Suite.run invocation, conditional registration or
+manual registry supplies their selection.
+
 # Native prerequisite Wait source revision (v6)
 
 The existing describe/adopt operations also select an actual unstarted ordinary

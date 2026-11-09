@@ -22,8 +22,8 @@ import RepositorySyncNativeProgressStore as N
 
 /** An independent Human direction for one new remote integration episode.
   * Historical intents and their UNKNOWN outcomes are never amended or replayed.
-  * @since Nov. 4, 2026
-  * @version Nov. 4, 2026
+  * @since   Nov.  4, 2026
+  * @version Nov.  5, 2026
   */
 private[smworkflow] object RepositorySyncPushContinuation {
   val purpose = "repository-sync-push-continuation"
@@ -753,7 +753,7 @@ private[smworkflow] object RepositorySyncPushContinuation {
     final class Reader extends ProcedureActionCall {
       val core = call
       def readSessionC: Consequence[String] = adoptionSourceC(suppliedRequest).flatMap(source =>
-        readAdoptionInputC(source, reference => read_resource_text(reference,
+        readAdoptionInputC(source, reference => WorkflowArtifactBudget.readTextC(core, reference,
           Some(java.nio.charset.StandardCharsets.UTF_8))).map(_.sessionId))
       def execute(): Consequence[OperationResponse] = N.invalid("push continuation reader is not an Operation")
     }
@@ -777,7 +777,7 @@ private[smworkflow] object RepositorySyncPushContinuation {
         def execute(): Consequence[OperationResponse] = for {
           value <- input match {
             case None => Consequence.success(Option.empty[V.RepositorySyncPushContinuationAdoptionInput])
-            case Some(source) => readAdoptionInputC(source, reference => read_resource_text(reference,
+            case Some(source) => readAdoptionInputC(source, reference => WorkflowArtifactBudget.readTextC(core, reference,
               Some(java.nio.charset.StandardCharsets.UTF_8))).map(Some(_))
           }
           session = value.map(_.sessionId).orElse(identity).get

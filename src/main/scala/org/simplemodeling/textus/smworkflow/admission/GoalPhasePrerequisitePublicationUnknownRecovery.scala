@@ -24,7 +24,7 @@ import GoalPhasePrerequisitePublicationRecovery as P
   * lifecycle facts and Human direction are separate inputs. Neither replaces
   * the old publication result nor the accepted semantic work.
   * @since   Nov.  1, 2026
-  * @version Nov.  2, 2026
+  * @version Nov.  5, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhasePrerequisitePublicationUnknownRecovery {
@@ -541,7 +541,7 @@ private[smworkflow] object GoalPhasePrerequisitePublicationUnknownRecovery {
     target = R.Target(R.primarySchema, original.sessionId, "", original.frontierRevision, original.frontierRevision,
       original.plan, original.candidate.step, original.generation, original.base, original.completed, original.repairProgress,
       original.requestingResult, predecessor, original.originalDirection.target.ancestors, proposal, selected,
-      original.dependencyGuard, fresh, committedBaseSuccession = committed, primaryFailureOrigin = Some(original))
+      Some(original.dependencyGuard), fresh, committedBaseSuccession = committed, primaryFailureOrigin = Some(original))
     _ <- if (R.targetValid(target)) Consequence.unit else F.invalid("Primary source proposal crosses inherited scope, program, identity or coverage")
   } yield target
 
@@ -562,7 +562,7 @@ private[smworkflow] object GoalPhasePrerequisitePublicationUnknownRecovery {
         original.admission.binding.base).map(Some(_))
     target = R.Target(R.waitSchema, original.sessionId, "", original.frontierRevision, original.frontierRevision,
       original.plan, original.candidate.step, original.generation, original.base, original.completed, original.repairProgress,
-      original.requestingResult, original.admission, original.ancestors, proposal, selected, original.guard, fresh,
+      original.requestingResult, original.admission, original.ancestors, proposal, selected, Some(original.guard), fresh,
       committedBaseSuccession = committed, waitOrigin = Some(original))
     _ <- if (R.targetValid(target)) Consequence.unit else F.invalid("Wait source proposal crosses inherited source, scope or coverage")
   } yield target

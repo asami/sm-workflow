@@ -23,8 +23,8 @@ import RepositorySyncPurpose.given
 
 /** Read the actual failed Git receipt; a separate Human direction appends a
   * fresh preparation namespace without resubmitting the accepted repair.
-  * @since Nov. 4, 2026
-  * @version Nov. 4, 2026
+  * @since   Nov.  4, 2026
+  * @version Nov.  5, 2026
   */
 private[smworkflow] object RepositorySyncPurposePreparationContinuation {
   val purpose = "repository-sync-purpose-preparation-continuation"
@@ -337,7 +337,7 @@ private[smworkflow] object RepositorySyncPurposePreparationContinuation {
       val core: ActionCall.Core = call
       def execute(): Consequence[OperationResponse] = N.invalid("preparation session reader is not an Operation")
       def readC: Consequence[String] = NativeWorkflowResourceInput.selectC[Record](suppliedRequest).flatMap(source =>
-        NativeWorkflowResourceInput.readC(source, ref => read_resource_text(ref, Some(java.nio.charset.StandardCharsets.UTF_8))))
+        NativeWorkflowResourceInput.readC(source, ref => WorkflowArtifactBudget.readTextC(core, ref, Some(java.nio.charset.StandardCharsets.UTF_8))))
         .flatMap(_input_c).map(_.sessionId)
     }
     new Reader().readC
@@ -372,7 +372,7 @@ private[smworkflow] object RepositorySyncPurposePreparationContinuation {
         val core = c
         def execute(): Consequence[OperationResponse] = for {
           value <- input.fold(Consequence.success(Option.empty[V.RepositorySyncPurposePreparationContinuationAdoptionInput]))(source =>
-            NativeWorkflowResourceInput.readC(source, ref => read_resource_text(ref, Some(java.nio.charset.StandardCharsets.UTF_8)))
+            NativeWorkflowResourceInput.readC(source, ref => WorkflowArtifactBudget.readTextC(core, ref, Some(java.nio.charset.StandardCharsets.UTF_8)))
               .flatMap(_input_c).map(Some(_)))
           sessionid = value.map(_.sessionId).orElse(identity).get
           context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(sessionid))
