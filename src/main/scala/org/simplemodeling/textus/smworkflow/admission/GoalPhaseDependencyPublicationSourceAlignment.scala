@@ -210,6 +210,9 @@ private[smworkflow] object GoalPhaseDependencyPublicationSourceAlignment {
       native.controller, native.from, native.documentPolicy, native.recordingPaths, native.chain) else Consequence.unit
     process <- if (observe) B.processPolicyC(d, core) else retained.map(t => Consequence.success(t.processPolicy))
       .getOrElse(F.invalid("Alignment history omitted its process policy"))
+    publicationpolicy <- if (observe) Consequence.success(B.publicationPolicy(policy))
+      else retained.map(t => Consequence.success(t.publicationPolicy))
+        .getOrElse(F.invalid("Alignment history omitted its publication policy"))
     roots <- if (observe) mismatchesC(native.candidate.payload, policy.targets.filter(_.beforeChecks), rootC(core, _))
       else retained.map(t => Consequence.success(t.targets)).getOrElse(F.invalid("Alignment history omitted its literal targets"))
     _ <- if (observe) R.freshnessC(core, capture) else Consequence.unit
@@ -219,7 +222,7 @@ private[smworkflow] object GoalPhaseDependencyPublicationSourceAlignment {
       core.component.get.core.instanceId.canonicalKey, native.session.participantIdentity,
       native.from.identity.value, native.from.revision.value.toString, _sorted(B.controller(native.controller)),
       native.candidate.record.revision.value.toString, _sorted(native.candidate.payload.asJson), _sorted(capture.asJson),
-      roots, process, B.publicationPolicy(policy), publication, observationIssues(capture, publication))
+      roots, process, publicationpolicy, publication, observationIssues(capture, publication))
     _ <- if (targetValid(target) && roots.forall(r => policy.targets.contains(r.target))) Consequence.unit
       else F.invalid("Alignment has no exact obsolete publisher at this native source frontier")
   } yield target

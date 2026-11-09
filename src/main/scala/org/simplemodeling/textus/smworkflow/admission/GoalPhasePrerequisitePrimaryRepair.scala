@@ -455,6 +455,13 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
         candidate.sourceRevision.toLongOption.exists(n => n.toString == candidate.sourceRevision &&
           n > next.target.pendingRevision.toLong))
 
+  private def _historical_repair_progress(previous: GoalPhaseRepairProgress.Snapshot,
+    current: GoalPhaseRepairProgress.Snapshot): Boolean =
+    GoalPhaseRepairProgress.validateC(previous).isSuccess && GoalPhaseRepairProgress.validateC(current).isSuccess &&
+      current.limit == previous.limit && current.runtimePolicy == previous.runtimePolicy &&
+      current.selectedLimit == previous.selectedLimit && current.effectiveLimit == previous.effectiveLimit &&
+      current.automaticCount >= previous.automaticCount && current.ordinaryCount >= previous.ordinaryCount
+
   /** The native source walker authenticates these Directions. This one relation
     * carries the exact saved historical cause through reconstructed inspection;
     * it never makes that cause an active Repair or grants publication authority.
@@ -478,7 +485,7 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
                   origin.historicalFailure.isEmpty && origin.historicalPublicationFailure.isEmpty &&
                   current.participant == previous.participant && selected.sessionId == prior.sessionId &&
                   selected.plan == prior.plan && selected.step == prior.step && selected.primaryBase == prior.primaryBase &&
-                  selected.completed == prior.completed && selected.repairProgress == prior.repairProgress &&
+                  selected.completed == prior.completed && _historical_repair_progress(prior.repairProgress, selected.repairProgress) &&
                   selected.predecessor == prior.predecessor && selected.ancestors == prior.ancestors &&
                   selected.binding.identity == prior.binding.identity && selected.binding.requester == prior.binding.requester &&
                   selected.binding.dependency.identity == prior.binding.dependency.identity &&
@@ -709,6 +716,7 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
     failed: LocalPublication.Result, retained: Option[Failure] = None): Consequence[Failure] = for {
     policy <- d.localPublication.map(Consequence.success).getOrElse(F.invalid("Primary repair requires its current publication policy"))
     process <- retained.map(value => Consequence.success(value.processPolicy)).getOrElse(B.processPolicyC(d, core))
+    publication = retained.map(_.publicationPolicy).getOrElse(B.publicationPolicy(policy))
     n = source.native
     dependency = n.candidate.payload.dependencyAdmission.map(_.binding.identity)
       .orElse(n.candidate.payload.dependencySourceCapture.map(_.direction.target.binding.identity))
@@ -720,7 +728,7 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
       n.from.revision.value.toString, _sorted(B.controller(n.controller)), n.controller.plan, n.controller.base,
       n.controller.generation, n.controller.completed, GoalPhaseRepairProgress.snapshot(n.controller),
       n.candidate.record.revision.value.toString, n.candidate.payload, source.requestingResult, targets,
-      B.publicationPolicy(policy), process, failed, source.artifactAdoption, source.primaryDirections, exclusions)
+      publication, process, failed, source.artifactAdoption, source.primaryDirections, exclusions)
     _ <- if (failureValid(failure)) Consequence.unit else F.invalid("Primary repair requires an eligible exact current Compile or generation failure")
     _ <- if (targets.filter(_.dependency.isEmpty) == Vector(failed.request.target) &&
         n.candidate.payload.dependencySourceCapture.forall(c =>

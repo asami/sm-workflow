@@ -3228,25 +3228,25 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           saved = _active_primary_repair(cursor).get
           adoption = _current_artifact_direction(cursor)
           _ <- adoption.fold(Consequence.unit)(direction => Z.currentC(direction.direction.target, core, d))
-          permit <- A.permitC(saved, native, cursor.primaryPublicationAuthority, d, core)
-          result <- permit.route match {
-            case A.PublicationRoute.MissingAuthority => _unresolved_publication_mismatches_c(source, cursor, core).flatMap { mismatches =>
-              if (mismatches.isEmpty) A.publicationTargetC(native, saved.fact.failure, Some(saved), d, core)
+          mismatches <- _unresolved_publication_mismatches_c(source, cursor, core)
+          result <- if (mismatches.nonEmpty) {
+            val binding = Alignment.canonicalCapture(native.candidate.payload).map(c => GoalPhaseDependencySourceRevision.bindingOf(c))
+            _wait_cursor_c(cursor, Alignment.message + " Binding " + binding.map(_.identity).getOrElse("") +
+              " selects " + binding.map(_.root).getOrElse("") + "; configured targets: " + mismatches.map(m =>
+                m.target.identity + "@" + m.target.workspace + "=" + m.actualRoot).mkString(", "))
+              .map(_.copy(condition = Some("dependency-publication-source-mismatch")))
+          } else for {
+            permit <- A.permitC(saved, native, cursor.primaryPublicationAuthority, d, core)
+            result <- permit.route match {
+              case A.PublicationRoute.MissingAuthority => A.publicationTargetC(native, saved.fact.failure, Some(saved), d, core)
                 .flatMap(target => _wait_cursor_c(cursor, A.description(target).message))
-              else {
-                val binding = Alignment.canonicalCapture(native.candidate.payload).map(c => GoalPhaseDependencySourceRevision.bindingOf(c))
-                _wait_cursor_c(cursor, Alignment.message + " Binding " + binding.map(_.identity).getOrElse("") +
-                  " selects " + binding.map(_.root).getOrElse("") + "; configured targets: " + mismatches.map(m =>
-                    m.target.identity + "@" + m.target.workspace + "=" + m.actualRoot).mkString(", "))
-                  .map(_.copy(condition = Some("dependency-publication-source-mismatch")))
-              }
+              case A.PublicationRoute.FirstFailureSuccessor | A.PublicationRoute.OrdinaryPrerequisite => GoalPhaseNativeValidation.advanceC(source, d, core, cursor.candidate.get,
+                cursor.controller, acknowledgement, Some(cursor.from), cursor.documentpolicy, N.managementPaths(cursor.findings),
+                dependencyChain = Some(cursor.dependencyChain), existingArtifactAdoption = adoption.map(_.adoption).orElse(saved.fact.failure.artifactAdoption),
+                primaryRepairPublication = permit.successor, sourceAlignment = _source_alignment_permit(cursor))
+                .flatMap(_after_validation_c(source, cursor, _, core))
             }
-            case A.PublicationRoute.FirstFailureSuccessor | A.PublicationRoute.OrdinaryPrerequisite => GoalPhaseNativeValidation.advanceC(source, d, core, cursor.candidate.get,
-              cursor.controller, acknowledgement, Some(cursor.from), cursor.documentpolicy, N.managementPaths(cursor.findings),
-              dependencyChain = Some(cursor.dependencyChain), existingArtifactAdoption = adoption.map(_.adoption).orElse(saved.fact.failure.artifactAdoption),
-              primaryRepairPublication = permit.successor, sourceAlignment = _source_alignment_permit(cursor))
-              .flatMap(_after_validation_c(source, cursor, _, core))
-          }
+          } yield result
         } yield result
       case O.Stage.Review => for {
         selected <- _review_completion_source_c(cursor)
