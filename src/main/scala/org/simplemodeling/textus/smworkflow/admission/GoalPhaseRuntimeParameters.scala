@@ -13,7 +13,7 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
  * Logical persistence configuration only; physical storage and grants belong to the host.
  * @since   Oct.  1, 2026
  *  version Oct. 27, 2026
- * @version Nov.  6, 2026
+ * @version Nov.  9, 2026
  */
 private[smworkflow] object GoalPhaseRuntimeParameters {
   private val _prefix = "sm-workflow.goal-phase.persistence."
@@ -45,7 +45,7 @@ private[smworkflow] object GoalPhaseRuntimeParameters {
   val continuations = _key("continuation-collection")(_collection_c)
   val declarations: Vector[ComponentParameterKey[?]] =
     Vector(storeName, storeIdentity, migrationPolicy, retentionPolicy, leasePolicy, instances, continuations,
-      WorkflowMechanicalReceiptParameters.maxBytes, WorkflowArtifactBudget.maxBytes)
+      WorkflowMechanicalReceiptParameters.maxBytes, WorkflowArtifactBudget.maxBytes, WorkflowPreparedImport.maxWriteBytes)
 
   final case class Persistence(configuration: Configuration, instances: DataStore.CollectionId,
     continuations: DataStore.CollectionId)

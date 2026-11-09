@@ -123,3 +123,67 @@ Obtain needed full content through the public route and reach the same isolated
 Session's normal validation/review/commit/completion path. Preserve successful
 effects and all prior uncertainty; authored fixtures are not real Human consent
 or independent product review. Record actual transfer sizes and coverage limits.
+
+## Derived preparation imports — B5 authored contract, 2026-11-09
+
+Pure preparation functions keep returning complete importer records without
+storage effects. Their executing public importer Operations now separately
+retain the **derived importer template** through the configured CommonEvidence
+collection, managed File DSL/UoW and its storage observation. They neither import
+the encoded host-evidence rows nor archive a second copy of raw execution logs
+or native snapshots. Normal output is `WorkflowPreparationResult`: a compact
+availability status/message and `retainedImport` only after confirmed storage.
+Missing policy is `setup-required`; conflicting or indeterminate storage never
+falls back to a complete response and never authorizes another File attempt.
+
+Use the actual `retainedImport` as `readPreparedImport.input` on
+`NativeWorkflowPreparationService` to retrieve the complete unchanged importer.
+That explicit detail Operation requires its exact Component, authenticated
+participant, preparation operation/purpose, source association, evidence ID and
+revision. CommonEvidence owns collection and File access; possession of a
+reference or a supplied participant string grants no read authority. Generic
+Evidence detail reads enforce the same prepared-source principal check before
+payload access. Preparation attribution is never native, Human, review,
+execution or anti-tamper authority; independent source admission remains intact.
+
+Association keys use the actual business source identity/revision, operation and
+kind, selected business scope and native Session/source revision when present.
+Both supported public field spellings are resolved without copying historical
+bodies, and contradictory aliases refuse. Observation timestamps, issuers and
+generated answer filenames do not allocate a new association. Identical bytes
+reuse the confirmed reference; differing importer bytes under the same source
+association return `conflict` without overwriting the original. This includes a
+changed supplied provenance timestamp that changes importer bytes: callers must
+retain the original provenance rather than silently rewriting it. Pre-Start
+sources use a declared `host-preparation` storage association, not a fabricated
+native Session, and retain their actual selected resource references.
+
+The Workflow artifact read budget also reaches CommonEvidence File reads,
+including Gzip decoding, through the delivered CNCF `FileReadPolicy`. Generic
+Resource/File constructors and their limits remain unchanged. Derived importer
+writes independently select `FileWritePolicy` through
+`workflow.preparation.max-write-bytes` (absence default 67,108,864 bytes; normal
+property precedence and CNCF's finite supported range). Selecting a read budget
+neither selects write capacity nor grants FileWrite. A full derived serialized
+import can be larger than its input; both actual capacities remain applicable,
+and installed qualification must report the observed sizes and any refusal.
+
+Every changed importer Operation supports explicit
+`--preparationFormat legacy-full` for its historical complete output, without
+retention. The name avoids CNCF's reserved `--format` rendering option. The new
+optional public result fields qualify this selected legacy shape. Existing pure
+APIs and old stored `passed`/`failed` CommonEvidence records remain readable.
+The CommonEvidence v1 string vocabulary additionally admits `prepared` for
+these versioned `sm-workflow.prepared-import.v1` associations. Older binaries
+that recognize only passed/failed are **not** asserted to read new prepared
+records. An importer is prepared, never a passed check. CML/ABI/help and the
+in-repository caller follow this changed contract; external copies require
+their own rollout and are not qualification evidence.
+
+The installed specification measures actual text/JSON stdout/stderr, retains
+full-baseline/detail captures separately, and compares them with ordinary
+compact transfers. It uses the exact supplied 37,533,326 / 39,715,102 /
+47,011,719 / 55,908,377-byte incident inputs passively, plus fresh isolated
+Session acquisition correction. Authored cases and fixtures are not observed
+qualification or Phase acceptance. No original historical Session is adopted,
+continued or replayed by those passive source-input cases.

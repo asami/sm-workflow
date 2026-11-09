@@ -22,7 +22,8 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Common immutable source association and managed one-text storage.
   * Physical I/O belongs to File intents in the current call's UoW.
   * @since   Oct. 20, 2026
-  * @version Oct. 27, 2026
+  *  version Oct. 27, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object CommonEvidence {
@@ -97,7 +98,7 @@ private[smworkflow] object CommonEvidence {
   } catch { case NonFatal(_) => false }
   def validSource(source: Source): Boolean = source != null && source.reference != null &&
     Vector(source.reference.identity, source.reference.revision, source.repository, source.phase, source.session, source.output).forall(_exact) &&
-    source.step != null && source.step.forall(_exact) && Set("passed", "failed")(source.actionOutcome)
+    source.step != null && source.step.forall(_exact) && Set("passed", "failed", "prepared")(source.actionOutcome)
   private def _allocation_c(raw: String, id: String): Consequence[Allocation] = _decode_c[Allocation](raw).flatMap { a =>
     if (a != null && validSource(a.source) && a.identity == id && identity(a.source) == id &&
         Vector(a.host, a.workspace).forall(_exact) && WorkspaceId.parseC(a.workspace).isSuccess &&
@@ -122,6 +123,7 @@ private[smworkflow] object CommonEvidence {
   private def _encode[A: Encoder](value: A): Json = Json.obj("schemaVersion" -> Json.fromString(schemaVersion), "payload" -> value.asJson)
 
   trait Storage {
+    def admitSourceC(source: Source): Consequence[Unit] = Consequence.unit
     def allocateNameC(): Consequence[String]
     def loadC(key: String): Consequence[Option[String]]
     def createC(key: String, value: String): Consequence[Unit]
@@ -140,7 +142,8 @@ private[smworkflow] object CommonEvidence {
     def searchLifecycleC(directive: QueryDirective): Consequence[Vector[(String, Record)]] =
       Consequence.notImplemented("Evidence indexed search is unsupported")
   }
-  def storage(core: ActionCall.Core, p: Policy): Storage = new Storage {
+  def storage(core: ActionCall.Core, p: Policy, writePolicy: Option[FileWritePolicy] = None): Storage = new Storage {
+    override def admitSourceC(source: Source) = WorkflowPreparedImport.admitSourceC(source, core)
     def allocateNameC() = Consequence.success(core.executionContext.idGeneration.opaqueId("sm-workflow-evidence-file"))
     private def _bound_c(key: String) = ComponentRecordStorage.bindForCallC(core, p.storeName, p.collection, DataStore.StringEntryId(key))
     def loadC(key: String) = _bound_c(key).flatMap(_.loadC()).flatMap {
@@ -157,7 +160,8 @@ private[smworkflow] object CommonEvidence {
     def readC(workspace: String, path: String) = for {
       target <- WorkspaceId.parseC(workspace)
       file <- WorkspaceFilePath.parseC(path)
-      result <- WorkflowFileExecution.readTextC(core, FileTarget(target), file)
+      limits <- WorkflowArtifactBudget.limitsC(core)
+      result <- WorkflowFileExecution.readTextC(core, FileTarget(target), file, FileReadPolicy(limits))
     } yield result.text
     override def prepareDirectoryC(workspace: String, path: String) = for {
       target <- WorkspaceId.parseC(workspace)
@@ -167,12 +171,16 @@ private[smworkflow] object CommonEvidence {
     override def writeBytesC(workspace: String, path: String, bytes: Vector[Byte], representation: FileRepresentation) = for {
       target <- WorkspaceId.parseC(workspace)
       file <- WorkspaceFilePath.parseC(path)
-      result <- WorkflowFileExecution.writeBytesC(core, FileTarget(target), file, bytes, representation)
+      result <- writePolicy match {
+        case Some(policy) => WorkflowFileExecution.writeBytesC(core, FileTarget(target), file, bytes, representation, policy)
+        case None => WorkflowFileExecution.writeBytesC(core, FileTarget(target), file, bytes, representation)
+      }
     } yield result.outcome
     override def readBytesC(workspace: String, path: String, representation: FileRepresentation) = for {
       target <- WorkspaceId.parseC(workspace)
       file <- WorkspaceFilePath.parseC(path)
-      result <- WorkflowFileExecution.readBytesC(core, FileTarget(target), file, representation)
+      limits <- WorkflowArtifactBudget.limitsC(core)
+      result <- WorkflowFileExecution.readBytesC(core, FileTarget(target), file, representation, FileReadPolicy(limits))
     } yield result.bytes
     override def createLifecycleC(key: String, row: Record) = CommonEvidenceLifecycle.createRowC(core, p, key, row)
     override def saveLifecycleC(key: String, row: Record) = CommonEvidenceLifecycle.saveRowC(core, p, key, row)
@@ -225,6 +233,7 @@ private[smworkflow] object CommonEvidence {
       var representationconflict = false
       var representationorphan = false
       val result = for {
+        _ <- store.admitSourceC(source)
         existing <- store.loadC(id)
         representation <- representationC(store, id)
         _ = representationorphan = existing.isEmpty && representation.nonEmpty
@@ -306,7 +315,7 @@ private[smworkflow] object CommonEvidence {
       else Consequence.stateConflict("Evidence representation is invalid")
     }
   }
-  def payloadC(store: Storage, a: Allocation): Consequence[Option[String]] = representationC(store, a.identity).flatMap {
+  def payloadC(store: Storage, a: Allocation): Consequence[Option[String]] = store.admitSourceC(a.source).flatMap(_ => representationC(store, a.identity)).flatMap {
     case None => store.readC(a.workspace, a.path)
     case Some(compression) => store.readBytesC(a.workspace, a.path, fileRepresentation(compression)).flatMap {
       case None => Consequence.success(None)

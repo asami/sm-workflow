@@ -21,7 +21,8 @@ import SplitPhaseExplicitPartitionFixture.take
   * Supplied specification facts prove no reviewer, operator or execution authority.
   * The inherited normal fixture closes each actual runtime handle.
   * @since   Oct. 15, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 25, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] trait NativePreparationOperationFixture extends ThreeWorkflowManagedRepositoryFixture {
@@ -34,7 +35,7 @@ private[admission] trait NativePreparationOperationFixture extends ThreeWorkflow
   protected final class PreparationEpisode(val root: Path, val owner: Subsystem, val component: Component,
     val actor: ExecutionContext, val project: (Setup => Consequence[Unit]) => Unit) {
     def request(operation: String, input: Record): Request = Request.of(component = component.name,
-      service = preparationService, operation = operation, properties = List(Property("input", input, None)))
+      service = preparationService, operation = operation, properties = List(Property("input", input, None), Property("preparationFormat", "legacy-full", None)))
     def invoke(operation: String, input: Record): Consequence[OperationResponse] =
       owner.executeOperationResponseInContext(request(operation, input), actor)
     def save(name: String, text: String): String = {

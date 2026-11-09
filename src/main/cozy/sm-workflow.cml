@@ -8990,7 +8990,7 @@ RepositorySyncHumanConflictAnswer
 
 ### DESCRIPTION
 
-Own configured repository synchronization through Start, Advance and the actual assigned purpose/conflict/review/repair/Human completion. Repository identity plus actual sync intent resolves the configured tracking target and default Git. Equal, push-only and fast-forward add no product tests or AI solely for sync. Dirty purpose acceptance requires normal host policy and fixed candidate workspaces; missing configuration is an explicit preparation gap. Session context resolves retained work, actual effects and completed results without replay. Workflow owns fetch, preservation, integration, impact-selected validation, commit, non-force push and final observation. Host scope, effect authority and independent evidence remain with their consuming boundaries. Wait and accepted semantic results do not establish convergence.
+The ordinary installed entry is syncRepositoryDirectories for the configured sm-workflow.repository-sync.directories list with FULL_STATE. Keep its aggregate Session and resultReference; refreshRepositoryDirectoryConfiguration resumes eligible setup using the exact returned revision, and readRepositoryDirectoryResult reads an exact historical result. Normal clean batches need no per-directory caller loop, added AI call or periodic monitoring. Explicit lower-level startRepositorySync/advanceRepositorySync and supported push-only/fast-forward-only APIs remain available under their own contracts. Ordinary text/JSON output contains concise outcomes and confirmed retained owner/revision references; use the returned public read operation only when selected detail is needed. Own configured repository synchronization through Start, Advance and the actual assigned purpose/conflict/review/repair/Human completion. Repository identity plus actual sync intent resolves the configured tracking target and default Git. Equal, push-only and fast-forward add no product tests or AI solely for sync. Dirty purpose acceptance requires normal host policy and fixed candidate workspaces; missing configuration is an explicit preparation gap. Session context resolves retained work, actual effects and completed results without replay. Workflow owns fetch, preservation, integration, impact-selected validation, commit, non-force push and final observation. Host scope, effect authority and independent evidence remain with their consuming boundaries. Wait and accepted semantic results do not establish convergence.
 
 ### OPERATION
 
@@ -11489,6 +11489,40 @@ Explicit passive preparation metadata and absolute local file: URI references. S
 | turnId | string | 1 |
 | itemId | string | 1 |
 
+## WorkflowPreparedImportReference
+
+- input-kind :: COMMAND
+
+### DESCRIPTION
+
+Confirmed derived importer association owned by CommonEvidence. Preparation attribution grants no native, Human, review or execution authority. Select exact evidence/source revisions and authenticated participant in the same Component.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| schemaVersion | string | 1 |
+| componentInstance | string | 1 |
+| participantIdentity | string | 1 |
+| operation | string | 1 |
+| sourceReference | WorkflowArtifactReference | 1 |
+| evidence | EvidenceReference | 1 |
+
+## WorkflowPreparationResult
+
+### DESCRIPTION
+
+Normal compact output contains status, message and confirmed retainedImport only when stored. Explicit preparationFormat legacy-full returns the historical datastore importer shape, without retention. Optional fields preserve that qualified legacy representation; no setup, unknown or unavailable result contains a full-body fallback.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| status | string | ? |
+| message | string | ? |
+| retainedImport | WorkflowPreparedImportReference | ? |
+| datastore | WorkflowPreparedImportCollection | * |
+
 ## WorkflowPreparedImport
 
 ### ATTRIBUTE
@@ -12140,15 +12174,45 @@ JournalFindResult
 
 ### DESCRIPTION
 
-Prepare explicit native host input as a structured datastore importer object through ordinary current-context resource reads. Preparation authenticates no origin, certifies no reviewer or operator, grants no effect and performs no import, save, Start, Submit or Advance. Native storage codecs and admission owners retain identity and payload authority.
+Pure preparation helpers remain passive. Executing importer Operations normally retain only derived importer templates through configured CommonEvidence collection and managed File UoW; this is a separately disclosed retention effect, never provisioning or a Workflow transition. Actual authenticated principal and Component bind the source association. No native Session is invented for pre-Start host preparation. Independent host admission remains responsible for Human, review and execution provenance.
 
-Six passive import preparations return datastore rows. Two passive host-execution conversions return typed execution state through the same current-context reads, without provider IO or workflow transitions.
+Default compact output reports storage availability and a confirmed exact reference. Explicit preparationFormat legacy-full preserves the complete former importer output with no retention. readPreparedImport retrieves the unchanged importer through the existing owner under workflow.artifact.max-bytes. Separately selected workflow.preparation.max-write-bytes defaults to 67108864; it grants no FileWrite permission and is independent of the read policy. Host execution conversions keep their original typed output.
 
 ### OPERATION
+
+#### readPreparedImport
+
+##### DESCRIPTION
+
+Explicit authorized full detail of the exact confirmed derived importer reference. Admit the current authenticated participant, Component, preparation purpose, source and evidence identity/revision. Return complete unchanged importer data through CommonEvidence and managed File with the Workflow artifact read budget. No latest revision, authority grant, accepted-result replay or storage retry.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+WorkflowPreparedImportReference
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowPreparedImportReference | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowPreparedImport
 
 #### prepareGoalStart
 
 ##### DESCRIPTION
+
+Default compact format retains only the derived importer through configured CommonEvidence/File authority and returns its confirmed reference. Use readPreparedImport with retainedImport for complete importer data. Explicit --preparationFormat legacy-full preserves historical complete output without retention. Missing setup/storage never falls back to full bodies. Preparation is prepared, never check acceptance.
 
 Passively prepare the explicitly selected GoalStart input. Read only the declared absolute local file: URI references in the executing call. Return existing structured datastore rows without provisioning or workflow transition. Supplied metadata grants no authority.
 
@@ -12167,16 +12231,19 @@ WorkflowGoalStartPreparationInput
 | name | type | multiplicity |
 |------+------|--------------|
 | input | WorkflowGoalStartPreparationInput | 1 |
+| preparationFormat | string | ? |
 
 ##### OUTPUT
 
 ###### TYPE
 
-WorkflowPreparedImport
+WorkflowPreparationResult
 
 #### prepareStandaloneFixStart
 
 ##### DESCRIPTION
+
+Default compact format retains only the derived importer through configured CommonEvidence/File authority and returns its confirmed reference. Use readPreparedImport with retainedImport for complete importer data. Explicit --preparationFormat legacy-full preserves historical complete output without retention. Missing setup/storage never falls back to full bodies. Preparation is prepared, never check acceptance.
 
 Prepare only the explicitly selected standalone business request and its normal selection import, without a Phase or Plan. The returned import grants no execution authority.
 
@@ -12195,16 +12262,19 @@ WorkflowStandaloneFixStartPreparationInput
 | name | type | multiplicity |
 |------+------|--------------|
 | input | WorkflowStandaloneFixStartPreparationInput | 1 |
+| preparationFormat | string | ? |
 
 ##### OUTPUT
 
 ###### TYPE
 
-WorkflowPreparedImport
+WorkflowPreparationResult
 
 #### prepareStandaloneReviewFixStart
 
 ##### DESCRIPTION
+
+Default compact format retains only the derived importer through configured CommonEvidence/File authority and returns its confirmed reference. Use readPreparedImport with retainedImport for complete importer data. Explicit --preparationFormat legacy-full preserves historical complete output without retention. Missing setup/storage never falls back to full bodies. Preparation is prepared, never check acceptance.
 
 Prepare only the explicitly selected original review-fix business request and its normal selection import, without a Phase or Plan. The returned import grants no execution authority.
 
@@ -12223,16 +12293,19 @@ WorkflowStandaloneReviewFixStartPreparationInput
 | name | type | multiplicity |
 |------+------|--------------|
 | input | WorkflowStandaloneReviewFixStartPreparationInput | 1 |
+| preparationFormat | string | ? |
 
 ##### OUTPUT
 
 ###### TYPE
 
-WorkflowPreparedImport
+WorkflowPreparationResult
 
 #### prepareDelegateTaskStart
 
 ##### DESCRIPTION
+
+Default compact format retains only the derived importer through configured CommonEvidence/File authority and returns its confirmed reference. Use readPreparedImport with retainedImport for complete importer data. Explicit --preparationFormat legacy-full preserves historical complete output without retention. Missing setup/storage never falls back to full bodies. Preparation is prepared, never check acceptance.
 
 Prepare only the explicitly selected ad hoc Task business request and its normal selection import, without a Phase or Plan. The returned import grants no execution authority.
 
@@ -12251,16 +12324,19 @@ WorkflowDelegateTaskStartPreparationInput
 | name | type | multiplicity |
 |------+------|--------------|
 | input | WorkflowDelegateTaskStartPreparationInput | 1 |
+| preparationFormat | string | ? |
 
 ##### OUTPUT
 
 ###### TYPE
 
-WorkflowPreparedImport
+WorkflowPreparationResult
 
 #### prepareDelegateTaskScopeCorrection
 
 ##### DESCRIPTION
+
+Default compact format retains only the derived importer through configured CommonEvidence/File authority and returns its confirmed reference. Use readPreparedImport with retainedImport for complete importer data. Explicit --preparationFormat legacy-full preserves historical complete output without retention. Missing setup/storage never falls back to full bodies. Preparation is prepared, never check acceptance.
 
 Passively prepare the complete scope-correction input for exact ExplicitHuman selection; the import alone grants no authority.
 
@@ -12279,16 +12355,19 @@ WorkflowDelegateTaskScopeCorrectionPreparationInput
 | name | type | multiplicity |
 |------+------|--------------|
 | input | WorkflowDelegateTaskScopeCorrectionPreparationInput | 1 |
+| preparationFormat | string | ? |
 
 ##### OUTPUT
 
 ###### TYPE
 
-WorkflowPreparedImport
+WorkflowPreparationResult
 
 #### prepareGoalTaskStart
 
 ##### DESCRIPTION
+
+Default compact format retains only the derived importer through configured CommonEvidence/File authority and returns its confirmed reference. Use readPreparedImport with retainedImport for complete importer data. Explicit --preparationFormat legacy-full preserves historical complete output without retention. Missing setup/storage never falls back to full bodies. Preparation is prepared, never check acceptance.
 
 Prepare only the explicitly selected ad hoc Task business request and its normal selection import, without a Phase or Plan. The returned import grants no execution authority.
 
@@ -12307,16 +12386,19 @@ WorkflowGoalTaskStartPreparationInput
 | name | type | multiplicity |
 |------+------|--------------|
 | input | WorkflowGoalTaskStartPreparationInput | 1 |
+| preparationFormat | string | ? |
 
 ##### OUTPUT
 
 ###### TYPE
 
-WorkflowPreparedImport
+WorkflowPreparationResult
 
 #### prepareRepositoryStart
 
 ##### DESCRIPTION
+
+Default compact format retains only the derived importer through configured CommonEvidence/File authority and returns its confirmed reference. Use readPreparedImport with retainedImport for complete importer data. Explicit --preparationFormat legacy-full preserves historical complete output without retention. Missing setup/storage never falls back to full bodies. Preparation is prepared, never check acceptance.
 
 Passively prepare the explicitly selected RepositoryStart input. Read only the declared absolute local file: URI references in the executing call. Return existing structured datastore rows without provisioning or workflow transition. Supplied metadata grants no authority.
 
@@ -12335,16 +12417,19 @@ WorkflowRepositoryStartPreparationInput
 | name | type | multiplicity |
 |------+------|--------------|
 | input | WorkflowRepositoryStartPreparationInput | 1 |
+| preparationFormat | string | ? |
 
 ##### OUTPUT
 
 ###### TYPE
 
-WorkflowPreparedImport
+WorkflowPreparationResult
 
 #### prepareSplitStart
 
 ##### DESCRIPTION
+
+Default compact format retains only the derived importer through configured CommonEvidence/File authority and returns its confirmed reference. Use readPreparedImport with retainedImport for complete importer data. Explicit --preparationFormat legacy-full preserves historical complete output without retention. Missing setup/storage never falls back to full bodies. Preparation is prepared, never check acceptance.
 
 Passively prepare the explicitly selected SplitStart input. Read only the declared absolute local file: URI references in the executing call. Return existing structured datastore rows without provisioning or workflow transition. Supplied metadata grants no authority.
 
@@ -12363,12 +12448,13 @@ WorkflowSplitStartPreparationInput
 | name | type | multiplicity |
 |------+------|--------------|
 | input | WorkflowSplitStartPreparationInput | 1 |
+| preparationFormat | string | ? |
 
 ##### OUTPUT
 
 ###### TYPE
 
-WorkflowPreparedImport
+WorkflowPreparationResult
 
 #### prepareTaskFixDelivery
 
@@ -12430,6 +12516,8 @@ WorkflowTaskFixAdoption
 
 ##### DESCRIPTION
 
+Default compact format retains only the derived importer through configured CommonEvidence/File authority and returns its confirmed reference. Use readPreparedImport with retainedImport for complete importer data. Explicit --preparationFormat legacy-full preserves historical complete output without retention. Missing setup/storage never falls back to full bodies. Preparation is prepared, never check acceptance.
+
 Passively prepare the explicitly selected RepositoryEffect input. Read only the declared absolute local file: URI references in the executing call. Return existing structured datastore rows without provisioning or workflow transition. Supplied metadata grants no authority.
 
 ##### TYPE
@@ -12447,16 +12535,19 @@ WorkflowRepositoryEffectPreparationInput
 | name | type | multiplicity |
 |------+------|--------------|
 | input | WorkflowRepositoryEffectPreparationInput | 1 |
+| preparationFormat | string | ? |
 
 ##### OUTPUT
 
 ###### TYPE
 
-WorkflowPreparedImport
+WorkflowPreparationResult
 
 #### prepareAuthority
 
 ##### DESCRIPTION
+
+Default compact format retains only the derived importer through configured CommonEvidence/File authority and returns its confirmed reference. Use readPreparedImport with retainedImport for complete importer data. Explicit --preparationFormat legacy-full preserves historical complete output without retention. Missing setup/storage never falls back to full bodies. Preparation is prepared, never check acceptance.
 
 Passively prepare the explicitly selected Authority input: a closing Wait or an explicit original-purpose inventory authority context. Read only the declared absolute local file: URI references in the executing call. Return existing structured datastore rows without provisioning or workflow transition. Supplied metadata grants no authority; independent host admission remains required.
 
@@ -12475,16 +12566,19 @@ WorkflowAuthorityPreparationInput
 | name | type | multiplicity |
 |------+------|--------------|
 | input | WorkflowAuthorityPreparationInput | 1 |
+| preparationFormat | string | ? |
 
 ##### OUTPUT
 
 ###### TYPE
 
-WorkflowPreparedImport
+WorkflowPreparationResult
 
 #### prepareEvidence
 
 ##### DESCRIPTION
+
+Default compact format retains only the derived importer through configured CommonEvidence/File authority and returns its confirmed reference. Use readPreparedImport with retainedImport for complete importer data. Explicit --preparationFormat legacy-full preserves historical complete output without retention. Missing setup/storage never falls back to full bodies. Preparation is prepared, never check acceptance.
 
 GoalPhase kind review-purpose-repair requires participant, the actual GoalPhaseReviewPurposeRepairDescriptionResult as request and GoalPhaseReviewPurposeRepairInput as result, matching directive reference and execution worker, and explicit acknowledgment of the complete saved original-purpose defect batch. Preparation records separately observed actual Human provenance under goal-phase-review-purpose-repair; it neither grants that consent nor admits a continuation nor rewrites the original review or unanswered question.
 
@@ -12537,12 +12631,13 @@ WorkflowEvidencePreparationInput
 | name | type | multiplicity |
 |------+------|--------------|
 | input | WorkflowEvidencePreparationInput | 1 |
+| preparationFormat | string | ? |
 
 ##### OUTPUT
 
 ###### TYPE
 
-WorkflowPreparedImport
+WorkflowPreparationResult
 
 #### prepareExecution
 
@@ -13338,6 +13433,9 @@ StandaloneFixView
 | resultType | string | ? |
 | diagnostics | record | * |
 | reviewContext | WorkflowReviewContext | ? |
+| retainedWork | WorkflowRetainedWorkReference | ? |
+| controlSummary | record | ? |
+| retainedMaterials | WorkflowRetainedFieldReference | * |
 
 # WORKFLOW
 
@@ -14072,6 +14170,9 @@ One original finding identity with fixed, not-applicable or unresolved outcome; 
 | resultType | string | ? |
 | diagnostics | record | * |
 | reviewContext | WorkflowReviewContext | ? |
+| retainedWork | WorkflowRetainedWorkReference | ? |
+| controlSummary | record | ? |
+| retainedMaterials | WorkflowRetainedFieldReference | * |
 
 # WORKFLOW
 

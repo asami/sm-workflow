@@ -18,7 +18,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Passive normal Operations borrow only the current executing call's resource context.
   * @since   Oct. 15, 2026
   *  version Oct. 27, 2026
-  * @version Nov.  8, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowPreparationServiceAssembly {
@@ -27,6 +27,7 @@ private[smworkflow] object NativeWorkflowPreparationServiceAssembly {
 
   def bind: spec.ServiceDefinition = NativeWorkflowDescriptionMetadata.service(_declared,
     spec.OperationDefinitionGroup(NonEmptyVector.of(
+      ReadPreparedOperation,
       new BoundOperation[V.WorkflowGoalStartPreparationInput](_declared.PrepareGoalStartOperation,
         (input, reader) => NativeGoalStartInput.prepareC(Map(
           "input" -> input.input,
@@ -131,25 +132,59 @@ private[smworkflow] object NativeWorkflowPreparationServiceAssembly {
     def createOperationRequest(request: Request): Consequence[OperationRequest] =
       if (request == null || !request.service.contains(_declared.name) || request.operation != original.name)
         Consequence.stateConflict("Workflow preparation requires its exact owning service and Operation")
-      else NativeWorkflowOperationInput.recordC(request, "input")
-        .flatMap(summon[ValueReader[A]].readC).map(input => BoundAction(request, input, prepare))
+      else for {
+        record <- NativeWorkflowOperationInput.recordC(request, "input")
+        input <- summon[ValueReader[A]].readC(record)
+        format <- NativeWorkflowOperationInput.optionalTextC(request, "preparationFormat")
+        _ <- if (format.forall(Set("compact", "legacy-full"))) Consequence.unit
+          else Consequence.stateConflict("Preparation preparationFormat requires compact or explicit legacy-full")
+      } yield BoundAction(request, input, record, original.name, format.contains("legacy-full"), prepare)
   }
 
-  private final case class BoundAction[A](request: Request, input: A,
-    prepare: (A, Reader) => Consequence[Record]) extends CommandAction {
+  private object ReadPreparedOperation extends spec.OperationDefinition {
+    val specification = NativeWorkflowDescriptionMetadata.operation(_declared.ReadPreparedImportOperation)
+    def createOperationRequest(request: Request): Consequence[OperationRequest] =
+      if (request == null || !request.service.contains(_declared.name) || request.operation != specification.name)
+        Consequence.stateConflict("Prepared import detail requires its owning public Operation")
+      else NativeWorkflowOperationInput.valueC[V.WorkflowPreparedImportReference](request, "input").map { input =>
+        val incoming = request
+        new CommandAction {
+          val request = incoming
+          override def commandExecutionMode = CommandExecutionMode.Sync
+          def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
+            val core = c
+            def execute(): Consequence[OperationResponse] = WorkflowPreparedImport.readC(core, input).flatMap { record =>
+              record.toJsonStringC.flatMap(text => io.circe.parser.parse(text)
+                .fold(error => Consequence.stateConflict(error.message), json => Consequence.success(OperationResponse.Json(json))))
+            }
+          }
+        }
+      }
+  }
+
+  private final case class BoundAction[A](request: Request, input: A, inputRecord: Record,
+    operation: String, legacyFull: Boolean, prepare: (A, Reader) => Consequence[Record]) extends CommandAction {
     override def commandExecutionMode = CommandExecutionMode.Sync
-    def createCall(core: ActionCall.Core): ActionCall = BoundCall(core, input, prepare)
+    def createCall(core: ActionCall.Core): ActionCall = BoundCall(core, input, inputRecord, operation, legacyFull, prepare)
   }
 
-  private final case class BoundCall[A](core: ActionCall.Core, input: A,
-    prepare: (A, Reader) => Consequence[Record]) extends ProcedureActionCall {
+  private final case class BoundCall[A](core: ActionCall.Core, input: A, inputRecord: Record,
+    operation: String, legacyFull: Boolean, prepare: (A, Reader) => Consequence[Record]) extends ProcedureActionCall {
+    private var reads = Map.empty[String, String]
     def execute(): Consequence[OperationResponse] = for {
       prepared <- prepare(input, _read_c)
-      text <- prepared.toJsonStringC
+      selected <- if (!legacyFull && prepared.getAny("datastore").nonEmpty)
+        WorkflowPreparedImport.retainC(core, operation, inputRecord, prepared, reads)
+        else Consequence.success(prepared)
+      text <- selected.toJsonStringC
       json <- io.circe.parser.parse(text).fold(error => Consequence.stateConflict(error.message), Consequence.success)
     } yield OperationResponse.Json(json)
 
-    private def _read_c(value: String): Consequence[String] =
+    private def _read_c(value: String): Consequence[String] = reads.get(value) match {
+      case Some(text) => Consequence.success(text)
+      case None => _acquire_c(value).map { text => reads += value -> text; text }
+    }
+    private def _acquire_c(value: String): Consequence[String] =
       if (!NativePreparationInput.exact(value))
         Consequence.stateConflict("Workflow preparation requires an exact nonempty resource reference")
       else if (value.startsWith(WorkflowRetainedWork.resourcePrefix)) WorkflowRetainedWork.readResourceC(value, core)

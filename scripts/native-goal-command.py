@@ -135,6 +135,7 @@ def native_field(value, name):
         "nextSelection": "next_selection",
         "completionEvidence": "completion_evidence",
         "retainedWork": "retained_work",
+        "retainedImport": "retained_import",
     }[name]
     require(name not in value or wire_name not in value or value[name] == value[wire_name],
             "contradictory native field aliases: " + name)
@@ -1174,7 +1175,28 @@ def complete(options, executable, runtime_root, task_fd, output_fd):
                     "--input", json.dumps(value, ensure_ascii=False, allow_nan=False), "--json"]
                 prepare_context = exchange_context(prepare_command, runtime_root, output / "preparation", outer_id, request)
                 _text, prepared = native_call(prepare_command, runtime_root, preparation_fd, prepare_context)
-                require(isinstance(prepared.get("datastore"), list), "preparation must return a datastore array")
+                retained_import = native_field(prepared, "retainedImport")
+                if retained_import is not None:
+                    require(prepared.get("status") == "prepared" and isinstance(retained_import, dict),
+                            "preparation requires a confirmed retained importer reference")
+                    os.mkdir("detail", mode=0o700, dir_fd=preparation_fd)
+                    detail_fd = os.open("detail", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=preparation_fd)
+                    try:
+                        detail_command = command_prefix(executable, runtime_root) + [
+                            "org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.readPreparedImport",
+                            "--input", json.dumps(retained_import, ensure_ascii=False, allow_nan=False), "--json"]
+                        detail_context = exchange_context(detail_command, runtime_root, output / "preparation" / "detail", outer_id, request)
+                        _detail_text, importer = native_call(detail_command, runtime_root, detail_fd, detail_context)
+                        require(isinstance(importer.get("datastore"), list) and importer["datastore"],
+                                "selected retained importer detail is unavailable")
+                        old_import = "--textus.import.data.file=" + str(output / "preparation" / "response.json")
+                        require(command.count(old_import) == 1, "selected Submit importer route differs")
+                        command[command.index(old_import)] = "--textus.import.data.file=" + str(output / "preparation" / "detail" / "response.json")
+                    finally:
+                        os.close(detail_fd)
+                else:
+                    require("status" not in prepared and isinstance(prepared.get("datastore"), list),
+                            "preparation requires confirmed detail or historical complete importer output")
                 display_observation(prepared)
                 response_progress(prepared, prepare_context)
                 require(route_record(task_fd) == {"family": "GoalPhase", "sessionId": outer_id},

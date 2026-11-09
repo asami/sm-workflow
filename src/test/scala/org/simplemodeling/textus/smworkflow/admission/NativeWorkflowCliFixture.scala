@@ -25,7 +25,7 @@ import GoalPhaseAcceptanceBoundary as A
   * No Workflow state is read or seeded by this caller.
   * @since   Oct. 13, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  6, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeWorkflowCliFixture {
@@ -48,6 +48,16 @@ private[admission] object NativeWorkflowCliFixture {
       Files.readString(stdout) + "\n" + Files.readString(stderr)
   }
   final case class Result(exitCode: Int, invocation: Invocation) {
+    /** Large-output qualifications retain full captures but never embed them
+      * into a failed assertion or decoder diagnostic. */
+    def businessBounded[A: ValueReader]: A = {
+      val location = s"exit=$exitCode; stdout=${invocation.stdout}; stderr=${invocation.stderr}"
+      require(exitCode == 0, location)
+      val record = new RecordDecoder().json(Files.readString(invocation.stdout)).toOption
+        .getOrElse(throw new AssertionError("Cannot decode retained business JSON; " + location))
+      summon[ValueReader[A]].readC(record).toOption
+        .getOrElse(throw new AssertionError("Cannot decode selected business contract; " + location))
+    }
     def business[A: ValueReader]: A = {
       require(exitCode == 0, invocation.logs)
       val record = _take(new RecordDecoder().json(Files.readString(invocation.stdout)), invocation.logs)
@@ -164,13 +174,69 @@ private[admission] object NativeWorkflowCliFixture {
 
     def selectPreparedImport(success: Result): Unit = {
       require(success.exitCode == 0 && _sequence.contains(success.invocation), "Select an actual successful scenario invocation")
-      val stdout = success.invocation.stdout
+      val selected = resolvePreparedImport(success)
+      val stdout = selected.invocation.stdout
       require(stdout.isAbsolute && stdout.normalize == stdout && stdout.startsWith(root) && Files.isRegularFile(stdout),
         "Prepared stdout must be the actual scenario-owned file")
       val config = root.resolve(".textus/config.json")
       val current = parse(Files.readString(config)).fold(error => throw new AssertionError(error.message), identity)
       require(current.isObject, "Scenario configuration must be an object")
       Files.writeString(config, current.mapObject(_.add("textus.import.data.file", Json.fromString(stdout.toString))).noSpaces)
+    }
+
+    /** Specification-owned normal host declaration, separate from native
+      * evidence imports. It grants managed storage only in this fixture root. */
+    def enablePreparedImportRetention(): Unit = {
+      val config = root.resolve(".textus/config.json")
+      val current = parse(Files.readString(config)).fold(error => throw new AssertionError(error.message), identity)
+      if (current.hcursor.downField(CommonEvidence.declaration.name).focus.isEmpty) {
+        val workspace = "prepared-imports"
+        val directory = Files.createDirectories(root.resolve("prepared-import-files"))
+        val collection = "entity:smworkflow.cli.prepared_imports"
+        val policy = Json.obj("schemaVersion" -> Json.fromString(CommonEvidence.schemaVersion),
+          "storeName" -> Json.fromString("workflow"), "collection" -> Json.fromString(collection),
+          "hostIdentity" -> Json.fromString("normal-cli-prepared-import-host"),
+          "workspaceIdentity" -> Json.fromString(workspace), "directory" -> Json.fromString("templates"))
+        def configured(name: String): Json = parse(current.hcursor.get[String](name).toOption.get)
+          .fold(error => throw new AssertionError(error.message), identity)
+        val storage = configured("textus.subsystem.storage.plan").mapObject(fields => fields.add("records",
+          Json.fromValues(fields("records").get.asArray.get :+ Json.obj(
+            "componentId" -> Json.fromString(_component), "storeName" -> Json.fromString("workflow"),
+            "collection" -> Json.fromString(collection)))))
+        val process = configured("textus.subsystem.process-execution.plan").mapObject { fields =>
+          fields.add("workspaces", Json.fromValues(fields("workspaces").get.asArray.get :+ Json.obj(
+            "identity" -> Json.fromString(workspace), "root" -> Json.fromString(directory.toString))))
+            .add("workspaceGrants", Json.fromValues(fields("workspaceGrants").get.asArray.get :+ Json.obj(
+              "componentId" -> Json.fromString(_component), "workspaceId" -> Json.fromString(workspace),
+              "access" -> Json.fromString("manage"))))
+        }
+        Files.writeString(config, current.mapObject(_.add(CommonEvidence.declaration.name, Json.fromString(policy.noSpaces))
+          .add("textus.subsystem.storage.plan", Json.fromString(storage.noSpaces))
+          .add("textus.subsystem.process-execution.plan", Json.fromString(process.noSpaces))).noSpaces)
+      }
+    }
+
+    /** Follow only an actual public confirmed reference. Historical complete
+      * importer captures remain accepted without issuing a new preparation. */
+    def resolvePreparedImport(success: Result, installations: Option[Path] = None): Result = {
+      require(success.exitCode == 0 && _sequence.contains(success.invocation), "Select actual preparation output")
+      val json = parse(Files.readString(success.invocation.stdout)).fold(error => throw new AssertionError(error.message), identity)
+      json.hcursor.downField("retainedImport").focus.filterNot(_.isNull) match {
+        case None =>
+          require(json.hcursor.get[Vector[Json]]("datastore").toOption.exists(_.nonEmpty),
+            "Preparation is unavailable/setup-required; no full-body fallback")
+          success
+        case Some(reference) =>
+          require(json.hcursor.get[String]("status").toOption.contains("prepared"), "Reference requires confirmed prepared storage")
+          val argv = success.invocation.argv
+          val selector = argv.indexWhere(_.contains(".NativeWorkflowPreparationService."))
+          val input = argv.indexOf("--input")
+          require(selector >= 0 && input >= 0 && input + 1 < argv.size, "Select exact public preparation argv")
+          val detail = _run(argv.updated(selector, "org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.readPreparedImport")
+            .updated(input + 1, reference.noSpaces), installations)
+          require(detail.exitCode == 0, "Selected public importer detail unavailable; retain both captures")
+          detail
+      }
     }
 
     def updateMappedExecution(mapping: Json, origin: Json): Unit = {
@@ -220,7 +286,7 @@ private[admission] object NativeWorkflowCliFixture {
         (if (mode == "client") _client_options else Vector.empty) ++ _output)
     /** The same isolated host can qualify a separately installed normal CLI. */
     def callInstalled(executable: Path, service: String, operation: String, parameters: Vector[String],
-      installations: Option[Path] = None, assemblyDescriptor: Option[Path] = None): Result = {
+      installations: Option[Path] = None, assemblyDescriptor: Option[Path] = None, jsonOutput: Boolean = true): Result = {
       require(executable.isAbsolute && Files.isRegularFile(executable) && Files.isExecutable(executable),
         "Select an actual absolute installed command")
       val descriptor = assemblyDescriptor.toVector.map { path =>
@@ -229,7 +295,7 @@ private[admission] object NativeWorkflowCliFixture {
         s"--textus.assembly.descriptor=$path"
       }
       _run(Vector(executable.toString, s"$_component.$service.$operation") ++ descriptor ++
-        parameters ++ Vector("--json"), installations)
+        parameters ++ (if (jsonOutput) Vector("--json") else Vector.empty), installations)
     }
     def repositoryCall(operation: String, parameters: Vector[String]): Result =
       _run(_operation_argv("command", s"$_component.RepositorySyncService.$operation") ++ parameters ++ _output)
@@ -250,8 +316,10 @@ private[admission] object NativeWorkflowCliFixture {
       require(Set("prepareGoalStart", "prepareRepositoryStart", "prepareSplitStart", "prepareRepositoryEffect",
         "prepareAuthority", "prepareEvidence", "prepareExecution", "recordExecution")(operation),
         "Specification must select one declared preparation Operation")
-      _run(_operation_argv("command", s"$_component.NativeWorkflowPreparationService.$operation") ++ Vector("--input",
+      val result = _run(_operation_argv("command", s"$_component.NativeWorkflowPreparationService.$operation") ++ Vector("--input",
         _take(input.toJsonStringC, "Concrete preparation input"), "--json"))
+      if (result.exitCode == 0 && operation != "prepareExecution" && operation != "recordExecution") resolvePreparedImport(result)
+      else result
     }
     def preparationHelp(): Result = _run(_operation_argv("command", s"$_component.meta.help") ++
       Vector(s"$_component.NativeWorkflowPreparationService"))
@@ -683,7 +751,8 @@ private[admission] object NativeWorkflowCliFixture {
     bootstrapSelectedInput: Boolean = true, httpMethods: Option[Vector[String]] = Some(Vector("POST")),
     denyGit: Boolean = false, mappedExecution: Option[(Json, Json)] = None,
     sbtRepair: Option[Path] = None, classifiedSbtRepair: Boolean = false, sourceHistory: Boolean = false,
-    repairContinuation: Boolean = false, documentRevision: Boolean = false, sbtDiagnosticBytes: Int = 0): Scenario = {
+    repairContinuation: Boolean = false, documentRevision: Boolean = false, sbtDiagnosticBytes: Int = 0,
+    laterPlanPurpose: Option[String] = None): Scenario = {
     require((sbtDiagnosticBytes >= 0 && sbtDiagnosticBytes <= 90000 || sbtDiagnosticBytes == 1500000) &&
       (sbtDiagnosticBytes == 0 || sbtRepair.nonEmpty),
       "Diagnostic padding requires a selected SBT build and 0..90000 or exactly 1500000 bytes")
@@ -732,7 +801,9 @@ private[admission] object NativeWorkflowCliFixture {
       host.goal.candidatePaths, Vector.empty, Vector("test"), classification)) ++
       Option.when(repairContinuation)(GoalPhaseOrderedProgression.Step("step-2",
         "Append the next guide entry to docs/phase.md", Vector("docs/phase.md") ++
-          Option.when(documentRevision)("docs/checklist.md"), Vector.empty, Vector("test"), None))
+          Option.when(documentRevision)("docs/checklist.md"), Vector.empty, Vector("test"), None)) ++
+      laterPlanPurpose.toVector.map(purpose => GoalPhaseOrderedProgression.Step("later-retained-step", purpose,
+        host.goal.candidatePaths, Vector("step-1"), Vector("test")))
     val plan = GoalPhaseOrderedProgression.Plan("native-selected-plan", "1", host.goal.input.phaseIdentity,
       host.goal.input.repositoryIdentity, steps,
       Vector("test"), repairLimit = if (repairContinuation) 2 else if (sbtRepair.nonEmpty) 1 else 0,
@@ -2137,6 +2208,7 @@ private[admission] object NativeWorkflowCliFixture {
         |config:
         |  textus.subsystem.user-mode: standalone
         |""".stripMargin)
+    scenario.enablePreparedImportRetention()
   }
   private def _process_plan(root: Path, host: ThreeWorkflowRuntimeParameters.Definition, denygit: Boolean,
     sbtrepair: Option[Path], repaircontinuation: Boolean = false, sbtdiagnosticbytes: Int = 0): Json = {

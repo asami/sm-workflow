@@ -22,7 +22,8 @@ import SplitPhaseExplicitPartitionFixture.take
   * Supplied reviewer and execution facts confer no independent review or execution authority.
   * These episodes neither provision importer output nor operate a Workflow Session.
   * @since   Oct. 23, 2026
-  * @version Oct. 24, 2026
+  *  version Oct. 24, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -140,7 +141,7 @@ final class NativeLargeReviewPreparationSpec extends AnyWordSpec with Matchers w
         val cli = NativeWorkflowCliFixture.fresh("large-review-preparation", resourceRoots = Vector(episode.root),
           bootstrapSelectedInput = false)
         def _invoke_(input: Record): NativeWorkflowCliFixture.Result = cli.callInstalled(executable,
-          preparationService, "prepareEvidence", Vector("--input", take(input.toJsonStringC)))
+          preparationService, "prepareEvidence", Vector("--input", take(input.toJsonStringC), "--preparationFormat", "legacy-full"))
         Vector(None, Some(16777216)).foreach { cap =>
           Given("only the isolated host's ordinary byte-limit property is omitted or set to 16 MiB: " + cap)
           _configure_limit(cli.root, cap)

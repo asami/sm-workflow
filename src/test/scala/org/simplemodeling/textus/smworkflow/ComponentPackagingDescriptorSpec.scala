@@ -12,7 +12,8 @@ import org.simplemodeling.textus.smworkflow.value as V
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 28, 2026
+ *  version Oct. 28, 2026
+ * @version Nov.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -28,6 +29,31 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
     value.hcursor.get[String](field).fold(error => fail(error.message), identity)
 
   "The authored packaging descriptor" should {
+    "accept the emitted retained importer reference directly as the generated detail input" in {
+      Given("a compact preparation result carrying the exact participant, Component, source and Evidence revisions")
+      val reference = V.WorkflowPreparedImportReference("sm-workflow.prepared-import.v1",
+        "spec-component", "spec-participant", "prepareEvidence",
+        V.WorkflowArtifactReference("spec-source", "7"), V.EvidenceReference("spec-evidence", "3"))
+      val preparation = V.WorkflowPreparationResult(Some("stored"), Some("Prepared importer retained"),
+        Some(reference), Vector.empty)
+      val emitted = preparation.toRecord().getRecord("retainedImport").getOrElse(fail("Missing retained importer reference"))
+
+      When("the generated public detail input reader consumes that emitted reference without a replacement envelope")
+      val decoded = summon[org.goldenport.convert.ValueReader[V.WorkflowPreparedImportReference]].readC(emitted)
+
+      Then("the same required input fields reach the detail Operation without dropping or substituting owner revisions")
+      withClue(s"The emitted retained importer must decode as the detail input: $decoded. ") {
+        decoded.isSuccess shouldBe true
+      }
+      val input = decoded.toOption.get
+      input shouldBe reference
+      input.componentInstance shouldBe "spec-component"
+      input.participantIdentity shouldBe "spec-participant"
+      input.operation shouldBe "prepareEvidence"
+      input.sourceReference shouldBe V.WorkflowArtifactReference("spec-source", "7")
+      input.evidence shouldBe V.EvidenceReference("spec-evidence", "3")
+    }
+
     "E67 expose the bounded native chain and optional closed Step field in authored ABI and generated values" in {
       Given("docs/spec/goal-phase-closure-recovery.md R8 E67: the authored ABI and normally generated public value constructors")
       val types = array(readJson("src/main/car/abi-manifest.json").hcursor.downField("abi").downField("exports").focus.get, "types")
@@ -190,6 +216,7 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
       val preparation = Map("prepareStandaloneFixStart" -> "WorkflowStandaloneFixStartPreparationInput", "prepareGoalStart" -> "WorkflowGoalStartPreparationInput",
         "prepareStandaloneReviewFixStart" -> "WorkflowStandaloneReviewFixStartPreparationInput", "prepareGoalTaskStart" -> "WorkflowGoalTaskStartPreparationInput",
         "prepareDelegateTaskStart" -> "WorkflowDelegateTaskStartPreparationInput",
+        "prepareDelegateTaskScopeCorrection" -> "WorkflowDelegateTaskScopeCorrectionPreparationInput",
         "prepareRepositoryStart" -> "WorkflowRepositoryStartPreparationInput", "prepareSplitStart" -> "WorkflowSplitStartPreparationInput",
         "prepareRepositoryEffect" -> "WorkflowRepositoryEffectPreparationInput", "prepareAuthority" -> "WorkflowAuthorityPreparationInput",
         "prepareEvidence" -> "WorkflowEvidencePreparationInput")
@@ -199,18 +226,21 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
         "prepareTaskFixDelivery" -> ("WorkflowTaskFixDeliveryPreparationInput", "WorkflowTaskFixDelivery"),
         "prepareTaskFixAdoption" -> ("WorkflowTaskFixAdoptionPreparationInput", "WorkflowTaskFixAdoption"),
         "prepareCallerInformation" -> ("WorkflowCallerInformationPrepareInput", "WorkflowCallerInformationRequest"),
-        "recordCallerInformation" -> ("WorkflowCallerInformationRecordInput", "WorkflowCallerInformationResult"))
+        "recordCallerInformation" -> ("WorkflowCallerInformationRecordInput", "WorkflowCallerInformationResult"),
+        "readPreparedImport" -> ("WorkflowPreparedImportReference", "WorkflowPreparedImport"))
       names("NativeWorkflowPreparationService") should contain theSameElementsAs (preparation.keys ++ callerinformation.keys).toVector
       preparation.foreach { (name, input) =>
         text(operation("NativeWorkflowPreparationService", name), "kind") shouldBe "COMMAND"
         text(operation("NativeWorkflowPreparationService", name), "input") shouldBe input
-        text(operation("NativeWorkflowPreparationService", name), "output") shouldBe "WorkflowPreparedImport"
+        text(operation("NativeWorkflowPreparationService", name), "output") shouldBe "WorkflowPreparationResult"
       }
       callerinformation.foreach { case (name, (input, output)) =>
         text(operation("NativeWorkflowPreparationService", name), "kind") shouldBe "COMMAND"
         text(operation("NativeWorkflowPreparationService", name), "input") shouldBe input
         text(operation("NativeWorkflowPreparationService", name), "output") shouldBe output
       }
+      valueFields("WorkflowPreparationResult") shouldBe Vector("status", "message", "retainedImport", "datastore")
+      valueFields("WorkflowPreparedImportReference") shouldBe Vector("schemaVersion", "componentInstance", "participantIdentity", "operation", "sourceReference", "evidence")
       valueFields("WorkflowPreparedImport") shouldBe Vector("datastore")
       valueFields("WorkflowPreparedImportCollection") shouldBe Vector("collection", "records")
       valueFields("WorkflowPreparedImportRow") shouldBe Vector("id", "selectionPayload", "selectedPlanPayload", "nativeExternalEvidencePayload")

@@ -11,7 +11,7 @@ import org.goldenport.configuration.ConfigurationValue
 /** Workflow input acquisition policy; the executing Resource owner retains all
   * provider, authorization, decoding and observation responsibilities.
   * @since   Nov.  5, 2026
-  * @version Nov.  8, 2026
+  * @version Nov.  9, 2026
   */
 private[smworkflow] object WorkflowArtifactBudget {
   val defaultMaximumBytes: Int = 67108864
@@ -36,6 +36,11 @@ private[smworkflow] object WorkflowArtifactBudget {
 
   def resolveC(parameters: ComponentInitializationParameters): Consequence[ResourceReadLimits] =
     parameters.resolve(maxBytes).map(_.value.getOrElse(ResourceReadLimits(defaultMaximumBytes)))
+
+  def limitsC(core: ActionCall.Core): Consequence[ResourceReadLimits] = core.component match {
+    case Some(component) => resolveC(component.initializationParameters)
+    case None => Consequence.success(ResourceReadLimits(defaultMaximumBytes))
+  }
 
   /** Only operations classifying their input as a Workflow artifact call here.
     * This does not replace generic Resource or independent capture budgets.

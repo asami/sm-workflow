@@ -304,3 +304,64 @@ worker ran no validation, independent review, commit, publication, installed
 qualification or effect on a live Session. B5 owns actual 37.5 MB incident
 qualification, fresh-process installed coverage, emitted-byte measurements and
 normal publication; all Phase acceptance checkboxes remain pending.
+
+
+## B5 installed qualification source handoff — 2026-11-09
+
+The issued B5 source assignment retains Plan revision 2 and Session
+`3585e04191dce0bc0f70e394b6745767`. The exact frozen installed suite
+`NativeRepositoryDirectoryListCliSpec` is now authored with ordinary text/JSON
+stream measurements, directory-list setup and mixed clean batches, six-family
+initial-work detail reads, large same-Session result acquisition correction,
+normal isolated-home/project/Component precedence and caller-selected actual
+37.5 MB/growing public incident inputs. GoalTask and DelegateTask optional
+compact reference fields are synchronized in CML and ABI. Skill/help explain
+the list entry and explicit lower-level route.
+
+No qualification, publication, integrated review or acceptance is claimed by
+source authorship. The ordinary passive preparation producer still lacks a
+confirmed retained output owner and explicit detail contract; the incident test
+records that large ordinary-output gap rather than relabelling it as detail.
+The original consumer Session is never operated or rebound by these fixtures.
+Current isolated UNKNOWN/successful-effect preservation and complete adoption
+coverage remain required. All acceptance checkboxes and Phase 7 boundaries are
+unchanged. See the [B5 source handoff](../journal/2026/11/2026-11-09-phase-6.11-b5-qualification-handoff.md)
+for exact retained prefix references, authored cases, metadata schema and gaps.
+
+## B5 retained preparation consumer source — 2026-11-09
+
+The later consumer implementation supersedes the preceding **authored owner
+gap** while preserving its historical report. The delivered CNCF File policies
+are consumed through `WorkflowFileExecution`; CommonEvidence artifact detail
+reads use the selected Workflow artifact budget. Importer-producing public
+preparation Operations retain their derived template through CommonEvidence
+and emit compact confirmed references. `readPreparedImport` returns complete
+selected importer data; explicit `--preparationFormat legacy-full` preserves
+historical full output for every changed importer Operation. Read capacity,
+independently configured preparation write capacity and actual File permissions
+remain distinct. Pure preparation helpers remain passive.
+
+The new association binds authenticated participant, Component, preparation
+purpose, actual business reference/revision and available native source scope.
+Public snake/camel aliases are qualified. Observation time and generated answer
+filenames do not allocate fresh identities; contradictory bytes refuse without
+overwrite/retry. Pre-Start storage does not invent a native Session. `prepared`
+extends the Evidence outcome vocabulary; old passed/failed records retain their
+reader, and no old-binary compatibility with new prepared records is claimed.
+
+The in-repository native caller follows actual public retained detail before
+selecting its importer and preserves historical full outputs. Controlled host
+fixtures declare separate template storage/File grants and follow the same
+public connection. Authored behavior specifications cover association reuse,
+contradiction/UNKNOWN preservation, authenticated owner refusal, independently
+selected File policies, missing setup, explicit legacy output, exact detail,
+normal importer consumption, growing incident inputs and byte measurements.
+Help/ABI/packaging expectations are synchronized for the changed contract.
+
+No worker validation, installed execution, publication, independent review,
+commit or Phase acceptance is claimed. The runtime still owns all selected
+checks, actual qualification measurements, source adoption/publication, review,
+closure and durable final English completion. External operational helper copies
+and historical consumer Sessions remain unchanged. The exact parent-retained
+Request3099 and all 29 Phase acceptance conditions remain unchanged. Phase 7 keeps
+worktree/subtree and dependency-development management.

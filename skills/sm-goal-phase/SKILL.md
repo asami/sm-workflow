@@ -1331,3 +1331,18 @@ actual native Session/continuation/Step identities and accepted commit IDs.
 Missing historical time, tokens, provider identity and complete attempt history
 remain unknown. This passive projection permits no extra acquisition, AI call,
 replay, acceptance or process effect.
+
+## Retained preparation output
+
+Normal importer preparation returns compact storage availability and an actual
+`retainedImport` only after confirmed CommonEvidence retention. Pass that exact
+reference to `NativeWorkflowPreparationService.readPreparedImport` when the
+complete importer is needed, then use its actual output through the existing
+trusted import route. Missing setup, unavailable or UNKNOWN storage never grants
+a full-output fallback or retry. Preparation is prepared, never check acceptance
+or Human/review/execution authority. Explicit lower-level
+`--preparationFormat legacy-full` preserves former complete importer output
+without retention. Preserve the original source/provenance; contradictory bytes
+under the same business source association refuse. The bundled caller follows
+retained detail and accepts historical full outputs. External deployed caller
+copies require their own adoption; do not treat them as already updated.

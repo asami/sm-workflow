@@ -456,42 +456,42 @@
           "service": "NativeWorkflowPreparationService",
           "name": "prepareGoalStart",
           "kind": "COMMAND",
-          "output": "WorkflowPreparedImport",
+          "output": "WorkflowPreparationResult",
           "input": "WorkflowGoalStartPreparationInput"
         },
         {
           "service": "NativeWorkflowPreparationService",
           "name": "prepareRepositoryStart",
           "kind": "COMMAND",
-          "output": "WorkflowPreparedImport",
+          "output": "WorkflowPreparationResult",
           "input": "WorkflowRepositoryStartPreparationInput"
         },
         {
           "service": "NativeWorkflowPreparationService",
           "name": "prepareSplitStart",
           "kind": "COMMAND",
-          "output": "WorkflowPreparedImport",
+          "output": "WorkflowPreparationResult",
           "input": "WorkflowSplitStartPreparationInput"
         },
         {
           "service": "NativeWorkflowPreparationService",
           "name": "prepareRepositoryEffect",
           "kind": "COMMAND",
-          "output": "WorkflowPreparedImport",
+          "output": "WorkflowPreparationResult",
           "input": "WorkflowRepositoryEffectPreparationInput"
         },
         {
           "service": "NativeWorkflowPreparationService",
           "name": "prepareAuthority",
           "kind": "COMMAND",
-          "output": "WorkflowPreparedImport",
+          "output": "WorkflowPreparationResult",
           "input": "WorkflowAuthorityPreparationInput"
         },
         {
           "service": "NativeWorkflowPreparationService",
           "name": "prepareEvidence",
           "kind": "COMMAND",
-          "output": "WorkflowPreparedImport",
+          "output": "WorkflowPreparationResult",
           "input": "WorkflowEvidencePreparationInput"
         },
         {
@@ -653,21 +653,21 @@
           "name": "prepareStandaloneFixStart",
           "kind": "COMMAND",
           "input": "WorkflowStandaloneFixStartPreparationInput",
-          "output": "WorkflowPreparedImport"
+          "output": "WorkflowPreparationResult"
         },
         {
           "service": "NativeWorkflowPreparationService",
           "name": "prepareStandaloneReviewFixStart",
           "kind": "COMMAND",
           "input": "WorkflowStandaloneReviewFixStartPreparationInput",
-          "output": "WorkflowPreparedImport"
+          "output": "WorkflowPreparationResult"
         },
         {
           "service": "NativeWorkflowPreparationService",
           "name": "prepareGoalTaskStart",
           "kind": "COMMAND",
           "input": "WorkflowGoalTaskStartPreparationInput",
-          "output": "WorkflowPreparedImport"
+          "output": "WorkflowPreparationResult"
         },
         {
           "service": "NativeWorkflowPreparationService",
@@ -814,7 +814,7 @@
           "name": "prepareDelegateTaskStart",
           "kind": "COMMAND",
           "input": "WorkflowDelegateTaskStartPreparationInput",
-          "output": "WorkflowPreparedImport"
+          "output": "WorkflowPreparationResult"
         },
         {
           "service": "EvidenceService",
@@ -920,6 +920,20 @@
           "kind": "COMMAND",
           "input": "RepositoryDirectoryConfigurationRefreshInput",
           "output": "RepositoryDirectoryBatchResult"
+        },
+        {
+          "service": "NativeWorkflowPreparationService",
+          "name": "readPreparedImport",
+          "kind": "COMMAND",
+          "input": "WorkflowPreparedImportReference",
+          "output": "WorkflowPreparedImport"
+        },
+        {
+          "service": "NativeWorkflowPreparationService",
+          "name": "prepareDelegateTaskScopeCorrection",
+          "kind": "COMMAND",
+          "input": "WorkflowDelegateTaskScopeCorrectionPreparationInput",
+          "output": "WorkflowPreparationResult"
         }
       ],
       "types": [
@@ -6248,6 +6262,24 @@
               "type": "WorkflowReviewContext",
               "multiplicity": "?",
               "required": false
+            },
+            {
+              "name": "retainedWork",
+              "type": "WorkflowRetainedWorkReference",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "controlSummary",
+              "type": "record",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "retainedMaterials",
+              "type": "WorkflowRetainedFieldReference",
+              "multiplicity": "*",
+              "required": false
             }
           ]
         },
@@ -7292,6 +7324,24 @@
               "type": "WorkflowReviewContext",
               "multiplicity": "?",
               "required": false
+            },
+            {
+              "name": "retainedWork",
+              "type": "WorkflowRetainedWorkReference",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "controlSummary",
+              "type": "record",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "retainedMaterials",
+              "type": "WorkflowRetainedFieldReference",
+              "multiplicity": "*",
+              "required": false
             }
           ]
         },
@@ -8214,6 +8264,120 @@
             {
               "name": "reference",
               "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowPreparedImportReference",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "schemaVersion",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "componentInstance",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participantIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "operation",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sourceReference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "evidence",
+              "type": "EvidenceReference",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowPreparationResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "status",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "retainedImport",
+              "type": "WorkflowPreparedImportReference",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "datastore",
+              "type": "WorkflowPreparedImportCollection",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "WorkflowDelegateTaskScopeCorrectionPreparationInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "input",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "origin",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionCollection",
+              "type": "string",
               "multiplicity": "1",
               "required": true
             }

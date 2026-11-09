@@ -302,6 +302,39 @@ class NativeHostProgressionSpecification(unittest.TestCase):
                     self.assertEqual((directory / "response.json").read_bytes(), self.raw(responses[index]))
                     self.assertEqual((directory / "stderr.log").read_bytes(), ("fixture stderr " + str(index)).encode())
 
+    def test_human_complete_consumes_exact_retained_import_detail_without_printing_the_full_body(self):
+        # Fixture responses qualify caller transport only; installed/native authority
+        # and retention observations belong to the runtime-owned Scala qualification.
+        self.select_human(False)
+        output = self.output()
+        reference = {"schemaVersion": "sm-workflow.prepared-import.v1", "componentInstance": "fixture-component",
+                     "participantIdentity": "participant", "operation": "prepareEvidence",
+                     "sourceReference": {"identity": "actual-source", "revision": "7"},
+                     "evidence": {"identity": "actual-retained-evidence", "revision": "1"}}
+        prepared = {"status": "prepared", "message": "Actual-shaped fixture storage confirmation",
+                    "retainedImport": reference}
+        importer = {"datastore": [{"fixture": "FULL_IMPORT_DETAIL_ONLY_" + "x" * 100000}]}
+        responses = [prepared, importer, self.submit_response(), self.advance_response()]
+        status, observed, diagnostic, calls, _native = self.call(output, responses, argv=self.human_args(output))
+        self.assertEqual(status, 0, diagnostic)
+        self.assertEqual(len(calls), 4)
+        self.assertEqual(calls[1][4], "org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.readPreparedImport")
+        self.assertEqual(json.loads(calls[1][6]), reference)
+        self.assertIn("--textus.import.data.file=" + str(output / "preparation/detail/response.json"), calls[2])
+        self.assertNotIn("FULL_IMPORT_DETAIL_ONLY_", observed.getvalue())
+        self.assertEqual([json.loads(line) for line in observed.getvalue().splitlines()],
+                         [prepared, responses[2], responses[3]])
+        self.assertEqual((output / "preparation/detail/response.json").read_bytes(), self.raw(importer))
+        self.assertEqual(calls[3], self.expected_command("GoalPhase", "advanceGoalPhase", ["--sessionId", self.outer_id]))
+
+    def test_human_prepare_setup_never_falls_back_to_an_empty_import_or_submits(self):
+        self.select_human(False)
+        output = self.output()
+        prepared = {"status": "setup-required", "message": "Missing retention policy", "datastore": []}
+        status, _observed, _diagnostic, calls, _native = self.call(output, [prepared], argv=self.human_args(output))
+        self.assertNotEqual(status, 0)
+        self.assertEqual(len(calls), 1)
+
     def test_human_missing_or_invalid_supplied_records_stop_before_effects(self):
         # Given absent provenance, nonobject/extra submission fields, and strict invalid provenance JSON.
         cases = [("missing", None), ("submission", {}), ("submission", {"answer": []}),
