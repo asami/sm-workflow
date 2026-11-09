@@ -3,7 +3,7 @@
 Status: approved development direction, not implemented by this document.
 
 Delivery ownership, producer-local plans and capability dependencies are tracked
-in the [Phase 6.12 dependency plan](../phase/sm-workflow-6.12-dependencies.md).
+in the [Phase 6.12 dependency plan](../phase/phase-6.12-dependencies.md).
 That work ledger does not establish implementation or change this contract.
 
 ## Ownership and configuration

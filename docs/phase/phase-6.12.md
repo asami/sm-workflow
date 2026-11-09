@@ -11,7 +11,7 @@ Planned: 2026-11-01
 Sequence: Phase 6.11 -> Phase 6.12 -> Phase 7.
 Specification: [shared Scala lint profiles](../spec/scala-lint-profiles.md).
 Handoff: [English journal](../journal/2026/11/2026-11-01-shared-scala-lint-profiles-handoff.md).
-Producer plans: [cross-project deliveries and dependencies](sm-workflow-6.12-dependencies.md).
+Producer plans: [cross-project deliveries and dependencies](phase-6.12-dependencies.md).
 
 ## Purpose and preservation
 
@@ -44,7 +44,7 @@ handoffs. Missing Core support blocks only affected 6.12-C acceptance; do not
 wait for unrelated whole producer Phases. These are planning assignments, not
 implementation dispatches, new repository edit permissions or new Sessions.
 
-The [dependency plan](sm-workflow-6.12-dependencies.md) records local plans in
+The [dependency plan](phase-6.12-dependencies.md) records local plans in
 Core, SimpleModeler, Cozy, SimpleModeling Model, sbt-cozy, CNCF and
 development-workstation, with bounded early handoffs and acceptance mapping.
 sm-workflow owns the independently reusable Scalafix rules artifact and profile

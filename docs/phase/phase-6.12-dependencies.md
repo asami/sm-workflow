@@ -1,12 +1,13 @@
 # Phase 6.12 cross-project delivery plan
 
 Stage Status:
-- Current status: OPEN / planning only
+- Current status: OPEN
 - Owner: sm-workflow development; each producer owns its local delivery
 - Update rule: Record actual accepted handoffs and affected consumer evidence.
 - Closure basis: Existing [Phase 6.12 checklist](phase-6.12-checklist.md), not an additional gate.
 
 Planned: 2026-11-09
+Execution: not started by this plan.
 Parent: [Phase 6.12](phase-6.12.md)
 Behavior: [Scala lint profiles](../spec/scala-lint-profiles.md)
 
@@ -19,13 +20,13 @@ evidence only; it is not qualification of these new requirements.
 | Delivery | Producer and local plan | Handoff to Phase 6.12 | Required before |
 | --- | --- | --- | --- |
 | SLP-RULES | sm-workflow, SLP-1/SLP-2 | One reusable versioned Scalafix rule artifact, baseline/team resources, qualified Scala/SemanticDB matrix and diagnostics | A rule execution and adoption; CNCF build consumption |
-| SLP-CORE | [goldenport-core](../../../goldenport-core/docs/phase/sm-workflow-6.12-strict-scala-plan.md) | Receiver-type-preserving equality/identity collection API, actual imports/signatures and positive/negative evidence | C generated/AI API adoption; not A or independent B work |
-| SLP-GEN | [SimpleModeler](../../../simple-modeler/docs/phase/sm-workflow-6.12-strict-scala-plan.md) | Qualified Scala 3 output with strictEquality and bounded CanEqual; later Core API emission where actually needed | Cozy generation qualification; B/C generated-consumer acceptance |
-| SLP-COZY | [Cozy](../../../cozy/docs/phase/sm-workflow-6.12-strict-scala-plan.md) | Normal CML-to-generator integration, Cozy-owned Scala output coverage and a small generated compilation handoff | B/C end-to-end generated acceptance |
-| SLP-MODEL | [SimpleModeling Model](../../../simplemodeling-model/docs/phase/sm-workflow-6.12-strict-scala-plan.md) | Model-owned ID/value compatibility and representative library-target compilation against the accepted Core/generator delivery | Affected B/C model consumers only |
-| SLP-BUILD | [sbt-cozy](../../../sbt-cozy/docs/phase/sm-workflow-6.12-strict-scala-plan.md) | Qualified compiler-profile/build wiring and ordinary generation/check execution; implementation changes only for demonstrated gaps | B compiler-policy and relevant A/C build acceptance |
-| SLP-AI | [development-workstation](../../../../development-workstation/docs/phase/sm-workflow-6.12-strict-scala-plan.md) | Versioned AI coding instructions/templates, compiler/lint guidance and accepted Core imports; normal product distribution handoff | B AI-authored acceptance; C AI consumer adoption |
-| SLP-EXEC | [CNCF](../../../goldenport-cncf/docs/phase/sm-workflow-6.12-strict-scala-plan.md) | Existing typed SBT/UoW and resolved-configuration capability qualification, plus shared-rule build consumption | A normal validation/FIX result return; no new runtime API assumed |
+| SLP-CORE | [goldenport-core](../../../goldenport-core/docs/phase/phase-4.md) | Receiver-type-preserving equality/identity collection API, actual imports/signatures and positive/negative evidence | C generated/AI API adoption; not A or independent B work |
+| SLP-GEN | [SimpleModeler](../../../simple-modeler/docs/phase/phase-1.md) | Qualified Scala 3 output with strictEquality and bounded CanEqual; later Core API emission where actually needed | Cozy generation qualification; B/C generated-consumer acceptance |
+| SLP-COZY | [Cozy](../../../cozy/docs/phase/phase-89.md) | Normal CML-to-generator integration, Cozy-owned Scala output coverage and a small generated compilation handoff | B/C end-to-end generated acceptance |
+| SLP-MODEL | [SimpleModeling Model](../../../simplemodeling-model/docs/phase/phase-1.md) | Model-owned ID/value compatibility and representative library-target compilation against the accepted Core/generator delivery | Affected B/C model consumers only |
+| SLP-BUILD | [sbt-cozy](../../../sbt-cozy/docs/phase/phase-1.md) | Qualified compiler-profile/build wiring and ordinary generation/check execution; implementation changes only for demonstrated gaps | B compiler-policy and relevant A/C build acceptance |
+| SLP-AI | [development-workstation](../../../../development-workstation/docs/phase/phase-4.md) | Versioned AI coding instructions/templates, compiler/lint guidance and accepted Core imports; normal product distribution handoff | B AI-authored acceptance; C AI consumer adoption |
+| SLP-EXEC | [CNCF](../../../goldenport-cncf/docs/phase/phase-122.md) | Existing typed SBT/UoW and resolved-configuration capability qualification, plus shared-rule build consumption | A normal validation/FIX result return; no new runtime API assumed |
 
 Core owns generic equality/identity APIs; SimpleModeling Model owns its domain
 types. Neither depends on sm-workflow, its profile resolver, its rule artifact

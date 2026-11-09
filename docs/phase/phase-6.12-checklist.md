@@ -17,7 +17,7 @@ Stage B maps SLP-B1 -> B01, SLP-B2 -> B02/B03 and SLP-B3 -> B04.
 Stage C maps SLP-C1 -> C01, SLP-C2 -> C02/C03 and SLP-C3 -> C04/C05.
 
 Producer dependency mapping and local plans:
-[Phase 6.12 cross-project deliveries](sm-workflow-6.12-dependencies.md).
+[Phase 6.12 cross-project deliveries](phase-6.12-dependencies.md).
 Use bounded accepted handoffs and actual consumer evidence for the existing
 criteria. Planning adds no checklist IDs, acceptance claims or review cycle.
 
