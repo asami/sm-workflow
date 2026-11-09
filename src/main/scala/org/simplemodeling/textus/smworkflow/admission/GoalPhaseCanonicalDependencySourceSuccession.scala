@@ -267,18 +267,44 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
     }
   private def _previous(v: R.Target, origin: Origin): D.Binding =
     origin.previousDirection.orElse(origin.originalDirection).map(_.target.binding).getOrElse(v.predecessor.binding)
+  private def _prior_covered_approvals(v: R.Target, prior: R.Target): Option[Vector[D.Approval]] = {
+    val records = (prior.predecessor.approvals ++ prior.ancestors.flatMap(_.capture.admission.approvals) ++
+      prior.canonicalOrigin.toVector.flatMap(_.approvals)).distinct
+    val selected = prior.proposal.coverage.map { coverage =>
+      val matches = records.filter(_.decision == coverage.approval)
+      matches match {
+        case Vector(approval) if coverage == R.Coverage(approval.decision, approval.proposal.acceptance,
+            prior.binding.checks.map(_.identity)) &&
+            approval.proposal.requester == prior.binding.requester &&
+            approval.proposal.dependency.identity == prior.binding.dependency.identity &&
+            approval.proposal.dependency.repository == prior.binding.dependency.repository &&
+            prior.predecessor.approvals.map(_.proposal.usageContract.identity).distinct ==
+              Vector(approval.proposal.usageContract.identity) &&
+            (approval.step == prior.step || prior.completed.exists(_.step == approval.step)) &&
+            (approval.step == v.step || v.completed.exists(_.step == approval.step)) => Some(approval)
+        case _ => None
+      }
+    }
+    if (selected.forall(_.nonEmpty)) Some(selected.flatten) else None
+  }
   private def _boundary_valid(v: R.Target, o: Origin): Boolean = _boundary_failure(v, o).isEmpty
   private def _boundary_failure(v: R.Target, o: Origin): Option[String] = {
     val old = _previous(v, o)
     val oldpaths = (if (o.originalDirection.isEmpty)
       v.predecessor.acceptedPrefix.toVector.flatMap(_.paths) ++ old.paths else old.paths).distinct
-    val inherited = v.predecessor.approvals ++ v.ancestors.flatMap(_.capture.admission.approvals)
+    val prior = o.previousDirection.orElse(o.originalDirection)
+    val priorcovered = prior.map(d => _prior_covered_approvals(v, d.target)).getOrElse(Some(Vector.empty))
+    val inherited = (v.predecessor.approvals ++ v.ancestors.flatMap(_.capture.admission.approvals) ++
+      priorcovered.toVector.flatten).distinct
     val added = o.approvals.filter(a => a.step == v.step && !inherited.exists(_.decision == a.decision))
     val paths = oldpaths ++ added.flatMap(_.proposal.paths).filterNot(oldpaths.contains).distinct
-    val coverage = (inherited ++ added).groupBy(_.decision).values.map(_.head).toVector
+    val coverage = (inherited ++ added).distinct
     val original = o.originalDirection
     val oldcoverage = o.previousDirection.orElse(original).map(_.target.proposal.coverage)
     _first_failure(Vector(
+      _clause("scope-boundary.prior-covered-approvals")(priorcovered.nonEmpty),
+      _clause("scope-boundary.inherited-approvals")(inherited.forall(o.approvals.contains)),
+      _clause("scope-boundary.approval-conflicts")((inherited ++ o.approvals).distinct.groupBy(_.decision).values.forall(_.size == 1)),
       _clause("scope-boundary.revision")(v.binding.revision > old.revision),
       _clause("scope-boundary.paths")(v.binding.paths == paths),
       _clause("scope-boundary.component")(v.binding.dependency.identity == old.dependency.identity),

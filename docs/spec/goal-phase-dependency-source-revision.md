@@ -131,6 +131,21 @@ and compares the exact current native target before independent source Human
 admission, so an unapproved revision supplied in a target refuses. This bounded
 relation adds no schema, operation or generic revision-forgetting fallback.
 
+Inherited approvals also retain the exact additional approvals covered by the
+latest prior source Direction, selected as the previous consumption Direction
+when present or the original source Direction otherwise. The existing private
+native source/capture/closure walk authenticates that Direction. Each of its
+coverage decisions must resolve to one literal typed approval from its standing
+predecessor, ancestor admissions or canonical origin, after identical records
+are deduplicated. Its complete acceptance and prior dependency check names must
+match, and that same approval must still occur literally in the current native
+approval set. Missing or conflicting records refuse. The requester, dependency
+Component and repository, Usage identity and retained Step boundary still apply.
+Only these covered records join standing and ancestor approvals; unrelated or
+unselected global origin approvals supply no inherited authority. The full old
+coverage order and approved paths remain literal, and only newly approved
+current-Step paths append. Caller-added coverage labels supply no approval.
+
 These additions select target
 `sm-workflow.goal-phase-dependency-source-revision.v11` and capture
 `sm-workflow.goal-phase-dependency-source-capture.v12`. A v11 target requires at
@@ -200,6 +215,31 @@ and accepted Step remain literal through fresh capture, checks and Step2 closure
 The saved preparation records the actual proposal and answer reference and
 lineage flag. COLLECT remains read-only; fixture structure supplies no real
 consumer authority.
+
+The separate strict Boolean opt-in
+`smworkflow.spec.laterSourcePublicationCoverageLineage=true` requires explicit
+`smworkflow.spec.laterSourcePublicationUsageLineage=true` and a new caller
+locator and physical Session. Both defaults remain false. This scenario keeps
+one original Step1 predecessor approval for `Api.scala`, obtains a second actual
+same-Step Human approval of Usage revision1 for `docs/export-contract.md` after
+ordinary ReviseWork, and selects the old canonical source at the resulting
+unissued Implementation frontier. It preserves predecessor1, old canonical
+approvals2 and coverage2 through actual checks, independent fixture review and
+Step1 closure. Step2 separately approves Usage revision2 for
+`docs/later-contract.md`. The fixed inventory registration follows the exact
+binding paths1, then2, then3 while retaining its capability and execution limits.
+PREPARE_OLD records the published old product's
+`scope-boundary.coverage.approvals` refusal separately from ordinary committed-source/inventory
+freshness refusal and stops before producer publication. RESUME_CURRENT retains
+the same native Session, original accepted capture and complete old2 coverage
+prefix, reconstructs three approvals with exact Usage revisions1/1/2, and first
+refuses a caller rewrite of the retained old extra approval without preparing
+source Human evidence. The next correct describe has the same frontier. The
+existing unapproved Usage revision refusal, exact source Human adoption,
+separate Advance, ordinary repair1of10, fresh capture, current checks and Step2
+closure remain required. Prior successful default or Usage-only episodes are
+retained history and are never reused for this qualification; COLLECT is
+read-only and FinalReviewPhase supplies no Phase acceptance.
 
 `NativeGoalCanonicalDependencySourceSuccessionCliSpec` calls the bounded
 `qualifyCanonicalSource` fixture entry. Prepare uses the old installed product

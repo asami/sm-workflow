@@ -45,8 +45,16 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     case Some("true") => true
     case _ => throw new IllegalArgumentException("laterSourcePublicationUsageLineage must be true or false")
   }
+  private val _coverage_lineage = sys.props.get("smworkflow.spec.laterSourcePublicationCoverageLineage") match {
+    case None | Some("false") => false
+    case Some("true") => true
+    case _ => throw new IllegalArgumentException("laterSourcePublicationCoverageLineage must be true or false")
+  }
+  require(!_coverage_lineage || _usage_lineage, "CoverageLineage=true requires explicitly selected UsageLineage=true")
   private val _source = "src/main/scala/Consumer.scala"
   private val _api = "src/main/scala/Api.scala"
+  private val _export_doc = "docs/export-contract.md"
+  private val _later_doc = "docs/later-contract.md"
   private val _suite = "fixture.LaterSourceSpec"
   private val _checks = Vector(GoalPhaseNativeValidation.Check("primary-compile", 14, WorkflowSbtValidation.Kind.Compile),
     GoalPhaseNativeValidation.Check("primary-test", 15, WorkflowSbtValidation.Kind.TestOnly))
@@ -198,11 +206,17 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     val dependency = root.resolve("dependency/repository")
     Files.createDirectories(dependency.resolve("src/main/scala"))
     Files.writeString(dependency.resolve(_api), "object Api { def oldApi: Int = 42 }\n")
+    if (_coverage_lineage) {
+      Files.createDirectories(dependency.resolve("docs"))
+      Files.writeString(dependency.resolve(_export_doc), "Ordinary export contract for the original tiny API.\n")
+      Files.writeString(dependency.resolve(_later_doc), "Later tiny API contract.\n")
+    }
     Files.writeString(dependency.resolve("build.sbt"), "scalaVersion := \"2.12.20\"\norganization := \"org.example.smworkflow.specification\"\n" +
       "name := " + ("tiny-api-" + root.getFileName.toString).asJson.noSpaces + "\nversion := \"0.0.1-SNAPSHOT\"\n" +
       "lazy val root = project.in(file(\".\"))\npublishLocal := { val result = publishLocal.value; " +
       "IO.append(file(\"../publication-count.txt\"), \"published\\n\"); result }\n")
-    val base = _commit(root, dependency, "tiny-api-baseline", Vector("build.sbt", _api))
+    val base = _commit(root, dependency, "tiny-api-baseline", Vector("build.sbt", _api) ++
+      (if (_coverage_lineage) Vector(_export_doc, _later_doc) else Vector.empty))
     Files.createDirectories(repository.resolve("src/main/scala"))
     Files.createDirectories(repository.resolve("src/test/scala/fixture"))
     Files.writeString(repository.resolve(_source), _consumer("0"))
@@ -319,6 +333,16 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       (host.goal.dependencySourceRevisions.filterNot(b => b.identity == binding.identity && b.revision == binding.revision) :+ binding),
       dependencySourceConsumptions = (host.goal.dependencySourceConsumptions :+ _consumption(binding)).distinct))
     _config(root)(_.mapObject(_.add("sm-workflow.runtime.definition", ThreeWorkflowRuntimeParameters.encode(revised).noSpaces.asJson)))
+    if (_coverage_lineage) _config(root) { config =>
+      val process = parse(config.hcursor.get[String]("textus.subsystem.process-execution.plan").toOption.get).toOption.get
+      val programs = _array(process, "gitPrograms").map { program =>
+        if (program.hcursor.get[String]("identity").contains("later-source-inventory"))
+          program.mapObject(_.add("selectedPaths", binding.paths.asJson)) else program
+      }
+      programs.count(_.hcursor.get[String]("identity").contains("later-source-inventory")) shouldBe 1
+      config.mapObject(_.add("textus.subsystem.process-execution.plan",
+        process.mapObject(_.add("gitPrograms", programs.asJson)).noSpaces.asJson))
+    }
   }
   private def _publish(scenario: F.Scenario, label: String): P.PublicationObservation = {
     val input = V.LocalPublicationInput("specification-" + label, _producer.identity, None, true, None)
@@ -411,6 +435,7 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     if (Files.exists(preparedlocator)) {
       val saved = _read(preparedlocator)
       saved.hcursor.get[Boolean]("usageLineage").getOrElse(false) shouldBe _usage_lineage
+      saved.hcursor.get[Boolean]("coverageLineage").getOrElse(false) shouldBe _coverage_lineage
       _preserved(saved)
       return
     }
@@ -419,12 +444,12 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       val initial = F.freshDependency("later-source-publication", dependencyChecks = Some(Vector(
         GoalPhaseNativeValidation.Check("dependency-compile", 2, WorkflowSbtValidation.Kind.Compile))))
       _write(locator, Json.obj("stage" -> "PREPARING_OLD".asJson, "root" -> initial.root.toString.asJson,
-        "usageLineage" -> _usage_lineage.asJson))
+        "usageLineage" -> _usage_lineage.asJson, "coverageLineage" -> _coverage_lineage.asJson))
       val selectedbinding = _build(initial)
       val selected = _configure(initial, selectedbinding)
       _write(setupfile, Json.obj("root" -> selected.root.toString.asJson, "binding" -> selectedbinding.asJson,
         "plan" -> selected.plan.asJson, "oldComponent" -> sys.props("smworkflow.spec.componentFile").asJson,
-        "usageLineage" -> _usage_lineage.asJson))
+        "usageLineage" -> _usage_lineage.asJson, "coverageLineage" -> _coverage_lineage.asJson))
       selected -> selectedbinding
     } else {
       val point = sys.props.getOrElse("smworkflow.spec.laterSourcePublicationResumePoint",
@@ -434,6 +459,7 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       require(required.contains(point) && Files.isRegularFile(setupfile), "Select a retained fixture setup and finite resume point")
       val setup = _read(setupfile)
       setup.hcursor.get[Boolean]("usageLineage").getOrElse(false) shouldBe _usage_lineage
+      setup.hcursor.get[Boolean]("coverageLineage").getOrElse(false) shouldBe _coverage_lineage
       setup.hcursor.get[String]("oldComponent").toOption.get shouldBe sys.props("smworkflow.spec.componentFile")
       val actualroot = Path.of(setup.hcursor.get[String]("root").toOption.get)
       actualroot.toString shouldBe _read(locator).hcursor.get[String]("root").toOption.get
@@ -485,16 +511,61 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     _input(scenario, "initial-source-recover", "GoalPhaseService", GoalPhaseCandidateRecovery.recoveryOperation,
       V.GoalPhaseCandidateRecoveryInput(started.sessionId, recoverydescription.target, recoveryanswer.choice, recoveryanswer.rationale, recoveryreference))
       .business[V.GoalPhaseCandidateRecoveryResult].accepted shouldBe true
-    val oldbinding = binding.copy(revision = 2, base = oldbase)
+    val extraproposal = if (_coverage_lineage) Some(proposal.copy(identity = "later-source-export-scope",
+      paths = Vector(_export_doc), reason = "SPECIFICATION-ONLY independently approved ordinary export contract",
+      acceptance = Vector("Preserve the independently approved ordinary export contract"))) else None
+    val extrareference = V.WorkflowArtifactReference("specification-old-export-human", "1")
+    extraproposal.foreach { scope =>
+      Given("the recovered still-unfinished Step1 and its already admitted single predecessor selection")
+      val extraissued = _advance(scenario, task, "old-extra-implementation").business[V.GoalPhaseAdvanceResult]
+      extraissued.work.get.stepIdentity shouldBe Some("step-1")
+      When("that implementation requests a separate ordinary same Usage revision1 export scope approval")
+      _submit(scenario, extraissued, "old-extra-proposal", Json.obj("outcome" -> "decision-needed".asJson,
+        "summary" -> "SPECIFICATION-ONLY separate export scope approval".asJson, "findings" -> Json.arr(),
+        "dependencyProposal" -> scope.asJson)).business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+      val extraquestion = _advance(scenario, task, "old-extra-question")
+      val extra = extraquestion.business[V.GoalPhaseAdvanceResult]
+      val extraanswer = V.GoalPhaseOrderedDecisionAnswer("ApproveDependencyScope", "SPECIFICATION-ONLY independently approve export scope")
+      val extraexecution = _evidence(scenario, extraquestion, "old-extra-human", "human", _json(extraanswer), extrareference)
+      val accepted = _call(scenario, "old-extra-submit", "GoalPhaseService", extra.submitOperation.get,
+        Vector("--sessionId", extra.submitSessionId.get, "--answer", _json(extraanswer).noSpaces,
+          "--resultReference", _json(extrareference).noSpaces, "--executionEvidence", _json(extraexecution).noSpaces))
+        .business[V.GoalPhaseOrderedDecisionSubmissionResult]
+      Then("the second actual Human answer leaves an unissued Implementation frontier without replacing predecessor approval1")
+      accepted.accepted shouldBe true
+    }
+    val oldbinding = binding.copy(revision = 2, base = oldbase,
+      paths = binding.paths ++ extraproposal.toVector.flatMap(_.paths))
     _register(root, oldbinding)
     val oldpublication = _saved_value(root, "old-api-publication")(_publish(scenario, "old-api").asJson).as[P.PublicationObservation].toOption.get
-    val oldproposal = _proposal(oldbinding, oldpublication, locator.toUri.toASCIIString)
+    val extracoverage = extraproposal.toVector.map(scope => R.Coverage(
+      ContextReference(extrareference.identity, extrareference.revision), scope.acceptance, oldbinding.checks.map(_.identity)))
+    val oldproposal = _proposal(oldbinding, oldpublication, locator.toUri.toASCIIString, extracoverage)
     val olddescription = _describe(scenario, started.sessionId, "old-canonical-description", oldproposal)
     val oldtarget = _adopt(scenario, olddescription, "old-canonical-human")
     oldtarget.schemaVersion shouldBe R.canonicalSchema
+    if (_coverage_lineage) {
+      oldtarget.predecessor.approvals.size shouldBe 1
+      oldtarget.predecessor.binding.paths shouldBe Vector(_api)
+      oldtarget.canonicalOrigin.get.approvals shouldBe Vector(
+        D.Approval("step-1", proposal, ContextReference(reference.identity, reference.revision)),
+        D.Approval("step-1", extraproposal.get, ContextReference(extrareference.identity, extrareference.revision)))
+      oldtarget.proposal.coverage.size shouldBe 2
+      oldtarget.binding.paths shouldBe Vector(_api, _export_doc)
+    }
     val oldwork = _advance(scenario, task, "old-canonical-implementation").business[V.GoalPhaseAdvanceResult]
     _completed(scenario, oldwork, "old-canonical-implementation-submit")
     val oldreview = _advance(scenario, task, "old-canonical-review")
+    val oldcapture = if (_coverage_lineage) {
+      val captures = oldreview.business[V.GoalPhaseAdvanceResult].work.get.review.get.dependencyValidations.flatMap(record =>
+        GoalPhaseNativeMetadata.normalizePublicJson(_json(record)).toOption.toVector.flatMap(_.hcursor.get[R.Capture]("capture").toOption))
+      captures.size shouldBe 1
+      captures.head.direction.target shouldBe oldtarget
+      captures.head.direction.target.predecessor.approvals.size shouldBe 1
+      captures.head.direction.target.canonicalOrigin.get.approvals.size shouldBe 2
+      captures.head.direction.target.proposal.coverage shouldBe oldproposal.source.coverage
+      Some(captures.head)
+    } else None
     val laterissued = _close(scenario, task, oldreview, "old-canonical").business[V.GoalPhaseAdvanceResult]
     laterissued.work.get.stepIdentity shouldBe Some("step-2")
     laterissued.work.get.completed.map(_.step) shouldBe Vector("step-1")
@@ -502,6 +573,7 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       usageContract = ContextReference("tiny-api-contract", "2"),
       reason = "SPECIFICATION-ONLY same Usage identity with independently approved later obligations",
       acceptance = Vector("Consume the newly approved tiny dependency API", "Preserve the earlier tiny dependency callers"),
+      paths = if (_coverage_lineage) Vector(_later_doc) else proposal.paths,
       dependentWork = Vector(ContextReference("step-2", "1")))) else None
     val lineagereference = V.WorkflowArtifactReference("specification-later-usage-human", "1")
     val later = lineageproposal.fold(laterissued) { scope =>
@@ -548,21 +620,24 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       Files.writeString(Path.of(binding.root).resolve(_api), "object Api { def newApi(value: Int): Int = value * 2 + 2; def sourceRevision: Int = 2 }\n")
       _commit(root, Path.of(binding.root), "new-canonical-api", Vector(_api)).asJson
     }.as[O.Snapshot].toOption.get
-    val newbinding = oldbinding.copy(revision = 3, step = "step-2", base = newbase)
+    val newbinding = oldbinding.copy(revision = 3, step = "step-2", base = newbase,
+      paths = oldbinding.paths ++ (if (_coverage_lineage) Vector(_later_doc) else Vector.empty))
     _register(root, newbinding)
     val newpublication = _saved_value(root, "new-api-publication")(_publish(scenario, "new-api").asJson).as[P.PublicationObservation].toOption.get
     val lineagecoverage = lineageproposal.toVector.map(scope => R.Coverage(
       ContextReference(lineagereference.identity, lineagereference.revision), scope.acceptance, newbinding.checks.map(_.identity)))
-    val newproposal = _proposal(newbinding, newpublication, locator.toUri.toASCIIString, lineagecoverage)
+    val newproposal = _proposal(newbinding, newpublication, locator.toUri.toASCIIString, extracoverage ++ lineagecoverage)
     val stale = _advance(scenario, task, "old-ordinary-freshness-refusal")
     val unsupported = _describe(scenario, started.sessionId, "old-publication-cause-refusal", newproposal)
     // Preserve the historical default oracle. The opt-in lineage episode uses
     // the later published old product and must reach the exact approval clause.
     stale.exitCode should not be 0
-    if (_usage_lineage) stale.invocation.logs should include("canonical source requires its exact clean committed root, branch, HEAD, index and tree")
+    if (_coverage_lineage) stale.invocation.logs should include("canonical observation changed or fixed committed inventory differs from the declaration")
+    else if (_usage_lineage) stale.invocation.logs should include("canonical source requires its exact clean committed root, branch, HEAD, index and tree")
     else stale.invocation.logs should include("Canonical check consumption refuses unchanged base core and ordered routes")
     unsupported.exitCode should not be 0
-    if (_usage_lineage) unsupported.invocation.logs should include("clause=scope-boundary.added-approvals")
+    if (_coverage_lineage) unsupported.invocation.logs should include("clause=scope-boundary.coverage.approvals")
+    else if (_usage_lineage) unsupported.invocation.logs should include("clause=scope-boundary.added-approvals")
     else unsupported.invocation.logs should include("Canonical check consumption refuses unchanged base core and ordered routes")
     _lines(root.resolve("dependency/publication-count.txt")).size shouldBe 2
     val logs = Files.list(root.resolve("logs"))
@@ -572,6 +647,9 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       "host" -> ThreeWorkflowRuntimeParameters.encode(_host(root)), "plan" -> scenario.plan.asJson,
       "binding" -> newbinding.asJson, "proposal" -> newproposal.asJson, "oldTarget" -> oldtarget.asJson,
       "usageLineage" -> _usage_lineage.asJson, "usageLineageProposal" -> lineageproposal.asJson,
+      "coverageLineage" -> _coverage_lineage.asJson, "oldExtraScopeProposal" -> extraproposal.asJson,
+      "oldExtraAnswerReference" -> (if (_coverage_lineage) _json(extrareference) else Json.Null),
+      "oldAcceptedCapture" -> oldcapture.asJson,
       "usageLineageAnswerReference" -> (if (_usage_lineage) _json(lineagereference) else Json.Null),
       "originalScopeProposal" -> proposal.asJson, "oldSourceProposal" -> oldproposal.asJson,
       "oldReview" -> oldreview.invocation.stdout.toString.asJson, "laterImplementation" -> _json(later),
@@ -595,6 +673,8 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     saved.hcursor.get[String]("stage").toOption.get shouldBe "PREPARED_OLD"
     val usagelineage = saved.hcursor.get[Boolean]("usageLineage").getOrElse(false)
     usagelineage shouldBe _usage_lineage
+    val coveragelineage = saved.hcursor.get[Boolean]("coverageLineage").getOrElse(false)
+    coveragelineage shouldBe _coverage_lineage
     val root = Path.of(saved.hcursor.get[String]("root").toOption.get)
     require(root.toRealPath() == root && root.getParent == Path.of("").toAbsolutePath.normalize.resolve("target/sm-workflow/work/native-cli"))
     val task = Path.of(saved.hcursor.get[String]("task").toOption.get)
@@ -620,21 +700,56 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       val answer = take(summon[ValueReader[V.WorkflowArtifactReference]].readC(take(new RecordDecoder().json(
         saved.hcursor.get[Json]("usageLineageAnswerReference").toOption.get.noSpaces))))
       val oldapproval = D.Approval("step-1", oldscope, ContextReference("specification-scope-human", "1"))
+      val extraapproval = if (coveragelineage) {
+        val scope = saved.hcursor.get[GoalPhaseDependencyScope.Proposal]("oldExtraScopeProposal").toOption.get
+        val reference = take(summon[ValueReader[V.WorkflowArtifactReference]].readC(take(new RecordDecoder().json(
+          saved.hcursor.get[Json]("oldExtraAnswerReference").toOption.get.noSpaces))))
+        Vector(D.Approval("step-1", scope, ContextReference(reference.identity, reference.revision)))
+      } else Vector.empty
       val newapproval = D.Approval("step-2", newscope, ContextReference(answer.identity, answer.revision))
       Then("native reconstruction retains both exact approved revisions and their complete literal acceptance coverage")
       oldscope.usageContract shouldBe ContextReference("tiny-api-contract", "1")
       newscope.usageContract shouldBe ContextReference("tiny-api-contract", "2")
-      origin.approvals shouldBe Vector(oldapproval, newapproval)
+      origin.approvals shouldBe Vector(oldapproval) ++ extraapproval :+ newapproval
       origin.originalDirection.get.target shouldBe oldtarget
       oldtarget.proposal shouldBe saved.hcursor.get[C.Proposal]("oldSourceProposal").toOption.get.source
       current.proposal.coverage.startsWith(oldtarget.proposal.coverage) shouldBe true
       current.proposal.coverage shouldBe oldtarget.proposal.coverage :+
         R.Coverage(newapproval.decision, newscope.acceptance, current.binding.checks.map(_.identity))
       current.binding.step shouldBe "step-2"
+      if (coveragelineage) {
+        val accepted = saved.hcursor.get[R.Capture]("oldAcceptedCapture").toOption.get
+        current.predecessor.approvals shouldBe Vector(oldapproval)
+        oldtarget.predecessor shouldBe current.predecessor
+        oldtarget.canonicalOrigin.get.approvals shouldBe Vector(oldapproval) ++ extraapproval
+        oldtarget.proposal.coverage.size shouldBe 2
+        current.proposal.coverage.size shouldBe 3
+        origin.approvals.map(_.proposal.usageContract) shouldBe Vector(ContextReference("tiny-api-contract", "1"),
+          ContextReference("tiny-api-contract", "1"), ContextReference("tiny-api-contract", "2"))
+        oldtarget.binding.paths shouldBe Vector(_api, _export_doc)
+        current.binding.paths shouldBe Vector(_api, _export_doc, _later_doc)
+        current.preStageGuard.committedInventory.get.selected.map(_.path) shouldBe current.binding.paths
+        accepted.direction.target shouldBe oldtarget
+        origin.acceptedSourcePrefix.get.capture shouldBe ContextReference(session, accepted.sourceRevision)
+        Given("the native retained old extra approval and no source Human evidence for rewriting it")
+        val changed = extraapproval.head.copy(proposal = extraapproval.head.proposal.copy(acceptance = Vector("Caller replaced old obligation")))
+        val changedtarget = current.copy(canonicalOrigin = Some(origin.copy(approvals = Vector(oldapproval, changed, newapproval))))
+        val negative = V.GoalPhaseDependencySourceRevisionAdoptionInput(session, R.targetRecord(changedtarget), C.choice,
+          "SPECIFICATION-ONLY changed retained old approval", V.WorkflowArtifactReference("specification-changed-old-extra", "1"))
+        When("strict adoption intake receives a caller rewrite without any source Human preparation")
+        val refused = _input(scenario, "current-changed-old-extra-refusal", "GoalPhaseService", R.adoptionOperation, negative)
+        val unchanged = _describe(scenario, session, "current-description-after-changed-old-extra", proposal)
+        Then("the literal inheritance contract refuses it and the correct description retains the same native frontier")
+        R.targetValid(changedtarget) shouldBe false
+        refused.exitCode should not be 0
+        Files.exists(root.resolve("caller-results/current-changed-old-extra-evidence.json")) shouldBe false
+        take(R.targetC(unchanged.business[V.GoalPhaseDependencySourceRevisionDescriptionResult].target)) shouldBe current
+        _preserved(saved)
+      }
       saved.hcursor.get[Vector[Json]]("originalOutputs").toOption.get.size should be >= 88
       Given("the returned exact current target and no independent Human source evidence for an unapproved Usage revision")
       val forgedapproval = newapproval.copy(proposal = newscope.copy(usageContract = newscope.usageContract.copy(revision = "unapproved-revision")))
-      val forged = current.copy(canonicalOrigin = Some(origin.copy(approvals = Vector(oldapproval, forgedapproval))))
+      val forged = current.copy(canonicalOrigin = Some(origin.copy(approvals = Vector(oldapproval) ++ extraapproval :+ forgedapproval)))
       val forgedreference = V.WorkflowArtifactReference("specification-unapproved-usage-revision", "1")
       val forgedinput = V.GoalPhaseDependencySourceRevisionAdoptionInput(session, R.targetRecord(forged), C.choice,
         "SPECIFICATION-ONLY negative unapproved Usage revision", forgedreference)

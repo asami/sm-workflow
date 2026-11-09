@@ -243,6 +243,45 @@ private[admission] object LaterSourcePublicationSpecificationFixture {
   val lineageCapture = capture.copy(direction = lineageDirection)
 }
 
+/** Structural lineage data; installed qualification supplies the native proof. */
+private[admission] object PriorCoveredSourceSpecificationFixture {
+  import CanonicalDependencySourceSpecificationFixture as F
+  import LaterSourcePublicationSpecificationFixture as L
+  import GoalPhaseDependencyValidation as D
+  val standing = D.Approval("step-1", F.predecessor.approvals.head.proposal.copy(
+    paths = F.predecessor.binding.paths), ContextReference("coverage-standing-human", "1"))
+  val predecessor = D.Admission(F.predecessor.binding, Vector(standing))
+  val coverage = R.Coverage(standing.decision, standing.proposal.acceptance, predecessor.binding.checks.map(_.identity))
+  val original = F.original.copy(target = F.original.target.copy(predecessor = predecessor, ancestors = Vector.empty,
+    proposal = F.original.target.proposal.copy(coverage = Vector(coverage))))
+  val extra = standing.copy(proposal = standing.proposal.copy(identity = "coverage-old-extra", paths = Vector("docs/export-contract.md"),
+    acceptance = Vector("Preserve the approved ordinary export contract")), decision = ContextReference("coverage-old-extra-human", "1"))
+  val oldbinding = F.binding.copy(paths = F.binding.paths ++ extra.proposal.paths)
+  val oldconsumption = F.consumption.copy(expectedModes = oldbinding.paths.map(R.ExpectedMode(_, "100644")))
+  val oldsource = F.source.copy(coverage = Vector(coverage, R.Coverage(extra.decision, extra.proposal.acceptance,
+    oldbinding.checks.map(_.identity))), consumption = oldconsumption)
+  val oldguard = F.guard.copy(committedInventory = Some(F.guard.committedInventory.get.copy(selected =
+    oldbinding.paths.map(p => R.CommittedEntry(p, Some(R.CommittedObject("100644", "7" * 40)))))))
+  val oldorigin = L.olddirection.target.canonicalOrigin.get.copy(approvals = Vector(standing, extra),
+    originalDirection = Some(original), selection = F.proposal.copy(source = oldsource))
+  val olddirection = L.olddirection.copy(target = L.olddirection.target.copy(predecessor = predecessor, ancestors = Vector.empty,
+    binding = oldbinding, proposal = oldsource, preStageGuard = oldguard, canonicalOrigin = Some(oldorigin)))
+  val oldcapture = L.oldcapture.copy(direction = olddirection, preStageGuard = oldguard, postStageGuard = oldguard)
+  val added = L.lineageApproval.copy(proposal = L.lineageApproval.proposal.copy(paths = Vector("docs/later-contract.md")))
+  val binding = L.binding.copy(paths = oldbinding.paths ++ added.proposal.paths)
+  val consumption = L.consumption.copy(expectedModes = binding.paths.map(R.ExpectedMode(_, "100644")))
+  val source = L.proposal.source.copy(coverage = oldsource.coverage :+
+    R.Coverage(added.decision, added.proposal.acceptance, binding.checks.map(_.identity)), consumption = consumption)
+  val guard = L.guard.copy(committedInventory = Some(oldguard.committedInventory.get.copy(selected =
+    binding.paths.map(p => R.CommittedEntry(p, Some(R.CommittedObject("100644", "7" * 40)))))))
+  val origin = L.origin.copy(approvals = Vector(standing, extra, added), originalDirection = Some(olddirection),
+    selection = L.proposal.copy(source = source))
+  val target = L.target.copy(predecessor = predecessor, ancestors = Vector.empty, binding = binding, proposal = source,
+    preStageGuard = guard, canonicalOrigin = Some(origin))
+  val direction = L.direction.copy(target = target)
+  val capture = L.capture.copy(direction = direction, preStageGuard = guard, postStageGuard = guard)
+}
+
 /** Canonical source contracts use specification-only observations and authority.
   * @since   Nov.  8, 2026
   * @version Nov.  9, 2026
@@ -254,6 +293,93 @@ final class GoalPhaseCanonicalDependencySourceSuccessionSpec extends AnyWordSpec
   "LSR-01 Later source and genuine publication failure" should {
     import LaterSourcePublicationSpecificationFixture as L
     import GoalPhasePrerequisitePrimaryRepair as A
+    "retain only uniquely resolved prior covered approvals and append the later Step approval with its exact path" in {
+      Given("structural predecessor1 plus old canonical extra1 and later Usage revision2 approval1; these records supply no native authority")
+      import PriorCoveredSourceSpecificationFixture as P
+      When("the complete target Direction and capture cross owner and public codecs")
+      val publictarget = R.targetC(GoalPhaseNativeMetadata.record(P.target.asJson))
+      val directionwire = io.circe.parser.parse(take(GoalPhaseNativeMetadata.record(P.direction.asJson).toJsonStringC)).toOption.get
+      val capturewire = io.circe.parser.parse(take(GoalPhaseNativeMetadata.record(P.capture.asJson).toJsonStringC)).toOption.get
+      val publiccapture = for {
+        wire <- GoalPhaseNativeMetadata.normalizePublicJson(capturewire)
+        direction <- R.decodePublicDirection(wire.hcursor.downField("direction").focus.get)
+        capture <- wire.mapObject(_.add("direction", direction.asJson)).as[R.Capture].left.map(_.message)
+      } yield capture
+      Then("old coverage2 stays literal before new1 and both approved path suffixes and the original reservation survive")
+      P.target.asJson.as[R.Target] shouldBe Right(P.target)
+      take(publictarget) shouldBe P.target
+      R.decodePublicDirection(directionwire) shouldBe Right(P.direction)
+      P.direction.asJson.as[R.Direction] shouldBe Right(P.direction)
+      P.capture.asJson.as[R.Capture] shouldBe Right(P.capture)
+      publiccapture shouldBe Right(P.capture)
+      P.target.predecessor.approvals shouldBe Vector(P.standing)
+      P.origin.originalDirection shouldBe Some(P.olddirection)
+      P.oldcapture.direction shouldBe P.olddirection
+      P.olddirection.asJson.as[R.Direction] shouldBe Right(P.olddirection)
+      P.oldcapture.asJson.as[R.Capture] shouldBe Right(P.oldcapture)
+      P.oldsource.coverage.size shouldBe 2
+      P.source.coverage shouldBe P.oldsource.coverage :+ R.Coverage(P.added.decision,
+        P.added.proposal.acceptance, P.binding.checks.map(_.identity))
+      P.origin.approvals.map(_.proposal.usageContract) shouldBe Vector(P.standing.proposal.usageContract,
+        P.extra.proposal.usageContract, P.added.proposal.usageContract)
+      P.binding.paths shouldBe P.predecessor.binding.paths ++ Vector("docs/export-contract.md", "docs/later-contract.md")
+      P.capture.preStageGuard shouldBe P.guard
+      P.target.repairProgress shouldBe L.target.repairProgress
+      P.target.repairProgress.ordinaryCount shouldBe 1
+      P.target.repairProgress.limit shouldBe 10
+    }
+    "refuse missing changed conflicting foreign or caller-only retained coverage without erasing old approval obligations" in {
+      Given("the exact structural old covered extra approval and later source target")
+      import PriorCoveredSourceSpecificationFixture as P
+      def _target_(approvals: Vector[GoalPhaseDependencyValidation.Approval], coverage: Vector[R.Coverage]): R.Target = {
+        val source = P.source.copy(coverage = coverage)
+        P.target.copy(proposal = source, canonicalOrigin = Some(P.origin.copy(approvals = approvals,
+          selection = P.origin.selection.copy(source = source))))
+      }
+      val changed = P.extra.copy(proposal = P.extra.proposal.copy(acceptance = Vector("Changed old acceptance")))
+      val foreign = Vector(P.extra.copy(step = "foreign-step"),
+        P.extra.copy(proposal = P.extra.proposal.copy(requester = P.extra.proposal.requester.copy(identity = "foreign"))),
+        P.extra.copy(proposal = P.extra.proposal.copy(dependency = P.extra.proposal.dependency.copy(repository = "foreign"))),
+        P.extra.copy(proposal = P.extra.proposal.copy(usageContract = ContextReference("foreign-usage", "1"))))
+      val unrelated = P.extra.copy(step = "step-0", proposal = P.extra.proposal.copy(identity = "unselected-earlier-scope",
+        dependentWork = Vector(ContextReference("step-0", "1"))), decision = ContextReference("unselected-global-human", "1"))
+      val unselectedold = P.olddirection.copy(target = P.olddirection.target.copy(canonicalOrigin = Some(
+        P.oldorigin.copy(approvals = P.oldorigin.approvals :+ unrelated))))
+      val unselected = P.target.copy(canonicalOrigin = Some(P.origin.copy(originalDirection = Some(unselectedold),
+        approvals = P.origin.approvals :+ unrelated)))
+      val missingold = P.olddirection.copy(target = P.olddirection.target.copy(canonicalOrigin = Some(
+        P.oldorigin.copy(approvals = Vector(P.standing)))))
+      val conflictingstanding = P.standing.copy(proposal = P.standing.proposal.copy(
+        usageContract = ContextReference("linked-api", "changed")))
+      val conflictingold = P.olddirection.copy(target = P.olddirection.target.copy(canonicalOrigin = Some(
+        P.oldorigin.copy(approvals = Vector(conflictingstanding, P.extra)))))
+      When("a literal prior approval coverage entry guard or native-shaped ancestor is crossed")
+      val invalid = Vector(_target_(Vector(P.standing, P.added), P.source.coverage),
+        _target_(Vector(P.standing, changed, P.added), P.source.coverage),
+        _target_(P.origin.approvals :+ changed, P.source.coverage),
+        _target_(P.origin.approvals, P.source.coverage.tail),
+        _target_(P.origin.approvals, P.source.coverage.reverse),
+        _target_(P.origin.approvals, P.source.coverage.takeRight(1)),
+        _target_(P.origin.approvals, P.source.coverage.updated(1, P.source.coverage(1).copy(acceptance = Vector("Changed")))),
+        _target_(P.origin.approvals, P.source.coverage.updated(1, P.source.coverage(1).copy(checks = Vector("foreign-check")))),
+        _target_(P.origin.approvals :+ unrelated, P.source.coverage :+ R.Coverage(unrelated.decision,
+          unrelated.proposal.acceptance, P.binding.checks.map(_.identity))),
+        P.target.copy(canonicalOrigin = Some(P.origin.copy(originalDirection = None))),
+        P.target.copy(canonicalOrigin = Some(P.origin.copy(originalDirection = Some(missingold)))),
+        P.target.copy(canonicalOrigin = Some(P.origin.copy(originalDirection = Some(conflictingold)))),
+        P.target.copy(preStageGuard = P.guard.copy(head = "9" * 40)),
+        P.target.copy(canonicalOrigin = Some(P.origin.copy(baseLineage = P.origin.baseLineage.updated(1,
+          P.origin.baseLineage.last.copy(tree = "9" * 40))))),
+        P.target.copy(binding = P.binding.copy(paths = P.binding.paths.dropRight(1))),
+        P.target.copy(ancestors = L.target.ancestors)) ++ foreign.map(a =>
+          _target_(Vector(P.standing, a, P.added), P.source.coverage))
+      Then("crossed targets refuse and unrelated old global records confer no additional inherited coverage")
+      invalid.foreach { target =>
+        R.targetValid(target) shouldBe false
+        target.asJson.as[R.Target].isLeft shouldBe true
+      }
+      R.targetValid(unselected) shouldBe true
+    }
     "retain complete independently approved Usage revisions within one identity across the accepted source prefix" in {
       Given("a specification-only accepted Usage revision1 and a distinct current-Step approval of revision2 with its own full acceptance")
       val oldcoverage = L.olddirection.target.proposal.coverage
