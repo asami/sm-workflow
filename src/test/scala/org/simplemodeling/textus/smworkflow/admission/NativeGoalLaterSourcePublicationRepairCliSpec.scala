@@ -8,6 +8,7 @@ import io.circe.{Json, Printer}
 import io.circe.generic.auto.*
 import io.circe.parser.parse
 import io.circe.syntax.*
+import org.goldenport.cncf.config.SystemNodeShutdownConfiguration
 import org.goldenport.cncf.processexecution.{GitOperationKind, SbtOperation}
 import org.goldenport.cncf.workflow.ContextReference
 import org.goldenport.convert.ValueReader
@@ -46,7 +47,8 @@ import SplitPhaseExplicitPartitionFixture.take
   * without claiming that original response or qualification succeeded.
   * No consumer or product source is copied.
   * @since   Nov.  9, 2026
-  * @version Nov. 10, 2026
+  *  version Nov. 10, 2026
+  * @version Nov. 11, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
@@ -209,7 +211,34 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
   }
   private def _call(scenario: F.Scenario, label: String, service: String, operation: String, parameters: Vector[String]): F.Result =
     _once(scenario, label)(scenario.callInstalled(Path.of(sys.props("smworkflow.spec.installedCommand")), service, operation,
-      parameters, assemblyDescriptor = Some(scenario.root.resolve(".textus/assembly.yaml"))))
+      parameters, assemblyDescriptor = Some(scenario.root.resolve(".textus/assembly.yaml")),
+      wait = if (_post_validation_lineage && label == "post-validation-new-advance") Some(_installed_call_wait(scenario.root)) else None))
+  private def _installed_sbt_program_waits(config: Json): Vector[Long] = {
+    val raw = config.hcursor.get[String]("textus.subsystem.process-execution.plan")
+      .fold(_ => fail("The retained process execution plan must be a JSON string"), identity)
+    val plan = parse(raw).fold(_ => fail("The retained process execution plan is malformed"), identity)
+    val programs = plan.hcursor.get[Vector[Json]]("sbtPrograms")
+      .fold(_ => fail("The retained process execution plan must declare SBT programs"), identity)
+    require(programs.nonEmpty, "The selected installed caller requires a nonempty declared SBT program set")
+    programs.map { program =>
+      val limits = program.hcursor.downField("limits")
+      def _positive_limit_(name: String): Long = {
+        val value = limits.get[Long](name).fold(_ => fail("Missing or malformed SBT program limit: " + name), identity)
+        require(value > 0, "SBT program limits must be positive: " + name)
+        value
+      }
+      Math.addExact(Math.addExact(_positive_limit_("launchTimeoutMillis"), _positive_limit_("executionTimeoutMillis")),
+        _positive_limit_("terminationGraceMillis"))
+    }
+  }
+  private def _installed_call_wait(root: Path): F.InstalledCallWait = {
+    val config = _read(root.resolve(".textus/config.json"))
+    require(config.asObject.exists(!_.contains("textus.system-node.shutdown.drain-timeout-millis")),
+      "The selected installed fixture must have no shutdown drain override before assuming the public default")
+    val programs = _installed_sbt_program_waits(config)
+    F.InstalledCallWait(Math.addExact(programs.max, TimeUnit.SECONDS.toMillis(240)),
+      Math.addExact(SystemNodeShutdownConfiguration.default.drainTimeoutMillis, 5000L))
+  }
   private def _input(scenario: F.Scenario, label: String, service: String, operation: String, input: RecordPresentable): F.Result =
     _call(scenario, label, service, operation,
       if (service == "GoalPhaseService" && Set(R.describeOperation, R.adoptionOperation, B.recoveryOperation, B.describeOperation,
@@ -968,6 +997,17 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     _read(started).hcursor.get[String]("label").toOption shouldBe Some("post-validation-new-advance")
     require(!Files.exists(root.resolve("caller-results/post-validation-new-advance.json")),
       "Result-only collection requires the original Advance response to remain missing")
+    Given("the retained actual host configuration and its declared finite SBT program limits, without a shutdown drain override")
+    val config = _read(root.resolve(".textus/config.json"))
+    val programwaits = _installed_sbt_program_waits(config)
+    When("the selected installed caller wait is calculated from those retained limits without invoking the CLI or Advance")
+    val installedwait = _installed_call_wait(root)
+    Then("the finite caller wait covers every declared SBT program plus startup and reading, and TERM grace exceeds the public drain")
+    programwaits.foreach { programwait =>
+      installedwait.completionTimeoutMillis should be >= Math.addExact(programwait, TimeUnit.SECONDS.toMillis(240))
+    }
+    installedwait.terminationGraceMillis should be > SystemNodeShutdownConfiguration.default.drainTimeoutMillis
+    installedwait.terminationGraceMillis shouldBe Math.addExact(SystemNodeShutdownConfiguration.default.drainTimeoutMillis, 5000L)
     def _completed_output_(label: String): Path = {
       require(Set("new-reconstruction", "new-source-description", "new-source-human-adopt")(label))
       val name = "post-validation-" + label
@@ -1074,8 +1114,10 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     collectedcapture.direction.directive shouldBe ContextReference(adoptioninput.reference.identity, adoptioninput.reference.revision)
     withClue("candidate.sourceCapture: ") { (payload.dependencySourceCapture == Some(collectedcapture)) shouldBe true }
     val capture = _require_post_validation_capture(root, old, saved, initial, prior, target, nextbinding, payload, controllerjson)
-    val resultpath = locator.resolveSibling(locator.getFileName.toString + ".post-validation.collected.json")
+    val resultpath = locator.resolveSibling(locator.getFileName.toString + ".post-validation.wait-checked.collected.json")
     val result = Json.obj("session" -> session.asJson, "root" -> root.toString.asJson,
+      "installedCallWait" -> Json.obj("completionTimeoutMillis" -> installedwait.completionTimeoutMillis.asJson,
+        "terminationGraceMillis" -> installedwait.terminationGraceMillis.asJson),
       "collectedDescription" -> descriptionpath.toString.asJson, "observedPublicationOutcome" -> description.outcome.asJson,
       "currentPublicationTarget" -> alignment.asJson, "candidate" -> candidate, "capture" -> capture.asJson,
       "target" -> target.asJson, "historicalCheckSource" -> oldtarget.asJson,

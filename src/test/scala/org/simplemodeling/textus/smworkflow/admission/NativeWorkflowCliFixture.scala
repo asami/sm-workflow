@@ -25,7 +25,8 @@ import GoalPhaseAcceptanceBoundary as A
   * No Workflow state is read or seeded by this caller.
   * @since   Oct. 13, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  8, 2026
+  *  version Nov.  8, 2026
+  * @version Nov. 11, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeWorkflowCliFixture {
@@ -55,6 +56,14 @@ private[admission] object NativeWorkflowCliFixture {
       val record = _take(new RecordDecoder().json(Files.readString(invocation.stdout)), invocation.logs)
       _take(summon[ValueReader[A]].readC(record), invocation.logs)
     }
+  }
+
+  /** Finite test-only waits for an explicitly selected installed invocation. */
+  final case class InstalledCallWait(completionTimeoutMillis: Long, terminationGraceMillis: Long) {
+    require(completionTimeoutMillis > 0 && terminationGraceMillis > 0,
+      "Installed caller waits must be positive and finite")
+    require(completionTimeoutMillis <= Long.MaxValue / 1000000L && terminationGraceMillis <= Long.MaxValue / 1000000L,
+      "Installed caller waits must fit finite nanosecond bounds")
   }
 
   enum MetadataDenial {
@@ -222,7 +231,8 @@ private[admission] object NativeWorkflowCliFixture {
         (if (mode == "client") _client_options else Vector.empty) ++ _output)
     /** The same isolated host can qualify a separately installed normal CLI. */
     def callInstalled(executable: Path, service: String, operation: String, parameters: Vector[String],
-      installations: Option[Path] = None, assemblyDescriptor: Option[Path] = None): Result = {
+      installations: Option[Path] = None, assemblyDescriptor: Option[Path] = None,
+      wait: Option[InstalledCallWait] = None): Result = {
       require(executable.isAbsolute && Files.isRegularFile(executable) && Files.isExecutable(executable),
         "Select an actual absolute installed command")
       val descriptor = assemblyDescriptor.toVector.map { path =>
@@ -231,7 +241,7 @@ private[admission] object NativeWorkflowCliFixture {
         s"--textus.assembly.descriptor=$path"
       }
       _run(Vector(executable.toString, s"$_component.$service.$operation") ++ descriptor ++
-        parameters ++ Vector("--json"), installations)
+        parameters ++ Vector("--json"), installations, wait)
     }
     def repositoryCall(operation: String, parameters: Vector[String]): Result =
       _run(_operation_argv("command", s"$_component.RepositorySyncService.$operation") ++ parameters ++ _output)
@@ -524,7 +534,10 @@ private[admission] object NativeWorkflowCliFixture {
         "org.goldenport.cncf.CncfMain", "--", "--force-exit", "--component-dev-dir", _primary.toString,
         s"--textus.assembly.descriptor=$_assembly")
     }
-    private def _spawn(argv: Vector[String], installations: Option[Path] = None): (Process, Invocation) = {
+    private def _spawn(argv: Vector[String], installations: Option[Path] = None,
+      terminationgracemillis: Long = 5000L): (Process, Invocation) = {
+      require(terminationgracemillis > 0, "Owned process termination grace must be positive")
+      Math.multiplyExact(terminationgracemillis, 1000000L)
       val logs = Files.createDirectories(root.resolve("logs"))
       val index = _log_index
       _log_index += 1
@@ -547,19 +560,22 @@ private[admission] object NativeWorkflowCliFixture {
       val invocation = Invocation(argv, process.pid(), stdout, stderr)
       _sequence :+= invocation
       try process.getOutputStream.close()
-      catch { case NonFatal(error) => _stop(process); throw error }
+      catch { case NonFatal(error) => _stop(process, terminationgracemillis); throw error }
       (process, invocation)
     }
-    private def _run(argv: Vector[String], installations: Option[Path] = None): Result = {
-      val bound = TimeUnit.SECONDS.toNanos(if (_primary_generation) 1500 else if (_sbt_repair.nonEmpty) 240 else 60)
+    private def _run(argv: Vector[String], installations: Option[Path] = None,
+      wait: Option[InstalledCallWait] = None): Result = {
+      val bound = wait.fold(TimeUnit.SECONDS.toNanos(if (_primary_generation) 1500 else if (_sbt_repair.nonEmpty) 240 else 60))(
+        selected => Math.multiplyExact(selected.completionTimeoutMillis, 1000000L))
+      val terminationgracemillis = wait.fold(5000L)(_.terminationGraceMillis)
       val remaining = _server_deadline.fold(bound)(_ - System.nanoTime())
       require(remaining > 0, "Owned server scenario deadline expired")
-      val (process, invocation) = _spawn(argv, installations)
+      val (process, invocation) = _spawn(argv, installations, terminationgracemillis)
       try {
         if (!process.waitFor(math.min(remaining, bound), TimeUnit.NANOSECONDS))
           throw new AssertionError("Owned process exceeded its deadline\n" + invocation.logs)
         Result(process.exitValue(), invocation)
-      } finally _stop(process)
+      } finally _stop(process, terminationgracemillis)
     }
     private[NativeWorkflowCliFixture] def prepareRepository(): Unit = {
       val repository = Path.of(host.target.root)
@@ -2290,10 +2306,12 @@ private[admission] object NativeWorkflowCliFixture {
     } catch { case NonFatal(_) => false }
     finally connection.disconnect()
   }
-  private def _stop(process: Process): Unit = {
+  private def _stop(process: Process, terminationgracemillis: Long = 5000L): Unit = {
+    require(terminationgracemillis > 0, "Owned process termination grace must be positive")
+    val grace = Math.multiplyExact(terminationgracemillis, 1000000L)
     var interrupted = Thread.interrupted()
-    def reap(): Boolean = {
-      val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+    def _reap_(timeout: Long): Boolean = {
+      val deadline = System.nanoTime() + timeout
       var remaining = deadline - System.nanoTime()
       while (process.isAlive && remaining > 0) {
         try process.waitFor(remaining, TimeUnit.NANOSECONDS)
@@ -2304,9 +2322,9 @@ private[admission] object NativeWorkflowCliFixture {
     }
     try {
       if (process.isAlive) process.destroy()
-      if (!reap()) {
+      if (!_reap_(grace)) {
         process.destroyForcibly()
-        if (!reap()) throw new AssertionError("Owned process could not be reaped: " + process.pid())
+        if (!_reap_(TimeUnit.SECONDS.toNanos(5))) throw new AssertionError("Owned process could not be reaped: " + process.pid())
       }
     } finally {
       Vector(process.getInputStream, process.getErrorStream, process.getOutputStream).foreach { stream =>
