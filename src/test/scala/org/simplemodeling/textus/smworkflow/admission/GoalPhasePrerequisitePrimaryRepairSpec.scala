@@ -9,7 +9,9 @@ import org.goldenport.cncf.workspace.WorkspaceId
 import org.goldenport.cncf.workflow.ContextReference
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.scalatest.GivenWhenThen
+import org.scalatest.concurrent.TimeLimits
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.time.{Seconds, Span}
 import org.scalatest.wordspec.AnyWordSpec
 import GoalPhasePrerequisitePrimaryRepair as A
 import GoalPhasePrerequisitePublicationRecovery as B
@@ -303,13 +305,60 @@ private[admission] object PrimaryPublicationRepairSpecificationFixture {
 /** Primary publication repair authority, attribution and retained capture contracts.
   * @since   Nov.  2, 2026
   *  version Nov.  9, 2026
-  * @version Nov. 10, 2026
+  *  version Nov. 10, 2026
+  * @version Nov. 11, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
-final class GoalPhasePrerequisitePrimaryRepairSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+final class GoalPhasePrerequisitePrimaryRepairSpec extends AnyWordSpec with Matchers with GivenWhenThen with TimeLimits {
   import PrimaryPublicationRepairSpecificationFixture as F
+
+  "P611-HISTORY-EVALUATION-01 Immutable failure classification" should {
+    "preserve the legacy Compile and Generation wire contracts across repeated classification and changed copies" in {
+      Given("the exact retained Compile and generation failures, with their existing distinct fact schemas")
+      val facts = Vector(F.fact, F.generationFact)
+      val wires = facts.map(A.codec.encode)
+      When("ordinary strict decoding, classification, schema selection and directives repeatedly consume those immutable facts")
+      val decoded = wires.map(wire => A.codec.decode(wire).toOption.get)
+      val kinds = Vector.fill(20)(decoded.map { fact =>
+        A.failureValid(fact.failure) shouldBe true
+        A.factValid(fact) shouldBe true
+        A.factSchema(fact.failure) shouldBe fact.schemaVersion
+        A.directive(fact.failure) shouldBe fact.directive
+        A.failureKind(fact.failure)
+      })
+      val compile = decoded.head.failure
+      val generation = compile.copy(failed = F.generationFailure.failed)
+      val rejected = generation.copy(failed = generation.failed.copy(process = Some(F.process(
+        F.generationOutput + "[error] (Test / test) Tests unsuccessful\n"))))
+      val corrected = rejected.copy(failed = generation.failed)
+      Then("only the copied content changes classification, with no cached success or refusal crossing instance boundaries")
+      kinds shouldBe Vector.fill(20)(Vector(Some(A.FailureKind.Compile), Some(A.FailureKind.Generation)))
+      A.failureKind(generation) shouldBe Some(A.FailureKind.Generation)
+      A.publicationSchema(generation) shouldBe A.generationTargetSchema
+      A.failureKind(rejected) shouldBe None
+      A.failureValid(rejected) shouldBe false
+      A.failureKind(corrected) shouldBe Some(A.FailureKind.Generation)
+      A.failureValid(corrected) shouldBe true
+      A.failureKind(corrected.copy(failed = compile.failed)) shouldBe Some(A.FailureKind.Compile)
+      A.failureKind(generation.copy(participant = "crossed-participant")) shouldBe None
+      A.failureKind(generation.copy(processPolicy = F.processPolicy(F.target).replace("publish-local", "test"))) shouldBe None
+      A.failureKind(generation.copy(failed = null)) shouldBe None
+      A.failureKind(generation.copy(failed = generation.failed.copy(request = null))) shouldBe None
+      A.failureKind(null) shouldBe None
+      A.failureKind(compile) shouldBe Some(A.FailureKind.Compile)
+      decoded.map(A.codec.encode) shouldBe wires
+      val failurefields = Set("componentInstance", "participant", "sessionId", "frontierRevision", "controller", "plan", "base",
+        "generation", "completed", "repairProgress", "candidateRecordRevision", "candidate", "requestingResult", "targets",
+        "publicationPolicy", "processPolicy", "failed", "primaryDirections", "excludedDirty")
+      decoded.foreach { fact =>
+        fact.failure.asJson.asObject.get.keys.toSet shouldBe failurefields
+        fact.asJson.asObject.get.keys.toSet shouldBe Set("schemaVersion", "failure", "directive", "successorController")
+      }
+      decoded.map(_.schemaVersion) shouldBe Vector(A.schema, A.generationSchema)
+    }
+  }
   "Committed primary publication target" should {
     "use complete qualified work without rewriting the original nonempty failure or granting publication" in {
       Given("P611-CHECKPOINT-A-01: the original literal publication failure and a later clean repaired checkpoint")
@@ -507,6 +556,52 @@ final class GoalPhasePrerequisitePrimaryRepairSpec extends AnyWordSpec with Matc
 
   "LSR-01 Canonical publication-failure succession" should {
     import LaterSourcePublicationSpecificationFixture as L
+
+    "repeatedly restore shared source and failed-check history while rejecting copied capture and receipt crossings" in {
+      Given("P611-HISTORY-EVALUATION-01: two primary repairs followed by inspection and a failed selected check retaining its prior source")
+      import GoalPhaseDependencySourceRevision as R
+      import GoalPhaseCanonicalDependencySourceSuccession as Source
+      val (_, _, selected, _, _) = _post_validation_source_fixture
+      val selectedorigin = selected.target.canonicalOrigin.get
+      val prior = selectedorigin.originalDirection.get
+      val direction = selected.copy(target = selected.target.copy(canonicalOrigin = Some(selectedorigin.copy(
+        previousDirection = Some(prior)))))
+      val wire = Source.codec.encode(Source.Checkpoint(direction))
+      When("the ordinary strict codec and both target predicates revisit the immutable captured-source lineage")
+      val decoded = failAfter(Span(30, Seconds)) {
+        val restored = Source.codec.decode(wire).toOption.get
+        Vector.fill(20)(Source.targetValid(restored.direction.target) && R.directionValid(restored.direction)) shouldBe Vector.fill(20)(true)
+        restored
+      }
+      val target = decoded.direction.target
+      val origin = target.canonicalOrigin.get
+      val historical = origin.historicalFailure.get
+      val validation = historical.context.validation
+      val capture = validation.dependencySource.get
+      val crossedcapture = capture.copy(generation = capture.direction.target.generation)
+      val crossedreceipt = validation.receipts.head.copy(identity = "crossed-selected-check")
+      val changed = Vector(validation.copy(dependencySource = Some(crossedcapture)),
+        validation.copy(receipts = validation.receipts.updated(0, crossedreceipt)))
+      Then("copied capture generations and selected receipt identities refuse without changing or poisoning the retained history")
+      decoded.direction shouldBe direction
+      validation.dependencySource.map(_.direction) shouldBe origin.originalDirection
+      changed.foreach { value =>
+        val crossed = target.copy(canonicalOrigin = Some(origin.copy(historicalFailure = Some(historical.copy(
+          context = historical.context.copy(validation = value))))))
+        Source.targetValid(crossed) shouldBe false
+        R.targetValid(crossed) shouldBe false
+        crossed.asJson.as[R.Target].isLeft shouldBe true
+        val corrected = crossed.copy(canonicalOrigin = Some(crossed.canonicalOrigin.get.copy(historicalFailure = Some(historical))))
+        Source.targetValid(corrected) shouldBe true
+        corrected.asJson.as[R.Target] shouldBe Right(target)
+      }
+      Source.codec.encode(decoded) shouldBe wire
+      R.directionValid(decoded.direction) shouldBe true
+      origin.controller.repairs shouldBe selectedorigin.controller.repairs
+      origin.controller.ordinaryRepairs shouldBe selectedorigin.controller.ordinaryRepairs
+      A.codec.encode(L.fact) shouldBe A.codec.encode(L.historical.fact)
+    }
+
     "retain the original primary fact and latest Saved across a genuine later failed-check source edge" in {
       Given("CPB-243-SOURCE-LINEAGE-01: two pure primary reservations, inspection succession and an actual-shaped failed selected check")
       import GoalPhaseDependencySourceRevision as R

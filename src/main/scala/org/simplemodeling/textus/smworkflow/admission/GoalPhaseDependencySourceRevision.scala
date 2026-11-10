@@ -35,7 +35,8 @@ import WorkflowManagedProcessExecution as E
   * @since   Oct. 26, 2026
   *  version Oct. 28, 2026
   *  version Nov.  8, 2026
-  * @version Nov.  9, 2026
+  *  version Nov.  9, 2026
+  * @version Nov. 11, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseDependencySourceRevision {
@@ -264,7 +265,10 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
     primaryFailureOrigin: Option[GoalPhasePrerequisitePublicationRecovery.PrimaryTarget] = None,
     initialOrigin: Option[InitialOrigin] = None,
     publishedOrigin: Option[GoalPhasePublishedDependencySourceAdoption.SourceOrigin] = None,
-    canonicalOrigin: Option[GoalPhaseCanonicalDependencySourceSuccession.Origin] = None)
+    canonicalOrigin: Option[GoalPhaseCanonicalDependencySourceSuccession.Origin] = None) {
+    private[admission] lazy val canonicalValidationFailure: Option[String] =
+      GoalPhaseCanonicalDependencySourceSuccession.evaluateCanonicalTargetFailure(this)
+  }
 
   /** Native traversal supplies this relation from the decoded ReviseWork Direction.
     * It is historical effect provenance, not historical primary byte evidence. */

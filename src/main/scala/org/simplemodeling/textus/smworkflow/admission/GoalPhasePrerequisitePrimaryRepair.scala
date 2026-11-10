@@ -28,7 +28,8 @@ import org.simplemodeling.textus.smworkflow.value as V
   * Publication authority is evaluated again at the actual repaired candidate.
   * @since   Nov.  2, 2026
   *  version Nov.  9, 2026
-  * @version Nov. 10, 2026
+  *  version Nov. 10, 2026
+  * @version Nov. 11, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
@@ -54,7 +55,10 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
     candidateRecordRevision: String, candidate: C.Payload, requestingResult: ContextReference,
     targets: Vector[LocalPublication.Target], publicationPolicy: String, processPolicy: String,
     failed: LocalPublication.Result, artifactAdoption: Option[W.ExistingArtifactAdoption],
-    primaryDirections: Vector[B.PrimaryFact], excludedDirty: Vector[G.DirtyPath])
+    primaryDirections: Vector[B.PrimaryFact], excludedDirty: Vector[G.DirtyPath]) {
+    private[GoalPhasePrerequisitePrimaryRepair] lazy val _failure_kind: Option[FailureKind] =
+      _evaluate_failure_kind(this)
+  }
   object Failure {
     given Encoder[Failure] = Encoder.instance(value => _public(Json.obj(
       "componentInstance" -> value.componentInstance.asJson,
@@ -299,6 +303,8 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
     case Compile, Generation
   }
   def failureKind(value: Failure): Option[FailureKind] =
+    if (value == null) None else value._failure_kind
+  private def _evaluate_failure_kind(value: Failure): Option[FailureKind] =
     if (value == null || value.failed == null || value.failed.request == null) None
     else {
       val failed = value.failed
