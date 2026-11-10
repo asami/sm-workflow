@@ -487,13 +487,50 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
       }
     }
 
-  /** Only the one checked predecessor edge is traversed. Values describe the
+  private def _checked_failure_predecessor(current: R.Direction): Option[R.Direction] =
+    Option(current).filter(R.directionValid).flatMap(_.target.canonicalOrigin).flatMap { origin =>
+      origin.historicalFailure.filter(CanonicalSource.failureValid).flatMap { failure =>
+        origin.previousDirection.orElse(origin.originalDirection).filter { previous =>
+          val selected = current.target
+          val prior = previous.target
+          R.directionValid(previous) && prior.canonicalOrigin.exists(before =>
+            origin.componentInstance == before.componentInstance && origin.participant == before.participant &&
+              origin.primaryRoot == before.primaryRoot) &&
+            origin.controller.stage == "Repair" && origin.historicalPublicationFailure.isEmpty &&
+            origin.inspectionFrontier.isEmpty &&
+            GoalPhaseNativeWorkContinuation.sourceCheckFailureMatches(current, failure.context) &&
+            current.participant == previous.participant && selected.sessionId == prior.sessionId &&
+            selected.plan == prior.plan && selected.step == prior.step && selected.primaryBase == prior.primaryBase &&
+            selected.completed == prior.completed && _historical_repair_progress(prior.repairProgress, selected.repairProgress) &&
+            selected.predecessor == prior.predecessor && selected.ancestors == prior.ancestors &&
+            selected.binding.identity == prior.binding.identity && selected.binding.requester == prior.binding.requester &&
+            selected.binding.dependency.identity == prior.binding.dependency.identity &&
+            selected.binding.dependency.repository == prior.binding.dependency.repository &&
+            selected.binding.checks == prior.binding.checks &&
+            failure.context.validation.dependencySource.exists { capture =>
+              R.captureValid(capture) && R.isCanonicalCaptureSchema(capture.schemaVersion) && capture.direction == previous &&
+                _revision(failure.context.validation.sourceRevision) &&
+                BigInt(prior.sourceRevision) < BigInt(capture.sourceRevision) &&
+                BigInt(capture.sourceRevision) <= BigInt(failure.candidate.revision) &&
+                BigInt(failure.candidate.revision) < BigInt(failure.context.validation.sourceRevision) &&
+                BigInt(failure.context.validation.sourceRevision) <= BigInt(failure.validation.revision) &&
+                BigInt(failure.validation.revision) <= BigInt(selected.sourceRevision) &&
+                prior.generation < capture.generation && capture.generation < selected.generation
+            }
+        }
+      }
+    }
+
+  private def _canonical_predecessor(current: R.Direction): Option[R.Direction] =
+    _inspection_predecessor(current).orElse(_checked_failure_predecessor(current))
+
+  /** Only the checked predecessor edges are traversed. Values describe the
     * relation; the native walker authenticates the actual Direction history. */
-  private def _inspection_successor(previous: R.Direction, next: R.Direction): Boolean =
-    _inspection_predecessor(next).exists(prior => prior == previous || _inspection_successor(previous, prior))
+  private def _canonical_successor(previous: R.Direction, next: R.Direction): Boolean =
+    _canonical_predecessor(next).exists(prior => prior == previous || _canonical_successor(previous, prior))
 
   /** The native source walker authenticates these Directions. This one relation
-    * carries the exact saved historical cause through reconstructed inspection;
+    * carries the exact saved historical cause through inspection and failed checks;
     * it never makes that cause an active Repair or grants publication authority.
     * Strictly descending native revisions bound traversal without a count cap.
     */
@@ -503,17 +540,17 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
       if (!R.directionValid(current)) None else current.target.canonicalOrigin.flatMap { origin =>
         origin.historicalPublicationFailure.filter(_ => Set(R.canonicalSuccessorSchema,
           R.canonicalApplicabilitySuccessorSchema)(current.target.schemaVersion))
-          .orElse(_inspection_predecessor(current).flatMap(_retained_))
+          .orElse(_canonical_predecessor(current).flatMap(_retained_))
       }
     _retained_(direction)
   }
 
   /** Match the exact Saved/native reservation through its original cause or
-    * captured prior inspection succession, separately from historical/v5 reuse. */
+    * captured prior canonical succession, separately from historical/v5 reuse. */
   private[admission] def canonicalSelectionValid(saved: Saved, direction: Option[R.Direction],
     selectedScope: Option[R.ScopeSuccessor], controller: O.State): Boolean = direction.exists { next =>
     factValid(saved.fact) && R.directionValid(next) && (canonicalPublicationFailure(next).contains(
-        CanonicalSource.HistoricalPublicationFailure(saved.reference, saved.fact)) || _inspection_saved_selection(saved, next)) &&
+        CanonicalSource.HistoricalPublicationFailure(saved.reference, saved.fact)) || _canonical_saved_selection(saved, next)) &&
       next.target.plan == controller.plan && next.target.primaryBase == controller.base &&
       next.target.completed == controller.completed && next.target.step == saved.fact.failure.candidate.step &&
       controller.plan.steps.lift(controller.cursor).exists(_.identity == next.target.step) &&
@@ -531,12 +568,12 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
       R.isCanonicalCaptureSchema(c.schemaVersion) && candidate.dependencySourceDirection.contains(c.direction) &&
       candidate.dependencySourceScope == c.scope && c.sourceRevision == candidate.sourceRevision)
 
-  private def _inspection_saved_selection(saved: Saved, next: R.Direction): Boolean = {
+  private def _canonical_saved_selection(saved: Saved, next: R.Direction): Boolean = {
     val failure = saved.fact.failure
     _captured_canonical(failure.candidate).exists { capture =>
       val prior = capture.direction
       val target = next.target
-      _inspection_successor(prior, next) && failure.plan == target.plan && failure.base == target.primaryBase &&
+      _canonical_successor(prior, next) && failure.plan == target.plan && failure.base == target.primaryBase &&
         failure.completed == target.completed && failure.candidate.step == target.step &&
         failure.sessionId == target.sessionId && failure.participant == next.participant &&
         target.canonicalOrigin.exists(o => o.componentInstance == failure.componentInstance && o.participant == failure.participant) &&
@@ -548,7 +585,7 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
     }
   }
 
-  private def _inspection_reuse_bounds(candidate: C.Payload, direction: R.Direction, prior: R.Direction): Boolean =
+  private def _canonical_reuse_bounds(candidate: C.Payload, direction: R.Direction, prior: R.Direction): Boolean =
     candidate != null && R.candidateValid(candidate) && candidate.step == direction.target.step &&
       _revision(candidate.sourceRevision) && candidate.primaryPublicationRepair.exists { reuse =>
         reuseValid(reuse) && reuse.repair.identity == direction.target.sessionId &&
@@ -564,12 +601,12 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
         c.sessionId == direction.target.sessionId && c.step == candidate.step && c.primaryBase == direction.target.primaryBase &&
         c.generation == direction.target.generation + 1 && c.sourceRevision == candidate.sourceRevision)
 
-  private def _inspection_candidate_successor(previous: C.Payload, candidate: C.Payload): Boolean =
+  private def _canonical_candidate_successor(previous: C.Payload, candidate: C.Payload): Boolean =
     _captured_canonical(previous).exists { capture =>
       candidate != null && candidate.dependencySourceDirection.exists { next =>
-        _inspection_successor(capture.direction, next) && previous.step == candidate.step &&
+        _canonical_successor(capture.direction, next) && previous.step == candidate.step &&
           capture.sessionId == next.target.sessionId && capture.primaryBase == next.target.primaryBase &&
-          _inspection_reuse_bounds(candidate, next, capture.direction) && candidate.primaryPublicationRepair.exists(reuse =>
+          _canonical_reuse_bounds(candidate, next, capture.direction) && candidate.primaryPublicationRepair.exists(reuse =>
             reuse.generation == capture.generation && BigInt(reuse.candidateRecordRevision) >= BigInt(previous.sourceRevision) &&
               reuse.sourceRevision == previous.primaryPublicationRepair.map(_.sourceRevision).getOrElse(previous.sourceRevision))
       }
@@ -579,8 +616,8 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
     * actual Saved reference, exact reuse, controller and native record prefix. */
   private[admission] def inspectionSourceCaptureValid(candidate: C.Payload): Boolean = candidate != null &&
     candidate.dependencySourceDirection.exists { direction =>
-      def _prior_(current: R.Direction): Boolean = _inspection_predecessor(current).exists { prior =>
-        _inspection_reuse_bounds(candidate, direction, prior) || _prior_(prior)
+      def _prior_(current: R.Direction): Boolean = _canonical_predecessor(current).exists { prior =>
+        _canonical_reuse_bounds(candidate, direction, prior) || _prior_(prior)
       }
       _prior_(direction) && (candidate.dependencySourceCapture.nonEmpty ||
         (candidate.candidate.isEmpty && candidate.changedPaths.isEmpty && candidate.diff.isEmpty &&
@@ -588,7 +625,7 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
     }
 
   private[admission] def canonicalSourceSuccessorValid(previous: C.Payload, candidate: C.Payload): Boolean =
-    _inspection_candidate_successor(previous, candidate) || _historical_canonical_source_successor(previous, candidate)
+    _canonical_candidate_successor(previous, candidate) || _historical_canonical_source_successor(previous, candidate)
 
   private def _historical_canonical_source_successor(previous: C.Payload, candidate: C.Payload): Boolean =
     candidate != null && candidate.dependencySourceDirection.exists { direction =>
@@ -613,7 +650,7 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
     _historical_canonical_source_successor(previous, candidate) && candidate.dependencySourceDirection.exists(direction =>
       direction.target.canonicalOrigin.exists(origin => origin.processPolicy == currentPolicy &&
         canonicalPublicationFailure(direction).exists(_.fact.failure.processPolicy == previousPolicy))) ||
-    _inspection_candidate_successor(previous, candidate) && previous.dependencySourceDirection.exists(prior =>
+    _canonical_candidate_successor(previous, candidate) && previous.dependencySourceDirection.exists(prior =>
       prior.target.canonicalOrigin.exists(_.processPolicy == previousPolicy)) && candidate.dependencySourceDirection.exists(next =>
       next.target.canonicalOrigin.exists(_.processPolicy == currentPolicy)) ||
     currentSourceSuccessorValid(previous, candidate) && (for {

@@ -460,8 +460,176 @@ final class GoalPhasePrerequisitePrimaryRepairSpec extends AnyWordSpec with Matc
     val (controller, direction, capture, current) = _inspection_source_from(completed, saved.reuse, applicability = true, prior = prior)
     (saved, controller, direction, capture, current)
   }
+
+  /** A real pure failed-check transition follows the second primary repair and
+    * its independently selected inspection source. Records remain spec-owned. */
+  private def _post_validation_source_fixture: (A.Saved, O.State, GoalPhaseDependencySourceRevision.Direction,
+    GoalPhaseDependencySourceRevision.Capture, C.Payload) = {
+    import GoalPhaseDependencySourceRevision as R
+    import GoalPhaseCanonicalDependencySourceSuccession as Source
+    val (saved, inspecting, prior, previouscapture, previouscandidate) = _second_primary_failure_fixture
+    val observed = take(inspecting.acceptC(O.CandidateObserved(previouscandidate.candidate.get)))
+    val consumption = R.consumptionOf(previouscapture)
+    val binding = R.bindingOf(previouscapture)
+    val check = GoalPhaseNativeValidation.Check(observed.plan.steps(observed.cursor).checks.head, 1,
+      WorkflowSbtValidation.Kind.Test)
+    val program = consumption.programs.find(_.check == check.identity).get.program
+    val output = "SPECIFICATION-ONLY later selected test failed\n"
+    val process = WorkflowSbtCapture.decode(F.process(text = output, identity = program)).toOption.get
+    val receipt = RepositorySyncNativeMergeValidation.Receipt(check.identity, "exited", Some(1), output, "",
+      Some(WorkflowSbtValidation.Facts(check.kind, WorkflowSbtValidation.Outcome.Failed, None, None)), Some(process))
+    val validation = GoalPhaseNativeValidation.Payload("98", previouscandidate.step, observed.candidate.get,
+      Vector(check) ++ binding.checks.map(_.copy(dependency = Some(binding.identity))), Vector(receipt),
+      Some("repair-required"), dependencySource = Some(previouscapture), sourceConsumption = Some(consumption))
+    val context = take(W.checkFailureContextC(previouscandidate.changedPaths, previouscandidate.diff.get, validation))
+    val repair = take(observed.acceptC(O.RepairableChecksObserved(observed.candidate.get, Vector(check.identity),
+      "SPECIFICATION-ONLY later selected check receipt", O.RepairDirective("Correct the later failed check",
+        Vector("Preserve primary source repairs and correct the selected assertion")))))
+    val historical = Source.HistoricalFailure(ContextReference(prior.target.sessionId, "96"),
+      ContextReference(prior.target.sessionId, "100"), context)
+    val nextbinding = binding.copy(revision = binding.revision + 1)
+    val proposal = prior.target.proposal.copy(binding = ContextReference(nextbinding.identity, nextbinding.revision.toString))
+    val origin = prior.target.canonicalOrigin.get.copy(controller = GoalPhaseCandidateRecovery.controllerSnapshot(repair),
+      originalDirection = Some(prior), previousDirection = None, inspectionFrontier = None,
+      historicalFailure = Some(historical), historicalPublicationFailure = None,
+      selection = prior.target.canonicalOrigin.get.selection.copy(source = proposal),
+      baseLineage = Vector(O.HistoryCommit(binding.base.head, binding.base.tree, Vector.empty)))
+    val target = prior.target.copy(sourceRevision = "102", pendingRevision = "102", generation = repair.generation,
+      repairProgress = GoalPhaseRepairProgress.snapshot(repair), binding = nextbinding, proposal = proposal,
+      canonicalOrigin = Some(origin))
+    val direction = prior.copy(target = target, directive = ContextReference("post-check-source-human", "1"))
+    val controller = take(repair.adoptCanonicalDependencySourceC(direction.directive))
+    val capture = previouscapture.copy(sourceRevision = "106", generation = controller.generation, direction = direction)
+    val candidate = previouscandidate.copy(sourceRevision = "106", dependencySourceDirection = Some(direction),
+      dependencySourceCapture = Some(capture), diff = Some("SPECIFICATION-ONLY corrected later failed check"))
+    (saved, controller, direction, capture, candidate)
+  }
+
   "LSR-01 Canonical publication-failure succession" should {
     import LaterSourcePublicationSpecificationFixture as L
+    "retain the original primary fact and latest Saved across a genuine later failed-check source edge" in {
+      Given("CPB-243-SOURCE-LINEAGE-01: two pure primary reservations, inspection succession and an actual-shaped failed selected check")
+      import GoalPhaseDependencySourceRevision as R
+      import GoalPhaseCanonicalDependencySourceSuccession as Source
+      val original = A.codec.encode(L.fact)
+      val (saved, controller, direction, capture, candidate) = _post_validation_source_fixture
+      val origin = direction.target.canonicalOrigin.get
+      val failure = origin.historicalFailure.get
+      val prior = origin.originalDirection.get
+      val previousselected = direction.copy(target = direction.target.copy(canonicalOrigin = Some(origin.copy(
+        originalDirection = Some(L.direction), previousDirection = Some(prior)))))
+      val description = direction.copy(target = direction.target.copy(sourceRevision = failure.validation.revision,
+        pendingRevision = failure.validation.revision))
+      val progress = candidate.copy(candidate = None, changedPaths = Vector.empty, diff = None,
+        stagedPaths = Vector.empty, dependencySourceGuard = None, dependencySourceCapture = None)
+      When("the next canonical source follows the exact retained failed check and the existing Saved relation")
+      val retained = A.canonicalPublicationFailure(direction)
+      val reused = A.reusedCandidateC(saved, candidate, controller, F.nativeRecord(106))
+      Then("the third ordinary reservation preserves both primary facts without activating publication failure or passing a check")
+      Source.failureValid(failure) shouldBe true
+      R.directionValid(direction) shouldBe true
+      R.captureValid(capture) shouldBe true
+      failure.context.validation.dependencySource.map(_.direction) shouldBe Some(prior)
+      GoalPhaseNativeValidation.repairable(failure.context.validation) shouldBe true
+      GoalPhaseNativeWorkContinuation.sourceCheckFailureMatches(direction, failure.context) shouldBe true
+      retained shouldBe Some(L.historical)
+      R.directionValid(previousselected) shouldBe true
+      A.canonicalPublicationFailure(previousselected) shouldBe retained
+      R.directionValid(description) shouldBe true
+      A.canonicalPublicationFailure(description) shouldBe retained
+      saved.reference should not be L.saved.reference
+      retained.map(_.repair) should not be Some(saved.reference)
+      A.codec.encode(L.fact) shouldBe original
+      A.canonicalSelectionValid(saved, Some(direction), None, controller) shouldBe true
+      A.canonicalSourceSuccessorValid(saved.fact.failure.candidate, candidate) shouldBe true
+      C.sourceCaptureValid(candidate) shouldBe true
+      C.sourceCaptureValid(progress) shouldBe true
+      C.codec.decode(C.codec.encode(candidate)) shouldBe Right(candidate)
+      direction.target.asJson.as[R.Target] shouldBe Right(direction.target)
+      reused.isSuccess shouldBe true
+      A.reusedCandidateC(saved, progress, controller, F.nativeRecord(106)).isSuccess shouldBe true
+      candidate.primaryPublicationRepair shouldBe Some(saved.reuse)
+      (controller.repairs, controller.ordinaryRepairs) shouldBe (3, 3)
+      controller.plan shouldBe saved.fact.failure.plan
+      controller.checksReceipt shouldBe None
+      origin.historicalPublicationFailure shouldBe None
+      origin.inspectionFrontier shouldBe None
+      A.canonicalCauseAt(saved, Some(direction), controller) shouldBe false
+      take(A.canonicalWorkContextC(saved, Some(direction), controller, "RepairStep")) shouldBe None
+      take(A.workContextC(saved.fact, saved.reference, controller, "RepairStep")) shouldBe None
+    }
+
+    "refuse crossed failed-check provenance record order and native reuse without borrowing earlier primary authority" in {
+      Given("CPB-243-SOURCE-LINEAGE-01: the exact checked source edge and latest Saved under unchanged finite repair policy")
+      import GoalPhaseDependencySourceRevision as R
+      val (saved, controller, direction, capture, candidate) = _post_validation_source_fixture
+      val target = direction.target
+      val origin = target.canonicalOrigin.get
+      val failure = origin.historicalFailure.get
+      val validation = failure.context.validation
+      val priorcapture = validation.dependencySource.get
+      val crossedsource = priorcapture.copy(direction = priorcapture.direction.copy(
+        directive = ContextReference("foreign-source-human", "1")))
+      def _failure_direction_(value: GoalPhaseCanonicalDependencySourceSuccession.HistoricalFailure): R.Direction =
+        direction.copy(target = target.copy(canonicalOrigin = Some(origin.copy(historicalFailure = Some(value)))))
+      def _validation_direction_(value: GoalPhaseNativeValidation.Payload): R.Direction =
+        _failure_direction_(failure.copy(context = failure.context.copy(validation = value)))
+      val crossedcaptures = Vector(priorcapture.copy(direction = L.direction), priorcapture.copy(sessionId = "foreign-session"),
+        priorcapture.copy(plan = ContextReference("foreign-plan", "1")), priorcapture.copy(step = "foreign-step"),
+        priorcapture.copy(primaryBase = priorcapture.primaryBase.copy(tree = "f" * 40)),
+        priorcapture.copy(sourceRevision = "97"), priorcapture.copy(generation = target.generation))
+      val crossedchecks = Vector(validation.copy(dependencySource = None), validation.copy(outcome = None),
+        validation.copy(outcome = Some("passed")), validation.copy(step = "foreign-step"),
+        validation.copy(selected = validation.selected.tail), validation.copy(receipts = Vector.empty),
+        validation.copy(receipts = validation.receipts.map(_.copy(exitCode = Some(0)))),
+        validation.copy(sourceRevision = "96"), validation.copy(sourceRevision = "101"))
+      val crossedcanonical = validation.copy(dependencySource = Some(crossedsource),
+        sourceConsumption = Some(R.consumptionOf(crossedsource)))
+      val crossedfacts = Vector(failure.copy(candidate = failure.candidate.copy(identity = "foreign-session")),
+        failure.copy(candidate = failure.candidate.copy(revision = "93")),
+        failure.copy(candidate = failure.candidate.copy(revision = "98")),
+        failure.copy(validation = failure.validation.copy(revision = "97")),
+        failure.copy(validation = failure.validation.copy(revision = "103")))
+      val crossedtargets = Vector(target.copy(sessionId = "foreign-session"), target.copy(step = "foreign-step"),
+        target.copy(plan = target.plan.copy(revision = "foreign-plan")),
+        target.copy(primaryBase = target.primaryBase.copy(tree = "f" * 40)),
+        target.copy(generation = priorcapture.generation),
+        target.copy(repairProgress = target.repairProgress.copy(automaticCount = 0, ordinaryCount = 0)),
+        target.copy(repairProgress = target.repairProgress.copy(limit = target.repairProgress.limit + 1)),
+        target.copy(repairProgress = target.repairProgress.copy(selectedLimit = Some(99), effectiveLimit = Some(99))),
+        target.copy(binding = target.binding.copy(checks = Vector.empty)),
+        target.copy(canonicalOrigin = Some(origin.copy(participant = "foreign-participant"))),
+        target.copy(canonicalOrigin = Some(origin.copy(componentInstance = "foreign-owner"))),
+        target.copy(canonicalOrigin = Some(origin.copy(primaryRoot = "/specification/foreign"))),
+        target.copy(canonicalOrigin = Some(origin.copy(historicalFailure = None))),
+        target.copy(canonicalOrigin = Some(origin.copy(originalDirection = Some(L.direction)))))
+      val directions = crossedcaptures.map(value => _validation_direction_(validation.copy(dependencySource = Some(value)))) ++
+        (crossedchecks :+ crossedcanonical).map(_validation_direction_) ++ crossedfacts.map(_failure_direction_) ++
+        crossedtargets.map(value => direction.copy(target = value))
+      When("the retained-cause selection and structural candidate relation inspect each crossed edge")
+      val retained = directions.map(A.canonicalPublicationFailure)
+      val selected = directions.map(value => A.canonicalSelectionValid(saved, Some(value), None, controller))
+      val candidates = directions.map(value => candidate.copy(dependencySourceDirection = Some(value),
+        dependencySourceCapture = Some(capture.copy(direction = value))))
+      val sources = candidates.map(C.sourceCaptureValid)
+      Then("no crossed edge can revive the old cause, authenticate a candidate or reset the actual controller reservation")
+      R.captureValid(crossedsource) shouldBe true
+      all(retained) shouldBe None
+      all(selected) shouldBe false
+      all(sources) shouldBe false
+      A.reusedCandidateC(L.saved, candidate, controller, F.nativeRecord(106)).isSuccess shouldBe false
+      A.reusedCandidateC(saved, candidate.copy(primaryPublicationRepair = Some(L.saved.reuse)), controller,
+        F.nativeRecord(106)).isSuccess shouldBe false
+      A.reusedCandidateC(saved, candidate, controller, F.nativeRecord(105)).isSuccess shouldBe false
+      val crossedrecord = F.nativeRecord(106)
+      A.reusedCandidateC(saved, candidate, controller, crossedrecord.copy(history = crossedrecord.history.drop(1)))
+        .isSuccess shouldBe false
+      A.reusedCandidateC(saved, candidate, L.successor, F.nativeRecord(106)).isSuccess shouldBe false
+      C.sourceCaptureValid(candidate.copy(dependencySourceCapture = Some(priorcapture))) shouldBe false
+      A.canonicalSourceSuccessorValid(saved.fact.failure.candidate, candidate.copy(sourceRevision = "94")) shouldBe false
+      A.canonicalCauseAt(saved, Some(direction), controller) shouldBe false
+    }
+
     "select the actual second primary repair through checked inspection ancestry while retaining the first historical cause" in {
       Given("two classified pure primary Compile failures, each reserving its real ordinary Repair, followed by source reconstruction")
       import GoalPhaseDependencySourceRevision as R

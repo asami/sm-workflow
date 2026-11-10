@@ -34,8 +34,12 @@ import SplitPhaseExplicitPartitionFixture.take
   * PREPARE_OLD must precede producer product publication; RESUME_CURRENT uses
   * the same physical native Session. The opt-in PREPARE_CHECKPOINT and
   * RESUME_CHECKPOINT stages retain an accepted Repair and ordinary checkpoint
-  * across the same public source-selection boundary. No consumer or product
-  * source is copied.
+  * across the same public source-selection boundary. PREPARE_POST_VALIDATION
+  * starts one new tiny episode whose captured value 19 reaches an actual test
+  * failure before the next source adoption; RESUME_POST_VALIDATION continues
+  * only that same Session after normal product publication. The explicitly
+  * selected prior qualification remains read-only comparison evidence. No
+  * consumer or product source is copied.
   * @since   Nov.  9, 2026
   *  version Nov.  9, 2026
   * @version Nov. 10, 2026
@@ -45,14 +49,22 @@ import SplitPhaseExplicitPartitionFixture.take
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.DependencyValidationTestDeclaration])
 final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  private val _noninput_lineage = sys.props.get("smworkflow.spec.laterSourcePublicationMode").contains("QUALIFY_NONINPUT_LINEAGE")
+  private val _post_validation_lineage = sys.props.get("smworkflow.spec.laterSourcePublicationMode")
+    .exists(Set("PREPARE_POST_VALIDATION", "RESUME_POST_VALIDATION"))
+  private var _post_scaffolding = false
+  private val _post_labels = Set("artifact-description", "artifact-human-evidence", "artifact-adopt", "artifact-advance",
+    "primary-description", "primary-human-evidence", "primary-adopt", "actual-checks", "source-publication-recollection",
+    "source-description", "source-human-evidence", "source-human-adopt", "fresh-repair", "fresh-repair-submit",
+    "old-advance", "new-advance", "new-description").map("post-validation-" + _)
+  private val _noninput_lineage = _post_validation_lineage ||
+    sys.props.get("smworkflow.spec.laterSourcePublicationMode").contains("QUALIFY_NONINPUT_LINEAGE")
   private val _repeated_primary_failure = sys.props.get("smworkflow.spec.laterSourcePublicationRepeatedPrimaryFailure") match {
     case None | Some("false") => false
     case Some("true") => true
     case _ => throw new IllegalArgumentException("laterSourcePublicationRepeatedPrimaryFailure must be true or false")
   }
   require(!_repeated_primary_failure || _noninput_lineage,
-    "RepeatedPrimaryFailure=true belongs only to QUALIFY_NONINPUT_LINEAGE")
+    "RepeatedPrimaryFailure=true requires QUALIFY_NONINPUT_LINEAGE or an explicit post-validation mode")
   private val _reconstruction_label = sys.props.getOrElse("smworkflow.spec.laterSourcePublicationReconstructionLabel",
     "checkpoint-common-reconstruction")
   require(_reconstruction_label == "checkpoint-common-reconstruction" ||
@@ -135,13 +147,25 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
   /** A retained output locator never supplies Workflow authority. Each label
     * names one actual invocation and can only recollect that same response. */
   private def _once(scenario: F.Scenario, label: String)(run: => F.Result): F.Result = {
+    if (_post_validation_lineage && !_post_scaffolding)
+      require(_post_labels(label), "Post-validation invocations use only their finite new labels")
     val path = scenario.root.resolve("caller-results/" + label + ".json")
     if (Files.exists(path)) {
       val saved = _read(path)
+      if (_post_validation_lineage) require(Files.isRegularFile(scenario.root.resolve("caller-results/" + label + ".started.json")) &&
+        Vector("stdout", "stderr").forall(key => {
+          val output = Path.of(saved.hcursor.get[String](key).toOption.get)
+          output.getParent == scenario.root.resolve("logs") && Files.isRegularFile(output) && output.toRealPath() == output
+        }), "Only an actually started and completed invocation with its original outputs can be recollected")
       F.Result(saved.hcursor.get[Int]("exit").toOption.get, F.Invocation(
         saved.hcursor.get[Vector[String]]("argv").toOption.get, saved.hcursor.get[Long]("pid").toOption.get,
         Path.of(saved.hcursor.get[String]("stdout").toOption.get), Path.of(saved.hcursor.get[String]("stderr").toOption.get)))
     } else {
+      if (_post_validation_lineage) {
+        val started = scenario.root.resolve("caller-results/" + label + ".started.json")
+        require(!Files.exists(started), "Started invocation has no retained completed result; never retry: " + label)
+        _write(started, Json.obj("label" -> label.asJson, "startedAt" -> Instant.now().toString.asJson))
+      }
       val result = run
       _write(path, Json.obj("exit" -> result.exitCode.asJson, "argv" -> result.invocation.argv.asJson,
         "pid" -> result.invocation.pid.asJson, "stdout" -> result.invocation.stdout.toString.asJson,
@@ -510,18 +534,27 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
   "LSR-01 Same physical Session later source publication repair" should {
     "retain an accepted earlier source and the real primary failure through explicit old and current stages" in {
       val mode = sys.props.getOrElse("smworkflow.spec.laterSourcePublicationMode",
-        cancel("Select PREPARE_OLD, RESUME_CURRENT, PREPARE_CHECKPOINT, RESUME_CHECKPOINT, QUALIFY_NONINPUT_LINEAGE or COLLECT"))
+        cancel("Select PREPARE_OLD, RESUME_CURRENT, PREPARE_CHECKPOINT, RESUME_CHECKPOINT, QUALIFY_NONINPUT_LINEAGE, PREPARE_POST_VALIDATION, RESUME_POST_VALIDATION or COLLECT"))
       val locator = Path.of(sys.props.getOrElse("smworkflow.spec.laterSourcePublicationLocator", cancel("Select the explicit caller locator")))
       val canonical = Path.of("").toAbsolutePath.normalize
       require(locator.isAbsolute && locator.normalize == locator && locator.startsWith(canonical.resolve("target")))
-      if (Files.exists(locator)) _require_repeated_primary(_read(locator))
-      require(Set("PREPARE_OLD", "RESUME_CURRENT", "PREPARE_CHECKPOINT", "RESUME_CHECKPOINT", "QUALIFY_NONINPUT_LINEAGE", "COLLECT")(mode))
+      if (Files.exists(locator) && !_post_validation_lineage) _require_repeated_primary(_read(locator))
+      require(Set("PREPARE_OLD", "RESUME_CURRENT", "PREPARE_CHECKPOINT", "RESUME_CHECKPOINT", "QUALIFY_NONINPUT_LINEAGE",
+        "PREPARE_POST_VALIDATION", "RESUME_POST_VALIDATION", "COLLECT")(mode))
       require(!Set("PREPARE_CHECKPOINT", "RESUME_CHECKPOINT")(mode) || _checkpoint_lineage,
         "Checkpoint modes require explicitly selected CheckpointLineage=true")
       require(sys.props.contains("smworkflow.spec.installedCommand") && sys.props.contains("smworkflow.spec.componentFile"))
       require(_noninput_lineage || !sys.props.get("smworkflow.spec.laterSourcePublicationResumePoint").contains("NONINPUT_CHECKPOINT"),
         "NONINPUT_CHECKPOINT belongs only to QUALIFY_NONINPUT_LINEAGE")
-      if (_noninput_lineage) {
+      if (_post_validation_lineage) {
+        require(_repeated_primary_failure && _usage_lineage && _coverage_lineage && _root_lineage && _checkpoint_lineage &&
+          !sys.props.contains("smworkflow.spec.laterSourcePublicationResumePoint") &&
+          _reconstruction_label == "checkpoint-common-reconstruction" && _advance_label == "noninput-checkpoint-ordinary-advance",
+          "Post-validation modes require all four lineage flags and RepeatedPrimaryFailure=true without old resume selections")
+        if (mode == "PREPARE_POST_VALIDATION") _prepare_post_validation(locator)
+        else _resume_post_validation(locator)
+      }
+      else if (_noninput_lineage) {
         require(_checkpoint_lineage && _root_lineage && _coverage_lineage && _usage_lineage,
           "QUALIFY_NONINPUT_LINEAGE requires all four explicit lineage flags")
         require(Files.isDirectory(locator.getParent) && locator.getParent.toRealPath().startsWith(canonical.resolve("target").toRealPath()),
@@ -547,6 +580,367 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
       }
     }
   }
+  /** The earlier completed qualification is comparison only. The new original
+    * episode is started once; its completed scaffold is never replayed. Started
+    * operations without a completed retained result require parent disposition. */
+  private def _post_value(root: Path, label: String)(value: => Json): Json = {
+    require(Set("dependency-base", "publication", "source-proposal", "fresh-consumer")(label))
+    val name = "post-validation-" + label
+    val path = root.resolve("caller-values/" + name + ".json")
+    if (Files.exists(path)) _read(path)
+    else {
+      val started = root.resolve("caller-values/" + name + ".started.json")
+      require(!Files.exists(started), "Started fixture operation has no retained result; never retry: " + name)
+      _write(started, Json.obj("label" -> name.asJson, "startedAt" -> Instant.now().toString.asJson))
+      _saved_value(root, name)(value)
+    }
+  }
+  private def _post_prior(locator: Path): (Path, Json, Path, Json) = {
+    val canonical = Path.of("").toAbsolutePath.normalize
+    require(Files.isDirectory(locator.getParent) && locator.getParent.toRealPath().startsWith(canonical.resolve("target").toRealPath()))
+    val priorpath = Path.of(sys.props.getOrElse("smworkflow.spec.laterSourcePublicationPriorResult",
+      fail("Post-validation stages require the explicit completed noninput-lineage prior result")))
+    _post_result(priorpath, locator)
+  }
+  private def _post_result(priorpath: Path, locator: Path): (Path, Json, Path, Json) = {
+    val canonical = Path.of("").toAbsolutePath.normalize
+    require(priorpath.isAbsolute && priorpath.normalize == priorpath && Files.isRegularFile(priorpath) &&
+      priorpath.toRealPath() == priorpath && priorpath.startsWith(canonical.resolve("target")) &&
+      priorpath.getFileName.toString.endsWith(".noninput-lineage.result.json") && priorpath != locator)
+    val prior = _read(priorpath)
+    Vector("phaseAccepted", "consumerAuthorityClaimed").foreach(key => prior.hcursor.get[Boolean](key).toOption shouldBe Some(false))
+    prior.hcursor.get[Boolean]("repeatedPrimaryFailure").toOption shouldBe Some(true)
+    val checkpointpath = Path.of(prior.hcursor.get[String]("checkpoint").toOption.get)
+    require(checkpointpath.isAbsolute && checkpointpath.normalize == checkpointpath && Files.isRegularFile(checkpointpath) &&
+      checkpointpath.toRealPath() == checkpointpath && checkpointpath.startsWith(canonical.resolve("target")) &&
+      checkpointpath != locator)
+    val saved = _read(checkpointpath)
+    val root = Path.of(saved.hcursor.get[String]("root").toOption.get)
+    require(root.isAbsolute && root.normalize == root && root.toRealPath() == root &&
+      root.getParent == canonical.resolve("target/sm-workflow/work/native-cli") &&
+      root.getFileName.toString.startsWith("noninput-source-lineage-"), "Only the retained tiny qualification is eligible")
+    require(Files.isRegularFile(root.resolve("workflow.sqlite")), "Retain the physical SQLite Session")
+    val task = Path.of(saved.hcursor.get[String]("task").toOption.get)
+    task shouldBe root.resolve("target/sm-workflow/tasks/later-source-publication")
+    val session = prior.hcursor.get[String]("session").toOption.get
+    saved.hcursor.get[String]("session").toOption shouldBe Some(session)
+    _read(task.resolve("workflow-session.json")).hcursor.get[String]("sessionId").toOption shouldBe Some(session)
+    def _output_(key: String): Path = {
+      val path = Path.of(prior.hcursor.get[String](key).toOption.get)
+      require(path.getParent == root.resolve("logs") && path.toRealPath() == path && Files.isRegularFile(path))
+      path
+    }
+    val oldwait = _business[V.GoalPhaseAdvanceResult](_output_("ordinaryAdvanceOutput"))
+    oldwait.sessionId shouldBe session
+    oldwait.kind shouldBe "Wait"
+    oldwait.condition shouldBe Some("dependency-publication-source-mismatch")
+    _post_progress(oldwait, 2)
+    _business[V.GoalPhaseWorkSubmissionResult](_output_("acceptedRepairSubmitOutput")).accepted shouldBe true
+    val previous = _business[V.GoalPhaseAdvanceResult](_output_("secondPrimaryFailureOutput"))
+    previous.work.get.publicationFailure should not be empty
+    previous.work.get.checkFailure shouldBe None
+    _post_progress(previous, 2)
+    prior.hcursor.get[Json]("secondPrimaryFailure").toOption shouldBe saved.hcursor.get[Json]("secondPrimaryFailure").toOption
+    prior.hcursor.get[LocalPublication.Result]("historicalPrimaryFailure").toOption shouldBe
+      saved.hcursor.get[LocalPublication.Result]("publicationFailure").toOption
+    prior.hcursor.get[R.Target]("target").toOption.get.binding shouldBe saved.hcursor.get[D.Binding]("binding").toOption.get
+    prior.hcursor.get[Vector[String]]("producerPublications").toOption shouldBe Some(Vector("published"))
+    (priorpath, prior, checkpointpath, saved)
+  }
+  private def _post_progress(value: V.GoalPhaseAdvanceResult, count: Int): Unit = {
+    value.repairProgress.get.automaticCount shouldBe count
+    value.repairProgress.get.ordinaryCount shouldBe count
+    value.repairProgress.get.limit shouldBe 10
+  }
+  private def _post_preserved(saved: Json, initial: Json): Unit = {
+    val root = Path.of(saved.hcursor.get[String]("root").toOption.get)
+    initial.hcursor.get[String]("root").toOption shouldBe Some(root.toString)
+    initial.hcursor.get[String]("session").toOption shouldBe saved.hcursor.get[String]("session").toOption
+    Vector("priorResult", "checkpoint", "episodeResult").foreach(key =>
+      Files.isRegularFile(Path.of(initial.hcursor.get[String](key).toOption.get)) shouldBe true)
+    _lines(root.resolve("dependency/publication-count.txt")).size shouldBe saved.hcursor.get[Int]("oldDependencyPublicationCount").toOption.get
+    _lines(root.resolve("canonical-dependency/publication-count.txt")) shouldBe Vector("published")
+    Files.isRegularFile(root.resolve("workflow.sqlite")) shouldBe true
+  }
+  private def _post_artifact(scenario: F.Scenario, task: Path, publication: P.PublicationObservation): F.Result = {
+    val session = scenario.retrieve(task)
+    val described = _input(scenario, "post-validation-artifact-description", "GoalPhaseService", B.describeOperation,
+      V.GoalPhasePrerequisitePublicationRecoveryDescriptionInput(session, Some(GoalPhaseNativeMetadata.record(publication.asJson))))
+    val description = described.business[V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult]
+    val target = take(Alignment.targetC(description.target))
+    description.choices shouldBe Vector(Alignment.adoptionChoice, "Defer")
+    target.publication shouldBe Some(publication)
+    val reference = V.WorkflowArtifactReference("specification-post-validation-artifact-human", "1")
+    val input = V.GoalPhasePrerequisitePublicationRecoveryInput(session, description.target, Alignment.adoptionChoice,
+      "SPECIFICATION-ONLY independently adopt the already applicable retained artifact", reference, None)
+    _evidence(scenario, described, "post-validation-artifact-human", "goal-phase-prerequisite-publication-recovery",
+      _json(input), reference, Vector(V.WorkflowArtifactReference(publication.recollectionReference.identity, publication.recollectionReference.revision),
+        V.WorkflowArtifactReference(publication.artifact.identity, publication.artifact.revision)))
+    _input(scenario, "post-validation-artifact-adopt", "GoalPhaseService", B.recoveryOperation, input)
+      .business[V.GoalPhasePrerequisitePublicationRecoveryResult].accepted shouldBe true
+    _advance(scenario, task, "post-validation-artifact-advance")
+  }
+  private def _post_checks(scenario: F.Scenario, task: Path, aligned: F.Result): F.Result = {
+    val value = aligned.business[V.GoalPhaseAdvanceResult]
+    if (value.work.exists(_.kind == "RepairStep")) aligned
+    else {
+      withClue(aligned.invocation.logs) {
+        value.kind shouldBe "Wait"
+        value.condition shouldBe Some("local-publication")
+      }
+      val described = _call(scenario, "post-validation-primary-description", "GoalPhaseService", B.describeOperation,
+        Vector("--sessionId", scenario.retrieve(task)))
+      val description = described.business[V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult]
+      description.choices should contain("AuthorizePrimaryPublicationOnce")
+      val reference = V.WorkflowArtifactReference("specification-post-validation-primary-human", "1")
+      val input = V.GoalPhasePrerequisitePublicationRecoveryInput(scenario.retrieve(task), description.target, "AuthorizePrimaryPublicationOnce",
+        "SPECIFICATION-ONLY publish this actual compiling candidate once before its selected tests", reference, None)
+      _evidence(scenario, described, "post-validation-primary-human", "goal-phase-prerequisite-publication-recovery", _json(input), reference)
+      _input(scenario, "post-validation-primary-adopt", "GoalPhaseService", B.recoveryOperation, input)
+        .business[V.GoalPhasePrerequisitePublicationRecoveryResult].accepted shouldBe true
+      _advance(scenario, task, "post-validation-actual-checks")
+    }
+  }
+  private def _post_invocation(value: F.Result): Json = Json.obj("exit" -> value.exitCode.asJson,
+    "argv" -> value.invocation.argv.asJson, "pid" -> value.invocation.pid.asJson,
+    "stdout" -> value.invocation.stdout.toString.asJson, "stderr" -> value.invocation.stderr.toString.asJson,
+    "stdoutBytes" -> Files.readString(value.invocation.stdout).asJson,
+    "stderrBytes" -> Files.readString(value.invocation.stderr).asJson)
+  private def _prepare_post_validation(locator: Path): Unit = {
+    Given("the completed earlier qualification as read-only comparison and one new tiny integrated post-validation episode")
+    val (comparisonpath, comparison, _, comparisoncheckpoint) = _post_prior(locator)
+    val episodepath = locator.resolveSibling(locator.getFileName.toString + ".noninput-lineage.result.json")
+    if (!Files.exists(episodepath)) {
+      val started = locator.resolveSibling(locator.getFileName.toString + ".post-validation.scaffold.started.json")
+      require(!Files.exists(locator) && !Files.exists(started),
+        "A partial new episode is retained for parent disposition; never repeat setup or Start")
+      _write(started, Json.obj("priorResult" -> comparisonpath.toString.asJson,
+        "startedAt" -> Instant.now().toString.asJson))
+      _post_scaffolding = true
+      try _qualify_noninput_lineage(locator) finally _post_scaffolding = false
+    }
+    val (priorpath, prior, checkpointpath, saved) = _post_result(episodepath, locator)
+    prior.hcursor.get[String]("session").toOption.get should not be comparison.hcursor.get[String]("session").toOption.get
+    saved.hcursor.get[String]("root").toOption.get should not be comparisoncheckpoint.hcursor.get[String]("root").toOption.get
+    val root = Path.of(saved.hcursor.get[String]("root").toOption.get)
+    val task = Path.of(saved.hcursor.get[String]("task").toOption.get)
+    val initialpath = locator.resolveSibling(locator.getFileName.toString + ".post-validation.start.json")
+    val complete = locator.resolveSibling(locator.getFileName.toString + ".post-validation.old.json")
+    if (!Files.exists(initialpath)) {
+      _lines(root.resolve("primary-publications.txt")) shouldBe saved.hcursor.get[Vector[String]]("oldPrimaryPublications").toOption.get
+      _lines(root.resolve("selected-tests.txt")) shouldBe saved.hcursor.get[Vector[String]]("oldTests").toOption.get
+      _write(initialpath, Json.obj("stage" -> "POST_VALIDATION_STARTED".asJson, "root" -> root.toString.asJson,
+        "session" -> prior.hcursor.get[String]("session").toOption.get.asJson,
+        "priorResult" -> comparisonpath.toString.asJson,
+        "episodeResult" -> priorpath.toString.asJson,
+        "checkpoint" -> checkpointpath.toString.asJson,
+        "oldComponent" -> sys.props("smworkflow.spec.componentFile").asJson,
+        "primaryPublications" -> _lines(root.resolve("primary-publications.txt")).asJson,
+        "tests" -> _lines(root.resolve("selected-tests.txt")).asJson))
+    }
+    val initial = _read(initialpath)
+    initial.hcursor.get[String]("priorResult").toOption shouldBe Some(comparisonpath.toString)
+    initial.hcursor.get[String]("episodeResult").toOption shouldBe Some(priorpath.toString)
+    initial.hcursor.get[String]("root").toOption shouldBe Some(root.toString)
+    _post_preserved(saved, initial)
+    if (Files.exists(complete)) {
+      _post_complete(_read(complete), initial, prior)
+      info("POST_VALIDATION_OLD_RESULT=" + complete)
+      return
+    }
+    initial.hcursor.get[String]("oldComponent").toOption shouldBe Some(sys.props("smworkflow.spec.componentFile"))
+    val scenario = F.reopenCanonicalSource(root, _host(root), saved.hcursor.get[O.Plan]("plan").toOption.get, _next_log(root))
+    val session = scenario.retrieve(task)
+    session shouldBe prior.hcursor.get[String]("session").toOption.get
+    When("the remaining ordinary artifact and necessary primary choices allow the compiling value 19 to reach its actual selected test")
+    val failedoutput = _post_checks(scenario, task,
+      _post_artifact(scenario, task, saved.hcursor.get[P.PublicationObservation]("checkpointPublication").toOption.get))
+    info("POST_VALIDATION_ACTUAL_CHECK_RESULT=" + failedoutput.invocation.stdout)
+    val failed = failedoutput.business[V.GoalPhaseAdvanceResult]
+    withClue(failedoutput.invocation.logs) { failed.work.get.kind shouldBe "RepairStep" }
+    failed.work.get.publicationFailure shouldBe None
+    failed.work.get.checkFailure.get.validation.outcome shouldBe Some("repair-required")
+    _post_progress(failed, 3)
+    val priorrepair = _business[V.GoalPhaseAdvanceResult](Path.of(prior.hcursor.get[String]("secondPrimaryFailureOutput").toOption.get))
+    failed.work.get.selectedPlan shouldBe priorrepair.work.get.selectedPlan
+    failed.work.get.originalBase shouldBe priorrepair.work.get.originalBase
+    failed.work.get.completed shouldBe priorrepair.work.get.completed
+    _lines(root.resolve("primary-publications.txt")) shouldBe initial.hcursor.get[Vector[String]]("primaryPublications").toOption.get :+ "published"
+    _lines(root.resolve("selected-tests.txt")) shouldBe initial.hcursor.get[Vector[String]]("tests").toOption.get :+ "later"
+    And("a new clean canonical descendant changes only the already declared non-input document without republishing its producer")
+    val previousbinding = saved.hcursor.get[D.Binding]("binding").toOption.get
+    val dependency = Path.of(previousbinding.root)
+    val nextbase = _post_value(root, "dependency-base") {
+      _git(root, dependency, "post-validation-dependency-before-clean", "status", "--porcelain=v1") shouldBe ""
+      _snapshot(root, dependency, "post-validation-dependency-before") shouldBe previousbinding.base
+      Files.writeString(dependency.resolve(_later_doc), Files.readString(dependency.resolve(_later_doc)) +
+        "The later actual test failure retains this separate documentation-only source successor.\n")
+      val snapshot = _commit(root, dependency, "post-validation-documentation-only-descendant", Vector(_later_doc))
+      _git(root, dependency, "post-validation-dependency-clean", "status", "--porcelain=v1") shouldBe ""
+      _git(root, dependency, "post-validation-dependency-only-doc", "diff", "--name-only", previousbinding.base.head, snapshot.head) shouldBe _later_doc
+      _git(root, dependency, "post-validation-dependency-descendant", "merge-base", "--is-ancestor", previousbinding.base.head, snapshot.head) shouldBe ""
+      snapshot.asJson
+    }.as[O.Snapshot].toOption.get
+    val binding = previousbinding.copy(revision = previousbinding.revision + 1, base = nextbase)
+    _register(root, binding)
+    val publication = _post_value(root, "publication") {
+      _recollect_noninput(scenario, saved.hcursor.get[P.PublicationObservation]("checkpointPublication").toOption.get,
+        binding, "post-validation-source-publication-recollection").asJson
+    }.as[P.PublicationObservation].toOption.get
+    val proposal = _post_value(root, "source-proposal") {
+      val oldproposal = saved.hcursor.get[C.Proposal]("proposal").toOption.get
+      _proposal(binding, publication, locator.toUri.toASCIIString, oldproposal.source.coverage.drop(1)).asJson
+    }.as[C.Proposal].toOption.get
+    proposal.schemaVersion shouldBe C.applicabilityProposalSchema
+    val described = _describe(scenario, session, "post-validation-source-description", proposal)
+    val target = take(R.targetC(described.business[V.GoalPhaseDependencySourceRevisionDescriptionResult].target))
+    val origin = target.canonicalOrigin.get
+    val nativefailure = origin.historicalFailure.get.context
+    val checkcapture = nativefailure.validation.dependencySource.get
+    Then("the source description names the real check failure and its actual original direction, retaining both older primary failures literally")
+    NativeWorkflowOperationOutput.goalValidation(nativefailure.validation) shouldBe failed.work.get.checkFailure.get.validation
+    nativefailure.diff shouldBe failed.work.get.checkFailure.get.diff
+    nativefailure.changedPaths shouldBe failed.work.get.checkFailure.get.changedPaths
+    checkcapture.direction.target shouldBe prior.hcursor.get[R.Target]("target").toOption.get
+    nativefailure.validation.receipts.last.exitCode shouldBe Some(1)
+    nativefailure.validation.receipts.last.sbt.get.kind shouldBe WorkflowSbtValidation.Kind.TestOnly
+    nativefailure.validation.receipts.last.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Failed
+    origin.historicalPublicationFailure shouldBe None
+    origin.originalDirection shouldBe Some(checkcapture.direction)
+    target.binding shouldBe binding
+    target.plan shouldBe checkcapture.direction.target.plan
+    target.primaryBase shouldBe checkcapture.primaryBase
+    target.completed shouldBe checkcapture.direction.target.completed
+    target.repairProgress.automaticCount shouldBe 3
+    target.repairProgress.ordinaryCount shouldBe 3
+    target.repairProgress.limit shouldBe 10
+    When("one genuine fixture Human source adoption and a separate ordinary Advance issue the fresh current Repair")
+    _adopt(scenario, described, "post-validation-source-human") shouldBe target
+    val freshoutput = _advance(scenario, task, "post-validation-fresh-repair")
+    val fresh = freshoutput.business[V.GoalPhaseAdvanceResult]
+    fresh.work.get.kind shouldBe "RepairStep"
+    fresh.work.get.publicationFailure shouldBe None
+    fresh.work.get.checkFailure shouldBe failed.work.get.checkFailure
+    fresh.work.get.selectedPlan shouldBe failed.work.get.selectedPlan
+    fresh.work.get.originalBase shouldBe failed.work.get.originalBase
+    fresh.work.get.completed shouldBe failed.work.get.completed
+    fresh.repairProgress shouldBe failed.repairProgress
+    _post_value(root, "fresh-consumer") {
+      Files.writeString(root.resolve("repository").resolve(_source), _consumer("Api.newApi(20)"))
+      Json.obj("source" -> Files.readString(root.resolve("repository").resolve(_source)).asJson)
+    }
+    val dispositions = fresh.work.get.issues.toVector.flatMap(_.issues).filter(_.status != "RESOLVED").map(issue =>
+      V.GoalPhaseIssueDisposition(issue.identity, "FIXED",
+        "SPECIFICATION-ONLY correct the actual failed test's Consumer value from 19 to 20; fresh checks remain owed", None))
+    _submit(scenario, fresh, "post-validation-fresh-repair-submit", Json.obj("outcome" -> "completed".asJson,
+      "summary" -> "SPECIFICATION-ONLY correct actual failed test's Consumer value to the required 42".asJson,
+      "findings" -> Json.arr(), "issueReport" -> _json(V.GoalPhaseIssueReport(dispositions))))
+      .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+    val old = _advance(scenario, task, "post-validation-old-advance")
+    Then("the OLD installed product refuses that accepted latest source at the exact retained primary repair lineage guard")
+    old.exitCode should not be 0
+    Files.readString(old.invocation.stdout).trim shouldBe ""
+    old.invocation.logs should include("Primary repair source selection has no authenticated historical or successor relation")
+    _post_preserved(saved, initial)
+    val result = Json.obj("stage" -> "PREPARED_POST_VALIDATION".asJson, "root" -> root.toString.asJson,
+      "task" -> task.toString.asJson, "session" -> session.asJson, "priorResult" -> comparisonpath.toString.asJson,
+      "episodeResult" -> priorpath.toString.asJson,
+      "oldComponent" -> sys.props("smworkflow.spec.componentFile").asJson,
+      "failedChecksOutput" -> failedoutput.invocation.stdout.toString.asJson, "failedChecks" -> _json(failed),
+      "sourceDescriptionOutput" -> described.invocation.stdout.toString.asJson, "target" -> target.asJson,
+      "publication" -> publication.asJson, "binding" -> binding.asJson,
+      "freshRepairOutput" -> freshoutput.invocation.stdout.toString.asJson,
+      "acceptedFreshRepairOutput" -> _read(root.resolve("caller-results/post-validation-fresh-repair-submit.json")).hcursor.get[String]("stdout").toOption.get.asJson,
+      "oldRefusal" -> _post_invocation(old), "primaryPublications" -> _lines(root.resolve("primary-publications.txt")).asJson,
+      "tests" -> _lines(root.resolve("selected-tests.txt")).asJson,
+      "producerPublications" -> _lines(root.resolve("canonical-dependency/publication-count.txt")).asJson,
+      "retainedPrimaryRepair" -> prior.hcursor.downField("secondPrimaryFailure").get[Json]("repair").toOption.get,
+      "phaseAccepted" -> Json.False, "consumerAuthorityClaimed" -> Json.False)
+    _write(complete, result)
+    _post_complete(result, initial, prior)
+    info("POST_VALIDATION_OLD_RESULT=" + complete)
+  }
+  private def _post_complete(result: Json, initial: Json, prior: Json): Unit = {
+    result.hcursor.get[String]("stage").toOption shouldBe Some("PREPARED_POST_VALIDATION")
+    result.hcursor.get[String]("session").toOption shouldBe prior.hcursor.get[String]("session").toOption
+    result.hcursor.get[String]("root").toOption shouldBe initial.hcursor.get[String]("root").toOption
+    result.hcursor.get[String]("priorResult").toOption shouldBe initial.hcursor.get[String]("priorResult").toOption
+    val refusal = result.hcursor.downField("oldRefusal")
+    refusal.get[Int]("exit").toOption.get should not be 0
+    refusal.get[String]("stdoutBytes").toOption.get.trim shouldBe ""
+    refusal.get[String]("stderrBytes").toOption.get should include("Primary repair source selection has no authenticated historical or successor relation")
+    result.hcursor.get[Vector[String]]("primaryPublications").toOption.get shouldBe initial.hcursor.get[Vector[String]]("primaryPublications").toOption.get :+ "published"
+    result.hcursor.get[Vector[String]]("tests").toOption.get shouldBe initial.hcursor.get[Vector[String]]("tests").toOption.get :+ "later"
+    result.hcursor.get[Vector[String]]("producerPublications").toOption shouldBe Some(Vector("published"))
+    _business[V.GoalPhaseWorkSubmissionResult](Path.of(result.hcursor.get[String]("acceptedFreshRepairOutput").toOption.get)).accepted shouldBe true
+    Vector("phaseAccepted", "consumerAuthorityClaimed").foreach(key => result.hcursor.get[Boolean](key).toOption shouldBe Some(false))
+  }
+  private def _resume_post_validation(locator: Path): Unit = {
+    Given("the complete OLD lineage refusal and the same physical Session with its accepted fresh Repair")
+    val (comparisonpath, comparison, _, _) = _post_prior(locator)
+    val (_, prior, _, saved) = _post_result(locator.resolveSibling(locator.getFileName.toString + ".noninput-lineage.result.json"), locator)
+    prior.hcursor.get[String]("session").toOption.get should not be comparison.hcursor.get[String]("session").toOption.get
+    val initial = _read(locator.resolveSibling(locator.getFileName.toString + ".post-validation.start.json"))
+    initial.hcursor.get[String]("priorResult").toOption shouldBe Some(comparisonpath.toString)
+    val old = _read(locator.resolveSibling(locator.getFileName.toString + ".post-validation.old.json"))
+    _post_complete(old, initial, prior)
+    _post_preserved(saved, initial)
+    val root = Path.of(old.hcursor.get[String]("root").toOption.get)
+    val task = Path.of(old.hcursor.get[String]("task").toOption.get)
+    val scenario = F.reopenCanonicalSource(root, _host(root), saved.hcursor.get[O.Plan]("plan").toOption.get, _next_log(root))
+    scenario.retrieve(task) shouldBe old.hcursor.get[String]("session").toOption.get
+    When("the normally updated published CAR receives one new ordinary Advance without source adoption or semantic Submit replay")
+    val advanced = _advance(scenario, task, "post-validation-new-advance")
+    info("POST_VALIDATION_NEW_ADVANCE=" + advanced.invocation.stdout)
+    val current = advanced.business[V.GoalPhaseAdvanceResult]
+    current.sessionId shouldBe old.hcursor.get[String]("session").toOption.get
+    current.kind shouldBe "Wait"
+    current.condition.get should (be("dependency-publication-source-mismatch") or be("local-publication"))
+    _post_progress(current, 3)
+    val publication = old.hcursor.get[P.PublicationObservation]("publication").toOption.get
+    val described = if (current.condition.contains("dependency-publication-source-mismatch"))
+      _input(scenario, "post-validation-new-description", "GoalPhaseService", B.describeOperation,
+        V.GoalPhasePrerequisitePublicationRecoveryDescriptionInput(current.sessionId, Some(GoalPhaseNativeMetadata.record(publication.asJson))))
+    else _call(scenario, "post-validation-new-description", "GoalPhaseService", B.describeOperation, Vector("--sessionId", current.sessionId))
+    val description = described.business[V.GoalPhasePrerequisitePublicationRecoveryDescriptionResult]
+    val targetjson = GoalPhaseNativeMetadata.normalizePublicJson(_json(description.target)).fold(fail(_), identity)
+    val candidate = targetjson.hcursor.get[String]("candidate").toOption.map(raw => parse(raw).fold(error => fail(error.message), identity))
+      .getOrElse(targetjson.hcursor.get[Json]("candidate").toOption.get)
+    val payload = candidate.as[GoalPhaseNativeCandidate.Payload].fold(error => fail(error.message), identity)
+    val capture = payload.dependencySourceCapture.get
+    val target = old.hcursor.get[R.Target]("target").toOption.get
+    val failed = _business[V.GoalPhaseAdvanceResult](Path.of(old.hcursor.get[String]("failedChecksOutput").toOption.get))
+    Then("the real fresh candidate carries the accepted latest CHECK source and authentic reuse of the retained primary failure")
+    capture.direction.target shouldBe target
+    R.bindingOf(capture) shouldBe old.hcursor.get[D.Binding]("binding").toOption.get
+    capture.primaryBase shouldBe target.primaryBase
+    target.plan shouldBe saved.hcursor.get[O.Plan]("plan").toOption.get
+    target.completed shouldBe prior.hcursor.get[R.Target]("target").toOption.get.completed
+    NativeWorkflowOperationOutput.goalValidation(target.canonicalOrigin.get.historicalFailure.get.context.validation) shouldBe
+      failed.work.get.checkFailure.get.validation
+    target.canonicalOrigin.get.historicalPublicationFailure shouldBe None
+    payload.primaryPublicationRepair.get.repair shouldBe old.hcursor.get[ContextReference]("retainedPrimaryRepair").toOption.get
+    val controller = parse(targetjson.hcursor.get[String]("controller").toOption.get).toOption.get
+    controller.hcursor.get[Int]("repairs").toOption shouldBe Some(3)
+    controller.hcursor.get[Int]("ordinaryRepairs").toOption shouldBe Some(3)
+    _lines(root.resolve("primary-publications.txt")) shouldBe old.hcursor.get[Vector[String]]("primaryPublications").toOption.get
+    _lines(root.resolve("selected-tests.txt")) shouldBe old.hcursor.get[Vector[String]]("tests").toOption.get
+    _post_preserved(saved, initial)
+    _post_complete(old, initial, prior)
+    val resultpath = locator.resolveSibling(locator.getFileName.toString + ".post-validation.result.json")
+    val result = Json.obj("session" -> current.sessionId.asJson, "root" -> root.toString.asJson,
+      "oldRefusal" -> old.hcursor.get[Json]("oldRefusal").toOption.get,
+      "newAdvance" -> _post_invocation(advanced), "descriptionOutput" -> described.invocation.stdout.toString.asJson,
+      "candidate" -> candidate, "capture" -> capture.asJson, "target" -> target.asJson,
+      "retainedPrimaryRepair" -> payload.primaryPublicationRepair.get.repair.asJson,
+      "primaryPublications" -> _lines(root.resolve("primary-publications.txt")).asJson,
+      "tests" -> _lines(root.resolve("selected-tests.txt")).asJson,
+      "producerPublications" -> _lines(root.resolve("canonical-dependency/publication-count.txt")).asJson,
+      "phaseAccepted" -> Json.False, "consumerAuthorityClaimed" -> Json.False)
+    if (Files.exists(resultpath)) _read(resultpath) shouldBe result else _write(resultpath, result)
+    info("POST_VALIDATION_RESULT=" + resultpath)
+  }
+
   private def _prepare_old(locator: Path): Unit = {
     Given("two independent tiny Scala projects before Start and the old installed product; no consumer checkout or native state is copied")
     val preparedlocator = locator.resolveSibling(locator.getFileName.toString + ".prepared.json")
@@ -942,9 +1336,9 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     _advance(scenario, task, "alignment-ordinary-continuation")
   }
   private def _recollect_noninput(scenario: F.Scenario, original: P.PublicationObservation,
-    binding: D.Binding): P.PublicationObservation = {
+    binding: D.Binding, label: String = "noninput-original-publication-recollection"): P.PublicationObservation = {
     val request = original.result.publication.request.input
-    val output = _input(scenario, "noninput-original-publication-recollection", "LocalPublicationService", "collectLocalPublication",
+    val output = _input(scenario, label, "LocalPublicationService", "collectLocalPublication",
       V.LocalPublicationCollectionInput(request.requestIdentity, request.targetIdentity, request.ownerSessionId, request.explicit))
     val dto = output.business[V.LocalPublicationResult]
     val publication = take(GoalPhasePrerequisitePublicationUnknownRecovery.jsonC(dto.publication.get)).as[LocalPublication.Result].toOption.get
@@ -1088,12 +1482,16 @@ final class NativeGoalLaterSourcePublicationRepairCliSpec extends AnyWordSpec wi
     direction.repairProgress.ordinaryCount shouldBe 1
     val submitlabel = "noninput-second-repair-submit"
     if (!Files.exists(root.resolve("caller-results/" + submitlabel + ".json")))
-      Files.writeString(root.resolve("repository").resolve(_source), _consumer("Api.newApi(20)"))
+      Files.writeString(root.resolve("repository").resolve(_source), _consumer(if (_post_validation_lineage) "Api.newApi(19)" else "Api.newApi(20)"))
     val dispositions = repair.work.get.issues.toVector.flatMap(_.issues).filter(_.status != "RESOLVED").map(issue =>
-      V.GoalPhaseIssueDisposition(issue.identity, "FIXED", "SPECIFICATION-ONLY correct Consumer value to the actual required 42", None))
-    When("only that actual current Repair submits the correct Consumer before an ordinary nonacceptance checkpoint")
+      V.GoalPhaseIssueDisposition(issue.identity, "FIXED", if (_post_validation_lineage)
+        "SPECIFICATION-ONLY correct the primary Compile type failure; actual TestOnly remains unexecuted"
+        else "SPECIFICATION-ONLY correct Consumer value to the actual required 42", None))
+    When(if (_post_validation_lineage) "the current Repair submits compiling value 19 before checkpoint and candidate capture, with selected tests still owed"
+      else "only that actual current Repair submits the correct Consumer before an ordinary nonacceptance checkpoint")
     _submit(scenario, repair, submitlabel, Json.obj("outcome" -> "completed".asJson,
-      "summary" -> "SPECIFICATION-ONLY correct real failed test".asJson, "findings" -> Json.arr(),
+      "summary" -> (if (_post_validation_lineage) "SPECIFICATION-ONLY correct actual primary Compile failure; tests remain owed"
+        else "SPECIFICATION-ONLY correct real failed test").asJson, "findings" -> Json.arr(),
       "issueReport" -> _json(V.GoalPhaseIssueReport(dispositions))))
       .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
     val current = saved.mapObject(_.add("oldPrimaryPublications", _lines(root.resolve("primary-publications.txt")).asJson)
