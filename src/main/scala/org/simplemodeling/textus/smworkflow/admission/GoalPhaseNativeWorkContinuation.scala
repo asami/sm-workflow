@@ -1731,7 +1731,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     private def _active_primary_repair(cursor: Cursor): Option[A.Saved] = cursor.primaryRepair.filter(A.reusableAt(_, cursor.controller))
     private def _current_artifact_needed(cursor: Cursor): Boolean =
       _active_primary_repair(cursor).exists(repair => cursor.candidate.exists(candidate =>
-        Z.needed(repair, candidate, cursor.currentArtifactDirections)))
+        Z.needed(repair, candidate, cursor.currentArtifactDirections, Some(cursor.controller.generation))))
     private def _current_artifact_direction(cursor: Cursor): Option[Z.Saved] = for {
       repair <- _active_primary_repair(cursor)
       candidate <- cursor.candidate

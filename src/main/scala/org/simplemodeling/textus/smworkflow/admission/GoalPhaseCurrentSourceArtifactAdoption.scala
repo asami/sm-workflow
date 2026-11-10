@@ -119,7 +119,7 @@ private[smworkflow] object GoalPhaseCurrentSourceArtifactAdoption {
           A.CaptureReuse(publication.repair.get, failure.candidateRecordRevision,
             failure.candidate.primaryPublicationRepair.map(_.sourceRevision).getOrElse(failure.candidate.sourceRevision),
             failure.generation)) &&
-        A.currentSourceSuccessorValid(failure.candidate, candidate) && candidate.dependencySourceCapture.exists { capture =>
+        A.currentSourceSuccessorValid(failure.candidate, candidate, Some(publication.generation)) && candidate.dependencySourceCapture.exists { capture =>
           val binding = R.bindingOf(capture)
           R.captureValid(capture) && R.candidateValid(candidate) && capture.sessionId == publication.sessionId &&
             capture.plan == ContextReference(publication.scope.plan.identity, publication.scope.plan.revision) &&
@@ -130,7 +130,7 @@ private[smworkflow] object GoalPhaseCurrentSourceArtifactAdoption {
             value.guard == capture.postStageGuard && R.guardValid(value.guard) && value.source == sourceOf(value.guard) &&
             (value.source != value.previous.source || value.guard != value.previous.guard)
         } && _policy(value.processPolicy) && A.processPolicyMatches(failure.candidate, candidate,
-          failure.processPolicy, value.processPolicy)
+          failure.processPolicy, value.processPolicy, Some(publication.generation))
     }
   def directionValid(value: Direction): Boolean = value != null && targetValid(value.target) &&
     value.choice == choices.head && _rationale(value.rationale) && R.referenceValid(value.reference) &&
@@ -144,9 +144,10 @@ private[smworkflow] object GoalPhaseCurrentSourceArtifactAdoption {
       value.target.publicationTarget.candidate == candidate.payload &&
       value.target.publicationTarget.candidateRecordRevision == candidate.record.revision.value.toString
 
-  def needed(repair: A.Saved, candidate: GoalPhaseNativeCandidate.Saved, directions: Vector[Saved]): Boolean = {
+  def needed(repair: A.Saved, candidate: GoalPhaseNativeCandidate.Saved, directions: Vector[Saved],
+    currentGeneration: Option[Long] = None): Boolean = {
     val failure = repair.fact.failure
-    A.currentSourceSuccessorValid(failure.candidate, candidate.payload) &&
+    A.currentSourceSuccessorValid(failure.candidate, candidate.payload, currentGeneration) &&
       candidate.payload.primaryPublicationRepair.contains(repair.reuse) &&
       candidate.payload.dependencySourceCapture.exists(c => R.captureValid(c) &&
         failure.artifactAdoption.exists(old => old.guard != c.postStageGuard || old.source != sourceOf(c.postStageGuard))) &&

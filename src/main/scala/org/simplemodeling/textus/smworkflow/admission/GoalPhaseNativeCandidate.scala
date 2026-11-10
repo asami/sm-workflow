@@ -128,6 +128,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     _ <- GoalPhaseCandidateRecovery.exactPublicFragment(wire, payload.asJson)
   } yield payload
 
+  /** Structural capture shape only; the Store separately checks the owning
+    * controller generation, Saved relation and actual native record history. */
   private[admission] def sourceCaptureValid(value: Payload): Boolean = value != null &&
     value.primaryPublicationRepair != null && (value.primaryPublicationRepair match {
       case None => GoalPhaseDependencySourceRevision.candidateValid(value)
@@ -135,7 +137,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
         value.sourceRevision.toLongOption.exists(_ > reuse.repair.revision.toLong) &&
         (GoalPhasePrerequisitePrimaryRepair.inspectionSourceCaptureValid(value) ||
           value.dependencySourceDirection.exists(direction => GoalPhasePrerequisitePrimaryRepair.canonicalPublicationFailure(direction)
-          .exists(h => GoalPhasePrerequisitePrimaryRepair.canonicalSourceSuccessorValid(h.fact.failure.candidate, value))) ||
+          .exists(h => GoalPhasePrerequisitePrimaryRepair.canonicalSourceSuccessorValid(h.fact.failure.candidate, value,
+            value.dependencySourceCapture.map(_.generation)))) ||
           value.dependencySourceScope.exists(_.consumptionDirection.exists(_.target.sourceSuccession.nonEmpty)) &&
           GoalPhaseDependencySourceRevision.candidateValid(value) ||
           value.dependencySourceDirection.flatMap(_.target.canonicalOrigin).forall(_.controller.stage != "InspectCandidate") &&
@@ -1019,7 +1022,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
         _retained_initial_effects_c(value).flatMap(_ =>
         (if (value.payload.primaryPublicationRepair.nonEmpty) reusedCaptureC(value.payload).flatMap { _ =>
           if (primaryRepair.exists(saved => GoalPhasePrerequisitePrimaryRepair.currentSourceSuccessorValid(
-              saved.fact.failure.candidate, value.payload)))
+              saved.fact.failure.candidate, value.payload, Some(controller.generation))))
             GoalPhaseDependencySourceRevision.retainedCaptureC(value, loadC)
           else Consequence.unit
         }
