@@ -430,3 +430,85 @@ Record the unnecessary prompt and associated preparation/resumption work as an
 additional cost candidate; this incident's incremental credits were not measured.
 Only Phase 8 planning and this journal were edited. No adoption, Advance, test,
 review submission, Git mutation or live synchronization was performed here.
+
+## Follow-up example: repeated artifact adoption after candidate repair (2026-11-11)
+
+The user requested this additional Phase 8 improvement and explicitly directed
+that no extra repair be performed now: ending Phase 6.11 takes priority. This
+entry and the Phase 8 plan/checklist record future work, not live authority or
+implementation acceptance.
+
+The supplied question was public target259, offering
+`AdoptRecollectedPublishedDependencyArtifact` or Defer for the existing Session
+`3585e04191dce0bc0f70e394b6745767`, Plan2/P611-B5, frontier/candidate3341,
+generation39, primary candidate tree
+`25651090c3d93eeea3cca3a26215d41adb9c046a`. Its dependency was canonical CNCF
+main `3eccff71acef97872715658b94e5999fe9e8fdbb`, normal published
+`0.5.6-SNAPSHOT`, with no reported applicability issues. Adoption would append
+an artifact fact; a separate normal Advance would continue. It would neither
+republish CNCF nor grant a new primary publication attempt.
+
+Read the retained case descriptions under the existing local task root:
+`/Users/asami/src/dev2026/sm-workflow-dev/target/sm-workflow/runtime-phase-6.11-restart-20261106/target/sm-workflow/tasks/phase-6.11-restart-20261106-01a1aee5/`:
+
+- `251-current-source-artifact-description/artifact-decision.md` and
+  `target-summary.json`: frontier/candidate3292, generation38, consumer tree
+  `f62e6c91de6a2d51bff69ac5b9ecf3e551d5ec9c`; original CNCF publication
+  collection62 is Published/Exited0, not a republication; applicability issues
+  are empty. At that point the earlier239 decision had selected source only.
+- `259-b5-artifact-description-after-restoration/artifact-decision.md` and
+  `projection.json`: the251 artifact choice was subsequently accepted once.
+  An ordinary check then formally failed, and its accepted fixture correction
+  changed the primary candidate. Target259 requests artifact adoption again
+  for the new candidate while retaining the earlier decision.
+
+The259 description also reports prerequisite restoration with 140 tests,
+independent review, ordinary publishLocal and local commit `96e90d36`. Those
+are reported prerequisite results, not tests executed for this journal edit,
+B5 acceptance or a Human decision on259. The described repair counts are
+automatic4/ordinary3/limit10 and remain historical facts, not a new observation
+of the live controller. Local task paths are diagnostic provenance, not a fixed
+repository layout or a requirement to retain temporary artifacts indefinitely.
+
+The current public contracts bind independent Human evidence to the entire
+concrete candidate target. That explains why the new candidate triggers another
+question. It does not, by itself, establish that Human must reconsider using
+the same dependency artifact. The selected improvement separates the prior
+adoption's meaning from fresh mechanical applicability checks and recording.
+See [the existing source/artifact contract](../../../spec/goal-phase-published-dependency-source-adoption.md#r3--separate-artifact-adoption)
+and [canonical publication-source alignment](../../../spec/goal-phase-dependency-source-revision.md).
+
+Prospective Phase 8 behavior: within the same authorized purpose and ownership,
+retain the genuine initial decision when dependency identity, selected source,
+actual publication/artifact and effect authority remain covered. Have the
+existing runtime owners recheck native provenance, current availability and
+freshness, consumer requirements/compatibility and explicit restrictions before
+binding the artifact to the new candidate. A changed candidate tree, frontier or
+generation alone should not create another Human decision. A SNAPSHOT coordinate
+alone cannot prove that the artifact is unchanged. Do not introduce a parallel
+approval ledger, caller-written certificate or inferred publication permission.
+
+Fresh applicability is not consumer validation. Required affected checks and
+independent review remain. Changed artifact/source, stale/missing/crossed
+evidence, unknown effects or an unqualified mutable-SNAPSHOT replacement refuse
+inherited applicability and require ordinary investigation or checks. Human is
+needed for an actual unresolved purpose, acceptance, compatibility, ownership,
+risk or effect-authority choice, not merely to endorse a technical recheck.
+Neither zero applicability issues nor140 prerequisite tests supplies that choice
+or proves a changed consumer has passed its own checks.
+
+Acceptance includes the positive 251 -> primary repair ->259 equivalent with
+one genuine artifact-adoption decision and no duplicate prompt, alongside
+negative artifact/source/authority/freshness cases. Preserve original decisions,
+accepted work, failure/UNKNOWN history and repair accounting; do not republish
+the dependency or create a new primary attempt. Observe duplicate prompts,
+evidence preparation/transfer and parent round trips; this incident's additional
+AI cost has not been measured, so no saving is assigned.
+
+This entry is linked from the [Phase 8 Human-decision plan](../../../phase/phase-8.md#human-decisions-in-normal-operation)
+and its unchecked completion criteria. Implementation must first change and
+qualify the owning public contract. It does not reinterpret the actual251
+answer for259 under today's contract. No source/runtime/skill change, live
+adoption, Advance, new validation/publication, commit or Phase restart is part
+of this recording task. Phase 6.11 closure remains the priority; this improvement
+must not become an additional prerequisite for it.

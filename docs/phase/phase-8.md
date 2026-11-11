@@ -2,8 +2,31 @@
 
 Status: planned
 Decision: 2026-10-05; documented 2026-10-06 (Asia/Tokyo)
-Planned after: Phase 7, with carryover recorded from Phase 2 onward
+Planned after: Phase 7 and the bounded Phase 11.1 Journal route; before Phase 8.1
 Depends on: practical Phase 2, Phase 5 and the selected Phase 6.3/7 delivery
+
+## Sequence and ownership — 2026-11-11
+
+The Phase order is **[7](phase-7.md) -> [11.1](phase-11.1.md) -> 8 -> [8.1](phase-8.1.md) ->
+[9](phase-9.md) -> [18](phase-18.md)**. Phase 7 prioritizes managed parallel
+development within its own acceptance. Phase 8 follows with operational improvements, including
+continuation, waiting/result collection and compact evidence references, through
+the existing owners. It does not introduce another executor.
+Use Phase 11.1's bounded records where applicable; later Journal batch and
+additional-consumer work stays in [11.2](phase-11.2.md), outside this Phase's
+completion gates. Journal recording does not implement Human consent or routing.
+
+Phase 8.1 contains the former 6.12 Scala-quality plan; the existing Phase 9
+retains convergence/provider routing. Broader server/MCP/sandbox/compaction work
+retains its declared necessity and acceptance boundaries. All current checklist
+items, deferred problems, actual evidence and active Session state are retained.
+Reordering is not acceptance and adds no Phase 6.11 closure requirement.
+
+Parallel scheduling is permitted if assessment shows the remaining Phase 8
+scope, including required validation and independent review, fits about half
+a day and does not depend on unfinished Phase 7 or 11.1 delivery. No such estimate has
+yet been established. Retain all acceptance and use the normal sequence when
+these conditions are not met; this option starts no development or effects.
 
 ## Phase 6 split dependency correction — 2026-10-13
 
@@ -460,6 +483,53 @@ incremental credits have not been measured, so record no invented saving. The
 selected correction removes unnecessary decisions rather than merely shortening
 the question or batching multiple artificial approvals into one.
 
+**Repeated dependency artifact adoption after candidate repair (2026-11-11).**
+In the same P611-B5 Session, target251 had already accepted
+`AdoptRecollectedPublishedDependencyArtifact` for CNCF main
+`3eccff71acef97872715658b94e5999fe9e8fdbb`, normal published
+`0.5.6-SNAPSHOT`. A subsequent primary-side fixture repair changed the consumer
+candidate: frontier3292/generation38 became frontier3341/generation39, with
+candidate tree `25651090c3d93eeea3cca3a26215d41adb9c046a`. Target259 again asked
+Human to adopt that dependency artifact, reporting zero applicability issues.
+Its description retains the earlier accepted choice and grants neither CNCF
+republication nor a new primary publication attempt. The current exact-target
+Human contract explains the repeated question; it does not establish a new
+material decision. See the
+[case journal](../journal/2026/11/2026-11-09-ai-cost-observations-and-phase-workflow-comparison.md#follow-up-example-repeated-artifact-adoption-after-candidate-repair-2026-11-11).
+
+Selected Phase 8 correction: separate the meaning of an existing artifact
+adoption from mechanical binding to the current consumer candidate. When the
+dependency identity, selected source and actual published artifact, purpose,
+ownership and effect authority remain covered by the genuine prior decision,
+the owning runtime rechecks current applicability and records the connection
+without requesting another Human answer solely for a new candidate tree,
+frontier or generation. Reuse existing typed publication/recollection and
+authority owners; a mutable SNAPSHOT coordinate alone cannot identify the
+same artifact. Do not add a parallel approval ledger or caller-authored proof.
+
+This does not inherit successful checks for a changed consumer automatically.
+Resolve its current dependency requirements and compatibility, run required
+affected checks and retain independent review. Missing or stale evidence,
+changed publication/source, an unqualified replacement at the same SNAPSHOT
+coordinate or unresolved effects cannot receive inherited applicability.
+Investigate through normal owners; ask Human only for an actual unresolved
+purpose, compatibility, ownership, acceptance, risk or effect-authority choice.
+Preserve genuine explicit exclusions and the original decision's scope.
+
+Acceptance: a prospective equivalent of 251 -> consumer repair -> 259 retains
+the real initial adoption and revalidates the same artifact for the new
+candidate without a duplicate Human prompt or dependency republication. A
+different artifact/source or changed authority cannot pass merely because its
+coordinate or earlier approval matches. Preserve accepted work, candidate and
+decision provenance, failure/UNKNOWN history and repair counts. Record prompts,
+preparation/transfer work and parent round trips without inventing a cost saving.
+
+This is deferred Phase 8 work. Change and qualify the owning public contract
+before enabling automatic adoption; do not fabricate a Human answer or bypass
+target259 today. Recording the item adds no Phase 6.11 repair, continuation or
+closure prerequisite. Prioritize ending the current Phase 6.11 work and retain
+its unfinished scope honestly.
+
 **RepositorySync input classification example (2026-11-09).** Session
 `9d01b91080ca146bf2aee9a46e16aa4e`, public frontier44, offered
 `AdoptInputClassificationAndContinueReview` for six previously unknown documents.
@@ -656,6 +726,64 @@ B worktrees' dirty or unpublished work, require their cleanliness, or switch
 routes on failure. This allocation preserves parallel-development independence
 and does not silently retarget existing Sessions or add routine Human prompts.
 
+## Proportionate validation and bounded closure — 2026-11-11
+
+The Phase 6.11 experience showed repeated bounded repairs accumulating their
+own validation Task, review, publication and old-to-new installed qualification.
+Failures in that qualification route then created further repair work. Select
+this operational cost problem for Phase 8. A bounded file inventory alone does
+not make that complete process proportionate to the change.
+
+1. **Select verification by impact and risk.** For an ordinary small repair,
+   use the regression that demonstrates the defect plus affected compile/lint/
+   integration checks. Reuse successful evidence only while its actual source,
+   candidate, configuration, scope and authority remain applicable. Keep the
+   reason for selected checks and invalidated evidence in existing results.
+   Independent review follows the actual changed boundary; a new repair Task
+   does not itself require a new comprehensive review or FULL/HEAVY campaign.
+   Genuine contract, authority, compatibility and state-transition changes
+   retain their required verification. This is not blanket permission to skip
+   required checks or to report untested behavior as accepted.
+2. **Group connected qualification.** Give each repair its relevant regression,
+   then qualify compatible related repairs together at an actual integration or
+   delivery boundary. Reuse the existing validation, publication and installed
+   execution owners. Publication, installation and old-to-new recovery tests
+   are selected when their behavior or an applicable delivery obligation needs
+   them; they are not a ritual attached to every source edit. A later change
+   invalidates only the affected evidence and receives the necessary rechecks.
+   Do not introduce another executor, evidence ledger or mandatory benchmark.
+3. **Bound existing-Session rescue.** Distinguish an ordinary defect repair,
+   a specification extension and rescue of a particular retained state when
+   selecting work. Give rescue a finite work boundary through existing repair
+   accounting and explicit user direction. If meeting it requires further
+   recovery-contract development or a repair of its own qualification machinery,
+   return a concrete disposition at that boundary rather than recursively
+   creating new Tasks or resetting the repair allowance. Keep actual UNKNOWN,
+   failures, accepted results and cumulative counts. Preserve/defer or publicly
+   close as unaccepted according to the actual user choice; do not fabricate
+   success, infer retry authority or terminate a running external effect by fiat.
+4. **Keep closure scoped.** Freeze the required closing work at the adopted
+   acceptance boundary. Classify later findings as a demonstrated blocker for
+   that boundary or separate Hygiene/Development Candidate work. Do not silently
+   add another improvement, producer contract or broad qualification campaign
+   to the closing phase. A demonstrated required blocker still prevents accepted
+   completion until resolved or an explicit public scope/termination decision is
+   made. Changes in purpose or effect authority keep their genuine Human decision.
+
+Use one representative small repair and an applicable existing closing/rescue
+example to establish these behaviors through the normal owners. Reuse existing
+records for actual selected checks, review, publication/qualification launches,
+AI interventions and available elapsed time; compare equivalent scope and mark
+missing baseline observations unavailable. Check that required quality evidence
+is retained while duplicate stages and coordination are reduced. No fixed saving,
+new measurement subsystem, fresh whole-repository campaign or separate review
+ceremony is added merely to prove this optimization.
+
+This is planned Phase 8 work, not an implementation or PASS. It supplies no new
+Phase 6.11 closure prerequisite, changes no active Session or historical result,
+and does not retroactively waive its unexecuted validation. Apply the existing
+user's closure direction through that Session's owning public route.
+
 ## Selection and execution
 
 Carry forward Phase 6 command ownership and live Phase-document synchronization
@@ -685,6 +813,17 @@ scenarios and retains its owning project's responsibilities.
 
 ## Completion
 
+- [ ] A representative small repair demonstrates impact/risk-selected checks,
+      applicable successful-evidence reuse and grouped connected qualification.
+      Existing records show actual stages/AI interventions and available elapsed
+      time for equivalent scope; required regression/review evidence remains,
+      with no per-repair blanket FULL/HEAVY or automatic publish/install/recovery
+      campaign. Missing observations are explicit, not invented savings.
+- [ ] A selected closing/rescue example retains the adopted acceptance boundary
+      and finite repair accounting: qualification failures do not recursively
+      enlarge the rescue, separate findings have explicit dispositions, and a
+      genuine blocker leads to bounded repair or an actual defer/unaccepted-close
+      decision without false acceptance, history loss or counter reset.
 - [ ] Every inherited/discovered item has an explicit disposition and a link to
       actual evidence or a reason for exclusion/future placement.
 - [ ] The finite selected scenarios are implemented and their connected
@@ -707,6 +846,15 @@ scenarios and retains its owning project's responsibilities.
       acceptance, ownership or effect-authority changes retain the actual
       decision. Existing explicit exclusions and historical answers are not
       rewritten; the owning public contract is qualified before automation.
+- [ ] The P611 target251 -> repaired candidate -> target259 example revalidates
+      the same already adopted dependency artifact without a duplicate Human
+      prompt solely for changed tree/frontier/generation. Check current source,
+      actual artifact provenance, consumer requirements, prior authority and
+      freshness through existing owners; changed SNAPSHOT artifacts, stale or
+      missing evidence and changed authority cannot inherit applicability.
+      Preserve required consumer checks/review, original decisions, history and
+      repair counts; do not republish the dependency or grant a new primary
+      attempt. Qualify the public contract in Phase 8, not as a P611 close gate.
 - [ ] The RepositorySync frontier44 example classifies unknown inputs through
       semantic assessment and runtime coverage checks, retaining applicable
       successful validation and proceeding to independent review without an
