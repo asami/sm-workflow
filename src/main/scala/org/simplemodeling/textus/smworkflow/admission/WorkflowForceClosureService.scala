@@ -121,18 +121,23 @@ private[smworkflow] object WorkflowForceClosureService {
     val specification = NativeWorkflowDescriptionMetadata.operation(if (describe)
       declared.DescribeWorkflowForceClosureOperation else declared.ForceCloseWorkflowOperation)
     def createOperationRequest(incoming: Request): Consequence[OperationRequest] = {
-      val selected: Consequence[Either[V.WorkflowForceClosureDescriptionInput, C.Direction]] = if (describe)
+      val selected: Consequence[Either[V.WorkflowForceClosureDescriptionInput, NativeWorkflowResourceInput.Source[V.WorkflowForceClosureAnswer]]] = if (describe)
         NativeWorkflowOperationInput.valueC[V.WorkflowForceClosureDescriptionInput](incoming, "input").map(Left(_))
-      else NativeWorkflowOperationInput.valueC[V.WorkflowForceClosureAnswer](incoming, "input").flatMap(directionC).map(Right(_))
-      selected.map { input => new CommandAction {
+      else NativeWorkflowResourceInput.selectC[V.WorkflowForceClosureAnswer](incoming).map(Right(_))
+      selected.map { selectedInput => new CommandAction {
         val request = incoming
         override def commandExecutionMode = CommandExecutionMode.Sync
         def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
           val core = c
           def execute(): Consequence[OperationResponse] = {
-            val family = input.fold(_.family, _.target.family)
-            val session = input.fold(_.sessionId, _.target.sessionId)
             for {
+              input <- selectedInput match {
+                case Left(value) => Consequence.success[Either[V.WorkflowForceClosureDescriptionInput, C.Direction]](Left(value))
+                case Right(source) => NativeWorkflowResourceInput.readC(source, reference =>
+                  read_resource_text(reference, Some(java.nio.charset.StandardCharsets.UTF_8))).flatMap(directionC).map(value => Right(value): Either[V.WorkflowForceClosureDescriptionInput, C.Direction])
+              }
+              family = input.fold(_.family, _.target.family)
+              session = input.fold(_.sessionId, _.target.sessionId)
               context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(session))
               call = core.copy(executionContext = context)
               definition <- definitionC(family)

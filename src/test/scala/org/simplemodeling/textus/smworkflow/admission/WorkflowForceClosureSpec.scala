@@ -50,7 +50,9 @@ final class WorkflowForceClosureSpec extends AnyWordSpec with GivenWhenThen with
       }
       val parameters = BoundedWorkExecutionAdmissionFixture.parameters ++ Map(
         WorkflowForceClosureService.collectionKey -> facts,
-        "textus.subsystem.storage.plan" -> plan.noSpaces)
+        "textus.subsystem.storage.plan" -> plan.noSpaces,
+        "cncf.resource.read.max-bytes" -> "67108864",
+        "textus.resource.url.file.roots" -> root.toString)
       _with_runtime_(root, "ForcedClosure", hostParameters = parameters) { (owner, component, actor, project) =>
         project(call => call.setupC(_setup_commands_(root, "ForcedClosure").size).flatMap { _ =>
           val row = selection.getVector("datastore").get.head.asInstanceOf[Record].getVector("records").get.head.asInstanceOf[Record]
@@ -83,11 +85,20 @@ final class WorkflowForceClosureSpec extends AnyWordSpec with GivenWhenThen with
         val described = describe()
         val reference = V.WorkflowArtifactReference("specification-human-forced-close", "1")
         val answer = V.WorkflowForceClosureAnswer(described.target, "ForceClose", "Stop this specification run without accepting unfinished implementation",
-          Vector("Implementation not returned", "Validation, review, commit and publication not performed"), "NotAccepted", true, "participant", reference)
+          Vector("Implementation not returned", "Validation, review, commit and publication not performed",
+            "Retained unfinished detail: " + ("x" * 1100000)), "NotAccepted", true, "participant", reference)
         def close(value: V.WorkflowForceClosureAnswer) = call("WorkflowForceClosureService", "forceCloseWorkflow", List(Property("input", value, None)))
+
+        val payload = root.resolve("force-close-answer.json")
+        Files.writeString(payload, take(answer.toRecord().toJsonStringC))
+        Files.size(payload) should be > 1048576L
+        val resource = Property("inputResource", payload.toUri.toASCIIString, None)
+        def closeResource() = call("WorkflowForceClosureService", "forceCloseWorkflow", List(resource))
+        def closeProperties(properties: List[Property]) = call("WorkflowForceClosureService", "forceCloseWorkflow", properties)
 
         Given("a real native pending fixture WorkOrder, without any independently provisioned Human direction")
         close(answer).isSuccess shouldBe false
+        closeResource().isSuccess shouldBe false
         json(current(started.sessionId)) shouldBe json(before)
         project(call => for {
           prepared <- NativeWorkflowForceClosurePreparation.prepareC(described, answer, reference,
@@ -95,8 +106,26 @@ final class WorkflowForceClosureSpec extends AnyWordSpec with GivenWhenThen with
             call.executionContext.clock.instant().minusSeconds(1))
           _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)
         } yield ())
+        When("valid Human direction is present but the input transport is invalid")
+        def refuseTransport(properties: List[Property]): Unit = {
+          closeProperties(properties).isSuccess shouldBe false
+          json(current(started.sessionId)) shouldBe json(before)
+        }
+        refuseTransport(Nil)
+        refuseTransport(List(Property("input", answer, None), resource))
+        refuseTransport(List(Property("inputResource", "https://example.org/answer.json", None)))
+        refuseTransport(List(Property("inputResource", root.resolve("missing.json").toUri.toASCIIString, None)))
+        val malformed = root.resolve("malformed.json")
+        Files.writeString(malformed, "{invalid")
+        refuseTransport(List(Property("inputResource", malformed.toUri.toASCIIString, None)))
+        val outside = Files.createTempFile("force-close-outside-", ".json")
+        try {
+          Files.writeString(outside, take(answer.toRecord().toJsonStringC))
+          refuseTransport(List(Property("inputResource", outside.toUri.toASCIIString, None)))
+        } finally Files.deleteIfExists(outside)
+        json(current(started.sessionId)) shouldBe json(before)
         When("the public operation consumes the independently retained specification-owned direction")
-        val closed = read_value[V.WorkflowForceClosureView](take(close(answer)))
+        val closed = read_value[V.WorkflowForceClosureView](take(closeResource()))
         val after = current(started.sessionId)
         Then("only a terminal is appended, while every original native entry and WorkOrder fact remains")
         closed.kind shouldBe "ForcedClosed"
@@ -121,6 +150,7 @@ final class WorkflowForceClosureSpec extends AnyWordSpec with GivenWhenThen with
               ThreeWorkflowExternalEvidencePorts.key(reference.identity, reference.revision)))))
         })
         close(answer).isSuccess shouldBe true
+        closeResource().isSuccess shouldBe true
         val collected = describe()
         collected.kind shouldBe "ForcedClosed"
         collected.closure shouldBe closed.closure

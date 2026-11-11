@@ -14878,7 +14878,8 @@ CompletionRecordClosureView
 
 | name | type | multiplicity |
 |------+------|--------------|
-| input | WorkflowForceClosureAnswer | 1 |
+| input | WorkflowForceClosureAnswer | ? |
+| inputResource | string | ? |
 
 ## WorkflowForceClosureView
 
@@ -14936,7 +14937,7 @@ WorkflowForceClosureView
 
 ##### DESCRIPTION
 
-Require independently retained Human ForceClose direction bound to the complete described target, reason, unfinished work, NotAccepted or AcceptedByHuman disposition and acknowledgement of prior uncertainty. Append one terminal using the actual native expected revision. Keep every old history entry and business checkpoint unchanged, including pending work and failed/UNKNOWN effects. A stale direction refuses; exact redelivery collects the retained closure. Never reissue work, rerun checks, normalize HEAD/candidate/Plan, commit or publish. Ordinary Advance and delayed Submit cannot resume a forced-closed Session. Actual Session use belongs to its owning caller.
+Supply exactly one of input or inputResource. The latter is an absolute local file URI containing the same complete answer, read during execution through normal authorized CNCF Resource access and UTF-8 decoding with configured limits. Require independently retained Human ForceClose direction bound to the complete described target, reason, unfinished work, NotAccepted or AcceptedByHuman disposition and acknowledgement of prior uncertainty. Append one terminal using the actual native expected revision. Keep every old history entry and business checkpoint unchanged, including pending work and failed/UNKNOWN effects. A stale direction refuses; exact redelivery collects the retained closure. Never reissue work, rerun checks, normalize HEAD/candidate/Plan, commit or publish. Ordinary Advance and delayed Submit cannot resume a forced-closed Session. Actual Session use belongs to its owning caller.
 
 ##### TYPE
 
@@ -14952,7 +14953,8 @@ ForceCloseWorkflowInput
 
 | name | type | multiplicity |
 |------+------|--------------|
-| input | WorkflowForceClosureAnswer | 1 |
+| input | WorkflowForceClosureAnswer | ? |
+| inputResource | string | ? |
 
 ##### OUTPUT
 
