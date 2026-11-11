@@ -5,6 +5,12 @@
 The implementation belongs to sm-workflow. Skills transport the actual public
 description and explicit Human decision; they do not repair or close state locally.
 
+Supply exactly one of `input` or `inputResource` to `forceCloseWorkflow`. The
+Resource form is an absolute local file URI containing the same complete answer;
+the executing call reads it through the normal authorized CNCF Resource UTF-8
+reader and configured finite budget. A failed read has no inline fallback.
+`describeWorkflowForceClosure` retains its existing input.
+
 The description contains the complete opaque native frontier, original
 participant, family, Component instance and Session. It reads no Git state and
 does not require HEAD, candidate, Plan or validation to agree. An independently

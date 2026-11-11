@@ -218,6 +218,28 @@ final class GoalPhaseCurrentSourceArtifactAdoptionSpec extends AnyWordSpec with 
       rejected shouldBe Vector.fill(crossed.size)(false)
     }
 
+    "require the publication controller generation even when a copied capture remains structurally valid" in {
+      Given("CB-P611-257-02: a closed artifact target and a structurally valid capture copied into a later generation")
+      val publication = _target.publicationTarget
+      val before = _failure.asJson
+      val previous = _previous.asJson
+      val generation = publication.generation + 1
+      val copied = _candidate.copy(dependencySourceCapture = Some(_capture.copy(generation = generation)))
+      val mismatched = _target.copy(publicationTarget = publication.copy(candidate = copied))
+      val claimed = mismatched.copy(publicationTarget = mismatched.publicationTarget.copy(generation = generation))
+      When("the target checks the copied capture against its publication generation and retained controller")
+      val rejected = Vector(A.targetValid(mismatched), A.targetValid(claimed))
+      Then("structural capture acceptance supplies neither a matching current target nor independent artifact authority")
+      C.sourceCaptureValid(copied) shouldBe true
+      C.codec.decode(C.codec.encode(copied)) shouldBe Right(copied)
+      P.targetValid(mismatched.publicationTarget) shouldBe true
+      P.targetValid(claimed.publicationTarget) shouldBe false
+      rejected shouldBe Vector(false, false)
+      A.targetValid(_target) shouldBe true
+      _failure.asJson shouldBe before
+      _previous.asJson shouldBe previous
+    }
+
     "require the exact current candidate capture and repair relation for applicability" in {
       Given("pure typed direction and native-shaped arguments without any provisioned acceptance")
       val later = _candidate.copy(sourceRevision = "63")

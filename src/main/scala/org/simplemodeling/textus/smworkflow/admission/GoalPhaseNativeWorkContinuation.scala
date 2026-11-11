@@ -303,6 +303,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     stepTestReportRepair: Option[U.Saved] = None,
     dependencyChain: DependencyChain = _empty_dependency_chain,
     dependencySourceDirection: Option[GoalPhaseDependencySourceRevision.Direction] = None,
+    repairWindow: Option[GoalPhaseRepairProgress.WindowContinuation] = None,
     diagnoses: Vector[IncrementalSbtDiagnosisRepair.Prior] = Vector.empty,
     consumptionDirection: Option[GoalPhaseDependencySourceRevision.Direction] = None,
     phaseInventory: Option[K.Saved] = None, deferredHuman: Option[K.Deferred] = None,
@@ -1731,7 +1732,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
     private def _active_primary_repair(cursor: Cursor): Option[A.Saved] = cursor.primaryRepair.filter(A.reusableAt(_, cursor.controller))
     private def _current_artifact_needed(cursor: Cursor): Boolean =
       _active_primary_repair(cursor).exists(repair => cursor.candidate.exists(candidate =>
-        Z.needed(repair, candidate, cursor.currentArtifactDirections)))
+        Z.needed(repair, candidate, cursor.currentArtifactDirections, Some(cursor.controller.generation))))
     private def _current_artifact_direction(cursor: Cursor): Option[Z.Saved] = for {
       repair <- _active_primary_repair(cursor)
       candidate <- cursor.candidate
@@ -2120,6 +2121,11 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
               else port.retainedC(decision, core).flatMap {
                 case None => Consequence.success[Located](Human(decision, cursor.findings, cursor))
                 case Some((state, next, answer, input)) => for {
+                  window <- if (answer.result.value.choice == "ContinueRepairs")
+                    cursor.dependencySourceDirection.fold(Consequence.success(Option.empty[GoalPhaseRepairProgress.WindowContinuation]))(
+                      direction => GoalPhaseRepairProgress.retainedWindowC(direction, cursor.controller, state,
+                        cursor.from, next, answer.resultReference.identity, cursor.repairWindow))
+                    else Consequence.success(cursor.repairWindow)
                   deferred <- if (answer.result.value.choice == "Defer" && cursor.controller.releaseRepairActive &&
                       cursor.controller.decisionSource.contains(O.Stage.Repair) && decision.sourceHistoryRecovery.isEmpty &&
                       decision.result.result.value.dependencyProposal.isEmpty)
@@ -2145,6 +2151,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
                       answer.continuationId.value, next.revision.value), approval, context, input.work.decisionContext)
                   } else Consequence.success(cursor.dependencyLineage)
                   resumed = cursor.copy(from = next, controller = state, documents = documents, deferredHuman = deferred,
+                    repairWindow = window,
                     developmentReconstructionAnswer = if (input.developmentReconstruction.nonEmpty)
                       Some(answer.result.value.choice -> answer.resultReference) else cursor.developmentReconstructionAnswer,
                     dependencyLineage = lineage, dependencyApprovals = lineage.approvals,
@@ -2549,7 +2556,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       case O.Stage.InspectCandidate | O.Stage.PhaseInspection => for {
         retained <- GoalPhaseNativeCandidate.retainedOptionC(source, d, core, cursor.from, cursor.controller,
           cursor.documentpolicy, N.managementPaths(cursor.findings), cursor.completedCandidates, retainedOnly = historyonly,
-          primaryRepair = _active_primary_repair(cursor))
+          primaryRepair = _active_primary_repair(cursor), repairWindow = cursor.repairWindow)
         result <- retained match {
           case None if cursor.wholePhaseCandidateRecovery.nonEmpty => _paused_c(source, cursor,
             "The authorized whole-Phase observation has an unresolved intent. Original and fresh outcomes remain UNKNOWN; no automatic retry or further authorization is granted.")
@@ -2650,7 +2657,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
               else F.invalid("revised source capture crosses its actual candidate frontier")
             }
             _ <- if (value.payload.primaryPublicationRepair.nonEmpty) _active_primary_repair(cursor)
-              .map(saved => A.reusedCandidateC(saved, value.payload, cursor.controller, cursor.from))
+              .map(saved => A.reusedCandidateC(saved, value.payload, cursor.controller, cursor.from, cursor.repairWindow))
               .getOrElse(F.invalid("Candidate dependency reuse lacks its actual primary repair fact"))
               else value.payload.dependency.fold(Consequence.unit)(capture =>
               GoalPhaseDependencyValidation.capturedForC(capture, source.current.identity.value,
@@ -3307,7 +3314,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             cursor.controller.plan.steps.lift(cursor.controller.cursor).exists(_.identity == a.binding.step)),
           dependencyChain = Some(cursor.dependencyChain), dependencySourceDirection = cursor.dependencySourceDirection.filter(direction =>
             cursor.controller.plan.steps.lift(cursor.controller.cursor).exists(_.identity == direction.target.step)),
-          dependencySourceScope = scope, primaryRepair = _active_primary_repair(cursor)))
+          dependencySourceScope = scope, primaryRepair = _active_primary_repair(cursor), repairWindow = cursor.repairWindow))
           }
           .flatMap(_after_native_c(source, cursor, _, core))
       case O.Stage.Validation | O.Stage.PhaseValidation =>

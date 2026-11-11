@@ -5,7 +5,9 @@ import io.circe.generic.auto.*
 import io.circe.syntax.*
 import org.goldenport.cncf.workflow.ContextReference
 import org.scalatest.GivenWhenThen
+import org.scalatest.concurrent.TimeLimits
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.time.{Seconds, Span}
 import org.scalatest.wordspec.AnyWordSpec
 import GoalPhaseCanonicalDependencySourceSuccession as C
 import GoalPhaseDependencySourceRevision as R
@@ -346,12 +348,96 @@ private[admission] object MixedDependencySourceSpecificationFixture {
 
 /** Canonical source contracts use specification-only observations and authority.
   * @since   Nov.  8, 2026
-  * @version Nov. 10, 2026
+  *  version Nov. 10, 2026
+  * @version Nov. 11, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
-final class GoalPhaseCanonicalDependencySourceSuccessionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+final class GoalPhaseCanonicalDependencySourceSuccessionSpec extends AnyWordSpec with Matchers with GivenWhenThen with TimeLimits {
   import CanonicalDependencySourceSpecificationFixture as F
+
+  /** Shared immutable Directions model repeated source selections, not native
+    * authentication or a permission to execute the selected source. */
+  private def _shared_source_history(size: Int): Vector[R.Direction] =
+    (1 to size).foldLeft((F.controller, Vector(F.direction))) { case ((state, history), index) =>
+      val prior = history.last
+      val selected = take(state.adoptCanonicalDependencySourceC(prior.directive))
+      val binding = prior.target.binding.copy(revision = prior.target.binding.revision + 1)
+      val proposal = prior.target.proposal.copy(binding = ContextReference(binding.identity, binding.revision.toString))
+      val origin = prior.target.canonicalOrigin.get.copy(
+        controller = GoalPhaseCandidateRecovery.controllerSnapshot(selected),
+        originalDirection = Some(prior), previousDirection = Some(prior),
+        selection = prior.target.canonicalOrigin.get.selection.copy(source = proposal),
+        baseLineage = Vector(O.HistoryCommit(binding.base.head, binding.base.tree, Vector.empty)))
+      val revision = (30 + index * 10).toString
+      val target = prior.target.copy(sourceRevision = revision, pendingRevision = revision,
+        generation = selected.generation, repairProgress = GoalPhaseRepairProgress.snapshot(selected),
+        binding = binding, proposal = proposal, canonicalOrigin = Some(origin))
+      (selected, history :+ prior.copy(target = target,
+        directive = ContextReference("specification-repeated-source-" + index, "1")))
+    }._2
+
+  "P611-HISTORY-EVALUATION-01 Immutable canonical source histories" should {
+    "retain all source relations across repeated multi-generation shared ancestry" in {
+      Given("specification-only canonical selections with shared original and previous Directions across eighteen generations")
+      val history = _shared_source_history(18)
+      When("ordinary validators repeatedly traverse the same retained source history")
+      val valid = failAfter(Span(30, Seconds)) {
+        Vector.fill(20)(history.forall(direction =>
+          C.originValid(direction.target.canonicalOrigin.get) && C.targetValid(direction.target) && R.directionValid(direction)))
+      }
+      Then("each exact immutable history remains valid and selection advances generation without consuming repair counts")
+      valid shouldBe Vector.fill(20)(true)
+      history.last.target.generation shouldBe F.target.generation + 18
+      history.last.target.repairProgress shouldBe F.target.repairProgress
+      val origin = history.last.target.canonicalOrigin.get
+      (origin.originalDirection.get eq origin.previousDirection.get) shouldBe true
+    }
+
+    "round trip shared source history with the unchanged closed fields and isolate changed nested copies" in {
+      Given("three successive shared source selections small enough to retain both literal ancestry branches in the wire format")
+      val direction = _shared_source_history(3).last
+      val checkpoint = C.Checkpoint(direction)
+      val wire = C.codec.encode(checkpoint)
+      When("the ordinary strict codec reconstructs the same immutable history and its predicates are reused")
+      val decoded = failAfter(Span(30, Seconds)) {
+        C.codec.decode(wire).toOption.get
+      }
+      val target = decoded.direction.target
+      val origin = target.canonicalOrigin.get
+      val prior = origin.previousDirection.get
+      val priororigin = prior.target.canonicalOrigin.get
+      val crossedparticipant = prior.copy(participant = "crossed-specification-participant")
+      val crossedselection = prior.copy(target = prior.target.copy(canonicalOrigin = Some(priororigin.copy(
+        selection = priororigin.selection.copy(source = prior.target.proposal.copy(binding = ContextReference("crossed-binding", "1")))))))
+      val crossed = Vector(crossedparticipant, crossedselection).map(value =>
+        target.copy(canonicalOrigin = Some(origin.copy(previousDirection = Some(value)))))
+      Then("both Boolean entry paths re-evaluate changed copies while the original decoded value and its exact JSON remain valid")
+      decoded shouldBe checkpoint
+      Vector.fill(10)(C.targetValid(target) && R.targetValid(target)) shouldBe Vector.fill(10)(true)
+      crossed.foreach { value =>
+        C.targetValid(value) shouldBe false
+        R.targetValid(value) shouldBe false
+        value.asJson.as[R.Target].isLeft shouldBe true
+        val restored = value.copy(canonicalOrigin = Some(value.canonicalOrigin.get.copy(previousDirection = Some(prior))))
+        R.targetValid(restored) shouldBe true
+        restored.asJson.as[R.Target] shouldBe Right(target)
+      }
+      C.codec.encode(decoded) shouldBe wire
+      val targetfields = Set("schemaVersion", "sessionId", "questionIdentity", "sourceRevision", "pendingRevision", "plan",
+        "step", "generation", "primaryBase", "completed", "repairProgress", "requestingResult", "predecessor", "ancestors",
+        "proposal", "binding", "preStageGuard", "canonicalOrigin") ++ target.predecessorGuard.toVector.map(_ => "predecessorGuard")
+      target.asJson.asObject.get.keys.toSet shouldBe targetfields
+      origin.asJson.asObject.get.keys.toSet shouldBe Set("componentInstance", "participant", "controller", "approvals",
+        "originalDirection", "previousDirection", "selection", "primaryRoot", "processPolicy", "baseLineage")
+      C.originValid(null) shouldBe false
+      C.targetValid(null) shouldBe false
+      R.targetValid(null) shouldBe false
+      C.targetValid(target.copy(canonicalOrigin = null)) shouldBe false
+      R.targetValid(target.copy(canonicalOrigin = null)) shouldBe false
+      R.targetValid(target) shouldBe true
+    }
+  }
   "Declared non-input canonical source relation" should {
     "require proposal v2, target v12 and capture v13 while keeping actual publication literal" in {
       Given("an authenticated-shaped canonical target and an earlier actual publication with separate descendant applicability")

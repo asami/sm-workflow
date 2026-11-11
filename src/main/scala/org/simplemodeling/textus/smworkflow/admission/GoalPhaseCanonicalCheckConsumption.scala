@@ -99,8 +99,7 @@ private[smworkflow] object GoalPhaseCanonicalCheckConsumption {
     _ <- _selector(basis, extras).map(_ => ())
   } yield ()
   private def _selector(basis: Basis, extras: Vector[R.CheckProgram]): Either[String, String] = for {
-    _ <- _check(basis.previousRoot != null && basis.previousRoot.nonEmpty && basis.previousRoot != basis.base.sourceRoot,
-      "distinct actual previous root")
+    _ <- _check(basis.previousRoot != null && basis.previousRoot.nonEmpty, "actual previous root")
     policy <- _json(basis.capturedPolicy)
     selected = basis.base.programs.filter(p => basis.plan.steps.find(_.identity == basis.adoptedStep).exists(_.checks.contains(p.check)))
     _ <- _check(selected.nonEmpty, "captured selected primary checks")

@@ -9,7 +9,9 @@ import org.goldenport.cncf.workspace.WorkspaceId
 import org.goldenport.cncf.workflow.ContextReference
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.scalatest.GivenWhenThen
+import org.scalatest.concurrent.TimeLimits
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.time.{Seconds, Span}
 import org.scalatest.wordspec.AnyWordSpec
 import GoalPhasePrerequisitePrimaryRepair as A
 import GoalPhasePrerequisitePublicationRecovery as B
@@ -303,13 +305,60 @@ private[admission] object PrimaryPublicationRepairSpecificationFixture {
 /** Primary publication repair authority, attribution and retained capture contracts.
   * @since   Nov.  2, 2026
   *  version Nov.  9, 2026
-  * @version Nov. 10, 2026
+  *  version Nov. 10, 2026
+  * @version Nov. 11, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
-final class GoalPhasePrerequisitePrimaryRepairSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+final class GoalPhasePrerequisitePrimaryRepairSpec extends AnyWordSpec with Matchers with GivenWhenThen with TimeLimits {
   import PrimaryPublicationRepairSpecificationFixture as F
+
+  "P611-HISTORY-EVALUATION-01 Immutable failure classification" should {
+    "preserve the legacy Compile and Generation wire contracts across repeated classification and changed copies" in {
+      Given("the exact retained Compile and generation failures, with their existing distinct fact schemas")
+      val facts = Vector(F.fact, F.generationFact)
+      val wires = facts.map(A.codec.encode)
+      When("ordinary strict decoding, classification, schema selection and directives repeatedly consume those immutable facts")
+      val decoded = wires.map(wire => A.codec.decode(wire).toOption.get)
+      val kinds = Vector.fill(20)(decoded.map { fact =>
+        A.failureValid(fact.failure) shouldBe true
+        A.factValid(fact) shouldBe true
+        A.factSchema(fact.failure) shouldBe fact.schemaVersion
+        A.directive(fact.failure) shouldBe fact.directive
+        A.failureKind(fact.failure)
+      })
+      val compile = decoded.head.failure
+      val generation = compile.copy(failed = F.generationFailure.failed)
+      val rejected = generation.copy(failed = generation.failed.copy(process = Some(F.process(
+        F.generationOutput + "[error] (Test / test) Tests unsuccessful\n"))))
+      val corrected = rejected.copy(failed = generation.failed)
+      Then("only the copied content changes classification, with no cached success or refusal crossing instance boundaries")
+      kinds shouldBe Vector.fill(20)(Vector(Some(A.FailureKind.Compile), Some(A.FailureKind.Generation)))
+      A.failureKind(generation) shouldBe Some(A.FailureKind.Generation)
+      A.publicationSchema(generation) shouldBe A.generationTargetSchema
+      A.failureKind(rejected) shouldBe None
+      A.failureValid(rejected) shouldBe false
+      A.failureKind(corrected) shouldBe Some(A.FailureKind.Generation)
+      A.failureValid(corrected) shouldBe true
+      A.failureKind(corrected.copy(failed = compile.failed)) shouldBe Some(A.FailureKind.Compile)
+      A.failureKind(generation.copy(participant = "crossed-participant")) shouldBe None
+      A.failureKind(generation.copy(processPolicy = F.processPolicy(F.target).replace("publish-local", "test"))) shouldBe None
+      A.failureKind(generation.copy(failed = null)) shouldBe None
+      A.failureKind(generation.copy(failed = generation.failed.copy(request = null))) shouldBe None
+      A.failureKind(null) shouldBe None
+      A.failureKind(compile) shouldBe Some(A.FailureKind.Compile)
+      decoded.map(A.codec.encode) shouldBe wires
+      val failurefields = Set("componentInstance", "participant", "sessionId", "frontierRevision", "controller", "plan", "base",
+        "generation", "completed", "repairProgress", "candidateRecordRevision", "candidate", "requestingResult", "targets",
+        "publicationPolicy", "processPolicy", "failed", "primaryDirections", "excludedDirty")
+      decoded.foreach { fact =>
+        fact.failure.asJson.asObject.get.keys.toSet shouldBe failurefields
+        fact.asJson.asObject.get.keys.toSet shouldBe Set("schemaVersion", "failure", "directive", "successorController")
+      }
+      decoded.map(_.schemaVersion) shouldBe Vector(A.schema, A.generationSchema)
+    }
+  }
   "Committed primary publication target" should {
     "use complete qualified work without rewriting the original nonempty failure or granting publication" in {
       Given("P611-CHECKPOINT-A-01: the original literal publication failure and a later clean repaired checkpoint")
@@ -507,6 +556,52 @@ final class GoalPhasePrerequisitePrimaryRepairSpec extends AnyWordSpec with Matc
 
   "LSR-01 Canonical publication-failure succession" should {
     import LaterSourcePublicationSpecificationFixture as L
+
+    "repeatedly restore shared source and failed-check history while rejecting copied capture and receipt crossings" in {
+      Given("P611-HISTORY-EVALUATION-01: two primary repairs followed by inspection and a failed selected check retaining its prior source")
+      import GoalPhaseDependencySourceRevision as R
+      import GoalPhaseCanonicalDependencySourceSuccession as Source
+      val (_, _, selected, _, _) = _post_validation_source_fixture
+      val selectedorigin = selected.target.canonicalOrigin.get
+      val prior = selectedorigin.originalDirection.get
+      val direction = selected.copy(target = selected.target.copy(canonicalOrigin = Some(selectedorigin.copy(
+        previousDirection = Some(prior)))))
+      val wire = Source.codec.encode(Source.Checkpoint(direction))
+      When("the ordinary strict codec and both target predicates revisit the immutable captured-source lineage")
+      val decoded = failAfter(Span(30, Seconds)) {
+        val restored = Source.codec.decode(wire).toOption.get
+        Vector.fill(20)(Source.targetValid(restored.direction.target) && R.directionValid(restored.direction)) shouldBe Vector.fill(20)(true)
+        restored
+      }
+      val target = decoded.direction.target
+      val origin = target.canonicalOrigin.get
+      val historical = origin.historicalFailure.get
+      val validation = historical.context.validation
+      val capture = validation.dependencySource.get
+      val crossedcapture = capture.copy(generation = capture.direction.target.generation)
+      val crossedreceipt = validation.receipts.head.copy(identity = "crossed-selected-check")
+      val changed = Vector(validation.copy(dependencySource = Some(crossedcapture)),
+        validation.copy(receipts = validation.receipts.updated(0, crossedreceipt)))
+      Then("copied capture generations and selected receipt identities refuse without changing or poisoning the retained history")
+      decoded.direction shouldBe direction
+      validation.dependencySource.map(_.direction) shouldBe origin.originalDirection
+      changed.foreach { value =>
+        val crossed = target.copy(canonicalOrigin = Some(origin.copy(historicalFailure = Some(historical.copy(
+          context = historical.context.copy(validation = value))))))
+        Source.targetValid(crossed) shouldBe false
+        R.targetValid(crossed) shouldBe false
+        crossed.asJson.as[R.Target].isLeft shouldBe true
+        val corrected = crossed.copy(canonicalOrigin = Some(crossed.canonicalOrigin.get.copy(historicalFailure = Some(historical))))
+        Source.targetValid(corrected) shouldBe true
+        corrected.asJson.as[R.Target] shouldBe Right(target)
+      }
+      Source.codec.encode(decoded) shouldBe wire
+      R.directionValid(decoded.direction) shouldBe true
+      origin.controller.repairs shouldBe selectedorigin.controller.repairs
+      origin.controller.ordinaryRepairs shouldBe selectedorigin.controller.ordinaryRepairs
+      A.codec.encode(L.fact) shouldBe A.codec.encode(L.historical.fact)
+    }
+
     "retain the original primary fact and latest Saved across a genuine later failed-check source edge" in {
       Given("CPB-243-SOURCE-LINEAGE-01: two pure primary reservations, inspection succession and an actual-shaped failed selected check")
       import GoalPhaseDependencySourceRevision as R
@@ -718,9 +813,9 @@ final class GoalPhasePrerequisitePrimaryRepairSpec extends AnyWordSpec with Matc
         reuse.copy(repair = reuse.repair.copy(revision = "95")), reuse.copy(candidateRecordRevision = "70"),
         reuse.copy(candidateRecordRevision = reuse.repair.revision), reuse.copy(sourceRevision = previous.sourceRevision),
         reuse.copy(generation = L.target.generation), reuse.copy(generation = target.generation))
+      val copiedgeneration = candidate.copy(dependencySourceCapture = Some(capture.copy(generation = capture.generation + 1)))
       val invalid = reuses.map(value => candidate.copy(primaryPublicationRepair = Some(value))) ++ Vector(
         candidate.copy(sourceRevision = "79"), candidate.copy(step = "foreign"),
-        candidate.copy(dependencySourceCapture = Some(capture.copy(generation = capture.generation + 1))),
         candidate.copy(dependencySourceCapture = Some(capture.copy(direction = L.direction))),
         candidate.copy(dependencySourceCapture = Some(capture.copy(sourceRevision = "95"))),
         candidate.copy(dependencySourceCapture = Some(capture.copy(sessionId = "foreign"))),
@@ -731,12 +826,25 @@ final class GoalPhasePrerequisitePrimaryRepairSpec extends AnyWordSpec with Matc
       When("the exact latest native reuse, checked predecessor and structural capture checks receive each crossing")
       val rejectedfacts = wrongfacts.map(value => A.reusedCandidateC(value, candidate, controller, F.nativeRecord(94)).isSuccess)
       val rejectedselection = directions.map(value => A.canonicalSelectionValid(saved, Some(value), None, controller))
-      val rejectedreuse = invalid.map(value => A.reusedCandidateC(saved, value, controller, F.nativeRecord(94)).isSuccess)
+      val rejectedreuse = (invalid :+ copiedgeneration).map(value =>
+        A.reusedCandidateC(saved, value, controller, F.nativeRecord(94)).isSuccess)
       Then("no crossed Saved, source edge, revision or capture can substitute for the actual current repair")
       all(rejectedfacts) shouldBe false
       all(rejectedselection) shouldBe false
       all(rejectedreuse) shouldBe false
       all(invalid.map(C.sourceCaptureValid)) shouldBe false
+      When("a specification-owned generation copy is decoded structurally and compared with the unchanged native owner")
+      val decoded = C.codec.decode(C.codec.encode(copiedgeneration))
+      val currentgeneration = Some(controller.generation)
+      Then("structural readability supplies neither the strict first-generation relation nor the actual current generation")
+      C.sourceCaptureValid(copiedgeneration) shouldBe true
+      decoded shouldBe Right(copiedgeneration)
+      A.canonicalSourceSuccessorValid(previous, copiedgeneration) shouldBe false
+      A.currentSourceSuccessorValid(previous, copiedgeneration) shouldBe false
+      A.canonicalSourceSuccessorValid(previous, copiedgeneration, currentgeneration) shouldBe false
+      A.currentSourceSuccessorValid(previous, copiedgeneration, currentgeneration) shouldBe false
+      A.processPolicyMatches(previous, copiedgeneration, saved.fact.failure.processPolicy,
+        origin.processPolicy, currentgeneration) shouldBe false
       C.sourceCaptureValid(uncaptured) shouldBe false
       A.canonicalSourceSuccessorValid(previous.copy(dependencySourceCapture = None), candidate) shouldBe false
       A.canonicalSourceSuccessorValid(previous.copy(dependencySourceDirection = Some(L.olddirection)), candidate) shouldBe false
@@ -985,6 +1093,294 @@ final class GoalPhasePrerequisitePrimaryRepairSpec extends AnyWordSpec with Matc
       A.processPolicyMatches(L.failedcandidate, L.candidate, L.failure.processPolicy, L.origin.processPolicy) shouldBe true
       A.processPolicyMatches(L.failedcandidate, L.candidate, L.failure.processPolicy, "{}") shouldBe false
       A.publicationRoute(L.failure, A.scope(L.failure), Vector.empty, L.candidate, "76", L.successor.generation) should not be (A.PublicationRoute.FirstFailureSuccessor)
+    }
+    "retain the same canonical source through actual selected-check and independent review repairs with fresh current captures" in {
+      Given("the first admitted canonical generation and its literal saved publication failure and Direction")
+      val failurebytes = A.codec.encode(L.fact)
+      val directionbytes = L.direction.asJson
+      val validation = F.nextValidation(L.successor, L.candidate.candidate.get)
+      val failed = F.primaryValidation(passed = false).copy(sourceRevision = "76", step = L.candidate.step,
+        candidate = L.candidate.candidate.get, selected = Vector(GoalPhaseNativeValidation.Check("primary-later", 1)),
+        receipts = F.primaryValidation(passed = false).receipts.map(_.copy(identity = "primary-later")))
+      val passed = failed.copy(receipts = F.primaryValidation(passed = true).receipts.map(_.copy(identity = "primary-later")),
+        outcome = Some("passed"))
+      When("the native selected-check classifier reserves a repair and passed checks admit an independent review repair")
+      val checkrepair = take(GoalPhaseNativeValidation.observedStateC(validation, failed, "canonical-later-failed-check"))
+      val reviewed = take(GoalPhaseNativeValidation.observedStateC(validation, passed, "canonical-later-passed-check"))
+      val reviewdirective = O.RepairDirective("Correct the later independent review finding", Vector("Complete the selected behavior"))
+      val reviewrepair = take(reviewed.acceptC(O.ReviewAdmitted(reviewed.next.asInstanceOf[O.Semantic].key,
+        passed.candidate, "canonical-later-passed-check", "canonical-later-independent-review", O.ReviewOutcome.Repair,
+        Some(reviewdirective))))
+      Then("both actual repair causes advance ordinary accounting while the initial source selection remains authenticated")
+      A.canonicalSelectionValid(L.saved, Some(L.direction), None, validation) shouldBe true
+      A.reusedCandidateC(L.saved, L.candidate, validation, F.nativeRecord(74)).isSuccess shouldBe true
+      validation.generation shouldBe L.direction.target.generation + 1
+      Vector(checkrepair, reviewrepair).foreach { repair =>
+        repair.stage shouldBe O.Stage.Repair
+        repair.generation shouldBe validation.generation + 1
+        repair.repairs shouldBe validation.repairs + 1
+        repair.ordinaryRepairs shouldBe validation.ordinaryRepairs + 1
+        repair.plan shouldBe validation.plan
+        repair.base shouldBe validation.base
+        repair.completed shouldBe validation.completed
+        A.canonicalSelectionValid(L.saved, Some(L.direction), None, repair) shouldBe true
+        A.currentCauseAt(L.fact, repair) shouldBe false
+        A.canonicalCauseAt(L.saved, Some(L.direction), repair) shouldBe false
+        take(A.canonicalWorkContextC(L.saved, Some(L.direction), repair, "RepairStep")) shouldBe None
+        take(A.workContextC(L.fact, L.saved.reference, repair, "RepairStep")) shouldBe None
+
+        When("the assigned ordinary correction completes and a fresh candidate captures the same canonical source")
+        val inspection = take(repair.acceptC(O.SemanticCompleted(repair.next.asInstanceOf[O.Semantic].key,
+          "SPECIFICATION-ONLY completed the current ordinary correction")))
+        val capture = L.capture.copy(generation = inspection.generation, sourceRevision = "80")
+        val candidate = L.candidate.copy(sourceRevision = "80", candidate = Some(L.candidate.candidate.get.copy(tree = "9" * 40)),
+          diff = Some("SPECIFICATION-ONLY corrected the current ordinary finding"), dependencySourceCapture = Some(capture))
+        val current = take(inspection.acceptC(O.CandidateObserved(candidate.candidate.get)))
+        val selected = A.canonicalSelectionValid(L.saved, candidate.dependencySourceDirection, candidate.dependencySourceScope, current)
+        val reused = A.reusedCandidateC(L.saved, candidate, current, F.nativeRecord(80))
+        Then("later selection and reuse retain exact history but require this generation's capture and fresh checks")
+        selected shouldBe true
+        reused.isSuccess shouldBe true
+        A.canonicalSourceSuccessorValid(L.failedcandidate, candidate, Some(current.generation)) shouldBe true
+        A.currentSourceSuccessorValid(L.failedcandidate, candidate, Some(current.generation)) shouldBe true
+        A.canonicalSourceSuccessorValid(L.failedcandidate, candidate) shouldBe false
+        A.currentSourceSuccessorValid(L.failedcandidate, candidate) shouldBe false
+        A.processPolicyMatches(L.failedcandidate, candidate, L.failure.processPolicy, L.origin.processPolicy,
+          Some(current.generation)) shouldBe true
+        A.processPolicyMatches(L.failedcandidate, candidate, L.failure.processPolicy, L.origin.processPolicy) shouldBe true
+        C.sourceCaptureValid(candidate) shouldBe true
+        C.codec.decode(C.codec.encode(candidate)) shouldBe Right(candidate)
+        candidate.primaryPublicationRepair shouldBe Some(L.saved.reuse)
+        candidate.dependencySourceDirection shouldBe Some(L.direction)
+        capture.generation shouldBe current.generation
+        current.checksReceipt shouldBe None
+        current.reviewEvidence shouldBe None
+        A.currentCauseAt(L.fact, current) shouldBe false
+        A.canonicalCauseAt(L.saved, Some(L.direction), current) shouldBe false
+        A.publicationRoute(L.failure, A.scope(L.failure), Vector.empty, candidate, "82", current.generation) should not be
+          (A.PublicationRoute.FirstFailureSuccessor)
+        Vector(L.capture.generation, current.generation + 1).foreach { generation =>
+          A.canonicalSourceSuccessorValid(L.failedcandidate, candidate, Some(generation)) shouldBe false
+          A.reusedCandidateC(L.saved, candidate.copy(dependencySourceCapture = Some(capture.copy(generation = generation))),
+            current, F.nativeRecord(80)).isSuccess shouldBe false
+        }
+        A.reusedCandidateC(L.saved, candidate.copy(dependencySourceCapture = Some(capture.copy(
+          direction = L.olddirection))), current, F.nativeRecord(80)).isSuccess shouldBe false
+        A.reusedCandidateC(L.saved.copy(record = F.nativeRecord(64)), candidate, current,
+          F.nativeRecord(80)).isSuccess shouldBe false
+      }
+      A.codec.encode(L.fact) shouldBe failurebytes
+      L.direction.asJson shouldBe directionbytes
+      L.failed.status shouldBe "failed"
+      failed.outcome shouldBe Some("repair-required")
+      passed.outcome shouldBe Some("passed")
+      reviewrepair.repairDirective shouldBe Some(reviewdirective)
+    }
+    "retain canonical selection across an authenticated renewed repair window" in {
+      val (saved, repairing, direction, capture, original) = _post_validation_source_fixture
+      val first = F.nextValidation(repairing, original.candidate.get)
+      direction.target.repairProgress.automaticCount shouldBe 3
+      direction.target.repairProgress.ordinaryCount shouldBe 3
+      def exhaust(state: O.State, index: Int): O.State = {
+        val failed = take(state.acceptC(O.RepairableChecksObserved(state.candidate.get,
+          state.plan.steps(state.cursor).checks, "window-failure-" + index,
+          O.RepairDirective("Correct failure " + index, Vector("Distinct issue " + index)))))
+        if (failed.stage == O.Stage.Decision) failed
+        else exhaust(F.nextValidation(failed, original.candidate.get), index + 1)
+      }
+      val stopped = exhaust(first, 1)
+      (stopped.repairs, stopped.ordinaryRepairs) shouldBe ((10, 10))
+      val resumed = take(stopped.acceptC(O.RepairContinuationAdmitted("spec-human-answer")))
+      (resumed.repairs, resumed.ordinaryRepairs) shouldBe ((1, 1))
+      val before = F.nativeRecord(200)
+      val boundary = F.nativeRecord(201)
+      val proof = take(GoalPhaseRepairProgress.retainedWindowC(direction, stopped, resumed,
+        before, boundary, "spec-human-answer")).get
+      val nextInspection = take(resumed.acceptC(O.SemanticCompleted(resumed.next.asInstanceOf[O.Semantic].key,
+        "SPECIFICATION-ONLY corrected renewed window")))
+      val freshCapture = capture.copy(generation = nextInspection.generation, sourceRevision = "202")
+      val fresh = original.copy(sourceRevision = "202", dependencySourceCapture = Some(freshCapture))
+      val candidate = take(nextInspection.acceptC(O.CandidateObserved(fresh.candidate.get)))
+      val from = F.nativeRecord(202)
+      A.canonicalSelectionValid(saved, Some(direction), None, candidate) shouldBe false
+      A.canonicalSelectionValid(saved, Some(direction), None, candidate, Some(proof), Some(from)) shouldBe true
+      A.reusedCandidateC(saved, fresh, candidate, from, Some(proof)).isSuccess shouldBe true
+      A.reusedCandidateC(saved, fresh, candidate, from).isSuccess shouldBe false
+      A.canonicalSelectionValid(saved, Some(direction), None, candidate, Some(proof), Some(before)) shouldBe false
+      A.canonicalSelectionValid(saved, Some(direction), None, candidate, Some(proof),
+        Some(from.copy(history = from.history.drop(1)))) shouldBe false
+      val crossed = direction.copy(participant = "another-participant")
+      A.canonicalSelectionValid(saved, Some(crossed), None, candidate, Some(proof), Some(from)) shouldBe false
+      proof.permits(direction.copy(target = direction.target.copy(sourceRevision = "101")), candidate, from) shouldBe false
+      proof.permits(direction.copy(target = direction.target.copy(repairProgress =
+        direction.target.repairProgress.copy(selectedLimit = Some(9)))), candidate, from) shouldBe false
+      proof.permits(direction, repairing, from) shouldBe false
+      take(GoalPhaseRepairProgress.retainedWindowC(direction, stopped, resumed, before,
+        boundary.copy(history = boundary.history.drop(1)), "spec-human-answer")) shouldBe None
+      GoalPhaseRepairProgress.retainedWindowC(direction, stopped, resumed, before, boundary, "").isSuccess shouldBe false
+    }
+    "retain the latest Saved and original Fact through further check and review repairs only at the current generation" in {
+      Given("CB-P611-257-01 and CB-P611-257-02: a later inspection and failed-check Direction retains distinct latest Saved and original Fact references")
+      val (saved, controller, direction, firstcapture, firstcandidate) = _post_validation_source_fixture
+      val originalbytes = A.codec.encode(L.fact)
+      val savedbytes = A.codec.encode(saved.fact)
+      val directionbytes = direction.asJson
+      val previous = saved.fact.failure.candidate
+      val previouspolicy = saved.fact.failure.processPolicy
+      val currentpolicy = direction.target.canonicalOrigin.get.processPolicy
+      val validation = F.nextValidation(controller, firstcandidate.candidate.get)
+      val failed = F.primaryValidation(passed = false).copy(sourceRevision = "108", step = firstcandidate.step,
+        candidate = firstcandidate.candidate.get, selected = Vector(GoalPhaseNativeValidation.Check("primary-later", 1)),
+        receipts = F.primaryValidation(passed = false).receipts.map(_.copy(identity = "primary-later")))
+      val passed = failed.copy(receipts = F.primaryValidation(passed = true).receipts.map(_.copy(identity = "primary-later")),
+        outcome = Some("passed"))
+      When("the native check classifier reserves a repair and independently reviewed passed checks require another correction")
+      val checkrepair = take(GoalPhaseNativeValidation.observedStateC(validation, failed, "latest-saved-failed-check"))
+      val reviewed = take(GoalPhaseNativeValidation.observedStateC(validation, passed, "latest-saved-passed-check"))
+      val reviewdirective = O.RepairDirective("Correct the current independent review finding", Vector("Keep exact source lineage"))
+      val reviewrepair = take(reviewed.acceptC(O.ReviewAdmitted(reviewed.next.asInstanceOf[O.Semantic].key,
+        passed.candidate, "latest-saved-passed-check", "latest-saved-independent-review", O.ReviewOutcome.Repair,
+        Some(reviewdirective))))
+      Then("the latest Saved remains separate from the original immutable publication cause")
+      saved.reference should not be L.saved.reference
+      A.canonicalPublicationFailure(direction) shouldBe Some(L.historical)
+      firstcapture.generation shouldBe direction.target.generation + 1
+      A.canonicalSourceSuccessorValid(previous, firstcandidate) shouldBe true
+      A.reusedCandidateC(saved, firstcandidate, validation, F.nativeRecord(106)).isSuccess shouldBe true
+      Vector(checkrepair, reviewrepair).foreach { repair =>
+        Given("an ordinary current repair with the exact latest Saved, original Fact and selected source Direction")
+        repair.generation shouldBe validation.generation + 1
+        repair.repairs shouldBe validation.repairs + 1
+        repair.ordinaryRepairs shouldBe validation.ordinaryRepairs + 1
+        When("the assigned correction completes and the owner observes a fresh candidate in its current generation")
+        val inspecting = take(repair.acceptC(O.SemanticCompleted(repair.next.asInstanceOf[O.Semantic].key,
+          "SPECIFICATION-ONLY latest Saved ordinary correction completed")))
+        val capture = firstcapture.copy(generation = inspecting.generation, sourceRevision = "110")
+        val candidate = firstcandidate.copy(sourceRevision = "110", candidate = Some(firstcandidate.candidate.get.copy(tree = "9" * 40)),
+          diff = Some("SPECIFICATION-ONLY latest Saved ordinary correction"), dependencySourceCapture = Some(capture))
+        val current = take(inspecting.acceptC(O.CandidateObserved(candidate.candidate.get)))
+        val reused = A.reusedCandidateC(saved, candidate, current, F.nativeRecord(110))
+        Then("the structural codec accepts the later shape while native reuse and policy alignment require the owner's exact generation")
+        C.sourceCaptureValid(candidate) shouldBe true
+        C.codec.decode(C.codec.encode(candidate)) shouldBe Right(candidate)
+        A.canonicalSelectionValid(saved, Some(direction), None, current) shouldBe true
+        A.canonicalSourceSuccessorValid(previous, candidate, Some(current.generation)) shouldBe true
+        A.currentSourceSuccessorValid(previous, candidate, Some(current.generation)) shouldBe true
+        A.canonicalSourceSuccessorValid(previous, candidate) shouldBe false
+        A.currentSourceSuccessorValid(previous, candidate) shouldBe false
+        A.processPolicyMatches(previous, candidate, previouspolicy, currentpolicy, Some(current.generation)) shouldBe true
+        A.processPolicyMatches(previous, candidate, previouspolicy, currentpolicy) shouldBe false
+        A.processPolicyMatches(previous, candidate, previouspolicy, "{}", Some(current.generation)) shouldBe false
+        A.processPolicyMatches(previous, candidate, "{}", currentpolicy, Some(current.generation)) shouldBe false
+        reused.isSuccess shouldBe true
+        candidate.primaryPublicationRepair shouldBe Some(saved.reuse)
+        candidate.dependencySourceDirection shouldBe Some(direction)
+        Vector(direction.target.generation, firstcapture.generation, current.generation + 1).foreach { generation =>
+          A.canonicalSourceSuccessorValid(previous, candidate, Some(generation)) shouldBe false
+          A.processPolicyMatches(previous, candidate, previouspolicy, currentpolicy, Some(generation)) shouldBe false
+          A.reusedCandidateC(saved, candidate.copy(dependencySourceCapture = Some(capture.copy(generation = generation))),
+            current, F.nativeRecord(110)).isSuccess shouldBe false
+        }
+        When("another actual selected-check repair completes into a genuinely later controller generation")
+        val laterrepair = take(current.acceptC(O.RepairableChecksObserved(current.candidate.get,
+          current.plan.steps(current.cursor).checks, "latest-saved-next-failed-check",
+          O.RepairDirective("Correct the next selected failure", Vector("Retain the current capture boundary")))))
+        val later = F.nextValidation(laterrepair, candidate.candidate.get)
+        Then("the later owner rejects the old candidate capture despite its valid structural lineage")
+        later.generation shouldBe current.generation + 1
+        A.reusedCandidateC(saved, candidate, later, F.nativeRecord(110)).isSuccess shouldBe false
+        A.reusedCandidateC(L.saved, candidate, current, F.nativeRecord(110)).isSuccess shouldBe false
+        A.reusedCandidateC(saved.copy(record = F.nativeRecord(80)), candidate, current, F.nativeRecord(110)).isSuccess shouldBe false
+        A.reusedCandidateC(saved, candidate.copy(dependencySourceDirection = Some(L.direction)), current,
+          F.nativeRecord(110)).isSuccess shouldBe false
+        A.reusedCandidateC(saved, candidate.copy(dependencySourceCapture = Some(capture.copy(direction = L.direction))),
+          current, F.nativeRecord(110)).isSuccess shouldBe false
+        val crossedscope = F.sourceSuccessor()._2
+        A.reusedCandidateC(saved, candidate.copy(dependencySourceScope = Some(crossedscope)), current,
+          F.nativeRecord(110)).isSuccess shouldBe false
+        Given("a SPECIFICATION-OWNED coupled Direction and Origin DTO claiming higher recorded repair counts, without genuine authority")
+        val higherprogress = direction.target.repairProgress.copy(automaticCount = current.repairs + 1,
+          ordinaryCount = current.ordinaryRepairs + 1)
+        val origin = direction.target.canonicalOrigin.get
+        val higherdirection = direction.copy(target = direction.target.copy(repairProgress = higherprogress,
+          canonicalOrigin = Some(origin.copy(controller = origin.controller.copy(
+            repairs = higherprogress.automaticCount, ordinaryRepairs = higherprogress.ordinaryCount)))))
+        When("selection compares that coupled recorded progress against the unchanged actual current controller")
+        val higherselected = A.canonicalSelectionValid(saved, Some(higherdirection), None, current)
+        Then("a lower actual current controller cannot borrow the higher recorded repair counts")
+        higherselected shouldBe false
+        val changedpolicy = direction.copy(target = direction.target.copy(repairProgress =
+          direction.target.repairProgress.copy(runtimePolicy = Some("foreign-repair-policy"))))
+        A.canonicalSelectionValid(saved, Some(changedpolicy), None, current) shouldBe false
+        A.reusedCandidateC(saved, candidate.copy(dependencySourceDirection = Some(changedpolicy),
+          dependencySourceCapture = Some(capture.copy(direction = changedpolicy))), current,
+          F.nativeRecord(110)).isSuccess shouldBe false
+        current.checksReceipt shouldBe None
+        current.reviewEvidence shouldBe None
+        A.canonicalCauseAt(saved, Some(direction), current) shouldBe false
+        take(A.canonicalWorkContextC(saved, Some(direction), current, "RepairStep")) shouldBe None
+        take(A.workContextC(saved.fact, saved.reference, current, "RepairStep")) shouldBe None
+        A.publicationRoute(saved.fact.failure, A.scope(saved.fact.failure), Vector.empty, candidate, "112",
+          current.generation) should not be (A.PublicationRoute.FirstFailureSuccessor)
+      }
+      A.canonicalSourceSuccessorValid(previous, null, Some(controller.generation)) shouldBe false
+      A.canonicalSourceSuccessorValid(previous, firstcandidate.copy(dependencySourceDirection = None),
+        Some(controller.generation)) shouldBe false
+      A.codec.encode(L.fact) shouldBe originalbytes
+      A.codec.encode(saved.fact) shouldBe savedbytes
+      direction.asJson shouldBe directionbytes
+      failed.outcome shouldBe Some("repair-required")
+      passed.outcome shouldBe Some("passed")
+      reviewrepair.repairDirective shouldBe Some(reviewdirective)
+    }
+    "refuse reset counters changed policy and crossed identities when retaining canonical selection after ordinary repair" in {
+      Given("a later ordinary repair in the same Step with the original exact canonical source Direction")
+      import GoalPhaseDependencySourceRevision as R
+      val validation = F.nextValidation(L.successor, L.candidate.candidate.get)
+      val repair = take(validation.acceptC(O.RepairableChecksObserved(validation.candidate.get,
+        validation.plan.steps(validation.cursor).checks, "canonical-policy-failed-check",
+        O.RepairDirective("Correct the current selected failure", Vector("Current ordinary finding")))))
+      val current = F.nextValidation(repair, L.candidate.candidate.get.copy(tree = "9" * 40))
+      val target = L.direction.target
+      val origin = target.canonicalOrigin.get
+      val progress = target.repairProgress
+      def _with_progress_(value: GoalPhaseRepairProgress.Snapshot): R.Direction = L.direction.copy(target = target.copy(
+        repairProgress = value, canonicalOrigin = Some(origin.copy(controller = origin.controller.copy(
+          repairs = value.automaticCount, ordinaryRepairs = value.ordinaryCount)))))
+      val selectedlimit = if (progress.selectedLimit.contains(64)) 63 else 64
+      val invalid = Vector(
+        _with_progress_(progress.copy(automaticCount = 0, ordinaryCount = 0)),
+        _with_progress_(progress.copy(ordinaryCount = 0)),
+        _with_progress_(progress.copy(automaticCount = current.repairs + 1, ordinaryCount = current.ordinaryRepairs + 1)),
+        _with_progress_(progress.copy(runtimePolicy = None, selectedLimit = None, effectiveLimit = None)),
+        _with_progress_(progress.copy(runtimePolicy = Some("foreign-repair-policy"))),
+        _with_progress_(progress.copy(selectedLimit = Some(selectedlimit),
+          effectiveLimit = Some(math.min(selectedlimit, GoalPhaseRuntimeRepairControl.ceiling)))),
+        _with_progress_(progress.copy(limit = if (progress.limit == 64) 63 else progress.limit + 1)),
+        _with_progress_(progress.copy(effectiveLimit = progress.effectiveLimit.map(n => if (n == 0) 1 else n - 1))),
+        L.direction.copy(target = target.copy(plan = target.plan.copy(revision = "foreign"))),
+        L.direction.copy(target = target.copy(primaryBase = O.Snapshot("d" * 40, "e" * 40))),
+        L.direction.copy(target = target.copy(completed = Vector.empty)),
+        L.direction.copy(target = target.copy(step = "step-1")),
+        L.direction.copy(target = target.copy(sessionId = "foreign")),
+        L.direction.copy(participant = "foreign"), L.olddirection)
+      val capture = L.capture.copy(generation = current.generation, sourceRevision = "80")
+      val candidate = L.candidate.copy(sourceRevision = "80", candidate = current.candidate, dependencySourceCapture = Some(capture))
+      When("selection checks changed progress or scope and reuse checks a different saved failure and capture Direction")
+      val rejected = invalid.map(direction => A.canonicalSelectionValid(L.saved, Some(direction), None, current))
+      val crossedreuse = invalid.map(direction => A.reusedCandidateC(L.saved,
+        candidate.copy(dependencySourceDirection = Some(direction), dependencySourceCapture = Some(capture.copy(direction = direction))),
+        current, F.nativeRecord(80)).isSuccess)
+      Then("no changed policy counter reset or crossed identity authenticates the later candidate")
+      A.canonicalSelectionValid(L.saved, Some(L.direction), None, current) shouldBe true
+      all(rejected) shouldBe false
+      all(crossedreuse) shouldBe false
+      A.canonicalSelectionValid(L.saved, Some(L.direction), None, L.repair) shouldBe false
+      A.canonicalSelectionValid(L.saved.copy(record = F.nativeRecord(64)), Some(L.direction), None, current) shouldBe false
+      A.canonicalSourceSuccessorValid(L.failedcandidate, candidate.copy(dependencySourceCapture = Some(
+        capture.copy(generation = target.generation)))) shouldBe false
+      A.canonicalSelectionValid(L.saved.copy(fact = L.fact.copy(failure = L.failure.copy(sessionId = "foreign"))),
+        Some(L.direction), None, current) shouldBe false
     }
     "retain strict genuine generation compile and termination classifications inside opaque publication provenance" in {
       Given("the existing complete generation signature, Compile signature and a new exact publication provenance value")

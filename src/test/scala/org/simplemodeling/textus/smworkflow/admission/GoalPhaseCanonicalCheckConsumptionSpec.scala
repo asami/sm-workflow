@@ -101,6 +101,37 @@ final class GoalPhaseCanonicalCheckConsumptionSpec extends AnyWordSpec with Matc
         CanonicalDependencySourceSpecificationFixture.consumption
     }
 
+    "accept an already canonical same-root extension only with the unchanged fixed policy" in {
+      Given("all selected original and remaining fixed programs already select the adopted source root")
+      val canonical = F.corrected()
+      val basis = F.basis.copy(previousRoot = F.sourceRoot, capturedPolicy = F.text(canonical))
+      When("the existing later and Phase routes are declared without changing the policy")
+      Then("the same-root extension and its pending launch are admitted")
+      _policy(canonical, basis = basis, expected = canonical).isSuccess shouldBe true
+      Q.resolveC(Some(F.base), Some(basis), F.plan, Vector(F.phaseCheck), false, None,
+        Vector(F.base, F.effective), Some(F.phasePolicy)).isSuccess shouldBe true
+      Q.launchC(basis, F.effective, Vector(F.phaseCheck), Vector(F.base, F.effective),
+        Some(F.phasePolicy), F.text(canonical)).isSuccess shouldBe true
+      val wrong = F.programs(canonical)(program => if (program.hcursor.get[String]("identity").contains(F.route(F.phaseCheck).program))
+        program.mapObject(_.add("environment", Json.obj(F.key -> F.previousRoot.asJson))) else program)
+      _policy(wrong, basis = basis, expected = canonical).isSuccess shouldBe false
+      _policy(wrong, basis = basis.copy(capturedPolicy = F.text(wrong)), expected = wrong).isSuccess shouldBe false
+      _policy(F.policy, basis = basis, expected = canonical).isSuccess shouldBe false
+      val changedCommand = F.programs(canonical)(program => if (program.hcursor.get[String]("identity").contains(F.route(F.phaseCheck).program))
+        program.mapObject(_.add("executable", "/different/sbt".asJson)) else program)
+      val changedGrants = canonical.mapObject(fields => fields.add("processPlan",
+        fields("processPlan").get.mapObject(_.add("grants", Json.arr()))))
+      val ambiguous = F.programs(canonical)(program => program.hcursor.get[Json]("environment").toOption.fold(program)(environment =>
+        program.mapObject(_.add("environment", environment.mapObject(_.add("SECOND_SELECTOR", F.sourceRoot.asJson))))))
+      Vector(changedCommand, changedGrants).foreach(value =>
+        _policy(value, basis = basis, expected = canonical).isSuccess shouldBe false)
+      _policy(ambiguous, basis = basis.copy(capturedPolicy = F.text(ambiguous)), expected = ambiguous).isSuccess shouldBe false
+      val unknown = F.base.copy(programs = F.base.programs :+ F.route(F.phaseCheck).copy(check = "unknown"))
+      val crossed = F.base.copy(programs = F.base.programs :+ F.route(F.phaseCheck).copy(program = F.route(F.checks(2)).program))
+      Vector(unknown, crossed, F.effective.copy(programs = F.effective.programs :+ F.route(F.phaseCheck))).foreach(value =>
+        _policy(canonical, Vector(F.base, value), basis, canonical).isSuccess shouldBe false)
+    }
+
     "preserve exact legacy policy and same-Step source-consumption payloads when the base already covers selected checks" in {
       Given("the literal original entry and the unchanged native validation v2 payload encoding")
       val payload = V.Payload("10", "b2", O.Snapshot("a" * 40, "b" * 40), Vector(F.checks(1)), Vector.empty, None,

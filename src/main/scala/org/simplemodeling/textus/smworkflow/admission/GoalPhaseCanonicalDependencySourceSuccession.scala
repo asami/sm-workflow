@@ -28,7 +28,8 @@ import GoalPhaseDevelopmentReconstruction as X
   * Native traversal, not these records, supplies historical authority. External
   * publication is provenance; no artifact adoption or publication happens here.
   * @since   Nov.  8, 2026
-  * @version Nov. 10, 2026
+  *  version Nov. 10, 2026
+  * @version Nov. 11, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
@@ -72,7 +73,10 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
     baseLineage: Vector[O.HistoryCommit], historicalFailure: Option[HistoricalFailure] = None,
     historicalPublicationFailure: Option[HistoricalPublicationFailure] = None,
     acceptedSourcePrefix: Option[AcceptedSourcePrefix] = None,
-    inspectionFrontier: Option[InspectionFrontier] = None)
+    inspectionFrontier: Option[InspectionFrontier] = None) {
+    private[GoalPhaseCanonicalDependencySourceSuccession] lazy val _validation_failure: Option[String] =
+      _evaluate_origin_failure(this)
+  }
   /** The native walker authenticates the reconstruction; its primary checkpoint
     * is a source observation and never an accepted Step or validation receipt.
     */
@@ -239,7 +243,8 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
 
   def originValid(v: Origin): Boolean = _origin_failure(v).isEmpty
   private def _origin_failure(v: Origin): Option[String] =
-    if (v == null) Some("native-origin.value") else _first_failure(Vector(
+    if (v == null) Some("native-origin.value") else v._validation_failure
+  private def _evaluate_origin_failure(v: Origin): Option[String] = _first_failure(Vector(
       _clause("native-origin.component")(_exact(v.componentInstance)),
       _clause("native-origin.participant")(_exact(v.participant)),
       _clause("native-origin.controller")(v.controller != null),
@@ -395,6 +400,10 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
     * generated-target diagnostic. Labels confer no source or execution authority.
     */
   private def _target_failure(v: R.Target): Option[String] =
+    if (v == null) Some("native-origin.target")
+    else if (v.canonicalOrigin == null) Some("native-origin.field")
+    else v.canonicalValidationFailure
+  private[admission] def evaluateCanonicalTargetFailure(v: R.Target): Option[String] =
     if (v == null) Some("native-origin.target")
     else if (v.canonicalOrigin == null) Some("native-origin.field")
     else v.canonicalOrigin match {

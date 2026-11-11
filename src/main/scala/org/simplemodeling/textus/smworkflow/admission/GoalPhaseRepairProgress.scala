@@ -4,6 +4,7 @@ import io.circe.{Decoder, DecodingFailure, Encoder, Json, JsonObject}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
 import org.goldenport.Consequence
+import org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceRecord
 import org.simplemodeling.textus.smworkflow.value as V
 
 /** Read-only current selected-window context owned by the ordered controller.
@@ -12,6 +13,46 @@ import org.simplemodeling.textus.smworkflow.value as V
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseRepairProgress {
+  /** Ephemeral evidence reconstructed only while traversing a retained Human answer. */
+  final class WindowContinuation private[GoalPhaseRepairProgress] (val direction: GoalPhaseDependencySourceRevision.Direction,
+    private val after: GoalPhaseOrderedProgression.State,
+    private val boundary: InstanceRecord) {
+    def permits(selected: GoalPhaseDependencySourceRevision.Direction, current: GoalPhaseOrderedProgression.State, from: InstanceRecord): Boolean =
+      selected == direction && from.identity == boundary.identity && from.revision.value >= boundary.revision.value &&
+        from.history.take(boundary.history.size) == boundary.history &&
+        current.plan == after.plan && current.base == after.base && current.completed == after.completed &&
+        current.cursor == after.cursor && current.generation >= after.generation &&
+        current.plan.steps.lift(current.cursor).exists(_.identity == direction.target.step) &&
+        historical(snapshot(after), snapshot(current))
+  }
+
+  def historical(previous: Snapshot, current: Snapshot): Boolean =
+    validateC(previous).isSuccess && validateC(current).isSuccess &&
+      current.limit == previous.limit && current.runtimePolicy == previous.runtimePolicy &&
+      current.selectedLimit == previous.selectedLimit && current.effectiveLimit == previous.effectiveLimit &&
+      current.automaticCount >= previous.automaticCount && current.ordinaryCount >= previous.ordinaryCount
+
+  /** Caller must already have authenticated the retained Human answer and native boundary. */
+  def retainedWindowC(direction: GoalPhaseDependencySourceRevision.Direction, before: GoalPhaseOrderedProgression.State,
+    after: GoalPhaseOrderedProgression.State, from: InstanceRecord, next: InstanceRecord,
+    evidence: String, previous: Option[WindowContinuation] = None): Consequence[Option[WindowContinuation]] =
+    before.acceptC(GoalPhaseOrderedProgression.RepairContinuationAdmitted(evidence)).map { expected =>
+      val target = direction.target
+      val same = GoalPhaseCandidateRecovery.controllerSnapshot(expected) == GoalPhaseCandidateRecovery.controllerSnapshot(after) &&
+        expected.repairControl == after.repairControl && expected.repairObservations == after.repairObservations &&
+        GoalPhaseDependencySourceRevision.directionValid(direction) && from.identity == next.identity &&
+        from.identity.value == target.sessionId && next.revision.value > from.revision.value &&
+        next.history.take(from.history.size) == from.history &&
+        target.sourceRevision.toLongOption.exists(_ <= from.revision.value) &&
+        target.plan == before.plan && target.primaryBase == before.base && target.completed == before.completed &&
+        before.plan.steps.lift(before.cursor).exists(_.identity == target.step) &&
+        target.generation < after.generation &&
+        (historical(target.repairProgress, snapshot(before)) || previous.exists(_.permits(direction, before, from))) &&
+        snapshot(after).automaticCount == 1 && snapshot(after).ordinaryCount == 1 &&
+        snapshot(before).copy(automaticCount = 1, ordinaryCount = 1) == snapshot(after) &&
+        validateC(snapshot(after)).isSuccess
+      Option.when(same)(new WindowContinuation(direction, after, next))
+    }
   final case class Snapshot(automaticCount: Int, ordinaryCount: Int, limit: Int,
     runtimePolicy: Option[String] = None, selectedLimit: Option[Int] = None, effectiveLimit: Option[Int] = None)
   object Snapshot {

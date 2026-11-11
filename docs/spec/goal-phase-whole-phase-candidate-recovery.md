@@ -2,6 +2,35 @@
 
 Updated: 2026-10-23.
 
+## Retained ordinary Step continuation
+
+An ordinary Step can observe a candidate on a checkpoint descended from its
+previous accepted Step, then commit with that checkpoint as the immediate parent.
+The retained whole-Phase comparison accepts that relation only when the actual
+completed candidate retains a valid continuation from the exact accepted
+predecessor, its candidate head is the proof's parent, and the ordinary commit
+has that same immediate parent. The existing accepted-predecessor, partial-chain
+and qualified-checkpoint relations remain available. Candidate, commit, paths,
+diff and correction evidence must still match the actual successful replay.
+
+The P611 public B5 review identifies candidate head `8c523321` after accepted B4
+`c680c96a`; the actual B5 commit `5f754874` has `8c523321` as parent, and Git
+shows that checkpoint descends directly from B4. This topology explains the
+direct-parent mismatch, but the cited public review does not itself expose the
+retained B5 candidate continuation. The regression is authored fixture evidence;
+installed old-to-new same-Session qualification remains required.
+
+`NativeWholePhaseStepEvidenceContinuationCliSpec` is an authored isolated
+qualification program. It selects the normal installed wrapper with
+`smworkflow.spec.installedCommand` and the two absolute component files with
+`smworkflow.spec.wholeEvidenceOldCar` and `smworkflow.spec.wholeEvidenceNewCar`.
+It arranges a real failed Step Test and an owned checkpoint, then expects the old
+control refusal and a same-Session continuation with the successor. It checks
+the retained history and candidate/validation receipts, committed prefix, repair
+counters, check-execution prefix and no repeated Start or accepted Submit.
+These expectations are source evidence only until the owning runtime executes
+the installed qualification against the actual selected CARs.
+
 Stable failure: **SM-WHOLE-CAND-01**. This limited contract continues an original
 whole-Phase inspection after every ordered Step closed. It does not restart or
 resubmit the Goal/Session and does not settle historical uncertainty.
