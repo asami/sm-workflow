@@ -14,6 +14,18 @@ reuses the owner for related-Component delivery, not another approval system.
 
 ## Delivery order and checklist
 
+### Phase policy extension — 2026-11-10
+
+Add [PDP-01–09](../spec/phase-development-permissions.md) to this common
+authorization owner at the next coherent producer boundary. Independent Phase
+properties for external dependency repair and shared CLI update default to false.
+Admitted initial true or genuine mid-Phase Human enablement persists for further
+in-purpose work without repeated permission questions. A dependency project
+already incorporated into Phase 7 needs no external-repair decision. Its JAR
+delivery is scope-private, without ordinary shared publishLocal pollution.
+Phase 7 composes this owner and its artifact isolation; no additional Phase or
+consent system is introduced. This plan changes no live configuration or Human.
+
 - [ ] PA-D1: separate Component/purpose/acceptance/operations authorization from
   planned and actual file inventory in existing typed domain/public contracts.
   Preserve explicit human exclusions and attributable authorization references.
@@ -36,14 +48,25 @@ reuses the owner for related-Component delivery, not another approval system.
   artifact, scope and results as one outcome to the consuming chats. Reuse applicable
   compile/tests/review. Report implementation, qualification and actual adoption
   separately; documentary changes alone complete none of these checkboxes.
+- [ ] PA-D6: add independent Phase properties and CML/public projections with
+  absence=false, initial true and attributable same-Session Human enablement.
+  Reuse existing native configuration/history rather than a separate grant store.
+- [ ] PA-D7: consume managed-development membership and enabled Phase policy
+  across Steps/reconnects. Necessary in-purpose Components, files and selected
+  effects create no repeated Human permission gates. Preserve actual exclusions
+  and concrete execution/validation obligations.
+- [ ] PA-D8: qualify PDP-09 through the installed public route, including legacy
+  adoption without history/count/effect replay and independent CLI policy.
+  Phase 7 owns scoped artifact isolation qualification; consume its evidence.
 
 ## Acceptance scenarios
 
 - Same Component/purpose/acceptance/operations, two additional completion-owner
   files: AI submits the reason, runtime admits, no new Human request, same work
   continues. Cover implementation, repair and necessary test-file additions.
-- Different Component, unrelated purpose, acceptance change, new operation or
-  explicit excluded file: actual runtime decision identifies the changed boundary;
+- Without managed-project or enabled Phase authority, a different Component or
+  new operation requires Human admission. Unrelated purpose, acceptance change
+  or explicit excluded file: actual runtime decision identifies the changed boundary;
   the skill relays the Human request instead of independently granting permission.
 - Malformed request or unavailable capability: typed failure/gap, not fabricated
   missing consent. Do not infer Component membership from a directory prefix.
