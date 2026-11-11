@@ -1176,6 +1176,49 @@ final class GoalPhasePrerequisitePrimaryRepairSpec extends AnyWordSpec with Matc
       passed.outcome shouldBe Some("passed")
       reviewrepair.repairDirective shouldBe Some(reviewdirective)
     }
+    "retain canonical selection across an authenticated renewed repair window" in {
+      val (saved, repairing, direction, capture, original) = _post_validation_source_fixture
+      val first = F.nextValidation(repairing, original.candidate.get)
+      direction.target.repairProgress.automaticCount shouldBe 3
+      direction.target.repairProgress.ordinaryCount shouldBe 3
+      def exhaust(state: O.State, index: Int): O.State = {
+        val failed = take(state.acceptC(O.RepairableChecksObserved(state.candidate.get,
+          state.plan.steps(state.cursor).checks, "window-failure-" + index,
+          O.RepairDirective("Correct failure " + index, Vector("Distinct issue " + index)))))
+        if (failed.stage == O.Stage.Decision) failed
+        else exhaust(F.nextValidation(failed, original.candidate.get), index + 1)
+      }
+      val stopped = exhaust(first, 1)
+      (stopped.repairs, stopped.ordinaryRepairs) shouldBe ((10, 10))
+      val resumed = take(stopped.acceptC(O.RepairContinuationAdmitted("spec-human-answer")))
+      (resumed.repairs, resumed.ordinaryRepairs) shouldBe ((1, 1))
+      val before = F.nativeRecord(200)
+      val boundary = F.nativeRecord(201)
+      val proof = take(GoalPhaseRepairProgress.retainedWindowC(direction, stopped, resumed,
+        before, boundary, "spec-human-answer")).get
+      val nextInspection = take(resumed.acceptC(O.SemanticCompleted(resumed.next.asInstanceOf[O.Semantic].key,
+        "SPECIFICATION-ONLY corrected renewed window")))
+      val freshCapture = capture.copy(generation = nextInspection.generation, sourceRevision = "202")
+      val fresh = original.copy(sourceRevision = "202", dependencySourceCapture = Some(freshCapture))
+      val candidate = take(nextInspection.acceptC(O.CandidateObserved(fresh.candidate.get)))
+      val from = F.nativeRecord(202)
+      A.canonicalSelectionValid(saved, Some(direction), None, candidate) shouldBe false
+      A.canonicalSelectionValid(saved, Some(direction), None, candidate, Some(proof), Some(from)) shouldBe true
+      A.reusedCandidateC(saved, fresh, candidate, from, Some(proof)).isSuccess shouldBe true
+      A.reusedCandidateC(saved, fresh, candidate, from).isSuccess shouldBe false
+      A.canonicalSelectionValid(saved, Some(direction), None, candidate, Some(proof), Some(before)) shouldBe false
+      A.canonicalSelectionValid(saved, Some(direction), None, candidate, Some(proof),
+        Some(from.copy(history = from.history.drop(1)))) shouldBe false
+      val crossed = direction.copy(participant = "another-participant")
+      A.canonicalSelectionValid(saved, Some(crossed), None, candidate, Some(proof), Some(from)) shouldBe false
+      proof.permits(direction.copy(target = direction.target.copy(sourceRevision = "101")), candidate, from) shouldBe false
+      proof.permits(direction.copy(target = direction.target.copy(repairProgress =
+        direction.target.repairProgress.copy(selectedLimit = Some(9)))), candidate, from) shouldBe false
+      proof.permits(direction, repairing, from) shouldBe false
+      take(GoalPhaseRepairProgress.retainedWindowC(direction, stopped, resumed, before,
+        boundary.copy(history = boundary.history.drop(1)), "spec-human-answer")) shouldBe None
+      GoalPhaseRepairProgress.retainedWindowC(direction, stopped, resumed, before, boundary, "").isSuccess shouldBe false
+    }
     "retain the latest Saved and original Fact through further check and review repairs only at the current generation" in {
       Given("CB-P611-257-01 and CB-P611-257-02: a later inspection and failed-check Direction retains distinct latest Saved and original Fact references")
       val (saved, controller, direction, firstcapture, firstcandidate) = _post_validation_source_fixture

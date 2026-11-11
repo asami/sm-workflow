@@ -464,11 +464,7 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
           n > next.target.pendingRevision.toLong))
 
   private def _historical_repair_progress(previous: GoalPhaseRepairProgress.Snapshot,
-    current: GoalPhaseRepairProgress.Snapshot): Boolean =
-    GoalPhaseRepairProgress.validateC(previous).isSuccess && GoalPhaseRepairProgress.validateC(current).isSuccess &&
-      current.limit == previous.limit && current.runtimePolicy == previous.runtimePolicy &&
-      current.selectedLimit == previous.selectedLimit && current.effectiveLimit == previous.effectiveLimit &&
-      current.automaticCount >= previous.automaticCount && current.ordinaryCount >= previous.ordinaryCount
+    current: GoalPhaseRepairProgress.Snapshot): Boolean = GoalPhaseRepairProgress.historical(previous, current)
 
   private def _inspection_predecessor(current: R.Direction): Option[R.Direction] =
     Option(current).filter(R.directionValid).flatMap(_.target.canonicalOrigin).flatMap { origin =>
@@ -555,14 +551,17 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
   /** Match the exact Saved/native reservation through its original cause or
     * captured prior canonical succession, separately from historical/v5 reuse. */
   private[admission] def canonicalSelectionValid(saved: Saved, direction: Option[R.Direction],
-    selectedScope: Option[R.ScopeSuccessor], controller: O.State): Boolean = direction.exists { next =>
+    selectedScope: Option[R.ScopeSuccessor], controller: O.State,
+    window: Option[GoalPhaseRepairProgress.WindowContinuation] = None,
+    from: Option[InstanceRecord] = None): Boolean = direction.exists { next =>
     factValid(saved.fact) && R.directionValid(next) && (canonicalPublicationFailure(next).contains(
         CanonicalSource.HistoricalPublicationFailure(saved.reference, saved.fact)) || _canonical_saved_selection(saved, next)) &&
       next.target.plan == controller.plan && next.target.primaryBase == controller.base &&
       next.target.completed == controller.completed && next.target.step == saved.fact.failure.candidate.step &&
       controller.plan.steps.lift(controller.cursor).exists(_.identity == next.target.step) &&
       controller.generation >= next.target.generation + 1 &&
-      _historical_repair_progress(next.target.repairProgress, GoalPhaseRepairProgress.snapshot(controller)) &&
+      (_historical_repair_progress(next.target.repairProgress, GoalPhaseRepairProgress.snapshot(controller)) ||
+        window.exists(proof => from.exists(proof.permits(next, controller, _)))) &&
       selectedScope != null && selectedScope.forall(R.scopeValid(next, _)) &&
       saved.record.identity.value == next.target.sessionId &&
       saved.record.revision.value.toString == saved.reference.revision &&
@@ -704,11 +703,11 @@ private[smworkflow] object GoalPhasePrerequisitePrimaryRepair {
     }
 
   def reusedCandidateC(saved: Saved, candidate: C.Payload, controller: O.State,
-    from: InstanceRecord): Consequence[Unit] = {
+    from: InstanceRecord, window: Option[GoalPhaseRepairProgress.WindowContinuation] = None): Consequence[Unit] = {
     val failure = saved.fact.failure
     val previous = failure.candidate
     val dependencies = sameDependencyCapture(candidate, previous) ||
-      canonicalSelectionValid(saved, candidate.dependencySourceDirection, candidate.dependencySourceScope, controller) &&
+      canonicalSelectionValid(saved, candidate.dependencySourceDirection, candidate.dependencySourceScope, controller, window, Some(from)) &&
         canonicalSourceSuccessorValid(previous, candidate, Some(controller.generation)) &&
         candidate.dependencySourceCapture.forall(_.generation == controller.generation) ||
       currentSourceSuccessorValid(previous, candidate, Some(controller.generation)) &&

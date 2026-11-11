@@ -316,12 +316,13 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     recordingPaths: Vector[String] = Vector.empty,
     completedCandidates: Vector[Payload] = Vector.empty,
     retainedOnly: Boolean = false,
-    primaryRepair: Option[GoalPhasePrerequisitePrimaryRepair.Saved] = None): Consequence[Option[Saved]] = for {
+    primaryRepair: Option[GoalPhasePrerequisitePrimaryRepair.Saved] = None,
+    repairWindow: Option[GoalPhaseRepairProgress.WindowContinuation] = None): Consequence[Option[Saved]] = for {
     _ <- documentPolicy.fold(Consequence.unit)(_.validateC(controller.plan, d.candidatePaths))
     _ <- GoalPhaseNativeFindingRecording.validatePathsC(recordingPaths, controller.plan, d.candidatePaths)
     adapter <- session.storage.bindMechanicalC(F.advanceOperation, codec)
     store = new Store(adapter, session, from, controller, d, core, _ => Consequence.unit, documentPolicy, recordingPaths, completedCandidates,
-      retainedOnly = retainedOnly, primaryRepair = primaryRepair)
+      retainedOnly = retainedOnly, primaryRepair = primaryRepair, repairWindow = repairWindow)
     saved <- store.loadC("candidate").flatMap(_.fold(Consequence.success(Option.empty[Saved]))(
       value => store.completedC(value).map(Some(_))))
   } yield saved
@@ -409,7 +410,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     dependencySourceDirection: Option[GoalPhaseDependencySourceRevision.Direction] = None,
     dependencySourceScope: Option[GoalPhaseDependencySourceRevision.ScopeSuccessor] = None,
     primaryRepair: Option[GoalPhasePrerequisitePrimaryRepair.Saved] = None,
-    reconstructionPrefixReuse: Option[GoalPhaseDevelopmentReconstruction.PrefixReuse] = None): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
+    reconstructionPrefixReuse: Option[GoalPhaseDevelopmentReconstruction.PrefixReuse] = None,
+    repairWindow: Option[GoalPhaseRepairProgress.WindowContinuation] = None): Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
     whole <- Consequence.success(controller.cursor == controller.plan.steps.size)
     inspection = if (whole) "PhaseInspection" else "InspectCandidate"
     _ <- if (controller.stage.toString == inspection &&
@@ -426,7 +428,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
       sourceHistoryRecovery, dependencyAdmission = dependencyAdmission, dependencyChain = dependencyChain,
       sourceHistoryNormalization = sourceHistoryNormalization, dependencySourceDirection = dependencySourceDirection,
       dependencySourceScope = dependencySourceScope, primaryRepair = primaryRepair,
-      reconstructionPrefixReuse = reconstructionPrefixReuse)
+      reconstructionPrefixReuse = reconstructionPrefixReuse, repairWindow = repairWindow)
     complete <- store.loadC("candidate")
     selected <- complete match {
       case Some(value) => store.completedC(value)
@@ -495,7 +497,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
       else if (previous.dependencySourceCapture.exists(GoalPhasePrerequisitePrimaryRepair.sourceSuccessorValid(_,
           store.dependencySourceDirection, store.dependencySourceScope))) Consequence.success(false)
       else if (GoalPhasePrerequisitePrimaryRepair.canonicalSelectionValid(saved, store.dependencySourceDirection,
-          store.dependencySourceScope, store.controller)) Consequence.success(false)
+          store.dependencySourceScope, store.controller, store.repairWindow, Some(store.from))) Consequence.success(false)
       else F.invalid("Primary repair source selection has no authenticated historical or successor relation")
     }
     _ <- if (historical) store.primaryRepair.get.fact.failure.candidate.dependencySourceCapture
@@ -873,7 +875,8 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     val dependencySourceDirection: Option[GoalPhaseDependencySourceRevision.Direction] = None,
     val dependencySourceScope: Option[GoalPhaseDependencySourceRevision.ScopeSuccessor] = None,
     val primaryRepair: Option[GoalPhasePrerequisitePrimaryRepair.Saved] = None,
-    val reconstructionPrefixReuse: Option[GoalPhaseDevelopmentReconstruction.PrefixReuse] = None) {
+    val reconstructionPrefixReuse: Option[GoalPhaseDevelopmentReconstruction.PrefixReuse] = None,
+    val repairWindow: Option[GoalPhaseRepairProgress.WindowContinuation] = None) {
     val plan = controller.plan
     val whole = controller.cursor == plan.steps.size
     val scopeIdentity = if (whole) "phase:" + plan.phase else plan.steps(controller.cursor).identity
@@ -897,7 +900,7 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     def reusedCaptureC(payload: Payload): Consequence[Unit] = (primaryRepair, payload.primaryPublicationRepair) match {
       case (None, None) => Consequence.unit
       case (Some(saved), Some(reuse)) => GoalPhasePrerequisitePrimaryRepair.reusedCandidateC(saved, payload,
-        controller, from)
+        controller, from, repairWindow)
       case _ => F.invalid("Candidate capture reuse lacks its actual retained primary repair fact")
     }
     def pathsOwned(paths: Vector[String]): Boolean =

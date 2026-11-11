@@ -42,6 +42,17 @@ issue batches `1/1/2` and `2/2/2`; another qualifying failure asks Human at
 reserved at `1/1/2`. Only actual committed next-Step progression yields
 `0/0/2` for that next Step. WIP and edits within a Step do not reset counts.
 
+R5. Canonical source selection compares counters monotonically within a window.
+When native history authenticates the actual retained Human ContinueRepairs
+answer, traversal may reconstruct an ephemeral proof connecting the exhausted
+predecessor to the reserved first batch of the new window. It is bound to the
+exact adopted source, Session, Plan, base, completed prefix, Step, repair policy
+and native history. Candidate inspection and retained reload may use that proof
+for the renewed window; a source DTO, generation, or a lower counter alone is
+not evidence of a transition. The proof is not persisted, grants no effects,
+and is reconstructed again on retained traversal. Existing history and all
+source, generation, capture and publication guards remain in force.
+
 E2. Executable examples cover strict snapshots, absent/present internal and
 generated-public roundtrips, retained predecessor mismatch, actual ordinary
 exemption, selected independent applicability and passive wire normalization.
