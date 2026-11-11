@@ -66,4 +66,6 @@ SBTは登録済みrunnerとsbt-native lockを使用する。コスト削減値�
 
 Decision／Issue／Handoffの管理、訂正batch、全スキル移行、既存Git文書移行、
 Evidence archive、ファイルexport、SIGINT、終了処理変更は本Phaseの対象外。
-前者の共通Journal拡張は[Phase 11.1](phase-11.1.md)で独立実施する。
+前者の共通Journal拡張は独立実施する。2026-11-11の分割により、
+[Phase 11.1](phase-11.1.md)は単件主経路、[Phase 11.2](phase-11.2.md)は
+batch管理と選択した追加利用先への展開を所有する。既存Phase 11の受入れは維持する。

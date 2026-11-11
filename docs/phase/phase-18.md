@@ -3,6 +3,7 @@
 Status: planned; no implementation or acceptance claimed.
 Date: 2026-10-28
 Owner: sm-workflow development
+Delivery order: Phase 7 -> Phase 11.1 -> Phase 8 -> Phase 8.1 -> Phase 9 -> Phase 18 (2026-11-11)
 Predecessor: [Phase 6.7](phase-6.7.md) shared Task/FIX route and existing GoalPhase/RepositorySync validation
 Producer: CNCF Phase 117 (required for W4–W5)
 Checklist: [P18 acceptance](phase-18-checklist.md)
@@ -24,13 +25,16 @@ This plan starts no execution and does not change live configuration.
 
 ## Roadmap position and dependencies
 
-Phase 18 is a toolchain extension after the shared execution baseline delivered
-by Phase 6.7, alongside the separately scoped Phase 17 extensions. Its number
-does not require completion of all Phases 8–17. Preserve the existing primary
-roadmap sequence; this Phase does not become a new
-gate for those deliveries or silently enlarge their active Steps.
+The user selected Phase 18 immediately after [Phase 9](phase-9.md) on
+2026-11-11: **7 -> 11.1 -> 8 -> 8.1 -> 9 -> 18** after the Journal split.
+Phase 11.2 is deferred without becoming a Flutter prerequisite. This supersedes
+its previously unassigned place in the delivery priority. It remains a toolchain extension
+using the shared execution baseline delivered by Phase 6.7; no completion of
+unrelated Phases 10-17 is required. This scheduling does not add Flutter to
+Phase 9 acceptance, start a Session or enlarge an active Step. See the
+[decision record](../journal/2026/11/2026-11-11-parallel-development-first-and-phase-8.1.md#subsequent-decision-phase-18-after-phase-9).
 
-W1 aligns with CNCF Phase 117 C1. W2–W3 can proceed with the existing SBT route
+After the scheduled Phase 18 start, W1 aligns with CNCF Phase 117 C1. W2–W3 can proceed with the existing SBT route
 while CNCF C2–C4 are developed. W4 needs W3 and the qualified CNCF C5 delivery;
 W5 then establishes consumer acceptance. Existing qualified behavior from 6.8/6.9
 must be preserved if present at implementation time; this Phase does not rebuild

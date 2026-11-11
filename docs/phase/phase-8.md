@@ -2,8 +2,31 @@
 
 Status: planned
 Decision: 2026-10-05; documented 2026-10-06 (Asia/Tokyo)
-Planned after: Phase 7, with carryover recorded from Phase 2 onward
+Planned after: Phase 7 and the bounded Phase 11.1 Journal route; before Phase 8.1
 Depends on: practical Phase 2, Phase 5 and the selected Phase 6.3/7 delivery
+
+## Sequence and ownership — 2026-11-11
+
+The Phase order is **[7](phase-7.md) -> [11.1](phase-11.1.md) -> 8 -> [8.1](phase-8.1.md) ->
+[9](phase-9.md) -> [18](phase-18.md)**. Phase 7 prioritizes managed parallel
+development within its own acceptance. Phase 8 follows with operational improvements, including
+continuation, waiting/result collection and compact evidence references, through
+the existing owners. It does not introduce another executor.
+Use Phase 11.1's bounded records where applicable; later Journal batch and
+additional-consumer work stays in [11.2](phase-11.2.md), outside this Phase's
+completion gates. Journal recording does not implement Human consent or routing.
+
+Phase 8.1 contains the former 6.12 Scala-quality plan; the existing Phase 9
+retains convergence/provider routing. Broader server/MCP/sandbox/compaction work
+retains its declared necessity and acceptance boundaries. All current checklist
+items, deferred problems, actual evidence and active Session state are retained.
+Reordering is not acceptance and adds no Phase 6.11 closure requirement.
+
+Parallel scheduling is permitted if assessment shows the remaining Phase 8
+scope, including required validation and independent review, fits about half
+a day and does not depend on unfinished Phase 7 or 11.1 delivery. No such estimate has
+yet been established. Retain all acceptance and use the normal sequence when
+these conditions are not met; this option starts no development or effects.
 
 ## Phase 6 split dependency correction — 2026-10-13
 
@@ -123,6 +146,64 @@ initial delivery and its six SimpleModeler acceptance scenarios belong to
 Phase 7. Record only optional later expansion here; do not defer core publication,
 selection, native operation integration or consumer verification to Phase 8.
 
+## Proportionate validation and bounded closure — 2026-11-11
+
+The Phase 6.11 experience showed repeated bounded repairs accumulating their
+own validation Task, review, publication and old-to-new installed qualification.
+Failures in that qualification route then created further repair work. Select
+this operational cost problem for Phase 8. A bounded file inventory alone does
+not make that complete process proportionate to the change.
+
+1. **Select verification by impact and risk.** For an ordinary small repair,
+   use the regression that demonstrates the defect plus affected compile/lint/
+   integration checks. Reuse successful evidence only while its actual source,
+   candidate, configuration, scope and authority remain applicable. Keep the
+   reason for selected checks and invalidated evidence in existing results.
+   Independent review follows the actual changed boundary; a new repair Task
+   does not itself require a new comprehensive review or FULL/HEAVY campaign.
+   Genuine contract, authority, compatibility and state-transition changes
+   retain their required verification. This is not blanket permission to skip
+   required checks or to report untested behavior as accepted.
+2. **Group connected qualification.** Give each repair its relevant regression,
+   then qualify compatible related repairs together at an actual integration or
+   delivery boundary. Reuse the existing validation, publication and installed
+   execution owners. Publication, installation and old-to-new recovery tests
+   are selected when their behavior or an applicable delivery obligation needs
+   them; they are not a ritual attached to every source edit. A later change
+   invalidates only the affected evidence and receives the necessary rechecks.
+   Do not introduce another executor, evidence ledger or mandatory benchmark.
+3. **Bound existing-Session rescue.** Distinguish an ordinary defect repair,
+   a specification extension and rescue of a particular retained state when
+   selecting work. Give rescue a finite work boundary through existing repair
+   accounting and explicit user direction. If meeting it requires further
+   recovery-contract development or a repair of its own qualification machinery,
+   return a concrete disposition at that boundary rather than recursively
+   creating new Tasks or resetting the repair allowance. Keep actual UNKNOWN,
+   failures, accepted results and cumulative counts. Preserve/defer or publicly
+   close as unaccepted according to the actual user choice; do not fabricate
+   success, infer retry authority or terminate a running external effect by fiat.
+4. **Keep closure scoped.** Freeze the required closing work at the adopted
+   acceptance boundary. Classify later findings as a demonstrated blocker for
+   that boundary or separate Hygiene/Development Candidate work. Do not silently
+   add another improvement, producer contract or broad qualification campaign
+   to the closing phase. A demonstrated required blocker still prevents accepted
+   completion until resolved or an explicit public scope/termination decision is
+   made. Changes in purpose or effect authority keep their genuine Human decision.
+
+Use one representative small repair and an applicable existing closing/rescue
+example to establish these behaviors through the normal owners. Reuse existing
+records for actual selected checks, review, publication/qualification launches,
+AI interventions and available elapsed time; compare equivalent scope and mark
+missing baseline observations unavailable. Check that required quality evidence
+is retained while duplicate stages and coordination are reduced. No fixed saving,
+new measurement subsystem, fresh whole-repository campaign or separate review
+ceremony is added merely to prove this optimization.
+
+This is planned Phase 8 work, not an implementation or PASS. It supplies no new
+Phase 6.11 closure prerequisite, changes no active Session or historical result,
+and does not retroactively waive its unexecuted validation. Apply the existing
+user's closure direction through that Session's owning public route.
+
 ## Selection and execution
 
 Carry forward Phase 6 command ownership and live Phase-document synchronization
@@ -152,6 +233,17 @@ scenarios and retains its owning project's responsibilities.
 
 ## Completion
 
+- [ ] A representative small repair demonstrates impact/risk-selected checks,
+      applicable successful-evidence reuse and grouped connected qualification.
+      Existing records show actual stages/AI interventions and available elapsed
+      time for equivalent scope; required regression/review evidence remains,
+      with no per-repair blanket FULL/HEAVY or automatic publish/install/recovery
+      campaign. Missing observations are explicit, not invented savings.
+- [ ] A selected closing/rescue example retains the adopted acceptance boundary
+      and finite repair accounting: qualification failures do not recursively
+      enlarge the rescue, separate findings have explicit dispositions, and a
+      genuine blocker leads to bounded repair or an actual defer/unaccepted-close
+      decision without false acceptance, history loss or counter reset.
 - [ ] Every inherited/discovered item has an explicit disposition and a link to
       actual evidence or a reason for exclusion/future placement.
 - [ ] The finite selected scenarios are implemented and their connected

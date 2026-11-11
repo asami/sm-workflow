@@ -2,6 +2,7 @@
 
 Status: planned; all items pending.
 Plan: [Phase 18](phase-18.md)
+Delivery order: after Phase 9; 7 -> 11.1 -> 8 -> 8.1 -> 9 -> 18 (2026-11-11).
 Producer: CNCF Phase 117
 
 - [ ] P18-01 (W1): Define common purpose, selection, attempt/result/evidence and exact mappings for existing SBT Compile/Test/TestOnly/FixCheck behavior.

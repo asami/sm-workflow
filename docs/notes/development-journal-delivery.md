@@ -15,7 +15,12 @@ status=planned
 | Phase 11 | 共通Entry、実結果／Findingの記録、read／find、同梱・配備スキル、6.4試用への引渡し。 |
 | Phase 12 | 共通EvidenceのID・保存・取得とAdvanceからの自動記録。Phase 11のJournalへ実保存観測を接続する。 |
 | Phase 6.4 | Phase 12の採用・実運用検証。共通サービス上でbatch・圧縮・保持管理を拡張する。 |
-| Phase 11.1 | Decision／Issue／Handoff、関係検索、訂正・状態更新・batch管理。 |
+| Phase 11.1 | Decision／Issue／Handoff、単件の関係検索・訂正・状態更新と一つの実利用経路。 |
+| Phase 11.2 | 11.1の単件機能を使う有限batch・個別結果管理と選択した追加利用先への展開。 |
+
+2026-11-11の追加採用：旧11.1を上記二つへ分け、11.1はPhase 7の後・8の前に実施する。
+11.2は実利用で必要になった時に別途選び、8／9／18の前提にしない。
+[分割記録](../journal/2026/11/2026-11-11-journal-single-entry-and-batch-split.md)に旧項目の移管を残す。
 
 ## この分割の理由
 
