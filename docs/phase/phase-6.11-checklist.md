@@ -1,9 +1,38 @@
 # Phase 6.11 Acceptance Checklist
 
 Date: 2026-10-31
-Status: in progress; all acceptance items pending.
+Status: closed with unverified items — 2026-11-11; final Phase acceptance not established.
 Plan: [Phase 6.11](phase-6.11.md).
 Contract: [directory-list synchronization](../spec/repository-sync-directory-list.md).
+
+## Closure disposition — 2026-11-11
+
+- [x] Record the user's decision to end Phase 6.11 with unverified items.
+- [x] Confirm existing Session `3585e04191dce0bc0f70e394b6745767` is
+  `ForcedClosed / NotAccepted`, with `normal_completion=false`.
+- [x] Preserve B1–B5 Step results/commits, applicable successful checks and Step
+  reviews, previous UNKNOWN/formal failures and cumulative repair history.
+- [x] Record that whole-Phase validation is not run; no new development,
+  validation, Start or accepted Submit is performed for this update.
+
+These closure entries describe the ending decision, not acceptance-test PASS.
+All original P611-01–29 boxes and requirement wording are retained. Their final
+integrated Phase acceptance remains **unverified**; they no longer keep this
+closed Phase in progress. Existing Step-level evidence is preserved.
+
+| Unverified or unfinished at closure | Disposition |
+| --- | --- |
+| Whole-Phase `repository-full` regression | Not executed; omitted by user direction. |
+| Independent integrated review of P611-01–29 | Not performed; no final Phase acceptance is asserted for any item. |
+| Normal release/acceptance completion, including P611-11 | Not performed; this ending record is not a normal release record. |
+| Complete incident/growing-response and cross-route coverage required by P611-21, P611-26 and P611-29 | Selected B5 installed checks passed; complete Phase-wide coverage has not received independent final acceptance. |
+| Same-root installed continuation qualification | Formal failure retained; later fixture correction is unsubmitted and unvalidated. |
+| Fixed-version launcher delivery | Deferred; its original nine delivery conditions are not treated as passed. |
+
+See the [closure record](../journal/2026/11/2026-11-11-phase-6.11-closed-with-unverified-items.md)
+for actual evidence and retained Step commits. Historical source/boundary notes
+below remain as observations at their original dates, not current instructions
+to resume or prerequisites for this administrative ending.
 
 - [ ] P611-01: (B1): A configured authorized directory list resolves repository identities/tracking/bindings in runtime; no caller source inspection, per-directory AI loop or manufactured grants.
 - [ ] P611-02: (B1): Mixed equal, push-only and fast-forward targets finish through one normal installed entry, with zero intermediate AI decisions and no extra product tests.

@@ -1,12 +1,42 @@
 # Phase 6.11: Runtime-Owned Directory-List RepositorySync
 
 Date: 2026-10-31
-Status: in progress; B1 implementation authored; validation and Phase acceptance pending.
+Status: closed with unverified items — 2026-11-11; native ForcedClosed / NotAccepted.
 Owner: sm-workflow development; adoption by sm-workflow-dev after Phase 6.10.
-Sequence: Phase 6.9 -> Phase 6.10 -> Phase 6.11 -> Phase 6.12 -> Phase 7.
+Sequence: Phase 6.9 -> Phase 6.10 -> Phase 6.11 -> Phase 7 -> Phase 8 -> Phase 8.1 -> Phase 9.
 Specification: [directory-list synchronization](../spec/repository-sync-directory-list.md).
 Checklist: [P611 acceptance](phase-6.11-checklist.md).
 Handoff: [English development handoff](../journal/2026/10/2026-10-31-phase-6.11-repository-sync-directory-list-handoff.md).
+
+## Closed with unverified items — 2026-11-11
+
+The user ended Phase 6.11 without running whole-Phase validation and requested
+that the plan and checklist record that disposition. Phase 6.11 is **closed
+with unverified items**; it is no longer an active development Phase. Native
+Session `3585e04191dce0bc0f70e394b6745767`, Plan 2, is `ForcedClosed` with
+`acceptance=NotAccepted` and `normal_completion=false`. The saved public
+result was confirmed by a separate public read. This administrative ending
+does not assert normal acceptance or change the saved native Plan.
+
+B1–B5 Step results and commits are retained, including B5 commit
+`5f7548748185e00470813f22787ca39aff816890`, its successful selected
+Compile/lint/installed checks and independent Step review. Whole-Phase
+`repository-full`, independent Phase acceptance review of P611-01–29 and
+normal release completion were not performed. The stopped same-root installed
+qualification retains its formal failure and subsequent unsubmitted,
+unvalidated fixture correction. The separate launcher delivery remains deferred.
+
+The [closure record](../journal/2026/11/2026-11-11-phase-6.11-closed-with-unverified-items.md) lists
+the preserved commits, evidence references and unverified work. The original
+29 acceptance conditions remain below/in the checklist; unchecked items are
+unverified at final Phase scope, not active work preventing this ending.
+Existing success, formal-failure and UNKNOWN records and cumulative repair
+counts remain unchanged. Historical dated progress/source reports below are
+preserved and are superseded only as descriptions of the current status.
+
+Do not resume this Session, re-Start, replay accepted Submit or rerun successful
+work for this documentation update. Later qualification or deferred dependency
+work needs a separately selected scope; no successor Phase or repair is started.
 
 ## Purpose and preservation
 
