@@ -1,5 +1,14 @@
 # sm-workflow incremental-use roadmap
 
+Phase 6.11 closed with unverified items — 2026-11-11:
+[plan](phase-6.11.md) / [checklist](phase-6.11-checklist.md).
+The user ended this Phase without whole-Phase validation. Its existing Session
+is `ForcedClosed / NotAccepted`; B1–B5 results, commits and history remain
+preserved. Whole-Phase regression, independent Phase acceptance and normal
+release completion are unverified/unfinished, not PASS. See the
+[closure record](../journal/2026/11/2026-11-11-phase-6.11-closed-with-unverified-items.md).
+The roadmap continues beyond this ended Phase; this record starts no new work.
+
 Shared Scala lint profiles allocated 2026-11-01:
 [Phase 6.12](phase-6.12.md) follows 6.11 and precedes 7. Reuse Phase 6.5 Q3
 for baseline/team/project settings: `sm-workflow.source.style=goldenport` selects
@@ -476,7 +485,7 @@ in Phase 6, using the corrected runtime contract.
 | [6.8: Commit recovery and delegated delivery](phase-6.8.md) | Common authority/commit recovery, mechanical hygiene and independent sm-delegate-task | Shared execution; mandatory delegate commit, required publication/return; retain test-fix/goal-task contracts and active 6.7 |
 | [6.9: Runtime-owned RepositorySync](phase-6.9.md) | Clean synchronization, impact-selected validation/review and dirty purpose-based commits | Runtime-owned main route; reuse 6.8 commit/recovery; Phase 7 composes it across repositories |
 | [6.10: AI operating profiles and lightweight metrics](phase-6.10.md) | Standard/current, cost, quality selection; start/end source counts and observed tokens per net source step | No live config switch or extra AI calls; preserve issued work; comparison stays in 9 and usage acquisition in 13 |
-| [6.11: Directory-list RepositorySync](phase-6.11.md) | Runtime-owned batch synchronization and selected validation | After 6.10; preserve active work and lower-level APIs |
+| [6.11: Directory-list RepositorySync](phase-6.11.md) | Runtime-owned batch synchronization and selected validation | Closed with unverified items (2026-11-11); ForcedClosed / NotAccepted; results/history retained |
 | [6.12: Shared Scala lint and Goldenport conventions](phase-6.12.md) | Common profiles and Goldenport history/naming selection with project differences | After 6.11, before 7; [checklist](phase-6.12-checklist.md); reuse accepted Q3 |
 | [7: Multi-repository synchronization and artifact overlay](phase-7.md) | Synchronize/validate the workspace and consumer artifact selections using CNCF-discovered project purpose/feature queries | Full practical GoalPhase adoption with related-project management; retain local-development/sync/artifact ownership and existing overlay acceptance |
 | [17: Task and standalone FIX extensions](phase-17.md) | Wider inputs, dirty/focused/full options, multi-unit composition and authorized investigation/related-project integration | Reuse 6.7 without rebuilding it; [checklist](phase-17-checklist.md); Phase 7/14 dependencies are scenario-specific |

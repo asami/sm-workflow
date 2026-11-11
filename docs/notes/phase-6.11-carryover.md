@@ -1,8 +1,26 @@
 # Phase 6.11 development boundary and carryover
 
 Date: 2026-11-10
-Status: development run ended with unfinished work; native Phase not accepted or closed.
+Status: closed with unverified items — 2026-11-11; native ForcedClosed / NotAccepted.
 Plan: [Phase 6.11](../phase/phase-6.11.md), native revision 2.
+
+## Final closure disposition — 2026-11-11
+
+Phase 6.11 is closed with unverified items by explicit user direction. The
+existing Session is now `ForcedClosed / NotAccepted`, with
+`normal_completion=false`, confirmed by a separate public read. B1–B5 Step
+results and commits are retained; B5 commit is
+`5f7548748185e00470813f22787ca39aff816890`. Whole-Phase validation,
+independent Phase acceptance review and normal release completion were not
+performed. All original conditions and success/failure/UNKNOWN/counter history
+remain preserved. No follow-up work is started by this ending.
+
+See the [final closure record](../journal/2026/11/2026-11-11-phase-6.11-closed-with-unverified-items.md)
+and [updated checklist](../phase/phase-6.11-checklist.md) for current disposition
+and evidence. Every older section below remains an observation at its recorded
+frontier; statements that B5 is unaccepted, changes are uncommitted or the
+Session is open do not describe the current final state. The separately deferred
+launcher and incomplete helper qualifications remain unaccepted.
 
 ## Remaining test-origin StandaloneFix qualification setup — 2026-11-11
 
