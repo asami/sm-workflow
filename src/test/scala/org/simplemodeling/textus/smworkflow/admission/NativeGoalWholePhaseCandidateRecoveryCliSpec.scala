@@ -444,8 +444,6 @@ final class NativeWholePhaseStepEvidenceContinuationCliSpec extends AnyWordSpec 
   import NativeWorkflowCliFixture as F
   import java.time.Instant
   import java.nio.file.StandardOpenOption
-  import org.goldenport.cncf.processexecution.SbtOperation
-  import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
 
   override protected def goal_selected_paths(goal: ThreeWorkflowRuntimeParameters.Goal): Vector[Vector[String]] =
     if (goal.candidatePaths == Vector("value.txt", "docs/phase.md") &&
@@ -468,36 +466,7 @@ final class NativeWholePhaseStepEvidenceContinuationCliSpec extends AnyWordSpec 
   private def select(s: F.Scenario, car: Path): Unit = {
     val config = s.root.resolve(".textus/config.json")
     Files.writeString(config, read(config).mapObject(_.add("textus.component.file", car.toString.asJson)
-      .add("textus.assembly.descriptor", s.root.resolve(".textus/assembly.yaml").toString.asJson)
-      .remove("sm-workflow.runtime.definition")).noSpaces)
-  }
-  private def setup(s: F.Scenario): Unit = {
-    val assembly = s.root.resolve(".textus/assembly.yaml")
-    Files.writeString(assembly, Files.readString(assembly).replace("version: 0.1.1-SNAPSHOT", "version: 0.1.1"))
-    val config = s.root.resolve(".textus/config.json")
-    val descriptor = take(GenericSubsystemDescriptor.loadComponentArchive(Path.of("src/main/car").toAbsolutePath))
-    val template = parse(descriptor.config("textus.subsystem.process-execution.plan")).toOption.get
-    val substitutions = Map("repository.root" -> s.root.resolve("repository").toString, "git.branch" -> "main",
-      "git.remote" -> "origin", "git.remote-branch" -> "main", "git.endpoint" -> s.root.resolve("upstream.git").toString,
-      "git.user-name" -> "Fixture", "git.user-email" -> "fixture@example.invalid", "environment.path" -> "/usr/bin:/bin",
-      "environment.java-home" -> "", "environment.ssh-auth-sock" -> "")
-    def expand(value: Json): Json = value.mapString(text => substitutions.foldLeft(text) { case (a, (k, v)) =>
-      a.replace("${" + k + "}", v) }).mapArray(_.map(expand)).mapObject(_.mapValues(expand))
-    def array(value: Json, key: String): Vector[Json] = value.hcursor.get[Vector[Json]](key).toOption.get
-    val selected = expand(template)
-    val sbt = TypedSbtHostPlanFixture.plan(s.root, TypedSbtHostPlanFixture.normalExecutable, Vector(1), operation = SbtOperation.Test)
-    val removed = array(selected, "sbtPrograms").map(_.hcursor.get[Json]("capability").toOption.get).toSet
-    val grants = array(selected, "grants").map { grant =>
-      val owner = grant.hcursor.get[String]("componentId").toOption.get
-      val capabilities = array(grant, "capabilities").filterNot(removed)
-      val added = array(sbt, "grants").filter(_.hcursor.get[String]("componentId").contains(owner)).flatMap(array(_, "capabilities"))
-      grant.mapObject(_.add("capabilities", Json.fromValues((capabilities ++ added).distinct)))
-    }
-    val process = selected.mapObject(_.add("sbtPrograms", Json.fromValues(array(sbt, "sbtPrograms")))
-      .add("workspaces", Json.fromValues((array(selected, "workspaces") ++ array(sbt, "workspaces")).distinct))
-      .add("workspaceGrants", Json.fromValues((array(selected, "workspaceGrants") ++ array(sbt, "workspaceGrants")).distinct))
-      .add("grants", Json.fromValues(grants)))
-    Files.writeString(config, read(config).mapObject(_.add("textus.subsystem.process-execution.plan", process.noSpaces.asJson)).noSpaces)
+      .add("textus.assembly.descriptor", s.root.resolve(".textus/assembly.yaml").toString.asJson)).noSpaces)
   }
   private def result(outcome: String, issues: Option[V.GoalPhaseIssueReport] = None): V.GoalPhaseWorkResult =
     V.GoalPhaseWorkResult(outcome, "Specification-owned assigned work", Vector.empty, None, None, issues,
@@ -533,6 +502,35 @@ final class NativeWholePhaseStepEvidenceContinuationCliSpec extends AnyWordSpec 
     records.size shouldBe 1
     records.head
   }
+  private def validationReceipt(s: F.Scenario, car: Path, session: String, source: String,
+    key: String): Option[GoalPhaseNativeValidation.Saved] = {
+    val config = s.root.resolve(".textus/config.json")
+    val assembly = s.root.resolve(".textus/assembly.yaml")
+    val configBytes = Files.readAllBytes(config)
+    val assemblyBytes = Files.readAllBytes(assembly)
+    val parameters = read(config).asObject.get.toVector.map { (name, value) =>
+      name -> value.asString.getOrElse(value.noSpaces)
+    }.toMap
+    var observed = Option.empty[GoalPhaseNativeValidation.Saved]
+    try _with_runtime_(s.root, "Goal", Some(s.host), hostParameters = parameters,
+      nativeAcknowledgement = None, goalAcknowledgement = None, componentInstance = "default",
+      installedBootstrap = Some(InstalledBootstrapSelection(car))) { (_, _, _, prepare) =>
+      prepare(call => for {
+        catalog <- GoalPhaseRuntimeCatalog.loadC()
+        storage <- WorkflowComponentStorage.bindC(ComponentCreate(call.core.component.get.subsystem.get, ComponentOrigin.Builtin),
+          org.simplemodeling.textus.smworkflow.SmWorkflowComponent.componentId, _configuration_, Vector(catalog.definition),
+          _collection_("instances"), _collection_("continuations"))
+        reader <- storage.bindMechanicalC(GoalPhaseNativeRun.advanceOperation, GoalPhaseNativeValidation.codec)
+        saved <- reader.loadRetainedC(WorkflowMechanicalTransition.Reference(
+          session + ":ordered-validation:" + source + ":" + key, "1"))(using call.executionContext)
+        _ = observed = saved.map(value => GoalPhaseNativeValidation.Saved(value.receipt.next, value.receipt.payload.value))
+      } yield ())
+    } finally {
+      Files.write(config, configBytes)
+      Files.write(assembly, assemblyBytes)
+    }
+    observed
+  }
   private def interruptCheck(s: F.Scenario, session: String, old: Path): Unit = {
     val config = s.root.resolve(".textus/config.json")
     val assembly = s.root.resolve(".textus/assembly.yaml")
@@ -541,19 +539,22 @@ final class NativeWholePhaseStepEvidenceContinuationCliSpec extends AnyWordSpec 
     val parameters = read(config).asObject.get.toVector.map { (key, value) =>
       key -> value.asString.getOrElse(value.noSpaces)
     }.toMap
-    var observed = false
-    val acknowledge: String => Consequence[Unit] = point =>
+    var observed = Vector.empty[String]
+    val acknowledge: String => Consequence[Unit] = point => {
+      observed :+= point
       if (point == "goal-check-prepared:test") {
-        observed = true
         Consequence.stateConflict("Specification interruption after durable check intent")
       } else Consequence.unit
+    }
     try _with_runtime_(s.root, "Goal", Some(s.host), hostParameters = parameters,
       nativeAcknowledgement = None, goalAcknowledgement = Some(acknowledge), componentInstance = "default",
       installedBootstrap = Some(InstalledBootstrapSelection(old))) { (owner, component, actor, _) =>
-      owner.executeOperationResponseInContext(Request.of(component = component.name, service = "GoalPhaseService",
+      val response = owner.executeOperationResponseInContext(Request.of(component = component.name, service = "GoalPhaseService",
         operation = "advanceGoalPhase", properties = NativeWorkflowOperationInputFixture.advance(session)), actor)
-        .isSuccess shouldBe false
-      observed shouldBe true
+      withClue(s"embedded advance response: $response; acknowledgement points: $observed: ") {
+        response.isSuccess shouldBe false
+        observed should contain("goal-check-prepared:test")
+      }
     } finally {
       Files.write(config, configBytes)
       Files.write(assembly, assemblyBytes)
@@ -595,6 +596,14 @@ final class NativeWholePhaseStepEvidenceContinuationCliSpec extends AnyWordSpec 
       val described = goal(GoalPhaseValidationRecovery.describeOperation, Vector("--sessionId", session))
       val description = described.business[V.GoalPhaseValidationRecoveryDescriptionResult]
       val target = take(GoalPhaseValidationRecovery.targetC(description.target))
+      description.message should include("the old selected check outcome remains unknown")
+      target.knownFailedPhase shouldBe None
+      target.terminatedTimeoutPhase shouldBe None
+      val intent = validationReceipt(s, required("smworkflow.spec.wholeEvidenceOldCar"), session,
+        target.sourceRevision, "check-intent-0").get
+      intent.record.revision.value.toString shouldBe target.intentRevision
+      validationReceipt(s, required("smworkflow.spec.wholeEvidenceOldCar"), session,
+        target.sourceRevision, "check-result-0") shouldBe None
       val answer = V.GoalPhaseValidationRecoveryAnswer("AuthorizeNewAttempt",
         "Specification-owned direction after the interrupted invocation returned")
       val ref = V.WorkflowArtifactReference("whole-validation-recovery", "1")
@@ -619,7 +628,6 @@ final class NativeWholePhaseStepEvidenceContinuationCliSpec extends AnyWordSpec 
       val successor = required("smworkflow.spec.wholeEvidenceNewCar")
       old should not be successor
       val s = F.fresh("whole-evidence-old-new", sbtRepair = Some(TypedSbtHostPlanFixture.normalExecutable), repairContinuation = true)
-      setup(s)
       select(s, old)
       val cli = new Client(s, executable)
       val start = cli.goal("startGoalPhase", Vector("--input", s.input.noSpaces)).business[V.GoalPhaseStartResult]
@@ -630,7 +638,17 @@ final class NativeWholePhaseStepEvidenceContinuationCliSpec extends AnyWordSpec 
       cli.submit(implementation, result("completed"), "whole-old-implementation")
       val repair = cli.advance(session).business[V.GoalPhaseAdvanceResult]
       repair.work.get.kind shouldBe "RepairStep"
-      repair.work.get.checkFailure.get.validation.checks.head.exitCode.get should not be 0
+      val failedValidation = repair.work.get.checkFailure.get.validation
+      val failedCheck = failedValidation.checks.head
+      failedCheck.termination shouldBe "exited"
+      failedCheck.exitCode.get should not be 0
+      val failedIndex = failedValidation.selectedChecks.indexWhere(_.identity == failedCheck.identity)
+      failedIndex shouldBe 0
+      val failedReceipt = validationReceipt(s, old, session, failedValidation.sourceRevision,
+        "check-result-" + failedIndex).get
+      failedReceipt.payload.receipts.head.identity shouldBe failedCheck.identity
+      failedReceipt.payload.receipts.head.termination shouldBe "exited"
+      failedReceipt.payload.receipts.head.exitCode shouldBe failedCheck.exitCode
       val oldChecks = checks(s)
       oldChecks should not be empty
       val issues = repair.work.get.issues.get.issues.filter(_.status != "RESOLVED")
@@ -671,6 +689,7 @@ final class NativeWholePhaseStepEvidenceContinuationCliSpec extends AnyWordSpec 
       cli.authority(secondWait, "whole-second-authority")
       val refused = cli.advance(session)
       refused.exitCode should not be 0
+      Files.readString(refused.invocation.stderr) should include("status=409")
       (Files.readString(refused.invocation.stdout) + Files.readString(refused.invocation.stderr)) should include(
         "whole-Phase retained Step evidence differs from actual successful replay")
       val committed = s.candidateHead
@@ -685,9 +704,18 @@ final class NativeWholePhaseStepEvidenceContinuationCliSpec extends AnyWordSpec 
         raw.contains(session + ":ordered-candidate:"))
       oldReceipts should not be empty
       oldRecord.history.count(_.causation.value == "ordered-step-closure:committed") shouldBe 2
+      oldRecord.currentProgression shouldBe Some(ProgressionReference("phase.PhaseValidation"))
+      oldRecord.causation.value shouldBe "ordered-candidate:candidate"
       select(s, successor)
       val described = cli.goal(W.describeOperation, Vector("--sessionId", session))
-      described.exitCode shouldBe 0
+      described.exitCode should not be 0
+      (Files.readString(described.invocation.stdout) + Files.readString(described.invocation.stderr)) should include(
+        "whole-Phase recovery requires the original paused all-closed whole-Phase inspection frontier")
+      retained(s) shouldBe oldRows
+      take(WorkflowInstanceRecordJsonV1.encodeC(current(retained(s), session))) shouldBe
+        take(WorkflowInstanceRecordJsonV1.encodeC(oldRecord))
+      checks(s) shouldBe beforeChecks
+      s.candidateHead shouldBe committed
       val continued = cli.advance(session).business[V.GoalPhaseAdvanceResult]
       continued.sessionId shouldBe session
       continued.work.get.kind shouldBe "ReviewPhase"
@@ -701,6 +729,12 @@ final class NativeWholePhaseStepEvidenceContinuationCliSpec extends AnyWordSpec 
       val newRows = retained(s)
       oldReceipts.foreach(raw => newRows should contain(raw))
       unknownRows.foreach(raw => newRows should contain(raw))
+      val successorFailedReceipt = validationReceipt(s, successor, session, failedValidation.sourceRevision,
+        "check-result-" + failedIndex)
+      successorFailedReceipt.map(saved => (take(WorkflowInstanceRecordJsonV1.encodeC(saved.record)),
+        GoalPhaseNativeValidation.codec.encode(saved.payload))) shouldBe Some((
+        take(WorkflowInstanceRecordJsonV1.encodeC(failedReceipt.record)),
+        GoalPhaseNativeValidation.codec.encode(failedReceipt.payload)))
       current(newRows, session).history.take(unknownRecord.history.size) shouldBe unknownRecord.history
       current(newRows, session).history.take(oldRecord.history.size) shouldBe oldRecord.history
       val operations = s.invocations.map(_.argv).filter(_.headOption.contains(executable.toString))
