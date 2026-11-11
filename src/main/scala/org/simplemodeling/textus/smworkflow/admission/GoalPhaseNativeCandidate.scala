@@ -847,8 +847,14 @@ private[smworkflow] object GoalPhaseNativeCandidate {
           val actual = completedCandidates(index)
           val closed = controller.completed(index)
           value.step == closed.step && value.commit == closed.commit && value.partialCompletion == closed.partialCompletion &&
-            value.qualifiedCheckpoint == closed.qualifiedCheckpoint && O.acceptedPredecessorValid(closed,
-              if (index == 0) controller.base else O.Snapshot(controller.completed(index - 1).commit.identity, controller.completed(index - 1).commit.tree)) && actual.step == closed.step &&
+            value.qualifiedCheckpoint == closed.qualifiedCheckpoint && {
+              val predecessor = if (index == 0) controller.base else
+                O.Snapshot(controller.completed(index - 1).commit.identity, controller.completed(index - 1).commit.tree)
+              O.acceptedPredecessorValid(closed, predecessor) ||
+                (O.validStepAcceptance(closed) && closed.partialCompletion.isEmpty && closed.qualifiedCheckpoint.isEmpty &&
+                  actual.continuation.exists(proof => O.continuationValid(predecessor, proof) &&
+                    actual.candidate.exists(_.head == proof.parent.head) && closed.commit.parent == proof.parent.head))
+            } && actual.step == closed.step &&
             actual.candidate.contains(value.candidate) && workPaths(actual) == value.changedPaths && workDiff(actual).contains(value.diff) &&
             B.pathsOwned(value.eofCorrections, controller.plan.steps(index).ownedPaths) &&
             (value.eofCorrections.isEmpty == (value.candidate.tree == closed.commit.tree))

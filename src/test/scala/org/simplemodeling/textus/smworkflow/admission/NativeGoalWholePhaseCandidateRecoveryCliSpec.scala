@@ -8,6 +8,7 @@ import java.sql.DriverManager
 import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters.*
 import org.goldenport.Consequence
+import org.goldenport.protocol.Request
 import org.goldenport.cncf.component.{ComponentCreate, ComponentOrigin}
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
@@ -431,6 +432,280 @@ final class NativeGoalWholePhaseCandidateRecoveryCliSpec extends AnyWordSpec wit
       phaseExecutions(root) shouldBe executions
       compileExecutions(root) shouldBe retainedcompiles
       Files.writeString(config, configtext)
+    }
+  }
+}
+
+/** Installed old-to-new qualification. All input and effects belong to a new test host. */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class NativeWholePhaseStepEvidenceContinuationCliSpec extends AnyWordSpec with GivenWhenThen
+    with org.scalatest.matchers.should.Matchers with ThreeWorkflowManagedRepositoryFixture {
+  import NativeWorkflowCliFixture as F
+  import java.time.Instant
+  import java.nio.file.StandardOpenOption
+  import org.goldenport.cncf.processexecution.SbtOperation
+  import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
+
+  override protected def goal_selected_paths(goal: ThreeWorkflowRuntimeParameters.Goal): Vector[Vector[String]] =
+    if (goal.candidatePaths == Vector("value.txt", "docs/phase.md") &&
+        goal.closure.programs.map(_.step) == Vector("step-1", "step-2"))
+      Vector(goal.candidatePaths, Vector("docs/phase.md"))
+    else super.goal_selected_paths(goal)
+
+  private def required(name: String): Path = {
+    val p = Path.of(sys.props.getOrElse(name, throw new IllegalArgumentException("Missing " + name)))
+    require(p.isAbsolute && p.normalize == p && Files.isRegularFile(p), name + " must select an existing absolute file")
+    p.toRealPath()
+  }
+  private def json(value: RecordPresentable): String = take(value.toRecord().toJsonStringC)
+  private def read(path: Path): Json = parse(Files.readString(path)).toOption.get
+  private def save(s: F.Scenario, name: String, value: RecordPresentable): String = {
+    val path = s.root.resolve(name + ".json")
+    Files.writeString(path, json(value), StandardOpenOption.CREATE_NEW)
+    path.toUri.toASCIIString
+  }
+  private def select(s: F.Scenario, car: Path): Unit = {
+    val config = s.root.resolve(".textus/config.json")
+    Files.writeString(config, read(config).mapObject(_.add("textus.component.file", car.toString.asJson)
+      .add("textus.assembly.descriptor", s.root.resolve(".textus/assembly.yaml").toString.asJson)
+      .remove("sm-workflow.runtime.definition")).noSpaces)
+  }
+  private def setup(s: F.Scenario): Unit = {
+    val assembly = s.root.resolve(".textus/assembly.yaml")
+    Files.writeString(assembly, Files.readString(assembly).replace("version: 0.1.1-SNAPSHOT", "version: 0.1.1"))
+    val config = s.root.resolve(".textus/config.json")
+    val descriptor = take(GenericSubsystemDescriptor.loadComponentArchive(Path.of("src/main/car").toAbsolutePath))
+    val template = parse(descriptor.config("textus.subsystem.process-execution.plan")).toOption.get
+    val substitutions = Map("repository.root" -> s.root.resolve("repository").toString, "git.branch" -> "main",
+      "git.remote" -> "origin", "git.remote-branch" -> "main", "git.endpoint" -> s.root.resolve("upstream.git").toString,
+      "git.user-name" -> "Fixture", "git.user-email" -> "fixture@example.invalid", "environment.path" -> "/usr/bin:/bin",
+      "environment.java-home" -> "", "environment.ssh-auth-sock" -> "")
+    def expand(value: Json): Json = value.mapString(text => substitutions.foldLeft(text) { case (a, (k, v)) =>
+      a.replace("${" + k + "}", v) }).mapArray(_.map(expand)).mapObject(_.mapValues(expand))
+    def array(value: Json, key: String): Vector[Json] = value.hcursor.get[Vector[Json]](key).toOption.get
+    val selected = expand(template)
+    val sbt = TypedSbtHostPlanFixture.plan(s.root, TypedSbtHostPlanFixture.normalExecutable, Vector(1), operation = SbtOperation.Test)
+    val removed = array(selected, "sbtPrograms").map(_.hcursor.get[Json]("capability").toOption.get).toSet
+    val grants = array(selected, "grants").map { grant =>
+      val owner = grant.hcursor.get[String]("componentId").toOption.get
+      val capabilities = array(grant, "capabilities").filterNot(removed)
+      val added = array(sbt, "grants").filter(_.hcursor.get[String]("componentId").contains(owner)).flatMap(array(_, "capabilities"))
+      grant.mapObject(_.add("capabilities", Json.fromValues((capabilities ++ added).distinct)))
+    }
+    val process = selected.mapObject(_.add("sbtPrograms", Json.fromValues(array(sbt, "sbtPrograms")))
+      .add("workspaces", Json.fromValues((array(selected, "workspaces") ++ array(sbt, "workspaces")).distinct))
+      .add("workspaceGrants", Json.fromValues((array(selected, "workspaceGrants") ++ array(sbt, "workspaceGrants")).distinct))
+      .add("grants", Json.fromValues(grants)))
+    Files.writeString(config, read(config).mapObject(_.add("textus.subsystem.process-execution.plan", process.noSpaces.asJson)).noSpaces)
+  }
+  private def result(outcome: String, issues: Option[V.GoalPhaseIssueReport] = None): V.GoalPhaseWorkResult =
+    V.GoalPhaseWorkResult(outcome, "Specification-owned assigned work", Vector.empty, None, None, issues,
+      None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
+  private def checks(s: F.Scenario): Vector[String] = {
+    val marker = s.root.resolve("sbt-executions.txt")
+    if (Files.exists(marker)) Files.readString(marker).linesIterator.toVector else Vector.empty
+  }
+  private def retained(s: F.Scenario): Vector[String] = {
+    val connection = DriverManager.getConnection("jdbc:sqlite:" + s.root.resolve("workflow.sqlite").toUri.toASCIIString + "?mode=ro")
+    try {
+      val statement = connection.createStatement()
+      try {
+        val tables = statement.executeQuery("SELECT name FROM sqlite_master WHERE type='table'")
+        val names = Vector.newBuilder[String]
+        try { while (tables.next()) names += tables.getString(1) } finally tables.close()
+        names.result().flatMap { name =>
+          val rows = statement.executeQuery("SELECT * FROM \"" + name.replace("\"", "\"\"") + "\"")
+          val values = Vector.newBuilder[String]
+          try { while (rows.next()) (1 to rows.getMetaData.getColumnCount).foreach { column =>
+            Option(rows.getString(column)).filter(_.startsWith("cncf.workflow-json.v1:"))
+              .foreach(raw => values += raw.stripPrefix("cncf.workflow-json.v1:"))
+          } } finally rows.close()
+          values.result()
+        }
+      } finally statement.close()
+    } finally connection.close()
+  }
+  private def current(rows: Vector[String], session: String): InstanceRecord = {
+    val catalog = take(WorkflowInstanceRecordJsonV1.catalogC(Vector(take(GoalPhaseRuntimeCatalog.loadC()).definition)))
+    val records = rows.flatMap(raw => WorkflowInstanceRecordJsonV1.decodeC(raw, catalog).toOption)
+      .filter(_.identity.value == session)
+    records.size shouldBe 1
+    records.head
+  }
+  private def interruptCheck(s: F.Scenario, session: String, old: Path): Unit = {
+    val config = s.root.resolve(".textus/config.json")
+    val assembly = s.root.resolve(".textus/assembly.yaml")
+    val configBytes = Files.readAllBytes(config)
+    val assemblyBytes = Files.readAllBytes(assembly)
+    val parameters = read(config).asObject.get.toVector.map { (key, value) =>
+      key -> value.asString.getOrElse(value.noSpaces)
+    }.toMap
+    var observed = false
+    val acknowledge: String => Consequence[Unit] = point =>
+      if (point == "goal-check-prepared:test") {
+        observed = true
+        Consequence.stateConflict("Specification interruption after durable check intent")
+      } else Consequence.unit
+    try _with_runtime_(s.root, "Goal", Some(s.host), hostParameters = parameters,
+      nativeAcknowledgement = None, goalAcknowledgement = Some(acknowledge), componentInstance = "default",
+      installedBootstrap = Some(InstalledBootstrapSelection(old))) { (owner, component, actor, _) =>
+      owner.executeOperationResponseInContext(Request.of(component = component.name, service = "GoalPhaseService",
+        operation = "advanceGoalPhase", properties = NativeWorkflowOperationInputFixture.advance(session)), actor)
+        .isSuccess shouldBe false
+      observed shouldBe true
+    } finally {
+      Files.write(config, configBytes)
+      Files.write(assembly, assemblyBytes)
+    }
+  }
+  private final class Client(s: F.Scenario, executable: Path) {
+    def call(service: String, operation: String, args: Vector[String]): F.Result =
+      s.callInstalled(executable, service, operation, args)
+    def goal(operation: String, args: Vector[String]): F.Result = call("GoalPhaseService", operation, args)
+    def advance(session: String): F.Result = goal("advanceGoalPhase", Vector("--sessionId", session))
+    def submit(work: V.GoalPhaseAdvanceResult, r: V.GoalPhaseWorkResult, name: String,
+      execution: Option[V.WorkflowExecutionEvidence] = None): Unit = {
+      val args = Vector("--sessionId", work.submitSessionId.get, "--result", json(r), "--resultReference",
+        json(V.WorkflowArtifactReference(name, "1"))) ++ execution.toVector.flatMap(e => Vector("--executionEvidence", json(e)))
+      goal(work.submitOperation.get, args).business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+    }
+    def prepare(op: String, value: RecordPresentable): Unit = {
+      val prepared = call("NativeWorkflowPreparationService", op, Vector("--input", json(value)))
+      prepared.exitCode shouldBe 0
+      s.selectPreparedImport(prepared)
+    }
+    def review(callResult: F.Result, name: String): Unit = {
+      val work = callResult.business[V.GoalPhaseAdvanceResult]
+      val unresolved = work.work.get.issues.toVector.flatMap(_.issues).filter(_.status != "RESOLVED")
+      val issues = Option.when(unresolved.nonEmpty)(V.GoalPhaseIssueReport(unresolved.map(i =>
+        V.GoalPhaseIssueDisposition(i.identity, "RESOLVED", "Specification review confirms the correction", None))))
+      val r = result("accept", issues)
+      val ref = V.WorkflowArtifactReference(name, "1")
+      val evidence = V.WorkflowExecutionEvidence(Vector(ref), Some("specification-independent-reviewer"), None, None)
+      prepare("prepareEvidence", V.WorkflowEvidencePreparationInput("GoalPhase", "review", callResult.invocation.stdout.toUri.toASCIIString,
+        save(s, name + "-result", r), save(s, name + "-reference", ref), save(s, name + "-execution", evidence),
+        "normal-development-host", Instant.now().toString, "entity:smworkflow.cli.host_evidence", None))
+      submit(work, r, name, Some(evidence))
+    }
+    def authority(waiting: F.Result, name: String): Unit = prepare("prepareAuthority", V.WorkflowAuthorityPreparationInput(
+      waiting.invocation.stdout.toUri.toASCIIString, save(s, name, V.WorkflowArtifactReference(name, "1")),
+      "participant", "normal-development-host", Instant.now().toString, "entity:smworkflow.cli.host_evidence"))
+    def authorizeValidation(session: String): GoalPhaseValidationRecovery.RecoveryTarget = {
+      val described = goal(GoalPhaseValidationRecovery.describeOperation, Vector("--sessionId", session))
+      val description = described.business[V.GoalPhaseValidationRecoveryDescriptionResult]
+      val target = take(GoalPhaseValidationRecovery.targetC(description.target))
+      val answer = V.GoalPhaseValidationRecoveryAnswer("AuthorizeNewAttempt",
+        "Specification-owned direction after the interrupted invocation returned")
+      val ref = V.WorkflowArtifactReference("whole-validation-recovery", "1")
+      val execution = V.WorkflowExecutionEvidence(Vector(ref), Some("participant"), None, None)
+      prepare("prepareEvidence", V.WorkflowEvidencePreparationInput("GoalPhase", "validation-recovery",
+        described.invocation.stdout.toUri.toASCIIString, save(s, "whole-validation-answer", answer),
+        save(s, "whole-validation-reference", ref), save(s, "whole-validation-execution", execution),
+        "normal-development-host", Instant.now().toString, "entity:smworkflow.cli.host_evidence", Some("participant")))
+      val input = V.GoalPhaseValidationRecoveryInput(session, description.target, answer.choice, answer.rationale, ref)
+      val recovered = goal(GoalPhaseValidationRecovery.recoveryOperation, Vector("--input", json(input)))
+        .business[V.GoalPhaseValidationRecoveryResult]
+      recovered.accepted shouldBe true
+      recovered.outcome shouldBe "new-attempt-authorized"
+      target
+    }
+  }
+
+  "Installed whole-Phase retained Step continuation" should {
+    "continue the same isolated old-control Session after an ordinary checkpoint-parent refusal" in {
+      val executable = required("smworkflow.spec.installedCommand")
+      val old = required("smworkflow.spec.wholeEvidenceOldCar")
+      val successor = required("smworkflow.spec.wholeEvidenceNewCar")
+      old should not be successor
+      val s = F.fresh("whole-evidence-old-new", sbtRepair = Some(TypedSbtHostPlanFixture.normalExecutable), repairContinuation = true)
+      setup(s)
+      select(s, old)
+      val cli = new Client(s, executable)
+      val start = cli.goal("startGoalPhase", Vector("--input", s.input.noSpaces)).business[V.GoalPhaseStartResult]
+      val session = start.sessionId
+      val implementation = cli.advance(session).business[V.GoalPhaseAdvanceResult]
+      val value = Path.of(s.host.target.root).resolve("value.txt")
+      Files.writeString(value, "incorrect\n")
+      cli.submit(implementation, result("completed"), "whole-old-implementation")
+      val repair = cli.advance(session).business[V.GoalPhaseAdvanceResult]
+      repair.work.get.kind shouldBe "RepairStep"
+      repair.work.get.checkFailure.get.validation.checks.head.exitCode.get should not be 0
+      val oldChecks = checks(s)
+      oldChecks should not be empty
+      val issues = repair.work.get.issues.get.issues.filter(_.status != "RESOLVED")
+      issues should not be empty
+      Files.writeString(value, "expected\n")
+      val fixed = V.GoalPhaseIssueReport(issues.map(i => V.GoalPhaseIssueDisposition(i.identity, "FIXED", "Corrected input", None)))
+      cli.submit(repair, result("completed", Some(fixed)), "whole-old-repair")
+      Files.writeString(value, "checkpoint-incomplete\n")
+      val checkpoint = s.commitUnfinishedRepairCheckpoint()
+      Files.writeString(value, "expected\n")
+      interruptCheck(s, session, old)
+      val unknownRecord = current(retained(s), session)
+      unknownRecord.causation.value shouldBe "ordered-validation:check-intent-0"
+      checks(s) shouldBe oldChecks
+      val unknown = cli.authorizeValidation(session)
+      unknown.sessionId shouldBe session
+      unknown.checkIdentity shouldBe "test"
+      unknown.intentRevision shouldBe unknownRecord.revision.value.toString
+      val unknownRows = retained(s).filter(_.contains(session + ":ordered-validation:" + unknown.sourceRevision + ":check-intent-0"))
+      unknownRows.size shouldBe 1
+      checks(s) shouldBe oldChecks
+      val firstReview = cli.advance(session)
+      firstReview.business[V.GoalPhaseAdvanceResult].work.get.kind shouldBe "ReviewStep"
+      cli.review(firstReview, "whole-first-review")
+      val firstWait = cli.advance(session)
+      cli.authority(firstWait, "whole-first-authority")
+      val second = cli.advance(session).business[V.GoalPhaseAdvanceResult]
+      second.work.get.kind shouldBe "ImplementStep"
+      val prefix = second.work.get.completed
+      prefix.size shouldBe 1
+      prefix.head.commit.parent shouldBe checkpoint
+      Files.writeString(Path.of(s.host.target.root).resolve("docs/phase.md"), "Specification-owned second Step\n")
+      cli.submit(second, result("completed"), "whole-second-implementation")
+      val secondReview = cli.advance(session)
+      secondReview.business[V.GoalPhaseAdvanceResult].work.get.kind shouldBe "ReviewStep"
+      cli.review(secondReview, "whole-second-review")
+      val secondWait = cli.advance(session)
+      cli.authority(secondWait, "whole-second-authority")
+      val refused = cli.advance(session)
+      refused.exitCode should not be 0
+      (Files.readString(refused.invocation.stdout) + Files.readString(refused.invocation.stderr)) should include(
+        "whole-Phase retained Step evidence differs from actual successful replay")
+      val committed = s.candidateHead
+      val beforeChecks = checks(s)
+      beforeChecks.take(oldChecks.size) shouldBe oldChecks
+      val oldDescription = cli.goal(W.describeOperation, Vector("--sessionId", session))
+      oldDescription.exitCode should not be 0
+      checks(s) shouldBe beforeChecks
+      val oldRows = retained(s)
+      val oldRecord = current(oldRows, session)
+      val oldReceipts = oldRows.filter(raw => raw.contains(session + ":ordered-validation:") ||
+        raw.contains(session + ":ordered-candidate:"))
+      oldReceipts should not be empty
+      oldRecord.history.count(_.causation.value == "ordered-step-closure:committed") shouldBe 2
+      select(s, successor)
+      val described = cli.goal(W.describeOperation, Vector("--sessionId", session))
+      described.exitCode shouldBe 0
+      val continued = cli.advance(session).business[V.GoalPhaseAdvanceResult]
+      continued.sessionId shouldBe session
+      continued.work.get.kind shouldBe "ReviewPhase"
+      continued.work.get.completed.take(prefix.size) shouldBe prefix
+      continued.work.get.completed.last.commit.identity shouldBe committed
+      continued.repairProgress.get.automaticCount shouldBe second.repairProgress.get.automaticCount
+      continued.repairProgress.get.ordinaryCount shouldBe second.repairProgress.get.ordinaryCount
+      checks(s).take(beforeChecks.size) shouldBe beforeChecks
+      checks(s).size shouldBe beforeChecks.size + 1
+      s.candidateHead shouldBe committed
+      val newRows = retained(s)
+      oldReceipts.foreach(raw => newRows should contain(raw))
+      unknownRows.foreach(raw => newRows should contain(raw))
+      current(newRows, session).history.take(unknownRecord.history.size) shouldBe unknownRecord.history
+      current(newRows, session).history.take(oldRecord.history.size) shouldBe oldRecord.history
+      val operations = s.invocations.map(_.argv).filter(_.headOption.contains(executable.toString))
+      operations.count(_.exists(_.endsWith(".startGoalPhase"))) shouldBe 1
+      operations.count(_.exists(_.endsWith(".submitGoalPhaseWorkResult"))) shouldBe 5
     }
   }
 }

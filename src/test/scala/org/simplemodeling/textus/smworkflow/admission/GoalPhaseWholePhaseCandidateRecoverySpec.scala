@@ -62,6 +62,48 @@ final class GoalPhaseWholePhaseCandidateRecoverySpec extends AnyWordSpec with Na
       W.Policy(GoalPhaseNativeValidation.Policy("phase-test", 1, Vector(GoalPhaseNativeValidation.Check("test", 2))),
         1048576L, Json.obj("sbtPrograms" -> Json.arr(Json.obj("fixture" -> Json.fromString("opaque-host-definition"))))))
   }
+  "Whole-Phase retained ordinary continuation evidence" should {
+    "bind a committed candidate to its actual accepted predecessor through the retained checkpoint proof" in {
+      Given("an ordinary Step whose candidate is based on a checkpoint after the accepted tip")
+      val checkpoint = O.Snapshot("e" * 40, "f" * 40)
+      val proof = O.CandidateContinuation(checkpoint, Vector(
+        O.HistoryCommit(checkpoint.head, checkpoint.tree, Vector(_base.head)),
+        O.HistoryCommit(_base.head, _base.tree, Vector.empty)))
+      val candidate = O.Snapshot(checkpoint.head, "c" * 40)
+      val commit = O.Commit("d" * 40, checkpoint.head, candidate.tree)
+      val initial = take(O.startC(_closed.plan, _base))
+      val ready = take(initial.acceptC(O.SemanticCompleted(initial.next.asInstanceOf[O.Semantic].key, "Completed")))
+      val observed = take(ready.acceptC(O.CandidateContinuationObserved(candidate, proof)))
+      val checked = take(observed.acceptC(O.ChecksObserved(candidate, Vector("compile"), "compile-receipt", true)))
+      val reviewed = take(checked.acceptC(O.ReviewAdmitted(checked.next.asInstanceOf[O.Semantic].key,
+        candidate, "compile-receipt", "independent-step-review", O.ReviewOutcome.Accept)))
+      val prepared = take(reviewed.acceptC(O.ClosureIntentSaved(candidate, "closure")))
+      val closed = take(prepared.acceptC(O.StepCommitObserved("closure", commit)))
+      val actual = C.Payload("10", "step-1", Vector("value.txt"), Vector("value.txt"), Some(candidate),
+        Vector("value.txt"), Some("actual diff"), continuation = Some(proof))
+      val evidence = C.StepEvidence("step-1", candidate, Vector("value.txt"), "actual diff", commit, Vector.empty)
+      val whole = C.Payload("20", "phase:" + closed.plan.phase, Vector.empty, Vector.empty, Some(O.Snapshot(commit.identity, commit.tree)),
+        Vector("value.txt"), Some("actual diff"), stepEvidence = Some(Vector(evidence)))
+      When("the successful replay is compared with its complete retained candidate and Step evidence")
+      val admitted = C.retainedEvidenceC(whole, closed, Vector(actual), Vector.empty)
+      Then("the retained continuation establishes the real predecessor without changing the commit")
+      admitted.isSuccess shouldBe true
+      O.acceptedPredecessorValid(closed.completed.head, _base) shouldBe false
+      val badproof = proof.copy(lineage = proof.lineage.updated(1, proof.lineage.last.copy(tree = "1" * 40)))
+      val crossed = Vector(
+        (whole, Vector.empty[C.Payload]),
+        (whole, Vector(actual.copy(continuation = None))),
+        (whole, Vector(actual.copy(continuation = Some(badproof)))),
+        (whole, Vector(actual.copy(candidate = Some(candidate.copy(head = _base.head))))),
+        (whole.copy(stepEvidence = Some(Vector(evidence.copy(commit = commit.copy(parent = _base.head))))), Vector(actual)),
+        (whole.copy(stepEvidence = Some(Vector(evidence.copy(changedPaths = Vector("foreign.txt"))))), Vector(actual)),
+        (whole.copy(stepEvidence = Some(Vector(evidence.copy(diff = "crossed")))), Vector(actual)),
+        (whole.copy(stepEvidence = Some(Vector(evidence.copy(eofCorrections = Vector("value.txt"))))), Vector(actual)))
+      crossed.foreach { case (p, candidates) => C.retainedEvidenceC(p, closed, candidates, Vector.empty).isSuccess shouldBe false }
+      C.retainedEvidenceC(whole.copy(changedPaths = Vector("value.txt", "foreign.txt")), closed,
+        Vector(actual), Vector.empty).isSuccess shouldBe false
+    }
+  }
   "Qualified checkpoint recovery prefix" should {
     "retain an otherwise-valid whole-Phase UNKNOWN target with exact committed work and real checkpoint ancestry" in {
       Given("CB-P611-A-01: specification-owned completed Step work spanning two linear checkpoints")
