@@ -951,8 +951,11 @@ policy change replaces that value on the added programs with the adopted root;
 an already correct value stays unchanged. The key is derived, never named by
 application convention. The actual previous root comes from the canonical
 origin's previous/original Direction, or its predecessor binding when neither
-Direction exists. An unavailable or identical previous root cannot establish
-this selector relation.
+Direction exists. An unavailable previous root cannot establish this selector
+relation. When the previous and adopted roots are identical, all selected base
+and added programs must already select that exact root under the unique key;
+the compatible policy remains unchanged. This case grants no source relocation,
+program or environment change.
 
 Each added route uses the existing default primary ordinal workspace and an
 exact captured program with its original primary workspace root, manage grant
@@ -1002,6 +1005,16 @@ attempt, receipt reconciliation, typed SBT/UoW ownership and all source and
 candidate checks remain unchanged. Successful checks are never replayed to
 create replacement receipts. Actual installed same-Session qualification
 remains pending until the parent records its normal runtime results.
+
+The explicit-only `NativeSameRootCanonicalPhaseCheckContinuationCliSpec`
+authors a fresh test-owned old-to-new Session scenario for this case. Select an
+installed wrapper with `smworkflow.spec.installedCommand`, the old and new CARs
+with `smworkflow.spec.sameRootPhaseOldCar` and `smworkflow.spec.sameRootPhaseNewCar`,
+and a new absolute locator with `smworkflow.spec.sameRootPhaseLocator`. The
+scenario asserts the old missing-extension refusal and old same-root guard
+refusal, then uses the successor for ordinary Phase validation and ReviewPhase.
+The specification itself does not establish installed qualification or any
+real consumer completion.
 
 # Canonical source and dependency publication routing
 
