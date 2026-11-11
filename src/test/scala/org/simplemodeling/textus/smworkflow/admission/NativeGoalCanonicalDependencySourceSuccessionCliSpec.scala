@@ -271,7 +271,7 @@ final class NativeSameRootCanonicalPhaseCheckContinuationCliSpec extends AnyWord
         GoalPhaseNativeClosure.StepProgram("step-2", 2)))))
     val plan = O.Plan("step-report-source-plan", "1", host.goal.input.phaseIdentity, host.goal.input.repositoryIdentity,
       Vector(O.Step("step-1", "Qualify the canonical source prefix", Vector("value.txt"), Vector.empty, _checks.take(2).map(_.identity)),
-        O.Step("step-2", "Supply both fixed selected suites", Vector("docs/phase.md", "src/test"), Vector.empty, _checks.drop(2).map(_.identity))),
+        O.Step("step-2", "Supply the second suite", Vector("docs/phase.md", "src/test"), Vector.empty, _checks.take(2).map(_.identity))),
       Vector(_phase.identity), repairLimit = 10)
     val check = repository.resolve("src/test/scala/fixture/OneSpec.scala")
     Files.createDirectories(check.getParent)
@@ -370,7 +370,7 @@ final class NativeSameRootCanonicalPhaseCheckContinuationCliSpec extends AnyWord
     val observed = _native(scenario)(RepositorySyncManagedGitObservation.observeInWorkspaceC(_, provisional.dependency.workspace))
     val binding = provisional.copy(base = O.Snapshot(observed.head, observed.tree))
     val base = R.Consumption(binding.requester.workspace, binding.root, Vector.empty,
-      binding.paths.map(R.ExpectedMode(_, "100644")), _checks.map(_route) ++ binding.checks.map(check =>
+      binding.paths.map(R.ExpectedMode(_, "100644")), _checks.take(2).map(_route) ++ binding.checks.map(check =>
         R.CheckProgram(check.identity, binding.dependency.workspace, check.kind.wire, binding.dependency.workspace + "-" + check.kind.wire)))
     _select_source(scenario, binding, base)
     val publicationtarget = LocalPublication.Target("report-canonical-producer", binding.dependency.identity, binding.dependency.workspace)
