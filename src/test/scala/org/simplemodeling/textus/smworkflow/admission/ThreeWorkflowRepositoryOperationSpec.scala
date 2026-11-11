@@ -43,7 +43,7 @@ import SplitPhaseTypedStartFixture as StorageFixture
   * Optional completion timing observations delegate the actual product action.
   * @since   Oct.  7, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  3, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers {
@@ -53,7 +53,17 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
   protected val _configuration_ = StorageFixture.configuration
   private val _environment_ = Map("PATH" -> "/usr/bin:/bin", "GIT_TERMINAL_PROMPT" -> "0",
     "GIT_CONFIG_NOSYSTEM" -> "1", "GIT_CONFIG_GLOBAL" -> "/dev/null", "LC_ALL" -> "C")
+  private val _legacy_details = new scala.util.DynamicVariable[Option[Record => Record]](None)
+  /** Existing executable consumers explicitly retrieve selected full details.
+    * New control/size specifications use read_control_value to inspect the raw
+    * public response and never receive an implicit expanded body.
+    */
   protected def read_value[A: org.goldenport.convert.ValueReader](value: OperationResponse): A = value match {
+    case OperationResponse.RecordResponse(record) => take(summon[org.goldenport.convert.ValueReader[A]].readC(
+      _legacy_details.value.fold(record)(_(record))))
+    case other => fail(s"Expected declared public business value: $other")
+  }
+  protected def read_control_value[A: org.goldenport.convert.ValueReader](value: OperationResponse): A = value match {
     case OperationResponse.RecordResponse(record) => take(summon[org.goldenport.convert.ValueReader[A]].readC(record))
     case other => fail(s"Expected declared public business value: $other")
   }
@@ -489,7 +499,43 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
           service = "SpecificationSetup", operation = "prepareInput"), actor))
       }
       component.mcpReadyOperations shouldBe ThreeWorkflowLauncherAssembly.publishedMcpOperations
-      task(owner, component, actor, _prepare_)
+      def fullDetail(record: Record): Record = {
+        val work = record.getRecord("retainedWork") match {
+          case Some(reference) => read_control_value[V.WorkflowRetainedWorkReadResult](take(owner.executeOperationResponseInContext(
+            Request.of(component = component.name, service = WorkflowRetainedWork.serviceName,
+              operation = WorkflowRetainedWork.readOperation, properties = List(Property("input", reference, None))), actor))).response
+          case None => record
+        }
+        val materials = record.getAny("retainedMaterials").collect { case values: Seq[?] =>
+          values.collect { case value: Record => take(V.WorkflowRetainedFieldReference.createC(value)) }.toVector
+        }.getOrElse(Vector.empty)
+        val selected = materials.foldLeft(work) { (prior, field) =>
+          val detail = read_control_value[V.WorkflowRetainedSnapshotReadResult](take(owner.executeOperationResponseInContext(
+            Request.of(component = component.name, service = WorkflowRetainedWork.serviceName,
+              operation = WorkflowRetainedSnapshot.readOperation,
+              properties = List(Property("input", field.reference, None))), actor)))
+          val overlay = record.getRecord("controlSummary").flatMap(_.getRecord(field.fieldName)).getOrElse(Record.empty)
+          val restored = Record.createFull(detail.material.fields.filterNot(value => overlay.getAny(value.key).nonEmpty)
+            .map(value => value.key -> value.value.single)) ++ overlay
+          Record.createFull(prior.fields.filterNot(_.key == field.fieldName).map(value => value.key -> value.value.single)) ++
+            Record.data(field.fieldName -> restored)
+        }
+        val expanded = take(WorkflowRetainedSnapshot.expandTextC(take(selected.toJsonStringC), {
+          case reference: org.goldenport.cncf.resource.ResourceReference.Url if reference.scheme == "sm-workflow-snapshot" =>
+            WorkflowRetainedSnapshot.decodeResourceC(reference.uri.toString).flatMap { snapshot =>
+              owner.executeOperationResponseInContext(Request.of(component = component.name, service = WorkflowRetainedWork.serviceName,
+                operation = WorkflowRetainedSnapshot.readOperation,
+                properties = List(Property("input", WorkflowRetainedSnapshot.publicReference(snapshot), None))), actor)
+                .flatMap {
+                  case OperationResponse.RecordResponse(value) => V.WorkflowRetainedSnapshotReadResult.createC(value).flatMap(_.material.toJsonStringC)
+                  case _ => Consequence.stateConflict("Explicit fixture detail read returned no business record")
+                }
+            }
+          case _ => Consequence.stateConflict("Legacy fixture detail requires an actual native snapshot reference")
+        }))
+        take(NativeWorkflowOperationInput.decodeValueC[Record](expanded, "response"))
+      }
+      _legacy_details.withValue(Some(fullDetail))(task(owner, component, actor, _prepare_))
     } finally handle.close()
   }
   protected def _goal_selection_(input: GoalPhaseStartInput, identity: String,

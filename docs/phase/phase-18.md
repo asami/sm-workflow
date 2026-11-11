@@ -1,4 +1,4 @@
-# Phase 18: Tool-Neutral Validation and Flutter Integration
+# Phase 18: Tool-Neutral Validation, Project Checks and Flutter Integration
 
 Status: planned; no implementation or acceptance claimed.
 Date: 2026-10-28
@@ -11,8 +11,9 @@ Handoff: [design handoff](../journal/2026/10/2026-10-28-tool-neutral-validation-
 
 ## Purpose and preservation
 
-Commonize SBT and Flutter validation requests/results inside sm-workflow so
-existing Workflow progression, repair, review and acceptance can use either tool.
+Commonize SBT, project-declared checks and Flutter validation requests/results
+inside sm-workflow so existing Workflow progression, repair, review and
+acceptance can consume the selected tool's actual evidence.
 CNCF supplies tool-specific DSLs/results: preserve `sbt_xxx` and consume new
 `flutter_build`, `flutter_test` and `flutter_analyze`. Do not make SBT DSLs
 tool-neutral or move Workflow acceptance into CNCF.
@@ -47,7 +48,7 @@ delivery; independent producer handoff is sufficient for this initial integratio
 | --- | --- | --- | --- |
 | W1 | Existing validation baseline; align with CNCF C1 | Specify common requests/results/evidence and migration mapping | Purpose, selection, process state, validation verdict and retained evidence have a tool-neutral contract; existing FixCheck semantics remain covered |
 | W2 | W1 | Adapt SBT results and GoalPhase progression | Existing SBT behavior is preserved while progression/acceptance consume common results |
-| W3 | W2 | Connect RepositorySync, StandaloneFix and other shared-engine consumers; qualify persistence/resume | Old records remain readable and new results resume through supported public routes without duplicate execution |
+| W3 | W2 | Connect RepositorySync, StandaloneFix and other shared-engine consumers; add project-declared checks and Python defaults; qualify persistence/resume | Mixed Python/TOML/skill repositories use applicable checks; old records remain readable and new results resume through supported public routes without duplicate execution |
 | W4 | W3 and CNCF Phase 117 C5 | Bind Flutter configuration and typed DSLs | Analyze/test/build execute for the selected target/profile and convert real results to common validation |
 | W5 | W4 | Qualify real Flutter development, SBT regression and installed usage | Failure/repair/revalidation/review/acceptance and interrupted continuation are evidenced; consumer delivery is independently reviewed |
 
@@ -77,12 +78,58 @@ stays in the SBT route. Start Flutter with explicit test selection; equivalent
 automatic discovery is not an initial prerequisite. Update generated contracts
 through their existing CML/generation path when required.
 
+## Project-declared validation and Python defaults — 2026-11-05
+
+W1 specifies a project validation declaration; W3 connects it to the common
+execution/result contract and RepositorySync acceptance. A declaration identifies
+the Check, applicable changed inputs, registered execution binding, workspace,
+project environment, selected targets and success conditions. An explicit project
+setting takes precedence over the documented default. File types identify
+candidate checks; they do not prove that all project behavior is covered.
+
+For Python, the initial default is `python -m unittest discover` in the declared
+project environment and working directory. A project using pytest explicitly
+selects `python -m pytest`; project settings may override discovery paths and
+test selection. These are logical invocations resolved through the existing
+registered execution owner, not a requirement to use the machine's global Python.
+Resolve the selected framework before execution. A missing interpreter/framework
+is an unavailable prerequisite; do not silently switch frameworks or install one.
+Capture discovered/executed/skipped test counts and required target coverage.
+No discovered tests, all-skipped tests or unverified selection are not automatic
+success even if the process exits zero; any allowance requires explicit project
+acceptance policy.
+
+The same repository may declare Python syntax/import/lint/tests, TOML parsing
+and application-specific schema/reference checks, and skill frontmatter,
+referenced-file and bundled-script/isolated-behavior checks. TOML syntax alone
+does not establish valid application configuration. Structural skill checks do
+not replace required semantic review. Check contents and sufficient coverage
+remain project-specific; execution, waiting, collection, verdict mapping,
+repair/review progression and retained evidence are shared.
+
+CNCF retains registered tool/process execution and tool-specific results;
+sm-workflow owns selection, common result adaptation and Workflow acceptance.
+Reuse applicable existing registered execution APIs and identify any missing
+producer capability during W1/W3. Do not encode these checks as fake SBT tasks
+or have AI construct execution evidence. W3's project-check qualification can
+proceed independently of Flutter's W4 producer dependency. For an existing
+Session, use a qualified public selection/adoption route where needed and
+preserve accepted results, history and repair counts.
+
 ## Validation and completion
 
 W1–W2 cover common outcome mapping, SBT success/failure/non-execution/uncertainty,
 selection verification, FixCheck and existing GoalPhase transitions. W3 covers
 historical decoding, new result roundtrips, public resume, applicable accepted
 result reuse and each shared consumer's repair/review/closure behavior.
+
+W3 additionally qualifies explicit Python settings overriding the default,
+unittest default discovery, explicitly selected pytest, missing framework,
+zero/all-skipped tests and incomplete target evidence. Exercise a mixed
+Python/TOML/skill repository through actual RepositorySync checks, formal
+failure -> repair -> revalidation -> independent review and purpose commit,
+plus interrupted continuation without replaying successful checks. Include
+configuration/schema and referenced-file failures, not only valid syntax.
 
 W4 covers each Flutter operation, unavailable SDK/target, mismatched selection,
 zero/all-skipped tests, diagnostics and artifact evidence. W5 exercises a real

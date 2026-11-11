@@ -18,14 +18,20 @@ import WorkflowManagedProcessExecution as E
 /** Purpose proposals consume genuine work records and native content facts.
   * Neither grouping nor an old record establishes candidate acceptance.
   * @since   Oct. 28, 2026
-  * @version Nov.  3, 2026
+  *  version Nov.  3, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncPurpose {
-  final case class Source(kind: String, identity: String, revision: String)
+  final case class Source(kind: String, identity: String, revision: String, repositoryIdentity: Option[String] = None)
   final case class SourceRecord(source: Source, status: String, payload: Json)
   final case class Slot(workspace: String, checks: Vector[RepositorySyncNativeMergeValidation.Check],
-    actionPolicy: GoalPhaseStepAssessment.Policy, checkWorkspaces: Map[String, String] = Map.empty)
+    actionPolicy: GoalPhaseStepAssessment.Policy, checkWorkspaces: Map[String, String] = Map.empty,
+    repositoryIdentity: Option[String] = None)
+  given Encoder[Slot] = io.circe.generic.semiauto.deriveEncoder[Slot].mapJson(_.mapObject(_.filter {
+    case ("repositoryIdentity", value) => !value.isNull
+    case _ => true
+  }))
   given Decoder[Slot] = Decoder.instance { cursor =>
     val normalized = cursor.value.mapObject(fields =>
       if (fields("checkWorkspaces").isEmpty) fields.add("checkWorkspaces", Json.obj()) else fields)
@@ -36,7 +42,10 @@ private[smworkflow] object RepositorySyncPurpose {
     original: Option[String], indexed: Option[String], worktree: Option[String], unexamined: Option[String])
   final case class Request(repository: String, root: String, branch: String, parent: String, indexTree: String,
     files: Vector[File], records: Vector[SourceRecord])
-  given source_encoder: Encoder[Source] = io.circe.generic.semiauto.deriveEncoder[Source]
+  given source_encoder: Encoder[Source] = io.circe.generic.semiauto.deriveEncoder[Source].mapJson(_.mapObject(_.filter {
+    case ("repositoryIdentity", value) => !value.isNull
+    case _ => true
+  }))
   given source_decoder: Decoder[Source] = io.circe.generic.semiauto.deriveDecoder[Source]
   given source_record_encoder: Encoder[SourceRecord] = io.circe.generic.semiauto.deriveEncoder[SourceRecord]
   given source_record_decoder: Decoder[SourceRecord] = io.circe.generic.semiauto.deriveDecoder[SourceRecord]
@@ -145,15 +154,19 @@ private[smworkflow] object RepositorySyncPurpose {
       case _ => Consequence.configurationInvalid("Dirty purpose configuration requires an object")
     })
   def resolveC(parameters: ComponentInitializationParameters): Consequence[Option[Policy]] = parameters.resolve(declaration).map(_.value)
+  def slots(policy: Option[Policy], repository: String): Vector[Slot] =
+    policy.toVector.flatMap(_.slots).filter(_.repositoryIdentity.forall(_ == repository))
   private def _decode_policy_c(json: Json): Consequence[Policy] = json.as[Policy].fold(
     _ => Consequence.configurationInvalid("Dirty purpose policy is incomplete"), value => validatePolicyC(value).map(_ => value))
   def validatePolicyC(value: Policy): Consequence[Unit] = {
     val valid = value != null && value.slots != null && value.slots.size <= 16 && value.sources != null && value.sources.size <= 32 &&
       value.sources.distinct == value.sources && value.sources.forall(source => source != null &&
-        Set("Task", "Step", "Finding", "Journal")(source.kind) && _text(source.identity) && _text(source.revision)) &&
+        Set("Task", "Step", "Finding", "Journal")(source.kind) && _text(source.identity) && _text(source.revision) &&
+        source.repositoryIdentity != null && source.repositoryIdentity.forall(_text)) &&
       value.slots.forall(slot => slot != null && org.goldenport.cncf.workspace.WorkspaceId.parseC(slot.workspace).isSuccess &&
         slot.checks != null && slot.checks.map(_.identity).distinct.size == slot.checks.size &&
         slot.actionPolicy != null && GoalPhaseStepAssessment.validatePurposePolicyC(slot.actionPolicy).isSuccess &&
+        slot.repositoryIdentity != null && slot.repositoryIdentity.forall(_text) &&
         slot.checkWorkspaces != null && slot.checkWorkspaces.keys.forall(id => slot.checks.exists(_.identity == id)) &&
         slot.checkWorkspaces.values.forall(value => WorkspaceId.parseC(value).isSuccess)) && value.slots.map(_.workspace).distinct.size == value.slots.size
     if (valid) Consequence.unit else Consequence.configurationInvalid("Dirty purpose policy has invalid sources or fixed candidate slots")
@@ -184,7 +197,7 @@ private[smworkflow] object RepositorySyncPurpose {
   } yield Request(store.context.repositoryIdentity, store.original.repositoryRoot, observed.branch, observed.head, index, files, records)
 
   private def _worktree_c(store: N.Store, name: String): Consequence[(Option[String], Option[String])] = for {
-    workspace <- WorkspaceId.parseC("sm-workflow-repository")
+    workspace <- WorkspaceId.parseC(RepositorySyncDirectoryList.workspace(store.core, "sm-workflow-repository"))
     path <- WorkspaceFilePath.parseC(name)
     actual <- WorkflowFileExecution.readTextC(store.core, FileTarget(workspace), path)
   } yield actual.text -> (if (actual.text.exists(text => text.contains('\u0000') || !UTF_8.newEncoder().canEncode(text)))
@@ -252,7 +265,8 @@ private[smworkflow] object RepositorySyncPurpose {
   } yield GitPurposeCandidate(GitPurposeRequest(parent, index, changes, baseline), commit, tree, projected, candidate.message, before, after)
 
   private def _records_c(store: N.Store): Consequence[Vector[SourceRecord]] =
-    store.declaration.purposePolicy.toVector.flatMap(_.sources).foldLeft(Consequence.success(Vector.empty[SourceRecord])) { (prior, source) => for {
+    store.declaration.purposePolicy.toVector.flatMap(_.sources).filter(_.repositoryIdentity.forall(_ == store.context.repositoryIdentity))
+      .foldLeft(Consequence.success(Vector.empty[SourceRecord])) { (prior, source) => for {
       values <- prior
       definition <- RepositorySyncDefinitionBinding.bindC
       storage <- RepositorySyncManagedFetch.bindC(store.declaration, definition, store.core)

@@ -21,7 +21,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Synthetic retained work exercises read compatibility without a consumer
   * store, execution grant, new issue or native Human evidence.
   * @since   Nov.  1, 2026
-  * @version Nov.  2, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

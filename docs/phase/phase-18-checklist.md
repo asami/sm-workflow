@@ -17,6 +17,10 @@ Producer: CNCF Phase 117
 - [ ] P18-10 (W5): Real Flutter success and failure/repair/revalidation/review/acceptance plus interruption/resume are evidenced on the selected project/SDK/build target.
 - [ ] P18-11 (W5): Required SBT regression and independent integrated review pass; fixture results and producer operation results are not substituted for consumer acceptance.
 - [ ] P18-12 (W5): Deliver matching runtime/configuration/usage guidance, qualified SDK/targets, old-Session handling, revision and actual evidence with remaining limitations.
+- [ ] P18-13 (W1/W3): Define project-declared check applicability, registered execution binding, workspace/environment, targets and success conditions; explicit project settings override documented defaults and mixed Python/TOML/skill checks enter common Workflow acceptance.
+- [ ] P18-14 (W3): Qualify Python's initial `python -m unittest discover` default and explicitly selected `python -m pytest` in the project environment, including project discovery/selection overrides and unavailable interpreter/framework without silent fallback or installation.
+- [ ] P18-15 (W3): Retain discovered/executed/skipped counts and requested coverage; zero/all-skipped tests, unverified selection and incomplete evidence are not automatic success, including zero-exit cases, without explicit project acceptance policy.
+- [ ] P18-16 (W3): Qualify a mixed Python/TOML/skill RepositorySync through project-specific schema/reference/behavior checks, failure -> repair -> revalidation -> independent review -> purpose commit and interrupted public continuation; preserve accepted evidence/history/counts without fake SBT checks or successful-check replay.
 
 Record actual revision and evidence on completion. All obligations remain open;
 this planning update starts no Session and changes no existing Phase acceptance.

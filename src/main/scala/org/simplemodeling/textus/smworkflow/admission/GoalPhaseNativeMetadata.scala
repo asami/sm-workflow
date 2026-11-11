@@ -127,7 +127,8 @@ private[smworkflow] object GoalPhaseNativeMetadata {
     val duration = value.expectedDuration.fold(fields)(d => fields.mapObject(_.add("expectedDurationNanos",
       Json.fromBigInt(BigInt(d.length) * BigInt(d.unit.toNanos(1L))))))
     val requirement = value.executionRequirement.fold(duration)(r => duration.mapObject(_.add("executionRequirement", r.asJson)))
-    if (value.inputSchema.isEmpty) requirement else requirement.mapObject(_.add("inputSchema", value.inputSchema.asJson))
+    val schema = if (value.inputSchema.isEmpty) requirement else requirement.mapObject(_.add("inputSchema", value.inputSchema.asJson))
+    value.executionModes.fold(schema)(modes => schema.mapObject(_.add("executionModes", modes.toVector.sorted.asJson)))
   }
   private val _metadata_decoder: Decoder[M.Metadata] = Decoder.instance { cursor => for {
     purposes <- cursor.get[Set[M.Purpose]]("purposes")
@@ -137,13 +138,16 @@ private[smworkflow] object GoalPhaseNativeMetadata {
     requirement <- optional[ExecutionRequirement](cursor, "executionRequirement")
     origins <- cursor.get[M.Origins]("origins")
     schema <- optional[Vector[I.Parameter]](cursor, "inputSchema").map(_.getOrElse(Vector.empty))
+    modes <- optional[Set[String]](cursor, "executionModes")
+    _ <- Either.cond(modes.forall(values => org.goldenport.cncf.validation.ValidationExecutionModeV1.normalizeC(values).toOption.contains(values)), (),
+      DecodingFailure("Execution modes must be canonical producer modes", cursor.history))
     _ <- Either.cond(I.validateSchemaC(schema).toOption.contains(schema), (),
       DecodingFailure("Input schema must be producer-valid and canonical", cursor.history))
     _ <- Either.cond(duration.forall(_ > 0), (), DecodingFailure("Expected duration must be positive integral nanoseconds", cursor.history))
-  } yield M.Metadata(purposes, features, duration.map(n => FiniteDuration(n, NANOSECONDS)), durationclass, requirement, origins, schema) }
+  } yield M.Metadata(purposes, features, duration.map(n => FiniteDuration(n, NANOSECONDS)), durationclass, requirement, origins, schema, modes) }
   given Decoder[M.Metadata] = _strict(_metadata_decoder,
-    Set("purposes", "features", "expectedDurationNanos", "durationClass", "executionRequirement", "origins", "inputSchema"),
-    Set("expectedDurationNanos", "executionRequirement", "inputSchema"))()
+    Set("purposes", "features", "expectedDurationNanos", "durationClass", "executionRequirement", "origins", "inputSchema", "executionModes"),
+    Set("expectedDurationNanos", "executionRequirement", "inputSchema", "executionModes"))()
   given Encoder[D.OperationReference] = deriveEncoder
   given Decoder[D.OperationReference] = _strict(deriveDecoder[D.OperationReference],
     Set("component", "specification", "operation"))(referenceValid)
@@ -159,7 +163,8 @@ private[smworkflow] object GoalPhaseNativeMetadata {
   given Decoder[D.DiscoveryScope] = _strict(deriveDecoder[D.DiscoveryScope], Set("identity", "revision", "artifacts"))(_scope_valid)
   given Encoder[D.Diagnostic] = deriveEncoder
   given Decoder[D.Diagnostic] = _strict(deriveDecoder[D.Diagnostic], Set("code", "source", "message"))()
-  given Encoder[D.FrameworkFacts] = deriveEncoder
+  given Encoder[D.FrameworkFacts] = Encoder.instance(value => Json.obj(
+    "tags" -> value.tags.toVector.sorted.asJson, "explicitOnly" -> value.explicitOnly.asJson))
   given Decoder[D.FrameworkFacts] = _strict(deriveDecoder[D.FrameworkFacts], Set("tags", "explicitOnly"))()
   given Encoder[D.Operation] = deriveEncoder[D.Operation].mapJson(_omit(_, "metadata", "framework"))
   given Decoder[D.Operation] = _strict(deriveDecoder[D.Operation],
@@ -167,19 +172,21 @@ private[smworkflow] object GoalPhaseNativeMetadata {
   given Encoder[D.Inventory] = deriveEncoder
   given Decoder[D.Inventory] = _strict(deriveDecoder[D.Inventory], Set("scope", "completeness", "operations", "diagnostics"))(
     value => D.selectC(value, D.SelectionQuery()).isSuccess)
-  given Encoder[D.SelectionQuery] = Encoder.instance(value => Json.obj(
-    "purposes" -> value.purposes.toVector.sortBy(_.toString).asJson,
-    "features" -> value.features.toVector.sortBy(x => (x.scope, x.identity)).asJson,
-    "standardFramework" -> value.standardFramework.asJson,
-    "includeSlow" -> value.includeSlow.asJson,
-    "explicitSuites" -> value.explicitSuites.toVector.sorted.asJson))
-  given Decoder[D.SelectionQuery] = _strict(Decoder.instance(cursor => for {
+  given Encoder[D.SelectionQuery] = Encoder.instance { value =>
+    val legacy = Json.obj("purposes" -> value.purposes.toVector.sortBy(_.toString).asJson,
+      "features" -> value.features.toVector.sortBy(x => (x.scope, x.identity)).asJson)
+    if (!value.standardFramework && !value.includeSlow && value.explicitSuites.isEmpty) legacy
+    else legacy.mapObject(_.add("standardFramework", value.standardFramework.asJson)
+      .add("includeSlow", value.includeSlow.asJson).add("explicitSuites", value.explicitSuites.toVector.sorted.asJson))
+  }
+  private val _query_decoder: Decoder[D.SelectionQuery] = Decoder.instance(cursor => for {
     purposes <- cursor.get[Set[M.Purpose]]("purposes")
     features <- cursor.get[Set[M.FeatureReference]]("features")
-    standard <- optional[Boolean](cursor, "standardFramework").map(_.getOrElse(false))
-    slow <- optional[Boolean](cursor, "includeSlow").map(_.getOrElse(false))
-    suites <- optional[Set[String]](cursor, "explicitSuites").map(_.getOrElse(Set.empty))
-  } yield D.SelectionQuery(purposes, features, standard, slow, suites)),
+    standard <- optional[Boolean](cursor, "standardFramework")
+    slow <- optional[Boolean](cursor, "includeSlow")
+    suites <- optional[Set[String]](cursor, "explicitSuites")
+  } yield D.SelectionQuery(purposes, features, standard.getOrElse(false), slow.getOrElse(false), suites.getOrElse(Set.empty)))
+  given Decoder[D.SelectionQuery] = _strict(_query_decoder,
     Set("purposes", "features", "standardFramework", "includeSlow", "explicitSuites"),
     Set("standardFramework", "includeSlow", "explicitSuites"))(queryValid)
 

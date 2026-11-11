@@ -33,6 +33,7 @@ BASE_OPTIONS = {"executable", "runtime-root", "task", "action", "output"}
 ACTION_OPTIONS = {
     "start-repository": {"input", "proposal"},
     "advance-repository": set(),
+    "read-work": {"request"},
     "prepare-split-input": {
         "component-instance", "allocation-reference", "allocation", "source", "reference",
         "participant", "issuer", "occurred-at", "collection",
@@ -133,6 +134,8 @@ def native_field(value, name):
         "issuedWorkContext": "issued_work_context",
         "nextSelection": "next_selection",
         "completionEvidence": "completion_evidence",
+        "retainedWork": "retained_work",
+        "retainedImport": "retained_import",
     }[name]
     require(name not in value or wire_name not in value or value[name] == value[wire_name],
             "contradictory native field aliases: " + name)
@@ -260,6 +263,55 @@ def read_object(path):
     return text, json_object(text)
 
 
+def read_issued_request(path):
+    """Select the original public Request from an explicit native detail read.
+
+    Legacy full-body artifacts remain unchanged. This performs no lookup,
+    reconstruction, admission, accepted Submit or workflow progression.
+    """
+    text, value = read_object(path)
+    if "availability" not in value or "response" not in value:
+        return text, value
+    require(value.get("availability") == "available" and isinstance(value.get("reference"), dict)
+            and isinstance(value.get("response"), dict), "retained work detail is unavailable")
+    request, reference = value["response"], value["reference"]
+    selected_session = reference.get("sessionId", reference.get("session_id"))
+    require(request.get("kind") in {"Request", "Human"}
+            and native_field(request, "submitSessionId") == selected_session,
+            "detail response crosses its selected native Session")
+    issued = native_field(request, "issuedWorkContext")
+    if issued is not None:
+        require(isinstance(issued, dict)
+                and issued.get("continuationId", issued.get("continuation_id")) == reference.get("identity")
+                and issued.get("expectedRevision", issued.get("expected_revision")) == reference.get("revision"),
+                "detail response crosses its selected native identity or revision")
+    return text, request
+
+
+def retained_work_command(options, executable, runtime_root):
+    _text, request = read_object(explicit_path(options["request"]))
+    reference = native_field(request, "retainedWork")
+    require(isinstance(reference, dict)
+            and reference.get("schemaVersion", reference.get("schema_version")) == "sm-workflow.retained-work-reference.v1"
+            and reference.get("readOperation", reference.get("read_operation")) == "WorkflowRetainedWorkService.readWorkflowRetainedWork",
+            "read-work requires the actual supported retainedWork reference")
+    return command_prefix(executable, runtime_root) + [
+        "org.simplemodeling.textus.SmWorkflow.WorkflowRetainedWorkService.readWorkflowRetainedWork",
+        "--input", json.dumps(reference, ensure_ascii=False, allow_nan=False), "--json"], None
+
+
+def issued_request_resource(path):
+    """Forward an exact native reference to preparation instead of its full body."""
+    _text, value = read_object(path)
+    if value.get("availability") == "available" and isinstance(value.get("reference"), dict):
+        read_issued_request(path)  # preserve the selected identity/revision checks
+        resource = value["reference"].get("resource")
+        require(isinstance(resource, str) and resource.startswith("sm-workflow-work:"),
+                "selected native detail has no supported owner resource")
+        return resource
+    return existing_file(path).as_uri()
+
+
 def route_record(task_fd):
     descriptor = os.open(SESSION_FILE, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=task_fd)
     with os.fdopen(descriptor, "r", encoding="utf-8") as stream:
@@ -374,7 +426,7 @@ def advance(task_fd, family="GoalPhase"):
 def issued_split_route(options, task_fd):
     """Admit only the action-selected semantic route on its retained Split."""
     session_id = routing(task_fd, "SplitPhase")
-    _text, request = read_object(explicit_path(options["request"]))
+    _text, request = read_issued_request(explicit_path(options["request"]))
     operation = native_field(request, "submitOperation")
     result_type = native_field(request, "resultType")
     require(request.get("kind") == "Request"
@@ -390,7 +442,7 @@ def issued_goal_route(options, task_fd):
     family = route_record(task_fd)["family"]
     require(family in {"GoalPhase", "GoalTask"}, "invalid Goal Submit task routing")
     session_id = routing(task_fd, family)
-    _text, request = read_object(explicit_path(options["request"]))
+    _text, request = read_issued_request(explicit_path(options["request"]))
     request_session_id = native_field(request, "sessionId")
     submit_operation = native_field(request, "submitOperation")
     submit_session_id = native_field(request, "submitSessionId")
@@ -413,7 +465,7 @@ def issued_repository_route(options, task_fd, action, route=None):
     """Consume one private finite pair with distinct-child or standalone IDs."""
     route = route_record(task_fd) if route is None else route
     owning_id = route["sessionId"]
-    _text, request = read_object(explicit_path(options["request"]))
+    _text, request = read_issued_request(explicit_path(options["request"]))
     request_id = native_field(request, "sessionId")
     operation = native_field(request, "submitOperation")
     child_id = native_field(request, "submitSessionId")
@@ -429,7 +481,7 @@ def issued_repository_route(options, task_fd, action, route=None):
 def review_input_command(options, executable, session_id, family="GoalPhase"):
     """Forward whole opaque files to the normal typed preparation Operation."""
     value = {"family": family, "kind": "review",
-             "request": existing_file(explicit_path(options["request"])).as_uri(),
+             "request": issued_request_resource(explicit_path(options["request"])),
              "result": existing_file(explicit_path(options["result"])).as_uri(),
              "reference": existing_file(explicit_path(options["reference"])).as_uri(),
              "executionEvidence": existing_file(explicit_path(options["execution-evidence"])).as_uri(),
@@ -488,7 +540,7 @@ def submit(options, task_fd):
     submit_operation, session_id = issued_goal_route(options, task_fd)
     pairs = submission_pairs(options, session_id)
     if submit_operation == "submitGoalTaskWorkResult":
-        _text, request = read_object(explicit_path(options["request"]))
+        _text, request = read_issued_request(explicit_path(options["request"]))
         issued = native_field(request, "issuedWorkContext")
         require(isinstance(issued, dict) and bool(issued), "Task Submit requires the actual Request issuedWorkContext")
         pairs.extend(["--issuedWorkContext", json.dumps(issued, ensure_ascii=False, allow_nan=False)])
@@ -499,7 +551,7 @@ def execution_command(options, executable, task_fd):
     """Forward the whole issued DTO and explicitly selected runtime_root artifact URIs."""
     route = route_record(task_fd)
     session_id = route["sessionId"]
-    _text, request = read_object(explicit_path(options["request"]))
+    _text, request = read_issued_request(explicit_path(options["request"]))
     request_id = native_field(request, "sessionId")
     operation = native_field(request, "submitOperation")
     target_id = native_field(request, "submitSessionId")
@@ -540,7 +592,7 @@ def information_command(options, executable, task_fd):
     """Return to the existing caller; no source fetch, Submit or Advance."""
     route = route_record(task_fd)
     session_id = route["sessionId"]
-    _text, request = read_object(explicit_path(options["request"]))
+    _text, request = read_issued_request(explicit_path(options["request"]))
     require(request.get("kind") == "Request" and native_field(request, "sessionId") == session_id,
             "information request must retain the actual issued task")
     issued = native_field(request, "issuedWorkContext")
@@ -560,6 +612,8 @@ def information_command(options, executable, task_fd):
 
 
 def action_command(options, executable, runtime_root, task_fd):
+    if options["action"] == "read-work":
+        return retained_work_command(options, executable, runtime_root)
     action = options["action"]
     if action in {"prepare-information", "record-information"}:
         return information_command(options, executable, task_fd)
@@ -852,7 +906,7 @@ def native_call(command, runtime_root, output_fd, context):
 def completion_commands(options, executable, runtime_root, task_fd):
     """Select a closed issued Submit pair and retain its explicit outer Advance."""
     route = route_record(task_fd)
-    _text, request = read_object(explicit_path(options["request"]))
+    _text, request = read_issued_request(explicit_path(options["request"]))
     pair = (native_field(request, "submitOperation"), native_field(request, "resultType"))
     family = route["family"]
     preparation = None
@@ -1098,7 +1152,7 @@ def complete(options, executable, runtime_root, task_fd, output_fd):
     task_completion = family == "GoalTask"
     os.mkdir("advance", mode=0o700, dir_fd=output_fd)
     advance_fd = os.open("advance", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=output_fd)
-    _request_text, request = read_object(explicit_path(options["request"]))
+    _request_text, request = read_issued_request(explicit_path(options["request"]))
     output = explicit_path(options["output"])
     submit_context = exchange_context(command, runtime_root, output, outer_id, request)
     advance_context = exchange_context(following, runtime_root, output / "advance", outer_id)
@@ -1109,7 +1163,7 @@ def complete(options, executable, runtime_root, task_fd, output_fd):
             preparation_fd = os.open("preparation", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=output_fd)
             try:
                 value = dict(provenance, family="GoalPhase", kind="human",
-                             request=explicit_path(options["request"]).as_uri())
+                             request=issued_request_resource(explicit_path(options["request"])))
                 for field, source in (("result", "answer"), ("reference", "resultReference"),
                                       ("executionEvidence", "executionEvidence")):
                     name = source + ".json"
@@ -1121,7 +1175,28 @@ def complete(options, executable, runtime_root, task_fd, output_fd):
                     "--input", json.dumps(value, ensure_ascii=False, allow_nan=False), "--json"]
                 prepare_context = exchange_context(prepare_command, runtime_root, output / "preparation", outer_id, request)
                 _text, prepared = native_call(prepare_command, runtime_root, preparation_fd, prepare_context)
-                require(isinstance(prepared.get("datastore"), list), "preparation must return a datastore array")
+                retained_import = native_field(prepared, "retainedImport")
+                if retained_import is not None:
+                    require(prepared.get("status") == "prepared" and isinstance(retained_import, dict),
+                            "preparation requires a confirmed retained importer reference")
+                    os.mkdir("detail", mode=0o700, dir_fd=preparation_fd)
+                    detail_fd = os.open("detail", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=preparation_fd)
+                    try:
+                        detail_command = command_prefix(executable, runtime_root) + [
+                            "org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.readPreparedImport",
+                            "--input", json.dumps(retained_import, ensure_ascii=False, allow_nan=False), "--json"]
+                        detail_context = exchange_context(detail_command, runtime_root, output / "preparation" / "detail", outer_id, request)
+                        _detail_text, importer = native_call(detail_command, runtime_root, detail_fd, detail_context)
+                        require(isinstance(importer.get("datastore"), list) and importer["datastore"],
+                                "selected retained importer detail is unavailable")
+                        old_import = "--textus.import.data.file=" + str(output / "preparation" / "response.json")
+                        require(command.count(old_import) == 1, "selected Submit importer route differs")
+                        command[command.index(old_import)] = "--textus.import.data.file=" + str(output / "preparation" / "detail" / "response.json")
+                    finally:
+                        os.close(detail_fd)
+                else:
+                    require("status" not in prepared and isinstance(prepared.get("datastore"), list),
+                            "preparation requires confirmed detail or historical complete importer output")
                 display_observation(prepared)
                 response_progress(prepared, prepare_context)
                 require(route_record(task_fd) == {"family": "GoalPhase", "sessionId": outer_id},
@@ -1153,6 +1228,10 @@ def complete(options, executable, runtime_root, task_fd, output_fd):
 
 
 def acknowledge(action, response, session_id, task_fd, output_fd):
+    if action == "read-work":
+        require(response.get("availability") == "available" and isinstance(response.get("reference"), dict)
+                and isinstance(response.get("response"), dict), "native retained work detail is unavailable")
+        return
     if action in {"prepare-information", "record-information"}:
         requested = response if action == "prepare-information" else response.get("request")
         require(isinstance(requested, dict) and isinstance(native_field(requested, "issuedWorkContext"), dict),
@@ -1220,7 +1299,7 @@ def execute(options):
                 complete(options, executable, runtime_root, task_fd, output_fd)
                 return
             command, session_id = action_command(options, executable, runtime_root, task_fd)
-            request = read_object(explicit_path(options["request"]))[1] if "request" in options else None
+            request = read_issued_request(explicit_path(options["request"]))[1] if "request" in options else None
             context = exchange_context(command, runtime_root, output,
                                        route_record(task_fd)["sessionId"] if session_id is not None else None,
                                        request)

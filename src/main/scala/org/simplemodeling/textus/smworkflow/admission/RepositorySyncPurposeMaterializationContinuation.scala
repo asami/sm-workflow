@@ -24,8 +24,8 @@ import RepositorySyncPurposeContentContinuation.{exact, ordinary, revision, pref
 
 /** Explicit Human direction for one resultless materialization. The original
   * UNKNOWN, prepared candidate and complete Purpose progress remain immutable.
-  * @since Nov. 4, 2026
-  * @version Nov. 4, 2026
+  * @since   Nov.  4, 2026
+  * @version Nov.  8, 2026
   */
 private[smworkflow] object RepositorySyncPurposeMaterializationContinuation {
   val policy = "sm-workflow.repository-sync-purpose-materialization-continuation.v1"
@@ -196,10 +196,17 @@ private[smworkflow] object RepositorySyncPurposeMaterializationContinuation {
     _ <- if (plan != null && plan.asObject.exists(_.nonEmpty) && exact(root) && exact(selected)) Consequence.unit
       else N.invalid("materialization requires its complete resolved host plan and fixed slot")
     rows <- plan.hcursor.get[Vector[Json]]("workspaces").fold(e => N.invalid(e.message), Consequence.success)
-    source = rows.filter(_.hcursor.get[String]("identity").contains("sm-workflow-repository"))
+    repositories <- plan.hcursor.get[Option[Vector[Json]]]("gitRepositories").fold(e => N.invalid(e.message), Consequence.success)
+    // Validation workspaces may alias the checkout root. The host's existing
+    // Git target selects its source; legacy plans without that field retain
+    // the unique-root rule rather than acquiring a guessed target.
+    source = rows.filter(row => row.hcursor.get[String]("root").contains(root) && repositories.forall(_.exists(repository =>
+      repository.hcursor.get[String]("target").toOption == row.hcursor.get[String]("identity").toOption)))
     targets = rows.filter(_.hcursor.get[String]("identity").contains(selected))
-    _ <- if (source.size == 1 && targets.size == 1 && selected != "sm-workflow-repository") Consequence.unit
+    _ <- if (source.size == 1 && targets.size == 1 && source.head != targets.head) Consequence.unit
       else N.invalid("materialization workspace mapping is absent, duplicated or crosses the source")
+    sourceidentity <- source.head.hcursor.get[String]("identity").fold(e => N.invalid(e.message), Consequence.success)
+    _ <- WorkspaceId.parseC(sourceidentity)
     sourceroot <- source.head.hcursor.get[String]("root").fold(e => N.invalid(e.message), Consequence.success)
     targetroot <- targets.head.hcursor.get[String]("root").fold(e => N.invalid(e.message), Consequence.success)
     paths <- scala.util.Try((java.nio.file.Path.of(root), java.nio.file.Path.of(sourceroot), java.nio.file.Path.of(targetroot))).toOption
@@ -210,13 +217,18 @@ private[smworkflow] object RepositorySyncPurposeMaterializationContinuation {
       else N.invalid("materialization requires an ordinary absolute fixed destination disjoint from the actual source root")
   } yield Host(plan, selected, targetroot)
   def preflightC(store: N.Store, p: P.Progress): Consequence[Host] = for {
-    slot <- store.declaration.purposePolicy.toVector.flatMap(_.slots).lift(p.slotCursor).map(Consequence.success)
+    slot <- RepositorySyncPurpose.slots(store.declaration.purposePolicy, store.context.repositoryIdentity).lift(p.slotCursor).map(Consequence.success)
       .getOrElse(N.invalid("materialization fixed Purpose slot is absent"))
     root <- G.rootC(store.core)
     _ <- if (root == store.original.repositoryRoot && root == store.declaration.target.root.toString && root == p.request.root)
       Consequence.unit else N.invalid("materialization actual source root or original host mapping changed")
     reader = new Read(store.core)
     plan <- reader.hostC
+    source <- WorkspaceId.parseC(RepositorySyncDirectoryList.workspace(store.core, "sm-workflow-repository"))
+    rows <- plan.hcursor.get[Vector[Json]]("workspaces").fold(e => N.invalid(e.message), Consequence.success)
+    registered = rows.filter(_.hcursor.get[String]("identity").contains(source.value))
+    _ <- if (registered.size == 1 && registered.head.hcursor.get[String]("root").contains(root)) Consequence.unit
+      else N.invalid("materialization source differs from the admitted checkout workspace")
     host <- selectWorkspaceC(plan, root, slot.workspace)
     workspace <- WorkspaceId.parseC(host.workspaceId)
     _ <- reader.emptyC(workspace)
@@ -227,7 +239,6 @@ private[smworkflow] object RepositorySyncPurposeMaterializationContinuation {
     paths <- group.content.foldLeft(Consequence.success(Vector.empty[GitPath])) { (prior, content) => for {
       values <- prior; path <- GitPath.parseC(content.path)
     } yield values :+ path }
-    source <- WorkspaceId.parseC("sm-workflow-repository")
     selection = GitSelectionParameters(identity, paths, Some(group.message))
     _ <- GitExecutionPreflight.validateC(store.core.executionContext, GitTarget(source, Some(selection)),
       GitOperation.MaterializePurposeCandidate(identity, candidate, workspace))
@@ -295,7 +306,7 @@ private[smworkflow] object RepositorySyncPurposeMaterializationContinuation {
     observed <- G.inspectC(store.core)
     _ <- store.scopeC(observed.observed)
     index <- G.indexTreeC(store.core)
-    workspace <- WorkspaceId.parseC("sm-workflow-repository")
+    workspace <- WorkspaceId.parseC(RepositorySyncDirectoryList.workspace(store.core, "sm-workflow-repository"))
     matches <- RepositorySyncPurposePreparationContinuation.rootMatchesC(p, name => for {
       path <- WorkspaceFilePath.parseC(name)
       value <- WorkflowFileExecution.readTextC(store.core, FileTarget(workspace), path)
@@ -361,9 +372,13 @@ private[smworkflow] object RepositorySyncPurposeMaterializationContinuation {
   }
   def describeC(identity: String, d: F.Declaration, definition: DefinitionBinding, core: ActionCall.Core,
     acknowledge: String => Consequence[Unit]): Consequence[V.RepositorySyncValidationContinuationDescriptionResult] =
-    sourceC(identity, d, definition, core, acknowledge).map(source =>
-      V.RepositorySyncValidationContinuationDescriptionResult(identity, "adoption-required", message,
-        source.target.componentInstance, targetRecord(source.target), choices, RepositorySyncValidationContinuation.adoptionOperation))
+    sourceC(identity, d, definition, core, acknowledge).flatMap { source => for {
+      target <- WorkflowRetainedSnapshot.compactC(targetRecord(source.target), Vector(
+        "progressSnapshot" -> WorkflowRetainedSnapshot.reference(source.store, source.prepared, source.target.preparedKey, "purpose-progress"),
+        "preparedPayload" -> WorkflowRetainedSnapshot.reference(source.store, source.prepared, source.target.preparedKey, "native-payload"),
+        "intentPayload" -> WorkflowRetainedSnapshot.reference(source.store, source.intent, source.target.intentKey, "native-payload")), core)
+    } yield V.RepositorySyncValidationContinuationDescriptionResult(identity, "adoption-required", message,
+        source.target.componentInstance, target, choices, RepositorySyncValidationContinuation.adoptionOperation) }
   def adoptC(input: V.RepositorySyncValidationContinuationAdoptionInput, d: F.Declaration, definition: DefinitionBinding,
     core: ActionCall.Core, installation: RepositorySyncValidationContinuation.Installation,
     acknowledge: String => Consequence[Unit]): Consequence[V.RepositorySyncValidationContinuationAdoptionResult] = for {

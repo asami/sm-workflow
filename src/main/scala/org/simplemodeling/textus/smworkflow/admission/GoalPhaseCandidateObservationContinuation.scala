@@ -29,7 +29,7 @@ import D.given
   * Historical uncertainty and every completed effect remain immutable.
   * @since   Oct. 22, 2026
   *  version Oct. 25, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseCandidateObservationContinuation {

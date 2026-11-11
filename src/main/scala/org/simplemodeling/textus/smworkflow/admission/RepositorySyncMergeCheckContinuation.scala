@@ -24,8 +24,8 @@ import RepositorySyncPurposeContentContinuation.{canonical, exact, ordinary, rev
 /** Explicit direction for one ended pending-merge check invocation. Historical
   * missing results remain UNKNOWN; typed preparation refusals remain refusals.
   * No adoption or source preparation performs a Git mutation or executes SBT.
-  * @since Nov. 4, 2026
-  * @version Nov. 4, 2026
+  * @since   Nov.  4, 2026
+  * @version Nov.  8, 2026
   */
 private[smworkflow] object RepositorySyncMergeCheckContinuation {
   val policy = "sm-workflow.repository-sync-merge-check-continuation.v1"
@@ -47,7 +47,7 @@ private[smworkflow] object RepositorySyncMergeCheckContinuation {
       else Left(DecodingFailure("Merge check preparation refusal requires its exact typed facts", c.history))))
   }
   def validPreparation(value: PreparationRefusal): Boolean = value != null && value.workspaceId != null &&
-    value.workspaceId.matches("sm-workflow-repository-validation-[1-9][0-9]*") && value.kind != null && ordinary(value.diagnostic)
+    org.goldenport.cncf.workspace.WorkspaceId.parseC(value.workspaceId).isSuccess && value.kind != null && ordinary(value.diagnostic)
   private def _operation(kind: WorkflowSbtValidation.Kind): SbtOperation = kind match {
     case WorkflowSbtValidation.Kind.Compile => SbtOperation.Compile
     case WorkflowSbtValidation.Kind.Test => SbtOperation.Test
@@ -57,8 +57,12 @@ private[smworkflow] object RepositorySyncMergeCheckContinuation {
   /** Only the actual typed UoW rejection branch can create preparation facts. */
   private[admission] def preparationRefusalC(check: C.Check, attempt: SbtExecutionAttempt): Consequence[PreparationRefusal] = attempt match {
     case SbtExecutionAttempt.AdmissionRejected(target, operation, conclusion) if check != null && target != null &&
-        target.workspaceId != null.asInstanceOf[org.goldenport.cncf.workspace.WorkspaceId] && target.scenario.isEmpty && target.validationEstimate.isEmpty && check.kind != null &&
-        target.workspaceId.value == "sm-workflow-repository-validation-" + check.ordinal &&
+        target.workspaceId != null.asInstanceOf[org.goldenport.cncf.workspace.WorkspaceId] && target.validationEstimate.isEmpty &&
+        (check.invocation match {
+          case None => target.scenario.isEmpty && target.validationMode.isEmpty && target.validationProvider.isEmpty
+          case Some(_) => RepositorySyncProgramImpact.operationC(check).toOption.exists(_.intent.target == target)
+        }) && check.kind != null &&
+        target.workspaceId.value == check.workspaceIdentity &&
         operation == _operation(check.kind) && conclusion != null =>
       val value = PreparationRefusal(target.workspaceId.value, check.kind, conclusion.show)
       if (validPreparation(value)) Consequence.success(value) else N.invalid("typed preparation refusal diagnostic is incomplete")
@@ -197,7 +201,7 @@ private[smworkflow] object RepositorySyncMergeCheckContinuation {
       d.target.root == t.root && d.target.endpoint == t.endpoint && d.target.validationPolicy == t.validationPolicy &&
       d.asJson.as[P.Direction].isRight) && t.preparationRefusal != null &&
     t.preparationRefusal.forall(p => validPreparation(p) && t.checkIndex >= 2 && p.kind == t.check.kind &&
-      p.workspaceId == "sm-workflow-repository-validation-" + t.check.ordinal) &&
+      p.workspaceId == t.check.workspaceIdentity) &&
     t.frontierRevision.toLong == t.intentRevision.toLong + (if (t.preparationRefusal.nonEmpty) 1 else 0) &&
     t.continuationPolicy == policy && (for {
       candidate <- N.codec.decode(t.candidatePayload)

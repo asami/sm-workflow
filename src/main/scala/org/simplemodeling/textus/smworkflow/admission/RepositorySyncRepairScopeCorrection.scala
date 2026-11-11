@@ -24,8 +24,8 @@ import RepositorySyncRepairInventory.given
 
 /** Automatic file qualification and separate prior-worker lifecycle direction.
   * Native supersession retains the original issue and its UNKNOWN effects.
-  * @since Nov. 3, 2026
-  * @version Nov. 4, 2026
+  * @since   Nov.  3, 2026
+  * @version Nov.  6, 2026
   */
 private[smworkflow] object RepositorySyncRepairScopeCorrection {
   val purpose = "repository-sync-repair-scope-correction"
@@ -524,7 +524,7 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
     final class Reader extends ProcedureActionCall {
       val core = call
       def readSessionC: Consequence[String] = NativeWorkflowResourceInput.selectC[Record](suppliedRequest).flatMap(source =>
-        NativeWorkflowResourceInput.readC(source, reference => read_resource_text(reference,
+        NativeWorkflowResourceInput.readC(source, reference => WorkflowArtifactBudget.readTextC(core, reference,
           Some(java.nio.charset.StandardCharsets.UTF_8))).flatMap(record =>
             if (suppliedRequest.operation == prepareOperation) _prepare_input_c(record).map(_.sessionId)
             else _input_c(record).map(_.sessionId)))
@@ -546,7 +546,7 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
     final class Reader extends ProcedureActionCall {
       val core = call
       def readC: Consequence[Vector[String]] = NativeWorkflowResourceInput.selectC[Record](suppliedRequest).flatMap(source =>
-        NativeWorkflowResourceInput.readC(source, reference => read_resource_text(reference,
+        NativeWorkflowResourceInput.readC(source, reference => WorkflowArtifactBudget.readTextC(core, reference,
           Some(java.nio.charset.StandardCharsets.UTF_8))).flatMap { record =>
           if (suppliedRequest.operation == prepareOperation) _prepare_input_c(record).map(_.paths)
           else _input_c(record).flatMap(input => targetC(input.target)).map(_.inventory.toVector.flatMap(_.paths))
@@ -592,7 +592,7 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
       def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
         val core = c
         def execute(): Consequence[OperationResponse] = for {
-          value <- NativeWorkflowResourceInput.readC(input, reference => read_resource_text(reference,
+          value <- NativeWorkflowResourceInput.readC(input, reference => WorkflowArtifactBudget.readTextC(core, reference,
             Some(java.nio.charset.StandardCharsets.UTF_8))).flatMap(_prepare_input_c)
           context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(value.sessionId))
           observed <- _prepare_c(value.sessionId, value.paths, value.rationale, port, core.copy(executionContext = context))
@@ -619,7 +619,7 @@ private[smworkflow] object RepositorySyncRepairScopeCorrection {
         def execute(): Consequence[OperationResponse] = for {
           value <- input match {
             case None => Consequence.success(Option.empty[V.RepositorySyncRepairScopeCorrectionAdoptionInput])
-            case Some(source) => NativeWorkflowResourceInput.readC(source, reference => read_resource_text(reference,
+            case Some(source) => NativeWorkflowResourceInput.readC(source, reference => WorkflowArtifactBudget.readTextC(core, reference,
               Some(java.nio.charset.StandardCharsets.UTF_8))).flatMap(_input_c).map(Some(_))
           }
           session = value.map(_.sessionId).orElse(identity).get

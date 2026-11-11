@@ -13,7 +13,8 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Typed-result projection and admission, without launching a build.
   * @since   Oct. 15, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 25, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -51,6 +52,36 @@ final class WorkflowSbtValidationSpec extends AnyWordSpec with Matchers with Giv
       decoded.foreach(_.validateC.isSuccess shouldBe true)
       Facts(Kind.Compile, Outcome.Incomplete, None, None, Some(estimate)).validateC.isSuccess shouldBe false
     }
+    "preserve B2 mode and batch business facts independently of historical estimate presence" in {
+      Given("source-shaped mode and exact batch facts with omitted or explicit-null estimates")
+      val mode = Mode("develop", Some("develop"), Some("fixture"), None)
+      val selected = SbtValidationMode.Case(SbtScenarioSelection("fixture.ExampleSpec", "selected"), "develop")
+      val observation = org.goldenport.cncf.validation.ValidationExecutionModeV1.Observation(
+        "fixture.ExampleSpec", "selected", "develop", "fixture")
+      val batch = Vector(SbtValidationMode.CaseResult(selected, "passed", Some(observation)))
+      val modern = Vector(Facts(Kind.TestOnly, Outcome.Incomplete, None, None, mode = Some(mode)),
+        Facts(Kind.TestOnly, Outcome.Succeeded, None, None, batch = Some(batch)))
+      When("the merged codec roundtrips both historical estimate representations")
+      modern.foreach { facts =>
+        val absent = facts.asJson
+        val explicit = absent.mapObject(_.add("estimate", Json.Null))
+        val restored = Vector(absent, explicit).map(_.as[Facts].toOption.get)
+        Then("wire provenance stays exact without dropping mode or batch fields from semantic identity")
+        restored.map(_.copy().asJson) shouldBe Vector(absent, explicit)
+        restored.foreach { value =>
+          value.mode shouldBe facts.mode
+          value.batch shouldBe facts.batch
+          value.validateC.isSuccess shouldBe true
+        }
+        restored.head shouldBe restored.last
+        restored.head.hashCode shouldBe restored.last.hashCode
+      }
+      modern.head should not be modern.head.copy(mode = None)
+      val other = batch.head.copy(selected = selected.copy(selector = selected.selector.copy(testName = "other")),
+        observation = Some(observation.copy(test = "other")))
+      modern.last should not be modern.last.copy(batch = Some(Vector(other)))
+    }
+
     "retain confirmed nonexecution for every selected kind without a product result or repair" in {
       Given("actual-shaped typed NotStarted results for Compile, Test and TestOnly with no process captures")
       val kinds = Vector(Kind.Compile -> SbtOperation.Compile, Kind.Test -> SbtOperation.Test,
@@ -201,12 +232,12 @@ final class WorkflowSbtValidationSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "retain raw zero with absent or any rejected selection as durable negative facts" in {
-      Given("zero TestOnly results with absent selection and each of the six actual CNCF refusal reasons")
+      Given("zero TestOnly results with absent selection and every actual CNCF selection refusal reason")
       val selections = Vector(None) ++ SbtTestSelectionFailure.values.toVector.map(reason => Some(SbtTestSelectionResult.Rejected(reason)))
       When("native receipts preserve these actual results without interpreting stdout again")
       val receipts = selections.map(selection => take(V.sbtReceiptC("focused", Kind.TestOnly,
         _result(SbtOperation.TestOnly, selection = selection))))
-      Then("all raw exits stay zero while every typed outcome stays unverified and cannot pass")
+      Then("all raw exits stay zero while rejected selection remains unverified and cannot pass")
       receipts.foreach { receipt =>
         receipt.exitCode shouldBe Some(0)
         receipt.sbt.get.outcome shouldBe Outcome.Unverified
@@ -215,6 +246,21 @@ final class WorkflowSbtValidationSpec extends AnyWordSpec with Matchers with Giv
         receipt.asJson.as[V.Receipt] shouldBe Right(receipt)
       }
       receipts.map(_.sbt.get.reason.get) shouldBe Vector("MissingSelection") ++ SbtTestSelectionFailure.values.toVector.map(_.toString)
+    }
+
+    "refuse zero-exit failure without the producer's confirmed TestOnly selection reason" in {
+      Given("a complete zero-exit observation and invented failure facts without a confirmed selected-test reason")
+      val process = _result(SbtOperation.TestOnly).processResult
+      val invalid = Vector(
+        Facts(Kind.TestOnly, Outcome.Failed, None, None),
+        Facts(Kind.TestOnly, Outcome.Failed, None, Some("InvalidReport")),
+        Facts(Kind.TestOnly, Outcome.Failed, None, Some("ModeObservationMismatch")),
+        Facts(Kind.Compile, Outcome.Failed, None, Some("FailedTests")),
+        Facts(Kind.Test, Outcome.Failed, None, Some("FailedTests")))
+      When("the retained receipt checks actual process termination against typed facts")
+      val admitted = invalid.map(WorkflowSbtCapture.valid(process, _))
+      Then("exit zero alone cannot certify a formal failure and compile or Test cannot borrow TestOnly evidence")
+      admitted shouldBe Vector.fill(invalid.size)(false)
     }
 
     "refuse TestOnly success after failure timeout cancellation or output limit" in {

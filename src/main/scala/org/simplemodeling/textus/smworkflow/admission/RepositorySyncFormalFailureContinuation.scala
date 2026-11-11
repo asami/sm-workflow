@@ -22,9 +22,8 @@ import RepositorySyncPurposeContentContinuation.{canonical, exact, ordinary, rev
 
 /** A genuine new validation attempt after explicit host-correction direction.
   * Formal failure and unknown old-worker effects retain separate provenance.
-  * @since Nov. 3, 2026
-  *  version Nov. 3, 2026
-  * @version Nov. 4, 2026
+  * @since   Nov.  3, 2026
+  * @version Nov.  8, 2026
   */
 private[smworkflow] object RepositorySyncFormalFailureContinuation {
   val policy = "sm-workflow.repository-sync-formal-failure-continuation.v1"
@@ -315,7 +314,7 @@ private[smworkflow] object RepositorySyncFormalFailureContinuation {
         checks <- progress.selection.map(s => Consequence.success(s.checks)).getOrElse(N.invalid("formal purpose failure has no selection"))
         index = progress.receipts.size - 2
         check <- checks.lift(index).map(Consequence.success).getOrElse(N.invalid("structural failure is not eligible"))
-        slot <- store.declaration.purposePolicy.toVector.flatMap(_.slots).lift(progress.slotCursor)
+        slot <- RepositorySyncPurpose.slots(store.declaration.purposePolicy, store.context.repositoryIdentity).lift(progress.slotCursor)
           .map(Consequence.success).getOrElse(N.invalid("failed purpose slot is absent"))
         prefix = RepositorySyncPurposeRuntime.attemptPrefix(progress)
         intent <- _load_c(store, prefix + "-check-" + index + "-intent")
@@ -593,7 +592,7 @@ private[smworkflow] object RepositorySyncFormalFailureContinuation {
     _ <- store.scopeC(actual.observed)
     _ <- if (host == target.processPlan && validation == target.validationPolicy && actual == target.actual && tree == target.indexTree &&
         store.core.component.get.core.instanceId.canonicalKey == target.componentInstance &&
-        target.purposeSlot == target.purpose.flatMap(p => store.declaration.purposePolicy.toVector.flatMap(_.slots).lift(p.slotCursor)))
+        target.purposeSlot == target.purpose.flatMap(p => RepositorySyncPurpose.slots(store.declaration.purposePolicy, store.context.repositoryIdentity).lift(p.slotCursor)))
       Consequence.unit else N.invalid("formal host, candidate, index or selected policy changed after description")
   } yield ()
   def authenticateCandidateC(store: N.Store, current: InstanceRecord, candidate: N.Stage, selected: String): Consequence[Unit] = for {

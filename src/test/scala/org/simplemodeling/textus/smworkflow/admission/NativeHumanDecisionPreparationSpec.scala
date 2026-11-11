@@ -23,9 +23,9 @@ import NativeExternalEvidence.{Purpose, Evidence}
 import SplitPhaseExplicitPartitionFixture.take
 
 /** Shared specification-owned inputs, never a genuine Human/review issuer.
-  * @since   Oct. 14, 2026
-  *  version Oct. 25, 2026
-  * @version Nov.  3, 2026
+  * Created: Oct. 14, 2026
+  *  Revised: Oct. 25, 2026
+  * Last revised: Nov.  3, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativePreparationFixture {
@@ -92,8 +92,7 @@ private[admission] trait NativePreparationManagedFixture extends ThreeWorkflowMa
 /** Issued fixture questions and explicit fixture answers exercise passive preparation.
   * @since   Oct. 14, 2026
   *  version Oct. 26, 2026
-  *  version Nov.  3, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

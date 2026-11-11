@@ -13,7 +13,7 @@ import org.goldenport.protocol.Request
   * Standard borrows the existing mapping. Opt-in mappings are host declarations,
   * never a model table, observed availability or permission to execute.
   * @since   Oct. 29, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseOperatingProfiles {

@@ -46,7 +46,7 @@ import GoalPhaseCanonicalDependencySourceSuccession as CanonicalSource
   *  version Oct. 28, 2026
   *  version Oct. 31, 2026
   *  version Oct. 29, 2026
-  * @version Nov.  9, 2026
+  * @version Nov. 11, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWorkContinuation {
@@ -3918,8 +3918,6 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       val codec = new WorkflowCompletionServiceOperation.Codec[S.Result] {
         val resultTypeIdentity = S.resultCodec.typeIdentity
         def decodeC(request: ProtocolRequest) = for {
-          raw <- NativeWorkflowOperationInput.recordC(request, "result")
-          _ <- GoalPhaseDependencyValidation.validatePublicResultC(raw)
           submitted <- result.map(NativeWorkflowResultInput.typedC(_, S.resultCodec))
             .getOrElse(F.invalid("ordered completion has no resolved semantic result"))
           call <- core.map(Consequence.success).getOrElse(F.invalid("completion requires its actual owning call"))

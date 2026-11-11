@@ -1177,6 +1177,26 @@ uncommitted completion contract.
 
 ## Forward standard dispatch and ordinary-work comparison (2026-11-02)
 
+Current compact control responses may carry `retainedWork` and `controlSummary`
+instead of the full semantic body. Keep their unchanged native issued context.
+When semantic work or independent evidence preparation needs that body, use the
+product caller's explicit `--action read-work --request <absolute-control-artifact>`
+with its ordinary executable/runtime-root/task/output arguments, or invoke the
+declared `WorkflowRetainedWorkService.readWorkflowRetainedWork` with that exact
+typed reference. This is one owner read, never Start, Advance or accepted Submit
+replay. Missing, foreign or unsupported references remain concrete failures;
+do not infer a latest revision or access private Workflow storage.
+
+The returned detail artifact contains `availability`, the exact `reference` and
+`response`, which is the selected original issued business Request. The product
+dispatcher and submission helpers accept this wrapper without rewriting it;
+retain the complete caller artifact. Shared evidence preparation can receive
+the reference's `resource` directly, with no caller reconstruction of a complete
+historical envelope. Legacy full-body Request artifacts remain supported.
+`retainedMaterials` separately identifies selected immutable field snapshots;
+small current observations in `controlSummary` are not replacements for those
+historical revisions. Explicit native snapshot detail reads never execute work.
+
 For newly issued work only, the explicit Component setting
 `sm-workflow.goal-phase.dispatch-policy=standard-2026-11-01` captures the new
 logical route. Retain historical absence, old concrete captures and their one
@@ -1326,3 +1346,18 @@ actual native Session/continuation/Step identities and accepted commit IDs.
 Missing historical time, tokens, provider identity and complete attempt history
 remain unknown. This passive projection permits no extra acquisition, AI call,
 replay, acceptance or process effect.
+
+## Retained preparation output
+
+Normal importer preparation returns compact storage availability and an actual
+`retainedImport` only after confirmed CommonEvidence retention. Pass that exact
+reference to `NativeWorkflowPreparationService.readPreparedImport` when the
+complete importer is needed, then use its actual output through the existing
+trusted import route. Missing setup, unavailable or UNKNOWN storage never grants
+a full-output fallback or retry. Preparation is prepared, never check acceptance
+or Human/review/execution authority. Explicit lower-level
+`--preparationFormat legacy-full` preserves former complete importer output
+without retention. Preserve the original source/provenance; contradictory bytes
+under the same business source association refuse. The bundled caller follows
+retained detail and accepts historical full outputs. External deployed caller
+copies require their own adoption; do not treat them as already updated.

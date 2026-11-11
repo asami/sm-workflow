@@ -8,7 +8,8 @@ import org.goldenport.protocol.operation.OperationResponse
 /** Logical File intents interpreted only by the owning call's current UoW.
   * CNCF owns workspace authority, complete acquisition and per-file installation.
   * @since   Oct. 15, 2026
-  * @version Oct. 21, 2026
+  *  version Oct. 21, 2026
+  * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowFileExecution {
@@ -32,6 +33,18 @@ private[smworkflow] object WorkflowFileExecution {
     representation: FileRepresentation): Consequence[FileReadBytesResult] =
     _owning_c(core).flatMap(_.readBytesC(target, path, representation))
 
+  def readTextC(core: ActionCall.Core, target: FileTarget, path: WorkspaceFilePath,
+    policy: FileReadPolicy): Consequence[FileReadTextResult] =
+    _owning_c(core).flatMap(_.readC(target, path, policy))
+
+  def readBytesC(core: ActionCall.Core, target: FileTarget, path: WorkspaceFilePath,
+    representation: FileRepresentation, policy: FileReadPolicy): Consequence[FileReadBytesResult] =
+    _owning_c(core).flatMap(_.readBytesC(target, path, representation, policy))
+
+  def writeBytesC(core: ActionCall.Core, target: FileTarget, path: WorkspaceFilePath,
+    bytes: Vector[Byte], representation: FileRepresentation, policy: FileWritePolicy): Consequence[FileWriteBytesResult] =
+    _owning_c(core).flatMap(_.writeBytesC(target, path, bytes, representation, policy))
+
   private def _owning_c(core: ActionCall.Core): Consequence[Execution] =
     if (core == null || core.executionContext == null)
       Consequence.stateConflict("Workflow File requires its actual owning call")
@@ -51,6 +64,14 @@ private[smworkflow] object WorkflowFileExecution {
     def readBytesC(target: FileTarget, path: WorkspaceFilePath,
       representation: FileRepresentation): Consequence[FileReadBytesResult] =
       executeProgram(file_read_bytes(target, path, representation))
+    def readC(target: FileTarget, path: WorkspaceFilePath, policy: FileReadPolicy): Consequence[FileReadTextResult] =
+      executeProgram(file_read_text(target, path, policy))
+    def readBytesC(target: FileTarget, path: WorkspaceFilePath, representation: FileRepresentation,
+      policy: FileReadPolicy): Consequence[FileReadBytesResult] =
+      executeProgram(file_read_bytes(target, path, representation, policy))
+    def writeBytesC(target: FileTarget, path: WorkspaceFilePath, bytes: Vector[Byte],
+      representation: FileRepresentation, policy: FileWritePolicy): Consequence[FileWriteBytesResult] =
+      executeProgram(file_write_bytes(target, path, bytes, representation, policy))
     def execute(): Consequence[OperationResponse] =
       Consequence.stateConflict("Workflow File bridge is not a public Operation")
   }

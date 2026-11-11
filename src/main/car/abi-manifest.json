@@ -131,6 +131,9 @@
         },
         {
           "name": "WorkflowForceClosureService"
+        },
+        {
+          "name": "WorkflowRetainedWorkService"
         }
       ],
       "operations": [
@@ -439,42 +442,42 @@
           "service": "NativeWorkflowPreparationService",
           "name": "prepareGoalStart",
           "kind": "COMMAND",
-          "output": "WorkflowPreparedImport",
+          "output": "WorkflowPreparationResult",
           "input": "WorkflowGoalStartPreparationInput"
         },
         {
           "service": "NativeWorkflowPreparationService",
           "name": "prepareRepositoryStart",
           "kind": "COMMAND",
-          "output": "WorkflowPreparedImport",
+          "output": "WorkflowPreparationResult",
           "input": "WorkflowRepositoryStartPreparationInput"
         },
         {
           "service": "NativeWorkflowPreparationService",
           "name": "prepareSplitStart",
           "kind": "COMMAND",
-          "output": "WorkflowPreparedImport",
+          "output": "WorkflowPreparationResult",
           "input": "WorkflowSplitStartPreparationInput"
         },
         {
           "service": "NativeWorkflowPreparationService",
           "name": "prepareRepositoryEffect",
           "kind": "COMMAND",
-          "output": "WorkflowPreparedImport",
+          "output": "WorkflowPreparationResult",
           "input": "WorkflowRepositoryEffectPreparationInput"
         },
         {
           "service": "NativeWorkflowPreparationService",
           "name": "prepareAuthority",
           "kind": "COMMAND",
-          "output": "WorkflowPreparedImport",
+          "output": "WorkflowPreparationResult",
           "input": "WorkflowAuthorityPreparationInput"
         },
         {
           "service": "NativeWorkflowPreparationService",
           "name": "prepareEvidence",
           "kind": "COMMAND",
-          "output": "WorkflowPreparedImport",
+          "output": "WorkflowPreparationResult",
           "input": "WorkflowEvidencePreparationInput"
         },
         {
@@ -636,21 +639,21 @@
           "name": "prepareStandaloneFixStart",
           "kind": "COMMAND",
           "input": "WorkflowStandaloneFixStartPreparationInput",
-          "output": "WorkflowPreparedImport"
+          "output": "WorkflowPreparationResult"
         },
         {
           "service": "NativeWorkflowPreparationService",
           "name": "prepareStandaloneReviewFixStart",
           "kind": "COMMAND",
           "input": "WorkflowStandaloneReviewFixStartPreparationInput",
-          "output": "WorkflowPreparedImport"
+          "output": "WorkflowPreparationResult"
         },
         {
           "service": "NativeWorkflowPreparationService",
           "name": "prepareGoalTaskStart",
           "kind": "COMMAND",
           "input": "WorkflowGoalTaskStartPreparationInput",
-          "output": "WorkflowPreparedImport"
+          "output": "WorkflowPreparationResult"
         },
         {
           "service": "NativeWorkflowPreparationService",
@@ -811,7 +814,7 @@
           "name": "prepareDelegateTaskStart",
           "kind": "COMMAND",
           "input": "WorkflowDelegateTaskStartPreparationInput",
-          "output": "WorkflowPreparedImport"
+          "output": "WorkflowPreparationResult"
         },
         {
           "service": "EvidenceService",
@@ -902,7 +905,7 @@
           "name": "prepareDelegateTaskScopeCorrection",
           "kind": "COMMAND",
           "input": "WorkflowDelegateTaskScopeCorrectionPreparationInput",
-          "output": "WorkflowPreparedImport"
+          "output": "WorkflowPreparationResult"
         },
         {
           "service": "GoalPhaseService",
@@ -930,7 +933,7 @@
           "name": "prepareDelegateTaskCandidateContinuation",
           "kind": "COMMAND",
           "input": "WorkflowDelegateTaskCandidateContinuationPreparationInput",
-          "output": "WorkflowPreparedImport"
+          "output": "WorkflowPreparationResult"
         },
         {
           "service": "DelegateTaskService",
@@ -987,6 +990,48 @@
           "kind": "COMMAND",
           "input": "GoalTaskValidationContinuationDescriptionInput",
           "output": "GoalTaskValidationContinuationDescriptionResult"
+        },
+        {
+          "service": "RepositorySyncService",
+          "name": "syncRepositoryDirectories",
+          "kind": "COMMAND",
+          "output": "RepositoryDirectoryBatchResult",
+          "input": "RepositoryDirectorySyncInput"
+        },
+        {
+          "service": "RepositorySyncService",
+          "name": "readRepositoryDirectoryResult",
+          "kind": "COMMAND",
+          "output": "RepositoryDirectoryBatchResult",
+          "input": "RepositoryDirectoryResultReadInput"
+        },
+        {
+          "service": "WorkflowRetainedWorkService",
+          "name": "readWorkflowRetainedWork",
+          "kind": "COMMAND",
+          "input": "WorkflowRetainedWorkReference",
+          "output": "WorkflowRetainedWorkReadResult"
+        },
+        {
+          "service": "WorkflowRetainedWorkService",
+          "name": "readWorkflowRetainedSnapshot",
+          "kind": "COMMAND",
+          "input": "WorkflowRetainedSnapshotReference",
+          "output": "WorkflowRetainedSnapshotReadResult"
+        },
+        {
+          "service": "RepositorySyncService",
+          "name": "refreshRepositoryDirectoryConfiguration",
+          "kind": "COMMAND",
+          "input": "RepositoryDirectoryConfigurationRefreshInput",
+          "output": "RepositoryDirectoryBatchResult"
+        },
+        {
+          "service": "NativeWorkflowPreparationService",
+          "name": "readPreparedImport",
+          "kind": "COMMAND",
+          "input": "WorkflowPreparedImportReference",
+          "output": "WorkflowPreparedImport"
         }
       ],
       "types": [
@@ -3932,7 +3977,26 @@
         {
           "name": "GoalPhaseOrderedDecisionContext",
           "kind": "statemachine",
-          "fields": []
+          "fields": [
+            {
+              "name": "requestingResult",
+              "type": "GoalPhaseWorkResult",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choice",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
         },
         {
           "name": "SplitPhaseReasoningSemanticContext",
@@ -6003,6 +6067,24 @@
               "type": "WorkflowReviewContext",
               "multiplicity": "?",
               "required": false
+            },
+            {
+              "name": "retainedWork",
+              "type": "WorkflowRetainedWorkReference",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "controlSummary",
+              "type": "record",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "retainedMaterials",
+              "type": "WorkflowRetainedFieldReference",
+              "multiplicity": "*",
+              "required": false
             }
           ]
         },
@@ -6272,6 +6354,24 @@
               "name": "reviewContext",
               "type": "WorkflowReviewContext",
               "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "retainedWork",
+              "type": "WorkflowRetainedWorkReference",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "controlSummary",
+              "type": "record",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "retainedMaterials",
+              "type": "WorkflowRetainedFieldReference",
+              "multiplicity": "*",
               "required": false
             }
           ]
@@ -7431,6 +7531,24 @@
               "type": "WorkflowReviewContext",
               "multiplicity": "?",
               "required": false
+            },
+            {
+              "name": "retainedWork",
+              "type": "WorkflowRetainedWorkReference",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "controlSummary",
+              "type": "record",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "retainedMaterials",
+              "type": "WorkflowRetainedFieldReference",
+              "multiplicity": "*",
+              "required": false
             }
           ]
         },
@@ -8041,8 +8159,14 @@
             {
               "name": "input",
               "type": "WorkflowForceClosureAnswer",
-              "multiplicity": "1",
-              "required": true
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "inputResource",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
             }
           ]
         },
@@ -8877,6 +9001,150 @@
               "type": "WorkflowArtifactReference",
               "multiplicity": "1",
               "required": true
+            }
+          ]
+        },
+        {
+          "name": "RepositoryDirectorySummary",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "repositoryIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "workspace",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "kind",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "condition",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "nativeRevision",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "tip",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "tree",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "diagnostic",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "work",
+              "type": "RepositorySyncAdvanceResult",
+              "multiplicity": "?",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "WorkflowPreparedImportReference",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "schemaVersion",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "componentInstance",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participantIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "operation",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "sourceReference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "evidence",
+              "type": "EvidenceReference",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "WorkflowPreparationResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "status",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "retainedImport",
+              "type": "WorkflowPreparedImportReference",
+              "multiplicity": "?",
+              "required": false
+            },
+            {
+              "name": "datastore",
+              "type": "WorkflowPreparedImportCollection",
+              "multiplicity": "*",
+              "required": false
             }
           ]
         }

@@ -594,7 +594,7 @@ private[smworkflow] object GoalPhaseCandidateRecovery {
       val core = c
       def execute(): Consequence[OperationResponse] = for {
         recovered <- input.fold(Consequence.success(Option.empty[V.GoalPhaseCandidateRecoveryInput]))(source =>
-          NativeWorkflowResourceInput.readC(source, reference => read_resource_text(reference,
+          NativeWorkflowResourceInput.readC(source, reference => WorkflowArtifactBudget.readTextC(core, reference,
             Some(java.nio.charset.StandardCharsets.UTF_8))).flatMap(recoveryInputC).flatMap { value =>
             if (value == null || !_exact(value.sessionId) || value.reference == null ||
                 !Vector("AuthorizeNewObservation", "ReviseWork", "Defer").contains(value.choice) ||

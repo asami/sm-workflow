@@ -29,8 +29,16 @@ private[smworkflow] object WorkflowValidationInitialization {
           .fold(e => Consequence.configurationInvalid(e.message), Consequence.success)
         case _ => Consequence.success(Json.obj())
       }
-      initialized <- assembleC(root, plan, project, program, documents)
-    } yield initialized
+      ordinary <- if (program.nonEmpty) Consequence.success(None)
+        else RepositorySyncProgramImpact.ordinaryPolicyC(parameters, root.toString, plan)
+      initialized <- assembleC(root, plan, project, program.orElse(ordinary), documents)
+      bound <- initialized.program match {
+        case Some(policy) if policy.checks.exists(check => check.ordinaryDiscovery || check.metadata.nonEmpty) =>
+          RepositorySyncProgramImpact.bindOrdinaryC(policy, plan, root.toString)
+            .map(value => initialized.copy(program = Some(value)))
+        case _ => Consequence.success(initialized)
+      }
+    } yield bound
   }
 
   /** This inventory narrows existing declarations. Managed execution remains the

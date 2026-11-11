@@ -94,7 +94,7 @@ lazy val root = project
       val request = LabelledTests.request(sbt.complete.DefaultParsers.spaceDelimited("selection").parsed)
       val candidates = LabelledTests.candidates(request, (Test / definedTests).value)
       val selected = LabelledTests.select((Test / fullClasspath).value.files,
-        (Test / classDirectory).value, version.value, request.purpose, candidates, request.exact, request.containing)
+        (Test / classDirectory).value, version.value, request.purpose, candidates, request.exact, request.containing, request.properties)
       val operations = selected.map(_.definition.selectors.length).sum
       streams.value.log.info(s"Labelled selection: purpose=${request.purpose} suites=${selected.size} operations=$operations runtime=${selected.exists(_.requiresRuntime)}")
       selected.foreach(value => streams.value.log.info("Selected: " + value.definition.name))
@@ -110,12 +110,13 @@ lazy val root = project
       try {
         val candidates = LabelledTests.candidates(request, (Test / definedTests).value)
         val selected = LabelledTests.select((Test / fullClasspath).value.files,
-          (Test / classDirectory).value, version.value, request.purpose, candidates, request.exact, request.containing)
+          (Test / classDirectory).value, version.value, request.purpose, candidates, request.exact, request.containing, request.properties)
         streams.value.log.info(s"Labelled execution: purpose=${request.purpose} suites=${selected.size} operations=${selected.map(_.definition.selectors.length).sum} runtime=${selected.exists(_.requiresRuntime)}")
         // One ordinary SBT execution produces its genuine aggregate report.
         // Definitions retain their own metadata-selected TestSelector arrays.
         val execution = Def.valueStrict(LabelledTests.execute(selected, (Test / loadedTestFrameworks).value,
-          loader, (Test / labelledTestExecution / testExecution).value, streams.value.log))
+          loader, (Test / labelledTestExecution / testExecution).value, streams.value.log,
+          properties = request.properties, fork = (Test / fork).value))
         val resultLogger = (Test / labelledTestExecution / testResultLogger).value
         val log = streams.value.log
         val runs = Def.task {

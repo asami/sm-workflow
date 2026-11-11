@@ -15,7 +15,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * encoding owns the generic contracts; this view grants no execution authority.
   * @since   Oct. 14, 2026
   *  version Oct. 29, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  6, 2026
   */
 private[smworkflow] object NativeWorkflowIssuedWorkContext {
   enum Mode(val value: String) {

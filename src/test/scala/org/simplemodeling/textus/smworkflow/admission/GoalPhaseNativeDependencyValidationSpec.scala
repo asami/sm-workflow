@@ -183,7 +183,7 @@ private[admission] object LegacyDependencyHistoryFixture {
   * They establish no actual Git/SBT execution or production Human authority.
   * @since   Oct. 24, 2026
   *  version Oct. 25, 2026
-  * @version Nov.  2, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

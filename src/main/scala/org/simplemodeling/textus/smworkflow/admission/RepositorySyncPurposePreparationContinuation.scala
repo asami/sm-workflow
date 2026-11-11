@@ -24,8 +24,9 @@ import RepositorySyncPurposePreparationIntentContinuation as Intent
 
 /** Read the actual failed Git receipt; a separate Human direction appends a
   * fresh preparation namespace without resubmitting the accepted repair.
-  * @since Nov. 4, 2026
-  * @version Nov. 4, 2026
+  * @since   Nov.  4, 2026
+  *  version Nov.  4, 2026
+  * @version Nov.  8, 2026
   */
 private[smworkflow] object RepositorySyncPurposePreparationContinuation {
   val purpose = "repository-sync-purpose-preparation-continuation"
@@ -248,7 +249,7 @@ private[smworkflow] object RepositorySyncPurposePreparationContinuation {
     } yield matched && actual == expected.text }
   }
   private def _root_matches_c(store: N.Store, p: P.Progress): Consequence[Boolean] = for {
-    workspace <- WorkspaceId.parseC("sm-workflow-repository")
+    workspace <- WorkspaceId.parseC(RepositorySyncDirectoryList.workspace(store.core, "sm-workflow-repository"))
     matches <- rootMatchesC(p, name => for {
       path <- WorkspaceFilePath.parseC(name)
       actual <- WorkflowFileExecution.readTextC(store.core, FileTarget(workspace), path)
@@ -364,7 +365,7 @@ private[smworkflow] object RepositorySyncPurposePreparationContinuation {
       val core: ActionCall.Core = call
       def execute(): Consequence[OperationResponse] = N.invalid("preparation session reader is not an Operation")
       def readC: Consequence[String] = NativeWorkflowResourceInput.selectC[Record](suppliedRequest).flatMap(source =>
-        NativeWorkflowResourceInput.readC(source, ref => read_resource_text(ref, Some(java.nio.charset.StandardCharsets.UTF_8))))
+        NativeWorkflowResourceInput.readC(source, ref => WorkflowArtifactBudget.readTextC(core, ref, Some(java.nio.charset.StandardCharsets.UTF_8))))
         .flatMap(_input_c).map(_.sessionId)
     }
     new Reader().readC
@@ -400,7 +401,7 @@ private[smworkflow] object RepositorySyncPurposePreparationContinuation {
         val core = c
         def execute(): Consequence[OperationResponse] = for {
           value <- input.fold(Consequence.success(Option.empty[V.RepositorySyncPurposePreparationContinuationAdoptionInput]))(source =>
-            NativeWorkflowResourceInput.readC(source, ref => read_resource_text(ref, Some(java.nio.charset.StandardCharsets.UTF_8)))
+            NativeWorkflowResourceInput.readC(source, ref => WorkflowArtifactBudget.readTextC(core, ref, Some(java.nio.charset.StandardCharsets.UTF_8)))
               .flatMap(_input_c).map(Some(_)))
           sessionid = value.map(_.sessionId).orElse(identity).get
           context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(sessionid))
@@ -408,11 +409,14 @@ private[smworkflow] object RepositorySyncPurposePreparationContinuation {
           result <- value match {
             case None => Intent.selectedC(sessionid, d, definition, selected, acknowledge).flatMap {
               case true => Intent.describeC(sessionid, d, definition, selected, acknowledge)
-              case false => _observe_c(sessionid, d, definition, selected, acknowledge).map(observed =>
-              NativeWorkflowOperationOutput.response(V.RepositorySyncPurposePreparationContinuationDescriptionResult(sessionid,
+              case false => _observe_c(sessionid, d, definition, selected, acknowledge).flatMap { observed => for {
+                target <- WorkflowRetainedSnapshot.compactC(targetRecord(observed.target), Vector(
+                  "progressSnapshot" -> WorkflowRetainedSnapshot.reference(observed.store, observed.source,
+                    observed.target.failureKey, "purpose-repair-progress")), selected)
+              } yield NativeWorkflowOperationOutput.response(V.RepositorySyncPurposePreparationContinuationDescriptionResult(sessionid,
                 if (observed.target.eligibilityReason.isEmpty) "adoption-required" else "ineligible",
                 if (observed.target.eligibilityReason.isEmpty) message else observed.target.eligibilityReason,
-                observed.target.componentInstance, targetRecord(observed.target), targetChoices(observed.target), adoptionOperation)))
+                observed.target.componentInstance, target, targetChoices(observed.target), adoptionOperation)) }
             }
             case Some(supplied) => targetPolicyC(supplied.target).flatMap {
               case version if version == Intent.policy => Intent.adoptC(supplied, d, definition, installation, selected, acknowledge)

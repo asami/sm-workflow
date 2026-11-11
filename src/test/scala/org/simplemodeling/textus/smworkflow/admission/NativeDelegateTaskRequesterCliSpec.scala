@@ -15,8 +15,8 @@ import SplitPhaseExplicitPartitionFixture.take
 /** One explicitly selected installed behavioral case. Every caller/destination
   * identity and transport observation here is SPECIFICATION-OWNED, not actual
   * chat delivery, producer execution, publication or consumer adoption.
-  * @since   Nov. 5, 2026
-  * @version Nov. 5, 2026
+  * @since   Nov.  5, 2026
+  * @version Nov.  6, 2026
   */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

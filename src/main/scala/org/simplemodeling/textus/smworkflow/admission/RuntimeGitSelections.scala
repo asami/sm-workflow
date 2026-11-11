@@ -14,8 +14,8 @@ import org.goldenport.record.{Record, RecordPresentable}
   * Git boundary still admits the workspace, actor, capability and arguments.
   * Explicit legacy compositions do not install this data and keep their fixed
   * programs. Nothing is written to a file or cached across calls.
-  * @since Oct. 27, 2026
-  * @version Nov.  5, 2026
+  * @since   Oct. 27, 2026
+  * @version Nov.  6, 2026
   */
 private[smworkflow] object RuntimeGitSelections {
   private val key = "sm-workflow.runtime-git-data"

@@ -9,7 +9,7 @@ import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseFindingRecording
 /** Finite wire names for supplied Human questions; native scopes own projection.
   * @since   Oct. 15, 2026
   *  version Oct. 26, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeHumanDecisionQuestionWire {

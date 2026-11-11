@@ -22,9 +22,8 @@ import RepositorySyncNativeMergeValidation as C
 
 /** Explicit append-only direction for an ended invocation with no check result.
   * Description observes Git; adoption only appends a native mechanical record.
-  * @since Oct. 26, 2026
-  *  version Nov.  3, 2026
-  * @version Nov.  4, 2026
+  * @since   Oct. 26, 2026
+  * @version Nov.  8, 2026
   */
 private[smworkflow] object RepositorySyncValidationContinuation {
   val purpose = "repository-sync-validation-continuation"
@@ -568,7 +567,11 @@ private[smworkflow] object RepositorySyncValidationContinuation {
   private[admission] def adoptionSourceC(request: Request): Consequence[NativeWorkflowResourceInput.Source[Record]] = for {
     source <- GoalPhasePrerequisitePublicationRecovery.resourceInputC(request)
     _ <- source match {
-      case NativeWorkflowResourceInput.Inline(record) => adoptionInputC(record).map(_ => ())
+      case NativeWorkflowResourceInput.Inline(record) => record.toJsonStringC.flatMap { text =>
+        // Exact snapshot descriptors require current-context owner resolution.
+        // The complete original target decoder runs in readAdoptionInputC.
+        if (text.contains("retainedSnapshot")) Consequence.unit else adoptionInputC(record).map(_ => ())
+      }
       case _: NativeWorkflowResourceInput.Resource => Consequence.unit
     }
   } yield source
@@ -582,7 +585,7 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     final class Reader extends ProcedureActionCall {
       val core = call
       def readSessionC: Consequence[String] = adoptionSourceC(suppliedRequest).flatMap(source =>
-        readAdoptionInputC(source, reference => read_resource_text(reference,
+        readAdoptionInputC(source, reference => WorkflowArtifactBudget.readTextC(core, reference,
           Some(java.nio.charset.StandardCharsets.UTF_8))).map(_.sessionId))
       def execute(): Consequence[OperationResponse] = N.invalid("validation continuation reader is not an Operation")
     }
@@ -633,7 +636,7 @@ private[smworkflow] object RepositorySyncValidationContinuation {
         def execute(): Consequence[OperationResponse] = for {
           value <- input match {
             case None => Consequence.success(Option.empty[V.RepositorySyncValidationContinuationAdoptionInput])
-            case Some(source) => readAdoptionInputC(source, reference => read_resource_text(reference,
+            case Some(source) => readAdoptionInputC(source, reference => WorkflowArtifactBudget.readTextC(core, reference,
               Some(java.nio.charset.StandardCharsets.UTF_8))).map(Some(_))
           }
           session = value.map(_.sessionId).orElse(identity).get

@@ -8,7 +8,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /** One tiny installed adoption scenario. All fixture Human and
   * independent review evidence is specification-owned, never consumer authority.
   * @since   Nov.  5, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  6, 2026
   */
 @org.scalatest.DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

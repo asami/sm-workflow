@@ -24,6 +24,7 @@ import org.simplemodeling.textus.smworkflow.value.{GoalPhaseDevelopmentReconstru
   * @since   Oct. 27, 2026
   *  version Oct. 28, 2026
   *  version Nov.  7, 2026
+  *  version Nov.  8, 2026
   * @version Nov.  9, 2026
   */
 private[smworkflow] object StandardWorkflowRuntime {
@@ -38,8 +39,13 @@ private[smworkflow] object StandardWorkflowRuntime {
     request: Request, core: ActionCall.Core): Consequence[Vector[spec.ServiceDefinition]] = for {
     shared <- sharedC(creation, parameters)
     services <- request.service match {
+      case Some("WorkflowRetainedWorkService") => Consequence.success(Vector(WorkflowRetainedWork.bind))
       case Some("SplitPhaseService") => splitC(creation, parameters, shared, core).map(Vector(_))
       case Some("GoalPhaseService") => goalC(creation, parameters, shared, request, core).map(Vector(_))
+      case Some("RepositorySyncService") if RepositorySyncDirectoryList.operations(request.operation) =>
+        Consequence.success(Vector(RepositorySyncDirectoryList.bind(creation, parameters, shared.persistence,
+          (selectedrequest, selectedcore, selectedtarget) =>
+            repositoryC(creation, parameters, shared, selectedrequest, selectedcore, Some(selectedtarget)))))
       case Some("RepositorySyncService") => repositoryC(creation, parameters, shared, request, core).map(Vector(_))
       case Some("JournalService") => Consequence.success(Vector(DevelopmentJournalService.bind(shared.journal)))
       case Some("EvidenceService") => Consequence.success(Vector(CommonEvidenceService.bind(shared.evidence, shared.journal)))
@@ -177,11 +183,11 @@ private[smworkflow] object StandardWorkflowRuntime {
   } yield value
 
   private def repositoryC(creation: ComponentCreate, parameters: ComponentInitializationParameters, shared: Shared,
-    request: Request, core: ActionCall.Core): Consequence[spec.ServiceDefinition] = for {
+    request: Request, core: ActionCall.Core,
+    selectedtarget: Option[RepositoryGitRuntimePrograms.Target] = None): Consequence[spec.ServiceDefinition] = for {
     definition <- RepositorySyncDefinitionBinding.bindC
     p = shared.persistence
-    target <- targetC(creation)
-    selectedInput <- if (request.operation == "startRepositorySync") StandardRepositorySyncIntent.inputC(request, target).map(_ -> true)
+    retained <- if (request.operation == "startRepositorySync") Consequence.success(Option.empty[RepositorySyncManagedFetch.Payload])
       else for {
         session <- _repository_session_c(request, core)
         context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(session))
@@ -189,10 +195,19 @@ private[smworkflow] object StandardWorkflowRuntime {
           Vector(definition), p.instances, p.continuations)
         starts <- storage.bindMechanicalC(RepositorySyncManagedFetch.startOperation, RepositorySyncManagedFetch.codec(true))
         retained <- starts.loadRetainedC(RepositorySyncManagedFetch.reference(session, "start"))(using context)
-        selected <- retained.flatMap(_.receipt.payload.value.context).map(Consequence.success)
+        selected <- retained.map(value => Consequence.success(value.receipt.payload.value))
           .getOrElse(invalid("Session has no native RepositorySync Start"))
-      } yield (RepositorySyncStartInput(selected.repositoryIdentity, selected.localBranch, selected.trackingRemote,
-        selected.trackingBranch, selected.remoteEndpointIdentity, selected.syncMode), StandardRepositorySyncIntent.owns(selected))
+      } yield Some(selected)
+    binding <- selectedtarget match {
+      case Some(target) => Consequence.success(target -> RepositorySyncDirectoryList.workspace(core, "sm-workflow-repository"))
+      case None => _repository_target_c(creation, request, retained)
+    }
+    target = binding._1
+    call = RepositorySyncDirectoryList.scopedCore(core, binding._2)
+    selectedInput <- if (request.operation == "startRepositorySync") StandardRepositorySyncIntent.inputC(request, target).map(_ -> true)
+      else retained.flatMap(_.context).map { selected => Consequence.success((RepositorySyncStartInput(selected.repositoryIdentity,
+        selected.localBranch, selected.trackingRemote, selected.trackingBranch, selected.remoteEndpointIdentity, selected.syncMode),
+        StandardRepositorySyncIntent.owns(selected))) }.getOrElse(invalid("Session has no native RepositorySync Start context"))
     input = selectedInput._1
     classifications <- RepositorySyncNativeExecution.resolveC(parameters)
     initialized <- shared.validation.repositoryC(target.root, core)
@@ -214,7 +229,7 @@ private[smworkflow] object StandardWorkflowRuntime {
     // Before review use actual conflicts; afterwards use that issued review's
     // retained candidate paths so staging does not erase the repair scope.
     paths <- if (request.operation == "startRepositorySync") Consequence.success(Set.empty[String])
-      else repositoryPathsC(declaration, definition, request, core)
+      else repositoryPathsC(declaration, definition, request, call)
     service <- RepositorySyncManagedServiceAssembly.bindRuntimeC(creation, declaration, nativeProgression = true,
       conflictPolicy = RepositorySyncNativeConflictInput.Policy(paths), validationPolicy = Some(validation),
       nativeReview = Some(RepositorySyncNativeMergeReview.Installation(repositoryReview, shared.ports.repositoryReview)),
@@ -227,7 +242,41 @@ private[smworkflow] object StandardWorkflowRuntime {
       pushContinuation = Some(RepositorySyncPushContinuation.Installation(shared.ports.repositoryPushContinuation)))
     selected <- RuntimeGitSelections.repositoryC(NativeWorkflowSessionInput.repository(
       NativeWorkflowResultInput.repository(service, creation, declaration, definition), creation, declaration, definition, runtimeIntent = true), paths)
-  } yield StandardRepositorySyncIntent.bindInput(selected, input)
+  } yield RepositorySyncDirectoryList.bindWorkspace(StandardRepositorySyncIntent.bindInput(selected, input), binding._2)
+
+  /** The same admitted host plan resolves both a directory member and the
+    * ordinary lower-level repository entry. Recollection uses its original
+    * native root rather than an ambient default target.
+    */
+  private def _repository_target_c(creation: ComponentCreate, request: Request,
+    retained: Option[RepositorySyncManagedFetch.Payload]): Consequence[(RepositoryGitRuntimePrograms.Target, String)] = for {
+    plan <- GoalPhaseInputRecordReadPolicy.storedValue(creation.configuration.configuration.values,
+      CncfConfigurationParameterCatalog.SUBSYSTEM_PROCESS_EXECUTION_PLAN_KEY) match {
+      case Some(ConfigurationValue.StringValue(value)) => io.circe.parser.parse(value).fold(e => invalid(e.message), Consequence.success)
+      case _ => invalid("No managed repository execution profile is configured for this RuntimeRoot")
+    }
+    root <- retained match {
+      case Some(value) => Consequence.success(value.repositoryRoot)
+      case None => for {
+        input <- NativeWorkflowOperationInput.recordC(request, "input")
+        identity <- input.getString("repositoryIdentity").map(Consequence.success)
+          .getOrElse(invalid("RepositorySync requires an explicit repositoryIdentity"))
+        repositories <- plan.hcursor.get[Vector[Json]]("gitRepositories").fold(e => invalid(e.message), Consequence.success)
+        matching = repositories.filter(repository => repository.hcursor.get[String]("identity").contains(identity) ||
+          repository.hcursor.get[String]("target").contains(identity))
+        // A single explicitly configured legacy binding retains its caller's
+        // business repository identity. Multiple bindings require an exact one.
+        repository <- uniqueC(if (matching.nonEmpty) matching else if (repositories.size == 1) repositories else Vector.empty,
+          "RepositorySync requires one configured repository identity; no destination is guessed")
+        workspace <- repository.hcursor.get[String]("target").fold(e => invalid(e.message), Consequence.success)
+        workspaces <- plan.hcursor.get[Vector[Json]]("workspaces").fold(e => invalid(e.message), Consequence.success)
+        selected <- uniqueC(workspaces.filter(_.hcursor.get[String]("identity").contains(workspace)),
+          "RepositorySync requires one configured repository workspace")
+        path <- selected.hcursor.get[String]("root").fold(e => invalid(e.message), Consequence.success)
+      } yield path
+    }
+    members <- RepositorySyncDirectoryList.resolveC(Vector(root), plan, "target-resolution")
+  } yield members.head.target -> members.head.workspace
 
   private def repositoryPathsC(declaration: RepositorySyncManagedFetch.Declaration,
     definition: DefinitionBinding, request: Request, core: ActionCall.Core): Consequence[Set[String]] = for {

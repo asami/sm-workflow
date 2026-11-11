@@ -36,6 +36,7 @@ import WorkflowManagedProcessExecution as E
   *  version Oct. 28, 2026
   *  version Nov.  8, 2026
   *  version Nov.  9, 2026
+  *  version Nov.  6, 2026
   * @version Nov. 11, 2026
   * @author  ASAMI, Tomoharu
   */
@@ -1070,7 +1071,7 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
     def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
       val core = c
       def execute(): Consequence[OperationResponse] = for {
-        record <- NativeWorkflowResourceInput.readC(source, reference => read_resource_text(reference,
+        record <- NativeWorkflowResourceInput.readC(source, reference => WorkflowArtifactBudget.readTextC(core, reference,
           Some(java.nio.charset.StandardCharsets.UTF_8)).flatMap(GoalPhasePrerequisitePublicationRecovery.validateBusinessTextC))
         result <- if (describe) for {
           input <- GoalPhasePrerequisitePublicationRecovery.businessRecordC[V.GoalPhaseDependencySourceRevisionDescriptionInput](record, Set("sessionId", "proposal"))

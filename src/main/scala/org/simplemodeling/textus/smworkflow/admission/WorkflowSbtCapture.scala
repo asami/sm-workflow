@@ -10,7 +10,7 @@ import org.goldenport.cncf.processexecution.*
 
 /** Closed persistence adapter for actual CNCF results. Captures are stored once.
   * @since   Oct. 24, 2026
-  * @version Oct. 24, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowSbtCapture {
@@ -60,7 +60,8 @@ private[smworkflow] object WorkflowSbtCapture {
           case ProcessExecutionTermination.TerminationUnconfirmed => incomplete
           case ProcessExecutionTermination.Exited(code) => !truncation && (facts.outcome match {
             case WorkflowSbtValidation.Outcome.Succeeded => code == 0
-            case WorkflowSbtValidation.Outcome.Failed => code != 0
+            case WorkflowSbtValidation.Outcome.Failed => code != 0 ||
+              (facts.kind == WorkflowSbtValidation.Kind.TestOnly && WorkflowSbtValidation.formalTestFailure(facts.reason))
             case WorkflowSbtValidation.Outcome.Unverified => code == 0
             case _ => false
           })

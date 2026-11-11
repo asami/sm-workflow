@@ -17,7 +17,7 @@ import NativeWorkflowCliFixture as F
   * Sessions only. No publication, semantic execution, genuine chat delivery or
   * historical user-Session recovery is simulated by these assertions.
   * @since   Oct. 27, 2026
-  * @version Oct. 27, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover

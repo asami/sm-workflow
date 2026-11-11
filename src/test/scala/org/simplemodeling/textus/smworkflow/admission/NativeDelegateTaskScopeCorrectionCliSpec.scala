@@ -19,7 +19,7 @@ import S.given
   * All Human selections, worker observations and semantic facts below are
   * SPECIFICATION-OWNED. They establish no actual consumer consent or delivery.
   * @since   Nov.  5, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  6, 2026
   */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

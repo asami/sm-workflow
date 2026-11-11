@@ -19,7 +19,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Oct.  5, 2026
  *  version Oct. 28, 2026
  *  version Nov.  6, 2026
-  * @version Nov.  8, 2026
+ *  version Nov.  8, 2026
+ * @version Nov.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -35,8 +36,10 @@ final class SmWorkflowGeneratedHelpSpec extends SmWorkflowGeneratedHelpBehavior
 /** Shared declarations register real tests on each concrete suite. */
 private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _declarations: Vector[(ServiceDefinition, Vector[String])] = Vector(
+    SmWorkflowComponent.WorkflowRetainedWorkServiceService -> Vector(
+      "readWorkflowRetainedWork", "readWorkflowRetainedSnapshot"),
     SmWorkflowComponent.NativeWorkflowPreparationServiceService -> Vector(
-      "prepareGoalStart", "prepareRepositoryStart", "prepareSplitStart", "prepareRepositoryEffect", "prepareAuthority", "prepareEvidence",
+      "prepareGoalStart", "prepareRepositoryStart", "prepareSplitStart", "prepareRepositoryEffect", "prepareAuthority", "prepareEvidence", "readPreparedImport",
       "prepareExecution", "recordExecution", "prepareCallerInformation", "recordCallerInformation",
       "prepareStandaloneFixStart", "prepareStandaloneReviewFixStart", "prepareGoalTaskStart", "prepareTaskFixDelivery", "prepareTaskFixAdoption",
       "prepareDelegateTaskStart", "prepareDelegateTaskScopeCorrection", "prepareDelegateTaskCandidateContinuation"
@@ -67,6 +70,7 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
       "submitHandoffScopeResult", "submitReasoningResult", "submitSplitHumanDirection"
     ),
     SmWorkflowComponent.RepositorySyncServiceService -> Vector(
+      "syncRepositoryDirectories", "refreshRepositoryDirectoryConfiguration", "readRepositoryDirectoryResult",
       "startRepositorySync", "advanceRepositorySync", "submitRepositoryPurposeResult", "submitRepositorySyncWorkResult",
       "describeRepositorySyncValidationContinuation", "adoptRepositorySyncValidationContinuation",
       "describeRepositorySyncRepairBudgetContinuation", "adoptRepositorySyncRepairBudgetContinuation",
@@ -201,6 +205,29 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
     s"${SmWorkflowComponent.componentId.name}.$service.$operation"
 
   "SmWorkflow generated Help" must afterWord("in spec:repository-sync-native-merge-repair, example:C1, rules:R5,R6") {
+    "retained importer descriptions" which {
+      Vector("prepareGoalStart", "prepareStandaloneFixStart", "prepareStandaloneReviewFixStart", "prepareGoalTaskStart",
+        "prepareDelegateTaskStart", "prepareDelegateTaskScopeCorrection", "prepareRepositoryStart", "prepareSplitStart",
+        "prepareRepositoryEffect", "prepareAuthority", "prepareEvidence").foreach { name =>
+        s"expose confirmed retention and explicit complete compatibility on $name" in {
+          val help = HelpProjection.projectModel(_component(), Some(_selector("NativeWorkflowPreparationService", name)))
+          help.details("arguments") shouldBe Vector("input", "preparationFormat")
+          help.details("returns").mkString.toLowerCase should include("workflowpreparationresult")
+          val description = help.details("description").mkString
+          description should include("CommonEvidence")
+          description should include("readPreparedImport")
+          description should include("legacy-full")
+        }
+      }
+      "expose exact authorized complete importer detail as a separate public operation" in {
+        val help = HelpProjection.projectModel(_component(), Some(_selector("NativeWorkflowPreparationService", "readPreparedImport")))
+        help.details("arguments") shouldBe Vector("input")
+        help.details("returns").mkString.toLowerCase should include("workflowpreparedimport")
+        help.details("description").mkString should include("authenticated participant")
+        help.details("description").mkString should include("identity/revision")
+      }
+    }
+
     "normal passive execution descriptions" which {
       Vector("prepareExecution" -> "workflowcallerexecutionprepareinput", "recordExecution" -> "workflowcallerexecutionrecordinput")
         .foreach { (name, inputtype) =>

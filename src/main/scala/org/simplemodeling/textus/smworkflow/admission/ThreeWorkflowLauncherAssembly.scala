@@ -14,7 +14,8 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
   * Parameter data selects storage/targets/policies, never independent authority ports.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  6, 2026
+  *  version Nov.  6, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowLauncherAssembly {
@@ -36,6 +37,8 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
   }
 
   val publishedMcpOperations: Set[String] = Set(
+    "WorkflowRetainedWorkService.readWorkflowRetainedWork",
+    "WorkflowRetainedWorkService.readWorkflowRetainedSnapshot",
     "DelegateTaskService.startDelegateTask", "DelegateTaskService.advanceDelegateTask",
     "DelegateTaskService.submitDelegateTaskWorkResult", "DelegateTaskService.resolveDelegateTaskDiagnosticInformation",
     "CompletionRecordClosureService.describeCompletionRecordClosure", "CompletionRecordClosureService.advanceCompletionRecordClosure",
@@ -79,6 +82,8 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
   private val _standard_operations = publishedMcpOperations ++ Set(
     "GoalPhaseService." + GoalPhaseSourceHistoryNormalization.describeOperation,
     "GoalPhaseService." + GoalPhaseSourceHistoryNormalization.adoptionOperation,
+    "RepositorySyncService.syncRepositoryDirectories", "RepositorySyncService.readRepositoryDirectoryResult",
+    "RepositorySyncService.refreshRepositoryDirectoryConfiguration",
     "RepositorySyncService." + RepositorySyncPushContinuation.describeOperation,
     "RepositorySyncService." + RepositorySyncPushContinuation.adoptionOperation,
     "RepositorySyncService." + RepositorySyncPurposePreparationContinuation.describeOperation,
@@ -95,6 +100,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     * Their handlers are composed from the real run when invoked.
     */
   def deferredDeclarations: Vector[ServiceDefinition] = Vector(
+    SmWorkflowComponent.WorkflowRetainedWorkServiceService,
     SmWorkflowComponent.DelegateTaskServiceService, SmWorkflowComponent.DelegateTaskDeliveryServiceService,
     SmWorkflowComponent.CompletionRecordClosureServiceService,
     SmWorkflowComponent.WorkflowForceClosureServiceService,
@@ -158,5 +164,6 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
       DevelopmentJournalService.bind(host.goal.journalPolicy),
       CommonEvidenceService.bind(host.goal.evidencePolicy, host.goal.journalPolicy),
       DevelopmentObservationService.bind(host.goal, goalCatalog.definition),
-      LocalPublicationService.bind(host.goal, goalCatalog.definition))
+      LocalPublicationService.bind(host.goal, goalCatalog.definition)).map(NativeWorkflowCompactResponse.bind) :+
+      WorkflowRetainedWork.bind
 }

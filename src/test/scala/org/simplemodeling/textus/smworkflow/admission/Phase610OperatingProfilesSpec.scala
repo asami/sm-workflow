@@ -30,7 +30,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Specification-owned configurations and Operation construction only. No live
   * model, execution observation, workflow storage or accepted Phase is inferred.
   * @since   Oct. 29, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

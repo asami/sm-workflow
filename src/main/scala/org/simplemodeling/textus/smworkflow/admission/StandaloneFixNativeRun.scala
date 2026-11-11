@@ -366,7 +366,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
         source <- raw.hcursor.downField("source").downField("accepted").downField("payload").get[Json]("state").fold(e => invalid(e.message), Consequence.success)
         state <- recordC(source.deepMerge(Json.obj("localClosure" -> raw)))
       } yield V.StandaloneFixView(id, value.kind, "Completion scope " + value.scope + " " + value.identity + "; " + value.message,
-        Some(state), None, None, None, None, None, Vector.empty, None)
+        Some(state), None, None, None, None, None, Vector.empty, None, None, None, Vector.empty)
       case None => current.suspension match {
       case Some(suspension) => for {
         issued <- storage.bindIssuedC(completionOperation, inputCodec)
@@ -914,7 +914,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
   }
   def view(record: InstanceRecord, state: S.State, kind: String, message: String): V.StandaloneFixView =
     V.StandaloneFixView(record.identity.value, kind, message, recordC(state.asJson).toOption, None, None, None, None, None,
-      S.diagnostics(state, record.revision.value.toString).flatMap(d => recordC(d.asJson).toOption), None)
+      S.diagnostics(state, record.revision.value.toString).flatMap(d => recordC(d.asJson).toOption), None, None, None, Vector.empty)
   def recordC(json: Json): Consequence[org.goldenport.record.Record] = new org.goldenport.record.io.RecordDecoder().json(json.noSpaces)
   def invalid[A](message: String): Consequence[A] = Consequence.stateConflict((if (task) "GoalTask native work: " else "Standalone native fix: ") + message)
 }

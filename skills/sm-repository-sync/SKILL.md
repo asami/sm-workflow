@@ -73,14 +73,41 @@ push, final convergence observation. A dirty tree is unfinished synchronization.
 Do not repair the order with caller-owned Git/SBT, repeat a retained publication,
 or treat generated publication metadata as exempt from the final clean check.
 
-## Configured clean and dirty entry
+## Directory-list entry and explicit lower-level entry
 
-For a normally configured repository, pass repository identity and actual sync
-intent to public `startRepositorySync`; keep its returned Session for ordinary
-`advanceRepositorySync`. Runtime resolves tracking, default Git and existing
-intent authority. Equal, local-ahead and fast-forward use no additional product
-checks or AI solely for synchronization. Merge selection uses actual declared
-consumed inputs and applicable retained evidence, with reasons.
+For an authorized configured directory list, use the ordinary installed
+`RepositorySyncService.syncRepositoryDirectories` with
+`input={"syncMode":"FULL_STATE"}`. The normal
+`sm-workflow.repository-sync.directories` property selects checkouts; existing
+workspace/Git bindings select exact source and destination branches. Runtime
+resolves, deduplicates and executes the list in one call. Keep the returned
+aggregate Session and `resultReference`. No per-directory caller loop, periodic
+monitoring or added semantic call is needed for normal clean synchronization.
+
+`ConfigurationRequired` is setup in that same Session. Correct the normal host
+configuration and use `refreshRepositoryDirectoryConfiguration` with the exact
+returned Session and revision. Other actual failures and uncertain effects keep
+their existing explicit recovery. Recollect with `syncRepositoryDirectories`
+and the same Session; inspect an exact historical aggregate using
+`readRepositoryDirectoryResult`. Neither read nor recollection grants a replay.
+
+Ordinary text and JSON controls return outcomes and retained owner/revision
+references. Fetch needed assigned content once through the returned
+`WorkflowRetainedWorkService.readWorkflowRetainedWork` API (the bundled caller's
+explicit `read-work` action). Preserve that original detail artifact for semantic
+work and submission. Selected field references use their returned public owner.
+Do not reconstruct historical envelopes, expand every reference for display, or
+move captured bodies into diagnostics. The Workflow artifact acquisition default
+is 64 MiB; `workflow.artifact.max-bytes` overrides it through normal configuration.
+Generic Resource and process capture limits remain separate.
+
+The explicit lower-level option remains `startRepositorySync` with repository
+identity and actual sync intent, followed by `advanceRepositorySync` in its
+returned Session. Use it when the selected request needs one repository rather
+than the configured list. Existing push-only/fast-forward-only APIs retain their
+own contracts. Equal, local-ahead and fast-forward add no product checks or AI
+solely for synchronization. Merge validation uses ordinary configured applicable
+checks and retained evidence.
 
 Dirty entry needs the host's declared purpose policy and fixed candidate slots.
 Use the actual issued `RepositorySyncPurposeRequest` and return only its typed
@@ -474,3 +501,18 @@ history and its original meaning. Never fabricate Human direction or perform
 consumer operations to supply evidence. Ordinary issued Request, Submit and
 Advance own actual file/Git/Test effects and closure; inventory preparation
 does not replace their native contracts.
+
+## Retained preparation output
+
+Normal importer preparation returns compact storage availability and an actual
+`retainedImport` only after confirmed CommonEvidence retention. Pass that exact
+reference to `NativeWorkflowPreparationService.readPreparedImport` when the
+complete importer is needed, then use its actual output through the existing
+trusted import route. Missing setup, unavailable or UNKNOWN storage never grants
+a full-output fallback or retry. Preparation is prepared, never check acceptance
+or Human/review/execution authority. Explicit lower-level
+`--preparationFormat legacy-full` preserves former complete importer output
+without retention. Preserve the original source/provenance; contradictory bytes
+under the same business source association refuse. The bundled caller follows
+retained detail and accepts historical full outputs. External deployed caller
+copies require their own adoption; do not treat them as already updated.

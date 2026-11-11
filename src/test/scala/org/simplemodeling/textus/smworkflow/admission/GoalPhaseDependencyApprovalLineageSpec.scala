@@ -1,3 +1,7 @@
+/**
+ * @since   Nov.  6, 2026
+ * @version Nov.  8, 2026
+ */
 package org.simplemodeling.textus.smworkflow.admission
 
 import org.goldenport.cncf.workflow.ContextReference

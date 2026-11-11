@@ -9,7 +9,8 @@ import WorkflowManagedProcessExecution as E
   * Separate observations are not an atomic repository snapshot. The owning
   * progression re-observes preconditions and retains uncertain effect intent.
   * @since   Oct.  6, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 25, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncManagedGitObservation {
@@ -94,9 +95,24 @@ private[smworkflow] object RepositorySyncManagedGitObservation {
   def branchC(core: ActionCall.Core): Consequence[String] = _value_c(core, GitOperation.Branch)
   def remoteTipC(core: ActionCall.Core, branch: String): Consequence[String] = for {
     selected <- GitBranchName.parseC(branch)
-    observed <- _value_c(core, GitOperation.RemoteTip)
+    result <- E.executeGitC(core, GitOperation.RemoteTip)
+    observed <- remoteTipResultC(result)
     _ <- if (observed.branch == selected) Consequence.unit else invalid("advertised tip differs from the selected upstream branch")
   } yield observed.tip.value
+
+  /** ls-remote --exit-code's no-match result requires its complete empty
+    * captures and actual terminal status. Other remote-access/command failures
+    * keep the producer's concrete safe termination/capture diagnostics.
+    */
+  def remoteTipResultC(result: GitExecutionResult[GitRemoteTip]): Consequence[GitRemoteTip] = {
+    def _empty_(capture: ProcessExecutionCapture): Boolean =
+      !capture.truncated && capture.byteCount == 0 && capture.content.isEmpty
+    if (result.operation == GitOperation.RemoteTip && result.outcome == GitExecutionOutcome.Failed(2) &&
+        result.processResult.termination == ProcessExecutionTermination.Exited(2) &&
+        _empty_(result.processResult.stdout) && _empty_(result.processResult.stderr))
+      invalid("configured remote destination has no matching advertised branch (complete ls-remote no-match result)")
+    else result.valueC
+  }
 
   private def _value_c[A](core: ActionCall.Core, operation: GitOperation[A]): Consequence[A] =
     E.executeGitC(core, operation).flatMap(_.valueC)

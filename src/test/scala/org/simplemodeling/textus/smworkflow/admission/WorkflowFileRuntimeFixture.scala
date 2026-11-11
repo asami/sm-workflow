@@ -23,7 +23,8 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Public V3 configuration and ordinary host/Operation UoW, with no File process.
   * Each fixture owns its normal handle and closes its runtime resources.
   * @since   Oct. 15, 2026
-  * @version Oct. 20, 2026
+  *  version Oct. 20, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object WorkflowFileRuntimeFixture {

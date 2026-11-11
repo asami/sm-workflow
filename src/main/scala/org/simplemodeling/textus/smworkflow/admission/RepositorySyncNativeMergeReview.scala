@@ -16,7 +16,7 @@ import WorkflowManagedProcessExecution as E
   * command/authority selection participates in this native route.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  3, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeReview {
@@ -87,7 +87,7 @@ private[smworkflow] object RepositorySyncNativeMergeReview {
     _ <- policy.validateC
     progress <- source.payload.purposes.map(Consequence.success).getOrElse(invalid("purpose review lacks its native content candidate"))
     candidate <- progress.candidate.map(Consequence.success).getOrElse(invalid("purpose review lacks its actual candidate"))
-    slot <- store.declaration.purposePolicy.toVector.flatMap(_.slots).lift(progress.slotCursor).map(Consequence.success)
+    slot <- RepositorySyncPurpose.slots(store.declaration.purposePolicy, store.context.repositoryIdentity).lift(progress.slotCursor).map(Consequence.success)
       .getOrElse(invalid("purpose review lacks its fixed candidate workspace"))
     _ <- RepositorySyncPurposeRuntime.candidateWorkspaceC(store, slot, candidate)
     diff <- diffC(store, source, candidate.parent, "purpose-diff", policy.maximumDiffBytes, Some(slot.workspace))

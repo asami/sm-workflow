@@ -6,7 +6,7 @@ import GoalPhaseOrderedProgression as O
 
 /** Explicit document data only; source selection and execution belong to the host.
   * @since   Oct. 17, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseDocumentPlan {

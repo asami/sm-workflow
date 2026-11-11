@@ -61,10 +61,15 @@ private[smworkflow] object GoalPhaseValidationMetadata {
       candidates = (selected.map(_.reference) ++ request.supplemental).map(Invocation(_, Map.empty)) ++ request.invocations
       bound <- candidates.foldLeft(Consequence.success(Vector.empty[B.BoundOperation])) { (result, invocation) =>
         result.flatMap { operations =>
-          B.bindC(inventory, invocation.reference, request.workspace,
-            request.executionParameters ++ invocation.parameters).flatMap { operation =>
-            val next = if (operations.exists(bound => bound.operation.reference == operation.operation.reference &&
-                bound.parameters == operation.parameters)) operations else operations :+ operation
+          val binding = if (request.query.standardFramework)
+            B.bindVariantsC(inventory, invocation.reference, request.workspace, request.executionParameters ++ invocation.parameters)
+          else B.bindC(inventory, invocation.reference, request.workspace, request.executionParameters ++ invocation.parameters).map(Vector(_))
+          binding.flatMap { variants =>
+            val next = (operations ++ variants).foldLeft(Vector.empty[B.BoundOperation]) { (values, operation) =>
+              if (values.exists(bound => bound.operation.reference == operation.operation.reference &&
+                  bound.parameters == operation.parameters && bound.intent.target.validationMode == operation.intent.target.validationMode)) values
+              else values :+ operation
+            }
             if (next.size <= 16) Consequence.success(next)
             else Consequence.stateConflict("Validation selected union exceeds 16 normalized operation invocations")
           }

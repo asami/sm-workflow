@@ -9,8 +9,9 @@ import org.simplemodeling.textus.smworkflow.admission.*
 import org.simplemodeling.textus.smworkflow.value as V
 
 /** Passive input preparation; only current-call exact selection grants authority.
-  * @since Oct. 30, 2026
-  * @version Nov. 5, 2026
+  * @since   Oct. 30, 2026
+  *  version Nov.  5, 2026
+  * @version Nov.  6, 2026
   */
 private[smworkflow] object NativeDelegateTaskScopeCorrectionInput {
   def prepareC(supplied: Map[String, String], read: String => Consequence[String]): Consequence[Record] = for {

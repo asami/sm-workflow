@@ -1,5 +1,14 @@
 # sm-workflow incremental-use roadmap
 
+Phase 6.11 closed with unverified items — 2026-11-11:
+[plan](phase-6.11.md) / [checklist](phase-6.11-checklist.md).
+The user ended this Phase without whole-Phase validation. Its existing Session
+is `ForcedClosed / NotAccepted`; B1–B5 results, commits and history remain
+preserved. Whole-Phase regression, independent Phase acceptance and normal
+release completion are unverified/unfinished, not PASS. See the
+[closure record](../journal/2026/11/2026-11-11-phase-6.11-closed-with-unverified-items.md).
+The roadmap continues beyond this ended Phase; this record starts no new work.
+
 Phase 8 validation/closure efficiency selected 2026-11-11:
 [proportionate validation and bounded closure](phase-8.md#proportionate-validation-and-bounded-closure--2026-11-11)
 selects impact-based checks, applicable evidence reuse, grouped connected
@@ -525,7 +534,7 @@ in Phase 6, using the corrected runtime contract.
 | [6.8: Commit recovery and delegated delivery](phase-6.8.md) | Common authority/commit recovery, mechanical hygiene and independent sm-delegate-task | Shared execution; mandatory delegate commit, required publication/return; retain test-fix/goal-task contracts and active 6.7 |
 | [6.9: Runtime-owned RepositorySync](phase-6.9.md) | Clean synchronization, impact-selected validation/review and dirty purpose-based commits | Runtime-owned main route; reuse 6.8 commit/recovery; Phase 7 composes it across repositories |
 | [6.10: AI operating profiles and lightweight metrics](phase-6.10.md) | Standard/current, cost, quality selection; start/end source counts and observed tokens per net source step | No live config switch or extra AI calls; preserve issued work; comparison stays in 9 and usage acquisition in 13 |
-| [6.11: Directory-list RepositorySync](phase-6.11.md) | Runtime-owned batch synchronization and selected validation | After 6.10; preserve active work and lower-level APIs |
+| [6.11: Directory-list RepositorySync](phase-6.11.md) | Runtime-owned batch synchronization and selected validation | Closed with unverified items (2026-11-11); ForcedClosed / NotAccepted; results/history retained |
 | [7: Multi-repository synchronization and artifact overlay](phase-7.md) | Minimum managed parallel A/B lanes first, then assigned-chat/FIFO and remaining workspace/artifact scenarios | Prioritize parallel development within Phase 7; retain all related-project, overlay and synchronization acceptance |
 | [17: Task and standalone FIX extensions](phase-17.md) | Wider inputs, dirty/focused/full options, multi-unit composition and authorized investigation/related-project integration | Reuse 6.7 without rebuilding it; [checklist](phase-17-checklist.md); Phase 7/14 dependencies are scenario-specific |
 | [18: Tool-neutral validation and Flutter](phase-18.md) | Common validation results, retained SBT semantics and Flutter integration | Scheduled after Phase 9, reusing the 6.7 baseline; Flutter W4–W5 consume CNCF Phase 117; [checklist](phase-18-checklist.md); no new earlier-Phase gate |

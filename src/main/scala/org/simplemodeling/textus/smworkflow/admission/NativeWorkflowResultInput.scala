@@ -13,7 +13,7 @@ import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{Configuration, DefinitionBinding, InstanceIdentity, InstanceRecord}
 import org.goldenport.cncf.datastore.DataStore
-import org.goldenport.protocol.Request
+import org.goldenport.protocol.{Property, Request}
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
@@ -24,7 +24,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * Native completion consumes the typed result and owns its state, scope,
   * participant and update boundary. Public callers supply no control envelope.
   * @since   Oct.  9, 2026
-  * @version Nov. 5, 2026
+  * @version Nov. 11, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowResultInput {
@@ -109,23 +109,7 @@ private[smworkflow] object NativeWorkflowResultInput {
     declaration: GoalPhaseNativeRun.Declaration, definition: DefinitionBinding): spec.ServiceDefinition =
     _service(service, creation, declaration.configuration, declaration.instances, declaration.continuations, definition,
       Vector(
-        _work(GoalPhaseNativeRun.completionOperation, GoalPhaseNativeWork.inputCodec, request =>
-          NativeWorkflowOperationInput.recordC(request, "result").flatMap(record =>
-            GoalPhasePurposeRepair.validatePublicResultC(record).flatMap(_ => IncrementalSbtDiagnosisRepair.validatePublicResultC(record)))
-            .flatMap(_ => NativeWorkflowOperationInput.valueC[V.GoalPhaseWorkResult](request, "result")).flatMap[Value](value =>
-            for {
-              report <- GoalPhaseFixAssessment.internalReportC(value.fixAssessment)
-              issues <- GoalPhaseFixIssues.internalReportC(value.issueReport)
-              revision <- GoalPhasePlanRevision.fromPublicProposalC(value.planRevision)
-              observations <- GoalPhaseFindingRecording.internalObservationsC(value.reviewObservations)
-              dependency <- GoalPhaseDependencyScope.fromPublicProposalC(value.dependencyProposal)
-              conditions <- GoalPhaseNativeReviewCompletion.fromPublicConditionsC(value.completionConditions)
-              sources <- GoalPhasePurposeRepair.internalSourcesC(value.repairFindingSources)
-              validation <- GoalPhaseDependencyValidation.fromPublicC(value.dependencyValidation)
-              diagnostic <- IncrementalSbtDiagnosisRepair.fromPublicC(value.diagnosticRepair)
-            } yield GoalPhaseNativeWork.Result(value.outcome, value.summary, value.findings,
-                GoalPhaseAcceptanceBoundary.internalReport(value.acceptance), report, issues, revision, observations, dependency, conditions, sources,
-                dependencyValidation = validation, diagnosticRepair = diagnostic))),
+        _work(GoalPhaseNativeRun.completionOperation, GoalPhaseNativeWork.inputCodec, goalResultC),
         _work(GoalPhaseNativeFindingRecording.completionOperation, GoalPhaseFindingRecording.inputCodec, request =>
           NativeWorkflowOperationInput.valueC[V.GoalPhaseFindingRecordingResult](request, "result").map[Value](value =>
             GoalPhaseFindingRecording.Result(value.outcome, value.summary, value.items.map(item =>
@@ -134,6 +118,29 @@ private[smworkflow] object NativeWorkflowResultInput {
         _decision(GoalPhaseOrderedHumanDecision.completionOperation, GoalPhaseOrderedHumanDecision.inputCodec, request =>
           NativeWorkflowOperationInput.valueC[V.GoalPhaseOrderedDecisionAnswer](request, "answer").map[Value](value =>
             GoalPhaseOrderedHumanDecision.Answer(value.choice, value.rationale)))))
+
+  /** Inspect the acquired complete public result before generated conversion
+    * can discard enriched admission fields. The completion consumes this typed
+    * value, including when the original transport contains only resultResource.
+    */
+  private[admission] def goalResultC(request: Request): Consequence[GoalPhaseNativeWork.Result] = for {
+    record <- NativeWorkflowOperationInput.recordC(request, "result")
+    _ <- GoalPhasePurposeRepair.validatePublicResultC(record)
+    _ <- IncrementalSbtDiagnosisRepair.validatePublicResultC(record)
+    _ <- GoalPhaseDependencyValidation.validatePublicResultC(record)
+    value <- NativeWorkflowOperationInput.valueC[V.GoalPhaseWorkResult](request, "result")
+    report <- GoalPhaseFixAssessment.internalReportC(value.fixAssessment)
+    issues <- GoalPhaseFixIssues.internalReportC(value.issueReport)
+    revision <- GoalPhasePlanRevision.fromPublicProposalC(value.planRevision)
+    observations <- GoalPhaseFindingRecording.internalObservationsC(value.reviewObservations)
+    dependency <- GoalPhaseDependencyScope.fromPublicProposalC(value.dependencyProposal)
+    conditions <- GoalPhaseNativeReviewCompletion.fromPublicConditionsC(value.completionConditions)
+    sources <- GoalPhasePurposeRepair.internalSourcesC(value.repairFindingSources)
+    validation <- GoalPhaseDependencyValidation.fromPublicC(value.dependencyValidation)
+    diagnostic <- IncrementalSbtDiagnosisRepair.fromPublicC(value.diagnosticRepair)
+  } yield GoalPhaseNativeWork.Result(value.outcome, value.summary, value.findings,
+    GoalPhaseAcceptanceBoundary.internalReport(value.acceptance), report, issues, revision, observations, dependency, conditions, sources,
+    dependencyValidation = validation, diagnosticRepair = diagnostic)
 
   def repository(service: spec.ServiceDefinition, creation: ComponentCreate,
     declaration: RepositorySyncManagedFetch.Declaration, definition: DefinitionBinding): spec.ServiceDefinition =
@@ -184,7 +191,18 @@ private[smworkflow] object NativeWorkflowResultInput {
 
   private def _work[W](operation: StateMachineOperationIdentity,
     codec: WorkflowResultJsonV1.PayloadCodec[W], read: Request => Consequence[Value]): Target =
-    Target(operation, request => read(request).map(value => SelectedValue(_ => Consequence.success(value))), (storage, identity, context) =>
+    Target(operation, request => {
+      val record = request.toRecord
+      (record.getAny("result"), record.getAny("resultResource")) match {
+        case (Some(_), None) => read(request).map(value => SelectedValue(_ => Consequence.success(value)))
+        case (None, Some(resource: String)) => NativeWorkflowResourceInput.referenceC(resource).map(reference =>
+          SelectedValue(reader => reader(reference).flatMap(GoalPhasePrerequisitePublicationRecovery.validateBusinessTextC)
+            .flatMap(NativeWorkflowOperationInput.decodeValueC[Record](_, "result"))
+            .flatMap(value => read(request.copy(properties = request.properties.filterNot(p =>
+              Set("result", "resultResource")(p.name)) :+ Property("result", value, None))))))
+        case _ => _invalid("semantic completion requires exactly one result or resultResource")
+      }
+    }, (storage, identity, context) =>
       storage.bindIssuedC(operation, codec).flatMap(_.loadC(identity)(using context)).flatMap {
         case Some(value) => value.current match {
           case order: WorkflowContinuation.WorkOrder[?] =>
@@ -266,7 +284,7 @@ private[smworkflow] object NativeWorkflowResultInput {
         _ <- if (target.operation == GoalTaskNativeRun.completionOperation)
           _admit_task_context_c(storage, current, assigned, submission, context) else if (target.operation == DelegateTaskNativeRun.completionOperation)
           _admit_delegate_context_c(storage, current, assigned, submission, context) else Consequence.unit
-        value <- submission.value.resolve(reference => read_resource_text(reference, Some(StandardCharsets.UTF_8)))
+        value <- submission.value.resolve(reference => WorkflowArtifactBudget.readTextC(core, reference, Some(StandardCharsets.UTF_8)))
         submitted <- _result_c(assigned, submission, value)
         operation <- original match {
           case receiver: Receiver => receiver.createResultOperationRequestC(BoundAction.this.request, submitted)

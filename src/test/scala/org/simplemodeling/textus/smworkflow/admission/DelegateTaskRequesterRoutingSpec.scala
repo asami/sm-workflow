@@ -60,8 +60,8 @@ private[admission] object DelegateTaskRequesterRoutingFixture extends Matchers {
 
 /** Cheap pure admission and managed public operations; no destination program
   * or SBT program is installed or executed by this specification.
-  * @since   Nov. 5, 2026
-  * @version Nov. 5, 2026
+  * @since   Nov.  5, 2026
+  * @version Nov.  6, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])

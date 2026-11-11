@@ -32,6 +32,7 @@ import RepositorySyncManagedGitObservation as G
   * Retained UNKNOWN history is immutable. Failed new intents have no retry contract.
   * @since   Oct. 22, 2026
   *  version Oct. 28, 2026
+  *  version Nov.  6, 2026
   * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
@@ -481,7 +482,7 @@ private[smworkflow] object GoalPhaseWholePhaseCandidateRecovery {
       def execute(): Consequence[OperationResponse] = for {
         supplied <- input match {
           case None => Consequence.success(Option.empty[V.GoalPhaseWholePhaseCandidateRecoveryInput])
-          case Some(source) => NativeWholePhaseRecoveryInput.readC(source, reference => read_resource_text(reference, Some(UTF_8))).flatMap { value =>
+          case Some(source) => NativeWholePhaseRecoveryInput.readC(source, reference => WorkflowArtifactBudget.readTextC(core, reference, Some(UTF_8))).flatMap { value =>
             if (value == null || !_exact(value.sessionId) || value.reference == null || !choices.contains(value.choice) ||
                 !_text(value.rationale) || !_exact(value.reference.identity) || !_exact(value.reference.revision))
               _invalid("explicit Human input is incomplete")

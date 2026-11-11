@@ -21,7 +21,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /**
  * @since   Oct.  6, 2026
  *  version Oct. 28, 2026
- * @version Nov.  5, 2026
+ * @version Nov.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

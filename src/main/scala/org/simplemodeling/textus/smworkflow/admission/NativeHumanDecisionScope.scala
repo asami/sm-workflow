@@ -10,7 +10,7 @@ import NativeExternalEvidence.Purpose
   * Native completion owns live state, result type and CAS.
   * @since   Oct.  8, 2026
   *  version Oct. 23, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeHumanDecisionScope {

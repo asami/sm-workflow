@@ -32,6 +32,7 @@ import GoalPhasePrerequisitePublicationUnknownRecovery as W
   * publication. Direction appends no Git or SBT effect; Advance owns the bounded
   * effect chain and the ordinary prerequisite owner owns publication.
   * @since   Nov.  1, 2026
+  *  version Nov.  6, 2026
   * @version Nov.  9, 2026
   * @author  ASAMI, Tomoharu
   */
@@ -1040,7 +1041,7 @@ private[smworkflow] object GoalPhasePrerequisitePublicationRecovery {
         selected = core.copy(executionContext = context)
         result <- port.describePrerequisitePublicationRecoveryC(input.sessionId, selected, publication).map(NativeWorkflowOperationOutput.response(_))
       } yield result else for {
-        record <- NativeWorkflowResourceInput.readC(recovery.get, reference => read_resource_text(reference,
+        record <- NativeWorkflowResourceInput.readC(recovery.get, reference => WorkflowArtifactBudget.readTextC(core, reference,
           Some(java.nio.charset.StandardCharsets.UTF_8)).flatMap(validateBusinessTextC))
         input <- recoveryRecordC(record)
         _ <- recoveryInputC(input)

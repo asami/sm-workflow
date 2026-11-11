@@ -14,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * Native completion owns admission; the independent issuer owns provenance and provisioning.
   * @since   Oct. 14, 2026
   *  version Oct. 23, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 object NativeHumanDecisionPreparation {

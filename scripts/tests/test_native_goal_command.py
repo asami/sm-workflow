@@ -78,6 +78,39 @@ class NativeGoalCommandSpecification(unittest.TestCase):
         })
         self.output_index = 0
 
+    def test_explicit_retained_work_command_has_no_start_submit_or_advance(self):
+        # Given a compact native control response with an exact owner read reference.
+        reference = {'schema_version': 'sm-workflow.retained-work-reference.v1',
+                     'read_operation': 'WorkflowRetainedWorkService.readWorkflowRetainedWork',
+                     'session_id': 'actual-goal', 'identity': 'actual-work', 'revision': '8',
+                     'resource': 'sm-workflow-work:selected-native-reference'}
+        path = self.write_json('compact-control.json', {'kind': 'Request', 'retained_work': reference})
+        options = dict(request=str(path))
+        # When the caller explicitly selects the detail operation.
+        command, session = CALLER.retained_work_command(options, self.executable, self.runtime_root)
+        # Then one fixed public read carries the original reference without a scheduling loop.
+        self.assertIsNone(session)
+        self.assertIn('org.simplemodeling.textus.SmWorkflow.WorkflowRetainedWorkService.readWorkflowRetainedWork', command)
+        self.assertEqual(json.loads(command[command.index('--input') + 1]), reference)
+        self.assertEqual(json.loads(path.read_text())['retained_work'], reference)
+
+    def test_selected_detail_preserves_legacy_request_and_rejects_wrong_revision(self):
+        # Given an explicit detail response produced by the native owner.
+        request = self.issued_request()
+        request['issuedWorkContext'] = {'continuationId': 'actual-work', 'expectedRevision': '8'}
+        detail = {'availability': 'available', 'reference': {'sessionId': request['submitSessionId'],
+                  'identity': 'actual-work', 'revision': '8', 'resource': 'sm-workflow-work:selected'},
+                  'response': request}
+        path = self.write_json('native-detail.json', detail)
+        # When a semantic caller selects its original full Request.
+        self.assertEqual(CALLER.read_issued_request(path)[1], request)
+        self.assertEqual(CALLER.issued_request_resource(path), 'sm-workflow-work:selected')
+        # Then a crossed selected revision cannot be silently replaced by latest.
+        detail['reference']['revision'] = '9'
+        path.write_text(json.dumps(detail))
+        with self.assertRaises(CALLER.CallerError):
+            CALLER.read_issued_request(path)
+
     def write_json(self, name, value):
         path = self.root / name
         path.write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")

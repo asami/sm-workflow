@@ -17,8 +17,8 @@ import org.simplemodeling.textus.smworkflow.value as V
 import SplitPhaseExplicitPartitionFixture.take
 
 /** Shared transport and actual Resource acquisition regressions without business authority.
-  * @since Oct. 24, 2026
-  * @version Nov.  3, 2026
+  * @since   Oct. 24, 2026
+  * @version Nov.  6, 2026
   * @author ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

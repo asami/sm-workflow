@@ -60,7 +60,7 @@ private[admission] object GoalPhaseNativeMetadataFixture {
   * only and do not establish native execution or independent review.
   * @since   Oct. 18, 2026
   *  version Oct. 19, 2026
-  * @version Nov.  5, 2026
+  * @version Nov.  6, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

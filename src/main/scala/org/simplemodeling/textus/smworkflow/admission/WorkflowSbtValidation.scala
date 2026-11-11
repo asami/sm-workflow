@@ -3,18 +3,39 @@ package org.simplemodeling.textus.smworkflow.admission
 import io.circe.{Decoder, DecodingFailure, Encoder, HCursor, Json}
 import io.circe.syntax.*
 import io.circe.generic.auto.*
+import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
+import org.goldenport.cncf.validation.ValidationExecutionModeV1
 import org.goldenport.Consequence
 import org.goldenport.cncf.processexecution.*
 
 /** Actual typed SBT facts, without command or host-selection authority.
   * @since   Oct. 15, 2026
   *  version Oct. 25, 2026
-  * @version Nov.  6, 2026
+  *  version Nov.  6, 2026
+  * @version Nov.  8, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowSbtValidation {
-  // Incomplete is never successful or nonexecuted. Bounded continuation additionally
-  // requires the original valid CNCF terminal process observation, not these facts alone.
+  given Encoder[SbtScenarioParameters.Value] = Encoder.instance {
+    case SbtScenarioParameters.Value.Text(value) => Json.fromString(value)
+    case SbtScenarioParameters.Value.BooleanValue(value) => Json.fromBoolean(value)
+    case SbtScenarioParameters.Value.Integer(value) => Json.fromLong(value)
+  }
+  given Decoder[SbtScenarioParameters.Value] = Decoder.instance(cursor =>
+    cursor.value.asString.map(SbtScenarioParameters.Value.Text.apply)
+      .orElse(cursor.value.asBoolean.map(SbtScenarioParameters.Value.BooleanValue.apply))
+      .orElse(cursor.value.asNumber.flatMap(_.toBigDecimal).filter(value => value.isWhole && value.isValidLong)
+        .map(value => SbtScenarioParameters.Value.Integer(value.toLong)))
+      .toRight(DecodingFailure("Expected exact typed scenario primitive", cursor.history)))
+  given Encoder[SbtScenarioSelection] = deriveEncoder
+  given Decoder[SbtScenarioSelection] = deriveDecoder
+  given Encoder[SbtValidationMode.Case] = deriveEncoder
+  given Decoder[SbtValidationMode.Case] = deriveDecoder
+  given Encoder[ValidationExecutionModeV1.Observation] = deriveEncoder
+  given Decoder[ValidationExecutionModeV1.Observation] = deriveDecoder
+  given Encoder[SbtValidationMode.CaseResult] = deriveEncoder
+  given Decoder[SbtValidationMode.CaseResult] = deriveDecoder
+
   enum Kind(val wire: String) {
     case Compile extends Kind("compile")
     case TestCompile extends Kind("test-compile")
@@ -61,18 +82,52 @@ private[smworkflow] object WorkflowSbtValidation {
       _ <- Either.cond(value.valid, (), DecodingFailure("Invalid selected SBT tests", cursor.history))
     } yield value)
   }
+  final case class Mode(requested: String, actual: Option[String], provider: Option[String], reason: Option[String]) {
+    def verified: Boolean = actual.contains(requested) && provider.exists(Set("fixture", "live")) && reason.isEmpty
+    def valid: Boolean = requested != null && org.goldenport.cncf.config.OperationMode.from(requested).exists(_.name == requested) &&
+      actual != null && provider != null && reason != null &&
+      (verified || (actual.isEmpty && provider.isEmpty && reason.exists(_.nonEmpty)))
+  }
+  object Mode {
+    given Encoder[Mode] = Encoder.instance(value => Json.obj("requested" -> value.requested.asJson,
+      "actual" -> value.actual.asJson, "provider" -> value.provider.asJson, "reason" -> value.reason.asJson))
+    given Decoder[Mode] = Decoder.instance(cursor => for {
+      requested <- cursor.get[String]("requested")
+      actual <- cursor.get[Option[String]]("actual")
+      provider <- cursor.get[Option[String]]("provider")
+      reason <- cursor.get[Option[String]]("reason")
+      value = Mode(requested, actual, provider, reason)
+      _ <- Either.cond(value.valid, (), DecodingFailure("Invalid child validation mode facts", cursor.history))
+    } yield value)
+  }
+  /** CNCF distinguishes confirmed selection failure from unavailable observation. */
+  def formalTestFailure(reason: Option[String]): Boolean = reason.exists(Set(
+    "FailedTests", "ZeroTests", "SuiteMismatch", "ScenarioMismatch", "InventoryMismatch"))
+
   final case class Facts(kind: Kind, outcome: Outcome, selection: Option[Selection], reason: Option[String],
-    estimate: Option[SbtValidationEstimate] = None, private val estimateFieldPresent: Boolean = false) {
+    estimate: Option[SbtValidationEstimate] = None,
+    mode: Option[Mode] = None, batch: Option[Vector[SbtValidationMode.CaseResult]] = None,
+    private val estimateFieldPresent: Boolean = false) {
     override def equals(other: Any): Boolean = other match {
       case that: Facts => kind == that.kind && outcome == that.outcome && selection == that.selection &&
-        reason == that.reason && estimate == that.estimate
+        reason == that.reason && estimate == that.estimate && mode == that.mode && batch == that.batch
       case _ => false
     }
-    override def hashCode: Int = (kind, outcome, selection, reason, estimate).hashCode
+    override def hashCode: Int = (kind, outcome, selection, reason, estimate, mode, batch).hashCode
     def valid: Boolean = kind != null && outcome != null && selection != null && reason != null &&
       estimate != null && estimate.forall(e => e != null && kind == Kind.TestOnly && e.timeoutMillisC.isSuccess) &&
-      (outcome match {
-        case Outcome.Succeeded if kind == Kind.TestOnly => selection.exists(x => x != null && x.valid) && reason.isEmpty
+      batch != null && batch.forall(values => kind == Kind.TestOnly && values.nonEmpty && values.size <= 64 &&
+        values.forall(value => value != null && value.selected != null && value.selected.validateC.isSuccess &&
+          Set("passed", "failed", "unverified", "not-executed")(value.status) && value.observation != null &&
+          (value.status != "passed" || value.observation.exists(observed => observed.suite == value.selected.selector.suiteClassName &&
+            observed.test == value.selected.selector.testName && observed.mode == value.selected.mode &&
+            Set("fixture", "live")(observed.provider) && value.selected.requiredProvider.forall(_ == observed.provider)))) &&
+        (outcome != Outcome.Succeeded || values.forall(_.status == "passed"))) && mode != null && mode.forall(value => value != null && value.valid &&
+        (outcome != Outcome.Succeeded || value.verified)) && (outcome match {
+        case Outcome.Succeeded if kind == Kind.TestOnly =>
+          ((selection.exists(x => x != null && x.valid) && batch.isEmpty) || (selection.isEmpty && batch.nonEmpty)) && reason.isEmpty
+        case Outcome.Failed => selection.isEmpty &&
+          (reason.isEmpty || (kind == Kind.TestOnly && formalTestFailure(reason)))
         case Outcome.Unverified => kind == Kind.TestOnly && selection.isEmpty &&
           reason.exists(x => SbtTestSelectionFailure.values.exists(_.toString == x))
         case _ => selection.isEmpty && reason.isEmpty
@@ -82,12 +137,12 @@ private[smworkflow] object WorkflowSbtValidation {
   }
   object Facts {
     given Encoder[Facts] = Encoder.instance { value =>
-      val base = Json.obj("kind" -> value.kind.asJson,
-      "outcome" -> value.outcome.asJson, "selection" -> value.selection.asJson, "reason" -> value.reason.asJson,
-      )
-      if (value.estimate.nonEmpty || value.estimateFieldPresent)
-        base.mapObject(_.add("estimate", value.estimate.asJson))
-      else base
+      val legacy = Json.obj("kind" -> value.kind.asJson, "outcome" -> value.outcome.asJson,
+        "selection" -> value.selection.asJson, "reason" -> value.reason.asJson)
+      val estimated = if (value.estimate.nonEmpty || value.estimateFieldPresent)
+        legacy.mapObject(_.add("estimate", value.estimate.asJson)) else legacy
+      val mode = value.mode.fold(estimated)(mode => estimated.mapObject(_.add("mode", mode.asJson)))
+      value.batch.fold(mode)(batch => mode.mapObject(_.add("batch", batch.asJson)))
     }
     given Decoder[Facts] = Decoder.instance(cursor => for {
       kind <- cursor.get[Kind]("kind")
@@ -95,7 +150,10 @@ private[smworkflow] object WorkflowSbtValidation {
       selection <- cursor.get[Option[Selection]]("selection")
       reason <- cursor.get[Option[String]]("reason")
       estimate <- cursor.get[Option[SbtValidationEstimate]]("estimate")
-      value = Facts(kind, outcome, selection, reason, estimate, cursor.keys.exists(_.exists(_ == "estimate")))
+      mode <- GoalPhaseNativeMetadata.optional[Mode](cursor, "mode")
+      batch <- GoalPhaseNativeMetadata.optional[Vector[SbtValidationMode.CaseResult]](cursor, "batch")
+      value = Facts(kind, outcome, selection, reason, estimate, mode, batch,
+        cursor.keys.exists(_.exists(_ == "estimate")))
       _ <- Either.cond(value.valid, (), DecodingFailure("Invalid typed SBT validation facts", cursor.history))
     } yield value)
   }
@@ -105,7 +163,8 @@ private[smworkflow] object WorkflowSbtValidation {
     if (cursor.keys.exists(_.exists(_ == "kind"))) cursor.get[Kind]("kind") else Right(Kind.Test)
 
   def factsC(kind: Kind, result: SbtExecutionResult): Consequence[Facts] = for {
-    _ <- if (kind != null && result != null && result.processResult != null &&
+    _ <- if (kind != null && result != null && result.target != null && result.target.validationMode != null &&
+        result.validationMode != null && result.processResult != null &&
         result.processResult.termination != null && result.testSelection != null &&
         ((kind == Kind.Compile && result.operation == SbtOperation.Compile) ||
           (kind == Kind.TestCompile && result.operation == SbtOperation.TestCompile) ||
@@ -130,7 +189,12 @@ private[smworkflow] object WorkflowSbtValidation {
       case SbtExecutionOutcome.Incomplete(_) => Facts(kind, Outcome.Incomplete, None, None)
       case SbtExecutionOutcome.UnverifiedTests(reason) => Facts(kind, Outcome.Unverified, None, Some(reason.toString))
     }
-    retained = facts.copy(estimate = result.target.validationEstimate)
+    mode = result.target.validationMode.map { requested => result.validationMode match {
+      case Some(SbtValidationMode.Result.Observed(observed)) => Mode(requested, Some(observed.mode), Some(observed.provider), None)
+      case Some(SbtValidationMode.Result.Unverified(reason)) => Mode(requested, None, None, Some(reason))
+      case None => Mode(requested, None, None, Some("child observation unavailable"))
+    } }
+    retained = facts.copy(estimate = result.target.validationEstimate, mode = mode, batch = result.batch)
     _ <- retained.validateC
   } yield retained
 }

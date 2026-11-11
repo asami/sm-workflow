@@ -20,7 +20,8 @@ import RepositorySyncNativeMergeValidation as B
 /** Bounded public-operation specifications. Check, worker, chat and source facts
   * are fixture-owned; these cases prove no installed/cross-chat acceptance.
   * @since   Oct. 27, 2026
-  * @version Nov.  6, 2026
+  *  version Nov.  6, 2026
+  * @version Nov.  8, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -64,7 +65,7 @@ final class ThreeWorkflowTaskFixDeliverySpec extends AnyWordSpec with Matchers w
   }
   private def response(state: S.State, kind: String = "Terminal") = V.StandaloneFixView("destination-session", kind,
     state.message, Some(take(new org.goldenport.record.io.RecordDecoder().json(state.asJson.noSpaces))),
-    None, None, None, None, None, Vector.empty, None)
+    None, None, None, None, None, Vector.empty, None, None, None, Vector.empty)
   private def preparation(e: PreparationEpisode, state: S.State, route: String = "sm-test-fix", kind: String = "Terminal") =
     V.WorkflowTaskFixDeliveryPreparationInput(route, input.requestIdentity, "requester-chat", "destination-chat",
       "destination-participant", e.saveValue("destination-result-" + java.util.UUID.randomUUID().toString, response(state, kind)), V.WorkflowArtifactReference("actual-shaped-source", "1"))
