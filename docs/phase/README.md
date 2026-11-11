@@ -50,6 +50,17 @@ is a best-effort integration goal, not a Phase completion gate. Preserve active
 Sessions, accepted work and existing authority; unavailable compaction must not
 stop ordinary supported work. This allocation starts no Phase or implementation.
 
+Phase development permissions and scoped JAR delivery adopted 2026-11-10:
+[PA-D6–8](purpose-based-authorization-correction.md) adds independent Phase
+properties for external dependency repair and shared CLI update, default false,
+with same-Session Human enablement and no repeated in-purpose permission questions
+once true. [Phase 7](phase-7.md#phase-development-permissions-and-scoped-jars--2026-11-10)
+needs no additional repair decision for incorporated dependency projects and
+publishes/resolves their JARs only in the development scope, without shared
+publishLocal pollution. Track [P7-DD-13–15](phase-7-dependency-delivery-checklist.md)
+and the [PDP contract](../spec/phase-development-permissions.md). Planned only;
+active Sessions, pending Human, accepted work, history and counts are unchanged.
+
 Shared Scala lint profiles allocated 2026-11-01:
 [Phase 8.1](phase-8.1.md), formerly 6.12, follows Phase 8 and precedes Phase 9. Reuse Phase 6.5 Q3
 for baseline/team/project settings: `sm-workflow.source.style=goldenport` selects

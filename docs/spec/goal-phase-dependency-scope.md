@@ -70,6 +70,22 @@ available direction through its public route; do not silently continue past it.
 Identify unsupported same-purpose adoption as a producer gap. Already approved
 restoration can continue without waiting for this correction or RRC completion.
 
+## Phase policy extension — adopted 2026-11-10
+
+[Phase development permissions](phase-development-permissions.md) extends the
+authorization source for the planned common correction. Dependencies incorporated
+into Phase 7's managed development scope need no additional repair Human decision;
+their JARs are published/resolved only in that scope, without shared publishLocal
+pollution. External repair and shared CLI update have independent Phase properties
+defaulting to false. Admitted initial true or genuine same-Session Human enablement
+permits further in-purpose work without repeated permission questions for
+necessary Components, files, Steps or delivery effects. Preserve actual exclusions,
+concrete execution grants and separate outcomes.
+
+This extends PA-03 and the per-Step/per-Component approval source below; implement
+runtime consumption and public adoption together. It does not claim installed
+support, change a live property or answer a pending Human question.
+
 ## Typed authorization and inventory continuation
 
 PA-INVENTORY-CARRY-01 implements the producer contract below. Producer source

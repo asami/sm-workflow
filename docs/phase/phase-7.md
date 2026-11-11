@@ -69,7 +69,8 @@ subtree. Track implementation in the [P7-DD checklist](phase-7-dependency-delive
 The English [handoff](../journal/2026/10/2026-10-26-phase-7-dependency-development-modes-handoff.md)
 records the user direction and preservation rules.
 
-Assigned-chat work completes through local commit and successful publishLocal.
+Assigned-chat work completes through local commit and successful scope-private
+artifact publication, as refined by the 2026-11-10 policy below.
 Small defects and larger ad hoc work use Phase 6.8's independent
 [sm-delegate-task](../spec/delegate-task.md) route, with shared runtime execution
 and impact-selected verification. Do not wrap or change test-fix/goal-task
@@ -254,7 +255,30 @@ Planning changes no active Session, original base, accepted result, repair count
 or validation history. Reconcile pending Human records only through public
 admission; necessary same-purpose file additions do not create caller approval gates.
 
-Authorization reuse (2026-10-25): related-project delivery consumes the
+## Phase development permissions and scoped JARs — 2026-11-10
+
+Consume [PDP-01–09](../spec/phase-development-permissions.md) and
+[PA-D6–8](purpose-based-authorization-correction.md). Dependency projects already
+incorporated into this Phase's managed scope are ordinary development targets:
+their repair needs no additional dependency-repair Human decision. External
+dependency repair and shared CLI update have independent Phase properties
+defaulting to false. Initial true or genuine mid-Phase Human enablement allows
+further in-purpose work without repeated permission questions. A shared host
+installation remains distinct from development of its managed producer.
+
+Dependency JARs are valid only in the selected development scope. Reuse existing
+development artifact repositories, consumer bindings and overlay/selection for
+producer publication and consumer resolution. Do not publish the repair JAR to
+ordinary shared Ivy/Maven local repositories or change unrelated consumers.
+The minimal isolated route belongs in main-route orders 1–2; full overlay breadth
+can follow. This supersedes the earlier ordinary global publishLocal shortcut,
+including older A/B/C/D wording where applicable. Retain P7-DEP01–03 and the
+dependency-edge model; no second repository manager.
+
+Track P7-DD-13–15. Preserve ongoing work and pending Human records; this allocation
+does not restart/replan Phase 6.11, enable live properties or claim qualification.
+
+Authorization reuse (2026-10-25), extended by the Phase policy above: related-project delivery consumes the
 [purpose-based authorization correction](purpose-based-authorization-correction.md).
 Additional necessary files within the admitted Component/purpose/acceptance/operations
 are scope updates judged by sm-workflow, not automatic Human questions. Preserve
@@ -636,7 +660,7 @@ root + dedicated related worktrees
 RepositorySync MUST consume already-created local commits from GoalPhase without reimplementing GoalPhase closing. Conversely, GoalPhase MUST NOT grow multi-repository fetch/push/convergence semantics merely because its current worktree belongs to a larger Project Workspace.
 
 The assigned-chat delivery policy composes these existing owners: finish local
-Task/Phase acceptance and commit, perform publishLocal, return the local result,
+Task/Phase acceptance and commit, publish the scope-private artifact, return the local result,
 then attempt the selected best-effort sync. Reuse an applicable existing
 post-completion sync result rather than scheduling it twice. Consumer adoption
 does not wait for remote convergence; a live sync still retains its real resource

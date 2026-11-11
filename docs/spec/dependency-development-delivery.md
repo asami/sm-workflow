@@ -32,13 +32,29 @@ no current Session, mode, authority, accepted work, history or repair count.
 
 ## Three configured modes
 
+### Phase policy and scoped artifacts — 2026-11-10
+
+Consume [Phase development permissions](phase-development-permissions.md).
+Projects already incorporated into managed development scope need no additional
+dependency-repair Human decision. For external repair and shared CLI update,
+independent Phase properties default to false; admitted initial true or genuine
+same-Phase Human enablement permits further in-purpose work without repeated
+permission questions. Actual explicit Fixed/exclusion choices remain restrictions;
+do not silently reinterpret configured development ownership.
+
+Phase 7 dependency JARs are published/selected only within the development scope
+through existing artifact repositories, consumer bindings and overlay/selection.
+Ordinary shared local publication remains unchanged. This replaces the earlier
+unscoped publishLocal shortcut and applies to all delivery modes below. Shared
+CLI replacement, remote publication and push remain separate effects.
+
 Select a mode per participating dependency Component, rather than deriving it
 from a repository path, dirty status or availability of a chat.
 
 | Mode | When dependency development is necessary | Delivery boundary |
 | --- | --- | --- |
 | Fixed | Return a structured dependency-change-required error with reason and affected consumer work; await user direction | No automatic edit, delegation, publication or source switch |
-| Assigned development chat | Enqueue an authorized outcome request to the configured development chat; service its queue in FIFO order | Required development acceptance, local commit and successful publishLocal; return usable result |
+| Assigned development chat | Enqueue an authorized outcome request to the configured development chat; service its queue in FIFO order | Required development acceptance, local commit and successful scope-private publication; return usable result |
 | Development subtree | Use an explicitly selected development area with retained source/repository/branch and owner | Develop, validate and commit there, then register the result as synchronization work |
 
 Fixed-mode errors are unresolved dependency requirements, not evidence of repair
@@ -104,26 +120,27 @@ Use existing typed WorkOrder/Continuation and storage; no skill-owned queue ledg
 
 | Request | Destination execution | Required delivery | Post-delivery synchronization |
 | --- | --- | --- | --- |
-| Small defect | Independent delegation Workflow through sm-delegate-task; shared repair engine | Impact-selected focused/FULL validation, required review, local commit, publishLocal | Only when selected by the request |
-| Larger ad hoc development | Independent delegation Workflow through sm-delegate-task; shared development engine | Delegated acceptance and required integrated review, local commit, publishLocal | Best-effort sm-repository-sync |
-| Explicit Phase development | sm-goal-phase | Actual Phase completion, local commits, publishLocal | Best-effort sm-repository-sync |
+| Small defect | Independent delegation Workflow through sm-delegate-task; shared repair engine | Impact-selected focused/FULL validation, required review, local commit, scope-private publication | Only when selected by the request |
+| Larger ad hoc development | Independent delegation Workflow through sm-delegate-task; shared development engine | Delegated acceptance and required integrated review, local commit, scope-private publication | Best-effort sm-repository-sync |
+| Explicit Phase development | sm-goal-phase | Actual Phase completion, local commits, scope-private publication | Best-effort sm-repository-sync |
 
 Size is selected from the requested outcome, not an automatic file-count threshold.
 Standalone fix keeps its own no-implicit-commit contract and goal-task keeps its
 own test/review/commit contract. Neither is extended by this delegation route.
 Delegate completion requires a local commit (or applicable existing commit for
-no-change), with publishLocal additionally required for dependency delivery. Task/Phase local completion
+no-change), with scope-private artifact publication required for dependency delivery. Task/Phase local completion
 and delivery publication remain distinct recorded outcomes. The initial request
 carries the necessary authorization, so ordinary in-scope commit/publication
 does not create another permission question. Preserve actual human restrictions
 and runtime effect admission; test success does not itself grant authority.
 
-Use ordinary publishLocal through the existing runtime-owned SBT path, with
-normal development-coordinate/version rules. This mode does not require an
-artifact overlay, manual JAR copying or edits to dependency-resolution internals.
-The [overlay contract](development-artifact-overlay.md) applies to explicitly
-isolated development selections, not as a prerequisite for assigned-chat delivery.
-Remote/public release publication is not implied by publishLocal.
+Use existing runtime-owned SBT and development-coordinate/version rules with a
+scope-private publication destination. Reuse the
+[overlay contract](development-artifact-overlay.md) and artifact repository/selection
+for assigned-chat delivery as well as managed subtrees. Require the minimal
+isolated publication/resolution route first, not all overlay breadth. No manual
+JAR copy, resolution-internal edit or fallback to shared publishLocal when isolation
+is unavailable. Local delivery does not imply remote/public release publication.
 
 ## Runtime-owned FIFO
 
@@ -150,9 +167,9 @@ When dispatch needs the chat application's tools, return the typed dispatch work
 to the existing authorized caller and record its actual result. Runtime queue
 ownership does not require a new Codex API session or loss of chat context.
 
-## Commit, publishLocal and consumer adoption
+## Commit, scoped publication and consumer adoption
 
-Normal delivery is development acceptance -> actual local commit -> publishLocal
+Normal delivery is development acceptance -> actual local commit -> scope-private publication
 -> result return -> consumer artifact adoption and affected integration validation.
 For a legitimate no-change outcome, return the applicable existing commit rather
 than manufacturing an empty one, and establish the required publication result.
@@ -166,7 +183,7 @@ and commit; resume only the missing operation through supported recovery.
 Unknown effects require observation/settlement before any retry.
 
 The consumer uses the reported published result, not whichever development build
-happens to be newest. If later publishLocal replaces the same development
+happens to be newest. If later scoped publication replaces the same development
 coordinates before adoption, preserve attribution and resolve the actually selected
 artifact through existing runtime publication/selection resources. Do not silently
 attribute a different artifact to the earlier successful delivery. Keep this
@@ -180,7 +197,7 @@ publication with consumer acceptance.
 
 ## Best-effort synchronization after larger development
 
-Once development and publishLocal succeed, expose the usable local result and
+Once development and scope-private publication succeed, expose the usable local result and
 attempt the selected sm-repository-sync under existing synchronization authority.
 Schedule the existing completion hook after required publication in this composed
 delivery; do not run it both at Phase closure and after publication.
@@ -189,7 +206,7 @@ attempt if the underlying Phase already supplied the applicable result.
 Record succeeded, failed, deferred/waiting or unknown honestly.
 
 A synchronization failure or unresolved Human/conflict condition does not revoke
-development completion, publishLocal success or consumer usability. It does not
+development completion, scoped publication success or consumer usability. It does not
 hold local delivery or the development FIFO indefinitely. Retain the outstanding
 sync reference for separate continuation; do not spin/retry or force push.
 A still-running sync retains its actual process/resource ownership and must not

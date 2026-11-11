@@ -16,7 +16,7 @@ evidence. A checkbox is a delivery obligation, not a separate review ceremony.
   waiting, explicit hold/cancel and resume preserve queue history without
   duplicate execution or silent reorder. Self-queue dependency cannot deadlock.
 - [ ] P7-DD-04: A small defect uses Phase 6.8 delegation/shared execution with
-  impact-selected verification, mandatory local commit and required publishLocal,
+  impact-selected verification, mandatory local commit and scope-private publication,
   then real consumer integration. No repeat permission within unchanged scope.
 - [ ] P7-DD-05: An ad hoc request uses the independent delegation route without
   altering test-fix/goal-task contracts; an explicit Phase uses existing GoalPhase
@@ -59,3 +59,15 @@ evidence. A checkbox is a delivery obligation, not a separate review ceremony.
 - [ ] P7-DD-12: Installed caller/runtime delivery and operational guidance
   demonstrate fixed, chat and subtree modes with applicable existing evidence.
   All remaining overlay/workspace obligations retain their original acceptance.
+- [ ] P7-DD-13: Consume common Phase permission policy (PA-D6–8/PDP-01–09).
+  Incorporated projects need no additional repair decision. External repair/shared
+  CLI update default independently to false, retaining actual Human enablement
+  across Steps/reconnects without repeated in-purpose permission gates.
+- [ ] P7-DD-14: Publish/resolve dependency JARs only inside the development scope
+  through existing artifact repository/binding/overlay owners. Prove unrelated
+  consumers and shared local repositories unchanged, including same-coordinate
+  SNAPSHOT replacement and scope exit.
+- [ ] P7-DD-15: Connect minimal isolated JAR delivery before remaining overlay
+  breadth; distinguish scope-local tools from shared CLI installation with its
+  independent property. Return actual source/publication/selection/installation
+  and consumer results, retaining all existing histories and counts.
