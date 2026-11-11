@@ -3,7 +3,7 @@
 Date: 2026-10-31
 Status: planned; no implementation or acceptance claimed.
 Owner: sm-workflow development; adoption by sm-workflow-dev after Phase 6.10.
-Sequence: Phase 6.9 -> Phase 6.10 -> Phase 6.11 -> Phase 6.12 -> Phase 7.
+Sequence: Phase 6.9 -> Phase 6.10 -> Phase 6.11 -> Phase 7 -> Phase 8 -> Phase 8.1 -> Phase 9.
 Specification: [directory-list synchronization](../spec/repository-sync-directory-list.md).
 Checklist: [P611 acceptance](phase-6.11-checklist.md).
 Handoff: [English development handoff](../journal/2026/10/2026-10-31-phase-6.11-repository-sync-directory-list-handoff.md).

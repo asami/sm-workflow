@@ -1,5 +1,17 @@
 # Phase 9: Acceptance-Bounded Convergence and Provider Routing
 
+Rollout priority updated 2026-11-11: Phase 7 -> Phase 11.1 -> Phase 8 ->
+[Phase 8.1](phase-8.1.md), formerly 6.12 -> Phase 9 -> [Phase 18](phase-18.md).
+Phase 9 retains its existing number,
+R1–R3 scope and capability dependencies below; this scheduling adds no new
+lint/Core API prerequisite or acceptance gate and changes no active Session.
+Phase 18 follows this Phase by the user's 2026-11-11 scheduling decision.
+Its Flutter integration consumes CNCF Phase 117 independently; completing that
+future consumer is not a Phase 9 acceptance condition.
+Phase 11.1 supplies the bounded linked Journal records; Phase 11.2 batch and
+additional-consumer expansion is not required for Takeover. Existing workflow
+history and current authority remain owned by their original runtime contracts.
+
 2026-10-27 allocation: [Phase 6.10](phase-6.10.md) supplies named operating
 profiles and inexpensive source-delta/observed-token summaries. Model comparison
 and enhanced routing remain here; 6.10 does not require benchmarks or prove a

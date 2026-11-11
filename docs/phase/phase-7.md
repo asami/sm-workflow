@@ -1,5 +1,38 @@
 # Phase 7: Multi-Repository Synchronization and Development Artifact Overlay
 
+## Parallel development first — 2026-11-11
+
+The Phase order is **7 -> [11.1](phase-11.1.md) -> [8](phase-8.md) -> [8.1](phase-8.1.md) ->
+[9](phase-9.md) -> [18](phase-18.md)**. Within Phase 7, deliver the minimum
+practical managed parallel-development route first, then complete the remaining
+Phase 7 acceptance.
+Phase 8 owns subsequent operational improvements; Phase 8.1, formerly 6.12,
+owns the Scala-quality plan. Neither is an entry gate for Phase 7.
+
+Use two independent consumer/dependency lanes to qualify isolation and progress.
+Each consumer A keeps its Goal and Session while runtime prepares its selected B
+worktree, dispatches bounded semantic work, awaits actual checks/publication,
+collects the attributed result and resumes the matching A continuation. Pure
+waiting and result transport require no periodic AI coordinator. One lane waiting
+or needing a Human decision must not serialize the unrelated lane. FIFO remains
+local to its selected destination queue, not a machine-wide execution lock.
+
+Source worktrees and artifact repositories remain separate managed resources.
+Publish/select exact B artifacts in the selected development scope and validate
+the affected A integration; an acknowledgement or worker exit is not delivery.
+Synchronize only the selected B worktree with its explicitly configured GitHub
+branch, using the existing direct managed-dependency route rather than collecting
+another B checkout's changes or requiring canonical B main to be clean. Ordinary
+main synchronization retains its separate local-first policy.
+
+Reuse qualified 6.x execution, commit/recovery and synchronization. Bring the
+minimal resource/artifact selection and A/C integration forward from the existing
+A/B/C/D plan. Preserve all original scenario/checklist IDs, independent review,
+required checks, genuine authority decisions, UNKNOWN/failure distinctions and
+repair accounting. First-route delivery is not whole-Phase acceptance. This
+priority supersedes the older assigned-chat-first and overlay-first schedules;
+it neither changes an active Session nor grants new execution authority.
+
 ## Directory-list predecessor and local workspace scope — 2026-10-31
 
 [Phase 6.11](phase-6.11.md) owns ordinary batch synchronization of explicitly
@@ -15,7 +48,8 @@ This clarifies ownership without declaring any pending Phase 7 condition accepte
 
 The planned rollout is Phase 6.7 -> [Phase 6.8](phase-6.8.md) ->
 [Phase 6.9](phase-6.9.md) -> [Phase 6.10](phase-6.10.md) ->
-[Phase 6.11](phase-6.11.md) -> [Phase 6.12](phase-6.12.md) -> Phase 7.
+[Phase 6.11](phase-6.11.md) -> Phase 7 -> [Phase 11.1](phase-11.1.md) -> [Phase 8](phase-8.md) ->
+[Phase 8.1](phase-8.1.md) -> existing Phase 9 -> [Phase 18](phase-18.md).
 Consume 6.10's optional operating-profile selection and endpoint metrics without
 changing issued work or requiring model comparison/complete usage measurement.
 Consume 6.9's clean/dirty single-repository orchestration and impact-selected
@@ -199,22 +233,23 @@ is changed by this plan.
 
 ### Revised main-route order
 
-This order takes precedence over the older overlay-first sequence below.
-Retain original A/B/C/D and P7-DAO identities, existing evidence and remaining
-acceptance; the new ordinary publishLocal route is not overlay acceptance.
+Updated 2026-11-11: the parallel-development-first priority above supersedes
+older assigned-chat-first and overlay-first ordering. Retain A/B/C/D, P7-DD and
+P7-DAO identities, existing evidence and every remaining acceptance obligation.
 
 | Order | Work | Connected evidence |
 | --- | --- | --- |
-| 1 | Reconcile accepted 6.7 execution, qualified 6.8 commit/recovery, 6.9 synchronization and existing publication contracts; configure fixed/chat/subtree mode and one producer/consumer | Fixed-mode refusal is truthful; actual contract gaps are bounded |
-| 2 | Assigned-chat small defect -> 6.8 delegation/shared engine -> local commit -> publishLocal -> result return -> consumer integration | P7-DD-04/07/08 main route with actual installed execution |
-| 3 | Runtime FIFO for two requests; Task/Phase deliveries and post-publication best-effort sync using existing C operations | Ordering, retained results and nonblocking failed/deferred sync; no AI queue controller |
-| 4 | Managed subtree development and sync target registration; reuse A/B resource/artifact selection and C dependency-order synchronization | Explicit origin/destination and isolated consumer selection; no general worktree use before qualification |
-| 5 | Complete remaining B/C, all P7-DD/DAO and original workspace scenarios, then D integrated review/upstream closure | Preserve existing validation; no duplicate whole-route qualification for unchanged behavior |
+| 1 | Reuse qualified 6.x routes; select managed B worktrees, scope-private artifact repositories and one bounded producer/consumer route | Actual source/artifact attribution and consumer integration; no whole-overlay or whole-8 gate |
+| 2 | Qualify two independent managed A/B development lanes with runtime-owned dispatch, wait/result collection and matching A resumption | P7-DD-09 and existing A/C/D isolation cases; one waiting lane does not stop the other, no periodic AI wait monitor |
+| 3 | Complete assigned-chat delivery and per-destination FIFO for two requests; retain fixed-mode refusal and Task/Phase return/adoption | P7-DD delivery/recovery cases, queue ordering and separate best-effort synchronization results |
+| 4 | Complete remaining B/C, overlay/workspace breadth and every P7-DD/DAO scenario | Reuse applicable evidence and validate changed conditions; no silent loss of original obligations |
+| 5 | D integrated review/upstream closure, supported-use guidance and Phase 7 closure | Distinct actual Phase acceptance; preserve history, failures, UNKNOWN and counters |
 
-Ordinary cross-chat publishLocal must work without completing all overlay
-operations first. Required generation is included only when the selected consumer
-needs it. Subtree denotes a logical managed area; the concrete Git/source layout
-uses the existing CNCF resources rather than assuming a Git subtree command.
+Both managed and assigned-chat delivery reuse the minimal scoped artifact route;
+complete overlay breadth is not a prerequisite for that first route. Required
+generation is included when the selected consumer needs it. Subtree denotes a
+logical managed area, using existing CNCF resources rather than presuming a Git
+subtree command. This order authorizes no current worktree creation or execution.
 Planning changes no active Session, original base, accepted result, repair count
 or validation history. Reconcile pending Human records only through public
 admission; necessary same-purpose file additions do not create caller approval gates.
@@ -304,6 +339,9 @@ connected workspace route -> remaining B and C cases -> D closure**. Batch lette
 and work IDs retain their identities; this ordering creates no new tracking or
 review cycles. Required generation from B is brought into the first route only
 when that selected consumer actually needs it, not as a prerequisite to all C work.
+
+Historical A/B/C/D work inventory: retain the cases below, while the
+2026-11-11 revised main-route order governs delivery priority.
 
 | Order | Reuse and missing implementation | Exit evidence |
 | --- | --- | --- |

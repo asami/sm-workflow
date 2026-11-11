@@ -1,5 +1,38 @@
 # sm-workflow incremental-use roadmap
 
+Phase 8 validation/closure efficiency selected 2026-11-11:
+[proportionate validation and bounded closure](phase-8.md#proportionate-validation-and-bounded-closure--2026-11-11)
+selects impact-based checks, applicable evidence reuse, grouped connected
+qualification, finite Session rescue and fixed closing scope. Qualify through
+representative existing work without a new broad validation campaign. Planned
+only; no additional Phase 6.11 close gate or change to active Session authority.
+See the [decision record](../journal/2026/11/2026-11-11-phase-8-proportionate-validation-and-bounded-closure.md).
+
+Roadmap priority adopted 2026-11-11:
+**[Phase 7](phase-7.md) -> [Phase 11.1](phase-11.1.md) -> [Phase 8](phase-8.md) ->
+[Phase 8.1](phase-8.1.md) -> [Phase 9](phase-9.md) ->
+[Phase 18](phase-18.md)**.
+Within Phase 7, prioritize practical managed parallel development. Phase 11.1
+then delivers the minimum single-entry Journal route before Phase 8 improves
+runtime operation; 8.1 contains the former 6.12 Scala-quality plan with
+all three stages and existing SLP identifiers/statuses retained. Existing Goals,
+Sessions, accepted results, history and repair counts are unchanged; this planning
+decision starts no development or completion operation.
+The user subsequently selected Phase 18 immediately after Phase 9. It owns
+tool-neutral validation and Flutter integration; W4-W5 still require the
+qualified CNCF Phase 117 delivery. This scheduling does not start either Phase
+or make Flutter a prerequisite for Phase 9 closure.
+The user also split Journal work: 11.1 retains Decision/Issue/Handoff, single-entry
+correction/status/query and one real consumer; [11.2](phase-11.2.md) owns later
+batch management and selected additional consumers. Phase 11.2 has no fixed
+delivery slot and is not a prerequisite for 8, 9 or 18. See the
+[split record](../journal/2026/11/2026-11-11-journal-single-entry-and-batch-split.md).
+If the assessed remaining Phase 8 work, including validation and review, is
+about half a day and independent of unfinished Phase 7/11.1 delivery, it may run
+in parallel with Phase 7. Otherwise retain the sequence above. This is a
+conditional scheduling option, not an estimate or a reduction of acceptance.
+See the [decision record](../journal/2026/11/2026-11-11-parallel-development-first-and-phase-8.1.md).
+
 Context compaction coordination allocated 2026-11-07:
 [Phase 8](phase-8.md#context-compaction-coordination-framework-2026-11-07) owns
 meaningful-boundary selection, concise continuation information, optional host
@@ -9,21 +42,21 @@ Sessions, accepted work and existing authority; unavailable compaction must not
 stop ordinary supported work. This allocation starts no Phase or implementation.
 
 Shared Scala lint profiles allocated 2026-11-01:
-[Phase 6.12](phase-6.12.md) follows 6.11 and precedes 7. Reuse Phase 6.5 Q3
+[Phase 8.1](phase-8.1.md), formerly 6.12, follows Phase 8 and precedes Phase 9. Reuse Phase 6.5 Q3
 for baseline/team/project settings: `sm-workflow.source.style=goldenport` selects
 naming and inherited history; `sm-workflow.source.history.style` overrides history
 only. Old source-history keys are removed without compatibility aliases. Project
 `.scalafix.conf` remains optional differences only. Preserve accepted Q3 and active
-work; progress is recorded solely in the [checklist](phase-6.12-checklist.md).
+work; progress is recorded solely in the [checklist](phase-8.1-checklist.md).
 See the [specification](../spec/scala-lint-profiles.md) and
 [English handoff](../journal/2026/11/2026-11-01-shared-scala-lint-profiles-handoff.md).
-The [cross-project delivery plan](phase-6.12-dependencies.md) now identifies
+The [cross-project delivery plan](phase-8.1-dependencies.md) now identifies
 the Core API, SimpleModeler/Cozy generation, model compatibility, build/runtime
 qualification and shared AI-instruction handoffs. All remain planned; existing
 Phase/checklist states and active work are unchanged.
 
 Directory-list RepositorySync adopted 2026-10-31:
-[Phase 6.11](phase-6.11.md) follows active 6.10 and precedes 6.12, then Phase 7. One normal
+[Phase 6.11](phase-6.11.md) follows 6.10 and precedes the Phase 7 parallel route. One normal
 entry accepts existing checkout directories and sync intent, resolves settings,
 executes equal/push/fast-forward and validated automatic merge paths, and returns
 aggregate results without routine AI decisions. Dirty/conflict meaning returns
@@ -46,10 +79,12 @@ separate native desktop coverage. See the [checklist](phase-19-checklist.md) and
 
 Tool-neutral validation allocated 2026-10-28:
 [Phase 18](phase-18.md) / [checklist](phase-18-checklist.md) extends the Phase 6.7
-shared execution baseline alongside Phase 17, without inserting a gate into
-the existing primary roadmap. Common SBT validation and persistence work can
-proceed alongside CNCF Phase 117; Flutter integration requires its qualified
-delivery. Phase 18 owns consumer acceptance, not tool-specific CNCF DSLs.
+shared execution baseline. The 2026-11-11 scheduling decision places it after
+Phase 9, without requiring completion of unrelated Phases 10-17 or adding a
+gate to earlier deliveries. Within Phase 18, common SBT validation and
+persistence work can proceed alongside CNCF Phase 117; Flutter integration
+requires its qualified delivery. Phase 18 owns consumer acceptance, not
+tool-specific CNCF DSLs.
 
 AI operating profiles and lightweight metrics adopted 2026-10-27:
 [Phase 6.10](phase-6.10.md) follows 6.9 with standard/current, cost and quality
@@ -93,7 +128,7 @@ and delegated delivery; Phase 7 composes the qualified routes. See the
 
 
 Commit/recovery standardization adopted 2026-10-26:
-[Phase 6.8](phase-6.8.md) follows active Phase 6.7; Phases 6.9, 6.10, 6.11 and 6.12 then precede Phase 7.
+[Phase 6.8](phase-6.8.md) follows active Phase 6.7; Phases 6.9, 6.10 and 6.11 then precede Phase 7; former 6.12 moves to 8.1 after Phase 8.
 Reuse the bounded P67-T1 repair, purpose-based authorization and completed-result
 collection; finish common authority/recovery, configurable automatic commit
 hygiene and Step/release/RepositorySync integration. Document SHA and fixed file
@@ -108,8 +143,8 @@ owns fixed dependencies, FIFO requests to assigned development chats, and manage
 development subtrees. Assigned-chat delivery includes local commit and publishLocal;
 larger Task/Phase work adds best-effort repository sync afterward, without making
 remote success a local-delivery gate. Reuse Phase 6.7 single-request execution.
-Connect the ordinary chat/publication/consumer route before completing overlay
-breadth; retain all original Phase 7 obligations and active Sessions/results.
+Within Phase 7, prioritize the managed parallel route, then complete
+assigned-chat/FIFO and remaining overlay breadth; retain all original Phase 7 obligations and active Sessions/results.
 See the [contract](../spec/dependency-development-delivery.md),
 [P7-DD checklist](phase-7-dependency-delivery-checklist.md) and
 [English handoff](../journal/2026/10/2026-10-26-phase-7-dependency-development-modes-handoff.md).
@@ -321,8 +356,9 @@ record/read/find, accepted-finding recording and installed trial-skill connectio
 It does not depend on 6.4 archival or on Phases 7–10. Phase numbering does not
 set execution order. Phase 6.4 consumes this shared Journal through its normal
 adoption boundary while retaining ongoing work, issued requests and evidence.
-[Phase 11.1](phase-11.1.md) adds decisions/issues/handoffs and revision/batch
-management separately; it does not delay the 6.4 trial. The main rollout below
+[Phase 11.1](phase-11.1.md) adds decisions/issues/handoffs and single-entry
+revision management; [Phase 11.2](phase-11.2.md) owns later batch/consumer
+expansion. Neither retroactively delays the 6.4 trial. The main rollout below
 remains, with this selected prerequisite delivery inserted before 6.4's remaining
 integration. No active Goal or closed Phase is reset by this planning decision.
 See the [design](../design/development-journal.md) and
@@ -451,13 +487,14 @@ and connects the skills; Phase 6.3 starts gradual real use after integrated acce
 This replaces the earlier plan to start skill-based use after Phase 5.
 
 Build a small usable system, start using it, and grow it from actual development
-needs. The current rollout is **Phase 2 -> Phase 5 / Phase 5.1 -> Phase 5.2 -> Phase 5.3 -> Phase 6 -> Phase 6.1 -> Phase 6.2 -> Phase 6.3 -> Phase 6.4 -> Phase 6.5 -> Phase 6.6 -> Phase 6.7 -> Phase 6.8 -> Phase 6.9 -> Phase 6.10 -> Phase 7 -> Phase 8**.
+needs. The current rollout is **Phase 2 -> Phase 5 / Phase 5.1 -> Phase 5.2 -> Phase 5.3 -> Phase 6 -> Phase 6.1 -> Phase 6.2 -> Phase 6.3 -> Phase 6.4 -> Phase 6.5 -> Phase 6.6 -> Phase 6.7 -> Phase 6.8 -> Phase 6.9 -> Phase 6.10 -> Phase 6.11 -> Phase 7 -> Phase 11.1 -> Phase 8 -> Phase 8.1 -> Phase 9 -> Phase 18**.
 Phase 17 extends Task/FIX after 6.7; its number does not require all Phases 8–16
 to finish first. Only the specific workspace/investigation integrations consume
 their relevant Phase 7/14 capabilities.
-Phase 18 extends validation after the 6.7 shared execution baseline; it does not
-wait for all Phases 8–17. Its Flutter integration depends on CNCF Phase 117 delivery,
-while common SBT and persistence work can proceed in parallel with that producer.
+Phase 18 is scheduled after Phase 9, reusing the 6.7 shared execution baseline;
+it does not wait for unrelated Phases 10-17. Its Flutter integration depends on
+CNCF Phase 117 delivery, while common SBT and persistence work within Phase 18
+can proceed in parallel with that producer.
 Phase numbers do not require Phases 3 and 4 to precede Phase 5.
 
 Revised 2026-10-09: [Phase 5.1](phase-5.1.md) names the connected correction for
@@ -489,14 +526,15 @@ in Phase 6, using the corrected runtime contract.
 | [6.9: Runtime-owned RepositorySync](phase-6.9.md) | Clean synchronization, impact-selected validation/review and dirty purpose-based commits | Runtime-owned main route; reuse 6.8 commit/recovery; Phase 7 composes it across repositories |
 | [6.10: AI operating profiles and lightweight metrics](phase-6.10.md) | Standard/current, cost, quality selection; start/end source counts and observed tokens per net source step | No live config switch or extra AI calls; preserve issued work; comparison stays in 9 and usage acquisition in 13 |
 | [6.11: Directory-list RepositorySync](phase-6.11.md) | Runtime-owned batch synchronization and selected validation | After 6.10; preserve active work and lower-level APIs |
-| [6.12: Shared Scala lint and Goldenport conventions](phase-6.12.md) | Common profiles and Goldenport history/naming selection with project differences | After 6.11, before 7; [checklist](phase-6.12-checklist.md); reuse accepted Q3 |
-| [7: Multi-repository synchronization and artifact overlay](phase-7.md) | Synchronize/validate the workspace and consumer artifact selections using CNCF-discovered project purpose/feature queries | Full practical GoalPhase adoption with related-project management; retain local-development/sync/artifact ownership and existing overlay acceptance |
+| [7: Multi-repository synchronization and artifact overlay](phase-7.md) | Minimum managed parallel A/B lanes first, then assigned-chat/FIFO and remaining workspace/artifact scenarios | Prioritize parallel development within Phase 7; retain all related-project, overlay and synchronization acceptance |
 | [17: Task and standalone FIX extensions](phase-17.md) | Wider inputs, dirty/focused/full options, multi-unit composition and authorized investigation/related-project integration | Reuse 6.7 without rebuilding it; [checklist](phase-17-checklist.md); Phase 7/14 dependencies are scenario-specific |
-| [18: Tool-neutral validation and Flutter](phase-18.md) | Common validation results, retained SBT semantics and Flutter integration | After the 6.7 execution baseline; Flutter W4–W5 consume CNCF Phase 117; [checklist](phase-18-checklist.md); no new gate for 6.8–7 |
+| [18: Tool-neutral validation and Flutter](phase-18.md) | Common validation results, retained SBT semantics and Flutter integration | Scheduled after Phase 9, reusing the 6.7 baseline; Flutter W4–W5 consume CNCF Phase 117; [checklist](phase-18-checklist.md); no new earlier-Phase gate |
 | [19: Docker installation and customization qualification](phase-19.md) | Empty-environment install/use, configuration, preserved customization, update/failure and owned cleanup | Independent HEAVY track; consume INIT and profile producers per case; [checklist](phase-19-checklist.md); no active Phase gate |
-| [8: Runtime extensions and practical closure](phase-8.md) | Resolve necessary Phase 2 carryover and observed operational problems, including [work classification](phase-8.md#work-classification-in-practice--selected-for-phase-8), [review handoffs](phase-8.md#review-handoff-between-assignments) and [completion reports](phase-8.md#completion-reports-for-consumers) | Reassess necessity, finish selected work and close this rollout |
+| [8: Runtime extensions and practical closure](phase-8.md) | Resolve necessary Phase 2 carryover and observed operational problems, including [work classification](phase-8.md#work-classification-in-practice--selected-for-phase-8), [review handoffs](phase-8.md#review-handoff-between-assignments) and [completion reports](phase-8.md#completion-reports-for-consumers) | After Phase 7 and before 8.1; improve operation through the existing runtime owners |
+| [8.1: Shared Scala lint and Goldenport conventions](phase-8.1.md) | A shared strict lint, B strict Scala 3 generation/AI, C Core safe collection APIs and consumption | Former 6.12; after Phase 8 and before existing Phase 9; [checklist](phase-8.1-checklist.md); retain SLP IDs and accepted Q3 |
 | [11: Common Journal and trial skills](phase-11.md) | Actual common record/read/find, accepted Finding recording, packaged/deployed skills and Phase 6.4 trial-host connection | Short priority delivery before remaining 6.4 work; no 6.4 archive or 7–10 completion dependency |
-| [11.1: Journal decisions, issues and handoffs](phase-11.1.md) | Related semantic records, correction/history, state/query and bounded batch management | Reuse 11 independently; not a prerequisite for the 6.4 trial |
+| [11.1: Journal single-entry decisions, issues and handoffs](phase-11.1.md) | Linked semantic records, single-entry correction/history, state/query and one real consumer | After 7 and before 8; reuse 11 without reopening its trial |
+| [11.2: Journal batch management and additional consumers](phase-11.2.md) | Finite batch, per-entry outcomes/continuation and selected additional skills | After 11.1 when needed; no fixed slot or prerequisite for 8/9/18 |
 
 
 ## Applied Phase 6 split — 2026-10-13
@@ -729,7 +767,7 @@ The following summary was published in the merged GitHub parent
 `915e0e5ff0d5910353b62bec0940eab560e085e9`. The detailed roadmap above
 retains the subsequently adopted Phase 5.2/5.3 and Phase 6–9 directions.
 
-> The planned sequence is Phase 2, Phase 5/5.1, Phase 6, Phase 7 and Phase 8.
+> The planned sequence is Phase 2, Phase 5/5.1, the Phase 6 family, Phase 7, Phase 8, Phase 8.1 and existing Phase 9.
 > This page indexes the Phase 6–8 planning material published here. Earlier
 > phase work and its acceptance remain separate.
 >

@@ -47,6 +47,10 @@ evidence. A checkbox is a delivery obligation, not a separate review ceremony.
   exercise B failure/decision-needed and stop/defer without false success or
   duplicate execution. Notification/result storage alone does not establish
   automatic Goal resumption. Existing review/effect ownership and counters remain.
+  Qualify two independent managed A/B lanes early: distinct selected source
+  worktrees and scoped artifact repositories prevent cross-selection, and one
+  waiting/decision-needed lane does not stop the other. Runtime retains each
+  matching A continuation and actual B result, with no global FIFO or AI wait loop.
 - [ ] P7-DD-10: Existing pending dependency/Human records reconcile through
   public continuation with genuine existing direction; all Sessions/history/
   counts/results survive. Real authority expansion retains Human admission.

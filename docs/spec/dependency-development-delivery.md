@@ -13,6 +13,23 @@ sm-test-fix/goal-task as wrapper children or changing their validation/completio
 contracts. Runtime owns verification scope, mandatory commit, required publication
 and result return/adoption. Phase 7 adds modes, durable FIFO and workspace breadth.
 
+## Delivery priority — 2026-11-11
+
+The Phase order is **7 -> 8 -> 8.1 -> 9**.
+Within [Phase 7](../phase/phase-7.md#parallel-development-first--2026-11-11),
+qualify minimum managed parallel development first: prove two isolated A/B lanes,
+then complete assigned-chat/FIFO and remaining overlay breadth. All original
+delivery-mode, review, authority and acceptance contracts remain. Phase 8 owns
+subsequent operational improvements; 8.1 contains the former 6.12 Scala-quality
+plan. Neither is a Phase 7 entry gate.
+
+FIFO serializes requests to the selected destination queue, not unrelated lanes.
+Managed B source/artifact selection and matching A resumption remain runtime-owned.
+Synchronize only that selected B worktree with its configured GitHub branch;
+unrelated/canonical B source changes and cleanliness are not inputs. Ordinary
+main integration retains its separate local-first route. This schedule changes
+no current Session, mode, authority, accepted work, history or repair count.
+
 ## Three configured modes
 
 Select a mode per participating dependency Component, rather than deriving it

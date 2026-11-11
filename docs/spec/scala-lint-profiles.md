@@ -3,7 +3,7 @@
 Status: approved development direction, not implemented by this document.
 
 Delivery ownership, producer-local plans and capability dependencies are tracked
-in the [Phase 6.12 dependency plan](../phase/phase-6.12-dependencies.md).
+in the [Phase 8.1 dependency plan](../phase/phase-8.1-dependencies.md).
 That work ledger does not establish implementation or change this contract.
 
 ## Ownership and configuration
@@ -311,7 +311,7 @@ producer Phase completion.
 
 ### Stage 1: strict lint
 
-Subphase 6.12-A delivers the shared baseline/team/project resolver and the
+Subphase 8.1-A delivers the shared baseline/team/project resolver and the
 selected safety/security/equality rules above. Preserve error, warning,
 unverified and unavailable distinctions; add no private analysis engine. Reuse
 the existing runtime-owned lint/FIX/evidence route and applicable compiler checks.
@@ -380,7 +380,7 @@ and [Scala 3 optional braces](https://docs.scala-lang.org/scala3/reference/other
 
 ### Stage 2: strict generated and AI-authored Scala 3
 
-Subphase 6.12-B makes this active import standard in new or deliberately migrated
+Subphase 8.1-B makes this active import standard in new or deliberately migrated
 Scala 3 source produced through Cozy's generator chain and the AI coding path:
 
 ```scala
@@ -447,7 +447,7 @@ and [initialization checking](https://docs.scala-lang.org/scala3/reference/other
 
 ### Stage 3: type-safe collection extensions in goldenport-core
 
-Subphase 6.12-C consumes a bounded goldenport-core delivery. Reuse existing Cats Eq
+Subphase 8.1-C consumes a bounded goldenport-core delivery. Reuse existing Cats Eq
 and Identified/Identifiable abstractions where suitable, adding distinct domain
 identity semantics only where required. Give new standard-collection extensions
 distinct names; containsEq, containsId, findById and distinctById are examples,
@@ -515,7 +515,7 @@ as precise changed-scope attribution.
 
 ## Delivery
 
-Follow the [development plan and acceptance checklist](../phase/phase-6.12.md).
+Follow the [development plan and acceptance checklist](../phase/phase-8.1.md).
 This extension preserves Phase 6.5 acceptance, ongoing work, Sessions, history,
 repair counters and retained validation results.
 
@@ -523,4 +523,4 @@ History updates remain owned by the existing history operation; lint only detect
 applicable convention violations. Reuse retained history-check evidence where
 appropriate rather than adding a duplicate history-normalization pass. Profiles
 control acceptance, not automatic identifier rewriting; original history dates
-and records remain intact. See the [Phase 6.12 ledger](../phase/phase-6.12-checklist.md).
+and records remain intact. See the [Phase 8.1 ledger](../phase/phase-8.1-checklist.md).
