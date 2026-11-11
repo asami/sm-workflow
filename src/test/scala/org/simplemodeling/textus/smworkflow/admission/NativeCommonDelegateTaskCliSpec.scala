@@ -19,7 +19,7 @@ import S.given
 /** Tiny build and ordinary host declarations only. The fixed focused suite is
   * host configuration, never a request-supplied class or command argument.
   * @since   Nov.  5, 2026
-  * @version Nov.  6, 2026
+  * @version Nov. 11, 2026
   */
 private[admission] object NativeCommonDelegateTaskFixture {
   val suite = "org.simplemodeling.textus.smworkflow.p62authored.LineWriterSpec"
@@ -54,32 +54,48 @@ private[admission] object NativeCommonDelegateTaskFixture {
   * and semantic judgments are SPECIFICATION-OWNED. Actual checks, commit and
   * tiny artifact publication belong to the normal destination runtime.
   */
-@DoNotDiscover
-@org.goldenport.cncf.validation.annotation.ValidationSpecification(
-  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
-final class NativeCommonDelegateTaskCliSpec extends AnyWordSpec with Matchers with GivenWhenThen
+private[admission] trait NativeCommonDelegateTaskQualification extends AnyWordSpec with Matchers with GivenWhenThen
     with ThreeWorkflowManagedRepositoryFixture {
-  private lazy val _executable: Path = {
-    val path = Path.of(sys.props.get("smworkflow.spec.installedCommand")
-      .orElse(sys.env.get("SM_WORKFLOW_SPEC_INSTALLED_COMMAND"))
-      .getOrElse(fail("Select smworkflow.spec.installedCommand or SM_WORKFLOW_SPEC_INSTALLED_COMMAND")))
-    require(path.isAbsolute && path.normalize == path && Files.isRegularFile(path) && Files.isExecutable(path),
-      "Select the actual absolute installed executable")
-    path
-  }
+  protected def commonDelegateExecutable: Path
+  protected def commonDelegateInstallations: Option[Path] = None
+  protected def commonDelegateComponentFile: Option[Path] = sys.props.get("smworkflow.spec.componentFile")
+    .orElse(sys.env.get("SM_WORKFLOW_SPEC_COMPONENT_FILE")).map(Path.of(_))
+  protected def commonDelegateCall(scenario: F.Scenario, service: String, operation: String, arguments: Vector[String]): F.Result =
+    scenario.callInstalled(commonDelegateExecutable, service, operation, arguments, installations = commonDelegateInstallations,
+      assemblyDescriptor = Some(scenario.root.resolve(".textus/assembly.yaml")))
   private def _json(value: RecordPresentable): String = take(value.toRecord().toJsonStringC)
   private def _state(view: V.DelegateTaskView): S.State = GoalPhaseNativeMetadata.normalizePublicJson(
     parser.parse(take(view.state.get.toJsonStringC)).toOption.get).toOption.get.as[S.State].toOption.get
   private def _work(view: V.DelegateTaskView): S.Work = GoalPhaseNativeMetadata.normalizePublicJson(
     parser.parse(take(view.work.get.toJsonStringC)).toOption.get).toOption.get.as[S.Work].toOption.get
   private def _call(scenario: F.Scenario, service: String, operation: String, arguments: Vector[String]): F.Result =
-    scenario.callInstalled(_executable, service, operation, arguments, installations = None,
-      assemblyDescriptor = Some(scenario.root.resolve(".textus/assembly.yaml")))
+    commonDelegateCall(scenario, service, operation, arguments)
+
+  /** Each selected detail is another actual installed process. Keep ordinary
+    * control available separately for output and route assertions below. */
+  private def _view(scenario: F.Scenario, result: F.Result): V.DelegateTaskView = {
+    val control = result.business[V.DelegateTaskView]
+    val work = control.retainedWork.map { reference =>
+      _call(scenario, WorkflowRetainedWork.serviceName, WorkflowRetainedWork.readOperation,
+        Vector("--input", _json(reference))).business[V.WorkflowRetainedWorkReadResult].response
+    }.getOrElse(control.toRecord())
+    val complete = control.retainedMaterials.foldLeft(work) { (prior, field) =>
+      val detail = _call(scenario, WorkflowRetainedWork.serviceName, WorkflowRetainedSnapshot.readOperation,
+        Vector("--input", _json(field.reference))).business[V.WorkflowRetainedSnapshotReadResult]
+      val overlay = control.controlSummary.flatMap(_.getRecord(field.fieldName)).getOrElse(org.goldenport.record.Record.empty)
+      val material = org.goldenport.record.Record.createFull(detail.material.fields.filterNot(value => overlay.getAny(value.key).nonEmpty)
+        .map(value => value.key -> value.value.single)) ++ overlay
+      org.goldenport.record.Record.createFull(prior.fields.filterNot(_.key == field.fieldName)
+        .map(value => value.key -> value.value.single)) ++ org.goldenport.record.Record.data(field.fieldName -> material)
+    }
+    take(V.DelegateTaskView.createC(complete))
+  }
 
   private def _fresh(): F.Scenario = {
     val scenario = F.fresh("installed-common-delegate", bootstrapSelectedInput = false,
       sbtRepair = Some(TypedSbtHostPlanFixture.normalExecutable))
     val root = scenario.root
+    Files.createDirectories(root.resolve("isolated-home/.textus"))
     val repository = Path.of(scenario.host.target.root)
     TypedSbtHostPlanFixture.buildAuthoring(root)
     Files.writeString(repository.resolve("build.sbt"),
@@ -103,25 +119,28 @@ final class NativeCommonDelegateTaskCliSpec extends AnyWordSpec with Matchers wi
       "targets" -> Json.arr(Json.obj("identity" -> NativeCommonDelegateTaskFixture.publication.asJson,
         "component" -> NativeCommonDelegateTaskFixture.component.asJson,
         "workspace" -> TypedGitHostPlanFixture.workspace.asJson)))
+    // Both host plans below replace F.fresh's plans, including its importer
+    // collection/workspace grants. Rebuild that declaration against these
+    // selected plans before the first public preparation call.
     val selected = config.mapObject(fields => fields.remove(ThreeWorkflowRuntimeParameters.definition.name)
+      .remove(CommonEvidence.declaration.name)
       .add("textus.subsystem.process-execution.plan", NativeCommonDelegateTaskFixture.processPlan(root).noSpaces.asJson)
       .add("textus.subsystem.storage.plan", storage.noSpaces.asJson)
       .add(LocalPublicationRuntime.declaration.name, policy.noSpaces.asJson))
     val logical = BoundedWorkExecutionAdmissionFixture.logicalParameters.foldLeft(selected) { case (prior, (key, value)) =>
       prior.mapObject(_.add(key, value.asJson))
     }
-    val installed = sys.props.get("smworkflow.spec.componentFile").fold(logical) { supplied =>
-      val component = Path.of(supplied)
+    val installed = commonDelegateComponentFile.fold(logical) { component =>
       require(component.isAbsolute && component.normalize == component && Files.isRegularFile(component),
         "Select an actual absolute Component archive")
-      logical.mapObject(_.add("textus.component.file", supplied.asJson))
+      logical.mapObject(_.add("textus.component.file", component.toString.asJson))
     }
     Files.writeString(configfile, installed.noSpaces)
+    scenario.enablePreparedImportRetention()
     scenario
   }
 
-  "Installed common delegation" should {
-    "defer initial obligations then retain actual focused checks commit publication and final acceptance through normal owners" in {
+  protected def qualifyCommonDelegate(outcome: String): Unit = {
       Given("one tiny isolated normal host with no runtime.definition and SPECIFICATION-OWNED request authority")
       val scenario = _fresh()
       val root = scenario.root
@@ -148,17 +167,15 @@ final class NativeCommonDelegateTaskCliSpec extends AnyWordSpec with Matchers wi
           role + "-selection", "participant", "ExplicitHuman", role + "-key", "entity:smworkflow.cli.goal_selection")
         val prepared = _call(scenario, "NativeWorkflowPreparationService", "prepareDelegateTaskStart", Vector("--input", _json(preparation)))
         scenario.selectPreparedImport(prepared)
-        _call(scenario, "DelegateTaskService", "startDelegateTask", Vector("--input", _json(input),
-          "--selectionId", role + "-selection", "--participant", "participant", "--idempotencyKey", role + "-key"))
-          .business[V.DelegateTaskView]
+        _view(scenario, _call(scenario, "DelegateTaskService", "startDelegateTask", Vector("--input", _json(input),
+          "--selectionId", role + "-selection", "--participant", "participant", "--idempotencyKey", role + "-key")))
       }
-      def _advance_(id: String) = _call(scenario, "DelegateTaskService", "advanceDelegateTask",
-        Vector("--sessionId", id)).business[V.DelegateTaskView]
+      def _advance_(id: String) = _view(scenario, _call(scenario, "DelegateTaskService", "advanceDelegateTask",
+        Vector("--sessionId", id)))
       def _observe_(id: String, event: String, destination: String, result: Option[org.goldenport.record.Record] = None) =
-        _call(scenario, "DelegateTaskDeliveryService", "observeDelegateTaskDelivery", Vector("--input", _json(
+        _view(scenario, _call(scenario, "DelegateTaskDeliveryService", "observeDelegateTaskDelivery", Vector("--input", _json(
           V.DelegateTaskObservationInput(id, event, V.WorkflowArtifactReference("SPECIFICATION-OWNED-" + event, "1"),
-            Some(destination), result, None, "SPECIFICATION-OWNED transport observation; no consumer effect is certified"))))
-          .business[V.DelegateTaskView]
+            Some(destination), result, None, "SPECIFICATION-OWNED transport observation; no consumer effect is certified")))))
       def _submit_(view: V.DelegateTaskView, result: V.DelegateTaskWorkResult, name: String): F.Result = {
         val reference = V.WorkflowArtifactReference("SPECIFICATION-OWNED-" + name, "1")
         val worker = "SPECIFICATION-OWNED-" + name
@@ -246,6 +263,39 @@ final class NativeCommonDelegateTaskCliSpec extends AnyWordSpec with Matchers wi
       missing.exitCode should not be 0
       unfinished.exitCode should not be 0
       _advance_(destination.sessionId).issuedWorkContext shouldBe current.issuedWorkContext
+      if (outcome == "decision-needed") {
+        When("DeliveryAcceptance honestly retains unresolved activation obligations after actual commit and publication")
+        val decision = finalresult.copy(outcome = "decision-needed", conditions = NonEmptyVector.fromVectorUnsafe(deferredreport),
+          unresolvedQuestions = Vector("SPECIFICATION-OWNED activation remains unresolved"))
+        val submitteddecision = _submit_(current, decision, "delivery-decision")
+        withClue(submitteddecision.invocation.logs) { submitteddecision.exitCode shouldBe 0 }
+        val submittedcontrol = submitteddecision.business[V.DelegateTaskView]
+        submittedcontrol.kind shouldBe "Submitted"
+        submittedcontrol.state shouldBe empty
+        submittedcontrol.retainedMaterials.map(_.fieldName) should contain("state")
+        val humanresult = _call(scenario, "DelegateTaskService", "advanceDelegateTask", Vector("--sessionId", destination.sessionId))
+        val humancontrol = humanresult.business[V.DelegateTaskView]
+        Then("ordinary Human control uses its exact state owner without a fabricated completion operation or ReturnReady")
+        humancontrol.kind shouldBe "Human"
+        humancontrol.state shouldBe empty
+        humancontrol.retainedWork shouldBe empty
+        humancontrol.issuedWorkContext shouldBe empty
+        humancontrol.submitOperation shouldBe empty
+        humancontrol.retainedMaterials.map(_.fieldName) should contain("state")
+        val human = _state(_view(scenario, humanresult))
+        human.stage shouldBe "Human"
+        human.receipts shouldBe acceptedwork.state.receipts
+        human.commit shouldBe acceptedwork.state.commit
+        human.delivery shouldBe acceptedwork.state.delivery
+        human.automaticCount shouldBe acceptedwork.state.automaticCount
+        human.ordinaryCount shouldBe acceptedwork.state.ordinaryCount
+        human.conditionReport.forall(_.satisfied) shouldBe false
+        _state(_advance_(destination.sessionId)) shouldBe human
+        Files.readString(root.resolve("sbt-executions.txt")) shouldBe checks
+        Files.readString(root.resolve("publication-count.txt")) shouldBe publications
+        scenario.candidateHead shouldBe acceptedwork.state.commit.get.identity
+        scenario.candidateStatus shouldBe ""
+      } else {
       When("the exact DeliveryAcceptance result evaluates every obligation against those retained actual effects")
       val submittedacceptance = _submit_(current, finalresult, "delivery-acceptance")
       withClue(submittedacceptance.invocation.logs) { submittedacceptance.exitCode shouldBe 0 }
@@ -266,7 +316,28 @@ final class NativeCommonDelegateTaskCliSpec extends AnyWordSpec with Matchers wi
       Files.readString(root.resolve("publication-count.txt")) shouldBe publications
       scenario.candidateHead shouldBe acceptedwork.state.commit.get.identity
       scenario.candidateStatus shouldBe ""
+      }
       info("SPECIFICATION-OWNED installed common delegation results retained under " + root)
+  }
+}
+
+@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class NativeCommonDelegateTaskCliSpec extends AnyWordSpec with NativeCommonDelegateTaskQualification {
+  override protected lazy val commonDelegateExecutable: Path = {
+    val path = Path.of(sys.props.get("smworkflow.spec.installedCommand")
+      .orElse(sys.env.get("SM_WORKFLOW_SPEC_INSTALLED_COMMAND"))
+      .getOrElse(fail("Select smworkflow.spec.installedCommand or SM_WORKFLOW_SPEC_INSTALLED_COMMAND")))
+    require(path.isAbsolute && path.normalize == path && Files.isRegularFile(path) && Files.isExecutable(path),
+      "Select the actual absolute installed executable")
+    path
+  }
+  "Installed common delegation" should {
+    Vector("accept", "decision-needed").foreach { outcome =>
+      s"defer initial obligations then retain actual focused checks commit publication and $outcome through normal owners" in {
+        qualifyCommonDelegate(outcome)
+      }
     }
   }
 }

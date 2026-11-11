@@ -25,7 +25,7 @@ import GoalPhaseAcceptanceBoundary as A
   * No Workflow state is read or seeded by this caller.
   * @since   Oct. 13, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  9, 2026
+  * @version Nov. 11, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeWorkflowCliFixture {
@@ -192,7 +192,7 @@ private[admission] object NativeWorkflowCliFixture {
       if (current.hcursor.downField(CommonEvidence.declaration.name).focus.isEmpty) {
         val workspace = "prepared-imports"
         val directory = Files.createDirectories(root.resolve("prepared-import-files"))
-        val collection = "entity:smworkflow.cli.prepared_imports"
+        val collection = ThreeWorkflowNormalHostFixture.collection("prepared_imports")
         val policy = Json.obj("schemaVersion" -> Json.fromString(CommonEvidence.schemaVersion),
           "storeName" -> Json.fromString("workflow"), "collection" -> Json.fromString(collection),
           "hostIdentity" -> Json.fromString("normal-cli-prepared-import-host"),

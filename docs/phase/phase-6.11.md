@@ -1,12 +1,41 @@
 # Phase 6.11: Runtime-Owned Directory-List RepositorySync
 
 Date: 2026-10-31
-Status: in progress; B1 implementation authored; validation and Phase acceptance pending.
+Status: Dev-only continuation stopped at source-lineage qualification; native Phase remains open and unaccepted.
 Owner: sm-workflow development; adoption by sm-workflow-dev after Phase 6.10.
 Sequence: Phase 6.9 -> Phase 6.10 -> Phase 6.11 -> Phase 6.12 -> Phase 7.
 Specification: [directory-list synchronization](../spec/repository-sync-directory-list.md).
 Checklist: [P611 acceptance](phase-6.11-checklist.md).
 Handoff: [English development handoff](../journal/2026/10/2026-10-31-phase-6.11-repository-sync-directory-list-handoff.md).
+
+## Development boundary recorded — 2026-11-10
+
+Subsequently the user authorized Dev-only continuation after the operational
+owner ended. The same-Session public current-development selection succeeded;
+ordinary Advance owns the remaining B5 work, checks, review and closure. The
+unpublished operational checkpoint is retained as a partial handoff, not a new
+blanket acceptance prerequisite. The earlier stopping record below remains
+historical. See the [continuation journal](../journal/2026/11/2026-11-10-phase-6.11-dev-only-continuation.md).
+
+The user selected an end to this development run and separate later work for
+the unfinished items. Session `3585e04191dce0bc0f70e394b6745767` remains on
+Plan revision 2. B1–B4 are accepted; B5 source/repair results have been admitted,
+but B5 is not accepted. The latest observed automatic/ordinary repair counts
+are 3/3 with limit 10. Original base, accepted commits, successful checks,
+formal failures and UNKNOWN history remain intact.
+
+This records the development boundary. The runtime Session is not formally
+closed, no Phase acceptance or successful closure is claimed, and the saved
+29-condition acceptance contract has not been revised. The existing acceptance
+deferral route requires all Steps to be accepted before Phase review; it is
+not applicable at this B5 frontier. No new closure capability is commissioned.
+The checklist flags remain unchanged.
+
+See the [carryover and restart references](../notes/phase-6.11-carryover.md) and
+[boundary journal](../journal/2026/11/2026-11-10-phase-6.11-development-boundary.md).
+Uncommitted source and dependency work is preserved. Later work requires an
+explicit instruction; receiving a publication or repair result does not
+automatically resume it. No push or successor Phase is part of this boundary.
 
 ## Purpose and preservation
 

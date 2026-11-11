@@ -14,27 +14,38 @@ import SplitPhaseExplicitPartitionFixture.take
   * the selected installed command and retains its complete two output streams.
   * Fixture inputs are not Phase acceptance or live reviewer/provider evidence.
   * @since   Nov.  9, 2026
-  * @version Nov.  9, 2026
+  * @version Nov. 11, 2026
   */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeRepositoryDirectoryListCliSpec extends AnyWordSpec with GivenWhenThen
-    with Phase69ConfiguredRepositoryFixture {
+    with Phase69ConfiguredRepositoryFixture with NativeCommonDelegateTaskQualification {
   private val selectionFile = Path.of("target/sm-workflow/qualification/phase-6.11-installed.json").toAbsolutePath.normalize
-  private lazy val selected: (Path, Option[Path]) = {
+  private lazy val selected: (Path, Option[Path], Path) = {
     val explicitCommand = sys.props.get("smworkflow.spec.installedCommand").orElse(sys.env.get("SM_WORKFLOW_SPEC_INSTALLED_COMMAND"))
     val explicitImages = sys.props.get("smworkflow.spec.installations").orElse(sys.env.get("SM_WORKFLOW_SPEC_INSTALLATIONS"))
+    val explicitComponent = sys.props.get("smworkflow.spec.componentFile").orElse(sys.env.get("SM_WORKFLOW_SPEC_COMPONENT_FILE"))
     val fromFile = if (explicitCommand.nonEmpty) None else {
       withClue("Explicit installed fixture selection is required: " + selectionFile) { Files.isRegularFile(selectionFile) shouldBe true }
       Some(decodeSelection(parse(Files.readString(selectionFile, UTF_8)).fold(error => fail(error.message), identity)))
     }
     val command = explicitCommand.map(path => checkedPath(path, command = true)).getOrElse(fromFile.get._1)
     val images = explicitImages.map(path => checkedPath(path, command = false)).orElse(fromFile.flatMap(_._2))
-    command -> images
+    val component = explicitComponent.map(checkedComponent).orElse(fromFile.flatMap(_._3))
+      .getOrElse(fail("Explicit installed feature CAR selection is required: componentFile or smworkflow.spec.componentFile"))
+    (command, images, component)
   }
   private def executable: Path = selected._1
   private def installations: Option[Path] = selected._2
+  private def componentFile: Path = selected._3
+  override protected def commonDelegateExecutable: Path = executable
+  override protected def commonDelegateInstallations: Option[Path] = installations
+  override protected def commonDelegateComponentFile: Option[Path] = Some(componentFile)
+  override protected def commonDelegateCall(scenario: F.Scenario, service: String, operation: String, arguments: Vector[String]): F.Result =
+    call(scenario, service, operation, arguments,
+      detail = operation == WorkflowRetainedWork.readOperation || operation == WorkflowRetainedSnapshot.readOperation ||
+        operation == "readPreparedImport")
   private def checkedPath(value: String, command: Boolean): Path = {
     val path = Path.of(value)
     path.isAbsolute shouldBe true
@@ -42,29 +53,101 @@ final class NativeRepositoryDirectoryListCliSpec extends AnyWordSpec with GivenW
     (if (command) Files.isRegularFile(path) && Files.isExecutable(path) else Files.isDirectory(path)) shouldBe true
     path
   }
-  private def decodeSelection(value: Json): (Path, Option[Path]) = {
+  private def checkedComponent(value: String): Path = {
+    val path = Path.of(value)
+    path.isAbsolute shouldBe true
+    path.normalize shouldBe path
+    Files.isRegularFile(path) shouldBe true
+    path.getFileName.toString.endsWith(".car") shouldBe true
+    path
+  }
+  private def decodeSelection(value: Json): (Path, Option[Path], Option[Path]) = {
     val fields = value.asObject.getOrElse(fail("Installed qualification selection must be an object"))
-    fields.keys.toSet.subsetOf(Set("command", "installations")) shouldBe true
+    fields.keys.toSet.subsetOf(Set("command", "installations", "componentFile")) shouldBe true
     val command = value.hcursor.get[String]("command").fold(error => fail(error.message), identity)
     val images = fields("installations").filterNot(_.isNull).map(json =>
       checkedPath(json.asString.getOrElse(fail("installations must be an absolute directory or null")), command = false))
-    checkedPath(command, command = true) -> images
+    val component = fields("componentFile").filterNot(_.isNull).map(json =>
+      checkedComponent(json.asString.getOrElse(fail("componentFile must be an absolute CAR or null"))))
+    (checkedPath(command, command = true), images, component)
   }
   private def configure(scenario: F.Scenario)(change: io.circe.JsonObject => io.circe.JsonObject): Unit = {
     val file = scenario.root.resolve(".textus/config.json")
     val original = parse(Files.readString(file, UTF_8)).fold(error => fail(error.message), identity)
     Files.writeString(file, original.mapObject(change).noSpaces, UTF_8)
   }
-  private def fresh(name: String, later: Option[String] = None): F.Scenario = {
+  /** Fixture-owned local authentication for passive historical preparation.
+    * The original public target remains unchanged and is never adopted.
+    */
+  private def asFixturePrincipal[A](scenario: F.Scenario, principal: String)(body: => A): A = {
+    principal.matches("[A-Za-z][A-Za-z0-9_-]*") shouldBe true
+    val file = scenario.root.resolve(".textus/assembly.yaml")
+    val original = Files.readString(file, UTF_8)
+    val changed = original.replace("      id: participant\n", "      id: " + principal + "\n")
+    changed should not be original
+    Files.writeString(file, changed, UTF_8)
+    try body finally Files.writeString(file, original, UTF_8)
+  }
+  private def fresh(name: String, later: Option[String] = None, sbtRepair: Option[Path] = None): F.Scenario = {
     // Resolve the actual installed selection before arranging any fixture.
     executable
     installations
-    val scenario = F.fresh(name, laterPlanPurpose = later)
+    componentFile
+    val scenario = F.fresh(name, laterPlanPurpose = later, sbtRepair = sbtRepair)
     scenario.enablePreparedImportRetention()
     Files.createDirectories(scenario.root.resolve("isolated-home/.textus"))
-    configure(scenario)(_.add("textus.resource.url.file.roots", Json.fromString(scenario.root.toString))
-      .add("textus.resource.read.max-bytes", Json.fromString("1048576"))
-      .remove(WorkflowArtifactBudget.maxBytes.name))
+    // Use normal explicit CAR activation while retaining the installed wrapper
+    // and strict runtime Component/artifact identity checks.
+    configure(scenario) { fields =>
+      // Standard composition resolves its target from normal gitRepositories,
+      // whereas F.fresh supplies fixed legacy gitPrograms. Select the complete
+      // ordinary host plan as well as the composition, retaining the existing
+      // importer workspace and its grant. Product SBT is absent except for the
+      // explicitly selected standalone test-failure scenario below.
+      val previous = parse(fields("textus.subsystem.process-execution.plan").get.asString.get)
+        .fold(error => fail(error.message), identity)
+      val normal = process_plan(scenario.root, "Equal", scenario.host.goal)
+      val process = Vector("workspaces" -> "identity", "workspaceGrants" -> "workspaceId")
+        .foldLeft(normal) { case (plan, (key, identityKey)) =>
+          val declared = plan.hcursor.get[Vector[Json]](key).toOption.get
+          val identities = declared.map(_.hcursor.get[String](identityKey).toOption.get).toSet
+          val retained = previous.hcursor.get[Vector[Json]](key).toOption.get
+            .filterNot(row => identities(row.hcursor.get[String](identityKey).toOption.get))
+          plan.mapObject(_.add(key, Json.fromValues(declared ++ retained)))
+        }
+      val configuredProcess = sbtRepair.fold(process) { executable =>
+        val validation = TypedSbtHostPlanFixture.plan(scenario.root, executable, Vector(1))
+        def rows(plan: Json, key: String): Vector[Json] = plan.hcursor.get[Vector[Json]](key).toOption.get
+        val identities = Vector("sbtPrograms" -> Vector("identity"), "workspaces" -> Vector("identity"),
+          "workspaceGrants" -> Vector("componentId", "workspaceId"))
+        val withWorkspaces = identities.foldLeft(process) {
+          case (plan, (key, identityFields)) =>
+            def identity(row: Json): Vector[Json] = identityFields.map(field => row.hcursor.get[Json](field).toOption.get)
+            val merged = rows(validation, key).foldLeft(rows(plan, key)) { (retained, selected) =>
+              val matching = retained.filter(row => identity(row) == identity(selected))
+              require(matching.forall(_ == selected), "The selected SBT " + key + " definition must remain identical")
+              retained.filterNot(row => identity(row) == identity(selected)) :+ selected
+            }
+            plan.mapObject(_.add(key, Json.fromValues(merged)))
+        }
+        val selectedGrant = rows(validation, "grants").head
+        val selectedComponent = selectedGrant.hcursor.get[Json]("componentId").toOption.get
+        require(rows(process, "grants").count(_.hcursor.get[Json]("componentId").toOption.contains(selectedComponent)) == 1,
+          "Retain one existing Component grant for the selected SBT capability")
+        withWorkspaces.mapObject(_.add("grants", Json.fromValues(rows(process, "grants").map { grant =>
+          if (grant.hcursor.get[Json]("componentId").toOption.contains(selectedComponent))
+            grant.mapObject(_.add("capabilities", Json.fromValues(
+              (rows(grant, "capabilities") ++ rows(selectedGrant, "capabilities")).distinct)))
+          else grant
+        })))
+      }
+      fields.add("textus.component.file", Json.fromString(componentFile.toString))
+        .add("textus.subsystem.process-execution.plan", Json.fromString(configuredProcess.noSpaces))
+        .add("textus.resource.url.file.roots", Json.fromString(scenario.root.toString))
+        .add("textus.resource.read.max-bytes", Json.fromString("1048576"))
+        .remove(ThreeWorkflowRuntimeParameters.definition.name)
+        .remove(WorkflowArtifactBudget.maxBytes.name)
+    }
     scenario
   }
   private def call(scenario: F.Scenario, service: String, operation: String, parameters: Vector[String],
@@ -83,7 +166,8 @@ final class NativeRepositoryDirectoryListCliSpec extends AnyWordSpec with GivenW
       "exitCode" -> Json.fromInt(result.exitCode), "stdoutBytes" -> Json.fromLong(out),
       "stderrBytes" -> Json.fromLong(err), "stdout" -> Json.fromString(result.invocation.stdout.toString),
       "stderr" -> Json.fromString(result.invocation.stderr.toString), "compactOutput" -> Json.fromBoolean(out < 65536L && err < 65536L), "command" -> Json.fromString(executable.toString),
-      "installations" -> installations.fold(Json.Null)(path => Json.fromString(path.toString)))
+      "installations" -> installations.fold(Json.Null)(path => Json.fromString(path.toString)),
+      "componentFile" -> Json.fromString(componentFile.toString))
     Files.writeString(scenario.root.resolve("qualification-measurements.jsonl"), measurement.noSpaces + "\n", UTF_8,
       StandardOpenOption.CREATE, StandardOpenOption.APPEND)
     if (!detail && requireCompact) {
@@ -102,10 +186,14 @@ final class NativeRepositoryDirectoryListCliSpec extends AnyWordSpec with GivenW
       Vector(Json.obj("command" -> Json.fromString("relative")),
         Json.obj("command" -> Json.fromString("/nonexistent/p611-command")),
         Json.obj("command" -> Json.fromString("/usr/bin/true"), "sourceFallback" -> Json.True),
-        Json.obj("command" -> Json.fromString("/usr/bin/true"), "installations" -> Json.fromInt(1)))
+        Json.obj("command" -> Json.fromString("/usr/bin/true"), "installations" -> Json.fromInt(1)),
+        Json.obj("command" -> Json.fromString("/usr/bin/true"), "componentFile" -> Json.fromInt(1)),
+        Json.obj("command" -> Json.fromString("/usr/bin/true"), "componentFile" -> Json.fromString("relative.car")),
+        Json.obj("command" -> Json.fromString("/usr/bin/true"), "componentFile" -> Json.fromString("/nonexistent/p611.car")),
+        Json.obj("command" -> Json.fromString("/usr/bin/true"), "componentFile" -> Json.fromString("/usr/bin/true")))
         .foreach(value => intercept[org.scalatest.exceptions.TestFailedException](decodeSelection(value)))
       decodeSelection(Json.obj("command" -> Json.fromString("/usr/bin/true"), "installations" -> Json.Null)) shouldBe
-        (Path.of("/usr/bin/true") -> None)
+        (Path.of("/usr/bin/true"), None, None)
     }
   }
 
@@ -209,16 +297,29 @@ final class NativeRepositoryDirectoryListCliSpec extends AnyWordSpec with GivenW
   }
 
   "Installed bounded Workflow families" should {
+    "retain a genuine post-publication decision-needed result and exact Human checkpoint without replaying effects" in {
+      qualifyCommonDelegate("decision-needed")
+    }
+
     "retain typed work references for GoalTask DelegateTask and StandaloneFix with exact fresh-process reads" in {
       Vector("GoalTask", "DelegateTask", "StandaloneFix").foreach { family =>
-        val scenario = fresh("p611-family-" + family.toLowerCase)
-        configure(scenario) { fields => BoundedWorkExecutionAdmissionFixture.logicalParameters.foldLeft(fields) {
+        // Unlike Task's initial Implement work, test-origin StandaloneFix must
+        // observe an actual failed check before issuing Repair. Reuse the normal
+        // ProductCheck build and its typed Test binding only for that scenario.
+        val sbt = Option.when(family == "StandaloneFix")(TypedSbtHostPlanFixture.normalExecutable)
+        val scenario = fresh("p611-family-" + family.toLowerCase, sbtRepair = sbt)
+        // StandaloneFix retains its concrete execution-profile preflight;
+        // GoalTask and DelegateTask use their existing logical Task dispatch.
+        val executionParameters = if (family == "StandaloneFix") BoundedWorkExecutionAdmissionFixture.parameters
+          else BoundedWorkExecutionAdmissionFixture.logicalParameters
+        configure(scenario) { fields => executionParameters.foldLeft(fields) {
           case (prior, (key, value)) => prior.add(key, Json.fromString(value))
         } }
         val common = Json.obj("repositoryIdentity" -> Json.fromString(scenario.host.goal.input.repositoryIdentity),
           "requestIdentity" -> Json.fromString("specification-" + family),
           "objective" -> Json.fromString("SPECIFICATION-OWNED bounded retained-reference qualification"),
-          "ownedPaths" -> Json.arr(Json.fromString("docs/phase.md")), "checks" -> Json.arr(Json.fromString("test")),
+          "ownedPaths" -> Json.fromValues((if (family == "StandaloneFix") scenario.host.goal.candidatePaths
+            else Vector("docs/phase.md")).map(Json.fromString)), "checks" -> Json.arr(Json.fromString("test")),
           "conditions" -> Json.arr(Json.fromString("objective")), "sourceReferences" -> Json.arr(Json.obj(
             "identity" -> Json.fromString("specification-original-request"), "revision" -> Json.fromString("1"))),
           "reviewRequired" -> Json.False, "kind" -> Json.fromString("documentation"),
@@ -228,7 +329,7 @@ final class NativeRepositoryDirectoryListCliSpec extends AnyWordSpec with GivenW
         // Use the generated typed delegation constructor so its original public
         // field vocabulary remains authoritative rather than guessed JSON keys.
         val contract = V.DelegateTaskContract("SPECIFICATION-OWNED-requester", "SPECIFICATION-OWNED-destination",
-          "SPECIFICATION-OWNED-requester", "org.example.ReferenceFixture", "destination", "localized",
+          "SPECIFICATION-OWNED-requester", "org.example.ReferenceFixture", "destination", "documentation",
           cats.data.NonEmptyVector.of("dispatch", "implement", "validate", "review", "commit", "return", "adopt"), Vector("remote-push"),
           cats.data.NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-Human", "1")),
           None, Vector.empty, "SPECIFICATION-OWNED selected material only")
@@ -288,8 +389,29 @@ final class NativeRepositoryDirectoryListCliSpec extends AnyWordSpec with GivenW
         Then("the complete legacy business view remains typed and the same pending context survives recollection")
         original.context shouldBe issued.context
         original.work should not be empty
+        val checkExecutions = if (family == "StandaloneFix") {
+          import StandaloneFixExecution.given
+          val work = io.circe.parser.parse(take(original.work.get.toJsonStringC)).left.map(_.message)
+            .flatMap(GoalPhaseNativeMetadata.normalizePublicJson)
+            .flatMap(_.as[StandaloneFixExecution.Work].left.map(_.message))
+            .fold(message => fail(message), identity)
+          work.kind shouldBe "Repair"
+          work.state.input.reviewOrigin shouldBe empty
+          work.state.receipts.map(_.identity) shouldBe Vector("test")
+          work.state.receipts.head.termination shouldBe "exited"
+          work.state.receipts.head.exitCode shouldBe Some(1)
+          work.state.receipts.head.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Failed
+          work.state.receipts.head.stdout should include("PRODUCT_CHECK_ENTERED")
+          issued.context.get.requiredOperation shouldBe "standalone-fix-repair-capability"
+          val observed = Files.readString(scenario.root.resolve("sbt-executions.txt"), UTF_8)
+          observed.linesIterator.size shouldBe 1
+          Some(observed)
+        } else None
         control(call(scenario, service, "advance" + family, arguments)) shouldBe issued
         call(scenario, service, "advance" + family, arguments, json = false).exitCode shouldBe 0
+        checkExecutions.foreach { observed =>
+          Files.readString(scenario.root.resolve("sbt-executions.txt"), UTF_8) shouldBe observed
+        }
       }
     }
   }
@@ -321,7 +443,7 @@ final class NativeRepositoryDirectoryListCliSpec extends AnyWordSpec with GivenW
       def row(id: String, record: org.goldenport.record.Record): Json =
         DevelopmentOperationalView.json(org.goldenport.record.Record.data("id" -> id) ++ record)
       def rows(collection: String, values: Vector[Json]): Json = Json.obj("collection" ->
-        Json.fromString(ThreeWorkflowNormalHostFixture.collection(collection)), "records" -> Json.fromValues(values))
+        Json.fromString("entity:smworkflow.cli." + collection), "records" -> Json.fromValues(values))
       val allocation = NativeStartPreparationFixture.allocationRow(start)
       val source = NativeStartPreparationFixture.sourceRow(start)
       val selection = T.selectionFor(start.input, start.reference.identity, start.participantIdentity)
@@ -427,6 +549,7 @@ final class NativeRepositoryDirectoryListCliSpec extends AnyWordSpec with GivenW
           file("execution", V.WorkflowExecutionEvidence(Vector(reference), Some(target.context.participantIdentity), None, None)),
           "normal-development-host", java.time.Instant.now().minusSeconds(60).toString,
           "entity:smworkflow.cli.host_evidence", Some(target.context.participantIdentity))
+        asFixturePrincipal(scenario, target.context.participantIdentity) {
         Given("the exact unchanged caller-retained public response of " + Files.size(path) + " bytes")
         configure(scenario)(_.add(WorkflowArtifactBudget.maxBytes.name, Json.fromString("16777216")))
         val refused = call(scenario, "NativeWorkflowPreparationService", "prepareEvidence",
@@ -479,6 +602,7 @@ final class NativeRepositoryDirectoryListCliSpec extends AnyWordSpec with GivenW
         (Files.readString(path, UTF_8) == original) shouldBe true
         // Never selectPreparedImport on this export: no old-Session evidence is
         // provisioned, no old target is rebound and no original effect executes.
+        }
         val recollected = call(scenario, "GoalPhaseService", "advanceGoalPhase", arguments).businessBounded[V.GoalPhaseAdvanceResult]
         recollected.retainedWork shouldBe isolated.retainedWork
         recollected.issuedWorkContext shouldBe isolated.issuedWorkContext
@@ -569,16 +693,24 @@ final class NativeRepositoryDirectoryListCliSpec extends AnyWordSpec with GivenW
         stillIssued.issuedWorkContext shouldBe issued.issuedWorkContext
         stillIssued.retainedWork shouldBe issued.retainedWork
         stillIssued.repairProgress shouldBe issued.repairProgress
-        Given("project 64 MiB configuration and a more specific Component instance 16 MiB override")
-        configure(scenario)(_.add(WorkflowArtifactBudget.maxBytes.name, Json.fromString("67108864")))
+        Given("an assembly Component instance 16 MiB limit with no higher-priority runtime override")
+        // CNCF initialization places RuntimeConfiguration above the assembly
+        // SubsystemInstance layer. Clear the home value to select the Component
+        // limit itself; project 64 MiB would correctly shadow that limit.
+        Files.writeString(homeConfig, "{}", UTF_8)
         val descriptor = scenario.root.resolve(".textus/assembly.yaml")
         val originalDescriptor = Files.readString(descriptor, UTF_8)
         val componentLimit = originalDescriptor.replace("    version: 0.1.0-SNAPSHOT\n",
           "    version: 0.1.0-SNAPSHOT\n    config:\n      workflow.artifact.max-bytes: '16777216'\n")
         componentLimit should not be originalDescriptor
         Files.writeString(descriptor, componentLimit, UTF_8)
-        call(scenario, "GoalPhaseService", "submitGoalPhaseWorkResult", submit).exitCode should not be 0
+        val componentRefused = call(scenario, "GoalPhaseService", "submitGoalPhaseWorkResult", submit)
+        componentRefused.exitCode should not be 0
+        (Files.readString(componentRefused.invocation.stdout, UTF_8) +
+          Files.readString(componentRefused.invocation.stderr, UTF_8)) should include("runtime byte limit")
         Files.writeString(descriptor, originalDescriptor, UTF_8)
+        Files.writeString(homeConfig, Json.obj(WorkflowArtifactBudget.maxBytes.name -> Json.fromString("16777216")).noSpaces, UTF_8)
+        configure(scenario)(_.add(WorkflowArtifactBudget.maxBytes.name, Json.fromString("67108864")))
         When("normal configuration corrects the artifact limit in the same Session while generic Resource stays at one MiB")
         if (bytes == 37500000) {
           configure(scenario)(_.remove(WorkflowArtifactBudget.maxBytes.name))
@@ -616,6 +748,9 @@ final class NativeRepositoryDirectoryListCliSpec extends AnyWordSpec with GivenW
         val sentinel = "P611_SELECTED_DETAIL_ONLY_"
         val body = sentinel + ("x" * (bytes - sentinel.length))
         val scenario = fresh("p611-retained-" + bytes, Some(body))
+        // This large Plan also needs the existing, independent mechanical
+        // receipt capacity. It is not supplied by the artifact read budget.
+        configure(scenario)(_.add("workflow.mechanical-receipt.max-bytes", Json.fromString("67108864")))
         Given("an ordinary selected first Step with unrelated retained later Plan material of " + bytes + " UTF-8 bytes")
         val started = call(scenario, "GoalPhaseService", "startGoalPhase", Vector("--input", scenario.input.noSpaces))
           .businessBounded[V.GoalPhaseStartResult]

@@ -25,7 +25,7 @@ import RepositorySyncNativeProgressStore as N
   * target codecs/admission. It neither authenticates Human consent nor changes
   * any historical target, accepted result, uncertainty or execution counter.
   * @since   Nov.  8, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 11, 2026
   */
 private[smworkflow] object WorkflowRetainedSnapshot {
   val schema = "sm-workflow.retained-snapshot-reference.v1"
@@ -136,7 +136,13 @@ private[smworkflow] object WorkflowRetainedSnapshot {
           val engine = if (r.owner == "GoalTaskWorkflow") GoalTaskNativeRun else if (r.owner == "DelegateTaskWorkflow") DelegateTaskNativeRun else StandaloneFixNativeRun
           load(engine.advanceOperation, engine.stateCodec) { payload =>
             import StandaloneFixExecution.given
-            GoalPhaseParticipantAdmission.admitC(payload.state.participant, core.executionContext).map(_ => payload.state.asJson)
+            for {
+              _ <- GoalPhaseParticipantAdmission.admitC(payload.state.participant, core.executionContext)
+              // The bounded owner publishes a Record, whose canonical decoding
+              // omits null members. Detail must use that same public projection,
+              // rather than compare its raw internal JSON to the public Record.
+              publicState <- engine.recordC(payload.state.asJson)
+            } yield DevelopmentOperationalView.json(publicState)
           }
         case "goal-validation" if r.owner == "GoalPhaseWorkflow" =>
           load(GoalPhaseNativeRun.advanceOperation, GoalPhaseNativeValidation.codec)(payload =>

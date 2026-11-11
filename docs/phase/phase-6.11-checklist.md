@@ -1,9 +1,29 @@
 # Phase 6.11 Acceptance Checklist
 
 Date: 2026-10-31
-Status: in progress; all acceptance items pending.
+Status: Dev-only continuation stopped at source-lineage qualification; Phase acceptance and native closure incomplete.
 Plan: [Phase 6.11](phase-6.11.md).
 Contract: [directory-list synchronization](../spec/repository-sync-directory-list.md).
+
+## Recorded boundary — 2026-11-10
+
+The user subsequently selected Dev-only continuation after the operational
+owner ended. Public current-development selection succeeded in the same
+Session with unchanged Plan 2. Ordinary remaining work and qualification are
+still owed; no checkbox is changed by selection or by the partial handoff.
+
+B1–B4 have native accepted Step results. B5 has accepted semantic results but
+no Step acceptance, final qualification or Phase closure. The latest observed
+repair counts remain automatic 3 / ordinary 3 / limit 10. No checkbox below is
+changed by this record: accepted Steps are not a substitute for an independent
+assessment of the Phase conditions.
+
+The user ended this development run with unfinished work carried forward.
+The original Plan 2 and all 29 conditions remain historical/current native
+authority; no formal deferral or acceptance was fabricated. Follow-up scope,
+owners, preserved work and restart references are recorded in
+[Phase 6.11 carryover](../notes/phase-6.11-carryover.md). They are not newly
+started Tasks or added prerequisites for recording this boundary.
 
 - [ ] P611-01: (B1): A configured authorized directory list resolves repository identities/tracking/bindings in runtime; no caller source inspection, per-directory AI loop or manufactured grants.
 - [ ] P611-02: (B1): Mixed equal, push-only and fast-forward targets finish through one normal installed entry, with zero intermediate AI decisions and no extra product tests.

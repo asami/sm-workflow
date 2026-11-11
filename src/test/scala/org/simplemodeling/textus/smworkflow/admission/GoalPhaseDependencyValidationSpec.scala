@@ -16,7 +16,8 @@ import GoalPhaseNativeValidation as V
 
 /** Business fixtures never supply actual Human consent, Git observations or effect permission.
   * @since   Oct. 24, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 25, 2026
+  * @version Nov. 11, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object DependencyValidationSpecificationFixture {
@@ -102,7 +103,7 @@ final class GoalPhaseDependencyValidationSpec extends AnyWordSpec with Matchers 
       def _validate_(value: Any) = {
         val request = Request.ofOperation("specificationSubmission").copy(
           properties = List(org.goldenport.protocol.Property("result", value, None)))
-        NativeWorkflowOperationInput.recordC(request, "result").flatMap(D.validatePublicResultC)
+        NativeWorkflowResultInput.goalResultC(request)
       }
       When("the strict named business intake consumes Json and String results before the generated reader")
       val accepted = Vector(_validate_(plain), _validate_(plain.noSpaces))
@@ -113,6 +114,7 @@ final class GoalPhaseDependencyValidationSpec extends AnyWordSpec with Matchers 
       accepted.foreach(_.isSuccess shouldBe true)
       rejected.foreach(_.isSuccess shouldBe false)
       absentaccepted.foreach(_.isSuccess shouldBe true)
+      accepted.foreach(value => SplitPhaseExplicitPartitionFixture.take(value).dependencyValidation shouldBe Some(selection))
     }
 
     "preserve an actual dependency selection through the generic submission adapter" in {
