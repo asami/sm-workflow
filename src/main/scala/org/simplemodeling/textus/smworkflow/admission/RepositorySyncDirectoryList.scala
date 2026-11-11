@@ -31,7 +31,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * Only small business relations are retained here; sources and execution
   * captures remain with their existing owners.
   * @since   Nov.  5, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 12, 2026
   */
 private[smworkflow] object RepositorySyncDirectoryList {
   val syncOperation = "syncRepositoryDirectories"
@@ -302,13 +302,19 @@ private[smworkflow] object RepositorySyncDirectoryList {
         if (state.results.forall(_.kind == "Terminal")) "Completed" else "AttentionRequired"))
     }
 
-  /** Accepted paired work advances the child frontier. Only those changed
-    * outstanding children are called again; terminal, unchanged and unknown
-    * attempts are retained. Native Advance owns every check/effect decision.
+  /** Explicit setup refresh may also revisit an unchanged pre-effect wait.
+    * Every other unchanged or unknown attempt remains retained; Native Advance
+    * owns every check/effect decision after the existing admission checks.
     */
+  private[admission] def setupRefreshEligible(refreshsetup: Boolean, kind: String,
+    condition: Option[String], progression: Option[ProgressionReference]): Boolean =
+    refreshsetup && kind == "Wait" && (condition.contains("ValidationSetupRequired") ||
+      (condition.contains("purpose-materialization-preflight") &&
+        progression.contains(ProgressionReference("sync.PurposePrepared"))))
+
   private def _resume_c(current: InstanceRecord, payload: Payload, adapter: WorkflowManagedMechanicalTransition[Payload],
     persistence: GoalPhaseRuntimeParameters.Persistence, storage: WorkflowComponentStorage,
-    core: ActionCall.Core, repository: BindRepository, refreshSetup: Boolean = false): Consequence[(InstanceRecord, Payload)] =
+    core: ActionCall.Core, repository: BindRepository, refreshsetup: Boolean = false): Consequence[(InstanceRecord, Payload)] =
     payload.results.zipWithIndex.foldLeft(Consequence.success(current -> payload)) { case (prior, (result, ordinal)) =>
       prior.flatMap { (frontier, state) =>
         if (state.stage == "Indeterminate" || !Set("Request", "Wait", "Human")(result.kind)) Consequence.success(frontier -> state)
@@ -319,7 +325,7 @@ private[smworkflow] object RepositorySyncDirectoryList {
           child <- instances.loadC(InstanceIdentity(member.sessionId))(using core.executionContext)
             .flatMap(_.map(Consequence.success).getOrElse(_invalid("outstanding child Session is unavailable")))
           next <- if (result.revision.contains(child.revision.value.toString) &&
-              !(refreshSetup && result.kind == "Wait" && result.condition.contains("ValidationSetupRequired")))
+              !setupRefreshEligible(refreshsetup, result.kind, result.condition, child.currentProgression))
             Consequence.success(frontier -> state)
             else for {
               intent <- _save_c(adapter, persistence, core, frontier, state.copy(stage = "Attempting", attempting = Some(member.sessionId)))

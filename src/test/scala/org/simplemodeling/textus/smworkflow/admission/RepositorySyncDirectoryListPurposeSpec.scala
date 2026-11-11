@@ -7,7 +7,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation, GitStatusEntry}
 import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
 import org.goldenport.cncf.workflow.*
-import org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceIdentity
+import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{InstanceIdentity, InstanceRecord, ProgressionReference}
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.goldenport.protocol.{Property, Request}
 import org.goldenport.record.Record
@@ -22,7 +22,7 @@ import RepositorySyncPurpose as P
 /** Public directory entry exercises the existing purpose candidate owner in a
   * non-default configured workspace. Fixture authorship is not qualification.
   * @since   Nov.  8, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 12, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
@@ -117,6 +117,180 @@ final class RepositorySyncDirectoryListPurposeSpec extends AnyWordSpec with Give
         " diagnostic=" + repository.diagnostic).mkString + "\n").take(8192)
 
   "Directory-list dirty purpose handling" should {
+    "refresh only explicit setup waits at the exact prepared purpose frontier" in {
+      Given("the closed setup-refresh eligibility conditions and actual native progression")
+      val prepared = Some(ProgressionReference("sync.PurposePrepared"))
+      val preflight = Some("purpose-materialization-preflight")
+      val accepted = Vector(
+        (true, "Wait", preflight, prepared),
+        (true, "Wait", Some("ValidationSetupRequired"), None))
+      val rejected = Vector(
+        (false, "Wait", preflight, prepared),
+        (true, "Wait", preflight, Some(ProgressionReference("sync.PurposeMaterializing"))),
+        (true, "Wait", preflight, Some(ProgressionReference("sync.UNKNOWN"))),
+        (true, "Wait", preflight, None),
+        (true, "Wait", Some("purpose-effect-unknown"), prepared),
+        (true, "Wait", Some("purpose-check-failed"), prepared),
+        (true, "Wait", Some("arbitrary-wait"), prepared),
+        (true, "Wait", None, prepared),
+        (true, "Request", preflight, prepared),
+        (true, "Human", preflight, prepared),
+        (true, "Terminal", preflight, prepared),
+        (true, "Indeterminate", preflight, prepared))
+      When("an unchanged child is considered for explicit configuration refresh")
+      val acceptedobservations = accepted.map { (refresh, kind, condition, progression) =>
+        RepositorySyncDirectoryList.setupRefreshEligible(refresh, kind, condition, progression)
+      }
+      val rejectedobservations = rejected.map { (refresh, kind, condition, progression) =>
+        s"refresh=$refresh kind=$kind condition=$condition progression=$progression: " ->
+          RepositorySyncDirectoryList.setupRefreshEligible(refresh, kind, condition, progression)
+      }
+      Then("only the existing validation setup wait or the exact pre-effect purpose wait is eligible")
+      acceptedobservations.foreach(_ shouldBe true)
+      rejectedobservations.foreach { (clue, observed) =>
+        withClue(clue) {
+          observed shouldBe false
+        }
+      }
+    }
+
+    "refresh the same retained prepared purpose after legacy setup correction without replay" in {
+      val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/directory-list-purpose").toAbsolutePath), "refresh-")
+      val repository = root.resolve("repository")
+      var waiting = Option.empty[V.RepositoryDirectoryBatchResult]
+      var prepared = Option.empty[RepositorySyncNativeProgressStore.Stage]
+      var sourcehead = ""
+      var sourcebytes = Vector.empty[Option[Vector[Byte]]]
+      def _worktree_bytes_(): Vector[Option[Vector[Byte]]] = paths.map { path =>
+        val selected = repository.resolve(path)
+        Option.when(Files.exists(selected))(Files.readAllBytes(selected).toVector)
+      }
+      Given("the configured legacy fixture's admitted candidate roots with only its purpose policy omitted")
+      _with_runtime_(root, "Equal", hostParameters = parameters(root) - P.declaration.name) { (owner, component, actor, prepare) =>
+        prepare(call => call.setupC(_setup_commands_(root, "Equal").size))
+        Files.writeString(repository.resolve("shared.md"), first)
+        sourcehead = Files.readString(repository.resolve(".git/refs/heads/main")).trim
+        sourcebytes = _worktree_bytes_()
+        def _invoke_[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A =
+          read_value[A](take(owner.executeOperationResponseInContext(Request.of(component = component.name,
+            service = "RepositorySyncService", operation = operation, properties = properties), actor)))
+        def _batch_(session: Option[String] = None): V.RepositoryDirectoryBatchResult =
+          _invoke_(RepositorySyncDirectoryList.syncOperation, session.toList.map(Property("sessionId", _, None)) :+
+            Property("input", Record.data("syncMode" -> "FULL_STATE"), None))
+        val issued = _batch_()
+        issued.outcome shouldBe "AttentionRequired"
+        issued.repositories should have size 1
+        val summary = issued.repositories.head
+        summary.kind shouldBe "Request"
+        var work = Option.empty[WorkflowInteraction[P.Request, Nothing]]
+        prepare(_.repositoryWorkC(InstanceIdentity(summary.sessionId), RepositorySyncPurposeContinuation.completionOperation,
+          P.inputCodec).map(value => { work = Some(value); () }))
+        val request = work.get.current.asInstanceOf[WorkflowContinuation.WorkOrder[P.Request]].request
+        val group = P.Group("purpose-a", "One document purpose", "docs: purpose A", Vector.empty,
+          Vector(P.Content("shared.md", Some(first))), Vector.empty, "Only the first document line changed")
+        val proposal = P.Result("resolved", "One independent document purpose", Vector(group), Vector.empty)
+        val reference = ContextReference("batch-refresh-purpose-author", "1")
+        val reply = ContinuationResult(work.get.handle, request.runId, request.continuationId, request.expectedRevision,
+          request.context.snapshot, TypedValue(request.resultType.get.value, proposal), reference, Vector.empty,
+          ExecutionEvidence(Vector(reference), Some("batch-purpose-refresh-specification")))
+        When("the original authored grouping is accepted once and the native candidate reaches pre-effect setup wait")
+        _invoke_[V.RepositorySyncConflictSubmissionResult]("submitRepositoryPurposeResult",
+          take(NativeWorkflowOperationInputFixture.submissionC(reply))).accepted shouldBe true
+        val result = _batch_(Some(issued.sessionId))
+        withClue(batchClue(result)) {
+          result.outcome shouldBe "AttentionRequired"
+          result.repositories.head.sessionId shouldBe summary.sessionId
+          result.repositories.head.kind shouldBe "Wait"
+          result.repositories.head.condition shouldBe Some("purpose-materialization-preflight")
+        }
+        waiting = Some(result)
+        prepare(_.nativeStageC(ThreeWorkflowNormalHostFixture.definition(root).repository.input,
+          InstanceIdentity(summary.sessionId), root, "purpose-1-prepared").map(value => { prepared = value; () }))
+        prepared should not be empty
+        prepared.get.record.currentProgression shouldBe Some(ProgressionReference("sync.PurposePrepared"))
+        result.repositories.head.nativeRevision shouldBe Some(prepared.get.record.revision.value.toString)
+        prepared.get.payload.purposes.get.plan shouldBe Some(proposal)
+        prepared.get.payload.purposes.get.candidate should not be empty
+        Then("ordinary recollection retains the exact wait, child revision, source and prepared candidate")
+        _batch_(Some(result.sessionId)) shouldBe result
+        Files.readString(repository.resolve(".git/refs/heads/main")).trim shouldBe sourcehead
+        _worktree_bytes_() shouldBe sourcebytes
+        Files.exists(root.resolve("sbt-executions.txt")) shouldBe false
+      }
+      When("the same isolated runtime storage reopens with complete legacy parameters and explicitly refreshes the outstanding revision")
+      _with_runtime_(root, "Equal", hostParameters = parameters(root)) { (owner, component, actor, prepare) =>
+        val originalwait = waiting.get
+        val originalstage = prepared.get
+        val originalprogress = originalstage.payload.purposes.get
+        val child = InstanceIdentity(originalwait.repositories.head.sessionId)
+        def _invoke_(operation: String, properties: List[Property]): V.RepositoryDirectoryBatchResult =
+          read_value[V.RepositoryDirectoryBatchResult](take(owner.executeOperationResponseInContext(Request.of(component = component.name,
+            service = "RepositorySyncService", operation = operation, properties = properties), actor)))
+        def _assert_record_(actual: InstanceRecord, expected: InstanceRecord): Unit = {
+          actual.definition.workflowIdentity shouldBe expected.definition.workflowIdentity
+          actual.definition.workflowRevision shouldBe expected.definition.workflowRevision
+          actual.definition.sourceCorrelation shouldBe expected.definition.sourceCorrelation
+          actual.definition.producerAbiIdentity shouldBe expected.definition.producerAbiIdentity
+          actual.definition.workflowAbiIdentity shouldBe expected.definition.workflowAbiIdentity
+          actual.definition.bootstrapAbiIdentity shouldBe expected.definition.bootstrapAbiIdentity
+          actual.definition.producerRevision shouldBe expected.definition.producerRevision
+          take(actual.definition.validateC)
+          actual.copy(definition = expected.definition) shouldBe expected
+          ()
+        }
+        prepare(_.currentC(child).map { current =>
+          _assert_record_(current, originalstage.record)
+          ()
+        })
+        Files.readString(repository.resolve(".git/refs/heads/main")).trim shouldBe sourcehead
+        _worktree_bytes_() shouldBe sourcebytes
+        val completed = _invoke_(RepositorySyncDirectoryList.refreshOperation, List(
+          Property("sessionId", originalwait.sessionId, None), Property("revision", originalwait.resultReference.revision, None)))
+        Then("the one original purpose installs its exact prepared commit and preserves native history and the old wait")
+        withClue(batchClue(completed)) {
+          completed.sessionId shouldBe originalwait.sessionId
+          completed.outcome shouldBe "Completed"
+          completed.repositories should have size 1
+          completed.repositories.head.sessionId shouldBe child.value
+          completed.repositories.head.kind shouldBe "Terminal"
+          completed.repositories.head.outcome shouldBe "converged"
+        }
+        val candidate = originalprogress.candidate.get
+        Files.readString(repository.resolve(".git/refs/heads/main")).trim shouldBe candidate.commit
+        _worktree_bytes_() shouldBe sourcebytes
+        prepare(_.nativeStageC(ThreeWorkflowNormalHostFixture.definition(root).repository.input,
+          child, root, "purpose-1-installed").map { saved =>
+          saved should not be empty
+          val progress = saved.get.payload.purposes.get
+          progress.plan shouldBe originalprogress.plan
+          progress.cursor shouldBe 1
+          progress.commits shouldBe Vector(candidate.commit)
+          ()
+        })
+        prepare(_.nativeStageC(ThreeWorkflowNormalHostFixture.definition(root).repository.input,
+          child, root, "purpose-1-prepared").map { saved =>
+          saved should not be empty
+          saved.get.payload shouldBe originalstage.payload
+          _assert_record_(saved.get.record, originalstage.record)
+          ()
+        })
+        prepare(_.currentC(child).map { current =>
+          current.history.take(originalstage.record.history.size) shouldBe originalstage.record.history
+          Vector("PurposeGrouped", "PurposePreparing", "PurposePrepared", "PurposeInstalled").foreach { stage =>
+            current.history.count(_.currentProgression.contains(ProgressionReference("sync." + stage))) shouldBe 1
+          }
+          ()
+        })
+        _invoke_(RepositorySyncDirectoryList.readOperation, List(Property("sessionId", originalwait.sessionId, None),
+          Property("revision", originalwait.resultReference.revision, None))) shouldBe originalwait
+        _invoke_(RepositorySyncDirectoryList.syncOperation, List(Property("sessionId", completed.sessionId, None),
+          Property("input", Record.data("syncMode" -> "FULL_STATE"), None))) shouldBe completed
+        Files.readString(repository.resolve(".git/refs/heads/main")).trim shouldBe candidate.commit
+        _worktree_bytes_() shouldBe sourcebytes
+        Files.exists(root.resolve("sbt-executions.txt")) shouldBe false
+      }
+    }
+
     "combine independent currently-known questions with their original child contexts" in {
       val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/directory-list-purpose").toAbsolutePath), "questions-")
       Files.createDirectories(root.resolve("second/repository"))
