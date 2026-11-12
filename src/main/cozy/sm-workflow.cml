@@ -14578,6 +14578,14 @@ operation = DelegateTaskDeliveryService.observeDelegateTaskDelivery
 operation = DelegateTaskDeliveryService.describeDelegateTaskAdoption
 
 
+#### describeDelegateTaskSemanticContinuation
+
+operation = DelegateTaskService.describeDelegateTaskSemanticContinuation
+
+#### resumeDelegateTaskSemanticContinuation
+
+operation = DelegateTaskService.resumeDelegateTaskSemanticContinuation
+
 #### describeDelegateTaskRepairContinuation
 
 operation = DelegateTaskService.describeDelegateTaskRepairContinuation
@@ -14638,6 +14646,62 @@ on = task-accepted
 Independent single-request existing-chat delegation. Reuse the shared bounded WorkOrder, execution/profile preflight, validation, repair, conditional review and native selected commit owner. Required runtime-owned publication precedes return readiness; requester dispatch, returned source and artifact adoption retain their own correlated Sessions.
 
 ### OPERATION
+
+#### describeDelegateTaskSemanticContinuation
+
+##### DESCRIPTION
+
+Describe the exact retained initial destination Implement semantic Human stop without advancing it.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskSemanticContinuationDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | DelegateTaskSemanticContinuationDescriptionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskSemanticContinuationDescriptionResult
+
+#### resumeDelegateTaskSemanticContinuation
+
+##### DESCRIPTION
+
+Admit independently verified covering Human direction and actual upstream references for the exact target. A separate ordinary Advance issues the successor.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskSemanticContinuationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | DelegateTaskSemanticContinuationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskSemanticContinuationDescriptionResult
 
 #### describeDelegateTaskRepairContinuation
 
@@ -15796,6 +15860,46 @@ Explicit ad hoc Task request selection metadata and absolute local file: URI ref
 | name | type | multiplicity |
 |------+------|--------------|
 | sessionId | string | 1 |
+
+## DelegateTaskSemanticContinuationDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+## DelegateTaskSemanticContinuationDescriptionResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| componentInstance | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| target | string | 1 |
+| choices | string | * |
+| resumeOperation | string | 1 |
+
+## DelegateTaskSemanticContinuationInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | string | 1 |
+| choice | string | 1 |
+| rationale | string | 1 |
+| participant | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+| upstream | WorkflowArtifactReference | * |
 
 ## GoalTaskRepairContinuationInput
 

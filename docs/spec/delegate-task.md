@@ -520,3 +520,11 @@ match, and the complete artifact must satisfy its size, digest, canonical
 content and process-observation checks. Missing, changed, denied, foreign,
 ambiguous, incomplete or oversized evidence is refused. Configuring a binding
 does not itself establish successful validation or authorize a consumer effect.
+
+### Initial semantic Human continuation
+
+A destination stopped by the original initial Implement result may describe its current target with `describeDelegateTaskSemanticContinuation`, using `DelegateTaskSemanticContinuationDescriptionInput` and receiving `DelegateTaskSemanticContinuationDescriptionResult`. The target includes the retained original issue and completion, complete semantic result and unresolved questions, native frontier and original input. Description only reads native state. If the original Submit has not yet been materialized as Human, ordinary Advance must materialize it first. Pending work, noninitial or other Human stops and exhausted or terminal sessions are refused.
+
+The host prepares independently attributable Human evidence with `prepareEvidence`, family `DelegateTask` and kind `semantic-continuation`, using the exact description and `DelegateTaskSemanticContinuationInput`. The input supplies the same target, participant, Human reference, a closed choice (`ContinueAfterDependencyResolution` or `Defer`), rationale and actual upstream result references. The independently admitted Human evidence must cover the original questions, unchanged boundary and dependency resolution; preparation or an upstream result alone does not grant authority. Existing attributable direction can cover the continuation without a repeated user grant. `resumeDelegateTaskSemanticContinuation` admits that evidence and, for continuation, appends a checkpoint without issuing work. A separate `advanceDelegateTask` issues the successor Implement in the same Session. An exact repeated admission collects the retained result; a changed direction refuses. Defer changes no workflow state.
+
+The Lake owner must perform its own current-target description, independent Human evidence admission, and ordinary Advance against its original R2 after this capability is installed. Delivery of this capability does not itself resume or accept the Lake or Curator work.

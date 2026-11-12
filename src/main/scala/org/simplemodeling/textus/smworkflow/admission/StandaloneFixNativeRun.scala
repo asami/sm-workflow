@@ -47,6 +47,7 @@ private[smworkflow] object BoundedWorkRuntime {
     candidateContinuation: Option[DelegateTaskCandidateContinuation.Checkpoint] = None,
     repairContinuation: Option[GoalTaskRepairContinuation.Direction] = None,
     delegateRepairContinuation: Option[DelegateTaskRepairContinuation.Direction] = None,
+    delegateSemanticContinuation: Option[DelegateTaskSemanticContinuation.Direction] = None,
     validationContinuation: Option[GoalTaskValidationContinuation.Direction] = None,
     validationRecovery: Option[DelegateTaskValidationRecovery.Direction] = None,
     validationCaptureReservation: Option[ValidationCaptureReservation] = None)
@@ -57,7 +58,7 @@ private[smworkflow] object BoundedWorkRuntime {
   private given Encoder[G.DirtyPath] = deriveEncoder
   private given Decoder[G.DirtyPath] = deriveDecoder
   given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
-    case ("unrelated" | "implementationWorkers" | "supersededWork" | "hygiene" | "records" | "validationCompilations" | "candidateContinuation" | "repairContinuation" | "delegateRepairContinuation" | "validationContinuation" | "validationRecovery" | "validationCaptureReservation", value) => !value.isNull
+    case ("unrelated" | "implementationWorkers" | "supersededWork" | "hygiene" | "records" | "validationCompilations" | "candidateContinuation" | "repairContinuation" | "delegateRepairContinuation" | "delegateSemanticContinuation" | "validationContinuation" | "validationRecovery" | "validationCaptureReservation", value) => !value.isNull
     case _ => true
   }))
   given Decoder[Payload] = deriveDecoder

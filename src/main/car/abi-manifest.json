@@ -916,6 +916,20 @@
         },
         {
           "service": "DelegateTaskService",
+          "name": "describeDelegateTaskSemanticContinuation",
+          "kind": "COMMAND",
+          "input": "DelegateTaskSemanticContinuationDescriptionInput",
+          "output": "DelegateTaskSemanticContinuationDescriptionResult"
+        },
+        {
+          "service": "DelegateTaskService",
+          "name": "resumeDelegateTaskSemanticContinuation",
+          "kind": "COMMAND",
+          "input": "DelegateTaskSemanticContinuationInput",
+          "output": "DelegateTaskSemanticContinuationDescriptionResult"
+        },
+        {
+          "service": "DelegateTaskService",
           "name": "describeDelegateTaskRepairContinuation",
           "kind": "COMMAND",
           "input": "GoalTaskRepairContinuationDescriptionInput",
@@ -6943,6 +6957,18 @@
           ]
         },
         {
+          "name": "DelegateTaskSemanticContinuationDescriptionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
           "name": "GoalTaskRepairContinuationDescriptionInput",
           "kind": "value",
           "fields": [
@@ -6951,6 +6977,54 @@
               "type": "string",
               "multiplicity": "1",
               "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskSemanticContinuationInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choice",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "upstream",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "*",
+              "required": false
             }
           ]
         },
@@ -6991,6 +7065,54 @@
             {
               "name": "reference",
               "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskSemanticContinuationDescriptionResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "componentInstance",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choices",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "resumeOperation",
+              "type": "string",
               "multiplicity": "1",
               "required": true
             }

@@ -424,3 +424,21 @@ final class NativeDelegateTaskRepairContinuationCliSpec extends AnyWordSpec with
     }
   }
 }
+
+/** Installed semantic continuation qualification on a specification-owned Session. */
+@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class NativeDelegateTaskSemanticContinuationCliSpec extends AnyWordSpec with Matchers {
+  "Installed DelegateTask semantic continuation" should {
+    "admit and separately advance the original semantic stop after reopen" in {
+      val executable = Path.of(sys.props.get("smworkflow.spec.installedCommand")
+        .orElse(sys.env.get("SM_WORKFLOW_SPEC_INSTALLED_COMMAND"))
+        .getOrElse(fail("Select SM_WORKFLOW_SPEC_INSTALLED_COMMAND")))
+      val component = Path.of(sys.props.get("smworkflow.spec.componentFile")
+        .orElse(sys.env.get("SM_WORKFLOW_SPEC_COMPONENT_FILE"))
+        .getOrElse(fail("Select SM_WORKFLOW_SPEC_COMPONENT_FILE")))
+      new DelegateTaskSemanticContinuationOperationSpec().qualify(Some(executable -> component))
+    }
+  }
+}
