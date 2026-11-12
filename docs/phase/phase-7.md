@@ -981,3 +981,45 @@ describes the authored native publish/select/compile/status route and its exact
 limits. The current source implementation and executable specifications are not
 validation or independent review evidence. P7-C/P7-DD/P7-B/P7-D retain parallel
 continuation, delivery policy, remaining lifecycle and integrated closure work.
+
+P7-C's issued implementation context (continuation
+`14fad7b7a87c61d8d8f2eeb432a65fb4:ordered-implementation:253`, revision 254)
+adds an authored two-lane native build/isolation/reconnection scenario to the
+registered `Phase7ManagedDevelopmentSpec`. It does not establish automatic
+Goal continuation. The selected host configuration supplies no runtime worker
+dispatch/result-to-Goal-resume binding; the existing delegation observation and
+external continuation conversion APIs do not provide one. The required host
+registration/API, authority and failure/defer behavior must be resolved before
+P7-C can complete. Dependency-aware selected-worktree RepositorySync composition
+also remains unqualified. See the [current native route boundary](../spec/dependency-development-delivery.md#current-native-route-boundary--2026-11-12).
+No P7-C validation or review receipt is supplied by this source assignment, and
+all 44 required Phase conditions remain pending their actual acceptance gates.
+
+The resumed P7-C Request (continuation `ordered-implementation:257`, revision
+258 in the same Session) supersedes the earlier blanket host-startup diagnosis:
+the existing caller can dispatch a dedicated semantic worker and receive its
+result in a live parent. The source batch now connects the existing dependency
+edge to native selected-worktree RepositorySync, with explicit scoped direct
+remote-main routing and original-root preservation on reconnect. It adds authored
+resolver and native Start/Advance specifications in the same registered suite.
+The [connection design and capability table](../spec/dependency-development-delivery.md#existing-caller-continuation-design-and-actual-host-gaps--2026-11-12)
+separates unfinished project A/B composition from host event execution,
+ended-turn scheduling and blocked Codex Goal reactivation. None is established by
+a passive result or notification. The source assignment ran no validation or
+independent review and changes no acceptance condition, Session or repair count.
+
+The P7-C repair issued as `ordered-repair:494`, revision 495 addresses the four
+original-purpose findings in the retained independent review. Managed B checks
+now require actual ordinal validation aliases for that selected worktree; the
+retained A Start root must match the configured consumer workspace; and managed
+publication source must be B's clean accepted commit/tree. Adoption remains an
+attachment operation. Explicit `selectDevelopmentArtifact` and
+`compileDevelopmentConsumer` establish consumer integration; subsequent native
+Advance authenticates those results and returns A's original public Request,
+issued context and completion binding to the live caller. A's real semantic
+Submit remains with its original owner and changes no Start or prior result.
+Failed/deferred lanes and stale or crossed source/work references cannot return
+A as ready. Registered specifications now include the connected public route,
+canonical-check misbinding, selected-B failure and negative consumer/source
+cases. These additions are authored source, not executed verification or
+independent review evidence. The original 44 Phase conditions remain in force.

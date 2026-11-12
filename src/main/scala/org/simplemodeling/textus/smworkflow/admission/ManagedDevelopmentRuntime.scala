@@ -30,12 +30,15 @@ import ManagedDevelopment.*
   * @author ASAMI, Tomoharu
   */
 private[smworkflow] object ManagedDevelopmentRuntime {
-  final case class Policy(storeName: String, collection: String, definition: Definition)
+  final case class Policy(storeName: String, collection: String, definition: Definition,
+    repositorySyncEdge: Option[String] = None, dependencyWorkEdge: Option[String] = None)
   val declaration = ComponentParameterKey.optional("sm-workflow.managed-development",
     ComponentParameterDecoder[Policy] {
       case ConfigurationValue.StringValue(text) => io.circe.jawn.JawnParser(allowDuplicateKeys = false).parse(text)
         .flatMap(_.as[Policy]).fold(e => Consequence.configurationInvalid(e.getMessage), p =>
-          validateC(p.definition).flatMap(_ => if (p.storeName.nonEmpty && EntityCollectionId.parse(p.collection).isSuccess)
+          validateC(p.definition).flatMap(_ => if (p.storeName.nonEmpty && EntityCollectionId.parse(p.collection).isSuccess &&
+            p.repositorySyncEdge != null && p.repositorySyncEdge.forall(id => p.definition.edges.exists(_.identity == id)) &&
+            p.dependencyWorkEdge != null && p.dependencyWorkEdge.forall(id => p.definition.edges.exists(_.identity == id)))
             Consequence.success(p) else Consequence.configurationInvalid("Managed development requires its granted Component collection")))
       case _ => Consequence.configurationInvalid("Managed development requires a structured JSON declaration")
     })
@@ -45,6 +48,11 @@ private[smworkflow] object ManagedDevelopmentRuntime {
     _ <- edgeC(policy.definition, input)
     result <- ManagedDevelopment.runC(operation, policy.definition, input, new NativePort(core, policy, roots))
   } yield result
+
+  def consumerSourceC(core: ActionCall.Core, policy: Policy, edge: Edge): Consequence[Json] = for {
+    roots <- rootsC(core)
+    source <- new NativePort(core, policy, roots).consumerSourceC(edge)
+  } yield source
 
   private def rootsC(core: ActionCall.Core): Consequence[Map[String, String]] = for {
     text <- core.executionContext.resolvedParameters.get("textus.subsystem.process-execution.plan")
@@ -106,6 +114,10 @@ private[smworkflow] object ManagedDevelopmentRuntime {
         actual <- WorkflowFileExecution.readBytesC(core, target, path, FileRepresentation.Identity)
       } yield actual.bytes)
     } yield source
+
+    override def consumerSourceC(edge: Edge): Consequence[Json] =
+      if (policy.dependencyWorkEdge.contains(edge.identity)) sourceC(edge.copy(provider = edge.consumer))
+      else Consequence.success(Json.Null)
 
     def executeC(e: Edge, input: Input, selected: Option[Publication]): Consequence[Execution] = for {
       owner <- rootC(d.ownerWorkspace)

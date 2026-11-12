@@ -1,6 +1,6 @@
 /**
  * @since   Oct. 27, 2026
- * @version Nov.  7, 2026
+ * @version Nov. 12, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -29,7 +29,10 @@ private[smworkflow] object DelegateTask {
     activationReference: Option[ContextReference], consumerCheckReferences: Vector[ContextReference])
   final case class Delivery(destinationSessionId: Option[String] = None, observations: Vector[Observation] = Vector.empty,
     publication: Option[LocalPublication.Result] = None, returned: Option[Json] = None,
-    artifactSelection: Option[Json] = None, adoptionScope: Option[String] = None)
+    artifactSelection: Option[Json] = None, adoptionScope: Option[String] = None,
+    managedPublication: Option[ManagedDevelopment.Publication] = None,
+    managedConsumer: Option[ManagedDevelopment.Result] = None,
+    managedContinuation: Option[GoalPhaseDependencyValidation.ManagedCapture] = None)
   private given Encoder[ContextReference] = deriveEncoder
   private given Decoder[ContextReference] = deriveDecoder
   given Encoder[ArtifactSelection] = deriveEncoder
@@ -38,13 +41,36 @@ private[smworkflow] object DelegateTask {
   given Decoder[Contract] = deriveDecoder
   given Encoder[Observation] = deriveEncoder
   given Decoder[Observation] = deriveDecoder
-  given Encoder[Delivery] = deriveEncoder
+  given Encoder[Delivery] = deriveEncoder[Delivery].mapJson(_.mapObject(_.filter {
+    case ("managedPublication" | "managedConsumer" | "managedContinuation", value) => !value.isNull
+    case _ => true
+  }))
   given Decoder[Delivery] = deriveDecoder
 
   final case class AdoptionTarget(componentInstance: String, sessionId: String, sourceRevision: String, participant: String,
     input: S.Input, returned: Json, destinationSessionId: String)
-  given Encoder[AdoptionTarget] = deriveEncoder
-  given Decoder[AdoptionTarget] = deriveDecoder
+  // returned is an opaque native checkpoint, not another public Record. Record
+  // decoding omits null object members, which would alter the exact target used
+  // by independent adoption evidence. Carry its complete JSON through that
+  // boundary as text; do not relax the evidence-to-current-target comparison.
+  private val adoptionTargetEncoder: Encoder[AdoptionTarget] = deriveEncoder
+  private val adoptionTargetDecoder: Decoder[AdoptionTarget] = deriveDecoder
+  given Encoder[AdoptionTarget] = Encoder.instance(value => adoptionTargetEncoder(value)
+    .mapObject(_.add("returned", Json.fromString(value.returned.noSpaces))))
+  given Decoder[AdoptionTarget] = Decoder.instance { cursor =>
+    cursor.get[Json]("returned").flatMap { returned =>
+      returned.asString match {
+        case Some(raw) => io.circe.parser.parse(raw).left.map(error => io.circe.DecodingFailure(error.message, cursor.history))
+          .flatMap { parsed =>
+            if (parsed.isObject) adoptionTargetDecoder.decodeJson(cursor.value.mapObject(_.add("returned", parsed)))
+            else Left(io.circe.DecodingFailure("Adoption target requires the complete returned checkpoint object", cursor.history))
+          }
+        // Retained pre-text descriptions remain readable without changing their
+        // original content or inventing omitted checkpoint fields.
+        case None => adoptionTargetDecoder.tryDecode(cursor)
+      }
+    }
+  }
   def adoptionBinding(target: AdoptionTarget, observation: Observation): Json = Json.obj(
     "componentInstance" -> target.componentInstance.asJson, "delegateAdoption" -> Json.obj(
       "target" -> target.asJson, "observation" -> observation.asJson))
@@ -175,7 +201,10 @@ private[smworkflow] object DelegateTask {
       (!state.input.reviewRequired || state.reviewReference.nonEmpty) && state.delivery.exists(d =>
         contract.publicationTarget.isEmpty || d.publication.exists(p => p.ready &&
           p.request.target.identity == contract.publicationTarget.get && p.request.target.component == contract.componentIdentity &&
-          p.request.source.head == state.commit.get.identity))) Consequence.unit
+          p.request.source.head == state.commit.get.identity) || d.managedPublication.exists(p =>
+            contract.publicationTarget.contains(p.edge.identity) && p.edge.provider.identity == contract.componentIdentity &&
+            ManagedDevelopmentBoundedWork.acceptedPublicationSource(p.source, state.commit.get) &&
+            contract.artifactCoordinates == Vector(p.selected.organization + ":" + p.selected.module + ":" + p.selected.version)))) Consequence.unit
       else invalid("returned result lacks accepted conditions, local commit or required actual publication")
   } yield state
 

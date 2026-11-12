@@ -47,7 +47,7 @@ private[smworkflow] object StandardWorkflowRuntime {
       case Some("RepositorySyncService") => repositoryC(creation, parameters, shared, request, core).map(Vector(_))
       case Some("JournalService") => Consequence.success(Vector(DevelopmentJournalService.bind(shared.journal)))
       case Some("EvidenceService") => Consequence.success(Vector(CommonEvidenceService.bind(shared.evidence, shared.journal)))
-      case Some("StandaloneFixService") | Some("GoalTaskService") | Some("DelegateTaskService") | Some("DelegateTaskDeliveryService") => boundedC(creation, shared, request, core).map(Vector(_))
+      case Some("StandaloneFixService") | Some("GoalTaskService") | Some("DelegateTaskService") | Some("DelegateTaskDeliveryService") => boundedC(creation, parameters, shared, request, core).map(Vector(_))
       case Some("ManagedDevelopmentService") => parameters.resolve(ManagedDevelopmentRuntime.declaration)
         .map(value => Vector(ManagedDevelopmentService.bind(value.value)))
       case Some("LocalPublicationService") => for {
@@ -200,7 +200,7 @@ private[smworkflow] object StandardWorkflowRuntime {
       } yield Some(selected)
     binding <- selectedtarget match {
       case Some(target) => Consequence.success(target -> RepositorySyncDirectoryList.workspace(core, "sm-workflow-repository"))
-      case None => _repository_target_c(creation, request, retained)
+      case None => _repository_target_c(creation, parameters, request, retained)
     }
     target = binding._1
     call = RepositorySyncDirectoryList.scopedCore(core, binding._2)
@@ -248,14 +248,23 @@ private[smworkflow] object StandardWorkflowRuntime {
     * ordinary lower-level repository entry. Recollection uses its original
     * native root rather than an ambient default target.
     */
-  private def _repository_target_c(creation: ComponentCreate, request: Request,
+  private def _repository_target_c(creation: ComponentCreate, parameters: ComponentInitializationParameters, request: Request,
     retained: Option[RepositorySyncManagedFetch.Payload]): Consequence[(RepositoryGitRuntimePrograms.Target, String)] = for {
     plan <- GoalPhaseInputRecordReadPolicy.storedValue(creation.configuration.configuration.values,
       CncfConfigurationParameterCatalog.SUBSYSTEM_PROCESS_EXECUTION_PLAN_KEY) match {
       case Some(ConfigurationValue.StringValue(value)) => io.circe.parser.parse(value).fold(e => invalid(e.message), Consequence.success)
       case _ => invalid("No managed repository execution profile is configured for this RuntimeRoot")
     }
-    root <- retained match {
+    repository <- retained.flatMap(_.context).map(value => Consequence.success(value.repositoryIdentity))
+      .getOrElse(NativeWorkflowOperationInput.recordC(request, "input").flatMap(record =>
+        record.getString("repositoryIdentity").map(Consequence.success)
+          .getOrElse(invalid("RepositorySync requires an explicit repositoryIdentity"))))
+    development <- parameters.resolve(ManagedDevelopmentRuntime.declaration).map(_.value)
+    mainRoute <- parameters.resolve(ManagedDevelopmentRepositorySync.mainIntegration).map(_.value)
+    managed <- ManagedDevelopmentRepositorySync.selectC(development, repository, plan, retained.map(_.repositoryRoot), mainRoute)
+    root <- managed match {
+      case Some(member) => Consequence.success(member.root)
+      case None => retained match {
       case Some(value) => Consequence.success(value.repositoryRoot)
       case None => for {
         input <- NativeWorkflowOperationInput.recordC(request, "input")
@@ -274,6 +283,7 @@ private[smworkflow] object StandardWorkflowRuntime {
           "RepositorySync requires one configured repository workspace")
         path <- selected.hcursor.get[String]("root").fold(e => invalid(e.message), Consequence.success)
       } yield path
+      }
     }
     members <- RepositorySyncDirectoryList.resolveC(Vector(root), plan, "target-resolution")
   } yield members.head.target -> members.head.workspace
@@ -409,13 +419,20 @@ private[smworkflow] object StandardWorkflowRuntime {
       RepositorySyncPushContinuation.sessionC(request, core)
     else NativeWorkflowOperationInput.textC(request, "sessionId")
 
-  private def boundedC(creation: ComponentCreate, shared: Shared, request: Request,
+  private def boundedC(creation: ComponentCreate, parameters: ComponentInitializationParameters, shared: Shared, request: Request,
     core: ActionCall.Core): Consequence[spec.ServiceDefinition] = for {
-    target <- targetC(creation)
-    delegation = request.service.exists(Set("DelegateTaskService", "DelegateTaskDeliveryService"))
+    delegation <- Consequence.success(request.service.exists(Set("DelegateTaskService", "DelegateTaskDeliveryService")))
     task = delegation || request.service.contains("GoalTaskService")
     native = if (delegation) DelegateTaskNativeRun else if (task) GoalTaskNativeRun else StandaloneFixNativeRun
     definition <- if (delegation) DelegateTaskRuntimeCatalog.loadC() else if (task) GoalTaskRuntimeCatalog.loadC() else StandaloneFixRuntimeCatalog.loadC()
+    development <- parameters.resolve(ManagedDevelopmentRuntime.declaration).map(_.value)
+    retained <- if (request.operation.startsWith("start")) Consequence.success(Option.empty[BoundedWorkRuntime.Payload])
+      else for {
+        session <- _bounded_session_c(request, core)
+        storage <- WorkflowComponentStorage.bindC(creation, SmWorkflowComponent.componentId, shared.persistence.configuration,
+          Vector(definition), shared.persistence.instances, shared.persistence.continuations)
+        value <- native.retainedPayloadC(storage, session, core)
+      } yield Some(value)
     input <- if (request.operation.startsWith("start")) NativeWorkflowOperationInput.recordC(request, "input").map(DevelopmentOperationalView.json)
       else for {
         session <- _bounded_session_c(request, core)
@@ -432,10 +449,25 @@ private[smworkflow] object StandardWorkflowRuntime {
     paths <- input.hcursor.get[Vector[String]]("ownedPaths").fold(e => invalid(e.message), Consequence.success)
     checkIds <- input.hcursor.get[Vector[String]]("checks").fold(e => invalid(e.message), Consequence.success)
     checks <- standardChecksC(checkIds)
+    destination = delegation && (retained.flatMap(_.state.input.delegation).exists(_.role == "destination") ||
+      input.hcursor.downField("delegation").get[String]("role").contains("destination"))
+    plan <- GoalPhaseInputRecordReadPolicy.storedValue(creation.configuration.configuration.values,
+      CncfConfigurationParameterCatalog.SUBSYSTEM_PROCESS_EXECUTION_PLAN_KEY) match {
+      case Some(ConfigurationValue.StringValue(value)) => io.circe.parser.parse(value).fold(e => invalid(e.message), Consequence.success)
+      case _ => invalid("No managed repository execution profile is configured for this RuntimeRoot")
+    }
+    managed <- if (destination) ManagedDevelopmentBoundedWork.selectC(development, repository, plan, retained.map(p => p.root -> p.branch))
+      else Consequence.success(Option.empty[RepositorySyncDirectoryList.Member])
+    _ <- managed.fold(Consequence.unit)(m => ManagedDevelopmentBoundedWork.validationBindingsC(plan, m, checks))
+    target <- managed.map(m => Consequence.success(RepositoryGitRuntimePrograms.Target(Paths.get(m.root), m.localBranch,
+      m.remote, m.remoteBranch, m.endpoint))).getOrElse(targetC(creation))
+    _ <- if (retained.forall(p => p.root == target.root.toString && p.branch == target.localBranch)) Consequence.unit
+      else invalid("Bounded host differs from the original native Session source")
     p = shared.persistence
     host = BoundedWorkRuntime.Host(p.configuration, p.instances, p.continuations, repository, target.root.toString,
       target.localBranch, paths, checks, shared.profiles, shared.origin, Some(shared.ports.goalReview), shared.evidence, shared.journal,
-      shared.publication, shared.hygienemode, shared.completionrecords, Some(shared.operatingcontext))
+      shared.publication, shared.hygienemode, shared.completionrecords, Some(shared.operatingcontext),
+      development.filter(p => p.dependencyWorkEdge.exists(id => p.definition.edges.exists(e => e.identity == id && e.provider.repository == repository))))
     records <- GoalPhaseInputRecordReadPolicy.decodeC(creation.configuration)
     selections = new ProfileSelectionDataStorePort(records.storeName,
       records.collections.find(_._1 == GoalPhaseInputRecordReadPolicy.Purpose.Selection).get._2)
@@ -444,7 +476,7 @@ private[smworkflow] object StandardWorkflowRuntime {
       else if (task) GoalTaskService.bindC(creation, host, selections) else StandaloneFixService.bindC(creation, host, selections)
     selected <- if (delegation) RuntimeGitSelections.boundedC(service, paths, requestIdentity, objective, "delegate-task")
       else RuntimeGitSelections.boundedC(service, paths, requestIdentity, objective)
-  } yield selected
+  } yield managed.fold(selected)(m => RepositorySyncDirectoryList.bindWorkspace(selected, m.workspace))
 
   private def _bounded_session_c(request: Request, core: ActionCall.Core): Consequence[String] =
     if (request.operation == "adoptGoalTaskValidationContinuation") GoalTaskValidationContinuation.inputForCallC(request, core).map(_.sessionId)

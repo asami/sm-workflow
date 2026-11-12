@@ -28,6 +28,7 @@ private[smworkflow] object ManagedDevelopment {
     def loadC(key: String): Consequence[Option[Json]]
     def createC(key: String, value: Json): Consequence[Unit]
     def sourceC(edge: Edge): Consequence[Json]
+    def consumerSourceC(edge: Edge): Consequence[Json] = sourceC(edge)
     def executeC(edge: Edge, input: Input, selected: Option[Publication]): Consequence[Execution]
     def publicationC(edge: Edge, input: Input, source: Json): Consequence[Publication]
     def consumerReportC(edge: Edge, input: Input, selected: Publication): Consequence[Json]
@@ -89,13 +90,18 @@ private[smworkflow] object ManagedDevelopment {
       case "compile" => for {
         selection <- selectionC(d, e, input, p)
         result <- attemptC(d, e, input, "compile", p) {
-          p.executeC(e, input, Some(selection.publication)).flatMap { actual =>
+          p.consumerSourceC(e).flatMap { before => p.executeC(e, input, Some(selection.publication)).flatMap { actual =>
             if (actual.status != "succeeded") Consequence.success(Result(actual.status, actual.detail))
-            else p.consumerReportC(e, input, selection.publication).transform(
+            else p.consumerSourceC(e).flatMap { after =>
+              if (before != after) Consequence.success(Result("unverified", Json.obj(
+                "execution" -> actual.detail, "reason" -> "consumer source changed during compilation".asJson)))
+              else p.consumerReportC(e, input, selection.publication).transform(
               report => Consequence.success(Result("verified",
-                Json.obj("selection" -> selection.asJson, "execution" -> actual.detail, "resolution" -> report))),
+                Json.obj("selection" -> selection.asJson, "execution" -> actual.detail, "resolution" -> report,
+                  "consumerSource" -> after))),
               error => Consequence.success(Result("unverified", Json.obj("execution" -> actual.detail, "reason" -> error.show.asJson))))
-          }
+            }
+          }}
         }
       } yield result
       case "status" => for {

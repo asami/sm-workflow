@@ -1,7 +1,6 @@
 /**
  * @since   Oct. 27, 2026
- *  version Nov.  5, 2026
- * @version Nov.  6, 2026
+ * @version Nov. 12, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -91,12 +90,13 @@ private[smworkflow] object DelegateTaskDeliveryService {
               _ <- if (admitted.nonEmpty) Consequence.unit else Consequence.securityPermissionDenied(
                 "Requester adoption requires independently admitted host observation for this exact source/artifact selection; passive data is not authority")
             } yield ()
-            saved <- if (next == payload.state) Consequence.success(current)
-              else if (current.lifecycle == Lifecycle.Active) N.saveC(h, storage, current, payload.copy(state = next), selected)
+            integrated = next
+            saved <- if (integrated == payload.state) Consequence.success(current)
+              else if (current.lifecycle == Lifecycle.Active) N.saveC(h, storage, current, payload.copy(state = integrated), selected)
               else N.invalid("Completed delivery cannot accept a new observation")
             retained <- N.loadPayloadC(storage, session, saved.revision.value, selected)
           } yield NativeWorkflowOperationOutput.response(N.view(saved, retained.state,
-            if (DelegateTask.terminal(retained.state.stage)) "Terminal" else "Wait", retained.state.message))
+            if (DelegateTask.terminal(retained.state.stage) && saved.lifecycle == Lifecycle.Completed) "Terminal" else "Wait", retained.state.message))
         } yield response
       }
     }

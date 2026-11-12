@@ -1,6 +1,6 @@
 /**
  * @since   Oct. 30, 2026
- * @version Nov.  7, 2026
+ * @version Nov. 12, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -135,6 +135,9 @@ private[smworkflow] object DelegateTaskScopeCorrection {
         retained.receipt.payload.target.oldContinuationId == old) Consequence.unit
       else N.invalid("Scope checkpoint does not bind the current frontier")
   } yield retained.receipt.payload
+
+  def retainedPayloadC(storage: WorkflowComponentStorage, current: InstanceRecord,
+    core: ActionCall.Core): Consequence[Payload] = _checkpoint_c(storage, current, core).map(_.target.business)
 
   def retainedInputC(storage: WorkflowComponentStorage, current: InstanceRecord,
     core: ActionCall.Core): Consequence[S.Input] = _checkpoint_c(storage, current, core).flatMap { saved =>

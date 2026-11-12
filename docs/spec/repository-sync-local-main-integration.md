@@ -121,6 +121,15 @@ This allocation clarifies the Phase 7/8 planning boundary. It changes no issued
 request or currently installed behavior and adds no routine Human route question
 when the managed dependency purpose/configuration already selects direct.
 
+The P7-C source connection is now authored through optional
+`repositorySyncEdge` on the existing managed-development declaration and the
+normal RepositorySync Start/Advance assembly. It resolves the selected provider
+workspace and exact Git identity from CNCF configuration, requires explicit
+scoped `direct` for remote main, and rejects a changed selected root on reconnect.
+See [the precise connection and current limits](dependency-development-delivery.md#selected-source-repositorysync-connection--2026-11-12).
+Its executable specifications have not been run by the semantic source worker.
+This does not implement the separate ordinary local-first route below.
+
 ## Checkout and target resolution
 
 For `local-first`, retain the source checkout/branch, canonical main checkout

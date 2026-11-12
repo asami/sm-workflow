@@ -16,7 +16,7 @@ import GoalPhaseNativeValidation as V
 /** References select business context, never execution permission or observations.
   * @since   Oct. 24, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  2, 2026
+  * @version Nov. 12, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseDependencyValidation {
@@ -33,6 +33,9 @@ private[smworkflow] object GoalPhaseDependencyValidation {
   final case class Capture(session: String, plan: ContextReference, step: String, generation: Long,
     sourceRevision: String, primaryBase: O.Snapshot, admission: Admission,
     candidate: O.Snapshot, changedPaths: Vector[String], diff: String)
+  /** Retained on B's existing bounded checkpoint while A remains suspended. */
+  final case class ManagedCapture(componentInstance: String, participant: String, session: String,
+    plan: ContextReference, step: String, generation: Long, work: ContextReference, edge: ManagedDevelopment.Edge)
   final case class CandidateOrigin(stageSourceRevision: String, observationSourceRevision: String, resultRecordRevision: String)
   final case class Execution(check: String, attempt: Int, workspace: String, operation: String)
   final case class RecoverySubject(binding: ContextReference, repository: String, workspace: String,
@@ -42,6 +45,12 @@ private[smworkflow] object GoalPhaseDependencyValidation {
   private given Decoder[ContextReference] = _closed(Set("identity", "revision"), deriveDecoder)
   private given Encoder[O.Snapshot] = deriveEncoder
   private given Decoder[O.Snapshot] = _closed(Set("head", "tree"), deriveDecoder)
+  private given Encoder[ManagedDevelopment.Coordinate] = deriveEncoder
+  private given Decoder[ManagedDevelopment.Coordinate] = deriveDecoder
+  private given Encoder[ManagedDevelopment.Edge] = deriveEncoder
+  private given Decoder[ManagedDevelopment.Edge] = deriveDecoder
+  given Encoder[ManagedCapture] = deriveEncoder
+  given Decoder[ManagedCapture] = deriveDecoder
   given Encoder[ApprovalReference] = deriveEncoder
   given Decoder[ApprovalReference] = _closed(Set("proposal", "decision"), deriveDecoder)
   given Encoder[Selection] = deriveEncoder

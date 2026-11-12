@@ -120,7 +120,8 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
       GoalPhaseNativeExecution.declaration, GoalPhaseNativeExecution.logicalOrigin, GoalPhaseRetainedObservations.declaration, GoalPhaseOperatingProfiles.declaration, GoalPhaseOperatingProfiles.cost, GoalPhaseOperatingProfiles.quality, GoalPhaseOperatingProfiles.localExperiment, GoalPhaseDispatchPolicy.declaration, GoalPhaseAcceptanceBoundary.declaration, GoalPhaseFindingRecording.declaration,
       RepositorySyncNativeExecution.declaration, RepositorySyncDocumentInputs.declaration, RepositorySyncProgramImpact.declaration,
       RepositorySyncPurpose.declaration, RepositorySyncDirectoryList.declaration, SplitPhaseNativeExecution.declaration, DevelopmentJournal.declaration, CommonEvidence.declaration,
-      completionPolicy, validationRepairCallerSource, developmentObservation, LocalPublicationRuntime.declaration, ManagedDevelopmentRuntime.declaration, CommitHygiene.declaration, CompletionRecords.declaration)
+      completionPolicy, validationRepairCallerSource, developmentObservation, LocalPublicationRuntime.declaration, ManagedDevelopmentRuntime.declaration,
+      ManagedDevelopmentRepositorySync.mainIntegration, CommitHygiene.declaration, CompletionRecords.declaration)
   lazy val factory = new SmWorkflowConfiguredComponentFactory(declarations, Vector.empty,
     bindServicesC, ThreeWorkflowLauncherAssembly.publishedMcpOperations)
 
