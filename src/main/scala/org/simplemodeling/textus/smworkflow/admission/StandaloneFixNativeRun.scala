@@ -163,7 +163,17 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
           result <- RepositorySyncNativeMergeValidation.hydrateExternalC(core, receipt, a, limits)
         } yield result
       }
-    } yield values :+ hydrated }.map(receipts => state.copy(receipts = receipts))
+    } yield values :+ hydrated }.flatMap { receipts =>
+      val selected = state.copy(receipts = receipts)
+      selected.delivery.flatMap(_.returned) match {
+        case None => Consequence.success(selected)
+        case Some(returned) => selected.delivery.flatMap(_.destinationSessionId) match {
+          case None => invalid("Retained producer result has no destination Session")
+          case Some(destination) => DelegateTask.returnedC(selected.input, returned,
+            s => DelegateTaskDeliveryService.hydrateReturnedC(core, destination, s)).map(_ => selected)
+        }
+      }
+    }
   }
 
   /** Recompose a standard host from its actual native input, without selecting

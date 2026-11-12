@@ -497,3 +497,26 @@ absent. This recovery boundary does not discover or import unrelated providers.
 At an eligible destination DelegateTask Human repair-trend stop, `describeDelegateTaskRepairContinuation` reads the retained exact target. Prepare and independently admit the actual Human `ContinueRepair` or `Defer` direction using the `DelegateTask` `repair-continuation` evidence purpose. `resumeDelegateTaskRepair` checks the target, participant, evidence and source freshness. Defer leaves the checkpoint untouched; ContinueRepair appends a Repair checkpoint without running work or checks. A separate ordinary `advanceDelegateTask` owns the next Repair and the retained allowance. Repeating the same admitted direction collects the existing result; a changed or stale target is refused.
 
 The description reports the retained generation, repair counts and limit, successful check prefix, receipt and observation counts; its opaque target carries the exact retained receipts and observations. Recurring check or test names indicate a coarse trend and do not establish that failures share a root cause. Description runs no checks.
+
+## Requester reads of referenced validation captures
+
+An external full-Test receipt remains a compact reference in the returned
+result. The requester must read the complete canonical capture before it can
+accept that receipt as a successful check. The requester host may declare
+`sm-workflow.delegate-task.returned-capture-read-bindings` with schema
+`sm-workflow.delegate-task-returned-capture-read.v1` and a `bindings` array.
+Each binding specifies `sourceComponentInstance`, `sourceSessionId`,
+`sourceRepository`, `sourceParticipant`, `sourceRoot`, `sourceBranch`,
+`sourceBaseHead`, `sourceCandidateTree`, `sourceCommit`, `sourceWorkspace`,
+`readWorkspace`, and `maximumBytes`. These are independently configured host
+facts, not values inferred from the incoming receipt. The read workspace must
+be separately granted read access to the original capture root; the finite
+maximum cannot exceed the native capture ceiling. The original workspace and
+reference remain unchanged in the stored result.
+
+Receipt, adoption and later reopening require an exact, unambiguous binding and
+an available File read. The Session, owner, selected check and candidate must
+match, and the complete artifact must satisfy its size, digest, canonical
+content and process-observation checks. Missing, changed, denied, foreign,
+ambiguous, incomplete or oversized evidence is refused. Configuring a binding
+does not itself establish successful validation or authorize a consumer effect.

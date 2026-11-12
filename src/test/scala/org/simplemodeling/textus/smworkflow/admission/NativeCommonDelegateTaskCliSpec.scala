@@ -368,6 +368,23 @@ final class NativeCommonDelegateTaskCliSpec extends AnyWordSpec with NativeCommo
   }
 }
 
+@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class NativeDelegateTaskDeliveryCaptureCliSpec extends AnyWordSpec with Matchers {
+  "Installed referenced DelegateTask validation" should {
+    "roundtrip the actual managed Test capture through public requester operations" in {
+      val executable = Path.of(sys.props.get("smworkflow.spec.installedCommand")
+        .orElse(sys.env.get("SM_WORKFLOW_SPEC_INSTALLED_COMMAND"))
+        .getOrElse(fail("Select SM_WORKFLOW_SPEC_INSTALLED_COMMAND")))
+      val component = Path.of(sys.props.get("smworkflow.spec.componentFile")
+        .orElse(sys.env.get("SM_WORKFLOW_SPEC_COMPONENT_FILE"))
+        .getOrElse(fail("Select SM_WORKFLOW_SPEC_COMPONENT_FILE")))
+      new DelegateTaskValidationRecoveryOperationSpec().qualifyReturnedCapture(Some(executable -> component))
+    }
+  }
+}
+
 /** Explicit, independently selectable installed recovery qualification. */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(

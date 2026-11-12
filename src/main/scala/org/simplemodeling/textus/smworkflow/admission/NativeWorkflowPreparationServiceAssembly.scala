@@ -178,6 +178,20 @@ private[smworkflow] object NativeWorkflowPreparationServiceAssembly {
     operation: String, legacyFull: Boolean, prepare: (A, Reader) => Consequence[Record]) extends ProcedureActionCall {
     private var reads = Map.empty[String, String]
     def execute(): Consequence[OperationResponse] = for {
+      _ <- input match {
+        case value: V.WorkflowEvidencePreparationInput if value.family == "DelegateTask" && value.kind == "adoption" => for {
+          raw <- _read_c(value.request)
+          record <- new org.goldenport.record.io.RecordDecoder().json(raw)
+          context <- summon[ValueReader[V.DelegateTaskAdoptionContext]].readC(record)
+          targetText <- context.target.toJsonStringC
+          targetJson <- io.circe.parser.parse(targetText).fold(e => Consequence.stateConflict(e.message), Consequence.success)
+          normalized <- GoalPhaseNativeMetadata.normalizePublicJson(targetJson).fold(Consequence.stateConflict(_), Consequence.success)
+          target <- normalized.as[DelegateTask.AdoptionTarget].fold(e => Consequence.stateConflict(e.message), Consequence.success)
+          _ <- DelegateTask.returnedC(target.input, target.returned,
+            s => DelegateTaskDeliveryService.hydrateReturnedC(core, target.destinationSessionId, s))
+        } yield ()
+        case _ => Consequence.unit
+      }
       prepared <- prepare(input, _read_c)
       selected <- if (!legacyFull && prepared.getAny("datastore").nonEmpty)
         WorkflowPreparedImport.retainC(core, operation, inputRecord, prepared, reads)

@@ -118,7 +118,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
   def factory(declarations: Vector[ComponentParameterKey[?]], routes: Vector[ComponentParameterPathRoute],
     host: RuntimeCompositionDecoder): Component.BundleFactory = {
     require(host != null, "Three-workflow factory requires a trusted host decoder")
-    new SmWorkflowConfiguredComponentFactory(declarations, routes, (creation, parameters, context) => for {
+    new SmWorkflowConfiguredComponentFactory(declarations :+ DelegateTaskDeliveryService.captureReadDeclaration, routes, (creation, parameters, context) => for {
       selected <- host.decodeC(creation, parameters, context)
       services <- bindC(creation, selected)(using context)
     } yield services, publishedMcpOperations)

@@ -98,11 +98,12 @@ private[smworkflow] object WorkflowSbtCapture {
 
   /** Reopen only the exact scoped canonical artifact; a missing or changed file is not success. */
   def hydrateC(core: ActionCall.Core, reference: ExternalReference, expected: Association,
-    facts: WorkflowSbtValidation.Facts, limits: ResourceReadLimits): Consequence[ProcessExecutionResult] = for {
+    facts: WorkflowSbtValidation.Facts, limits: ResourceReadLimits,
+    readWorkspace: Option[String] = None): Consequence[ProcessExecutionResult] = for {
     _ <- if (externalReferenceValid(reference) && reference.association == expected && limits != null &&
       limits.maximumBytes > 0 && limits.maximumBytes <= maximumArtifactBytes && reference.encodedBytes <= limits.maximumBytes)
       Consequence.unit else Consequence.stateConflict("External capture scope or finite read policy differs")
-    target <- WorkspaceId.parseC(reference.workspace)
+    target <- WorkspaceId.parseC(readWorkspace.getOrElse(reference.workspace))
     file <- WorkspaceFilePath.parseC(reference.path)
     read <- WorkflowFileExecution.readBytesC(core, FileTarget(target), file, FileRepresentation.Identity, FileReadPolicy(limits))
     bytes <- read.bytes.map(Consequence.success).getOrElse(Consequence.stateConflict("External capture is unavailable"))

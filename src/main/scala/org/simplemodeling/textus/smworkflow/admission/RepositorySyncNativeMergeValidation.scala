@@ -186,13 +186,14 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
     else Consequence.stateConflict("External receipt requires its exact actual full-Test observation")
   /** Hydration is an owner File read; an unhydrated v3 reference cannot pass checks. */
   def hydrateExternalC(core: org.goldenport.cncf.action.ActionCall.Core, receipt: Receipt,
-    expected: WorkflowSbtCapture.Association, limits: org.goldenport.cncf.resource.ResourceReadLimits): Consequence[Receipt] = for {
+    expected: WorkflowSbtCapture.Association, limits: org.goldenport.cncf.resource.ResourceReadLimits,
+    readWorkspace: Option[String] = None): Consequence[Receipt] = for {
     reference <- Option(receipt).flatMap(_.externalCapture).map(Consequence.success)
       .getOrElse(Consequence.stateConflict("External capture reference is absent"))
     facts <- Option(receipt.sbt).flatten.map(Consequence.success).getOrElse(Consequence.stateConflict("External capture facts are absent"))
     _ <- if (expected != null && receipt.identity == expected.check && reference.association == expected && Option(receipt.group).exists(_.isEmpty))
       Consequence.unit else Consequence.stateConflict("External capture owner or check differs")
-    process <- WorkflowSbtCapture.hydrateC(core, reference, expected, facts, limits)
+    process <- WorkflowSbtCapture.hydrateC(core, reference, expected, facts, limits, readWorkspace)
     hydrated = receipt.copy(termination = WorkflowSbtCapture.termination(process), exitCode = WorkflowSbtCapture.exitCode(process),
       stdout = WorkflowSbtCapture.text(process.stdout).value, stderr = WorkflowSbtCapture.text(process.stderr).value,
       processObservation = Some(process))
