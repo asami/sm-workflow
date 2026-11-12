@@ -205,6 +205,68 @@ OperationResult
 | outcome | string | 1 |
 | message | string | 1 |
 
+## ManagedDevelopmentInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| edgeIdentity | string | 1 |
+| requestIdentity | string | 1 |
+| publication | string | 1 |
+| selection | string | 1 |
+
+## PublishDevelopmentArtifactInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | ManagedDevelopmentInput | 1 |
+
+## SelectDevelopmentArtifactInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | ManagedDevelopmentInput | 1 |
+
+## CompileDevelopmentConsumerInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | ManagedDevelopmentInput | 1 |
+
+## ReadDevelopmentArtifactStatusInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | ManagedDevelopmentInput | 1 |
+
+## ManagedDevelopmentResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| status | string | 1 |
+| detail | org.goldenport.record.Record | 1 |
+
 ## LocalPublicationInput
 
 - input-kind :: COMMAND
@@ -12059,6 +12121,126 @@ DevelopmentHistoryReadInput
 ###### TYPE
 
 DevelopmentObservationResult
+
+## ManagedDevelopmentService
+
+### DESCRIPTION
+
+Runtime-owned scope-private producer publication, immutable selection, actual consumer compilation and status through existing CNCF workspace, File, Component records and typed SBT UnitOfWork. Callers select declared dependency edges and exact identities; no process arguments or physical paths are accepted. Unresolved effects are retained without automatic replay. No shared publishLocal is performed.
+
+### OPERATION
+
+#### publishDevelopmentArtifact
+
+##### DESCRIPTION
+
+Publish one declared ordinary JVM or Scala-cross producer module into its admitted development repository. Retain source origin, completed adapter output and actual typed execution separately from consumer verification.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+PublishDevelopmentArtifactInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | ManagedDevelopmentInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+ManagedDevelopmentResult
+
+#### selectDevelopmentArtifact
+
+##### DESCRIPTION
+
+Create an immutable selection bound to one declared consumer edge and completed publication. Selection does not build or publish the provider and reports selected-unverified.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+SelectDevelopmentArtifactInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | ManagedDevelopmentInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+ManagedDevelopmentResult
+
+#### compileDevelopmentConsumer
+
+##### DESCRIPTION
+
+Compile the consumer with the exact immutable selection through native scoped SBT. Retain actual adapter resolution and classpath outcomes. Missing artifacts or incompatible APIs fail explicitly without ordinary fallback.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+CompileDevelopmentConsumerInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | ManagedDevelopmentInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+ManagedDevelopmentResult
+
+#### readDevelopmentArtifactStatus
+
+##### DESCRIPTION
+
+Read the exact retained publication, selection and consumer result without launching a process or changing source or shared artifact caches.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+ReadDevelopmentArtifactStatusInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | ManagedDevelopmentInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+ManagedDevelopmentResult
 
 ## LocalPublicationService
 

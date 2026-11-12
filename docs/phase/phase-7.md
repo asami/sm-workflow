@@ -969,3 +969,15 @@ starts/awaits the managed command and collects results by test/parameters/mode.
 Keep explicit requirements distinct from dev-first/nightly defaults. Mixed-mode
 suites and forked consumers must receive the actual mode without leakage or
 duplicate declaration lists. No new Phase closure or implementation is claimed.
+
+## P7-A implementation boundary — 2026-11-12
+
+Plan revision 2 adopts explicit one-time consumer opt-in for P7-DAO-02 and
+P7-DAO-A05, using the delivered sbt-cozy plugin/helper contract. Valid selections
+need no resolvable ordinary baseline. All other condition descriptions, the five
+ordered Steps and the 44 required Phase obligations remain unchanged and pending.
+The [overlay contract](../spec/development-artifact-overlay.md#10-minimal-p7-a-native-route-2026-11-12)
+describes the authored native publish/select/compile/status route and its exact
+limits. The current source implementation and executable specifications are not
+validation or independent review evidence. P7-C/P7-DD/P7-B/P7-D retain parallel
+continuation, delivery policy, remaining lifecycle and integrated closure work.

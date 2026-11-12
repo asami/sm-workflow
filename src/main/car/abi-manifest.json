@@ -134,6 +134,9 @@
         },
         {
           "name": "WorkflowRetainedWorkService"
+        },
+        {
+          "name": "ManagedDevelopmentService"
         }
       ],
       "operations": [
@@ -1032,6 +1035,34 @@
           "kind": "COMMAND",
           "input": "WorkflowPreparedImportReference",
           "output": "WorkflowPreparedImport"
+        },
+        {
+          "service": "ManagedDevelopmentService",
+          "name": "publishDevelopmentArtifact",
+          "kind": "COMMAND",
+          "input": "PublishDevelopmentArtifactInput",
+          "output": "ManagedDevelopmentResult"
+        },
+        {
+          "service": "ManagedDevelopmentService",
+          "name": "selectDevelopmentArtifact",
+          "kind": "COMMAND",
+          "input": "SelectDevelopmentArtifactInput",
+          "output": "ManagedDevelopmentResult"
+        },
+        {
+          "service": "ManagedDevelopmentService",
+          "name": "compileDevelopmentConsumer",
+          "kind": "COMMAND",
+          "input": "CompileDevelopmentConsumerInput",
+          "output": "ManagedDevelopmentResult"
+        },
+        {
+          "service": "ManagedDevelopmentService",
+          "name": "readDevelopmentArtifactStatus",
+          "kind": "COMMAND",
+          "input": "ReadDevelopmentArtifactStatusInput",
+          "output": "ManagedDevelopmentResult"
         }
       ],
       "types": [
@@ -9145,6 +9176,54 @@
               "type": "WorkflowPreparedImportCollection",
               "multiplicity": "*",
               "required": false
+            }
+          ]
+        },
+        {
+          "name": "ManagedDevelopmentInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "edgeIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "requestIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "publication",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selection",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "ManagedDevelopmentResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "status",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "detail",
+              "type": "Record",
+              "multiplicity": "1",
+              "required": true
             }
           ]
         }

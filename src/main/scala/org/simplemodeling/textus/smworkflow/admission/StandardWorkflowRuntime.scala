@@ -23,9 +23,7 @@ import org.simplemodeling.textus.smworkflow.value.{GoalPhaseDevelopmentReconstru
   * only when its Operation executes, within that call's ordinary storage/UoW.
   * @since   Oct. 27, 2026
   *  version Oct. 28, 2026
-  *  version Nov.  7, 2026
-  *  version Nov.  8, 2026
-  * @version Nov.  9, 2026
+  * @version Nov. 12, 2026
   */
 private[smworkflow] object StandardWorkflowRuntime {
   private final case class Shared(persistence: GoalPhaseRuntimeParameters.Persistence,
@@ -50,6 +48,8 @@ private[smworkflow] object StandardWorkflowRuntime {
       case Some("JournalService") => Consequence.success(Vector(DevelopmentJournalService.bind(shared.journal)))
       case Some("EvidenceService") => Consequence.success(Vector(CommonEvidenceService.bind(shared.evidence, shared.journal)))
       case Some("StandaloneFixService") | Some("GoalTaskService") | Some("DelegateTaskService") | Some("DelegateTaskDeliveryService") => boundedC(creation, shared, request, core).map(Vector(_))
+      case Some("ManagedDevelopmentService") => parameters.resolve(ManagedDevelopmentRuntime.declaration)
+        .map(value => Vector(ManagedDevelopmentService.bind(value.value)))
       case Some("LocalPublicationService") => for {
         policy <- Consequence.success(shared.publication)
         definition <- GoalPhaseRuntimeCatalog.loadC().map(_.definition)

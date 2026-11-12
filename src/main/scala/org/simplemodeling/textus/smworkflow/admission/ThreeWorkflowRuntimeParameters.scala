@@ -21,7 +21,7 @@ import GoalPhaseDependencyValidation.given
   * Storage/process bootstrap has already been performed by the owning Subsystem.
   * @since   Oct.  7, 2026
   *  version Oct. 29, 2026
-  * @version Nov.  6, 2026
+  * @version Nov. 12, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowLauncherAssembly.RuntimeCompositionDecoder {
@@ -120,7 +120,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
       GoalPhaseNativeExecution.declaration, GoalPhaseNativeExecution.logicalOrigin, GoalPhaseRetainedObservations.declaration, GoalPhaseOperatingProfiles.declaration, GoalPhaseOperatingProfiles.cost, GoalPhaseOperatingProfiles.quality, GoalPhaseOperatingProfiles.localExperiment, GoalPhaseDispatchPolicy.declaration, GoalPhaseAcceptanceBoundary.declaration, GoalPhaseFindingRecording.declaration,
       RepositorySyncNativeExecution.declaration, RepositorySyncDocumentInputs.declaration, RepositorySyncProgramImpact.declaration,
       RepositorySyncPurpose.declaration, RepositorySyncDirectoryList.declaration, SplitPhaseNativeExecution.declaration, DevelopmentJournal.declaration, CommonEvidence.declaration,
-      completionPolicy, validationRepairCallerSource, developmentObservation, LocalPublicationRuntime.declaration, CommitHygiene.declaration, CompletionRecords.declaration)
+      completionPolicy, validationRepairCallerSource, developmentObservation, LocalPublicationRuntime.declaration, ManagedDevelopmentRuntime.declaration, CommitHygiene.declaration, CompletionRecords.declaration)
   lazy val factory = new SmWorkflowConfiguredComponentFactory(declarations, Vector.empty,
     bindServicesC, ThreeWorkflowLauncherAssembly.publishedMcpOperations)
 
@@ -171,6 +171,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
       evidencepolicy <- CommonEvidence.resolvePolicyC(parameters, Vector(persistence.instances, persistence.continuations) ++ journalpolicy.map(_.collection))
       observation <- parameters.resolve(developmentObservation).map(_.value)
       publication <- parameters.resolve(LocalPublicationRuntime.declaration).map(_.value)
+      managedDevelopment <- parameters.resolve(ManagedDevelopmentRuntime.declaration).map(_.value)
       hygiene <- CommitHygiene.resolveC(parameters)
       records <- parameters.resolve(CompletionRecords.declaration).map(_.value)
       target <- targetC(settings.target)
@@ -218,7 +219,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
       splitCatalog <- SplitPhaseRuntimeCatalog.loadC()
       split = SplitPhaseManagedStartAssembly.Declaration(persistence.configuration, persistence.instances, persistence.continuations,
         executionprofiles, executionorigin, splitclassifications, journalpolicy, Some(settings.repository.input.repositoryIdentity))
-    } yield ThreeWorkflowLauncherAssembly.RuntimeComposition(goal, split, splitCatalog, ports.splitStart, ports.splitAnswer)
+    } yield ThreeWorkflowLauncherAssembly.RuntimeComposition(goal, split, splitCatalog, ports.splitStart, ports.splitAnswer, managedDevelopment)
 
   private def targetC(value: Target): Consequence[RepositoryGitRuntimePrograms.Target] =
     try {

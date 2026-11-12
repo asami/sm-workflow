@@ -375,3 +375,18 @@ See [GoalTask runtime contract](../../../../docs/spec/goal-task-runtime.md).
 This is source capability documentation. Native qualification, independent review,
 local acceptance commit, installed publication and actual consumer adoption are
 separate evidence; no production or real stopped-Session acceptance is claimed.
+
+## Managed development artifacts
+
+The optional configured `ManagedDevelopmentService` exposes
+`publishDevelopmentArtifact`, `selectDevelopmentArtifact`,
+`compileDevelopmentConsumer` and `readDevelopmentArtifactStatus` through the
+normal CLI/MCP path. Input selects a declared edge, request, publication and
+immutable selection. Publication and consumer compilation use CNCF typed SBT
+and granted workspaces; selection/status never build the producer. Explicit
+consumer plugin opt-in is required. A publication is not consumer verification,
+and unknown effects are not automatically replayed. The initial route supports
+one ordinary JVM or Scala-cross library. Remaining overlay lifecycle, managed
+worktree acquisition, generation and parallel Goal continuation are pending
+Phase 7 work. See the authored development-artifact-overlay specification for
+host policy, plugin opt-in and actual supported boundaries.

@@ -18,9 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Oct.  5, 2026
  *  version Oct. 28, 2026
- *  version Nov.  6, 2026
- *  version Nov.  8, 2026
- * @version Nov.  9, 2026
+ * @version Nov. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -108,6 +106,8 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
     SmWorkflowComponent.GoalTaskReviewServiceService -> Vector("reviewGoalTask"),
     SmWorkflowComponent.GoalTaskSemanticAdmissionServiceService -> Vector("admitGoalTaskReview"),
     SmWorkflowComponent.DevelopmentObservationServiceService -> Vector("readDevelopmentState", "readDevelopmentHistory"),
+    SmWorkflowComponent.ManagedDevelopmentServiceService -> Vector("publishDevelopmentArtifact", "selectDevelopmentArtifact",
+      "compileDevelopmentConsumer", "readDevelopmentArtifactStatus"),
     SmWorkflowComponent.LocalPublicationServiceService -> Vector("ensureLocalPublication", "collectLocalPublication", "collectLatestLocalPublication"),
     SmWorkflowComponent.JournalServiceService -> Vector("readJournalEntry", "findJournalEntries"),
     SmWorkflowComponent.EvidenceServiceService -> Vector("readEvidence", "readEvidenceRange", "recordEvidenceJournal",

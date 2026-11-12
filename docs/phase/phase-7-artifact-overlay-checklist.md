@@ -46,10 +46,13 @@ checkboxes remain unchanged until actual evidence exists.
       integration; no shell-wide environment selection or per-selection edits
       to build.sbt/project dependency declarations. Document one-time plugin
       bootstrap and verify overrides under real project setting precedence.
-      A supported, enabled sbt-cozy handles the explicit argument without an
-      overlay-specific build.sbt declaration; preserve ordinary dependency
-      declarations without per-dependency wrappers. No argument keeps ordinary
-      behavior; invalid explicit selection fails rather than falling back.
+      A supported, enabled sbt-cozy handles the explicit argument after explicit
+      one-time consumer opt-in in build.sbt/project/plugins.sbt, including
+      reusable dependency helpers and declared development modules as needed;
+      preserve ordinary dependency coordinates through no-input identity mapping.
+      Valid development selection does not require ordinary baseline artifacts
+      to exist or resolve. No argument keeps ordinary behavior; invalid explicit
+      selection fails rather than falling back.
 - [ ] P7-DAO-03: Publish only declared development JARs/Ivy metadata and selected
       auxiliary outputs; record real dirty-source origin and build dependencies;
       prevent overwrite and incomplete/multi-module publication visibility.
@@ -86,9 +89,10 @@ independently review the integrated behavior.
 - [ ] P7-DAO-A05: Update/rollback/detach refresh actual generated output and
       classpaths, including running SBT/Cozy processes. The same checked-in
       build definition supports ordinary and selected builds without rewrite;
-      only the explicit per-build input changes. Use a pre-overlay build.sbt
-      without overlay-specific settings, with supported sbt-cozy installed and
-      enabled; no-argument and valid-selection cases pass, invalid selection fails.
+      only the explicit per-build input changes. Use an explicitly opted-in build
+      definition, allowing one-time build.sbt/project/plugins.sbt integration,
+      with supported sbt-cozy installed and enabled; no-argument and
+      valid-selection cases pass, invalid selection fails.
 - [ ] P7-DAO-A06: All six operations leave target shared ~/.ivy2/local artifacts
       untouched; ordinary caches remain available, without wholesale copying.
 
