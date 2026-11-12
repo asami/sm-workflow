@@ -444,3 +444,50 @@ alone must not silently add private tests to full validation. No CNCF execution
 contract change or alternative test runner is implied. A changed build or test
 source uses `AdoptCurrentOwnedCandidate` so fresh Compile and affected checks
 cover the new candidate; the old zero-test result remains in its native history.
+
+### Lost full-Test result recovery
+
+`describeDelegateTaskValidationRecovery` describes an active destination Session's
+retained full-Test intent, successful applicable prefix, unchanged Git candidate,
+and current host configuration without advancing or running a check. The selected
+SBT test ceilings are conservative capture upper bounds: CNCF may admit stricter
+host limits, and the description does not assert the exact limits of a future run.
+The old native process result and raw captures remain unknown when unavailable.
+
+`recoverDelegateTaskValidation` accepts an exact described target and a closed
+historical proof through the independently provisioned host evidence boundary.
+The proof references both a terminal event and completed caller invocation; its
+historical association is an attestation, not a native process receipt or a PASS.
+Passive `prepareEvidence` uses family `DelegateTask` and kind
+`delegate-task-validation-recovery`; preparation alone grants no authority.
+Recovery appends only a direction, preserving the original immutable frontier.
+A later ordinary Advance must recheck the direction and policy and own any new
+intent. An incomplete or missing capture cannot establish successful validation.
+
+The described `captureAvailability` is `not-retained` when no native
+reservation exists, `absent` when its admitted File read confirms no artifact,
+`available` only after the exact owner, Session, intent, check and source
+association and complete canonical contents are verified, and
+`unavailable-or-unreadable` when those facts cannot be established. The latter
+is not evidence of loss. A matching host-attested `available` direction may
+collect the real retained result without rerunning SBT. For `not-retained` or
+`absent`, an independently admitted `unavailable` direction retains the lost
+result and permits only a separately prepared new attempt. Neither path turns
+missing or partial data into success.
+
+The proof records caller terminal status and caller exit code separately from the
+child Test termination and its terminal-event OS exit code. The event OS exit
+code is not converted into a native SBT process exit code for an output-limit
+termination. A failed caller with exit code 1 is an ended invocation,
+not a successful check. Artifact content digests detect changed stored bytes;
+they are not proof of execution, Human authorization or source authority. A
+structurally valid complete capture containing undecodable text or NUL remains
+stored and discoverable, but is not admitted as behavioral success or diagnostic
+text. A reserved attempt whose SBT admission is confirmed rejected remains
+waiting; this boundary supplies no automatic retry for it.
+
+`not-retained` describes only the absence of a capture locator in this exact
+native intent. It does not assert that no bytes exist in another provider. If a
+caller knows of a genuine durable result in an unregistered provider, report the
+unsupported provider or setup gap rather than attesting that its bytes are
+absent. This recovery boundary does not discover or import unrelated providers.

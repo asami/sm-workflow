@@ -91,10 +91,14 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
   final case class Receipt(identity: String, termination: String, exitCode: Option[Int], stdout: String, stderr: String,
     sbt: Option[WorkflowSbtValidation.Facts] = None,
     processObservation: Option[ProcessExecutionResult] = None,
-    group: Option[RepositorySyncProgramImpact.Group] = None)
+    group: Option[RepositorySyncProgramImpact.Group] = None,
+    externalCapture: Option[WorkflowSbtCapture.ExternalReference] = None)
   object Receipt {
     given Encoder[Receipt] = Encoder.instance(value => {
-      if (value.group.nonEmpty) Json.obj("schemaVersion" -> Json.fromString("sm-workflow.native-sbt-validation-group.v1"),
+      if (value.externalCapture.nonEmpty) Json.obj("schemaVersion" -> WorkflowSbtCapture.externalReceiptSchema.asJson,
+        "identity" -> value.identity.asJson, "sbt" -> value.sbt.get.asJson,
+        "externalCapture" -> value.externalCapture.get.asJson)
+      else if (value.group.nonEmpty) Json.obj("schemaVersion" -> Json.fromString("sm-workflow.native-sbt-validation-group.v1"),
         "identity" -> value.identity.asJson, "group" -> value.group.get.asJson)
       else if (value.processObservation.nonEmpty) Json.obj("schemaVersion" -> WorkflowSbtCapture.schema.asJson,
         "identity" -> value.identity.asJson, "sbt" -> value.sbt.get.asJson,
@@ -110,6 +114,17 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       group <- cursor.get[RepositorySyncProgramImpact.Group]("group")
       _ <- Either.cond(id(identity) && group.valid, (), DecodingFailure("Invalid ordinary validation group", cursor.history))
     } yield RepositorySyncProgramImpact.groupReceipt(identity, group)
+    else if (cursor.get[String]("schemaVersion").contains(WorkflowSbtCapture.externalReceiptSchema)) for {
+      _ <- Either.cond(cursor.keys.exists(_.toSet == Set("schemaVersion", "identity", "sbt", "externalCapture")), (),
+        DecodingFailure("Malformed external SBT receipt", cursor.history))
+      identity <- cursor.get[String]("identity")
+      facts <- cursor.get[WorkflowSbtValidation.Facts]("sbt")
+      rawFacts <- cursor.get[Json]("sbt")
+      reference <- cursor.get[WorkflowSbtCapture.ExternalReference]("externalCapture")
+      _ <- Either.cond(id(identity) && facts.valid && facts.asJson == rawFacts && facts.kind == WorkflowSbtValidation.Kind.Test &&
+        WorkflowSbtCapture.externalReferenceValid(reference) && reference.association.check == identity, (),
+        DecodingFailure("Invalid external SBT observation reference", cursor.history))
+    } yield Receipt(identity, "external-unhydrated", None, "", "", Some(facts), None, None, Some(reference))
     else if (cursor.downField("schemaVersion").focus.nonEmpty) for {
       schema <- cursor.get[String]("schemaVersion")
       _ <- Either.cond(schema == WorkflowSbtCapture.schema && cursor.keys.exists(_.toSet ==
@@ -134,7 +149,7 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
 
     /** The historical merge-repair parent derived six fields, including sbt:null. */
     val mergeRepairEncoder: Encoder[Receipt] = Encoder.instance(value =>
-      if (value.processObservation.nonEmpty || value.group.nonEmpty) summon[Encoder[Receipt]].apply(value)
+      if (value.processObservation.nonEmpty || value.group.nonEmpty || value.externalCapture.nonEmpty) summon[Encoder[Receipt]].apply(value)
       else Json.obj("identity" -> value.identity.asJson, "termination" -> value.termination.asJson,
         "exitCode" -> value.exitCode.asJson, "stdout" -> value.stdout.asJson,
         "stderr" -> value.stderr.asJson, "sbt" -> value.sbt.asJson))
@@ -150,6 +165,29 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
         sbt <- cursor.get[Option[WorkflowSbtValidation.Facts]]("sbt")
       } yield Receipt(identity, termination, exit, stdout, stderr, sbt))
   }
+  def compactExternalC(identity: String, facts: WorkflowSbtValidation.Facts, process: ProcessExecutionResult,
+    reference: WorkflowSbtCapture.ExternalReference): Consequence[Receipt] =
+    if (id(identity) && facts != null && facts.kind == WorkflowSbtValidation.Kind.Test &&
+      WorkflowSbtCapture.externalReferenceValid(reference) && reference.association.check == identity && WorkflowSbtCapture.externalMatches(reference, facts, process))
+      Consequence.success(Receipt(identity, WorkflowSbtCapture.termination(process), WorkflowSbtCapture.exitCode(process),
+        WorkflowSbtCapture.text(process.stdout).value, WorkflowSbtCapture.text(process.stderr).value,
+        Some(facts), Some(process), None, Some(reference)))
+    else Consequence.stateConflict("External receipt requires its exact actual full-Test observation")
+  /** Hydration is an owner File read; an unhydrated v3 reference cannot pass checks. */
+  def hydrateExternalC(core: org.goldenport.cncf.action.ActionCall.Core, receipt: Receipt,
+    expected: WorkflowSbtCapture.Association, limits: org.goldenport.cncf.resource.ResourceReadLimits): Consequence[Receipt] = for {
+    reference <- Option(receipt).flatMap(_.externalCapture).map(Consequence.success)
+      .getOrElse(Consequence.stateConflict("External capture reference is absent"))
+    facts <- Option(receipt.sbt).flatten.map(Consequence.success).getOrElse(Consequence.stateConflict("External capture facts are absent"))
+    _ <- if (expected != null && receipt.identity == expected.check && reference.association == expected && Option(receipt.group).exists(_.isEmpty))
+      Consequence.unit else Consequence.stateConflict("External capture owner or check differs")
+    process <- WorkflowSbtCapture.hydrateC(core, reference, expected, facts, limits)
+    hydrated = receipt.copy(termination = WorkflowSbtCapture.termination(process), exitCode = WorkflowSbtCapture.exitCode(process),
+      stdout = WorkflowSbtCapture.text(process.stdout).value, stderr = WorkflowSbtCapture.text(process.stderr).value,
+      processObservation = Some(process))
+    _ <- if (storedProductOutputValid(hydrated)) Consequence.unit
+      else Consequence.stateConflict("Hydrated external capture contradicts its observation")
+  } yield hydrated
   final case class State(mode: String, reason: String, selected: Vector[Check], sourceRevision: String, receipts: Vector[Receipt],
     inputs: Option[RepositorySyncDocumentInputs.Assessment] = None,
     impact: Option[RepositorySyncProgramImpact.Selection] = None,
@@ -552,7 +590,9 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
 
   /** CNCF bounds acquisition; retained historical and typed text preserve complete results. */
   private[admission] def storedProductOutputValid(receipt: Receipt): Boolean =
-    receipt != null && receipt.sbt != null && receipt.processObservation != null && receipt.group != null &&
+    receipt != null && receipt.sbt != null && receipt.processObservation != null && receipt.group != null && receipt.externalCapture != null &&
+      (receipt.externalCapture.isEmpty || (receipt.group.isEmpty && receipt.processObservation.exists(p =>
+        receipt.sbt.exists(f => WorkflowSbtCapture.externalMatches(receipt.externalCapture.get, f, p))))) &&
       (if (receipt.group.nonEmpty) receipt.group.exists(group => group.valid &&
         RepositorySyncProgramImpact.groupReceipt(receipt.identity, group) == receipt)
       else receipt.processObservation match {
@@ -571,7 +611,8 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
   private[admission] def successful(receipts: Vector[Receipt], merge: Boolean = true, selected: Vector[Check] = Vector.empty): Boolean = {
     def structural(r: Receipt): Option[GitIndexCheck] =
       if (r == null || r.termination != "exited" || r.exitCode == null || r.exitCode.isEmpty ||
-          !_stored_text(r.stdout) || !_stored_text(r.stderr)) None
+          !_stored_text(r.stdout) || !_stored_text(r.stderr) ||
+          (r.externalCapture.nonEmpty && !storedProductOutputValid(r))) None
       else GitIndexCheck.parseStoredC(r.exitCode.get, r.stdout, r.stderr).toOption
     val count = if (merge) 2 else 1
     val first = receipts.take(count)

@@ -35,6 +35,7 @@ private[smworkflow] object NativeExternalEvidence {
     case DelegateAdoption extends Purpose("delegate-task-requester-artifact-adoption")
     case StandaloneReview extends Purpose("standalone-fix-independent-review")
     case StandaloneValidationRecovery extends Purpose("standalone-fix-validation-recovery")
+    case DelegateTaskValidationRecovery extends Purpose("delegate-task-validation-recovery")
     case GoalTaskMalformedIssuedWorkRecovery extends Purpose("goal-task-malformed-issued-work-recovery")
     case GoalTaskMalformedIssuedWorkNonexecution extends Purpose("goal-task-malformed-issued-work-nonexecution")
     case GoalTaskValidationContinuation extends Purpose("goal-task-validation-continuation")
@@ -272,6 +273,12 @@ private[smworkflow] object NativeExternalEvidence {
     } else if (purpose == Purpose.InventoryAuthority) {
       if (selected.hcursor.downField("scope").get[String]("participant").contains(value.participant)) Consequence.unit
       else Consequence.securityPermissionDenied("Inventory authority crosses its actual original participant")
+    } else if (purpose == Purpose.DelegateTaskValidationRecovery) {
+      val selectedRecovery = selected.hcursor.downField("delegateTaskValidationRecovery")
+      if (selectedRecovery.get[String]("participant").contains(value.participant) &&
+          selectedRecovery.downField("reference").get[String]("identity").contains(value.reference) &&
+          selectedRecovery.downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
+      else Consequence.securityPermissionDenied("DelegateTask recovery evidence crosses its participant or reference")
     } else if (purpose == Purpose.StandaloneValidationRecovery) {
       val answer = selected.hcursor.downField("standaloneValidationRecovery").downField("answer")
       if (answer.get[String]("participant").contains(value.participant) &&
@@ -351,6 +358,7 @@ private[smworkflow] object NativeExternalEvidence {
       case Purpose.GoalTaskRepairContinuation => GoalTaskRepairContinuation.selectBinding(value)
       case Purpose.GoalTaskMalformedIssuedWorkRecovery => GoalTaskMalformedIssuedWorkRecovery.selectBinding(value)
       case Purpose.StandaloneValidationRecovery => StandaloneFixValidationRecovery.selectBinding(value)
+      case Purpose.DelegateTaskValidationRecovery => DelegateTaskValidationRecovery.selectBinding(value)
       case Purpose.GoalTaskMalformedIssuedWorkNonexecution => GoalTaskMalformedIssuedWorkRecovery.selectNonexecutionBinding(value)
       case Purpose.InventoryAuthority => GoalPhaseInventoryAuthority.select(value)
       case Purpose.RepositoryEffect | Purpose.StepClosure | Purpose.PhaseClosure => NativeAuthorityScope.select(purpose, value)

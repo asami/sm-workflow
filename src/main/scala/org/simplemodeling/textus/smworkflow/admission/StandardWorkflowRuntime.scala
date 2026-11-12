@@ -447,7 +447,9 @@ private[smworkflow] object StandardWorkflowRuntime {
   } yield selected
 
   private def _bounded_session_c(request: Request, core: ActionCall.Core): Consequence[String] =
-    if (request.operation == "adoptGoalTaskValidationContinuation") GoalTaskValidationContinuation.inputForCallC(request, core).map(_.sessionId)
+    if (request.operation == "recoverDelegateTaskValidation") DelegateTaskValidationRecovery.inputForCallC(request, core).map(_.sessionId)
+    else if (request.operation == "describeDelegateTaskValidationRecovery") DelegateTaskValidationRecovery.descriptionForCallC(request, core).map(_.sessionId)
+    else if (request.operation == "adoptGoalTaskValidationContinuation") GoalTaskValidationContinuation.inputForCallC(request, core).map(_.sessionId)
     else if (request.operation == "correctDelegateTaskScope") DelegateTaskScopeCorrection.inputForCallC(request, core).map(_.sessionId)
     else NativeWorkflowOperationInput.optionalTextC(request, "sessionId").flatMap {
       case Some(value) => Consequence.success(value)

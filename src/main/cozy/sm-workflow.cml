@@ -14586,6 +14586,14 @@ operation = DelegateTaskService.describeDelegateTaskValidationContinuation
 
 operation = DelegateTaskService.adoptDelegateTaskValidationContinuation
 
+#### describeDelegateTaskValidationRecovery
+
+operation = DelegateTaskService.describeDelegateTaskValidationRecovery
+
+#### recoverDelegateTaskValidation
+
+operation = DelegateTaskService.recoverDelegateTaskValidation
+
 # STATE-MACHINE
 
 ## DelegateTaskLifecycle
@@ -14709,6 +14717,64 @@ DelegateTaskCandidateContinuationDescriptionInput
 ###### TYPE
 
 DelegateTaskCandidateContinuationView
+
+#### describeDelegateTaskValidationRecovery
+
+##### DESCRIPTION
+
+Describe the retained full-Test intent, unchanged candidate, successful prefix and resolved policies without executing or advancing. Missing old capture remains unknown.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskValidationRecoveryDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | DelegateTaskValidationRecoveryDescriptionInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskValidationRecoveryView
+
+#### recoverDelegateTaskValidation
+
+##### DESCRIPTION
+
+Admit an independently host-attested historical terminal event and completed caller invocation for the exact retained intent. Append a direction only; a separate Advance owns any new check. No old receipt or success is inferred.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskValidationRecoveryInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | DelegateTaskValidationRecoveryInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskValidationRecoveryView
 
 #### recoverDelegateTaskCandidateContinuation
 
@@ -15523,6 +15589,47 @@ Explicit ad hoc Task request selection metadata and absolute local file: URI ref
 | name | type | multiplicity |
 |------+------|--------------|
 | sessionId | string | 1 |
+
+# VALUE
+
+## DelegateTaskValidationRecoveryDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+# VALUE
+
+## DelegateTaskValidationRecoveryInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | string | 1 |
+| proof | string | 1 |
+| participant | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+
+# VALUE
+
+## DelegateTaskValidationRecoveryView
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| target | string | 1 |
 
 # VALUE
 
