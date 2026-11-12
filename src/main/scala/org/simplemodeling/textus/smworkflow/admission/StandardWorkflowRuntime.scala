@@ -215,10 +215,7 @@ private[smworkflow] object StandardWorkflowRuntime {
     programInputs = initialized.program
     purposePolicy <- RepositorySyncPurpose.resolveC(parameters)
     publication = shared.publication
-    validation = if (selectedInput._2) programInputs.fold(documentValidation)(p => documentValidation.copy(
-      identity = "impact-repository-sync", mode = "required", reason = p.reason, checks = p.checks, impact = Some(p),
-      assessment = documentValidation.assessment.map(_.copy(
-        lintReason = p.reason)))) else repositoryValidation
+    validation = if (selectedInput._2) normalRepositoryValidation(programInputs) else repositoryValidation
     goalDefinition <- GoalPhaseRuntimeCatalog.loadC()
     evidenceStorage <- WorkflowComponentStorage.bindC(creation, SmWorkflowComponent.componentId, p.configuration,
       Vector(goalDefinition.definition), p.instances, p.continuations)
@@ -510,6 +507,11 @@ private[smworkflow] object StandardWorkflowRuntime {
     ThreeWorkflowRuntimeParameters.Definition(ThreeWorkflowRuntimeParameters.schema,
       ThreeWorkflowRuntimeParameters.Target(target.root.toString, target.localBranch, target.remote, target.remoteBranch, target.endpoint), goal, repository)
   }
+
+  private[admission] def normalRepositoryValidation(programinputs: Option[RepositorySyncProgramImpact.Policy]): RepositorySyncNativeMergeValidation.Policy =
+    programinputs.fold(documentValidation)(p => documentValidation.copy(
+      identity = "impact-repository-sync", mode = "required", reason = p.reason, checks = p.checks, impact = Some(p),
+      assessment = documentValidation.assessment.map(_.copy(lintReason = p.reason))))
 
   private def documentValidation = RepositorySyncNativeMergeValidation.Policy("document-repository-sync", 1,
     "explicit-no-product-tests", "Reuse applicable program validation: actual parent/index deltas contain only declared non-consumed documents; no uncovered program behavior is introduced.",

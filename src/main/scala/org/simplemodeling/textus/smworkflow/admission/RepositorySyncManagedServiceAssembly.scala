@@ -37,7 +37,7 @@ private[smworkflow] object RepositorySyncManagedServiceAssembly {
     pushContinuation: Option[RepositorySyncPushContinuation.Installation] = None): Consequence[spec.ServiceDefinition] =
     if (params == null)
       Consequence.configurationInvalid("RepositorySync host assembly requires its owning Subsystem")
-    else bindC(params, declaration, acknowledgement, nativeProgression,
+    else bindC(params, declaration.copy(purposeValidation = validationPolicy), acknowledgement, nativeProgression,
       nativeAcknowledgement, conflictPolicy, validationPolicy, nativeReview, convergence, humanConflict, repositoryContinuation,
       repositoryRepairScopeCorrection, purposePreparation, repairBudgetContinuation, pushContinuation)
 

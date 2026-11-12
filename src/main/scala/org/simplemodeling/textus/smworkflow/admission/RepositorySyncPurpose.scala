@@ -84,7 +84,8 @@ private[smworkflow] object RepositorySyncPurpose {
     selection: Option[RepositorySyncProgramImpact.Selection] = None, review: Option[org.goldenport.cncf.workflow.ContextReference] = None, reusable: Vector[RepositorySyncNativeMergeValidation.Receipt] = Vector.empty, effects: Vector[Json] = Vector.empty,
     hostContinuation: Option[RepositorySyncFormalFailureContinuation.Direction] = None,
     ownership: Option[OwnershipContinuation] = None, projectedWorktree: Option[Vector[Content]] = None,
-    preparationNamespace: Option[String] = None)
+    preparationNamespace: Option[String] = None,
+    managedWorkspace: Option[RepositorySyncPurposeWorkspace.Binding] = None)
 
   /** Immutable failed progress and the original repository observation. The
     * virtual candidate tree deliberately differs from the original index. */
@@ -135,12 +136,12 @@ private[smworkflow] object RepositorySyncPurpose {
   val inputCodec: WorkflowResultJsonV1.PayloadCodec[Request] = new Codec("RepositorySyncPurposeRequest")
   val resultCodec: WorkflowResultJsonV1.PayloadCodec[Result] = new Codec("RepositorySyncPurposeResult")
   given Encoder[Progress] = io.circe.generic.semiauto.deriveEncoder[Progress].mapJson(_.mapObject(_.filter {
-    case ("hostContinuation" | "ownership" | "projectedWorktree" | "preparationNamespace", value) => !value.isNull
+    case ("hostContinuation" | "ownership" | "projectedWorktree" | "preparationNamespace" | "managedWorkspace", value) => !value.isNull
     case _ => true
   }))
   private val _progress_decoder: Decoder[Progress] = io.circe.generic.semiauto.deriveDecoder
   given Decoder[Progress] = Decoder.instance(cursor =>
-    if (Vector("hostContinuation", "ownership", "projectedWorktree", "preparationNamespace").exists(name => cursor.downField(name).focus.exists(_.isNull)))
+    if (Vector("hostContinuation", "ownership", "projectedWorktree", "preparationNamespace", "managedWorkspace").exists(name => cursor.downField(name).focus.exists(_.isNull)))
       Left(io.circe.DecodingFailure("Purpose optional continuation/projection cannot be explicitly null", cursor.history))
     else _progress_decoder(cursor).flatMap(value =>
       if (RepositorySyncPurposeOwnership.validProgress(value)) Right(value)
@@ -156,6 +157,8 @@ private[smworkflow] object RepositorySyncPurpose {
   def resolveC(parameters: ComponentInitializationParameters): Consequence[Option[Policy]] = parameters.resolve(declaration).map(_.value)
   def slots(policy: Option[Policy], repository: String): Vector[Slot] =
     policy.toVector.flatMap(_.slots).filter(_.repositoryIdentity.forall(_ == repository))
+  def selectedSlot(policy: Option[Policy], repository: String, progress: Progress): Option[Slot] =
+    progress.managedWorkspace.map(_.slot).orElse(slots(policy, repository).lift(progress.slotCursor))
   private def _decode_policy_c(json: Json): Consequence[Policy] = json.as[Policy].fold(
     _ => Consequence.configurationInvalid("Dirty purpose policy is incomplete"), value => validatePolicyC(value).map(_ => value))
   def validatePolicyC(value: Policy): Consequence[Unit] = {

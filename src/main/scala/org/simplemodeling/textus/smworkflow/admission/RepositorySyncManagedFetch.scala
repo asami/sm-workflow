@@ -46,7 +46,8 @@ private[smworkflow] object RepositorySyncManagedFetch {
     evidencePolicy: Option[CommonEvidence.Policy] = None,
     programEvidence: Option[RepositorySyncProgramImpact.EvidencePort] = None,
     purposePolicy: Option[RepositorySyncPurpose.Policy] = None,
-    localPublication: Option[LocalPublicationRuntime.Policy] = None)
+    localPublication: Option[LocalPublicationRuntime.Policy] = None,
+    purposeValidation: Option[RepositorySyncNativeMergeValidation.Policy] = None)
   final case class StartContext(selectionIdentity: String, invocationIdentity: String,
     participantIdentity: String, repositoryIdentity: String, localBranch: String,
     trackingRemote: String, trackingBranch: String, remoteEndpointIdentity: String, syncMode: String)
@@ -97,6 +98,8 @@ private[smworkflow] object RepositorySyncManagedFetch {
         else invalid("Commit hygiene staging declaration is missing or duplicated")
       _ <- d.documentInputs.fold(Consequence.unit)(RepositorySyncDocumentInputs.validateC)
       _ <- d.purposePolicy.fold(Consequence.unit)(RepositorySyncPurpose.validatePolicyC)
+      _ <- if (d.purposeValidation != null) d.purposeValidation.fold(Consequence.unit)(_.validateC)
+        else invalid("Purpose validation declaration is missing")
       _ <- d.localPublication.fold(Consequence.unit)(LocalPublicationRuntime.validateC)
       _ <- d.configuration.validateC
       _ <- DevelopmentJournal.validatePolicyC(d.journalPolicy, d.instances, d.continuations)

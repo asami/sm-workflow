@@ -203,9 +203,97 @@ Sources, native snapshots and child capture bodies are not rearchived into a
 parallel store. Missing target configuration, an unobserved child result and
 actual nonterminal work do not become aggregate success.
 
+`refreshRepositoryDirectoryConfiguration(sessionId, revision)` requires the exact
+outstanding aggregate revision and its original participant and captured members.
+After normal host configuration correction, it may revisit an unchanged child
+whose actual result is `Wait/ValidationSetupRequired`. It may also revisit the
+exact `Wait/purpose-materialization-preflight` result only while the loaded native
+child's current progression is `sync.PurposePrepared`, before any materialization
+effect intent. The same child continues with its original accepted grouping and
+prepared candidate; refresh creates no new Purpose or replacement Session.
+Ordinary same-Session recollection keeps this unchanged setup wait retained.
+Successful effects, live/materializing and UNKNOWN/indeterminate attempts remain
+retained; arbitrary waits, check failures, Terminal, Human and Request results
+gain no unchanged-revision re-entry from this setup correction. Earlier aggregate
+wait revisions remain readable through `readRepositoryDirectoryResult`.
+
+`RepositorySyncDirectoryListPurposeSpec` covers this pre-effect connection by
+reopening the same isolated local-Git fixture with its complete legacy purpose
+policy after retaining the prepared candidate without that policy. It verifies
+one original grouping/preparation and installation of the same candidate, source
+content preservation, historical wait reads and completed recollection without
+SBT for the explicitly non-consumed documentation group. This legacy binding
+fixture does not qualify normal-host candidate workspaces without fixed slots;
+that upstream CNCF workspace delivery remains a separate dependency.
+
 Executable contract: `RepositorySyncDirectoryListSpec`. It authors a mixed
 clean batch, duplicate/path resolution, distinct worktrees, non-main/no-upstream
 destinations, missing/ambiguous settings and fresh-runtime exact result reads.
+
+### Session candidate resource admission
+
+Without an explicit fixed Purpose slot, runtime uses the ordinary resolved v7
+process plan's single `sessionCandidateWorkspaces` entry for its actual component.
+The host supplies the admitted logical parent and eligible candidate alias,
+workspace Manage grants and typed Git/SBT programs. CNCF owns physical bindings,
+allocation, executable selection and authority. Callers provide synchronization
+intent and authored semantic work, with no per-Purpose Slot/actionPolicy JSON or
+host paths. This contract does not assert that an existing installed consumer
+already has that v7 resource admission.
+
+Actual prepared tree changes, declared document/consumed inputs and the ordinary
+validation/assessment policy derive the candidate checks and action contract.
+Consumed inputs take precedence over document classification. Declared coverage,
+check identity, metadata, review and lint requirements retain their existing
+meaning; an absent eligible typed program is a setup/admission failure. A
+non-consumed documentation candidate runs its actual structural Git check and
+claims no SBT success.
+
+This managed Purpose route supports statically selected ordinary typed checks.
+A selected check carrying `ordinaryDiscovery`, metadata or an expanded invocation
+returns an explicit `ValidationSetupRequired` preflight diagnostic before managed
+allocation. These selection fields are preserved and refused, never stripped to
+run a kind-only substitute. Metadata/discovery and ordinary FULL-group execution
+remain outside this route's supported scope.
+
+Every known managed continuation independently derives its logical binding and
+Slot from the current ordinary per-call validation and assessment policy. The
+logical reference and complete derived Slot must equal the retained selection
+before candidate observation, check execution or commit. Newly required checks,
+review requirements, absent policy or any other mismatch fail closed while old
+evidence remains retained. Reopening does not replace the original Slot or grant
+approval for a changed policy.
+
+The existing `PurposeMaterializing` intent precedes both managed allocation and
+materialization. Before that intent, missing logical setup returns the concrete
+`purpose-materialization-preflight` wait and preserves the prepared candidate.
+After intent, refusal or uncertainty retains the actual observation and unresolved
+effect; a crash stays UNKNOWN. Ordinary Advance neither allocates again nor
+replays materialization. The legacy Human direction for an empty fixed slot does
+not authorize recovery of this managed UNKNOWN.
+
+Native Purpose progress retains the logical component/source/parent/alias/Session/
+ordered-candidate reference, derived Slot and complete actual materialization
+evidence. Known completed materialization reopens through CNCF's observation
+context, actual typed Root/Head and materialized reacquisition. Only the eligible
+candidate alias is scoped; source observations keep their original checkout.
+Foreign, incomplete, occupied-empty and UNKNOWN selections fail closed. Next
+Purpose or new repaired candidate resets clear the current binding while all
+previous native rows remain immutable. Explicit fixed-slot policy and its
+existing recovery contract remain supported.
+
+Executable contract: `RepositorySyncSessionCandidateWorkspaceSpec` authors small
+local repositories for managed materialization, actual structural Git, ordinary
+Compile and nonempty ScalaTest TestOnly candidate consumption, same-storage
+reopening, current check/review-policy mismatch, unsupported selection preflight
+and same-candidate setup correction. Its uncertainty case creates an occupied
+candidate through a real CNCF allocation solely as fixture arrangement, then
+requires normal native continuation to retain the actual exclusive-allocation
+refusal after its intent and remain passive on later Advance/recollection. That
+arrangement is never adopted as native materialization evidence.
+`RepositorySyncDirectoryListPurposeSpec` remains
+the legacy fixed-slot compatibility control. Authored specifications are not a
+claim that these checks or installed consumer qualification have run.
 Authorship is not installed qualification or Phase acceptance.
 
 ## Workflow artifact acquisition budget — 2026-11-04

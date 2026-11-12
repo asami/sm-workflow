@@ -66,6 +66,13 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
   } yield output
 
   private def _drive_c(store: N.Store, source: N.Stage, policy: Option[C.Policy],
+    authority: Option[RepositorySyncNativeConvergence.AuthorityPort], review: Option[RepositorySyncNativeMergeReviewContinuation.Port], finish: Finish): Consequence[V.RepositorySyncAdvanceResult] =
+    if (Set("PurposeMaterialized", "PurposeChecked", "PurposeRepairRequired")(source.payload.stage))
+      RepositorySyncPurposeWorkspace.scopedStoreC(store, source.payload.purposes.get)
+        .flatMap(selected => _execute_c(selected, source, policy, authority, review, finish))
+    else _execute_c(store, source, policy, authority, review, finish)
+
+  private def _execute_c(store: N.Store, source: N.Stage, policy: Option[C.Policy],
     authority: Option[RepositorySyncNativeConvergence.AuthorityPort], review: Option[RepositorySyncNativeMergeReviewContinuation.Port], finish: Finish): Consequence[V.RepositorySyncAdvanceResult] = {
     val progress = source.payload.purposes.get
     val groups = progress.plan.get.groups
@@ -92,7 +99,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
         } yield output
     } yield output
     val group = RepositorySyncPurposeOwnership.effectiveGroup(progress, groups(progress.cursor))
-    val slot = RepositorySyncPurpose.slots(store.declaration.purposePolicy, store.context.repositoryIdentity).lift(progress.slotCursor)
+    val slot = P.selectedSlot(store.declaration.purposePolicy, store.context.repositoryIdentity, progress)
     source.payload.stage match {
       case "PurposeGrouped" | "PurposeInstalled" => for {
         _ <- RepositorySyncPurposePreparationContinuation.authenticateC(store, source)
@@ -137,7 +144,51 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
         }
       } yield output
       case "PurposePrepared" => slot match {
-        case None => _wait_("Missing fixed validation workspace slot for purpose " + group.identity + "; source work and prepared native candidate are preserved", "purpose-materialization-preflight")
+        case None => (for {
+          _ <- RepositorySyncPurposeMaterializationContinuation.authenticateC(store, source)
+          observed <- G.observeC(store.core)
+          _ <- store.scopeC(observed)
+          binding <- RepositorySyncPurposeWorkspace.preflightC(store, progress, policy)
+        } yield binding) match {
+          case Consequence.Failure(conclusion) => _wait_("Purpose materialization preflight refused before an effect intent: " +
+            conclusion.show, "purpose-materialization-preflight")
+          case Consequence.Success(binding) => for {
+            candidate <- P.producerC(progress.candidate.get)
+            selection <- _selection_c(group)
+            workspace <- WorkspaceId.parseC(binding.reference.alias)
+            materializationprefix = RepositorySyncPurposeMaterializationContinuation.materializationPrefix(progress, source.payload.purposeMaterialization)
+            intentprogress = progress.copy(managedWorkspace = Some(binding))
+            intent <- store.saveC(materializationprefix + "-materialize-intent", "purpose-progress", source.record,
+              source.payload.copy(stage = "PurposeMaterializing", purposes = Some(intentprogress)))
+            observed <- (for {
+              selectedcore <- RepositorySyncPurposeWorkspace.allocateC(store.core, binding)
+              result <- E.executePurposeC(selectedcore, GitOperation.MaterializePurposeCandidate(selection.identity, candidate, workspace), selection)
+            } yield result).map[Either[String, GitExecutionResult[Unit]]](Right(_)).recoverWith(conclusion =>
+              Consequence.success(Left(conclusion.show)))
+            output <- observed match {
+              case Left(diagnostic) =>
+                val rejection = io.circe.Json.obj("kind" -> io.circe.Json.fromString("managed-materialization-rejection"),
+                  "diagnostic" -> io.circe.Json.fromString(diagnostic))
+                val rejectedprogress = intentprogress.copy(effects = progress.effects :+ rejection)
+                val rejectedpayload = intent.payload.copy(stage = "PurposeUnfinished", purposes = Some(rejectedprogress))
+                store.saveC(materializationprefix + "-materialize-result", "purpose-progress", intent.record,
+                  rejectedpayload).map(_ =>
+                  NativeWorkflowOperationOutput.repositoryWait(store.identity,
+                    "Managed Purpose allocation/materialization has no complete observed result; original intent and uncertainty are retained: " + diagnostic,
+                    "purpose-effect-unfinished"))
+              case Right(result) if result.outcome != GitExecutionOutcome.Succeeded =>
+                _failed_c(store, intent, materializationprefix + "-materialize-result", result,
+                  "Managed Purpose materialization failed or is unknown; its actual candidate is retained")
+              case Right(result) => for {
+                completedbinding <- RepositorySyncPurposeWorkspace.materializedC(progress, binding, result)
+                materialized <- store.saveC(materializationprefix + "-materialized", "purpose-progress", intent.record,
+                  intent.payload.copy(stage = "PurposeMaterialized", purposes = Some(intentprogress.copy(
+                    managedWorkspace = Some(completedbinding), effects = progress.effects :+ _effect_json(result)))))
+                output <- _drive_c(store, materialized, policy, authority, review, finish)
+              } yield output
+            }
+          } yield output
+        }
         case Some(selected) => (for {
           _ <- RepositorySyncPurposeMaterializationContinuation.authenticateC(store, source)
           host <- RepositorySyncPurposeMaterializationContinuation.preflightC(store, progress)
@@ -233,7 +284,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
               projected <- if (progress.ownership.nonEmpty) _installed_worktree_c(store, progress, group)
                 else Consequence.success(Vector.empty[P.Content])
               installed <- _save_("installed", "PurposeInstalled", intent, progress.copy(cursor = progress.cursor + 1, slotCursor = progress.slotCursor + 1, attempt = 0, baselineTree = None, preparationNamespace = None,
-                candidate = None, receipts = Vector.empty, assessment = None, selection = None, review = None, reusable = Vector.empty, commits = progress.commits :+ candidate.commit.value, effects = progress.effects :+ _effect_json(result),
+                candidate = None, managedWorkspace = None, receipts = Vector.empty, assessment = None, selection = None, review = None, reusable = Vector.empty, commits = progress.commits :+ candidate.commit.value, effects = progress.effects :+ _effect_json(result),
                 projectedWorktree = if (progress.ownership.nonEmpty)
                   Some(RepositorySyncPurposeOwnership.project(progress, projected)) else progress.projectedWorktree))
               output <- _drive_c(store, installed, policy, authority, review, finish)
@@ -366,7 +417,11 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
     _snapshot_c(store, failed, false)
   private[admission] def budgetSnapshotC(store: N.Store, source: N.Stage): Consequence[P.RepairSnapshot] =
     _snapshot_c(store, source, true)
-  private def _snapshot_c(store: N.Store, failed: N.Stage, review: Boolean): Consequence[P.RepairSnapshot] = for {
+  private def _snapshot_c(store: N.Store, failed: N.Stage, review: Boolean): Consequence[P.RepairSnapshot] =
+    failed.payload.purposes.map(progress => RepositorySyncPurposeWorkspace.scopedStoreC(store, progress)
+      .flatMap(selected => _snapshot_in_c(selected, failed, review)))
+      .getOrElse(N.invalid("Purpose scope correction has no native progress"))
+  private def _snapshot_in_c(store: N.Store, failed: N.Stage, review: Boolean): Consequence[P.RepairSnapshot] = for {
     _ <- if ((failed.payload.stage == "PurposeRepairRequired" || (review && failed.payload.stage == "PurposeChecked")) &&
         failed.payload.purposes.nonEmpty)
       Consequence.unit else N.invalid("Purpose scope correction requires the actual failed Purpose stage")
@@ -377,7 +432,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
     _ <- if (retained == failed) Consequence.unit else N.invalid("Purpose failure crosses the actual retained progress")
     progress = failed.payload.purposes.get
     candidate <- progress.candidate.map(Consequence.success).getOrElse(N.invalid("Failed Purpose candidate is absent"))
-    slot <- RepositorySyncPurpose.slots(store.declaration.purposePolicy, store.context.repositoryIdentity).lift(progress.slotCursor).map(Consequence.success)
+    slot <- P.selectedSlot(store.declaration.purposePolicy, store.context.repositoryIdentity, progress).map(Consequence.success)
       .getOrElse(N.invalid("Failed Purpose validation slot is absent"))
     _ <- candidateWorkspaceC(store, slot, candidate)
     actual <- G.inspectC(store.core)
@@ -434,7 +489,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
       baselineexpectations)) else progress.projectedWorktree
   } yield progress.copy(preparationNamespace = None, request = if (overlap) progress.request else progress.request.copy(files = progress.request.files ++ baselines),
     plan = Some(plan), attempt = progress.attempt + 1, slotCursor = progress.slotCursor + 1,
-    baselineTree = Some(candidate.tree), candidate = None, receipts = Vector.empty, selection = None,
+    baselineTree = Some(candidate.tree), candidate = None, managedWorkspace = None, receipts = Vector.empty, selection = None,
     assessment = None, review = None, reusable = Vector.empty, ownership = ownership, projectedWorktree = projected)
 
   def repairC(store: N.Store, basis: RepositorySyncNativeMergeRepair.Basis,

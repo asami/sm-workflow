@@ -153,6 +153,12 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     val namespace: String = "",
     val continuation: Option[RepositorySyncValidationContinuation.Direction] = None,
     val pushContinuation: Option[RepositorySyncPushContinuation.Direction] = None) {
+    def withCore(selected: ActionCall.Core): Store =
+      new Store(declaration, selected, original, context, identity, adapter, storage, acknowledgement,
+        namespace, continuation, pushContinuation)
+    def withDeclaration(selected: RepositorySyncManagedFetch.Declaration): Store =
+      new Store(selected, core, original, context, identity, adapter, storage, acknowledgement,
+        namespace, continuation, pushContinuation)
     def scoped(namespace: String, direction: Option[RepositorySyncValidationContinuation.Direction] = None,
       pushDirection: Option[RepositorySyncPushContinuation.Direction] = None): Store =
       new Store(declaration, core, original, context, identity, adapter, storage, acknowledgement, namespace, direction, pushDirection)
