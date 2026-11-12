@@ -491,3 +491,9 @@ native intent. It does not assert that no bytes exist in another provider. If a
 caller knows of a genuine durable result in an unregistered provider, report the
 unsupported provider or setup gap rather than attesting that its bytes are
 absent. This recovery boundary does not discover or import unrelated providers.
+
+## Repair-trend continuation
+
+At an eligible destination DelegateTask Human repair-trend stop, `describeDelegateTaskRepairContinuation` reads the retained exact target. Prepare and independently admit the actual Human `ContinueRepair` or `Defer` direction using the `DelegateTask` `repair-continuation` evidence purpose. `resumeDelegateTaskRepair` checks the target, participant, evidence and source freshness. Defer leaves the checkpoint untouched; ContinueRepair appends a Repair checkpoint without running work or checks. A separate ordinary `advanceDelegateTask` owns the next Repair and the retained allowance. Repeating the same admitted direction collects the existing result; a changed or stale target is refused.
+
+The description reports the retained generation, repair counts and limit, successful check prefix, receipt and observation counts; its opaque target carries the exact retained receipts and observations. Recurring check or test names indicate a coarse trend and do not establish that failures share a root cause. Description runs no checks.

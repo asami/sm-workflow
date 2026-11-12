@@ -53,7 +53,8 @@ private[admission] final class BoundedTaskService(N: BoundedWorkNativeRun) {
     reader <- NativeExternalEvidence.bindBoundedC(creation.configuration, h)
     recovery = if (N.delegation) (DelegateTaskScopeCorrection.operations(h, definition, selections) ++ DelegateTaskCandidateContinuation.operations(h, definition, selections) ++ DelegateTaskValidationRecovery.operations(h, definition, new ThreeWorkflowExternalEvidencePorts(reader).delegateTaskValidationRecovery)) else GoalTaskMalformedIssuedWorkRecovery.operations(h, definition,
       new ThreeWorkflowExternalEvidencePorts(reader).goalTaskMalformedIssuedWorkRecovery)
-    continuation = (if (N.delegation) Vector.empty else GoalTaskRepairContinuation.operations(h, definition,
+    continuation = (if (N.delegation) DelegateTaskRepairContinuation.operations(h, definition,
+      new ThreeWorkflowExternalEvidencePorts(reader).delegateTaskRepairContinuation) else GoalTaskRepairContinuation.operations(h, definition,
       new ThreeWorkflowExternalEvidencePorts(reader).goalTaskRepairContinuation) ++ GoalTaskValidationContinuation.operations(h, definition,
       new ThreeWorkflowExternalEvidencePorts(reader).goalTaskValidationContinuation)) ++
       BoundedSelectedValidationContinuation.operations(h, definition,

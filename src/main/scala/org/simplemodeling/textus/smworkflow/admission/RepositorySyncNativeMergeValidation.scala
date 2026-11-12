@@ -94,6 +94,17 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
     group: Option[RepositorySyncProgramImpact.Group] = None,
     externalCapture: Option[WorkflowSbtCapture.ExternalReference] = None)
   object Receipt {
+    // Public Record serialization omits null-valued optional fields. Restrict
+    // equivalence to these two legacy Facts fields; all other fields, including
+    // unknown or nested fields, must still match the typed encoding exactly.
+    private def externalFactsMatch(facts: WorkflowSbtValidation.Facts, raw: Json): Boolean = {
+      val normalized = raw.mapObject { fields =>
+        Vector("selection", "reason").foldLeft(fields) { (prior, key) =>
+          if (prior.contains(key)) prior else prior.add(key, Json.Null)
+        }
+      }
+      facts.asJson == normalized
+    }
     given Encoder[Receipt] = Encoder.instance(value => {
       if (value.externalCapture.nonEmpty) Json.obj("schemaVersion" -> WorkflowSbtCapture.externalReceiptSchema.asJson,
         "identity" -> value.identity.asJson, "sbt" -> value.sbt.get.asJson,
@@ -121,7 +132,7 @@ private[smworkflow] object RepositorySyncNativeMergeValidation {
       facts <- cursor.get[WorkflowSbtValidation.Facts]("sbt")
       rawFacts <- cursor.get[Json]("sbt")
       reference <- cursor.get[WorkflowSbtCapture.ExternalReference]("externalCapture")
-      _ <- Either.cond(id(identity) && facts.valid && facts.asJson == rawFacts && facts.kind == WorkflowSbtValidation.Kind.Test &&
+      _ <- Either.cond(id(identity) && facts.valid && externalFactsMatch(facts, rawFacts) && facts.kind == WorkflowSbtValidation.Kind.Test &&
         WorkflowSbtCapture.externalReferenceValid(reference) && reference.association.check == identity, (),
         DecodingFailure("Invalid external SBT observation reference", cursor.history))
     } yield Receipt(identity, "external-unhydrated", None, "", "", Some(facts), None, None, Some(reference))

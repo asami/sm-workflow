@@ -40,6 +40,7 @@ private[smworkflow] object NativeExternalEvidence {
     case GoalTaskMalformedIssuedWorkNonexecution extends Purpose("goal-task-malformed-issued-work-nonexecution")
     case GoalTaskValidationContinuation extends Purpose("goal-task-validation-continuation")
     case GoalTaskRepairContinuation extends Purpose("goal-task-repair-continuation")
+    case DelegateTaskRepairContinuation extends Purpose("delegate-task-repair-continuation")
     case InventoryAuthority extends Purpose(GoalPhaseInventoryAuthority.purpose)
     case GoalReview extends Purpose("goal-phase-independent-review")
     case RepositoryReview extends Purpose("repository-sync-independent-review")
@@ -291,6 +292,12 @@ private[smworkflow] object NativeExternalEvidence {
           answer.downField("reference").get[String]("identity").contains(value.reference) &&
           answer.downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
       else Consequence.securityPermissionDenied("Task validation continuation Human evidence crosses its participant or reference")
+    } else if (purpose == Purpose.DelegateTaskRepairContinuation) {
+      val answer = selected.hcursor.downField("delegateTaskRepairContinuation").downField("answer")
+      if (answer.get[String]("participant").contains(value.participant) &&
+          answer.downField("reference").get[String]("identity").contains(value.reference) &&
+          answer.downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
+      else Consequence.securityPermissionDenied("DelegateTask continuation Human evidence crosses its participant or reference")
     } else if (purpose == Purpose.GoalTaskRepairContinuation) {
       val answer = selected.hcursor.downField("goalTaskRepairContinuation").downField("answer")
       if (answer.get[String]("participant").contains(value.participant) &&
@@ -356,6 +363,7 @@ private[smworkflow] object NativeExternalEvidence {
     val selected = purpose match {
       case Purpose.GoalTaskValidationContinuation => GoalTaskValidationContinuation.selectBinding(value)
       case Purpose.GoalTaskRepairContinuation => GoalTaskRepairContinuation.selectBinding(value)
+      case Purpose.DelegateTaskRepairContinuation => DelegateTaskRepairContinuation.selectBinding(value)
       case Purpose.GoalTaskMalformedIssuedWorkRecovery => GoalTaskMalformedIssuedWorkRecovery.selectBinding(value)
       case Purpose.StandaloneValidationRecovery => StandaloneFixValidationRecovery.selectBinding(value)
       case Purpose.DelegateTaskValidationRecovery => DelegateTaskValidationRecovery.selectBinding(value)

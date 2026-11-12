@@ -916,6 +916,20 @@
         },
         {
           "service": "DelegateTaskService",
+          "name": "describeDelegateTaskRepairContinuation",
+          "kind": "COMMAND",
+          "input": "GoalTaskRepairContinuationDescriptionInput",
+          "output": "GoalTaskRepairContinuationDescriptionResult"
+        },
+        {
+          "service": "DelegateTaskService",
+          "name": "resumeDelegateTaskRepair",
+          "kind": "COMMAND",
+          "input": "GoalTaskRepairContinuationInput",
+          "output": "GoalTaskRepairContinuationDescriptionResult"
+        },
+        {
+          "service": "DelegateTaskService",
           "name": "describeDelegateTaskScopeCorrection",
           "kind": "COMMAND",
           "input": "DelegateTaskScopeCorrectionDescriptionInput",

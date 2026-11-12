@@ -14578,6 +14578,14 @@ operation = DelegateTaskDeliveryService.observeDelegateTaskDelivery
 operation = DelegateTaskDeliveryService.describeDelegateTaskAdoption
 
 
+#### describeDelegateTaskRepairContinuation
+
+operation = DelegateTaskService.describeDelegateTaskRepairContinuation
+
+#### resumeDelegateTaskRepair
+
+operation = DelegateTaskService.resumeDelegateTaskRepair
+
 #### describeDelegateTaskValidationContinuation
 
 operation = DelegateTaskService.describeDelegateTaskValidationContinuation
@@ -14630,6 +14638,62 @@ on = task-accepted
 Independent single-request existing-chat delegation. Reuse the shared bounded WorkOrder, execution/profile preflight, validation, repair, conditional review and native selected commit owner. Required runtime-owned publication precedes return readiness; requester dispatch, returned source and artifact adoption retain their own correlated Sessions.
 
 ### OPERATION
+
+#### describeDelegateTaskRepairContinuation
+
+##### DESCRIPTION
+
+Same active DelegateTask repair-trend Human stop only. Complete opaque native target and independently admitted exact Human direction. Before appending one Repair checkpoint, ContinueRepair compares the current host source root/branch/repository and performs existing native read-only Git observation of root/HEAD/index/scoped working tree against the saved candidate; changed source or crossed host refuses without append or counter change. Zero Git/source mutation, staging, work, checks, commit or publication. Defer writes nothing; describe and repeated collection read storage. A separate ordinary Advance owns the next Repair and normal allowance. Repeated collection retains the original direction and target.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalTaskRepairContinuationDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalTaskRepairContinuationDescriptionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalTaskRepairContinuationDescriptionResult
+
+#### resumeDelegateTaskRepair
+
+##### DESCRIPTION
+
+Same active DelegateTask repair-trend Human stop only. Complete opaque native target and independently admitted exact Human direction. Before appending one Repair checkpoint, ContinueRepair compares the current host source root/branch/repository and performs existing native read-only Git observation of root/HEAD/index/scoped working tree against the saved candidate; changed source or crossed host refuses without append or counter change. Zero Git/source mutation, staging, work, checks, commit or publication. Defer writes nothing; describe and repeated collection read storage. A separate ordinary Advance owns the next Repair and normal allowance. Repeated collection retains the original direction and target.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalTaskRepairContinuationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalTaskRepairContinuationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalTaskRepairContinuationDescriptionResult
 
 #### describeDelegateTaskScopeCorrection
 

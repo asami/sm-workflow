@@ -367,3 +367,43 @@ final class NativeCommonDelegateTaskCliSpec extends AnyWordSpec with NativeCommo
     }
   }
 }
+
+/** Explicit, independently selectable installed recovery qualification. */
+@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class NativeDelegateTaskValidationRecoveryReviewCliSpec extends AnyWordSpec with NativeCommonDelegateTaskQualification {
+  override protected lazy val commonDelegateExecutable: Path = {
+    val path = Path.of(sys.props.get("smworkflow.spec.installedCommand")
+      .orElse(sys.env.get("SM_WORKFLOW_SPEC_INSTALLED_COMMAND"))
+      .getOrElse(fail("Select smworkflow.spec.installedCommand or SM_WORKFLOW_SPEC_INSTALLED_COMMAND")))
+    require(path.isAbsolute && path.normalize == path && Files.isRegularFile(path) && Files.isExecutable(path),
+      "Select the actual absolute installed executable")
+    path
+  }
+  "Installed recovery review" should {
+    "collect the actual retained full-Test result through the selected candidate CAR without replay" in {
+      val component = commonDelegateComponentFile.getOrElse(fail(
+        "Select the native-published candidate CAR through SM_WORKFLOW_SPEC_COMPONENT_FILE or smworkflow.spec.componentFile"))
+      new DelegateTaskValidationRecoveryOperationSpec().qualifyInstalledAvailableRecovery(commonDelegateExecutable, component)
+    }
+  }
+}
+
+/** Focused installed continuation only; no unrelated common-delegation scenarios. */
+@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class NativeDelegateTaskRepairContinuationCliSpec extends AnyWordSpec with Matchers {
+  "Installed DelegateTask repair continuation" should {
+    "describe, admit and separately advance the same specification-owned stop" in {
+      val executable = Path.of(sys.props.get("smworkflow.spec.installedCommand")
+        .orElse(sys.env.get("SM_WORKFLOW_SPEC_INSTALLED_COMMAND"))
+        .getOrElse(fail("Select SM_WORKFLOW_SPEC_INSTALLED_COMMAND")))
+      val component = Path.of(sys.props.get("smworkflow.spec.componentFile")
+        .orElse(sys.env.get("SM_WORKFLOW_SPEC_COMPONENT_FILE"))
+        .getOrElse(fail("Select SM_WORKFLOW_SPEC_COMPONENT_FILE")))
+      new DelegateTaskRepairContinuationOperationSpec().qualify(Some(executable -> component))
+    }
+  }
+}

@@ -43,12 +43,12 @@ private[smworkflow] object NativeExternalEvidenceInput {
       options <- NativePreparationInput.optionsC(supplied, _required, readText, Set("participant"))
       _ <- if (Set("DelegateTask", "GoalTask", "StandaloneFix", "GoalPhase", "RepositorySync", "SplitPhase")(options("family")) &&
           Set("selected-validation-continuation", "repair-continuation", "completion-record-closure", "adoption", "malformed-issued-work-recovery", "review", "human", "validation-continuation", "release-repair-continuation", "review-purpose-repair", "validation-recovery", "validation-repair-adoption", "source-history-recovery", "source-history-normalization", "candidate-recovery", "candidate-observation-continuation", "whole-phase-candidate-recovery", "closure-recovery", "remaining-plan-adoption", "dependency-source-revision", "failed-phase-repair-adoption", "completion-policy-adoption", "repair-policy-adoption", "standalone-fix-validation-recovery", "delegate-task-validation-recovery")(options("kind")) &&
-          (options("family") != "DelegateTask" || Set("review", "adoption", "completion-record-closure", "selected-validation-continuation", "delegate-task-validation-recovery")(options("kind"))) &&
+          (options("family") != "DelegateTask" || Set("review", "adoption", "completion-record-closure", "selected-validation-continuation", "repair-continuation", "delegate-task-validation-recovery")(options("kind"))) &&
           (options("kind") != "adoption" || options("family") == "DelegateTask") &&
           (options("kind") != "selected-validation-continuation" || Set("GoalTask", "DelegateTask")(options("family"))) &&
           (options("family") != "GoalTask" || Set("selected-validation-continuation", "repair-continuation", "validation-continuation", "review", "malformed-issued-work-recovery", "completion-record-closure")(options("kind"))) &&
           (options("kind") != "malformed-issued-work-recovery" || options("family") == "GoalTask") &&
-          (options("kind") != "repair-continuation" || options("family") == "GoalTask") &&
+          (options("kind") != "repair-continuation" || Set("GoalTask", "DelegateTask")(options("family"))) &&
           (options("kind") != "standalone-fix-validation-recovery" || options("family") == "StandaloneFix") &&
           (options("kind") != "delegate-task-validation-recovery" || options("family") == "DelegateTask") &&
           (options("kind") != "validation-continuation" || Set("RepositorySync", "GoalTask")(options("family"))) &&
@@ -365,6 +365,12 @@ private[smworkflow] object NativeExternalEvidenceInput {
         description <- summon[ValueReader[V.GoalTaskRepairContinuationDescriptionResult]].readC(request)
         answer <- summon[ValueReader[V.GoalTaskRepairContinuationInput]].readC(result)
         prepared <- NativeReviewPreparation.taskRepairContinuationC(description, answer, reference, execution,
+          participant, issuer, occurred)
+      } yield (prepared.recordIdentity, prepared.record)
+      case "DelegateTask" if options("kind") == "repair-continuation" => for {
+        description <- summon[ValueReader[V.GoalTaskRepairContinuationDescriptionResult]].readC(request)
+        answer <- summon[ValueReader[V.GoalTaskRepairContinuationInput]].readC(result)
+        prepared <- NativeReviewPreparation.delegateTaskRepairContinuationC(description, answer, reference, execution,
           participant, issuer, occurred)
       } yield (prepared.recordIdentity, prepared.record)
       case "GoalTask" if options("kind") == "malformed-issued-work-recovery" => for {
