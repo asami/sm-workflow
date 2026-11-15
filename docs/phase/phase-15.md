@@ -3,7 +3,12 @@
 status=planned
 Planned: 2026-10-21
 Owner: sm-workflow
-Dependencies: Phase 7 Development Workspace and Phase 13 recursive catch-up for related functionality
+Dependencies: [Phase 7 Development Workspace](phase-7.md) and [Phase 20 recursive catch-up](phase-20.md) for related functionality
+
+Catch-up allocation restored 2026-11-16: Phase 20 retains the former Phase 13
+catch-up plan. Current Phase 13 remains AI usage accounting and is not the
+catch-up dependency. This reference correction preserves the early initialization
+slice and broader workspace scope; it selects no implementation or delivery slot.
 
 Early-slice amendment (2026-10-24): single-project sm-workflow initialization
 depends only on the installed CLI and existing CNCF resource/configuration
@@ -29,7 +34,7 @@ sm-workspace-status, sm-bootstrap, sm-upgrade (candidate)
 
 ## Scope and implementation strategy
 
-Use existing workspace graph, Artifact Overlay status/verify and catch-up; start with a thin status skill over typed operations. Bootstrap must respect Cozy project generation ownership; upgrade must distinguish Git updates from provider-owned localJar publication and explicit consumer selection. Do not add a Workspace Profile or parallel configuration/state store.
+Use existing workspace graph, Artifact Overlay status/verify and [Phase 20 catch-up](phase-20.md); start with a thin status skill over typed operations. Bootstrap must respect Cozy project generation ownership; upgrade must distinguish Git updates from provider-owned localJar publication and explicit consumer selection. Do not add a Workspace Profile or parallel configuration/state store.
 
 ## Acceptance boundary
 

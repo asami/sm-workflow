@@ -2,6 +2,15 @@
 
 Status: reference / candidate backlog; **not committed Phase acceptance scope**
 
+## Restoration note — 2026-11-16
+
+The historical Phase 13 catch-up references below now resolve to
+[Phase 20](../../../phase/phase-20.md), restored with the original six
+requirements. Current Phase 13 is AI usage accounting. The original discussion,
+candidate priorities and Phase 7 scope are retained below; this note adds no
+candidate acceptance gate. See the
+[restoration record](../11/2026-11-16-catch-up-plan-restoration.md).
+
 ## Context
 
 Phase 7 defines the Development Workspace as the single development-environment configuration: a Project/Repository/Worktree graph with consumer-to-provider dependency edges carrying independent `localRepository`, `localJar`, and `localProject` properties. There is **no separate Workspace Profile** configuration layer. Artifact Overlay provides explicit producer publication, immutable selection and consumer binding. The producer owns building/validating/publishing/updating localJar; consumers resolve selected published artifacts only. Phase 13's recursive catch-up traverses registered localRepository edges, independently of localJar publication.

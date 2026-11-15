@@ -5,7 +5,16 @@ Owner: sm-workflow
 Discovery: independent focused review of reason-separated ordinary commits.
 These records do not reopen a Phase, change a Goal/Session or reset counters.
 
-## HYG-ORDINARY-SYNC-P13-REFERENCES-001 — OPEN
+## HYG-ORDINARY-SYNC-P13-REFERENCES-001 — RESOLVED
+
+- Original status: OPEN on 2026-10-23; original observations and follow-up below
+  remain historical evidence.
+- Documentation resolution (2026-11-16): the user selected restoration under
+  [Phase 20](../../../phase/phase-20.md), retaining current Phase 13. Phase 7,
+  Phase 15, the roadmap and current proposal references now name Phase 20; the
+  historical candidate journal has an explicit restoration note. This resolves
+  planning ownership only, not implementation or acceptance. See the
+  [restoration record](../11/2026-11-16-catch-up-plan-restoration.md).
 
 - Location: `docs/phase/phase-7.md` catch-up references and
   `docs/phase/phase-15.md` dependency summary.
