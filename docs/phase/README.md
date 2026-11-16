@@ -1,5 +1,15 @@
 # sm-workflow incremental-use roadmap
 
+AI efficiency allocation adopted 2026-11-13: Phase 9 refines comparable
+quality/time/consumption evaluation and developer-led operating-profile feedback;
+Phase 13 refines available work-category attribution. Only
+[Phase-total completion accounting](phase-20.md)
+is the separate planned Phase 20, with its [acceptance checklist](phase-20-checklist.md).
+Schedule it after the required Phase 13 measurement route is accepted. This does not reorder the roadmap or add
+active Phase completion gates. See the
+[note](../notes/ai-efficiency-evaluation-and-phase-total.md) and
+[decision record](../journal/2026/11/2026-11-13-ai-efficiency-planning-allocation.md).
+
 Phase 6.11 closed with unverified items — 2026-11-11:
 [plan](phase-6.11.md) / [checklist](phase-6.11-checklist.md).
 The user ended this Phase without whole-Phase validation. Its existing Session

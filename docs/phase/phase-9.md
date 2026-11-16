@@ -471,3 +471,31 @@ If takeover leaves too little remaining automatic repair allowance, early non-co
 - replacing Review or Admission with lint success;
 - encoding provider/model names in Workflow semantics;
 - speculative rollback/integrity/contamination machinery.
+
+## Efficiency evaluation and profile feedback — 2026-11-13
+
+Refine the existing evaluation work rather than introduce a separate evaluation
+Phase. Compare quality, completion time and attributable AI consumption for
+comparable work classes and acceptance scopes. Retain first-pass acceptance,
+repair cycles, final disposition and any observed reopened findings alongside
+model/effort, elapsed time and usage coverage. Include failed attempts, repair,
+review and parent coordination; a cheaper successful final invocation alone is
+not evidence of a cheaper completed task. Source-line ratios are supplementary,
+not a productivity target for deletion, refactoring or design work.
+
+Use existing Phase 6.10 observations and Phase 13 usage when available. Missing
+measurements remain unavailable; neither Phase 13 nor the separately planned
+Phase-total summary becomes a new routing/Takeover completion prerequisite.
+Different workloads, mixed profiles or incomplete coverage limit comparisons;
+ordinary observations do not prove model causality or justify token-to-plan-quota
+conversion. Do not add a benchmark campaign or AI calls just to produce metrics.
+
+Developers use the observations to propose bounded changes to existing versioned
+operating-profile configuration. Record the reason, baseline/new configuration,
+observed quality/time/usage and limitations; apply a selected revision only to
+new assignments and assess subsequent comparable work using the same criteria.
+Preserve issued Requests, acceptance policy and repair history. This is manual
+feedback into the existing configuration contract, not automatic optimization,
+a new AI approval gate or a change to live model settings.
+
+See [the accounting and evaluation note](../notes/ai-efficiency-evaluation-and-phase-total.md).
