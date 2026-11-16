@@ -46,7 +46,8 @@ import GoalPhaseCanonicalDependencySourceSuccession as CanonicalSource
   *  version Oct. 28, 2026
   *  version Oct. 31, 2026
   *  version Oct. 29, 2026
-  * @version Nov. 11, 2026
+  *  version Nov. 11, 2026
+  * @version Nov. 16, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWorkContinuation {
@@ -3966,7 +3967,12 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             draft <- _locate_assigned_c(source, submitted.continuationId, call)
             plan = draft
             _ <- _historical_freshness_c(plan, call)
-            _ <- plan.candidate.map(GoalPhaseNativeValidation.preconditionsC(source, d, call, _, plan.controller,
+            // A negative review authenticates findings about its original issued
+            // candidate/checks; it does not accept the current HEAD or index.
+            // Positive acceptance and all other completions retain live checks.
+            _ <- if (_is_review(plan.input) &&
+                Set("repair", "decision-needed").contains(submitted.result.value.outcome)) Consequence.unit
+              else plan.candidate.map(GoalPhaseNativeValidation.preconditionsC(source, d, call, _, plan.controller,
               documentPolicy = plan.documentpolicy, recordingPaths = N.managementPaths(plan.findings),
               dependencyChain = Some(plan.dependencyChain))).getOrElse(Consequence.unit)
             _ <- if (plan.input.kind == "RepairStep") GoalPhaseNativeCandidate.ownershipC(source, d, call, plan.controller)

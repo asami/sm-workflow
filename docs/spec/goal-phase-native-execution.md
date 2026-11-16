@@ -174,6 +174,30 @@ stage or security matrix. Existing Phase 6.1/6.2/6.3 responsibilities remain.
 
 ## Executable specifications
 
+### Original negative review collection
+
+R8: An actual retained `ReviewStep` or `ReviewPhase` result with outcome `repair`
+or `decision-needed` reports on its original issued candidate and checks. Normal
+Submit authenticates that native issue, continuation, context, semantic result
+and independent evidence without requiring the current HEAD or index to match
+the original candidate. Current selected source changes do not prevent collecting
+those findings. Operating-profile admission, dependency freshness, result admission
+and atomic native completion still apply; crossed references, missing independent
+evidence and stale replay are refused.
+
+Collecting this report supplies no current-candidate PASS or acceptance of obsolete
+checks. Normal repair reservation remains required. Subsequent Advance captures
+the repaired candidate, runs fresh selected checks and issues independent review;
+positive review acceptance and ordinary Step/Phase closure retain strict current
+candidate preconditions. No changed-path or document-type exception is involved.
+
+`GoalPhaseReviewCandidateContinuationSpec` exercises this distinction through
+normal managed Operations in small test-owned repositories with real Compile,
+independent fixture evidence and ordinary closure authority. It covers independent
+HEAD advancement, selected source drift, single repair reservation, fresh checks
+and review, strict positive acceptance, evidence/context refusal and replay.
+Fixture evidence grants no authority over a live consumer Session.
+
 ### Candidate continuation after independent local integration
 
 The original Phase base and accepted Step commits are immutable. Before a new
