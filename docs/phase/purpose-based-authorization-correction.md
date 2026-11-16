@@ -88,4 +88,4 @@ SimpleModeling development and Control Center development continue their existin
 approved restoration delivery and consumer acceptance, and use the new contract
 when delivered through its supported public route. sm-workflow-dev consumes the
 same owner without resetting its current Session. No new runtime action is issued
-by this planning document. See the [English handoff](../journal/2026/10/2026-10-25-purpose-based-authorization-handoff.md).
+by this planning document. See the [English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-25-purpose-based-authorization-handoff.md).

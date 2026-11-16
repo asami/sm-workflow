@@ -7,17 +7,17 @@ retained unchanged.
 
 Internal interface progress: focused-572 packaged and passed 191 tests/24 suites
 for a separate typed answerable question, closed answer and host-only current-call
-verification seam. See the [interface journal](../journal/2026/10/2026-10-01-human-question-verifier-contract.md).
+verification seam. See the [interface journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-human-question-verifier-contract.md).
 Successful verification examples remain fixtures. Managed immutable question
 retention passed focused-573 (197 tests/25 suites); managed answer-plus-receipt
 retention, exact retry and physical reopen passed focused-576 (201 tests/26
 suites), using the shared DataStoreSpace and independent answer Create grant.
-See the [answer retention journal](../journal/2026/10/2026-10-01-managed-human-answer-retention.md).
+See the [answer retention journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-managed-human-answer-retention.md).
 Focused-582 additionally packaged and passed 204 tests/27 suites for the CML
 `prepareGoalPhaseHumanDecision` and `recordGoalPhaseHumanAnswer` bindings, gated
 by explicit host presentation/verifier dependencies, with actual managed
 Service/ordinary CLI retention and physical reopen. See the
-[public Operation journal](../journal/2026/10/2026-10-01-public-human-decision-operations.md).
+[public Operation journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-public-human-decision-operations.md).
 Those scenarios still use fixture verification. They do not establish native
 pending-question publication, actual human issuer/verifier, production default
 activation, automatic human progression or answer/history resume.
@@ -38,17 +38,17 @@ remains incomplete. Invocation 596 refreshed the producer API into the consumed
 SNAPSHOT; focused-597 compiles the consumer and validates its closed native
 answer payload codec (38 tests/7 suites). This is not a native suspension/resume
 binding. A Decision wire codec alone is insufficient.
-See the [native boundary inventory](../journal/2026/10/2026-10-01-native-human-decision-boundary.md)
-and [publication progress](../journal/2026/10/2026-10-01-native-decision-publication.md).
-See [completion and validation recovery](../journal/2026/10/2026-10-01-native-decision-completion-validation-recovery.md).
-See [public native completion](../journal/2026/10/2026-10-01-public-native-decision-completion.md).
-See [consumer artifact and answer payload](../journal/2026/10/2026-10-01-native-decision-consumer-artifact-and-answer-codec.md).
+See the [native boundary inventory](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-native-human-decision-boundary.md)
+and [publication progress](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-native-decision-publication.md).
+See [completion and validation recovery](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-native-decision-completion-validation-recovery.md).
+See [public native completion](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-public-native-decision-completion.md).
+See [consumer artifact and answer payload](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-native-decision-consumer-artifact-and-answer-codec.md).
 Focused-602 defines the new `goal-phase-human-decision-v3` CML revision with
 distinct HumanPending/HumanAnswered projections, a human required capability
 and `submitGoalPhaseHumanDecision` Provided Operation (187 tests/26 suites).
 Old v2 ABI fixtures are preserved separately; no stored instance migration or
 native runtime activation is claimed. See the
-[native CML contract](../journal/2026/10/2026-10-01-native-human-cml-contract.md).
+[native CML contract](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-native-human-cml-contract.md).
 
 ## Evidence and responsibility
 
@@ -208,7 +208,7 @@ foreign-owner cases pass in the new six-scenario spec. Focused 606 passed 20/20;
 GoalPhase accumulator 607 passed 193/193 in 27 suites. These tests use an honest
 synthetic predecessor and do not establish production human verification,
 native completion or CLI/server/MCP activation. See the
-[payload and reopen journal](../journal/2026/10/2026-10-01-native-human-question-payload-and-reopen.md)
+[payload and reopen journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-native-human-question-payload-and-reopen.md)
 for exact evidence and required next integration boundary.
 
 ## Native current-call publication adapter
@@ -226,7 +226,7 @@ probe. Focused 612 passed 29/29; accumulator 613 passed 194/194 in 27 suites.
 This proves the private adapter on a real managed call, not production
 follow-up activation, a public native answer endpoint, human verification or
 CLI/server/MCP completion. See the
-[current-call publication journal](../journal/2026/10/2026-10-01-native-human-current-call-publication.md).
+[current-call publication journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-native-human-current-call-publication.md).
 
 ## Native answer successor preparation
 
@@ -237,7 +237,7 @@ command permission. No native answer writer or production verifier is enabled.
 The new pure scenario and existing GoalPhase accumulator pass (614: 10/10;
 615: 195/195 in 27 suites). Actual managed human admission, atomic completion,
 receipt retention and reopen recovery remain required; see the
-[answer preparation journal](../journal/2026/10/2026-10-01-native-human-answer-preparation.md).
+[answer preparation journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-native-human-answer-preparation.md).
 
 ## Native answer managed completion and explicit Factory opt-in
 
@@ -258,7 +258,7 @@ still test-only. Native receipt query/uncertain response recovery, production
 issuer/verifier, automatic question follow-up and actual CLI/server/MCP remain
 open. The native completion retains answer/evidence reference, not an extra
 full-receipt side record. See the
-[managed completion journal](../journal/2026/10/2026-10-01-native-human-managed-completion.md).
+[managed completion journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-native-human-managed-completion.md).
 
 ## Read-only native completion observation
 
@@ -276,7 +276,7 @@ evidence, not standalone launcher/CAR or server/MCP acceptance. The result is
 historical completion observation, not recovery of the original full receipt.
 Native completion's current-call reads/verifier admission now precede pure
 closing selection. Current accumulator 627 passed 196/196 in 27 suites; see the
-[query and pure closing journal](../journal/2026/10/2026-10-01-native-human-completion-query.md).
+[query and pure closing journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-native-human-completion-query.md).
 
 ## Public native mechanical advance
 
@@ -293,7 +293,7 @@ publication probe. Service retry is equal; caller-injected choices and copied
 authentication refuse. Accumulator 630 passed 196/196 in 27 suites. Automatic
 review follow-up, complete CML constituent execution and standalone launcher/
 server/MCP remain open; see the
-[public advance journal](../journal/2026/10/2026-10-01-native-human-public-advance.md).
+[public advance journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-native-human-public-advance.md).
 
 ## Read-only authority assessment for automatic native follow-up
 
@@ -308,7 +308,7 @@ The shared legacy path retains its lookup order and request restrictions.
 Native publication must occur only after the read-only assessment finishes,
 with separate managed predecessor/actor admission; this seam is not yet wired
 to automatic review follow-up at the assessment-only slice (633). The
-[assessment journal](../journal/2026/10/2026-10-01-native-human-authority-assessment.md)
+[assessment journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-native-human-authority-assessment.md)
 records the 46/46 focused and 199/199 GoalPhase regression evidence and limits.
 
 ## Connected automatic native follow-up
@@ -331,7 +331,7 @@ interrupted snapshot acquisition, changed-byte refusal, equal retry and physical
 reopen pass with lease-checked fixture bytes and zero Git effects. Accumulator
 635 passed 199/199. At that slice, native real-Blob integration and actual
 standalone/server/MCP transport acceptance remained open; see the
-[automatic follow-up journal](../journal/2026/10/2026-10-01-native-human-automatic-followup.md).
+[automatic follow-up journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-native-human-automatic-followup.md).
 
 ## Automatic native follow-up with actual Blob and retained catalog
 
@@ -349,7 +349,7 @@ GoalPhase accumulator 637 passed 199/199 in 27 suites, with zero Git effects.
 This test-only slice changes no production code or CML/ABI and grants no command
 authority. Production human issuance, complete CML constituent execution and
 standalone launcher/server/MCP acceptance remain open. See the
-[real-Blob follow-up journal](../journal/2026/10/2026-10-01-native-human-automatic-blob-followup.md).
+[real-Blob follow-up journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-native-human-automatic-blob-followup.md).
 
 ## Public advance shares fresh assessment and pending recovery
 
@@ -368,4 +368,4 @@ passed 46/46 and GoalPhase accumulator 640 passed 199/199 in 27 suites. Default
 automatic StopOnly and legacy observation/preparation behavior remain. No
 command permission, production human issuer or standalone transport acceptance
 is claimed. See the
-[advance assessment journal](../journal/2026/10/2026-10-01-native-human-advance-assessment.md).
+[advance assessment journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-native-human-advance-assessment.md).

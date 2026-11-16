@@ -9,7 +9,7 @@ phase=[Phase 12](phase-12.md)
 
 V1/V2 and the minimum installed interface are qualified. The local Phase release
 records the completed review and validation; producer evidence does not complete Phase 6.4 items. See the
-[delivery boundary](../journal/2026/10/2026-10-20-phase-12-producer-delivery.md).
+[delivery boundary](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-20-phase-12-producer-delivery.md).
 
 ## V1: actual automatic storage route
 

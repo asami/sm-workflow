@@ -6,7 +6,7 @@ Owner: sm-workflow development
 Sequence: Phase 6.8 -> Phase 6.9 -> Phase 6.10 -> Phase 6.11 -> Phase 7 -> Phase 8 -> Phase 8.1 -> Phase 9
 Specification: [profiles and endpoint metrics](../spec/ai-operating-profiles.md)
 Checklist: [P610 acceptance](phase-6.10-checklist.md)
-Handoff: [English development handoff](../journal/2026/10/2026-10-27-phase-6.10-ai-operating-profiles-handoff.md)
+Handoff: [English development handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-27-phase-6.10-ai-operating-profiles-handoff.md)
 
 ## Purpose and preservation
 
@@ -86,7 +86,7 @@ new usage acquisition. Do not run extra work or switch configuration to populate
 statistics. The November 1 follow-up below supersedes the earlier deferred
 Terra/Luna rollout, with explicit availability handling and retained captures.
 
-Handoff: [2026-10-30 role-based profile comparison](../journal/2026/10/2026-10-30-phase-6.10-role-based-profile-comparison-handoff.md).
+Handoff: [2026-10-30 role-based profile comparison](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-30-phase-6.10-role-based-profile-comparison-handoff.md).
 
 ## Standard dispatch follow-up (M2A) — 2026-11-01
 
@@ -117,7 +117,7 @@ Session, Plan, history, repair counts and successful results. No additional AI
 routing/monitoring calls. Startup recovery is an independent existing task, not a
 new prerequisite requiring this feature to be implemented first.
 
-Handoff: [standard routing and launch adoption](../journal/2026/11/2026-11-01-phase-6.10-standard-routing-handoff.md).
+Handoff: [standard routing and launch adoption](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-01-phase-6.10-standard-routing-handoff.md).
 
 ## M3 primary publication repair acceptance clarification — 2026-11-02
 
@@ -164,7 +164,7 @@ accepted results and successful verification. No runtime/config change, restart,
 resubmission, success replay, additional AI decision or mandatory Terra trial is
 part of this plan update. Runtime Git/SBT/publication ownership is unchanged.
 
-Handoff: [cost refinement development handoff](../journal/2026/11/2026-11-02-phase-6.10-cost-profile-refinement-handoff.md).
+Handoff: [cost refinement development handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-02-phase-6.10-cost-profile-refinement-handoff.md).
 
 ## Optional local-experiment configuration alongside M2A — 2026-11-02
 

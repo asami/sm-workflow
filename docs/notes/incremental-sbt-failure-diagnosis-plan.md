@@ -67,4 +67,4 @@ implementation owner and affected paths against current changes; do not restore
 old source copies or replace live ledgers. Historical receipts remain original.
 Record the actual adoption boundary and only necessary new evidence in English.
 
-[Phase 6.6 developer handoff](../journal/2026/10/2026-10-23-phase-6.6-incremental-diagnosis-handoff.md).
+[Phase 6.6 developer handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-23-phase-6.6-incremental-diagnosis-handoff.md).

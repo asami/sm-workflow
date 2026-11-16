@@ -6,7 +6,7 @@ Owner: sm-workflow development; adoption by sm-workflow-dev after Phase 6.10.
 Sequence: Phase 6.9 -> Phase 6.10 -> Phase 6.11 -> Phase 7 -> Phase 8 -> Phase 8.1 -> Phase 9.
 Specification: [directory-list synchronization](../spec/repository-sync-directory-list.md).
 Checklist: [P611 acceptance](phase-6.11-checklist.md).
-Handoff: [English development handoff](../journal/2026/10/2026-10-31-phase-6.11-repository-sync-directory-list-handoff.md).
+Handoff: [English development handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-31-phase-6.11-repository-sync-directory-list-handoff.md).
 
 ## Closed with unverified items — 2026-11-11
 
@@ -26,8 +26,7 @@ normal release completion were not performed. The stopped same-root installed
 qualification retains its formal failure and subsequent unsubmitted,
 unvalidated fixture correction. The separate launcher delivery remains deferred.
 
-The [closure record](../journal/2026/11/2026-11-11-phase-6.11-closed-with-unverified-items.md) lists
-the preserved commits, evidence references and unverified work. The original
+The original
 29 acceptance conditions remain below/in the checklist; unchecked items are
 unverified at final Phase scope, not active work preventing this ending.
 Existing success, formal-failure and UNKNOWN records and cumulative repair
@@ -45,7 +44,7 @@ owner ended. The same-Session public current-development selection succeeded;
 ordinary Advance owns the remaining B5 work, checks, review and closure. The
 unpublished operational checkpoint is retained as a partial handoff, not a new
 blanket acceptance prerequisite. The earlier stopping record below remains
-historical. See the [continuation journal](../journal/2026/11/2026-11-10-phase-6.11-dev-only-continuation.md).
+historical. See the [continuation journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-10-phase-6.11-dev-only-continuation.md).
 
 The user selected an end to this development run and separate later work for
 the unfinished items. Session `3585e04191dce0bc0f70e394b6745767` remains on
@@ -62,7 +61,7 @@ not applicable at this B5 frontier. No new closure capability is commissioned.
 The checklist flags remain unchanged.
 
 See the [carryover and restart references](../notes/phase-6.11-carryover.md) and
-[boundary journal](../journal/2026/11/2026-11-10-phase-6.11-development-boundary.md).
+[boundary journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-10-phase-6.11-development-boundary.md).
 Uncommitted source and dependency work is preserved. Later work requires an
 explicit instruction; receiving a publication or repair result does not
 automatically resume it. No push or successor Phase is part of this boundary.
@@ -125,7 +124,7 @@ and same-Session resume. Existing 6.10 work and reported live Sessions remain un
 
 ## Blank-line commit preparation follow-up — 2026-11-08
 
-Add the [EOF-only blank-line follow-up](../journal/2026/11/2026-11-08-commit-blank-line-whitespace-follow-up.md)
+Add the [EOF-only blank-line follow-up](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-08-commit-blank-line-whitespace-follow-up.md)
 to B3's shared commit preparation and B5's installed qualification. The user
 limits this work to the end of the file: remove extra terminal blank lines,
 including space/tab-only terminal lines, retaining one final LF and every byte
@@ -410,7 +409,7 @@ records that large ordinary-output gap rather than relabelling it as detail.
 The original consumer Session is never operated or rebound by these fixtures.
 Current isolated UNKNOWN/successful-effect preservation and complete adoption
 coverage remain required. All acceptance checkboxes and Phase 7 boundaries are
-unchanged. See the [B5 source handoff](../journal/2026/11/2026-11-09-phase-6.11-b5-qualification-handoff.md)
+unchanged. See the [B5 source handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-09-phase-6.11-b5-qualification-handoff.md)
 for exact retained prefix references, authored cases, metadata schema and gaps.
 
 ## B5 retained preparation consumer source — 2026-11-09

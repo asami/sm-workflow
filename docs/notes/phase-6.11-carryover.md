@@ -15,7 +15,7 @@ independent Phase acceptance review and normal release completion were not
 performed. All original conditions and success/failure/UNKNOWN/counter history
 remain preserved. No follow-up work is started by this ending.
 
-See the [final closure record](../journal/2026/11/2026-11-11-phase-6.11-closed-with-unverified-items.md)
+See the [ending disposition](../phase/phase-6.11.md#closed-with-unverified-items--2026-11-11)
 and [updated checklist](../phase/phase-6.11-checklist.md) for current disposition
 and evidence. Every older section below remains an observation at its recorded
 frontier; statements that B5 is unaccepted, changes are uncommitted or the
@@ -219,7 +219,7 @@ development changes remain separate and preserved.
 The existing Phase repair stays in its original Session. A new Task has not
 been started in its place. Actual public continuation observations and retained
 response locations are recorded in the
-[Dev-only continuation journal](../journal/2026/11/2026-11-10-phase-6.11-dev-only-continuation.md).
+[Dev-only continuation journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-10-phase-6.11-dev-only-continuation.md).
 
 The current-development selection succeeded, but separate normal Advance246
 again refused the primary source's authenticated historical/successor relation.

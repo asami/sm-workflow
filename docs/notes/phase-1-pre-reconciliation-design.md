@@ -145,7 +145,7 @@ when it is necessary to prove the application executable specification.
 ### Adopted executable-specification scope review
 
 The 2026-09-20
-[scope reconciliation decision](../journal/2026/09/2026-09-20-phase-1-common-contract-scope-reconciliation.md)
+[scope reconciliation decision](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-20-phase-1-common-contract-scope-reconciliation.md)
 is adopted as planning input with the following binding interpretation:
 
 - CNCF Phase 77 owns the generic Value Objects and fail-closed JSON wire

@@ -20,7 +20,7 @@ status=planned
 
 2026-11-11の追加採用：旧11.1を上記二つへ分け、11.1はPhase 7の後・8の前に実施する。
 11.2は実利用で必要になった時に別途選び、8／9／18の前提にしない。
-[分割記録](../journal/2026/11/2026-11-11-journal-single-entry-and-batch-split.md)に旧項目の移管を残す。
+[分割記録](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-11-journal-single-entry-and-batch-split.md)に旧項目の移管を残す。
 
 ## この分割の理由
 
@@ -39,7 +39,7 @@ review／Operation結果参照でJournalを使える。偽のEvidence IDを挿�
 6.4のE2へ実保存まで通った最小経路を渡す。全Action・媒体・管理機能の完成を待たない。
 AIからの通知・転記は既知のAction生成物には不要。明示登録は外部資料などに残し、
 公開参照はJournal/Evidence ID、物理保存は既存CNCF管理I/Oとする。
-[両開発チャット向けhandoff](../journal/2026/10/2026-10-20-phase-12-common-evidence-handoff.md)を参照。
+[両開発チャット向けhandoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-20-phase-12-common-evidence-handoff.md)を参照。
 
 これは設計と計画の記録であり、6.4の現在の質問へ回答したりSessionを変更したりしない。
 開発checkout／試用hostの実際の進捗を所有チャットで確認し、既存Goal／E1受入れ／
@@ -48,4 +48,4 @@ AIからの通知・転記は既知のAction生成物には不要。明示登録
 6.3の計画は変更しない。終了処理・SIGTERM実装を混ぜず、SIGINT制御返却は将来候補のまま。
 
 関連: [設計](../design/development-journal.md)、[用途精査](../spec/development-journal-skill-usage-inventory.md)、
-[引継ぎ](../journal/2026/10/2026-10-20-common-journal-phases-handoff.md)。
+[引継ぎ](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-20-common-journal-phases-handoff.md)。

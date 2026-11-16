@@ -160,7 +160,7 @@ parent-delegation-transcription correction requires its own explicit admission.
 No repair counter/frame, consumed-history count or Phase acceptance changed.
 The fresh preliminary independent integration source review identified three
 production connection issues and one executable-spec authoring issue. See
-[original report](../journal/2026/10/2026-10-07-three-workflow-integration-source-review.md).
+[original report](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-07-three-workflow-integration-source-review.md).
 These provisional IDs are not a new admitted repair batch or formal Phase review:
 CB-1107-01 literal conflict-path staging, CB-1107-02 reasoning DecisionNeeded
 Human successor, CB-1107-03 managed Scope criterion/status postimage readback,
@@ -199,7 +199,7 @@ is limited PASS, not whole-Phase acceptance. The unrelated existing typed-Start
 partition fixture still expects duplicate rejection instead of the unchanged
 completion wrapper's saved acknowledgement; its correction has been requested
 but not admitted. The original failure remains open. See the
-[limited correction record](../journal/2026/10/2026-10-07-approved-four-finding-correction.md#cb02-independent-focused-conclusion-after1114).
+[limited correction record](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-07-approved-four-finding-correction.md#cb02-independent-focused-conclusion-after1114).
 Original9/all history/R5/addition-onlyR6/A7/null/limit3/closed3of3 unchanged;
 no new repair frame or whole-Phase acceptance. CLI/skills remain Phase6-owned.
 Earlier read-only source inspection covered the1084 bounded delta and independently
@@ -317,7 +317,7 @@ The93 generated-description and1 CLI-summary failures of1063/1064 are retained,
 not erased. Standard .cozy/config.yaml now prevents timestamp-only reuse for
 unchanged SNAPSHOT generator refreshes. No normal all-three positive completion,
 independent integrated acceptance or P2-M02..M05 completion is claimed. See the
-[resumption journal](../journal/2026/10/2026-10-07-optimized-plan-resumption.md).
+[resumption journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-07-optimized-plan-resumption.md).
 Normal default composition1069 passed19/19 in5 completed suites, with current
 typed result/consumed permission/SBT0/wrapper0/released lock admitted; complete
 history723. Production HostDecoder/default factory, three cold normal CLI Help
@@ -413,14 +413,14 @@ Selection alone does not complete P2-M01 or any execution/acceptance checkbox.
 The [current route map](phase-2-practical-route-map.md) identifies actual assembly
 connections, supporting fixture evidence and missing connected behavior; its
 source inventory is distinct from the
-[fixed connected implementation/spec batch](../journal/2026/10/2026-10-06-three-workflow-connected-delivery-plan.md).
+[fixed connected implementation/spec batch](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-connected-delivery-plan.md).
 P2-M01 records that planning boundary only, not runtime acceptance or a new
 plan-complete admission. P2-M02..M05 remain uncompleted.
 Use ordinary planning notes to map their selected scenarios to the existing IDs.
 The scheduled stop was withdrawn by the subsequent human instruction. Fresh
 baseline 959 compiled and passed 1,144 tests across the three existing workflow
 families (136 suites, no aborts, SBT/wrapper 0 and shared lock released); see the
-[resumption journal](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+[resumption journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 This validates existing behavior, not installed successful three-route use.
 P2-M02..M05 remain unchecked; original-nine repair 3/3 is unchanged.
 Changed source 960 additionally passed the same 1,144 tests with native-issued
@@ -476,7 +476,7 @@ needed for any selected route also go to Phase 8, not an expanding Phase 2.
 
 Latest handoff evidence (2026-10-06): internal managed reasoning issue source-only
 review PASS, zero blockers and five unwaived Hygiene records. See the
-[retained final and parent disposition](../journal/2026/10/2026-10-05-reasoning-managed-issue.md#source-review-retained-at-the-2026-10-06-handoff).
+[retained final and parent disposition](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-05-reasoning-managed-issue.md#source-review-retained-at-the-2026-10-06-handoff).
 Current code remains uncompiled/unexecuted; request 956 remains terminal NONSTART.
 No checkbox, repair counter or earlier result is changed by this source verdict.
 The status paragraphs below preserve earlier observations, not a replacement
@@ -908,7 +908,7 @@ This contradicts application completion readiness, not the bounded primitive
 evidence retained below. No checkbox, original repair counter or prior review
 verdict is changed. A developer-admitted upstream contract/spec prerequisite,
 fresh appropriate regressions and fresh application validation are required
-before claiming these scenarios. See the [actual911 record](../journal/2026/10/2026-10-05-split-phase-managed-human-completion.md).
+before claiming these scenarios. See the [actual911 record](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-05-split-phase-managed-human-completion.md).
 
 ## Preparation
 
@@ -940,15 +940,15 @@ Evidence: [entry inventory](../notes/phase-2-runtime-entry-inventory.md).
 - [x] P2-U12: Validate bounded typed EventRecord canonical encoding and persistent transactional Create-only composition; preserve fully issued canonical ID/time/payload/assigned sequence, require strict storage prefix and reject unsupported payload/delivery keys. Focused-270 (50/50) and regression-271 (1184 succeeded / 143 suites) bind the same complete tree. No EventStore sequence/dedup or active UoW authority is claimed.
 - [x] P2-U13: Attach one strictly admitted batch of already-issued transactional EventRecords to the prepared Workflow record plan; validate the S9 codec before deriving canonical Create keys, reject unresolved IDs, duplicate keys, unordered/duplicate sequences, prior effects in the same event collection and invalid facts before publication. One canonical commit retains or rolls back all events with guarded Workflow records. Final focused-279 (44/44) and regression-280 (1190 succeeded / 143 suites) bind the same complete tree. No global allocator, EventStore or active UoW authority is claimed.
 - [x] P2-U14: Require authoritative readback of every prepared EventRecord after the guarded provider acknowledges a commit; missing/divergent readback is transaction-indeterminate before Workflow success projection. Focused-281 (45/45) and regression-282 (1191 succeeded / 143 suites) bind the same complete tree `99047c6527bbcfd4c8369ee2b0b33f9e46892adeb6f63a281f5b8ee9dd65cdf9`. This does not close P2-U05.
-- [ ] P2-U15: Admit a bounded canonical multi-guard transaction for the two Workflow records, additional independently checked revision updates and Create-only side records, with one physical commit, rollback, authority checks and authoritative readback. This is the S12 prerequisite for a global EventStore cursor, not the cursor or P2-U05 itself. The pure input contract passed focused-286 (12/12) after Cozy PathMap classpath prerequisite-285; internal same-owner memory staging passed focused-287 (16/16). The route-first correction requires Workflow → DataStoreSpace → one physical provider and executable admission/atomicity/readback evidence before SQL or public capability work. Host admission must be a call-scoped view inside the managed lease, derived from canonical component declarations, because the global DataStoreSpace can be rebound. Default-deny DataStoreSpace entry and deterministic host-policy comparison passed focused-290 (20/20, after Cozy classpath refresh-289); this is not a host-issued grant. Cross-owner host admission, SQLite, authoritative readback and independent-writer evidence remain open; no S12 provider capability is accepted. See the [S12 design](../notes/cncf-phase-88-s12-multi-guard-design.md), [route journal](../journal/2026/09/2026-09-30-cncf-phase-88-s12-route-contract.md), [contract journal](../journal/2026/09/2026-09-30-cncf-phase-88-s12-contract-candidate.md) and [memory journal](../journal/2026/09/2026-09-30-cncf-phase-88-s12-memory-staging.md).
+- [ ] P2-U15: Admit a bounded canonical multi-guard transaction for the two Workflow records, additional independently checked revision updates and Create-only side records, with one physical commit, rollback, authority checks and authoritative readback. This is the S12 prerequisite for a global EventStore cursor, not the cursor or P2-U05 itself. The pure input contract passed focused-286 (12/12) after Cozy PathMap classpath prerequisite-285; internal same-owner memory staging passed focused-287 (16/16). The route-first correction requires Workflow → DataStoreSpace → one physical provider and executable admission/atomicity/readback evidence before SQL or public capability work. Host admission must be a call-scoped view inside the managed lease, derived from canonical component declarations, because the global DataStoreSpace can be rebound. Default-deny DataStoreSpace entry and deterministic host-policy comparison passed focused-290 (20/20, after Cozy classpath refresh-289); this is not a host-issued grant. Cross-owner host admission, SQLite, authoritative readback and independent-writer evidence remain open; no S12 provider capability is accepted. See the [S12 design](../notes/cncf-phase-88-s12-multi-guard-design.md), [route journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-cncf-phase-88-s12-route-contract.md), [contract journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-cncf-phase-88-s12-contract-candidate.md) and [memory journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-cncf-phase-88-s12-memory-staging.md).
 
-- [ ] P2-U16: EventStore owns a fixed versioned event-kind persistence policy, independently of Subsystem storage declarations. Ordinary senders need no persistence option; unmatched kinds are transient. Workflow consumes the store's prepare-time decision and freezes its revision. Earlier pure selection and host-separation examples passed focused-293 (45/45 across five suites, after Cozy prerequisite-292), before this ownership correction. The corrected configured-memory append and six new ordinary-send/retention examples are unvalidated. Runtime selected-only cursor/event/index writes, mixed original-order delivery after authoritative readback, zero actual dispatch on rollback/uncertainty, and no transient recovery/replay remain open. Concrete application kind catalogs and configured-store binding must precede activation. See [selection contract](../notes/workflow-event-persistence-selection.md) and [correction journal](../journal/2026/09/2026-09-30-eventstore-policy-contract-correction.md). This supplements P2-U15 and does not reopen accepted S9-S11 record-codec primitives or close P2-U05.
+- [ ] P2-U16: EventStore owns a fixed versioned event-kind persistence policy, independently of Subsystem storage declarations. Ordinary senders need no persistence option; unmatched kinds are transient. Workflow consumes the store's prepare-time decision and freezes its revision. Earlier pure selection and host-separation examples passed focused-293 (45/45 across five suites, after Cozy prerequisite-292), before this ownership correction. The corrected configured-memory append and six new ordinary-send/retention examples are unvalidated. Runtime selected-only cursor/event/index writes, mixed original-order delivery after authoritative readback, zero actual dispatch on rollback/uncertainty, and no transient recovery/replay remain open. Concrete application kind catalogs and configured-store binding must precede activation. See [selection contract](../notes/workflow-event-persistence-selection.md) and [correction journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-eventstore-policy-contract-correction.md). This supplements P2-U15 and does not reopen accepted S9-S11 record-codec primitives or close P2-U05.
 
 P2-U15 progress: the internal admitted provider route passed settled-tree
 focused-299 (60/60 across seven suites), including ten counting-fixture route
 examples. No production provider opts in; cross-owner atomicity, rollback,
 authoritative readback and cursor/index integration remain open. The checkbox
-stays unchecked. See the [positive route journal](../journal/2026/09/2026-09-30-cncf-phase-88-s12-positive-route.md).
+stays unchecked. See the [positive route journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-cncf-phase-88-s12-positive-route.md).
 
 P2-U15 further progress: focused-301 passed 65/65 across eight suites. Five
 new test-only opt-in examples exercise real same-owner memory staging through
@@ -956,14 +956,14 @@ Workflow → DataStoreSpace, three guarded updates plus two Creates, stale guard
 second-Create rollback, four pre-publication failures and explicit stale-plan
 resubmission. Cross-owner remains rejected. Diagnostic fixture reads are not
 admitted Workflow readback; production provider/bootstrap and S12 acceptance
-remain open. See the [memory route journal](../journal/2026/09/2026-09-30-cncf-phase-88-s12-memory-route.md).
+remain open. See the [memory route journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-cncf-phase-88-s12-memory-route.md).
 
 P2-U16 progress: selected-only canonical Create preparation and exact durable
 readback comparison passed focused-294 (30/30) and final focused regression-295
 (50/50 across six suites). These are pure proposals/candidate reconstruction,
 not actual cursor allocation, commit evidence or dispatch. Unsupported private
 delivery keys remain rejected across selection and sequence copying. See the
-[record-preparation journal](../journal/2026/09/2026-09-30-selected-event-record-preparation.md).
+[record-preparation journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-selected-event-record-preparation.md).
 
 Focused-309 candidate evidence: P2-U15 adds a private verified route with exact
 ordered full postimages and coherent native-snapshot readback of every guard
@@ -974,12 +974,12 @@ After Cozy prerequisite-306 and two test-fixture corrections, focused-309 passed
 107/107 in 14 suites with exit 0/0 and lock=released. The user-directed simplified
 parent route retained platform review and SBT serialization. This is not typed
 Phase/PLAN acceptance or runtime integration; S12/P2-U15/P2-U16/P2-U05 remain open.
-See the [resumed validation journal](../journal/2026/09/2026-09-30-focused-validation-resumed.md).
+See the [event persistence selection design](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-event-persistence-selection.md).
 
 P2-U16 continuation: two additional ordinary-send examples cover transient/durable
 identity isolation and first-record durable deduplication, bringing the configured
 EventStore suite to eight examples, now passing focused-309. The earlier recovery
-interpretation was superseded by the [platform recovery journal](../journal/2026/09/2026-09-30-platform-recovery-clause-correction.md).
+interpretation was superseded by the [platform recovery journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-platform-recovery-clause-correction.md).
 
 P2-U15 native acknowledgement progress: focused-310 passed 144/144 in 18 suites.
 Internal same-owner memory now retains full ordered post-images from its native
@@ -987,7 +987,7 @@ staged state before publication; the verified fixture no longer reconstructs
 them with preloads. Two new immutability/pre-publication failure examples bring
 readback to nine cases. Existing conditional transition regressions also passed.
 No production opt-in, SQL or cross-owner capability is enabled; S12 and P2-U15
-remain open. See the [native acknowledgement journal](../journal/2026/09/2026-09-30-native-memory-multi-guard-acknowledgement.md).
+remain open. See the [native acknowledgement journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-native-memory-multi-guard-acknowledgement.md).
 
 P2-U15 SQLite candidate progress: focused-316 passed 164/164 in 20 suites.
 Eleven test-only admitted SQLite route examples cover native three-guard/two-Create
@@ -996,7 +996,7 @@ unadmitted/cross-owner/reserved-ID rejection. Readback also has eleven examples;
 physical id is verified before logical projection and field-order-only comparison
 retains values and rejects duplicates. Production opt-in, cross-owner/managed
 host activation and selected dispatch remain open. Snapshot-phase competing-writer
-evidence was not yet established at 316. See the [SQLite route journal](../journal/2026/09/2026-09-30-sqlite-native-multi-guard-route.md).
+evidence was not yet established at 316. See the [SQLite route journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-sqlite-native-multi-guard-route.md).
 
 P2-U16 host observation progress: focused-339 passed 221/221 in 25 suites;
 focused-341 passed 223/223 in 26 suites. The managed native read route resolves
@@ -1010,10 +1010,10 @@ and host-only ordinary-event selection rejects same-revision substitute stores,
 caller-created selections, escaped leases and legacy no-policy hosts. Legacy
 EventStore.inMemory remains the default; application configured-store activation
 and the immutable preparation/publication handoff remain open.
-See [closure journal](../journal/2026/09/2026-09-30-managed-event-observation-closure.md),
-[isolation journal](../journal/2026/09/2026-09-30-event-observation-isolation.md) and
+See [closure journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-managed-event-observation-closure.md),
+[isolation journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-event-observation-isolation.md) and
 [preparation contract](../notes/managed-event-preparation-handoff-contract.md) and
-[host-selection journal](../journal/2026/09/2026-09-30-host-eventstore-selection.md).
+[host-selection journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-host-eventstore-selection.md).
 Focused-345 adds an initial immutable host-bound preparation: native logical
 observations freeze before export, projections are fresh, and diagnostic routes
 cannot mint it (225/225, 26 suites). Focused-346 adds populated retained V2
@@ -1025,29 +1025,29 @@ staging on the write connection, generated event/index/cursor effects and
 complete retained/new readback (228/228, 26 suites). All-retained validation-only,
 transient-only completion, prepared-route rollback/concurrency/authority evidence
 and application dispatch remain open. See the
-[handoff journal](../journal/2026/09/2026-09-30-immutable-event-preparation.md) and
-[independence journal](../journal/2026/09/2026-09-30-event-preparation-independence.md) and
-[publication journal](../journal/2026/09/2026-09-30-prepared-event-publication.md).
+[handoff journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-immutable-event-preparation.md) and
+[independence journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-event-preparation-independence.md) and
+[publication journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-prepared-event-publication.md).
 Focused-349 verifies seven prepared-publication rejection cases and fresh
 post-scope unchanged storage: foreign issuing view even with identical service/
 provider/lease, thread, revoked/escaped preparation, injected Create, physical
 id-column changes and Continuation conflict (229/229, 26 suites). Prepared-route
 checkpoint rollback, in-flight revocation/readback uncertainty and independent
 writer competition remain open. See the
-[authority journal](../journal/2026/09/2026-09-30-prepared-publication-authority.md).
+[authority journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-prepared-publication-authority.md).
 Focused-350 verifies prepared-route rollback at four precommit checkpoints,
 actual lease revoke during staging and after committed readback, no retry, and
 independent JDBC writer SQLITE_BUSY after frozen observation validation; exact
 nine-record complete readback and subsequent writer success prove this bounded
 transaction domain (232/232, 26 suites). All-retained/transient-only completion,
 application/UoW dispatch and production assembly remain open. See the
-[transaction journal](../journal/2026/09/2026-09-30-prepared-publication-isolation.md).
+[transaction journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-prepared-publication-isolation.md).
 Focused-352 adds initial all-retained validation-only native completion without
 cursor update/allocation: normal and exhausted cursor success, stale cursor/index
 and new-durable rejection, exact five-record readback and field-for-field cursor
 invariance (233/233, 26 suites). Retained-route-specific lifecycle/authority/
 rollback/isolation specs, transient-only completion and common host-owned routing
-remain open. See the [retained journal](../journal/2026/09/2026-09-30-retained-event-completion.md).
+remain open. See the [retained journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-retained-event-completion.md).
 The checkbox and S12/P2-U15/P2-U16/P2-U05 remain open.
 Focused-354 adds retained-only rollback at all four precommit checkpoints,
 staging/postcommit-readback actual lease revocation and an independent JDBC
@@ -1056,7 +1056,7 @@ seven-record verification and fresh all-field inspection preserve cursor and
 retained events/indexes without alias/new Creates (236/236, 26 suites). This does
 not close malformed/failed/throwing readback, retained authority/absence/key-free
 cases, transient-only completion, common host routing or application dispatch.
-See the [retained isolation journal](../journal/2026/09/2026-09-30-retained-completion-isolation.md).
+See the [retained isolation journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-retained-completion-isolation.md).
 Focused-355 adds nine malformed acknowledgements and twelve failed/throwing/
 malformed/divergent postcommit readbacks through test-only trusted-provider return
 faults after actual managed SQLite commit/readback (238/238, 26 suites). Each is
@@ -1064,7 +1064,7 @@ transaction-indeterminate, never Verified/NotMatched or retried; a fresh scope
 sees the committed Workflow pair and exact retained/cursor fields. This does not
 close native I/O/cleanup/crash uncertainty, retained authority/absence/key-free
 cases, transient-only completion or application/runtime acceptance.
-See the [readback journal](../journal/2026/09/2026-09-30-retained-completion-readback.md).
+See the [readback journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-retained-completion-readback.md).
 Focused-359 validates retained host/thread/revoked/released/escaped misuse after
 user-reported Cozy repair and successful ordinary compile/export (239/239,
 26 suites). Identical provider/service/policies/actual lease cannot replace the
@@ -1072,21 +1072,21 @@ issuing host. No provider writes begin; fresh reads preserve the open pair and
 all retained/cursor fields. This closes the previously unvalidated five-case
 spec only; absence/key-free, other transition authority, transient-only and
 application/runtime requirements and the checkboxes remain open. See the
-[resumed journal](../journal/2026/09/2026-09-30-retained-authority-resumed.md).
+[managed host authority design](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-managed-host-authority-boundary.md).
 Focused-361 adds key-free retained V1/V2 and ID-retained input with a provisioned
 absent incoming-key index. Four-record verification closes only the pair without
 index creation/cursor change; an index created after capture rejects completion
 and is preserved (240/240, 26 suites). Missing schema remains a rejection, not
 trusted absence. Invalid transition, transient-only, common routing and
 application/runtime requirements remain open. See the
-[absence journal](../journal/2026/09/2026-09-30-retained-key-free-absence.md).
+[absence journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-retained-key-free-absence.md).
 Focused-363 validates retained foreign-owner/collection/effect/reserved-id
 rejection and external Workflow root/successor conflicts with fresh exact
 storage inspection (241/241, 26 suites). Read-only root NotMatched is not event
 publication; successor failure rolls back and neither retries. No checkbox
 closes: transient-only/empty native completion, common deterministic routing,
 application/UoW and production runtime requirements remain open. See the
-[transition journal](../journal/2026/09/2026-09-30-retained-transition-admission.md).
+[transition journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-retained-transition-admission.md).
 Focused-365 adds initial transient-only/empty pair-native completion: ordinary
 input uses the captured service, verifies only the Workflow pair and performs
 no cursor/event/index work. Empty/transient input succeeds without initialized
@@ -1094,7 +1094,7 @@ cursor and preserves a corrupt cursor; durable/mixed rejects (242/242, 26 suites
 The checkboxes remain open: transient-specific authority/rollback/uncertainty/
 competition evidence, deterministic common routing and application/runtime
 dispatch acceptance are still required. See the
-[transient journal](../journal/2026/09/2026-09-30-transient-empty-completion.md).
+[transient journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-transient-empty-completion.md).
 Focused-367 adds transient checkpoint rollback, actual staging/readback
 revocation and empty/transient pair success in eight configurations (245/245,
 26 suites). Durable observation and SQL-hook event-domain statement counts are
@@ -1102,14 +1102,14 @@ zero; fresh reads preserve every durable field. Committed-readback revocation
 is indeterminate without retry. This does not close metadata/I/O/crash proof,
 transient authority/readback/writer competition, common routing or application
 acceptance. See the
-[isolation journal](../journal/2026/09/2026-09-30-transient-completion-isolation.md).
+[isolation journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-transient-completion-isolation.md).
 Focused-369 validates six transient service/thread/lease misuse cases before
 provider writes and ten injected acknowledgement/readback faults after actual
 managed commit (247/247, 26 suites). The latter are indeterminate without replay
 or compensation; durable storage stays exact. This is return-boundary fault
 evidence, not native I/O/cleanup/crash proof. Independent writer competition,
 common routing and application/runtime acceptance remain open. See the
-[authority/readback journal](../journal/2026/09/2026-09-30-transient-authority-readback.md).
+[authority/readback journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-transient-authority-readback.md).
 
 Focused-372 proves the internal common host entry selects one native route from
 ordinary input and captured policy/frozen duplicate classification, with five
@@ -1119,7 +1119,7 @@ Transient independent writer exclusion and postcommit lock release also pass
 This is storage-only integration: active UoW, application delivery and production
 runtime/Operations/CLI/MCP remain open. All existing unchecked items remain
 unchecked. See the
-[host routing journal](../journal/2026/09/2026-09-30-host-completion-routing.md).
+[host routing journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-host-completion-routing.md).
 
 Focused-375 connects typed completion to the internal host route without changing
 compatibility commitC. Five actual WorkOrder completion modes, foreign-provider
@@ -1128,7 +1128,7 @@ uncertainty pass (270/270, 27 suites; exits 0/0, lock=released). No public
 Operation or active-UoW/dispatch path is activated. Existing postcommit resume
 and separate history append cannot substitute for the required single physical
 commit. All unchecked items stay unchecked. See the
-[typed completion journal](../journal/2026/09/2026-09-30-typed-host-completion.md).
+[typed completion journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-typed-host-completion.md).
 
 P2-U16 pure duplicate semantics: focused-335 passed 212/212 in 24 suites after
 enum repair and ordinary Cozy compile/export prerequisite-334. EventId-first
@@ -1138,7 +1138,7 @@ observations only, not native snapshot/absence authority, and has no commit
 adapter. Current unique-ID selection and new-only keyed collision rejection are
 unchanged. Coherent host lookup/absence/cursor provenance, retained readback and
 all-retained read-only cursor validation remain open. See
-[classifier journal](../journal/2026/09/2026-09-30-event-duplicate-classifier.md).
+[classifier journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-event-duplicate-classifier.md).
 
 P2-U16 bounded new-only V2/index composition: focused-331 passed 204/204 in 23
 suites. Explicit V2 preparation enlists selected event/index Creates with the
@@ -1147,7 +1147,7 @@ Complete readback/index-envelope integrity, mixed order/keys, reopen, late index
 collision rollback and five missing/divergent index cases are covered. V1 stays
 strict. Reused batch keys reject rather than deduplicate; retained-first coherent
 classification, races/revocation, all-transient completion and dispatch remain
-open. See [managed V2 journal](../journal/2026/09/2026-09-30-managed-v2-selected-events.md).
+open. See [managed V2 journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-managed-v2-selected-events.md).
 
 P2-U16 pure V2/index codec progress: focused-329 passed 199/199 in 22 suites.
 Full typed delivery keys (all targets/options/ordered context fields), separate
@@ -1156,7 +1156,7 @@ implemented. Producer EntityId.restore ABI is grounded; no printed-ID parsing,
 V1 change/fallback, key stripping helper or dispatch authority is introduced.
 SQLite close/reopen proves codec text only. Managed selected-event assembly
 still uses V1; V2/index cursor transaction/readback and duplicate classification
-remain open. See [codec journal](../journal/2026/09/2026-09-30-event-v2-delivery-index-codecs.md).
+remain open. See [codec journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-event-v2-delivery-index-codecs.md).
 
 P2-U16 bounded versioned progression: focused-327 passed 191/191 in 21 suites.
 Host-configured pure assembly now combines selected event Creates and a cursor
@@ -1165,7 +1165,7 @@ Managed atomic commit, strict cursor readback, values above 2^53 and reopen,
 four conflict/rollback cases and stale-root NotMatched are covered. Zero durable
 facts create no cursor work; verified two-record completion remains open, along
 with V2/index, races/revocation, duplicate reconciliation and dispatch. See the
-[progression journal](../journal/2026/09/2026-09-30-versioned-cursor-guarded-events.md).
+[progression journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-versioned-cursor-guarded-events.md).
 
 P2-U16 managed cursor bootstrap progress: focused-325 passed 188/188 in 21
 suites. Host declarations pin the exact cursor entry; alternate plan identities
@@ -1174,7 +1174,7 @@ cover retained progress/reopen, one concurrent winner, malformed bytes and legac
 schema preservation. Existing rows reject before Create/schema expansion; no
 reset, migration or automatic retry occurs. Versioned guarded progression and
 V2/index/dispatch remain open. See the
-[bootstrap journal](../journal/2026/09/2026-09-30-event-cursor-host-bootstrap.md).
+[bootstrap journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-event-cursor-host-bootstrap.md).
 
 P2-U16 pure cursor progress: EventCursorRecordV1 model/codec and seven specs
 passed focused-323 (183/183 in 21 suites), after stale Cozy classpath-321 was
@@ -1182,7 +1182,7 @@ resolved by compile/export prerequisite-322. Exact logical fields, native Int/Lo
 revision, canonical decimal-text sequence, immutable bounded proposals, zero-work
 and both overflow checks are covered. No storage initialization/reset or managed
 cursor binding is implemented. See the
-[cursor journal](../journal/2026/09/2026-09-30-event-cursor-codec.md).
+[cursor journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-event-cursor-codec.md).
 
 P2-U16 cursor/index design continuation: the
 [versioned contract](../notes/event-cursor-and-delivery-index-contract.md)
@@ -1191,7 +1191,7 @@ discriminator in a separate V2 event envelope, key-only delivery indexes and
 retained-first duplicate classification. It is not executable acceptance.
 Host-pinned cursor identity, codec closure/specs, managed reconciliation and
 actual dispatch remain open; existing V1 rejection and legacy behavior remain.
-See the [design journal](../journal/2026/09/2026-09-30-event-cursor-delivery-index-contract.md).
+See the [design journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-event-cursor-delivery-index-contract.md).
 
 P2-U16 managed canonical composition progress: focused-320 passed 176/176 in
 20 suites. Store-selected canonical events and a cursor guarded by both revision
@@ -1201,7 +1201,7 @@ Candidates are reconstructed from exact verified bytes in mixed input order;
 wrong proposal evidence rejects, and cursor mismatch/second event collision
 roll back. This test composition is not an accepted global cursor/index schema,
 actual dispatch, EventStore replay service or all-transient runtime completion.
-See the [canonical composition journal](../journal/2026/09/2026-09-30-selected-managed-canonical-events.md).
+See the [canonical composition journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-selected-managed-canonical-events.md).
 
 P2-U15 managed verified provider progress: focused-319 passed 173/173 in 20 suites.
 An explicit internal Subsystem route borrows a verified SQLite view of the same
@@ -1212,7 +1212,7 @@ Stale cursor and index collision rollback, wrong-owner/cross-thread denial,
 missing-grant denial and legacy ordinary-view opt-out are covered. Managed
 cross-owner writer competition/revocation and canonical selected-event runtime
 composition/dispatch still require evidence; S12/P2-U15/P2-U16/P2-U05 remain open.
-See the [managed provider journal](../journal/2026/09/2026-09-30-managed-verified-provider.md).
+See the [managed provider journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-managed-verified-provider.md).
 
 P2-U15 managed host authority progress: focused-318 passed 169/169 in 20 suites.
 Four additional real Subsystem examples exercise the verified Workflow adapter,
@@ -1220,7 +1220,7 @@ caller binding preservation, live cross-thread denial, escaped/released views,
 exact declared owner/collection rejection and exception cleanup/fresh leases.
 The managed provider still rejects unsupported verified capability; these are
 denial/lifecycle evidence, not successful cross-owner commit or activation.
-See the [host boundary journal](../journal/2026/09/2026-09-30-managed-host-authority-boundary.md).
+See the [host boundary journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-managed-host-authority-boundary.md).
 
 P2-U15 snapshot progress: focused-317 passed 165/165 in 20 suites. The twelfth
 SQLite route example pauses between native target reads, observes exact
@@ -1228,18 +1228,18 @@ SQLITE_BUSY from an independent cursor writer, then proves that an explicit
 later write succeeds after snapshot closure while retained post-images stay
 unchanged. Snapshot-phase writer evidence is now established for the internal
 same-owner candidate only. Production/managed host/cross-owner/selected dispatch
-gates remain open. See the [snapshot journal](../journal/2026/09/2026-09-30-sqlite-snapshot-writer-evidence.md).
+gates remain open. See the [snapshot journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-sqlite-snapshot-writer-evidence.md).
 
 U01-U03 evidence: WorkflowInstanceDataStorePersistenceSpec, seven executed
 examples; regression-235, 244 successful tests / 35 suites, 0 failures
 (7 existing opt-in MySQL cases canceled; 1 existing example pending).
-See [provider slice journal](../journal/2026/09/2026-09-29-cncf-phase-88-durable-instance-provider.md).
+See [provider slice journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-cncf-phase-88-durable-instance-provider.md).
 
 U04 evidence: ComponentFactoryWorkflowInstancePersistenceBootstrapSpec, eight
 executed examples including shared-binding concurrent CAS and owning-Subsystem
 shutdown/reopen. Regression-238 completed 109 suites with 876 successful tests,
 0 failures, 7 existing opt-in MySQL cases canceled and 3 existing examples pending.
-See [bootstrap slice journal](../journal/2026/09/2026-09-29-cncf-phase-88-instance-bootstrap.md).
+See [bootstrap slice journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-cncf-phase-88-instance-bootstrap.md).
 
 U06 evidence: WorkflowInstanceDataStoreSuspensionSpec, ten executed examples.
 Focused-242 passed 24/24 tests in three suites (ten S3, seven S1 provider and
@@ -1249,12 +1249,12 @@ transaction-indeterminate; it does not authorize blind retry. After limited
 recovery and successful Cozy classpath prerequisite-244, regression-245 ran
 124 suites: 1024 succeeded, 0 failed, 8 existing opt-in MySQL cases canceled
 and 5 existing examples pending, SBT/wrapper exit 0 and lock=released. See the
-[paired-persistence journal](../journal/2026/09/2026-09-29-cncf-phase-88-paired-suspension.md).
+[paired-persistence journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-cncf-phase-88-paired-suspension.md).
 U07 evidence: WorkflowIssuedWorkDataStorePersistenceSpec, nine executed examples.
 Focused-248 passed 34/34 tests in four suites. Regression-249 completed 125
 suites: 1033 succeeded, 0 failed, 8 existing live MySQL cases canceled and 5
 existing examples pending, no aborted suites, SBT/wrapper exit 0 and lock=released.
-See the [issued-work journal](../journal/2026/09/2026-09-29-cncf-phase-88-issued-work-publication.md).
+See the [issued-work journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-cncf-phase-88-issued-work-publication.md).
 U08 evidence: DataStoreConditionalUpdateSpec (eight examples) and
 WorkflowCompletionDataStorePersistenceSpec (thirteen examples). Focused-254
 passed 77/77 tests in nine suites, with no failed/canceled/pending/aborted.
@@ -1262,7 +1262,7 @@ Regression-255 completed 127 suites: 1054 succeeded, 0 failed, 8 existing live
 MySQL cases canceled and 5 existing placeholders pending. Both accepted
 receipts bind the same complete tree and nine owned source hashes, with
 SBT/wrapper exit 0 and lock=released. See the
-[guarded-completion journal](../journal/2026/09/2026-09-29-cncf-phase-88-guarded-completion.md).
+[guarded-completion journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-cncf-phase-88-guarded-completion.md).
 U09 evidence: CandidateAdmissionSubmissionJsonV1Spec (five examples, including
 50 generated payload/scope round-trips) and CandidateAdmissionCompletionPersistenceSpec
 (nine examples). Focused-257 passed 36/36 tests in five suites; regression-258
@@ -1270,7 +1270,7 @@ completed 129 suites with 1068 succeeded, 0 failed/aborted, 8 existing live MySQ
 examples canceled and 5 existing placeholders pending. Both successful receipts
 bind the same complete tree and all three new source identities, with exits 0/0
 and lock=released. S5 sources are unchanged. See the
-[application-evidence journal](../journal/2026/09/2026-09-29-cncf-phase-88-admission-evidence.md).
+[application-evidence journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-cncf-phase-88-admission-evidence.md).
 U10 evidence: WorkflowPreparedDataStoreTransitionSpec (twelve examples, including
 50 generated normalized payload round-trips), two additions to the issued-work
 spec and three additions to the completion spec. Focused-259 passed 70/70 tests
@@ -1280,7 +1280,7 @@ placeholders pending. Both receipts bind the same complete tree and seven owned
 source identities, with exits 0/0 and lock=released. S6 sources are unchanged;
 the existing suspension/issued-work/completion adapters are intentionally
 refactored for preparation. See the
-[prepared-record journal](../journal/2026/09/2026-09-29-cncf-phase-88-prepared-record-commit.md).
+[prepared-record journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-cncf-phase-88-prepared-record-commit.md).
 
 U11 evidence: fourteen new Create-only examples. Focused-265 passed 57/57 in
 six suites; regression-266 completed 142 suites with 1172 successful tests,
@@ -1288,7 +1288,7 @@ zero failed/aborted, eight existing opt-in MySQL cases canceled and nine
 existing placeholders pending. Accepted receipts bind the same complete tree
 and eight owned source hashes, exits 0/0 and lock=released. Historical 262-264
 receipt rejections remain unaccepted evidence; see the
-[Create-only journal](../journal/2026/09/2026-09-29-cncf-phase-88-create-only-side-records.md).
+[Create-only journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-cncf-phase-88-create-only-side-records.md).
 
 U05 remains unchecked: U09 proves bounded application AdmissionEvidence
 payload/scope retention, not active UnitOfWork event/data/closing-program
@@ -1308,7 +1308,7 @@ participant spec are test doubles; no central dispatcher or public Operation is
 activated. This does not close U05 or the runtime/event delivery obligations.
 The stale Cozy classpath prerequisite was recovered by compile/export (378),
 without Cozy source edits or additional user approval. See the
-[participant journal](../journal/2026/10/2026-10-01-isolated-managed-participant.md).
+[participant journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-isolated-managed-participant.md).
 
 Focused-381 binds real managed host storage to the internal participant:
 299/299 tests in 31 suites. Eight configurations cover mixed ordinary input,
@@ -1316,7 +1316,7 @@ callback/cleanup suppression, stale-root versus committed projection evidence,
 foreign provider, unenlisted closing effect and escaped lease. Delivery remains
 a test port; active UoW/closing-data enlistment and production dispatch are not
 proven. No acceptance checkbox changes. See the
-[host participant journal](../journal/2026/10/2026-10-01-host-storage-participant.md).
+[host participant journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-host-storage-participant.md).
 
 Focused-383 adds new-durable native local-intent composition (301/301, 31
 suites). Additional guarded closing/data records and Create-only effects share
@@ -1326,7 +1326,7 @@ Postcommit local readback failure is uncertain without compensation. Trusted
 test assembly explicitly grants these targets; standard host grants stay
 default-deny. All-retained/transient local composition, actual closing-program
 interpretation and production participant/dispatch integration remain open.
-See the [native local-intent journal](../journal/2026/10/2026-10-01-native-local-intent-composition.md).
+See the [native local-intent journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-native-local-intent-composition.md).
 
 Focused-385 verifies internal local-intent composition across all host-selected
 event modes and the typed Completion participant (304/304, 31 suites). Additional
@@ -1335,7 +1335,7 @@ reserved-domain injection cases are covered; transient/empty has no event-domain
 SQL. Local grants are trusted test assembly, not production declarations, and
 local intent input is not yet derived from an actual closing program. Production
 UoW/dispatch and all acceptance checkboxes remain open. See the
-[all-mode journal](../journal/2026/10/2026-10-01-all-mode-local-completion.md).
+[all-mode journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-all-mode-local-completion.md).
 
 ## First GoalPhase production slice
 
@@ -1345,14 +1345,14 @@ or separate append. Response projection failure and replay suppression are
 covered, plus existing GeneratedWorkflowAbi regression (461 executed tests,
 42 suites; two existing pending). This fixture-declared Operation is not the
 actual GoalPhase bootstrap/CLI, so all production checkboxes remain open. See the
-[public binding journal](../journal/2026/10/2026-10-01-public-managed-completion-binding.md).
+[public binding journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-public-managed-completion-binding.md).
 
 Focused-401 implements an internal host-owned claim/closing/joint-completion
 executor with actual SQLite/EventBus examples (444 executed tests, 41 suites;
 two existing pending). It does not use legacy postcommit claim completion or a
 second history append. Public Operation/host bootstrap and CLI binding are still
 missing, so no production acceptance checkbox is promoted. See the
-[owned-claim journal](../journal/2026/10/2026-10-01-host-owned-claim-completion.md).
+[owned-claim journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-host-owned-claim-completion.md).
 
 - [ ] P2-G01: Normal launcher/CLI starts an admitted GoalPhase instance in durable storage with no server running.
 - [ ] P2-G02: Registered close Operation issues one exact semantic WorkOrder on that Start-created instance.
@@ -1370,14 +1370,14 @@ both with zero dispatch and no second commit (440 executed tests, 41 suites;
 two existing pending). No production activation or acceptance checkbox changes.
 Physical rollback/provider-readback and independent-writer integrated bus evidence
 remain open. See the
-[active failure journal](../journal/2026/10/2026-10-01-active-uow-failure-bus-suppression.md).
+[active failure journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-active-uow-failure-bus-suppression.md).
 
 Focused-397 verifies exact finalized durable readback/transient projections and
 actual managed-UoW-to-EventBus delivery in real SQLite completion examples,
 including no second append and no retry after subscriber failure (440 executed
 tests, 41 suites; two existing pending). Production Operation/security/subscriber
 binding, durable replay and all acceptance checkboxes remain open. See the
-[finalized-delivery journal](../journal/2026/10/2026-10-01-finalized-event-bus-delivery.md).
+[finalized-delivery journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-finalized-event-bus-delivery.md).
 
 Focused-394 verifies internal active managed UnitOfWork opt-in through real
 SQLite Completion/local-effects scenarios, explicit uncertain resource outcome,
@@ -1385,20 +1385,20 @@ cleanup-before-delivery and affected ordinary UoW/Continuation/RuntimeContext/
 authorization regressions (429 executed tests, 40 suites, two existing pending).
 No production factory/Operation/claim runtime or finalized EventEngine delivery
 is activated; acceptance checkboxes remain open. See the
-[opt-in journal](../journal/2026/10/2026-10-01-managed-uow-opt-in.md).
+[opt-in journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-managed-uow-opt-in.md).
 
 Focused-390 adds joint actual-closing/semantic result retention in the same
 native Completion payload, strict V2 with unchanged no-closing V1 bytes,
 shutdown/reopen recovery without program replay and stale-claim suppression
 (325/325, 34 suites). This supersedes the memory-only Action-result limitation
 of focused-388, not its outstanding production Action/security/UoW/dispatch
-requirements. See the [joint-result journal](../journal/2026/10/2026-10-01-joint-closing-result-retention.md).
+requirements. See the [joint-result journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-joint-closing-result-retention.md).
 
 Internal closing preparation now folds an actual test-authored declarative
 ExecUowM and freezes local guards/Creates for the same native Completion path
 across all five event modes. Focused-388 passed 322/322 tests, 34 suites, after
 the compile-import and EntityStore-fixture corrections recorded in the
-[journal](../journal/2026/10/2026-10-01-closing-program-preparation.md).
+[journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-closing-program-preparation.md).
 This is not production CML Action selection, authorization, actual Action-result
 durability/binding, central UoW integration or production dispatch evidence.
 S12/P2-U05/P2-U15/P2-U16 and all existing unchecked acceptance items stay open.
@@ -1416,7 +1416,7 @@ production human interaction verifier is proven. Authentication establishes a
 submitting actor only. The [human boundary design candidate](../notes/goal-phase-human-interaction-contract.md)
 defines verifier, typed question, separate immutable answer/receipt and bounded
 command authorization requirements before enabling human entries. No checkbox
-is promoted; see the [inventory journal](../journal/2026/10/2026-10-01-human-interaction-boundary-inventory.md).
+is promoted; see the [inventory journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-human-interaction-boundary-inventory.md).
 
 Production record installation remains unimplemented. The
 [host installation design candidate](../notes/goal-phase-host-record-installation.md)
@@ -1446,8 +1446,8 @@ This is bounded catalog/managed-slice evidence only. Default launcher still uses
 placeholder services; trusted configuration/authority, public recovery, managed
 external commands, transport acceptance and independent review remain open.
 No existing unchecked production item is marked complete by these results.
-See the [selection journal](../journal/2026/10/2026-10-01-runtime-abi-explicit-workflow-selection.md)
-and [policy journal](../journal/2026/10/2026-10-01-runtime-compiled-producer-policy.md).
+See the [selection journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-runtime-abi-explicit-workflow-selection.md)
+and [policy journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-runtime-compiled-producer-policy.md).
 
 Configured factory progress (2026-10-01): after the user selected the existing
 initialization hook, attempt 485 passed actual packageBin plus 66 tests in nine
@@ -1458,7 +1458,7 @@ binder. Real managed SQLite Start/review/repair/re-review scenarios now assemble
 through that hook. No CNCF API or private pool was added. Default launcher and
 durable host authority adapters are still unimplemented; existing acceptance
 checkboxes remain unchanged. See the
-[hook journal](../journal/2026/10/2026-10-01-configured-factory-hook.md).
+[hook journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-configured-factory-hook.md).
 
 Typed logical persistence configuration progress (2026-10-01): attempt 488
 passed actual packageBin and all 71 tests in ten suites. Seven required typed
@@ -1468,7 +1468,7 @@ store names are checked, and real managed SQLite Start/reopen/repair/re-review
 examples consume that decoded declaration through the existing Factory hook.
 Default CLI wiring, durable host authority adapters and all unchecked production
 acceptance items remain open. See the
-[parameter journal](../journal/2026/10/2026-10-01-goal-phase-runtime-parameters.md).
+[parameter journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-goal-phase-runtime-parameters.md).
 
 Managed configured assembly progress (2026-10-01): attempt 489 passed actual
 packageBin and all 71 tests in ten suites after moving the canonical parameter
@@ -1476,7 +1476,7 @@ decode/managed service binder callback into main-code configuredC. Managed
 SQLite Start/reopen/repair/re-review examples use that assembly entry with
 explicit host ports. Default launcher activation and durable authority adapters
 remain open; fixture-owned ports are not production authority evidence.
-See the [assembly journal](../journal/2026/10/2026-10-01-configured-managed-factory-assembly.md).
+See the [assembly journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-configured-managed-factory-assembly.md).
 
 Host selection format progress (2026-10-01): attempt 490 passed actual packageBin
 and all 76 tests in eleven suites. A pure versioned codec preserves all existing
@@ -1484,7 +1484,7 @@ Selection facts and origins; decoding nonhuman records cannot bypass the
 existing human-selection admission gate. It adds no writer, pool, storage grant
 or authenticated provenance. The managed host-record access seam, trusted
 installation and CLI binding remain open. See the
-[host selection journal](../journal/2026/10/2026-10-01-host-selection-record-format.md).
+[host selection journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-host-selection-record-format.md).
 
 Call-scoped selection read progress (2026-10-01): attempt 493 passed actual
 packageBin and 77 tests in eleven suites. Start uses the current admitted
@@ -1495,7 +1495,7 @@ ActionCall binding supplies the managed resource; no new CNCF API/private pool
 was added. Trusted installation, explicit collection grants, concurrent writer
 checks, input scope and default launcher integration remain unimplemented.
 No production acceptance checkbox closes. See the
-[call-scoped reader journal](../journal/2026/10/2026-10-01-call-scoped-host-selection-reader.md).
+[call-scoped reader journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-call-scoped-host-selection-reader.md).
 
 Call-scoped submission association progress (2026-10-01): attempt 494 passed
 actual packageBin and all 78 tests in eleven suites. After actual Start, a
@@ -1507,7 +1507,7 @@ immutable provenance, not mutable progression authority; current instance
 validation remains in the existing gate. Trusted installation, grants, input
 scope, atomic Start/association and CLI activation remain open; no production
 checkbox closes. See the
-[association journal](../journal/2026/10/2026-10-01-call-scoped-submission-association.md).
+[association journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-call-scoped-submission-association.md).
 
 - [ ] P2-C01: Count semantic invocations and client round trips; mechanical progression remains internal and no semantic invocation is added for deterministic routing.
 - [ ] P2-C02: Public sm-* skills return only requested typed semantic results and contain no state/operation dispatcher, SQL/path knowledge or cncf-* dependency.

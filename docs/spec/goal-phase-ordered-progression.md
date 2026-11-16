@@ -382,14 +382,14 @@ SBT0/wrapper0/released lock/full685 admitted. Connected diverged/conflicted chil
 Operations, retained review reopen and Human-required WAIT passed. Actual Human
 answers/ordinary production assembly/product SBT/separate JVM/integrated acceptance
 remain open. Original9/history/closed3/3/same ACTIVE full Goal unchanged.
-See [result](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+See [result](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 
 Current candidate adds connected diverged/conflicted child completion, retained
 review reopen and Human-required WAIT specs; uncompiled/unverified, awaits fresh
 1031 complete GoalPhase/common-guard validation. Production/other families are
 unchanged. Original9/history/closed3/3/full684/same ACTIVE full Goal unchanged.
 No Human-answer ingress, integrated acceptance or Phase completion is claimed.
-See [candidate](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+See [candidate](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 
 Current1030 passed253/253 tests in31 GoalPhase/common-guard suites, zero
 failures/aborts/skips; actual terminal/current result/consumed permission admitted.
@@ -398,7 +398,7 @@ preparation -> one native Completed append/readback and four interruption points
 passed. Full684 preserves1029 failure; original9/history/closed3/3/same ACTIVE
 full Goal unchanged. Linked conflict/Human/normal installation/separate JVM/
 independent acceptance remain required; no Phase acceptance is inferred.
-See [result](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+See [result](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 
 Current1029 ran1263 tests/145 suites:1261 passed,2 new Goal closure cases failed.
 Actual terminal failure/full683 retained; Active-only mechanical storage cannot
@@ -406,14 +406,14 @@ append Completed. Corrected candidate saves Active phase.Closed/result, then
 conditionally appends native Completed and reads back. Additional completion
 acknowledgement recovery awaits fresh1030 complete Goal family/common guard.
 Original9/history/closed3/3/same ACTIVE full Goal unchanged, no Phase acceptance.
-See [failure and correction](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+See [failure and correction](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 
 Current candidate connects actual installed RepositorySync child Operations to
 PhaseClosing with separately selected authority, canonical intent/result and
 native convergence/ancestry checks. Shared factory/program changes and four
 connected groups await fresh1029 all-three/common-guard validation. Not compiled
 or accepted yet; original9/history/closed3/3/full682/same ACTIVE Goal unchanged.
-See [candidate](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+See [candidate](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 
 Current1028 passed249/249 tests in31 GoalPhase/common-guard suites, zero
 failure/abort/skip; actual terminal/current result/consumed permission admitted.
@@ -422,12 +422,12 @@ interruption/refusal groups passed. PhaseClosing remains nonterminal pending
 actual authorized RepositorySync closure, not a copied receipt or Step Terminal.
 Full682 retains1027 failure; original9/history/closed3/3/same ACTIVE Goal unchanged.
 Product installation/separate JVM/integrated acceptance are not established.
-See [current result](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+See [current result](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 
 Current1027 failed main compilation before tests; two initial for-enumerators
 are corrected and the complete GoalPhase/common guard awaits fresh1028. Actual
 terminal failure/full681 remain history; original9/closed3/3/same ACTIVE Goal
-are unchanged. See [actual evidence](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+are unchanged. See [actual evidence](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 
 ## Current candidate — native whole-Phase inspection/check/review
 
@@ -440,7 +440,7 @@ PhaseClosing for actual authorized repository closure. Repair/Human dispositions
 remain at Decision without reopening committed Steps or refunding allowance.
 Four connected groups await fresh1027 with the complete GoalPhase/common guard.
 Original9/history/closed3/3/full680/same ACTIVE Goal remain unchanged; no Phase
-or Goal acceptance. See [current candidate](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+or Goal acceptance. See [current candidate](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 
 ## Current result —1026 native ordered commits and all-three regressions PASS
 
@@ -451,7 +451,7 @@ two-Step commits, S2 repair/current-tip checks/review and unreplayed interrupted
 effects are verified; all Step commits still end at nonterminal PhaseInspection.
 Whole-Phase validation/ReviewWholePhase/repository closure, product installation
 and separate Workflow JVM/independent acceptance remain required, not proven.
-See [actual evidence and next connection](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+See [actual evidence and next connection](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 
 ## Previous candidate — authorized native Step commits and ordered continuation
 
@@ -570,7 +570,7 @@ All prior failures remain. Original9/bases/history/closed3/3/actual `blocked` Go
 metadata stay unchanged. Native review's fixture evidence is not actual independent
 production review or ordinary assembly. Native repair/fresh checks/review/later
 Steps/required decisions/whole closure/product SBT/integrated acceptance remain
-unfinished. [Current result](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+unfinished. [Current result](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 
 ### Previous all-three result —1023 fixture failures
 
@@ -600,7 +600,7 @@ SBT1/wrapper1/released lock/current typed failure/consumed permission are retain
 full675. Parent derives existing receipt/context codecs bottom-up without changing
 fields, legacy wire or admission predicates. Fresh1022 all-three validation is
 pending;1021 will not be replayed. Original9/history/closed3of3 and actual `blocked`
-Goal metadata remain unchanged. See [current result](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+Goal metadata remain unchanged. See [current result](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 
 After actual passed first-Step checks, owning advance now issues the CML
 ReviewOrderedStep Required Operation through the same public completion service.
@@ -623,7 +623,7 @@ An external two-file Cozy patch was rejected before application; no fixture
 cleanup or validation bypass occurred. Parent subsequently preserved the original
 implementation causation and absent optional-review V1 wire, adding readback/
 undeclared-field assertions. All new review/compatibility changes are unverified.
-No1019 request exists. See [current failure and prerequisite](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+No1019 request exists. See [current failure and prerequisite](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 Saved-result presentation now distinguishes retained accepted review at Closing
 from required repair/fresh checks/review and a Decision boundary, without claiming
 Step/Phase closure or granting a command. Existing connected cases assert the
@@ -645,7 +645,7 @@ SBT0/wrapper0/released lock/current complete result/consumed permission were
 parent-verified; full671 preserves all history and original closed3/3 accounting.
 The fixture checks are actual owned Git commands, not product SBT or independent
 review. No normal installation, native review, later Step or whole-Phase closure
-is claimed. See [current result](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+is claimed. See [current result](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 
 ### Native candidate implementation — 1016 PASS
 

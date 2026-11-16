@@ -10,7 +10,7 @@ Phase 6.1 must connect the existing actual reviewer/Admission/authority route
 without mandatory CBD calls; 6.2/6.3 retain ordinary review and validation.
 This edit does not change the existing source or certify that route yet.
 Historical CBD fixtures/results retain only their original evidentiary scope.
-See the [handoff](../journal/2026/10/2026-10-18-production-first-cbd-review-phase-10.md).
+See the [handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-production-first-cbd-review-phase-10.md).
 
 ## External execution target — adopted 2026-10-18
 

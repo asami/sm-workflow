@@ -4,7 +4,7 @@ Date: 2026-10-24 (Asia/Tokyo)
 Status: LTEST-1–4 accepted within the focused migration boundary
 Producer: sm-workflow development; representative consumer: textus-control-center
 Specification: [label-driven selection](../spec/label-driven-test-selection.md)
-Handoff: [English instructions](../journal/2026/10/2026-10-24-label-driven-test-handoff.md)
+Handoff: [English instructions](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-24-label-driven-test-handoff.md)
 
 Current target: [ADMISSION and standard annotations](../spec/label-driven-test-selection.md).
 LTEST-1–4 below retain their historical acceptance. Their blanket removal of
@@ -97,7 +97,7 @@ Detailed execution/review evidence is outside Git:
 Default retention: 2026-11-23. Bound original references remain on hold for active
 consumer adoption, with next retention review on 2026-10-31; no originals were
 removed. Nonblocking maintenance is recorded in the
-[label-selection Hygiene ledger](../journal/2026/10/2026-10-24-label-selection-hygiene-follow-up.md).
+[label-selection Hygiene ledger](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-24-label-selection-hygiene-follow-up.md).
 
 ## Standard-annotation follow-up — 2026-10-31
 
@@ -125,7 +125,7 @@ not a reopened closed Task/Phase or a prerequisite for unrelated work.
 - [ ] TA-A06: Product-packaged and deployed skill guidance agree; the actual
       supported commands and remaining limitations accompany the delivered result.
 
-Follow [the English handoff](../journal/2026/10/2026-10-31-admission-standard-annotations-handoff.md).
+Follow [the English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-31-admission-standard-annotations-handoff.md).
 Do not block this plan on a post-return correction API; a terminal predecessor
 uses normal linked new Task intake. Keep the separately pending main integration
 visible and preserve both branch histories and unrelated dirty/staged work.

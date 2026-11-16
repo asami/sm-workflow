@@ -295,7 +295,7 @@ No additional instrumentation is required just to improve an explanatory hint.
 ### Staged quality review across projects — 2026-10-13
 
 Phase 6 is the concrete consumer/driver for the adopted
-[staged review matrix](../journal/2026/10/2026-10-13-staged-quality-review-matrix.md).
+[staged review matrix](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-13-staged-quality-review-matrix.md).
 Deliver the required producer/provider work in its owning project, connecting
 the smallest complete Step route first rather than waiting for whole upstream
 roadmaps. This does not expand Phase 5.2/5.3 or reset prior execution history.
@@ -618,7 +618,7 @@ new dependency-management framework is required.
 
 Connect the Phase 5 runtime to AI/skills under
 [Managed Test Suites and Verification Cost Guard](../notes/managed-test-suites-and-verification-cost-guard.md)
-and its [decision journal](../journal/2026/10/2026-10-06-managed-test-suites-cost-feedback.md).
+and its [decision journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-managed-test-suites-cost-feedback.md).
 Reuse Phase 5 CNCF Phase 103 discovery/query, RunTestSuite, receipts, warnings and validation
 transitions; do not implement another test selector or execution ledger in a skill.
 

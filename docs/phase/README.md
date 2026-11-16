@@ -6,7 +6,7 @@ connects saved worker envelopes to the actual issued public DTO through typed
 caller/dispatch construction. Preserve complete payloads, references and required
 validation; remove parent-AI JSON reconstruction. Planned only, with no current
 Session/submission change. See the
-[related observation](../journal/2026/11/2026-11-12-phase-8-program-owned-host-initialization.md#related-submission-format-gap--2026-11-12).
+[related observation](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-12-phase-8-program-owned-host-initialization.md#related-submission-format-gap--2026-11-12).
 
 Phase 8 host-startup simplification selected 2026-11-12:
 [program-owned host initialization and Evidence setup](phase-8.md#program-owned-host-initialization-and-evidence-setup--2026-11-12)
@@ -14,7 +14,7 @@ reuses the Phase 15 early initialization route for normal settings, admitted
 storage bindings and existing-installation reuse. Routine Phase startup must
 not require parent-AI source/CAR inspection or manual CommonEvidence wiring.
 Existing overrides, data and Sessions remain intact; this is planned work.
-See the [decision record](../journal/2026/11/2026-11-12-phase-8-program-owned-host-initialization.md).
+See the [decision record](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-12-phase-8-program-owned-host-initialization.md).
 
 Phase 6.11 closed with unverified items — 2026-11-11:
 [plan](phase-6.11.md) / [checklist](phase-6.11-checklist.md).
@@ -22,7 +22,7 @@ The user ended this Phase without whole-Phase validation. Its existing Session
 is `ForcedClosed / NotAccepted`; B1–B5 results, commits and history remain
 preserved. Whole-Phase regression, independent Phase acceptance and normal
 release completion are unverified/unfinished, not PASS. See the
-[closure record](../journal/2026/11/2026-11-11-phase-6.11-closed-with-unverified-items.md).
+[ending disposition](phase-6.11.md#closed-with-unverified-items--2026-11-11).
 The roadmap continues beyond this ended Phase; this record starts no new work.
 
 Phase 8 validation/closure efficiency selected 2026-11-11:
@@ -31,7 +31,7 @@ selects impact-based checks, applicable evidence reuse, grouped connected
 qualification, finite Session rescue and fixed closing scope. Qualify through
 representative existing work without a new broad validation campaign. Planned
 only; no additional Phase 6.11 close gate or change to active Session authority.
-See the [decision record](../journal/2026/11/2026-11-11-phase-8-proportionate-validation-and-bounded-closure.md).
+See the [decision record](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-11-phase-8-proportionate-validation-and-bounded-closure.md).
 
 Roadmap priority adopted 2026-11-11:
 **[Phase 7](phase-7.md) -> [Phase 11.1](phase-11.1.md) -> [Phase 8](phase-8.md) ->
@@ -51,12 +51,12 @@ The user also split Journal work: 11.1 retains Decision/Issue/Handoff, single-en
 correction/status/query and one real consumer; [11.2](phase-11.2.md) owns later
 batch management and selected additional consumers. Phase 11.2 has no fixed
 delivery slot and is not a prerequisite for 8, 9 or 18. See the
-[split record](../journal/2026/11/2026-11-11-journal-single-entry-and-batch-split.md).
+[split record](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-11-journal-single-entry-and-batch-split.md).
 If the assessed remaining Phase 8 work, including validation and review, is
 about half a day and independent of unfinished Phase 7/11.1 delivery, it may run
 in parallel with Phase 7. Otherwise retain the sequence above. This is a
 conditional scheduling option, not an estimate or a reduction of acceptance.
-See the [decision record](../journal/2026/11/2026-11-11-parallel-development-first-and-phase-8.1.md).
+See the [decision record](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-11-parallel-development-first-and-phase-8.1.md).
 
 Context compaction coordination allocated 2026-11-07:
 [Phase 8](phase-8.md#context-compaction-coordination-framework-2026-11-07) owns
@@ -85,7 +85,7 @@ only. Old source-history keys are removed without compatibility aliases. Project
 `.scalafix.conf` remains optional differences only. Preserve accepted Q3 and active
 work; progress is recorded solely in the [checklist](phase-8.1-checklist.md).
 See the [specification](../spec/scala-lint-profiles.md) and
-[English handoff](../journal/2026/11/2026-11-01-shared-scala-lint-profiles-handoff.md).
+[English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-01-shared-scala-lint-profiles-handoff.md).
 The [cross-project delivery plan](phase-8.1-dependencies.md) now identifies
 the Core API, SimpleModeler/Cozy generation, model compatibility, build/runtime
 qualification and shared AI-instruction handoffs. All remain planned; existing
@@ -101,7 +101,7 @@ workflow APIs for explicit adjustments. Phase 7 retains project-local managed
 worktree/subtree and dependency-development management, consuming this route.
 See [contract](../spec/repository-sync-directory-list.md),
 [checklist](phase-6.11-checklist.md) and
-[English handoff](../journal/2026/10/2026-10-31-phase-6.11-repository-sync-directory-list-handoff.md).
+[English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-31-phase-6.11-repository-sync-directory-list-handoff.md).
 This adds no gate or state change to ongoing Phase 6.10.
 
 Docker installation/customization qualification adopted 2026-10-28:
@@ -111,7 +111,7 @@ The [CI-01–18 matrix](../spec/clean-installation-qualification.md) is HEAVY-on
 with no developer HOME/cache/classpath reuse and no new gate for active Phases.
 Consume Phase 15 initialization and 6.10 profile delivery where relevant; retain
 separate native desktop coverage. See the [checklist](phase-19-checklist.md) and
-[English handoff](../journal/2026/10/2026-10-28-docker-installation-customization-handoff.md).
+[English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-28-docker-installation-customization-handoff.md).
 
 Tool-neutral validation allocated 2026-10-28:
 [Phase 18](phase-18.md) / [checklist](phase-18-checklist.md) extends the Phase 6.7
@@ -130,28 +130,28 @@ positive net source step, with coverage/N/A reasons and no added AI calls.
 Preserve active configuration/work/results; Phase 9 owns model evaluation and
 Phase 13 owns usage acquisition. See the [specification](../spec/ai-operating-profiles.md),
 [checklist](phase-6.10-checklist.md) and
-[English handoff](../journal/2026/10/2026-10-27-phase-6.10-ai-operating-profiles-handoff.md).
+[English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-27-phase-6.10-ai-operating-profiles-handoff.md).
 
 Assembly-free installed startup correction adopted 2026-10-27:
 [AF-S1–5](assembly-free-startup-correction.md) consumes CNCF's ordinary standalone
 wiring correction, removes residual fixed-file assumptions from helper sources
 and installation guidance, and qualifies preserved-Session adoption. It adds no
 acceptance gate to active Phase 6.7 or CBD Phase 12 and does not alter 6.8/6.9.
-See the [English handoff](../journal/2026/10/2026-10-27-assembly-free-startup-handoff.md).
+See the [English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-27-assembly-free-startup-handoff.md).
 
 Completion-record closure adopted 2026-10-27: [Phase 6.8 C2/C4](phase-6.8.md)
 owns required completion records and local commits through scoped Terminal.
 Stage completion leaves its enclosing Phase active when appropriate. No external
 post-Terminal commit skill or repeat FULL is required for established record facts.
 See [P68-23–27](phase-6.8-checklist.md) and the
-[English handoff](../journal/2026/10/2026-10-27-phase-6.8-terminal-record-closure-handoff.md).
+[English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-27-phase-6.8-terminal-record-closure-handoff.md).
 
 Delegated delivery adopted 2026-10-27: [Phase 6.8 D1–D4](phase-6.8.md) adds
 [sm-delegate-task](../spec/delegate-task.md) as an independent entry using the
 shared execution engine. Keep test-fix/goal-task contracts unchanged. Runtime
 selects verification and owns mandatory local commit, required publishLocal,
 result return and consumer adoption. Phase 7 adds FIFO/modes/workspace breadth.
-See the [English handoff](../journal/2026/10/2026-10-27-phase-6.8-delegate-task-handoff.md).
+See the [English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-27-phase-6.8-delegate-task-handoff.md).
 
 RepositorySync optimization adopted 2026-10-27: [Phase 6.9](phase-6.9.md) owns
 both clean automatic synchronization and dirty purpose-based commits. Establish
@@ -160,7 +160,7 @@ commit preparation joining that route. Keep sync optimization in 6.9, separate f
 and delegated delivery; Phase 7 composes the qualified routes. See the
 [contract](../spec/repository-sync-runtime-orchestration.md),
 [checklist](phase-6.9-checklist.md) and
-[English handoff](../journal/2026/10/2026-10-27-phase-6.9-repository-sync-handoff.md).
+[English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-27-phase-6.9-repository-sync-handoff.md).
 
 
 Commit/recovery standardization adopted 2026-10-26:
@@ -172,7 +172,7 @@ inventories are not approval gates. Keep 6.7 acceptance and its restoration
 independent of 6.8; retain Sessions, history, counts, evidence and explicit real
 recovery consent boundaries. See the [checklist](phase-6.8-checklist.md),
 [target contract](../spec/commit-completion-and-recovery.md) and
-[English handoff](../journal/2026/10/2026-10-26-phase-6.8-commit-recovery-handoff.md).
+[English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-26-phase-6.8-commit-recovery-handoff.md).
 
 Dependency delivery adopted 2026-10-26: [Phase 7](phase-7.md#dependency-development-delivery-priority--2026-10-26)
 owns fixed dependencies, FIFO requests to assigned development chats, and managed
@@ -183,7 +183,7 @@ Within Phase 7, prioritize the managed parallel route, then complete
 assigned-chat/FIFO and remaining overlay breadth; retain all original Phase 7 obligations and active Sessions/results.
 See the [contract](../spec/dependency-development-delivery.md),
 [P7-DD checklist](phase-7-dependency-delivery-checklist.md) and
-[English handoff](../journal/2026/10/2026-10-26-phase-7-dependency-development-modes-handoff.md).
+[English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-26-phase-7-dependency-development-modes-handoff.md).
 
 Task/FIX priority allocation adopted 2026-10-26:
 [Phase 6.7](phase-6.7.md) promotes the single-repository sm-test-fix,
@@ -195,7 +195,7 @@ to the appropriate active/next Phase as actual needs arise; preserve source IDs
 and evidence, and distinguish transfer from completion. Existing Phase 7/9/14/16 owners
 remain unchanged. Neither allocation reopens completed Phase 6.6 or resets any
 Session/history/counts/results. See the
-[English handoff](../journal/2026/10/2026-10-26-phase-6.7-task-fix-priority-handoff.md).
+[English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-26-phase-6.7-task-fix-priority-handoff.md).
 
 Repository Git correction adopted 2026-10-26:
 [RS-C1–4](repository-sync-git-correction.md) first consumes the in-progress CNCF
@@ -203,7 +203,7 @@ default-Git route, then corrects fetched-tip adoption, completed-effect recovery
 and redundant observations. Preserve ongoing source-history/RRC and Phase work,
 all Sessions, counters and results. This adds no new numbered Phase or blocking
 gate to unaffected work. See the
-[English handoff](../journal/2026/10/2026-10-26-git-execution-and-recovery-handoff.md).
+[English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-26-git-execution-and-recovery-handoff.md).
 
 Source-history/result-collection correction adopted 2026-10-26:
 [SHR-C1–7](source-history-recovery-result-collection-correction.md) first recovers
@@ -219,7 +219,7 @@ with runtime admission against Component, purpose, acceptance and operations.
 AI submits extra files/reasons; only a formal runtime Human request reaches the
 user. Preserve ongoing work and all historical evidence; already approved
 restoration does not wait for this correction. Phase 7 reuses the delivered owner.
-See the [English handoff](../journal/2026/10/2026-10-25-purpose-based-authorization-handoff.md).
+See the [English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-25-purpose-based-authorization-handoff.md).
 
 
 Runtime repair correction adopted 2026-10-25:
@@ -228,7 +228,7 @@ caller-created stop/approval loops and connects runtime-owned convergence,
 the ten-cycle ceiling and same-Session adoption. Prioritize the blocked Control
 Center restoration at the next coherent producer boundary; preserve ongoing
 work/results. Phase 6.6 reuses this owner and Phase 9 retains broader routing.
-See the [English handoff](../journal/2026/10/2026-10-25-runtime-owned-repair-control-handoff.md).
+See the [English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-25-runtime-owned-repair-control-handoff.md).
 
 Label-driven test migration adopted 2026-10-24:
 [LTEST-1–4](../notes/label-driven-test-migration-plan.md) restores canonical
@@ -238,7 +238,7 @@ disabled/helper exclusions remain explicit. Establish FULL/default exclusion of
 HEAVY/external services before removing runnable exclusions. This is a bounded
 correction, not reopened Phase 6.3 acceptance or a new gate for active Sessions.
 See the [specification](../spec/label-driven-test-selection.md) and
-[English producer/control-center handoff](../journal/2026/10/2026-10-24-label-driven-test-handoff.md).
+[English producer/control-center handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-24-label-driven-test-handoff.md).
 
 Project initialization adopted 2026-10-24: deliver the bounded
 [Phase 15 early slice](phase-15.md) / [INIT-1–4 plan](../notes/project-initialization-delivery-plan.md)
@@ -247,7 +247,7 @@ configuration. Generate compatible setup through existing typed contracts,
 reuse existing installations and keep Start separate. This adds no dependency
 on Phase 7/catch-up and no reset of active consumer Sessions. See the
 [specification](../spec/project-initialization.md) and
-[producer/control-center handoff](../journal/2026/10/2026-10-24-project-initialization-handoff.md).
+[producer/control-center handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-24-project-initialization-handoff.md).
 
 Ad hoc GoalTask adopted 2026-10-24: [sm-goal-task](../spec/goal-task.md) accepts
 journals or other development inputs and completes Task-wide integrated review
@@ -257,7 +257,7 @@ path, retaining distinct terminal policies: sm-fix is Step-equivalent and does
 not implicitly commit. Deliver a single-repository main path before broadening
 inputs/composition. Phase 6.7 owns that initial delivery; Phase 17 owns the
 remaining inputs/composition. Neither adds a gate for ongoing Phases.
-See the [English handoff](../journal/2026/10/2026-10-24-goal-task-handoff.md).
+See the [English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-24-goal-task-handoff.md).
 
 Standalone sm-fix acceptance adopted 2026-10-24: one repair request is one
 Step-equivalent unit with required focused tests and conditional independent
@@ -269,7 +269,7 @@ Phase 6.7 owns initial test/review fix; Phase 17 owns the remaining selection an
 Phase 14 diagnosis integration. No automatic
 Phase/Release Review or commit is added. See the
 [specification](../spec/standalone-fix-acceptance.md) and
-[English handoff](../journal/2026/10/2026-10-24-standalone-fix-handoff.md).
+[English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-24-standalone-fix-handoff.md).
 
 Recovery observation correction adopted 2026-10-24: extend the active producer
 commit-selection/ordinary-recovery fix with the
@@ -280,13 +280,13 @@ Session adoption. [Recovery success and cause resolution](../spec/recovery-obser
 are independent; successful recovery does not erase the defect signal. No extra
 AI call, Human gate, numbered Phase or reopening of accepted 6.4/6.5 work is
 introduced. Implementation/live adoption remain pending. See the
-[English handoff for both development chats](../journal/2026/10/2026-10-24-recovery-observations-handoff.md).
+[English handoff for both development chats](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-24-recovery-observations-handoff.md).
 
 Next-development priority adopted 2026-10-23: complete GoalPhase first, then
 attempt RepositorySync on a best-effort basis. See the
 [C1-C3 delivery plan and GPSYNC checklist](../notes/goal-phase-post-completion-sync-plan.md),
 [planned specification](../spec/goal-phase-post-completion-sync.md), and
-[English handoff](../journal/2026/10/2026-10-23-goal-phase-post-completion-sync-handoff.md).
+[English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-23-goal-phase-post-completion-sync-handoff.md).
 Deliver this bounded correction before Phase 6.6 diagnosis work at the next
 coherent boundary. Sync failure/deferral preserves Phase completion and unrelated
 dirty work; it does not replay accepted checks/review. This is separate from
@@ -313,7 +313,7 @@ The caller's fixed response/stderr limits and read cap are already removed and
 are not remaining Phase 6.6 work. Preserve live Sessions, histories, repair counts
 and validation.
 See the [specification](../spec/incremental-sbt-failure-diagnosis.md) and
-[English handoff](../journal/2026/10/2026-10-23-phase-6.6-incremental-diagnosis-handoff.md).
+[English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-23-phase-6.6-incremental-diagnosis-handoff.md).
 
 Terminology revision adopted 2026-10-23: `host` is limited to network connection
 destinations. [Runtime/caller specification](../spec/runtime-caller-terminology.md)
@@ -321,7 +321,7 @@ and [N-01–04 adoption plan](../notes/runtime-caller-terminology-adoption-plan.
 define purpose-specific type/configuration/CLI names with no compatibility aliases.
 Integrate the caller-information main route first, preserving active Sessions,
 history, repair counts and evidence. This is not a new Phase or a reopening of
-accepted Steps. [Developer handoff](../journal/2026/10/2026-10-23-network-host-terminology-handoff.md).
+accepted Steps. [Developer handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-23-network-host-terminology-handoff.md).
 
 AI usage accounting adopted 2026-10-22: [Phase 13](phase-13.md) /
 [checklist](phase-13-checklist.md) is PLANNED. First connect one actual
@@ -338,21 +338,21 @@ Keep per-category coverage and parent/delegated model breakdowns. Reuse current
 execution resources and common Journal/Evidence.
 This adds no gate to ongoing 6.4/6.5, no Phase 9 evaluation prerequisite and no
 Goal/session/history reset. See [spec](../spec/ai-usage-accounting.md) and
-[handoff](../journal/2026/10/2026-10-22-ai-usage-accounting-handoff.md).
+[handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-22-ai-usage-accounting-handoff.md).
 
 Phase 6.5 refinement, adopted 2026-10-21: [deterministic assessment](../spec/goal-phase-step-assessment.md)
 admits ordinary Steps with no AI when declared checks pass and no unresolved
 semantic obligation requires resolution before continuation. Known failures use FIX; uncertain execution stays in
 the validation route; only residual meaning selects AI triage and, if needed,
 detailed review. Explicitly planned review bypasses triage. Runtime records the
-branch in common Journal. See the [handoff](../journal/2026/10/2026-10-21-phase-65-deterministic-assessment-handoff.md).
+branch in common Journal. See the [handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-21-phase-65-deterministic-assessment-handoff.md).
 Further adoption: [workflow-specific semantic gaps](../spec/workflow-semantic-gap-routing.md)
 extends the sequence to Q1 -> Q2 -> Q3 -> Q3-R RepositorySync clean merge/FIX ->
 Q3-S SplitPhase saved-answer/context reuse -> Q4 integration. Existing Step IDs
 and active 6.4/12 work are preserved. LLM evaluation is outside 6.5; Luna is
 optional through supported profiles and its failure is not a Phase blocker.
 Model comparison/enhanced routing remain Phase 9 work. See the
-[combined handoff](../journal/2026/10/2026-10-21-phase-65-three-workflow-optimization-handoff.md).
+[combined handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-21-phase-65-three-workflow-optimization-handoff.md).
 
 Early-warning refinement: Step supplies fast feedback against its own acceptance
 and subsequent prerequisites. PLAN-eligible later/nonblocking observations remain
@@ -362,7 +362,7 @@ Plan/Usage Contract <-> Given/When/Then <-> implementation and architecture.
 FIX uses affected re-review; Final reuses acceptance. Structural scenario signals
 use existing explicit metadata only; unsupported optional detectors stay OFF.
 CBD remains OFF and LLM evaluation remains outside 6.5. See the
-[handoff addendum](../journal/2026/10/2026-10-21-phase-65-three-workflow-optimization-handoff.md#追記-step早期警告release単一統合レビュー).
+[handoff addendum](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-21-phase-65-three-workflow-optimization-handoff.md#追記-step早期警告release単一統合レビュー).
 
 Common Evidence adopted 2026-10-20: [Phase 12](phase-12.md), owned by
 sm-workflow開発, delivers one automatic Action -> actual archive -> common
@@ -372,7 +372,7 @@ the same service for failure/batch/compression/retention. No absolute display-pa
 API, AI journal transcription or duplicate service is required. Phase 11's
 accepted Journal is reused; 11.1 and 7–10 are not prerequisites. Preserve ongoing
 6.4 execution and all accepted results. See the [shared specification](../spec/common-evidence.md)
-and [both-chat handoff](../journal/2026/10/2026-10-20-phase-12-common-evidence-handoff.md).
+and [both-chat handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-20-phase-12-common-evidence-handoff.md).
 
 Workflow optimization adopted 2026-10-20: [Phase 6.5](phase-6.5.md), with its
 own [checklist](phase-6.5-checklist.md), follows active 6.4 and precedes 7.
@@ -382,7 +382,7 @@ and applicable lint support ordinary code Steps; Q3 delivers a minimal Scalafix
 syntactic-rule profile verified on Scala 3.3.8, then enables adopted applicable
 rules. Integrated semantic review remains at Release. CBD is OFF pending Phase 10; enhanced convergence and the
 ten-cycle backstop remain Phase 9 work. Preserve current 6.4 execution and all
-earlier acceptance. See the [adoption handoff](../journal/2026/10/2026-10-20-phase-65-workflow-optimization-handoff.md).
+earlier acceptance. See the [adoption handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-20-phase-65-workflow-optimization-handoff.md).
 Historical mandatory Step-review descriptions below remain records of the
 earlier deliveries; 6.5 changes subsequent accepted workflow behavior only.
 
@@ -398,7 +398,7 @@ expansion. Neither retroactively delays the 6.4 trial. The main rollout below
 remains, with this selected prerequisite delivery inserted before 6.4's remaining
 integration. No active Goal or closed Phase is reset by this planning decision.
 See the [design](../design/development-journal.md) and
-[handoff](../journal/2026/10/2026-10-20-common-journal-phases-handoff.md).
+[handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-20-common-journal-phases-handoff.md).
 
 File Workspace clarification adopted 2026-10-15: Phase 6 P6-SBX03 uses protected
 `file_read_text` / `file_write_text` for development-file manipulation and retains
@@ -406,7 +406,7 @@ ordinary `read_resource` / `read_resource_text` with runtime-owned limits for
 logical resources. SBT -> Git -> File implementation order is unchanged;
 workspace authority is coarse per admitted logical root. This does not resume
 local worktree operations or pull Phase 7 overlays forward. See the
-[implementation handoff](../journal/2026/10/2026-10-15-phase-6-file-workspace-dsl-handoff.md).
+[implementation handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-15-phase-6-file-workspace-dsl-handoff.md).
 
 Managed-effects correction adopted 2026-10-15: [Phase 6](phase-6.md#safety-correction-managed-gitsbt-and-capability-laundering--2026-10-15)
 now drives the minimum CNCF110/CBD16 producer slice before accepting its main
@@ -417,7 +417,7 @@ focused tests from unnecessary runtime/JAR preparation. Successors reuse the
 contract/evidence; PHASE-6.3 remains the aggregate full-suite owner. Full Safety
 Sandbox stays later work. The original Phase 6 duration estimate predates this
 scope and must be reassessed for remaining work. See the
-[detailed journal](../journal/2026/10/2026-10-15-phase-6-managed-effects-and-sbt-plan.md).
+[detailed journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-15-phase-6-managed-effects-and-sbt-plan.md).
 
 Security projection adopted 2026-10-14: the
 [Phase 6 family security profile](phase-6-security-review-profile.md) assigns
@@ -428,7 +428,7 @@ validation ownership; producer plans alone are not implementation acceptance.
 Decision: 2026-10-05; replanned at the user stop on 2026-10-07 (Asia/Tokyo)
 
 Phase 5 / 5.1 Goal execution boundary, adopted 2026-10-11:
-[preserve mixed work -> Phase 5 accepted release and stop -> separately instructed Phase 5.1 accepted release and Goal end](../journal/2026/10/2026-10-11-phase-5-release-boundary-handoff.md).
+[preserve mixed work -> Phase 5 accepted release and stop -> separately instructed Phase 5.1 accepted release and Goal end](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-11-phase-5-release-boundary-handoff.md).
 Checkpoint `2291d2fec20cf7335a8bec2af4077c4b2dd0e71a` saves existing work without
 acceptance. Latest user revision: Phase 5 releases the completed implementation
 at that stage; actual connection verification moves to Phase 5.1. The later
@@ -510,7 +510,7 @@ integrated review/Final/full validation. Initial production use after 6.3 does
 not wait for CBD. Phase 10 is scheduled separately after initial use; it neither
 waits for nor blocks unrelated 6.4/7/8/9 work. Keep the accepted Phase 6 managed-
 effect/CBD16 slice and all existing source/evidence. See the
-[development handoff](../journal/2026/10/2026-10-18-production-first-cbd-review-phase-10.md).
+[development handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-production-first-cbd-review-phase-10.md).
 
 The earlier 2026-10-13 staged-review allocation and same-day CBD15/15.1 adoption
 remain history. Transfer unfinished integration rather than claiming it complete.
@@ -598,14 +598,14 @@ The concrete 6.3 condition is
 [single-repository production acceptance](phase-6.3.md#single-repository-production-acceptance--2026-10-18),
 tracked once as P63-USE01 in the
 [shared checklist](managed-test-suites-phase-checklist.md#phase-63-production-use-acceptance--2026-10-18).
-The [development handoff](../journal/2026/10/2026-10-18-phase-63-single-repository-production-handoff.md)
+The [development handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-phase-63-single-repository-production-handoff.md)
 preserves active work and existing evidence. A normal one-repository sync such
 as development-workstation must not be deferred to Phase 7 because that Phase
 also contains RepositorySync work. Repository names are examples, not hard-coded
 targets or authorization to push them during planning.
 
 The [three-skill use-tier clarification](phase-6.3.md#three-skill-use-tiers--2026-10-18)
-and [latest handoff](../journal/2026/10/2026-10-18-three-skill-production-tiers-handoff.md)
+and [latest handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-three-skill-production-tiers-handoff.md)
 make this distinction explicit. Limited GoalPhase use is a supported scope, not
 permission to skip required review, validation or actual local closure. Normal
 SplitPhase use does not imply Phase 7 worktree provisioning or artifact management.
@@ -639,14 +639,14 @@ the remaining generation/selection/prune and workspace branches. Required
 driver-specific generation moves forward with the main route. Closure obligations,
 6.4's evidence-storage predecessor role, existing work IDs and accepted evidence
 remain unchanged; the newly adopted 6.5 supplies workflow optimization before 7.
-See the [development handoff](../journal/2026/10/2026-10-18-production-cost-first-execution-order.md).
+See the [development handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-production-cost-first-execution-order.md).
 
 The [Core execution-overhead follow-up](phase-6.3.md#execution-overhead-in-ordinary-production-acceptance--2026-10-18)
 also belongs to 6.3's existing P63-USE01..03 acceptance. Preserve active 6.2 work
 and evidence; prove host-owned continuous progression, proportionate batches and
 applicable validation reuse in the normal installed routes. Report available cost
 facts and unknowns there, without an extra benchmark, gate or savings threshold.
-The [adoption handoff](../journal/2026/10/2026-10-18-phase-63-execution-overhead-handoff.md)
+The [adoption handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-phase-63-execution-overhead-handoff.md)
 records the remaining gaps and safe adoption sequence.
 
 ## Independent post-adoption review integration
@@ -771,17 +771,17 @@ or commits a release. The existing development task applies the revised scope
 at its coherent stopping/handoff boundary.
 
 The 2026-10-06 resumption is retained in the
-[resumption record](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+[resumption record](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 The subsequent 2026-10-07 user stop supersedes it: CNCF runtime validation 1059
 passed 123 tests / 17 suites; SimpleModeler source/spec are applied but unvalidated,
 and request 1060 was not started. See the
-[stopped handoff](../journal/2026/10/2026-10-07-approved-help-and-runtime-bootstrap-resumption.md)
-and [replanning decision](../journal/2026/10/2026-10-07-development-plan-optimization.md).
+[stopped handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-07-approved-help-and-runtime-bootstrap-resumption.md)
+and [replanning decision](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-07-development-plan-optimization.md).
 This planning revision neither resumes the Goal nor checks off runtime acceptance.
 
-Decision record: [incremental-use rollout](../journal/2026/10/2026-10-06-incremental-use-phase-rollout.md).
-Interface/use timing revision: [Phase 6 skill integration](../journal/2026/10/2026-10-06-phase-6-skill-integration-boundary.md).
-Phase 2 workflow selection: [three-workflow practical boundary](../journal/2026/10/2026-10-06-phase-2-three-workflow-boundary.md).
+Decision record: [incremental-use rollout](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-incremental-use-phase-rollout.md).
+Interface/use timing revision: [Phase 6 skill integration](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-phase-6-skill-integration-boundary.md).
+Phase 2 workflow selection: [three-workflow practical boundary](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-phase-2-three-workflow-boundary.md).
 
 
 ## Validation metadata producer/consumer sequence

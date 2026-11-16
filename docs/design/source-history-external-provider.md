@@ -223,7 +223,7 @@ C3の`GoalPhaseNativeSourceHistory`はcandidate内のmechanical bridgeであり�
 開発用SBTは既存の登録runner／共有ロック経由、製品側は通常SBTとsbt自身のlockを使用する。
 全体テストの担当は引き続きPhase 6.3。push・配備はこの案に含めない。
 
-設定経路と正式キーの権威は[2026-10-17 journal](../journal/2026/10/2026-10-17-source-history-resolved-configuration-contract.md)
+設定経路と正式キーの権威は[2026-10-17 journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-17-source-history-resolved-configuration-contract.md)
 に従う。C3の実装と実検証、C4の接続はそれぞれの限定結果であり、provider配備やStep／Phase受入の証拠にしない。
 
 ### C3のcandidate／永続記録／通常CLI接続

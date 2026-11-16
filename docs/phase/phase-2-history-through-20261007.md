@@ -15,7 +15,7 @@ shared lock. Complete713-through1059 retains1058's new-spec compile failure.
 Original9/all history/R5/A7/null/limit3/closed consumed3 stay unchanged. Current
 ledgerR6 only appends the approved generator participant; complete originalR5,
 authority/binding/epoch/all reviews are retained and no new review is claimed.
-[Actual approvals, application, validation and resume boundary](../journal/2026/10/2026-10-07-approved-help-and-runtime-bootstrap-resumption.md).
+[Actual approvals, application, validation and resume boundary](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-07-approved-help-and-runtime-bootstrap-resumption.md).
 
 Actual same full Goal is PAUSED, updated1791318702. Generator1060 preparation
 stopped before request/intake/runner/SBT; its provisional allocation is unused.
@@ -31,7 +31,7 @@ Fresh1055 passed78/78 producer tests in5 suites;1056 exact unchanged-coordinate
 local dependency refresh succeeded;1057 passed122/122 consumer tests in16 suites.
 Parent independently admitted current typed results, consumed permissions,
 original logs/summaries and SBT0/wrapper0/released shared locks.
-[Actual Decision and Human connection evidence](../journal/2026/10/2026-10-07-native-decision-description-gap.md).
+[Actual Decision and Human connection evidence](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-07-native-decision-description-gap.md).
 Full711-through1057 preserves original9/R5/A7/null/limit3/closed consumed3 and
 every historical outcome. This does not establish nonempty generated Help,
 standard production all-three installation or integrated acceptance. Separate
@@ -46,7 +46,7 @@ Fresh1054 passed1315/1315 tests in153 suites against1053's actual local dependen
 refresh, following1052's78/78 producer regression PASS. Parent admitted the full
 current typed result, consumed permission, original log/summary and
 SBT0/wrapper0/released shared lock.
-[Current evidence and unfinished requirements](../journal/2026/10/2026-10-07-native-workflow-help-metadata.md).
+[Current evidence and unfinished requirements](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-07-native-workflow-help-metadata.md).
 Full708-through1054 and original9/R5/A7/null/limit3/closed consumed3 remain intact.
 Later Decision completion metadata edits remain uncompiled/unverified. No new
 repair frame/counter change or full repository/Help/standard all-three/integrated
@@ -59,7 +59,7 @@ Fresh1051 passed95/95 tests in15 suites, including17 metadata mechanics and
 affected public Goal/default launcher/cold CLI-server-MCP/factory/full ABI
 regressions. Actual full current typed result, consumed permission, original
 log/summary and SBT0/wrapper0/released lock are admitted. [Current evidence and
-unfinished requirements](../journal/2026/10/2026-10-07-native-workflow-help-metadata.md).
+unfinished requirements](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-07-native-workflow-help-metadata.md).
 Full705-through1051 and original9/R5/A7/null/closed3/3 remain intact. No new
 repair frame/counter change, full repository/Help/standard all-three/integrated
 review/Phase acceptance. The same full Goal is ACTIVE. SimpleModeler scope
@@ -72,7 +72,7 @@ After1050 terminal PASS, parent connected actual generated descriptions to the
 existing managed Goal service and registration/Human/recovery operations while
 preserving exact existing responses, JSON ingress and handlers. Metadata17 cases
 are authored; fresh1051 selects affected public/default/factory regressions.
-[Current candidate and retained1050 evidence](../journal/2026/10/2026-10-07-native-workflow-help-metadata.md).
+[Current candidate and retained1050 evidence](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-07-native-workflow-help-metadata.md).
 The newer source is not covered automatically by1050. No repair-frame/counter
 change, producer-scope addition, standard all-three/Help/full-Phase acceptance.
 Same full ACTIVE Goal and every original unfinished duty remain unchanged.
@@ -83,7 +83,7 @@ Fresh1050 passed1302/1302 tests in153 suites, including all three affected
 Workflow families, nine description-binding mechanics, canonical launcher/
 factory and full ABI regressions. Parent admitted complete current typed result,
 consumed permission, original log/summary and SBT0/wrapper0/released shared lock.
-[Current evidence and unfinished boundaries](../journal/2026/10/2026-10-07-native-workflow-help-metadata.md).
+[Current evidence and unfinished boundaries](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-07-native-workflow-help-metadata.md).
 Full704-through1050 retains1049's failure. Original9/R5/A7/null/closed3/3 and
 same full ACTIVE Goal unchanged; no new repair frame or partial acceptance.
 Complete generated Help remains unverified and its producer gap open; standard
@@ -98,7 +98,7 @@ Start/advance specifications without replacing transport or operation objects.
 Actual1049 generated sources and compiled the product, but two new-spec API
 mistakes stopped Test/compile before any test ran. Parent corrected only those
 two calls; fresh1050 is selected for the same complete affected families/metadata/
-canonical factory/fullABI validation. [Evidence and unchanged limits](../journal/2026/10/2026-10-07-native-workflow-help-metadata.md).
+canonical factory/fullABI validation. [Evidence and unchanged limits](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-07-native-workflow-help-metadata.md).
 Actual terminal failure/consumed permission/released lock and full703-through1049
 are retained. Original9/R5/A7/null/closed3/3/same full ACTIVE Goal unchanged.
 No new repair frame, partial acceptance or resolved Help/production claim.
@@ -109,7 +109,7 @@ Parent aligned the original generated Help specification with all16 CML services
 64 operations and canonical meta/system host services, preserving mandatory actual
 runtime descriptions. Missing semantic/Human CML descriptions and six additional
 authority-limit cases are authored;96 declared cases remain ungenerated/unverified.
-[Current source and producer gap](../journal/2026/10/2026-10-07-complete-generated-help-catalog.md).
+[Current source and producer gap](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-07-complete-generated-help-catalog.md).
 SimpleModeler generator/spec scope addition is unanswered; no upstream edit or
 test was started.1048 is retained prior-input selected PASS, not current Help or
 whole-Phase validation. Original9/R5/A7/null/closed3/3/full702-through1048 unchanged;
@@ -125,7 +125,7 @@ CML ABI assertions passed. Parent admitted complete current typed results,
 consumed permissions, original logs/summaries and SBT0/wrapper0/released shared
 locks. Full702-through1048 retains every failure/outcome; original9/R5/A7/null/
 limit3/closed3/3/same full ACTIVE Goal unchanged. No new repair frame.
-[Current evidence and remaining work](../journal/2026/10/2026-10-07-development-runtime-consumer-refresh.md).
+[Development-runtime admission design](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-development-runtime-path-admission.md).
 
 Known generated Help/full-suite failures stay open; SimpleModeler generator/spec
 scope addition has been requested but not authorized/applied. Previously denied
@@ -145,7 +145,7 @@ Fresh1046 passed463/463 tests in14 suites; actual typed result/consumed permissi
 SBT0/wrapper0/released shared lock and original log/summary are admitted.
 Full700-through1046 preserves1045's1 failure and1044's73 failures. Original9/
 R5/A7/null/limit3/closed3/3/same full ACTIVE Goal unchanged; no new repair frame.
-[Detailed current result](../journal/2026/10/2026-10-06-development-runtime-path-admission.md).
+[Detailed current result](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-development-runtime-path-admission.md).
 
 Normal unchanged-SNAPSHOT dependency refresh and fresh consumer CLI/server tests
 remain required. No publication, installed-consumer freshness, generated Help/ABI
@@ -170,7 +170,7 @@ correction after an accepted first scoped review, preserving current semantic
 identity/runtime/readability checks and packaged integrity. Fresh1045 has a new
 registered runner/intake for CNCF development/initialization/CAR/Web regression;
 no terminal result, dependency refresh or consumer acceptance is claimed yet.
-[Detailed current record](../journal/2026/10/2026-10-06-development-runtime-path-admission.md). Previously denied13-file process bootstrap
+[Detailed current record](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-development-runtime-path-admission.md). Previously denied13-file process bootstrap
 remains unapplied, pending its informed approval. Same ACTIVE full Goal and
 original9/R5/A7/null/limit3/closed3/3 unchanged; no new repair frame or partial
 Step/Phase acceptance. Earlier current-result/candidate sections remain history.
@@ -183,7 +183,7 @@ corrected candidate remains unverified. Fresh1044 repeats full `--batch test`,
 new subject85/runner/intake, no standalone compile or replay. Actual1043 typed
 failure/consumed permission/SBT1/wrapper1/released lock/full697 and all original9/
 R5/A7/null/closed3/3/same ACTIVE full Goal preserved. No partial acceptance.
-[Detailed record](../journal/2026/10/2026-10-06-three-workflow-bundle-factory.md).
+[Detailed record](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-bundle-factory.md).
 
 ## Current candidate —canonical three-service host assembly, unverified
 
@@ -196,7 +196,7 @@ positive whole-workflow execution proof. Fresh1043 full repository validation is
 next; no execution/consumption or Phase acceptance yet. Last accepted1042 and
 full696/original9/R5/A7/null/closed3/3 remain intact.
 See [contract](../spec/three-workflow-launcher-assembly.md) and
-[candidate record](../journal/2026/10/2026-10-06-three-workflow-bundle-factory.md).
+[candidate record](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-bundle-factory.md).
 
 ## Current result —1042 connected SplitPhase service and all-three regression PASS
 
@@ -340,7 +340,7 @@ Fresh1038 passed1274/1274 tests in146 completed suites, zero failures/aborts.
 The parent admitted current typed result/consumed permission/SBT0/wrapper0/
 released shared lock and original readable log/summary. Both new RepositorySync
 persistent selection/reopen/refusal groups passed, as did all three families and
-the common guard. [Detailed result](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+the common guard. [Detailed result](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 Full692 through1038 preserves earlier failures/non-starts; original9/R5/A7/null/
 limit3/closed consumed3 and the same ACTIVE full Goal are unchanged. No replay,
 new repair frame, partial Step/Phase/Goal acceptance or release.
@@ -553,14 +553,14 @@ SBT0/wrapper0/released lock/full685 admitted. Connected diverged/conflicted chil
 Operations, retained review reopen and Human-required WAIT passed. Actual Human
 answers/ordinary production assembly/product SBT/separate JVM/integrated acceptance
 remain open. Original9/history/closed3/3/same ACTIVE full Goal unchanged.
-See [result](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+See [result](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 
 Current candidate adds connected diverged/conflicted child completion, retained
 review reopen and Human-required WAIT specs; uncompiled/unverified, awaits fresh
 1031 complete GoalPhase/common-guard validation. Production/other families are
 unchanged. Original9/history/closed3/3/full684/same ACTIVE full Goal unchanged.
 No Human-answer ingress, integrated acceptance or Phase completion is claimed.
-See [candidate](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+See [candidate](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 
 ## Current delivery contract — 2026-10-05; updated 2026-10-06
 
@@ -589,19 +589,19 @@ failures/aborts/skips. Actual terminal/current result/consumed permission and
 full684 admitted. Native installed child closure and four interruption points
 passed; normal production/separate JVM/integrated acceptance remain open.
 Original9/history/closed3/3/same ACTIVE full Goal unchanged. No completion.
-See [result](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+See [result](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 
 Current1029 completed1263 tests/145 suites:1261 passed,2 new Goal child closure
 cases failed. Actual failure/full683/released lock retained. Parent corrects
 Active result -> native Completed/readback; complete Goal family/common guard
 awaits fresh1030. Original9/history/closed3/3/same ACTIVE full Goal unchanged.
-See [failure and correction](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+See [failure and correction](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 
 Current candidate: actual installed RepositorySync child Start/advance connects
 PhaseClosing to canonical whole-Phase closure. Shared factory/program changes
 and four connected groups are unverified pending fresh1029 all-three/common
 guard. Original9/history/closed3/3/full682/same ACTIVE full Goal unchanged; no
-acceptance or new frame. See [candidate](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+acceptance or new frame. See [candidate](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 
 Current1028:249/249 GoalPhase/common-guard tests passed in31 suites, zero
 failure/abort/skip. Parent admitted current typed result/consumed permission/
@@ -611,13 +611,13 @@ effect/refusal groups passed. PhaseClosing still requires actual authorized
 RepositorySync closure. Product SBT/normal all-three assembly/separate JVM/
 integrated readonly acceptance/help/docs/release and complete Goal remain open.
 Original9/history/closed3/3/same ACTIVE Goal unchanged. No new frame or completion.
-See [current result](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+See [current result](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 
 Current1027: main compilation failed before tests at two initial for-enumerators.
 Actual SBT1/wrapper1/released lock/current failure/consumed permission/full681
 are retained. Parent corrects those enumerators; complete GoalPhase/common guard
 awaits fresh1028. Original9/history/closed3/3/same ACTIVE Goal unchanged.
-See [failure/candidate](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+See [failure/candidate](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 
 Current candidate after1026: native whole-Phase inspection against the original
 base/full commit chain, separate Phase checks and assigned ReviewWholePhase are
@@ -626,7 +626,7 @@ repository closure; it is not Terminal. Four connected groups and complete
 GoalPhase/common guard await fresh1027. Original9/history/closed3/3/full680/same
 ACTIVE Goal stay unchanged. Product SBT/normal assembly/separate JVM/integrated
 acceptance/help/docs/release and complete Goal obligations remain unfinished.
-See [current candidate](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+See [current candidate](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 
 Current1026: all three Workflow families/common guard passed1255/1255 tests in
 145 completed suites, zero failure/abort/skip. Parent admitted current typed
@@ -637,7 +637,7 @@ checks/review/current committed tip and interruption guards passed. Whole-Phase
 validation/ReviewWholePhase/repository closure are the next native connection;
 product SBT/normal shared assembly/separate JVM/integrated readonly acceptance/
 help/docs/release remain unfinished. No new frame or Step/Phase/Goal completion.
-See [current result](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+See [current result](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 
 Previous candidate after1025: native separately authorized Step commit and ordered
 next-Step implementation/repair/check/review are connected; last-Step commit
@@ -646,7 +646,7 @@ changes await fresh1026 all-three/common-guard validation. Actual same Goal
 ACTIVE; original9/all bases/history/closed3/3/full679 unchanged. No new frame,
 old request reuse or partial acceptance. Whole-Phase closure/product SBT/normal
 assembly/separate Workflow JVM/integrated readonly acceptance remain unfinished.
-See [current candidate](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+See [current candidate](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 
 Current1025: actual preserved Goal ACTIVE; complete affected GoalPhase/common
 guard passed241/241 in31 suites, no failure/abort/skip. Actual SBT0/wrapper0/
@@ -661,7 +661,7 @@ retain actual1023 evidence, not a new combined all-three PASS. Later Steps/Step
 commit/whole closure/product SBT/ordinary shared assembly/necessary separate
 Workflow JVM/integrated readonly acceptance/help/docs/release remain unfinished.
 No1026/live SBT/new frame or partial-success Phase acceptance.
-See [current result and remaining acceptance](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+See [current result and remaining acceptance](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 
 Current1024 (2026-10-06): complete affected GoalPhase/common guard passed236/236
 in31 completed suites, no failure/abort/skip. Actual SBT0/wrapper0/released lock/
@@ -670,7 +670,7 @@ fixtures/catalog/parameters/managed suspension and native review/legacy-wire/
 presentation cases passed. Cozy1019 passed28/28;1020 local SNAPSHOT refresh and
 consumer generation are confirmed. Unchanged Split/Repository retain passing1023
 evidence, not a new combined all-three invocation PASS; all previous failures
-remain history. [Current result](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+remain history. [Current result](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 Original9/history/bases/R5/A7/null/closed3/3/actual `blocked` Goal metadata stay
 unchanged. Native repair/later Steps/whole closure, product SBT/ordinary all-three
 assembly/separate-Workflow-JVM/integrated read-only acceptance/help/docs/release
@@ -683,7 +683,7 @@ released/current failure/consumed permission verified, full677. Parent updates
 only two GoalPhase fixtures' source lines+25 with complete comparisons intact.
 Fresh1024 affected GoalPhase family/common guard pending; unchanged Split/Repository
 retain actual1023 evidence, not a fresh combined all-three PASS.
-[Current result](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+[Current result](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 Original9/history/closed3/3/actual `blocked` Goal metadata stay unchanged; all
 remaining practical delivery/integrated acceptance remain open.
 
@@ -691,7 +691,7 @@ Previous1022 (2026-10-06): generation and main compile passed; Test compile fail
 two nonexistent handle-revision references. No tests ran. SBT1/wrapper1/released
 lock/current failure/consumed permission verified, full676. Parent now asserts
 public WAIT.expectedRevision with unchanged expected13/11; fresh1023 same all-three
-validation pending. [Current result](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+validation pending. [Current result](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 Original9/history/closed3/3/actual `blocked` Goal metadata stay unchanged; no live
 SBT, old request replay, new frame or practical acceptance is claimed.
 
@@ -701,7 +701,7 @@ run. SBT1/wrapper1/released lock/current failure/consumed permission verified,
 full675. Cozy1019 passed28/28;1020 refreshed its unchanged local SNAPSHOT. Parent
 now derives the existing nested receipt/context codecs bottom-up without changing
 the wire or narrowing tests. This remains unverified pending fresh1022 all-three
-validation. See [current result](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+validation. See [current result](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 Original9/history/closed3of3 and actual `blocked` Goal metadata remain unchanged;
 no new frame, replay, live SBT or practical acceptance/closure is claimed.
 
@@ -711,7 +711,7 @@ unrelated retained Git fixture Scala files. Actual SBT1/wrapper1/released lock/
 current failure/consumed permission were verified, full672. A scoped upstream
 two-file repair was rejected before application; no cleanup/bypass occurred.
 Native review and subsequent legacy-wire/causation compatibility corrections
-remain unverified. See [current prerequisite](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+remain unverified. See [current prerequisite](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 No1019 intake/runner or live SBT. Original9/history/closed3of3/same ACTIVE Goal
 remain; all practical acceptance and release work stays open.
 
@@ -720,7 +720,7 @@ affected suites; SBT0/wrapper0/releasedlock/current result/consumed permission
 verified, full671. Advance selects fixed host programs from saved Plan check
 identities, saves intent and admits actual receipts to Review/Decision; unknown
 intent does not replay. Actual failure, interruption/reopen and binding/candidate/
-policy refusal passed. See [current evidence](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+policy refusal passed. See [current evidence](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 Original9/R5/A7/null/limit3/closed consumed3/history/bases/same ACTIVE Goal remain.
 Native review/repair/later Steps/required decisions/whole closure, product SBT,
 normal all-three installation, necessary separate-process/integrated review/help/
@@ -1034,7 +1034,7 @@ No counter,new repair frame,unchecked practical gate or full-run verdict changes
 Current evidence at the 2026-10-06 handoff: internal managed reasoning issue
 source review is PASS (zero blockers, five unwaived Hygiene records), retained
 with its actual native final in the
-[increment journal](../journal/2026/10/2026-10-05-reasoning-managed-issue.md#source-review-retained-at-the-2026-10-06-handoff).
+[increment journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-05-reasoning-managed-issue.md#source-review-retained-at-the-2026-10-06-handoff).
 This is not compilation, executable validation or acceptance of any practical
 route. Current code remains uncompiled/unexecuted; request 956 remains terminal
 NONSTART. No new implementation, test or review agent was started for this
@@ -1044,7 +1044,7 @@ The explicit stop withdrawal supersedes that planning-only handoff restriction.
 The first resumed validation uses a fresh request and registered runner against
 the settled current source, including the unexecuted managed reasoning issue.
 It is a regression baseline, not proof of installed three-workflow acceptance.
-See the [resumption record](../journal/2026/10/2026-10-06-three-workflow-resumption.md).
+See the [resumption record](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 
 Resumed baseline 959 has now compiled the current implementation and passed all
 1,144 selected tests (136 suites, zero aborted; SBT/wrapper 0 and lock released).
@@ -1059,7 +1059,7 @@ aborts with SBT/wrapper 0 and released lock. Parent added typed reasoning result
 successor preparation and corresponding native issued-work/reopen assertions;
 provided managed completion and default/public installation remain unfinished.
 Complete consumed history is 614 through 960, repair remains 3/3. The
-[connected delivery plan](../journal/2026/10/2026-10-06-three-workflow-connected-delivery-plan.md)
+[connected delivery plan](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-connected-delivery-plan.md)
 fixes all three practical scenario/operation/effect/specification boundaries for
 P2-M01. This is ordinary planning and incremental executable validation, not
 P2-M02..M05 acceptance or an independent helper review.
@@ -1588,7 +1588,7 @@ terminal failed result and consumed permission admitted. Full595-through939 now
 retains all594-through937 plus the once-consumed original attempt938; old938
 nonstart stays separate. Runner behavior verified, product validation not accepted.
 Full Goal ACTIVE/incomplete, original9/R5/A7/null/limit3/closed3 unchanged.
-See docs/journal/2026/10/2026-10-05-runner-renderer-path-correction.md.
+See https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-05-runner-renderer-path-correction.md.
 Earlier CURRENT entries below are chronological, not the current stop contract.
 
 CURRENT938: owning Human successor publication and twelve new both-root SQLite
@@ -1603,7 +1603,7 @@ review success is established. Passive codec937 scoped
 PASS is prerequisite only. Public routing/default/downstream and all original
 Phase duties remain; no checkbox, counter/frame or acceptance change. Full Goal
 ACTIVE/incomplete; original9/R5/A7/null/limit3/closed3/full594-through937 retained.
-Current journal: docs/journal/2026/10/2026-10-05-human-checkpoint-publication.md.
+Current journal: https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-05-human-checkpoint-publication.md.
 Earlier CURRENT/pending paragraphs below retain their chronological meaning.
 
 CURRENT937: complete passive Human checkpoint encoding and stored-fact inspection
@@ -1619,7 +1619,7 @@ The full Goal is ACTIVE/incomplete. Codec fixture storage does not prove owning
 atomic publication, committed readback, retained-first public resolution/recovery
 or default production. All original Phase duties, unwaived CAR/HYG/DEV and
 release conditions remain; no executable checkbox, counter or frame change.
-See docs/journal/2026/10/2026-10-05-human-checkpoint-encoding.md and the current
+See https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-05-human-checkpoint-encoding.md and the current
 PHASE-2 handoff. Earlier CURRENT/pending/blocked entries below are chronological.
 
 CURRENT921 bounded shared scope-bounds prerequisite PASS: actual123/123 in8 suites,
@@ -1656,7 +1656,7 @@ remaining full Human resolution implementation. Historical920252/252 is not
 evidence for this new delta. No new SBT request or invocation has started.
 Original9/R5/A7/null/limit3/closedconsumed3/full578-through920 and all counters/
 frames/history remain unchanged. The current journal is
-docs/journal/2026/10/2026-10-05-split-phase-human-resolution-boundary.md.
+https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-05-split-phase-human-resolution-boundary.md.
 All original acceptance/release duties remain; earlier entries are chronology.
 
 CURRENT920 bounded independent source/integration QA PASS, no current terminal
@@ -1713,7 +1713,7 @@ CURRENT terminal-successor investigation: HumanAnswered still stops at the
 unimplemented handler. CNCF's managed mechanical API intentionally refuses
 Completed successors; freeze its typed managed terminal prerequisite before
 consumer execution, preserving the recorded Human answer and native terminal
-publication contract. See [current investigation](../journal/2026/10/2026-10-05-split-phase-human-terminal-boundary.md).
+publication contract. See [current investigation](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-05-split-phase-human-terminal-boundary.md).
 Proposal only, no runtime/source/test acceptance. Full Goal ACTIVE/in_progress;
 original9/R5/A7/null/limit3/closed3/full575/no-new-frame unchanged.
 
@@ -1831,7 +1831,7 @@ no eligible current public API and no additional local semantic defect.
 Its complete actual source/native231 and separate parent causal disposition are
 retained; CNCF mutation authority is still pending the developer's scope choice.
 This is not an acceptance review or another original-nine repair/review cycle.
-See the [actual911 journal](../journal/2026/10/2026-10-05-split-phase-managed-human-completion.md).
+See the [actual911 journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-05-split-phase-managed-human-completion.md).
 Original9/R5/A7/explicitlimit3/closedconsumed3/null/history are unchanged;
 no new repair frame/counter change, Step/Phase/full-review/release credit.
 All original full delivery and acceptance obligations remain mandatory.
@@ -1937,7 +1937,7 @@ public owner; actual downstream Human/mechanical handlers remain uninstalled,
 so the existing truthful serviceUnavailable remains, with no invented success.
 The18 owning publication lifecycle variants add whole Completed route/repeated/
 reopen/no-mutation/crossed-query checks; free constructors remain refused.
-Details: docs/journal/2026/10/2026-10-04-split-phase-typed-scope-routing.md.
+Details: https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-04-split-phase-typed-scope-routing.md.
 No current-delta SBT or runner request has started. Actual897146/146/15 and
 independent PASS are preceding evidence, not coverage of these new edits.
 Next: fresh registered runner/current typed intake/shared wrapper, then actual
@@ -2065,7 +2065,7 @@ only, not actual atomic publication/readback/public routing or Phase acceptance.
 Original9/R5/A7/limit3/closed3/null/history/repair frame remain unchanged.
 The earlier unexecuted/pending/blocked paragraphs below are retained history.
 
-Current next increment: [scope successor atomic publication](../journal/2026/10/2026-10-04-scope-successor-atomic-publication.md)
+Current next increment: [scope successor atomic publication](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-04-scope-successor-atomic-publication.md)
 has parent-authored passive publication preparation and genuine owning fixture
 coverage for both roots/decisions. UNCOMPILED/UNEXECUTED/UNREVIEWED; no893
 prepared/started. Complete wrapper/new Built descriptors and64 TOTAL Creates
@@ -2113,7 +2113,7 @@ New integration remains uncompiled/unexecuted/unreviewed; runtime capacity
 recovery or a human-directed fork is required before fresh validation.
 No Phase completion, fallback, parent SBT or further retry is admitted.
 
-Current original increment: [genuine PartitionCompletion-root scope integration](../journal/2026/10/2026-10-04-scope-projection-partition-root-integration.md)
+Current original increment: [genuine PartitionCompletion-root scope integration](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-04-scope-projection-partition-root-integration.md)
 subject1 is authored but UNCOMPILED/UNEXECUTED/UNREVIEWED. Only two grouped
 managed executable scenarios are added; production and existing Mechanical-root
 behavior/expectations are unchanged. Fresh current-input registered thirteen-suite
@@ -2122,7 +2122,7 @@ wrapper-only PASS remain evidence for their older source, not this new delta.
 Original9/R5/A7/history/limit3/closed3/null/full552-through890 unchanged;
 no new counter, repair frame, replay or partial Phase completion.
 
-Latest original increment: [complete scope checkpoint wrapper and native envelope preflight](../journal/2026/10/2026-10-04-scope-projection-native-wrapper-codec.md)
+Latest original increment: [complete scope checkpoint wrapper and native envelope preflight](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-04-scope-projection-native-wrapper-codec.md)
 revision1 reached actual886103 tests/13 suites,101passed2failed, SBT/wrapper1,
 shared lock released. Parent corrected the incorrect compiled-definition selection
 by requiring the adopted official runtime binding explicitly; revision2 is
@@ -2153,7 +2153,7 @@ Fresh independent read-only wrapper890 review completed **PASS**, zero current
 blockers, nine historical HYG unwaived. Complete source report and separate
 parent prerequisite disposition are retained without rewriting older FINDINGS.
 Source revision2/current subject4 wrapper prerequisite only; no Step/Phase/release
-acceptance. Next required [PartitionCompletion-root integration](../journal/2026/10/2026-10-04-scope-projection-partition-root-integration.md)
+acceptance. Next required [PartitionCompletion-root integration](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-04-scope-projection-partition-root-integration.md)
 must use the genuine composed managed route. Full original obligations remain.
 
 Current continuation (2026-10-04, fork01a103b3): the human-directed four new
@@ -2162,7 +2162,7 @@ independent technical879 PASS. All prior raw FINDINGS remain historical evidence
 875/878 are formally NONACCEPTED and never reused. Original nine/R5/A7/history,
 limit3/three closed consumed cycles/null remain unchanged; no new repair frame.
 
-The original [source-bound native scope capture prerequisite](../journal/2026/10/2026-10-04-scope-projection-native-capture.md)
+The original [source-bound native scope capture prerequisite](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-04-scope-projection-native-capture.md)
 now has fresh accepted882 **102/102** in thirteen suites, SBT/wrapper0 and shared
 lock released. Parent verified actual renderer storage before display, separate
 unchanged submission/session63515/terminal0, consumed permission and current
@@ -2204,7 +2204,7 @@ Current deterministic CAR lint0, warnings unwaived. Native full wrapper codec,
 public advance/both genuine roots and all remaining full Phase conditions stay
 mandatory unfinished; this preparation/test result is not Phase acceptance.
 
-The next original [scope successor codec prerequisite](../journal/2026/10/2026-10-04-scope-projection-successor-codec.md)
+The next original [scope successor codec prerequisite](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-04-scope-projection-successor-codec.md)
 now preserves the complete first checkpoint, assigned judgment/result, ordered
 mixed frontier and independently framed documents with closed canonical fields
 and a whole prefixed1MiB UTF-8 limit. Fresh881 **99/99** in twelve suites passed,
@@ -2229,7 +2229,7 @@ below describe their historical subjects, not the latest four-finding state.
 Resume update (2026-10-04): an explicitly requested new fork Goal retains the
 original nine findings, originals/full history, comparisonR5/repairA7, limit3
 and all three consumed closed cycles without reset/refund or a new repair slot.
-The [public planning advance increment](../journal/2026/10/2026-10-04-split-phase-public-advance-entry.md)
+The [public planning advance increment](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-04-split-phase-public-advance-entry.md)
 passed actual859 (**35/35**, six suites, SBT/wrapper0, shared lock released) and
 fresh independent read-only technical review PASS. Real Service/CLI fixture
 dispatch now issues the first genuine partition WorkOrder or atomically
@@ -2242,7 +2242,7 @@ acceptance, full validation/review and release gates remain open. Phase status
 remains in_progress; the new Goal remains active.
 
 Further executable-spec progress (2026-10-04): the
-[public continuation roundtrip](../journal/2026/10/2026-10-04-split-phase-public-continuation-roundtrip.md)
+[public continuation roundtrip](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-04-split-phase-public-continuation-roundtrip.md)
 passed actual862,37/37 in six suites, SBT/wrapper0 and released shared lock.
 Actual public issue, Enriched/DecisionNeeded result submission, canonical
 revision3 completion and policy-free SQLite reopen preserve the full retained
@@ -2254,7 +2254,7 @@ genuine Human/default ingress, later handler completion or full Phase acceptance
 Original nine/history/limit3/consumed3 and all full delivery/release gates remain.
 
 Current focused validation (2026-10-04): the
-[scope semantic stage](../journal/2026/10/2026-10-04-split-phase-scope-semantic-stage.md)
+[scope semantic stage](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-04-split-phase-scope-semantic-stage.md)
 adds a distinct generated v6 scope task, actual advance issue/retained routing
 and actual managed public completion, with new semantic/ABI/native transport
 executable specs. Fresh865/current subject3 passed123/123 examples across15
@@ -2273,7 +2273,7 @@ subsequent ranking/Human/document handlers and all original full Phase gates
 remain unfinished. No repair allowance/counter is reset or added.
 
 Documentation-only progress (2026-10-04): the
-[current development manual](../journal/2026/10/2026-10-04-current-development-manual.md)
+[current development manual](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-04-current-development-manual.md)
 adds authored CAR reference/user/scope sources and README navigation. All10 local
 links passed; fresh official CAR lint completed exit0, FAIL0/WARN298/OK28.
 All warnings remain unwaived. Verified first-success instructions, complete host
@@ -2283,7 +2283,7 @@ current technical findings and pending repair-admission question remain open;
 this document work grants no repair allowance and closes no acceptance gate.
 
 Next scope continuation contract (2026-10-04):
-[scope projection after semantic completion](../journal/2026/10/2026-10-04-split-phase-scope-projection-contract.md)
+[scope projection after semantic completion](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-04-split-phase-scope-projection-contract.md)
 records the verified first-checkpoint/index constraints and proposed separate
 managed mechanical stage. It requires genuine completion lineage, preserved
 mixed candidate frontier and explicit handling when admitted ranges still span
@@ -2291,13 +2291,13 @@ multiple owners. No program or test changed and no execution/repair allowance
 was created; the current three technical findings remain unresolved.
 
 Governing correction (2026-10-02): the
-[single-user typed-control policy](../journal/2026/10/2026-10-02-sm-workflow-single-user-typed-control-policy.md)
+[single-user typed-control policy](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-02-sm-workflow-single-user-typed-control-policy.md)
 supersedes application claim/contention and management-hash assumptions in
 the historical evidence and initial plan below. Keep storage transactions,
 execution permissions and machine-wide SBT serialization; do not infer a
 multi-writer requirement from those mechanisms. Historical passing evidence is
 not acceptance of unconverted control paths.
-The [managed single-user completion slice](../journal/2026/10/2026-10-02-managed-single-user-completion.md)
+The [managed single-user completion slice](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-02-managed-single-user-completion.md)
 removes claim/release and claimed projection from default CNCF managed WorkOrder
 and Decision completion. Focused producer-750 passed 68/68 (5 suites), local
 SNAPSHOT refresh-751 completed, and consumer-752 passed 381/381 (53 suites),
@@ -2305,7 +2305,7 @@ all with terminal exit 0 and `lock=released`. Typed partition production wiring,
 remaining legacy hash/control conversion and original Step/Phase acceptance
 remain open; none is closed by these focused results.
 
-The [typed partition context boundary](../journal/2026/10/2026-10-02-typed-partition-semantic-context.md)
+The [typed partition context boundary](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-02-typed-partition-semantic-context.md)
 adds complete raw owner/facts storage, a closed versioned codec and independent
 call-scoped DataStoreSpace reading without claims, management hashes or decoded
 authority. On 2026-10-02 the user said `再開して`; separately recorded resumed
@@ -2318,7 +2318,7 @@ authorized current-fact readers, host context registration and canonical typed
 WorkOrder issue/completion are the next production dependency; all original
 review/full-validation/release obligations stay open.
 
-The [managed typed preparation slice](../journal/2026/10/2026-10-02-managed-typed-partition-preparation.md)
+The [managed typed preparation slice](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-02-managed-typed-partition-preparation.md)
 now reads nine independent purpose-specific current rows and the canonical
 current instance through the incoming Operation's DataStoreSpace before
 constructing unknown-only partition work. Supplemental test-only accumulator
@@ -2344,7 +2344,7 @@ is resolved. This is bounded unit validation, not context registration, typed
 WorkOrder issue/completion or original Step/Phase acceptance. Those production
 connections and full validation/reviews/release remain open.
 
-The [typed context registration slice](../journal/2026/10/2026-10-02-typed-partition-context-registration.md)
+The [typed context registration slice](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-02-typed-partition-context-registration.md)
 adds an internal current-call immutable writer after independent input and
 canonical instance preparation. Actual native authenticated principal and a
 separate captured exact context Create grant are required. Accumulator 768
@@ -2359,7 +2359,7 @@ call the old digest-bearing Start assessment; actual typed Start/issue/result
 connections and original Step/Phase acceptance/full validation/release remain
 open.
 
-The [typed Start/partition binding slice](../journal/2026/10/2026-10-02-typed-start-partition-binding.md)
+The [typed Start/partition binding slice](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-02-typed-start-partition-binding.md)
 adds a distinct hash-free closed Start data schema, explicit instance allocation,
 exact complete selected-input binding and independent current source/proposal/
 selection reads. Fourteen distinct same-store purposes require no legacy entry,
@@ -2374,7 +2374,7 @@ expired/undeclared calls. No public Start, genuine human consent or WorkOrder
 issue/completion is established by these data fixtures. Those connections and
 all original Step/Phase full-validation/review/release gates remain open.
 
-The [typed public SplitPhase Start slice](../journal/2026/10/2026-10-02-typed-public-split-start.md)
+The [typed public SplitPhase Start slice](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-02-typed-public-split-start.md)
 binds the existing generated `startSplitPhase` Operation/CLI grammar to exact
 host-selected allocation revision, complete current typed inputs, native
 participant admission and a separate required human-verification dependency.
@@ -2392,7 +2392,7 @@ explicit private test fixtures, not genuine human/provider or installed public
 host evidence. Those production dependencies, canonical typed WorkOrder issue/
 completion and every original full-validation/review/release gate remain open.
 
-The [typed partition WorkOrder issue slice](../journal/2026/10/2026-10-02-typed-partition-work-issue.md)
+The [typed partition WorkOrder issue slice](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-02-typed-partition-work-issue.md)
 now projects only unknown partition work from constructed Start/context binding
 and atomically persists instance suspension, Continuation and issued payload
 through canonical Subsystem storage. Current-call DataStoreSpace adapters enforce
@@ -2407,7 +2407,7 @@ capability exercised by an explicit private fixture Operation; public advance,
 typed AI completion/mechanical resumption, genuine human verifier and production
 allocation registration remain open, as do all original Phase acceptance gates.
 
-The [typed partition result completion slice](../journal/2026/10/2026-10-02-typed-partition-result-completion.md)
+The [typed partition result completion slice](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-02-typed-partition-result-completion.md)
 binds the existing generated `submitPartitionSemanticResult` Operation to
 canonical managed completion. It loads exact issued context/original typed Start
 and independent current facts, receives only the semantic Judgment and resumes
@@ -2422,7 +2422,7 @@ human/allocation installation, public advance, enriched input/planning publicati
 and recovery, server/MCP/separate-process and original full-validation/review/
 release gates remain open. This bounded connection does not complete Phase 2.
 
-The [atomic enrichment publication dependency](../journal/2026/10/2026-10-02-partition-enrichment-atomic-publication-dependency.md)
+The [atomic enrichment publication dependency](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-02-partition-enrichment-atomic-publication-dependency.md)
 records a source-grounded public API gap after the Cozy resume instruction.
 CNCF can internally stage Create-only local records in canonical completion,
 but its staging intent/operation are private to CNCF; the public component
@@ -2455,7 +2455,7 @@ exit 0 and `lock=released`. The generated runtime classpath selects the updated
 Ivy jar containing `stageCreateC`. Application enrichment publication/recovery
 wiring is the current dependent slice; these focused results are not Phase
 acceptance and do not complete original review/full-validation/release gates.
-The [application publication/recovery plan](../journal/2026/10/2026-10-02-typed-partition-enrichment-publication-recovery.md)
+The [application publication/recovery plan](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-02-typed-partition-enrichment-publication-recovery.md)
 freezes the current dependent source/spec frontier. The implementation candidate stages complete enriched
 estimate/handoff rows plus their exact canonical-result reference mapping in
 the same managed completion, then reconstruct usable planning only after exact
@@ -2476,7 +2476,7 @@ or direct application SQLite substitute is selected. Updated Cozy HEAD/clean
 source observation is not a new validation result; invocation 781 remains
 historical evidence. Phase 2 stays in progress.
 
-The next [mechanical candidate allocation PLAN](../journal/2026/10/2026-10-02-split-phase-mechanical-candidate-allocation.md)
+The next [mechanical candidate allocation PLAN](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-02-split-phase-mechanical-candidate-allocation.md)
 targets the still-observed `HostAllocationRequired` boundary. It freezes an
 explicit deterministic host policy, reuse of the already computed enumeration,
 complete planning/candidate rows in the same completion transaction, and V2
@@ -2493,7 +2493,7 @@ production composition and generated public advance are still absent. Genuine
 human/result-allocation installation and follow-on semantic WorkOrders remain
 required, not replaced by an observation endpoint or fixture evidence.
 
-The next [issued reply contract design](../journal/2026/10/2026-10-02-split-phase-issued-reply-contract.md)
+The next [issued reply contract design](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-02-split-phase-issued-reply-contract.md)
 addresses a concrete prerequisite to public advance: the current WorkOrder
 does not disclose its assigned result reference, while completion depends on a
 fixture-backed AllocationPort. The frozen change assigns result/enrichment
@@ -2510,7 +2510,7 @@ execution and default multi-service installation remain the next integration.
 Public advance (including all-known work), genuine human ingress, multi-service
 Factory installation and original acceptance gates stay open.
 
-The [public advance mechanical-transition design](../journal/2026/10/2026-10-02-split-phase-public-advance-mechanical-transition-plan.md)
+The [public advance mechanical-transition design](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-02-split-phase-public-advance-mechanical-transition-plan.md)
 records the next source-grounded prerequisite: all-known planning cannot use
 the existing issued-AI completion API or separate instance/document writes.
 A generic CNCF managed mechanical transition will atomically append native
@@ -2531,7 +2531,7 @@ authority/base/binding/PLAN-owner and independent acceptance gaps remain open.
 Public advance/all-known routing and default multi-service installation follow
 this prerequisite within the original Phase 2, not a replacement storage Goal.
 
-The [public advance consumer plan](../journal/2026/10/2026-10-02-split-phase-public-advance-consumer-plan.md)
+The [public advance consumer plan](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-02-split-phase-public-advance-consumer-plan.md)
 now freezes the dependency-ready integration: common planning preparation
 without an AI-work predicate, separate mechanical allocation anchors and one
 continuation of the existing deterministic kernel. The first Slice owns five
@@ -2551,7 +2551,7 @@ default multi-service installation are still open.
 This is not an accepted ordinary PLAN or a replacement Phase. Existing semantic identities,
 Reply/codec contracts, independent acceptance and original closure gates remain.
 
-The [mechanical checkpoint consumer design](../journal/2026/10/2026-10-02-split-phase-mechanical-checkpoint-consumer-design.md)
+The [mechanical checkpoint consumer design](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-02-split-phase-mechanical-checkpoint-consumer-design.md)
 records five newly established integration dependencies. Typed Start/context
 binding still consumes semantic-only Prepared, so a distinct general binding
 must precede mechanical execution. Mixed projection frontiers must retain all
@@ -2570,7 +2570,7 @@ the next bounded design. Full
 snapshot publication/recovery and public current-state routing remain in the
 same original Phase 2, with no independent acceptance claimed by this design.
 
-The user's [test-settings correction](../journal/2026/10/2026-10-02-test-runtime-preparation-settings.md)
+The user's [test-settings correction](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-02-test-runtime-preparation-settings.md)
 now connects official runtime preparation to Test/compile (normal test and
 testOnly), with explicit serial/non-fork/Flat test configuration. Full 803
 exposed two stale contracts, not a platform failure: the exact Judgment list
@@ -2583,7 +2583,7 @@ invoked runtime prerequisite was needed. This resolves the test-configuration
 interruption, not independent Step/Phase review or closure. Passive snapshot
 and actual checkpoint/public advance implementation remain the next work.
 
-The [passive planning snapshot contract](../journal/2026/10/2026-10-02-split-phase-passive-planning-snapshot-contract.md)
+The [passive planning snapshot contract](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-02-split-phase-passive-planning-snapshot-contract.md)
 now freezes the complete effective inputs, ordered mixed candidate frontier,
 actual Built documents/local handoffs, aggregated scope work, admission reviews,
 objective scores and positional human-authority ties. BigInt scores use exact
@@ -2609,7 +2609,7 @@ No new full-suite run, native checkpoint, generated public operation, independen
 acceptance review or commit is claimed. Next is the bounded managed-consumer
 PLAN, retaining the sole Subsystem pool/grant pair and original Goal scope.
 
-The [planning checkpoint publication contract](../journal/2026/10/2026-10-02-split-phase-planning-checkpoint-publication-contract.md)
+The [planning checkpoint publication contract](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-02-split-phase-planning-checkpoint-publication-contract.md)
 now fixes the original context/typed Start/full snapshot wrapper, distinct
 mechanical versus actual AI-completion origins, immutable context index and
 mapping, complete mixed-frontier document Creates and actual native capacity
@@ -2640,7 +2640,7 @@ generated public advance, independent acceptance review or Git mutation is
 claimed. Next is managed integration PLAN within the unchanged original Goal;
 all original semantic/human/public/default-assembly and closure work remains.
 
-The [public advance integration contract](../journal/2026/10/2026-10-02-split-phase-public-advance-integration-contract.md)
+The [public advance integration contract](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-02-split-phase-public-advance-integration-contract.md)
 now identifies the precise next prerequisite: actual generated
 SplitPhaseService.advanceSplitPhase and a closed instance/context command, with
 an explicit v5 definition (no rewriting of retained v4 data). Source inspection
@@ -2670,7 +2670,7 @@ advance/current-call and complete observation/recovery PLAN, not another
 declaration plan. Native transaction/readback, AI mapping/default installation,
 independent review/commit and all original Phase closure requirements remain.
 
-The [managed checkpoint execution/observation contract](../journal/2026/10/2026-10-02-split-phase-managed-planning-checkpoint-contract.md)
+The [managed checkpoint execution/observation contract](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-02-split-phase-managed-planning-checkpoint-contract.md)
 froze six exact paths, now implemented under parent-only limited recovery. Current native
 WorkflowComponentStorage/ManagedMechanicalTransition already supply one actual
 same-pool transaction for instance, native receipt and all staged local Creates;
@@ -2693,7 +2693,7 @@ independent review and commit gaps remain. Next technical work is the original
 AI-completion mapping/observation and canonical public current-state routing;
 default assembly and the full original Phase closure contract remain required.
 
-The [original AI-completion checkpoint contract](../journal/2026/10/2026-10-02-split-phase-ai-completion-checkpoint-contract.md)
+The [original AI-completion checkpoint contract](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-02-split-phase-ai-completion-checkpoint-contract.md)
 now freezes the next twelve-path technical integration frontier. Original AI
 completion must capture the same K/R mapping inside its existing native closing
 transaction, replacing overlapping enrichment Creates rather than adding a
@@ -2747,7 +2747,7 @@ SBT/wrapper exits 0 and released lock; no failed, skipped or pending examples.
 No source/configuration/dependency edits occurred between these runs and no
 implementation repair was required. Ledger is 494 through 825; the new frontier
 repair count remains 0/3 and prior histories are unchanged. See the
-[actual validation closure](../journal/2026/10/2026-10-02-split-phase-ai-completion-checkpoint-contract.md).
+[actual validation closure](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-02-split-phase-ai-completion-checkpoint-contract.md).
 State is IMPLEMENT_VALIDATED, next REVIEW, not Phase acceptance. Only tests were
 delegated; independent review, ordinary authority/base/binding and commit gaps,
 canonical default public advance/assembly, human ingress and the full original
@@ -2761,8 +2761,8 @@ SBT/wrapper0, lock released and exact 943-path repaired state unchanged.
 Fresh read-only closure returned PASS, both findings CLOSED and no introduced
 regression. HYG-AICC-001/002/003 remain outside this repair. Ledger is 496 through
 827; technical byte-changing repair count is 1/3, and older budgets are preserved.
-See [repair validation](../journal/2026/10/2026-10-03-split-phase-ai-checkpoint-repair-validation.md)
-and [independent closure](../journal/2026/10/2026-10-03-split-phase-ai-checkpoint-repair-closure.md).
+See [repair validation](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-03-split-phase-ai-checkpoint-repair-validation.md)
+and [independent closure](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-03-split-phase-ai-checkpoint-repair-closure.md).
 This is bounded technical closure, not ordinary PLAN/Step/Phase acceptance,
 full validation or release; original authority/base/binding and review-history
 gaps and remaining production connections are still open. No commit occurred.
@@ -2770,7 +2770,7 @@ gaps and remaining production connections are still open. No commit occurred.
 The subsequent source inspection distinguishes the already generated
 `advanceSplitPhase` declaration from its missing production Operation and
 default service installation. The
-[public routing contract](../journal/2026/10/2026-10-03-split-phase-public-advance-routing-contract.md)
+[public routing contract](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-03-split-phase-public-advance-routing-contract.md)
 maps all ten planning dispositions to their owning mechanical, semantic, human
 or application work and records real-dispatch/recovery/assembly spec obligations.
 A saved checkpoint or `Planned` proposal is explicitly nonterminal. New
@@ -2783,7 +2783,7 @@ admission gap: the current supported comparison/history routes require an
 existing ordinary PLAN epoch and actual review-repair counters which remain
 unestablished. The observed parent profile is suitable; this is not a test or
 platform refusal. See the
-[history admission gap](../journal/2026/10/2026-10-03-phase-2-history-recovery-admission-gap.md).
+[history admission gap](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-03-phase-2-history-recovery-admission-gap.md).
 No unknown count is replaced with zero, no old review is promoted, and no
 replacement Goal or original-start claim is created. Continuing ordinary
 development requires an explicitly authorized missing-accounting recovery
@@ -2793,7 +2793,7 @@ That historical recovery stop is now resolved by the updated V3 contract.
 The same active Goal has a saved and independently verified comparison binding
 and a saved/read-back private review ledger; historical epoch and counts remain
 null with no allowance reset. See
-[V3 comparison recovery](../journal/2026/10/2026-10-03-phase-2-v3-comparison-recovery.md).
+[V3 comparison recovery](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-03-phase-2-v3-comparison-recovery.md).
 Next is an independent baseline-review at REASSESSMENT over the complete current
 comparison. No ordinary Step/Phase acceptance, final validation or release is
 claimed, and all production connections above remain unfinished.
@@ -2810,23 +2810,23 @@ also finds a concrete gap between provider-neutral WorkflowInstancePersistence
 and the legacy in-memory WorkflowEngine queried by built-in management.
 Existing SQLite datastore and local Continuation adapters are useful facilities,
 not evidence that a durable application runtime or management connection exists.
-See the [CNCF Phase 88 provider slice journal](../journal/2026/09/2026-09-29-cncf-phase-88-durable-instance-provider.md).
-The [bootstrap slice journal](../journal/2026/09/2026-09-29-cncf-phase-88-instance-bootstrap.md)
+See the [CNCF Phase 88 provider slice journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-cncf-phase-88-durable-instance-provider.md).
+The [bootstrap slice journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-cncf-phase-88-instance-bootstrap.md)
 records source precedence, per-call managed leases and shutdown/reopen evidence.
-The [paired-persistence slice journal](../journal/2026/09/2026-09-29-cncf-phase-88-paired-suspension.md)
+The [paired-persistence slice journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-cncf-phase-88-paired-suspension.md)
 records one canonical same-store instance/Continuation commit and durable claim
 CAS. Focused-242 passed 24/24 tests. After limited recovery and successful Cozy
 classpath prerequisite-244, regression-245 completed 124 suites with 1024
 succeeded, 0 failed, 8 existing live MySQL cases canceled and 5 existing examples
 pending. This is not full UnitOfWork,
 issued-work/evidence or production runtime acceptance.
-The [issued-work slice journal](../journal/2026/09/2026-09-29-cncf-phase-88-issued-work-publication.md)
+The [issued-work slice journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-cncf-phase-88-issued-work-publication.md)
 records S4's atomic co-located WorkOrder publication and matching recovery.
 Focused-248 passed 34/34 tests in four suites, including nine S4 examples.
 Regression-249 completed 125 suites with 1033 succeeded, 0 failed, 8 existing
 live MySQL cases canceled and 5 pending, no aborted suites and lock=released.
 P2-U07 is checked. The
-[guarded-completion journal](../journal/2026/09/2026-09-29-cncf-phase-88-guarded-completion.md)
+[guarded-completion journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-cncf-phase-88-guarded-completion.md)
 records S5's canonical two-existing-record update and retained typed
 result/ExecutionEvidence. Focused-254 passed 77/77 tests in nine suites,
 including 21 new S5 examples. Regression-255 completed 127 suites with 1054
@@ -2967,19 +2967,19 @@ are tracked in Phase 8 rather than required for Phase 2 closure:
    record effects for one canonical commit, with focused-259 (70/70) and
    regression-260 (1158 succeeded / 141 suites) producer evidence. This bounded
    record-plan seam is not active UoW event/data/closing-program enlistment; see
-   the [S7 journal](../journal/2026/09/2026-09-29-cncf-phase-88-prepared-record-commit.md).
+   the [S7 journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-cncf-phase-88-prepared-record-commit.md).
    S8 admits Create-only local record effects without overwriting an existing
    identity, with focused-265 (57/57) and regression-266 (1172 succeeded /
    142 suites) accepted producer receipts on one complete tree. This is P2-U11,
    not EventStore or active UoW enlistment.
-   See the [S8 journal](../journal/2026/09/2026-09-29-cncf-phase-88-create-only-side-records.md).
+   See the [S8 journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-cncf-phase-88-create-only-side-records.md).
    S9 adds a bounded pure EventRecord codec/Create bridge and twelve executable
    examples. After accepted Cozy classpath refresh-268 and the scoped repair of
    five focused-269 failures, focused-270 passed 50/50 and regression-271 passed
    1184 tests / 143 suites on the same complete tree. P2-U12 is checked.
    Fully issued IDs and exact prefixed storage reject regeneration or lossy
    SQL decoding; no EventStore allocator/delivery-dedup or active UoW is claimed.
-   See the [S9 journal](../journal/2026/09/2026-09-29-cncf-phase-88-event-record-storage-codec.md).
+   See the [S9 journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-cncf-phase-88-event-record-storage-codec.md).
    Active UnitOfWork joint recovery remains
    upstream work. No downstream artifact
    refresh or production provider/bootstrap consumption is claimed yet.
@@ -3021,7 +3021,7 @@ suites, with native SBT/wrapper0, consumed permissions and released locks.
 Independent read-only GPT-6.1 Sol/high technical review passed with no current
 blockers; retained naming/GWT/documentation maintenance is nonblocking and
 unwaived. Evidence and exact native report:
-[current-state observation journal](../journal/2026/10/2026-10-03-split-phase-current-state-observation.md).
+[current-state observation journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-03-split-phase-current-state-observation.md).
 Execution history is515 through848. Implementation is parent-owned and tests
 used registered GPT-6 Luna/medium runners. No commits or ordinary Step/Phase
 acceptance occurred.
@@ -3053,7 +3053,7 @@ The original comparison remains R5/A7: all nine resolved, all history retained,
 limit3 and three closed consumed cycles unchanged. This new feature correction
 does not grant a fourth comparison slot or ordinary Step/Phase acceptance.
 Details and actual evidence are in the
-[pending-work journal](../journal/2026/10/2026-10-03-split-phase-pending-work-observation.md).
+[pending-work journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-03-split-phase-pending-work-observation.md).
 All original public-router, terminal/retained-map/fresh-planning, human/scope/
 reasoning/document/default-assembly, command/transport/resident-reference/
 generic-skill and acceptance/release obligations remain required.
@@ -3072,7 +3072,7 @@ R5/A7/nine/limit3/three closed consumed cycles and full ACTIVE Goal are unchange
 ## Workflow-owned retained-origin routing: subsequent technical prerequisite
 
 The parent implemented the four frozen programs recorded in
-docs/journal/2026/10/2026-10-03-split-phase-retained-origin-routing.md. Workflow
+https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-03-split-phase-retained-origin-routing.md. Workflow
 selects the actual stored mechanical or AI-completion origin, with current-call
 actor, raw original selection, host read purposes and genuine native evidence.
 No observation error becomes another origin or fresh planning. Exact pre-issue
@@ -3114,7 +3114,7 @@ mechanical checkpoint publication. Later handlers still return typed
 unavailable errors and remain required full-Phase work; no successful
 intermediate WAIT, Terminal or default-installation acceptance is claimed.
 Frozen candidate and stop evidence are recorded in
-[the public-entry journal](../journal/2026/10/2026-10-04-split-phase-public-advance-entry.md).
+[the public-entry journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-04-split-phase-public-advance-entry.md).
 
 Fresh854 runner spawn failed before child creation: agent thread limit reached.
 SBT has not started; current candidate compilation/specs and independent review

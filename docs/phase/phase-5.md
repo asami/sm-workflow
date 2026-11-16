@@ -18,7 +18,7 @@ then stop. Additional major Phase 5.1 redesign requires a separate instruction
 after that release. The non-acceptance checkpoint
 `2291d2fec20cf7335a8bec2af4077c4b2dd0e71a` preserves 372 paths; it supplies no
 validation, review or Phase closure. See the
-[release/stop handoff and actual execution record](../journal/2026/10/2026-10-11-phase-5-release-boundary-handoff.md).
+[release/stop handoff and actual execution record](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-11-phase-5-release-boundary-handoff.md).
 The user subsequently approved the unverified state and requested a formal
 commit only, without additional validation or review. Record NOT RUN —
 USER-APPROVED, not PASS; do not substitute a WIP checkpoint. Development has
@@ -42,7 +42,7 @@ connected expiry-free host-record/Human-receipt migration has generation and
 focused verification evidence (initial 256 successes/one fixture failure,
 then four affected cases passed after correction); no acceptance item is
 complete and the integrated batch is unfinished. See the
-[entry and implementation journal](../journal/2026/10/2026-10-08-phase-5-entry-contract-audit.md).
+[entry and implementation journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-08-phase-5-entry-contract-audit.md).
 
 The minimum CNCF execution-disposition producer contract is implemented and
 focused-verified: 28 existing protocol/provider cases passed in the initial
@@ -545,7 +545,7 @@ Phase 5 delivers the minimum runtime slice. Phase 6 delivers the minimum usable 
 
 Implement the runtime portion of
 [Managed Test Suites and Verification Cost Guard](../notes/managed-test-suites-and-verification-cost-guard.md).
-The [source decision](../journal/2026/10/2026-10-06-managed-test-suites-cost-feedback.md)
+The [source decision](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-managed-test-suites-cost-feedback.md)
 separates semantic suite design from deterministic selection/execution. The
 [Phase 5/6/7 checklist](managed-test-suites-phase-checklist.md) assigns delivery
 and acceptance ownership. This adds no Phase 1/2 completion requirement.
@@ -1973,7 +1973,7 @@ assigned implementation. This evidence changes the next integration boundary,
 not the adopted Phase requirements or repair budget. No runtime/Phase PASS,
 new verifier, private launcher, sandbox relaxation or future-only deferral.
 Same fullGoal/original9/history/repair3/3/frames, ordinary866; no new SBT.
-[Causal audit](../journal/2026/10/2026-10-09-normal-workflow-execution-connection-audit.md).
+[Causal audit](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-09-normal-workflow-execution-connection-audit.md).
 
 ### Targeted result ingress — source corrected, executable evidence pending
 
@@ -2108,7 +2108,7 @@ was allocated for this work yet; ordinary completed count870, original nine/
 all history/repair upper3 consumed3/all frames remain unchanged. Frame/locator/
 repeated decoding necessity, session/executor/result integration and remaining
 Phase5/full Goal obligations remain open. No acceptance checkbox closes.
-[Connected implementation and verification scope](../journal/2026/10/2026-10-09-split-advance-unused-input-removal.md).
+[Connected implementation and verification scope](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-09-split-advance-unused-input-removal.md).
 
 Actual106 subsequently completed2026-10-10 00:06:18JST:40/40,4 whole suites,
 Codec6/Goal4/Repository8/Direct22, relevant compilation/SBT0/wrapper0/lockreleased;
@@ -2252,7 +2252,7 @@ fresh default/forknone (runtime metadata not independently observable), returns
 PASS/CB[]/newHYG[]/newDEV[] over3wholeproduct/wholemanaged5146lines and actual
 connected native/effect/consumer/docs/CAR evidence. Full original result and exact
 accepted text:
-[causal record](../journal/2026/10/2026-10-10-scope-capture-consuming-boundaries.md).
+[causal record](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-scope-capture-consuming-boundaries.md).
 
 This is not whole R5/E1-E12/Phase/Goal acceptance. Full application/native copies,
 raw/source/document joins, postcommit proof, locator/index/resource predicates,
@@ -2274,7 +2274,7 @@ application/document/negative/interruption/reopen coverage, both roots/decisions
 Actual124 two COMPLETE suites163/163/SBT0/wrapper0/lockreleased/current request
 ACCEPTED for subject116; fresh independent READ-ONLY supplemental PASS/CB[]/
 newHYG[]/newDEV[], CAR0FAIL347WARN114OK. Complete original and English accepted
-text in [causal record](../journal/2026/10/2026-10-10-scope-commit-observation-consumption.md).
+text in [causal record](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-scope-commit-observation-consumption.md).
 
 This is not whole R5/Phase/Goal acceptance. Reader joins/raw inspection/physical
 envelopes/resource predicates and adjacent scope-planning comparisons remain
@@ -2300,7 +2300,7 @@ reader actualexit0/ACCEPTED subject117/exact registered child. Fresh independent
 READ-ONLY supplemental PASS/CB[]/newHYG[]/newDEV[], CAR0FAIL347WARN114OK; warnings
 remain residuals, not waived release/transport acceptance. Whole158/202-line
 products/5169-line primary executable and actual connected consumers reviewed.
-[Current125 evidence and complete original](../journal/2026/10/2026-10-10-planning-human-commit-observation-consumption.md).
+[Current125 evidence and complete original](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-planning-human-commit-observation-consumption.md).
 
 Capture/codec duplicates and canonical JSON, reader full joins/envelopes/metadata/
 resource predicates still require individual necessity assessment. Full R5/R1–R5/
@@ -2328,7 +2328,7 @@ whole products/whole5278-line executable and actual connected native/consumer/
 docs/generated/static paths reviewed. Original126 compile failure and127163:
 140PASS/23FAILED retained; after terminal only causal syntax/spec/prose fixes,
 all23 failing cases retained and seven products unchanged after127.
-[Current128 evidence and complete original](../journal/2026/10/2026-10-10-planning-human-capture-codec-consumption.md).
+[Current128 evidence and complete original](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-planning-human-capture-codec-consumption.md).
 
 Raw inspector/reconstructed successor/native/application/source/document joins,
 nested strict/envelope/metadata/resource predicates and broader R5/R1–R5/E1–E12/
@@ -2362,7 +2362,7 @@ Tests: configured registered gpt-6-luna/medium/regular23/forkall,
 fresh-default/forknone, `/root/planning_human_native_state_readonly_review`.
 Actual runtime model metadata not independently observable; no reviewed input
 changed during execution/review, only later record projections appended.
-[Actual129 evidence and complete original](../journal/2026/10/2026-10-10-planning-human-native-state-consumption.md).
+[Actual129 evidence and complete original](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-planning-human-native-state-consumption.md).
 
 Raw reconstruction/source/frontier/document/envelope/metadata/resource predicates
 still require individual necessity assessment. All broader R5/R1–R5/E1–E12/
@@ -2395,7 +2395,7 @@ No old request reuse, filters/skips/new verifier/stamp/hash/ledger/authority/fra
 Remaining necessity assessment and ALL broader full completion boxes/four HYG
 stay OPEN. Same ACTIVE Goal/history/repair3/3/all frames, ordinary894through129
 unchanged; no counter/policy/epoch/allowance/commit/publication/full closure.
-[Frozen boundary and current unverified implementation](../journal/2026/10/2026-10-10-human-passive-field-consumption.md).
+[Frozen boundary and current unverified implementation](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-human-passive-field-consumption.md).
 
 ### R17 later Actual130 —175PASS, public-manual blocker OPEN
 
@@ -2409,7 +2409,7 @@ bounded PASS, newHYG[]/newDEV[]; whole primary6018lines/complete1629-line Direct
 regression/actual consumers and evidence reviewed. Original result retained, not
 rewritten PASS. One-file manual correction/recheck requested, pending approval;
 no product/spec changes or new command permission/frame/counter inferred.
-[Actual130 evidence and complete original](../journal/2026/10/2026-10-10-human-passive-field-consumption.md).
+[Actual130 evidence and complete original](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-human-passive-field-consumption.md).
 
 Same full ACTIVE Goal/original9/history/repair upper3 consumed3/all frames;
 ordinary895through130 separate. Original114 fulfilled, no replay. Broader R5/
@@ -2434,7 +2434,7 @@ Answer codec/spec, normative Human pair, original review/runtime record and
 complete fresh CAR report assessed. Only the stable
 CB-SESSION130-HUMAN-PASSIVE-ANSWER-MANUAL is resolved. Original FINDINGS retained,
 not relabeled; actual130175/175 remains original runtime evidence, no new SBT.
-[Evidence and separate focused original](../journal/2026/10/2026-10-10-human-passive-field-consumption.md).
+[Evidence and separate focused original](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-human-passive-field-consumption.md).
 
 Same full ACTIVE Goal/original9/all history/repair upper3 consumed3/all frames;
 ordinary895through130 unchanged, original114 fulfilled/not reopened. Four inherited
@@ -2457,7 +2457,7 @@ UNVERIFIED: fresh registered serialized three-COMPLETE-suite validation,
 current-result admission, fresh CAR and connected independent READ-ONLY review
 remain. Actual130175/175/manual PASS precede these inputs. No old request replay,
 filter/skip/new common validator/verified stamp/hash/comparison ledger.
-[Current causal boundary](../journal/2026/10/2026-10-10-reasoning-human-passive-consumption.md).
+[Current causal boundary](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-reasoning-human-passive-consumption.md).
 
 All broader predicate/resource/comparative-cost/Phase/Goal obligations/four HYG
 remain OPEN. Same full ACTIVE Goal/original9/history/repair upper3 consumed3/all
@@ -2476,7 +2476,7 @@ Fresh independent READ-ONLY /root/reasoning_human_passive_readonly_review return
 supplemental PASS, CurrentBoundaryBlockers[], newHYG[], newDEV[], owner sm-workflow,
 for ONLY frozen R18/E38–39: six whole owned programs2811lines, actual connected
 consumers, current normative/public prose, original runtime and full CAR assessed.
-[Actual evidence and retained original](../journal/2026/10/2026-10-10-reasoning-human-passive-consumption.md).
+[Actual evidence and retained original](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-reasoning-human-passive-consumption.md).
 
 All three reasoning Human directions/both stopped alternatives/saved annotations/
 retained/owning advance/separate-JVM reopen and genuine harmful-input negatives

@@ -359,7 +359,7 @@ repair frame. Phase5/5.1's explicitly approved-unverified FORMAL releases and
 Phase5.2's formal predecessor meaning remain valid; no retrospective checks.
 
 The two accepted nonblocking Hygiene records are persisted in the
-[canonical Hygiene journal](../journal/2026/10/2026-10-12-phase-5.3-hygiene-follow-up.md).
+[canonical Hygiene journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-12-phase-5.3-hygiene-follow-up.md).
 There are no accepted Development Candidate items or unpersisted findings.
 Authored packaged-ABI reference maintenance remains Hygiene, not a claim that
 publication/client/CLI readiness was tested.

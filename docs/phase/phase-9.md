@@ -98,7 +98,7 @@ Planning and its review remain pre-execution activities. Phase 9 assesses conver
 
 ## Delivery order: review connection before Takeover (2026-10-30)
 
-Source: [AI execution provider interface journal](https://github.com/asami/sm-workflow/blob/main/docs/journal/2026/10/2026-10-30-ai-execution-provider-interface-phase80-phase9.md).
+Source: [AI execution provider interface journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-30-ai-execution-provider-interface-phase80-phase9.md).
 The following slices make the provider-routing work concrete while preserving
 the existing convergence and Acceptance Boundary requirements below.
 

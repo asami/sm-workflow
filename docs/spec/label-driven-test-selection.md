@@ -5,7 +5,7 @@ Status: approved target; coordinated producer/consumer migration pending.
 Prior LTEST delivery remains accepted within its original scope. The target below
 supersedes its multi-purpose authoring guidance; it does not reopen that delivery.
 Plan: [TA-S1–4 and TA-A01–06](../notes/label-driven-test-migration-plan.md#standard-annotation-follow-up--2026-10-31).
-Handoff: [approved migration and preservation](../journal/2026/10/2026-10-31-admission-standard-annotations-handoff.md).
+Handoff: [approved migration and preservation](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-31-admission-standard-annotations-handoff.md).
 
 ## Classification and run scope
 

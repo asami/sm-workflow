@@ -24,7 +24,7 @@ SystemNode owns the physical resource. Eight bootstrap examples, including
 shared-binding concurrent CAS and shutdown/reopen, ran in regression-238:
 109 suites, 876 successful tests, 0 failures, 7 existing MySQL cases canceled and
 3 existing examples pending. See the
-[bootstrap journal](../journal/2026/09/2026-09-29-cncf-phase-88-instance-bootstrap.md).
+[bootstrap journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-cncf-phase-88-instance-bootstrap.md).
 
 S3 adds borrowed WorkflowContinuationDataStorePersistence and an explicit
 WorkflowInstanceDataStorePersistence.suspendC composition method. Existing
@@ -37,7 +37,7 @@ passed 24/24 tests in three suites. Limited recovery resolved regression-243's
 initial permission timeout; prerequisite-244 refreshed its stale Cozy classpath.
 Regression-245 completed 124 suites: 1024 succeeded, 0 failed, 8 existing live
 MySQL checks canceled and 5 existing examples pending, with lock=released. See the
-[S3 journal](../journal/2026/09/2026-09-29-cncf-phase-88-paired-suspension.md).
+[S3 journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-cncf-phase-88-paired-suspension.md).
 This is record-transaction evidence, not AtomicWorkflowSuspensionEngine or
 active UnitOfWork/event enlistment. S3 alone does not publish issued work;
 S4 below adds that bounded composition. Retained result/admission evidence,
@@ -54,7 +54,7 @@ passed 34/34 tests in four suites and regression-249 completed 125 suites with
 1033 succeeded, 0 failed, 8 existing live MySQL cases canceled and 5 pending.
 This is not production claim admission, active UnitOfWork/evidence/completion
 atomicity, separate-process restart or downstream artifact consumption. See the
-[S4 journal](../journal/2026/09/2026-09-29-cncf-phase-88-issued-work-publication.md).
+[S4 journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-cncf-phase-88-issued-work-publication.md).
 
 S5 adds an opt-in canonical existing-successor Update capability and
 WorkflowCompletionDataStorePersistence. One transaction guards the instance
@@ -67,7 +67,7 @@ Eight kernel and thirteen Workflow examples ran in focused-254 (77/77 tests,
 nine suites). Regression-255 passed 1054 tests in 127 suites, 0 failed/aborted,
 8 existing MySQL checks canceled and 5 placeholders pending. Exact receipts,
 earlier failures and source hashes are in the
-[S5 journal](../journal/2026/09/2026-09-29-cncf-phase-88-guarded-completion.md).
+[S5 journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-cncf-phase-88-guarded-completion.md).
 
 This closes bounded source-level instance/bootstrap, issued-work publication
 and guarded result completion, not separate application AdmissionEvidence
@@ -75,7 +75,7 @@ payload/scope, active UnitOfWork enlistment, full joint runtime recovery,
 production launcher/MCP or management visibility.
 The resolved downstream artifact below has not been refreshed and does not
 prove consumption of the new provider. Exact evidence and remaining work:
-[upstream slice journal](../journal/2026/09/2026-09-29-cncf-phase-88-durable-instance-provider.md).
+[upstream slice journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-cncf-phase-88-durable-instance-provider.md).
 
 ## Baseline and evidence limits
 
@@ -86,7 +86,7 @@ The actual JAR's default/named/descriptor preparation call sites were inspected;
 consumer recompilation and 53 tests in nine suites passed. This supersedes the
 404/405 artifact below, not the open production managed-binding or launcher
 acceptance requirements. See the
-[shared-storage consumer refresh](../journal/2026/10/2026-10-01-shared-storage-consumer-refresh.md).
+[managed completion assembly design](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-goal-phase-managed-review-assembly.md).
 
 Current consumer update (2026-10-01): refresh-404 produced the local CNCF
 SNAPSHOT, and consumer-405 resolved its actual Ivy JAR with SHA-256
@@ -95,7 +95,7 @@ The GoalPhase suspension snapshot conformance change and review/repair
 regressions passed 40 tests in 4 suites. This supersedes the initial artifact
 observation below for current consumer resolution only; it does not prove
 production managed binding/bootstrap or launcher/server recovery. See the
-[consumer conformance journal](../journal/2026/10/2026-10-01-goal-phase-snapshot-conformance.md).
+[consumer conformance journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-goal-phase-snapshot-conformance.md).
 
 Phase 1 is completed with 34/34 bounded application/common-contract items and
 full-229 (526/526 tests, 56 suites). Its test service assemblies and actual
@@ -245,7 +245,7 @@ factories use settings-only decoding. Focused-414 passed 49 tests and
 focused-415 passed 47, including managed Completion regression. Blob still
 creates a settings-only pool, and Generic Subsystem readers remain to be
 corrected. No full lifecycle closure or Phase acceptance is claimed. See the
-[settings/resource journal](../journal/2026/10/2026-10-01-runtime-settings-resource-separation.md).
+[settings/resource journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-runtime-settings-resource-separation.md).
 
 2026-10-01 host update: CNCF now has a public programmatic
 `SubsystemEventStoreBootstrap` delegating to canonical factory construction.
@@ -255,7 +255,7 @@ composition. The canonical-host log has an unresolved pool start/stop mismatch;
 attribute it and prove resource ownership before production lifecycle promotion.
 The producer changed after refresh-404 and needs a fresh local SNAPSHOT before
 downstream consumption. See the
-[public host bootstrap journal](../journal/2026/10/2026-10-01-public-eventstore-host-bootstrap.md).
+[public host bootstrap journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-public-eventstore-host-bootstrap.md).
 
 Consume CNCF Phase 88 with producer/consumer executable evidence and an exact
 artifact identity, then implement the first local GoalPhase slice above. If

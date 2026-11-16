@@ -12,7 +12,7 @@ cases; independently accepted ReviewPhase1270/1271 satisfied all eleven conditio
 Accepted Steps, original base, history and Phase repair count4/10 are retained.
 Synchronization is `deferred`; no GitHub convergence is claimed.
 
-See the [actual completion and exact evidence references](../journal/2026/10/2026-10-27-phase-6.7-t4-source-handoff.md#actual-phase-completion-2026-10-27).
+See the [actual completion and exact evidence references](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-27-phase-6.7-t4-source-handoff.md#actual-phase-completion-2026-10-27).
 This status reconciliation follows Final and does not alter its saved candidate.
 
 ## Historical Release repair observations
@@ -51,7 +51,7 @@ The separate NoChange Task has fresh Compile +5 passing tests, independent
 acceptance, no commit and unchanged HEAD. Both preserve unrelated dirty bytes
 and retain five Evidence references without warning. The square defect was
 intentionally seeded for qualification. Exact artifacts and limits are in the
-[current handoff](../journal/2026/10/2026-10-27-phase-6.7-t4-source-handoff.md).
+[current handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-27-phase-6.7-t4-source-handoff.md).
 
 Publication105 activated the corrected image `57ace7b8`. Six newly authored
 native cases are unexecuted; controlled failed/UNKNOWN fixture designs do not
@@ -93,15 +93,15 @@ open; public examples do not independently close the eleven Phase conditions.
 Remaining variants are [Phase 17](phase-17-checklist.md); their unfinished work
 does not block this Phase. Existing validation is reused only where applicable.
 
-T2 source handoff: [2026-10-27 implementation boundary](../journal/2026/10/2026-10-27-phase-6.7-t2-source-handoff.md).
+T2 source handoff: [2026-10-27 implementation boundary](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-27-phase-6.7-t2-source-handoff.md).
 Source implementation and bounded executable specifications do not close these
 phase-scoped conditions; actual native/installed evidence remains required.
 
-T3 source handoff: [2026-10-27 review-origin implementation boundary](../journal/2026/10/2026-10-27-phase-6.7-t3-source-handoff.md).
+T3 source handoff: [2026-10-27 review-origin implementation boundary](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-27-phase-6.7-t3-source-handoff.md).
 Original-finding attribution specifications do not close phase-scoped or
 installed acceptance conditions.
 
-T4 source handoff: [2026-10-27 packaging and existing-chat boundary](../journal/2026/10/2026-10-27-phase-6.7-t4-source-handoff.md).
+T4 source handoff: [2026-10-27 packaging and existing-chat boundary](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-27-phase-6.7-t4-source-handoff.md).
 Plan revision 2 admitted the current Step's authored CAR ABI inventory. Actual
 runtime-owned publication and dedicated activation succeeded, and the published
 CAR contains the matching ABI and all six skills in 23 regular resources. The

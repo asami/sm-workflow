@@ -80,7 +80,7 @@ The receiving owner validates only changed/missing consumer connections.
 
 Initial delivery excludes full media coverage, broad search/management, batch,
 compression, automatic deletion, generic interrupted-workflow recovery and Phase
-11.1's Journal management. See the [two-chat handoff](../journal/2026/10/2026-10-20-phase-12-common-evidence-handoff.md).
+11.1's Journal management. See the [two-chat handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-20-phase-12-common-evidence-handoff.md).
 
 ## Local completion
 

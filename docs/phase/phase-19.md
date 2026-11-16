@@ -5,7 +5,7 @@ Date: 2026-10-28
 Owner: sm-workflow development
 Specification: [clean installation qualification](../spec/clean-installation-qualification.md)
 Checklist: [P19 acceptance](phase-19-checklist.md)
-Handoff: [English development handoff](../journal/2026/10/2026-10-28-docker-installation-customization-handoff.md)
+Handoff: [English development handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-28-docker-installation-customization-handoff.md)
 
 ## Position and dependencies
 

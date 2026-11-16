@@ -7,7 +7,7 @@ Prerequisites: accepted initial-use workflow boundary from Phase 6.3 and the
 required bounded CBD15 / CBD15.1 producer handoffs.
 Checklist: [Phase 10](phase-10-checklist.md)
 Contract: [Scoped quality admission](../spec/goal-phase-scoped-quality-admission.md)
-Decision/handoff: [Production-first allocation](../journal/2026/10/2026-10-18-production-first-cbd-review-phase-10.md)
+Decision/handoff: [Production-first allocation](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-production-first-cbd-review-phase-10.md)
 
 ## Purpose and scheduling
 

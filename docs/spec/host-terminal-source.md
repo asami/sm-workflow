@@ -70,7 +70,7 @@ The caller-return route supersedes the provider proposal below. Preserve existin
 implementation and tests until the responsible development chat replaces the
 affected path. Prior passing results remain evidence only for their original
 scope. No current Session or historical receipt is rewritten by this revision.
-The [developer handoff](../journal/2026/10/2026-10-23-codex-caller-information-handoff.md)
+The [developer handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-23-codex-caller-information-handoff.md)
 defines the execution order and remaining acceptance.
 
 ## Historical provider proposal — superseded, not an installation instruction

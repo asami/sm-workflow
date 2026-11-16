@@ -11,7 +11,7 @@ Earlier UNKNOWN and failed results and consumed repair counts remain historical.
 No accepted result or successful check was replayed to establish completion.
 Repository synchronization was deferred at closure and is handled separately.
 P66-17/P66-18 planning additions below do not amend this completed sixteen-condition
-Plan. The [retained-evidence reconciliation](../journal/2026/10/2026-10-26-phase-66-p66-17-18-evidence-reconciliation.md)
+Plan. The [retained-evidence reconciliation](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-26-phase-66-p66-17-18-evidence-reconciliation.md)
 confirms both completed within the earlier recovery and continuation. Their stale
 unchecked projection has been corrected; no successor work remains for these IDs.
 
@@ -25,7 +25,7 @@ recover completed producer receipts first, connect same-authority source-history
 normalization and public adoption, then continue D3 and D4 with applicable existing
 results. RRC completion alone does not settle source-history recovery. No caller
 bypass or reimplementation of D1/D2. See the
-[English handoff](../journal/2026/10/2026-10-26-source-history-recovery-and-result-collection-handoff.md).
+[English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-26-source-history-recovery-and-result-collection-handoff.md).
 
 
 Status: completed — 2026-10-26
@@ -113,7 +113,7 @@ It exercised retained compiler failure, managed information/Evidence/Journal,
 manifest/history, a later behavioral failure, successful Compile plus three
 focused behavioral tests, and normal Step continuation in each isolated Session.
 Original installed01 failure/partial fixture effects remain retained. The
-[English D4 handoff](../journal/2026/10/2026-10-26-phase-66-d4-connected-adoption-handoff.md)
+[English D4 handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-26-phase-66-d4-connected-adoption-handoff.md)
 records the usable boundary and actual receipts. This completes the reported
 delivery work; P66-11/P66-12 remain subject to normal consumer repair admission
 and independent review. No live Session was operated solely for demonstration.
@@ -303,4 +303,4 @@ reopen Phase 6.4/6.5/12 acceptance. Adopt the delivered capability at an appropr
 existing continuation boundary after issued calls finish. The sm-workflow-dev
 worktree and its live work are not edited by this plan.
 
-[English development handoff](../journal/2026/10/2026-10-23-phase-6.6-incremental-diagnosis-handoff.md).
+[English development handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-23-phase-6.6-incremental-diagnosis-handoff.md).

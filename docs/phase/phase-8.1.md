@@ -10,7 +10,7 @@ Stage Status:
 Planned: 2026-11-01
 Sequence: Phase 7 -> Phase 11.1 -> Phase 8 -> Phase 8.1 -> existing Phase 9 -> Phase 18.
 Specification: [shared Scala lint profiles](../spec/scala-lint-profiles.md).
-Handoff: [English journal](../journal/2026/11/2026-11-01-shared-scala-lint-profiles-handoff.md).
+Handoff: [English journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-01-shared-scala-lint-profiles-handoff.md).
 Producer plans: [cross-project deliveries and dependencies](phase-8.1-dependencies.md).
 
 ## Renumbering and priority — 2026-11-11

@@ -136,7 +136,7 @@ legacy association bytes. Preparation and decoding have no write effect and do
 not establish authenticated consent or committed registration. PackageBin and
 the focused eighteen-suite accumulator passed (140 tests); production Operation,
 Create-only grant, actor admission and committed readback remain pending. See
-`docs/journal/2026/10/2026-10-01-registration-record-contract.md`.
+`https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-registration-record-contract.md`.
 
 ### Managed Create-only admission and outcome boundary
 

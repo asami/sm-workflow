@@ -7,7 +7,7 @@ Delivery order: Phase 7 -> Phase 11.1 -> Phase 8 -> Phase 8.1 -> Phase 9 -> Phas
 Predecessor: [Phase 6.7](phase-6.7.md) shared Task/FIX route and existing GoalPhase/RepositorySync validation
 Producer: CNCF Phase 117 (required for W4–W5)
 Checklist: [P18 acceptance](phase-18-checklist.md)
-Handoff: [design handoff](../journal/2026/10/2026-10-28-tool-neutral-validation-handoff.md)
+Handoff: [design handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-28-tool-neutral-validation-handoff.md)
 
 ## Purpose and preservation
 
@@ -32,7 +32,7 @@ its previously unassigned place in the delivery priority. It remains a toolchain
 using the shared execution baseline delivered by Phase 6.7; no completion of
 unrelated Phases 10-17 is required. This scheduling does not add Flutter to
 Phase 9 acceptance, start a Session or enlarge an active Step. See the
-[decision record](../journal/2026/11/2026-11-11-parallel-development-first-and-phase-8.1.md#subsequent-decision-phase-18-after-phase-9).
+[decision record](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-11-parallel-development-first-and-phase-8.1.md#subsequent-decision-phase-18-after-phase-9).
 
 After the scheduled Phase 18 start, W1 aligns with CNCF Phase 117 C1.
 W2–W3 can proceed with the existing SBT route

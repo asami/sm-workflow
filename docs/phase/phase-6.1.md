@@ -31,9 +31,9 @@ Phase 10 and accepted PLAN/COMMAND, Goal/base/epoch, counters and findings.
 Adopt at the next ordinary planning/dispatch boundary without retargeting issued
 work. Continue independent normal Action/UoW owner repair/validation as needed.
 This planning edit changes no source or live workflow state and claims no new
-acceptance. See the [production-first handoff](../journal/2026/10/2026-10-18-production-first-cbd-review-phase-10.md).
+acceptance. See the [production-first handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-production-first-cbd-review-phase-10.md).
 
-The [earlier continuation adoption](../journal/2026/10/2026-10-18-phase-6.1-cbd-external-review-adoption.md)
+The [earlier continuation adoption](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-phase-6.1-cbd-external-review-adoption.md)
 records the prior external-review target and actual gaps. Its waits and counts
 are historical, not instructions to restore that dependency or reset live state.
 
@@ -79,7 +79,7 @@ P6-SQ01..05 remains incomplete in Phase 10. Installed three-skill acceptance
 P63-USE01..03 and successor implementation remain with their existing owners;
 none is claimed by these focused checks or local Step commits.
 
-The adopted [cost-first execution order](../journal/2026/10/2026-10-18-production-cost-first-execution-order.md)
+The adopted [cost-first execution order](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-production-cost-first-execution-order.md)
 changes the later work order only. Preserve accepted work and fill actual missing
 connections; production use starts after 6.3 acceptance/release. Successor plans
 and shared projections currently remain preserved local planning, separately
@@ -190,7 +190,7 @@ contract and applicable evidence; do not introduce another client/workflow engin
 ### NICT delivery-friction observations — adopted 2026-10-17
 
 This is clarification of existing requirements from the
-[NICT incident handoff](../journal/2026/10/2026-10-17-nict-skill-failures-phase-6-family-handoff.md),
+[NICT incident handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-17-nict-skill-failures-phase-6-family-handoff.md),
 not a new item ID, acceptance gate or retrospective reopening. Preserve current
 issued work, in-flight results and applicable validation/review evidence. The
 owning development chat adopts it at the next ordinary planning/dispatch boundary;
@@ -383,7 +383,7 @@ the 8h ceiling is a packing rule, not an execution timeout.
 
 ### Source history comment policy selection — 2026-10-17
 
-Source history comments are optional, repository-specific conventions, not a universal sm-workflow requirement. Select `sm-workflow.source-history.style` from `none` (default) or `goldenport`. The previous `sourceHistory.style` spelling was explanatory shorthand, not an external property or compatibility alias. Consume the current call's `ExecutionContext.resolvedParameters`; CNCF owns common configuration loading and command-parameter precedence, as recorded in the [authoritative configuration contract](../journal/2026/10/2026-10-17-source-history-resolved-configuration-contract.md). `none` performs no source-history rule access, source read/update, check, or warning. `goldenport` explicitly selects the Asami-style source history convention (浅海式); obtain its external rule data from `sm-workflow.source-history.rule` in the same resolved configuration rather than hard-coding the convention into sm-workflow or loading a separate rule file. There is no separate `asami` selection. An unavailable selected rule reports a configuration/tool error; it must not silently fall back to another style. Phase 6.1 P6-HR01/04 owns deterministic execution only when a style is enabled. Phase 6.2 P6-HR02/03 retains semantic comment review as appropriate to the selected profile; ordinary semantic source comments are not disabled by `none`.
+Source history comments are optional, repository-specific conventions, not a universal sm-workflow requirement. Select `sm-workflow.source-history.style` from `none` (default) or `goldenport`. The previous `sourceHistory.style` spelling was explanatory shorthand, not an external property or compatibility alias. Consume the current call's `ExecutionContext.resolvedParameters`; CNCF owns common configuration loading and command-parameter precedence, as recorded in the [authoritative configuration contract](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-17-source-history-resolved-configuration-contract.md). `none` performs no source-history rule access, source read/update, check, or warning. `goldenport` explicitly selects the Asami-style source history convention (浅海式); obtain its external rule data from `sm-workflow.source-history.rule` in the same resolved configuration rather than hard-coding the convention into sm-workflow or loading a separate rule file. There is no separate `asami` selection. An unavailable selected rule reports a configuration/tool error; it must not silently fall back to another style. Phase 6.1 P6-HR01/04 owns deterministic execution only when a style is enabled. Phase 6.2 P6-HR02/03 retains semantic comment review as appropriate to the selected profile; ordinary semantic source comments are not disabled by `none`.
 
 Illustrative project setting:
 

@@ -40,7 +40,7 @@ CPB-P62-FIX-001, was resolved by 24 private/local lexical renames in 12 primary
 paths under the existing M0 waiver gate. The original sealed FINDINGS result
 and the parent's distinct mechanical amendment remain separate records;
 HYG-P62-FIX-001 is retained as open baseline debt in the
-[Hygiene journal](../journal/2026/10/2026-10-18-phase-6.2-hygiene-follow-up.md).
+[Hygiene journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-phase-6.2-hygiene-follow-up.md).
 Validation includes the applicable 19-suite/312-test accumulator, the later
 14 affected suites/286 passing tests, and final compile/Test compilation.
 Earlier failures and actual command/Human/review/commit evidence retain their
@@ -55,7 +55,7 @@ remain retained; cumulative repair accounting remains 39/Phase 0.
 
 ## Goal and connected implementation order
 
-The [production-first handoff](../journal/2026/10/2026-10-18-production-first-cbd-review-phase-10.md)
+The [production-first handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-production-first-cbd-review-phase-10.md)
 defers CBD review integration to [Phase 10](phase-10.md). This Phase uses 6.1's
 accepted ordinary reviewer-result route for affected REVIEW_FIX/re-review,
 findings and dependency decisions. It does not wait for CBD15/15.1. Preserve
@@ -71,7 +71,7 @@ do not build another engine or repeat Phase 5's complete threshold/state matrix.
 ### NICT delivery-friction observations — adopted 2026-10-17
 
 This is clarification of existing requirements from the
-[NICT incident handoff](../journal/2026/10/2026-10-17-nict-skill-failures-phase-6-family-handoff.md),
+[NICT incident handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-17-nict-skill-failures-phase-6-family-handoff.md),
 not a new item ID, acceptance gate or retrospective reopening. Preserve current
 issued work, in-flight results and applicable validation/review evidence. The
 owning development chat adopts it at the next ordinary planning/dispatch boundary;

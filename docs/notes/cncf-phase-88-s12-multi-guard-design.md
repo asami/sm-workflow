@@ -171,9 +171,9 @@ enlistment and production claim admission remain separate open gates to P2-U05.
 S12 does not close P2-U05, provide a sequence cursor or constitute a production
 EventStore. The pure plan contract passed focused-286 after Cozy classpath
 prerequisite-285; earlier failed attempts and both accepted receipts are in the
-[S12 contract journal](../journal/2026/09/2026-09-30-cncf-phase-88-s12-contract-candidate.md).
+[S12 contract journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-cncf-phase-88-s12-contract-candidate.md).
 No public provider capability, S12 acceptance, commit or publication is claimed.
-An [internal same-owner memory candidate](../journal/2026/09/2026-09-30-cncf-phase-88-s12-memory-staging.md)
+An [internal same-owner memory candidate](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-cncf-phase-88-s12-memory-staging.md)
 subsequently passed focused-287 (16/16); it does not establish cross-owner
 admission, SQLite behavior or post-commit readback.
 
@@ -214,7 +214,7 @@ not an admitted Workflow readback contract or delivery authorization. The next
 contract must retain/read back all guarded and Create records through the same
 admitted provider before success projection; the current two-record result
 does not prove that. S12/P2-U15 remain open. See the
-[memory route journal](../journal/2026/09/2026-09-30-cncf-phase-88-s12-memory-route.md).
+[memory route journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-cncf-phase-88-s12-memory-route.md).
 
 ## Native memory acknowledgement and complete readback (2026-09-30)
 

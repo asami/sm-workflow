@@ -66,7 +66,7 @@ allocation does not stop the current P67 repair or enlarge 6.7 acceptance.
 Adopt [three dependency modes and delivery](../spec/dependency-development-delivery.md):
 Fixed, assigned development chat with runtime-owned FIFO, and managed development
 subtree. Track implementation in the [P7-DD checklist](phase-7-dependency-delivery-checklist.md).
-The English [handoff](../journal/2026/10/2026-10-26-phase-7-dependency-development-modes-handoff.md)
+The English [handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-26-phase-7-dependency-development-modes-handoff.md)
 records the user direction and preservation rules.
 
 Assigned-chat work completes through local commit and successful scope-private
@@ -109,7 +109,7 @@ worktree's source, and no new global locking or isolation machinery is required.
 
 The [dependency contract](../spec/dependency-development-delivery.md#managed-dependency-synchronization-isolation--2026-11-09),
 [main-route contract](../spec/repository-sync-local-main-integration.md#phase-7-managed-dependency-route)
-and [decision journal](../journal/2026/11/2026-11-09-phase-7-managed-dependency-ai-cost.md#follow-up-two-synchronization-routes-for-parallel-development)
+and [decision journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-09-phase-7-managed-dependency-ai-cost.md#follow-up-two-synchronization-routes-for-parallel-development)
 define this planned allocation. Exercise the distinction in P7-DD-09 and the
 existing C workspace scenarios, including an unrelated B worktree with dirty
 and unpublished work. Preserve its source and existing active Sessions; this
@@ -122,7 +122,7 @@ The user confirmed the managed-development scenario: A needs a B change; develop
 validate and commit B in A's explicitly managed area; publish B's JARs and metadata
 into the selected development repository; A selects that exact result and runs
 affected consumer checks; synchronize both registered A/B source targets under
-existing authority. The [cost-planning journal](../journal/2026/11/2026-11-09-phase-7-managed-dependency-ai-cost.md)
+existing authority. The [cost-planning journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-09-phase-7-managed-dependency-ai-cost.md)
 records why this may reduce AI management cost compared with the assigned-chat
 route. This is an expected benefit, not a measured saving or a change to the
 three configured modes, FIFO ownership or revised delivery order below.
@@ -228,7 +228,7 @@ an access-control boundary: worktree/resource authority and verification remain
 enforced by their normal owners. Eliminating the worker is not an assumed cost
 saving or a substitute for those controls. The earlier observed 17.5% cost for
 parent waiting responses spans other work too; it is not a savings forecast for
-this A/B route. The [journal](../journal/2026/11/2026-11-09-phase-7-managed-dependency-ai-cost.md#follow-up-runtime-managed-a-stop-b-subagent-wait-and-a-resumption)
+this A/B route. The [journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-09-phase-7-managed-dependency-ai-cost.md#follow-up-runtime-managed-a-stop-b-subagent-wait-and-a-resumption)
 records this clarification. No active Session or present CNCF development owner
 is changed by this plan.
 
@@ -314,7 +314,7 @@ remains OFF pending Phase 10; observed convergence extensions remain in Phase 9.
 The existing A -> minimum C -> remaining B/C -> D implementation order, work IDs
 and acceptance remain unchanged. Earlier ordinary Step-review references describe
 the producer history, not a new mandatory per-Step review after 6.5 adoption.
-See the [handoff](../journal/2026/10/2026-10-20-phase-65-workflow-optimization-handoff.md).
+See the [handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-20-phase-65-workflow-optimization-handoff.md).
 
 ## Evidence-storage predecessor — 2026-10-13
 
@@ -389,7 +389,7 @@ Early A/C success does not declare Phase 7 complete or restore general worktree
 use before the applicable acceptance. Continue the already accepted 6.3 scope;
 record Phase 7 driver execution as bounded development until its full adoption
 boundary passes. No Phase 8/9/10 wait or new cost-measurement framework is added.
-See the [execution-order handoff](../journal/2026/10/2026-10-18-production-cost-first-execution-order.md).
+See the [execution-order handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-production-cost-first-execution-order.md).
 
 ### Shared execution and plan ownership — 2026-10-12
 
@@ -562,7 +562,7 @@ until its existing Phase 7 connected acceptance passes.
 Update usage instructions at closure to distinguish the 6.3 limited GoalPhase
 scope from this combined related-project workflow. Required validation, effect
 authority and independence stay with their existing owners. See the
-[development handoff](../journal/2026/10/2026-10-18-three-skill-production-tiers-handoff.md).
+[development handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-three-skill-production-tiers-handoff.md).
 
 ## Development Artifact Overlay (2026-10-06)
 
@@ -748,7 +748,7 @@ validation results remain unchanged; qualification/adoption is still required.
 
 Consume Phase 5's managed suites and Phase 6's semantic design/FIX connection,
 following [the suite contract](../notes/managed-test-suites-and-verification-cost-guard.md)
-and [decision journal](../journal/2026/10/2026-10-06-managed-test-suites-cost-feedback.md).
+and [decision journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-managed-test-suites-cost-feedback.md).
 The policy above determines **when** a repository needs FULL; CNCF Phase 103
 metadata discovery determines its FULL operation membership. FULL is not an
 unconditional synonym for `sbt test`. Do not introduce a registry, another
@@ -930,11 +930,11 @@ The discussion concerns the **development environment definition itself**, not a
 
 ## Optional operation candidates — reference only (2026-10-21)
 
-See [Development Workspace operation candidates](../journal/2026/10/2026-10-21-development-workspace-operation-candidates.md) for possible Status, Impact, Freshness, Diagnostics and related operations. This is non-normative reference material: no additional implementation, acceptance item or dependency is introduced by this link. Evaluate overlap with existing typed Operations before selecting any candidate.
+See [Development Workspace operation candidates](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-21-development-workspace-operation-candidates.md) for possible Status, Impact, Freshness, Diagnostics and related operations. This is non-normative reference material: no additional implementation, acceptance item or dependency is introduced by this link. Evaluate overlap with existing typed Operations before selecting any candidate.
 
 ## Natural inclusion of operation candidates (2026-10-21)
 
-During ordinary Phase 7 implementation, include Dependency Status, Artifact Freshness, and basic Dependency Impact when they follow naturally from the existing Development Workspace graph, Artifact Overlay status/verify, publication provenance, and dependency-aware validation. Prefer enriching existing typed operations/results rather than introducing separate operations, duplicate state, approval steps, or a new Phase. No additional approval is needed for such bounded implementation within Phase 7's existing acceptance boundary. Do not interpret the candidate journal as an unconditional new checklist or broaden Phase 7 into a general dependency-management system; materially larger scope requires a separate decision. See [candidate journal](../journal/2026/10/2026-10-21-development-workspace-operation-candidates.md).
+During ordinary Phase 7 implementation, include Dependency Status, Artifact Freshness, and basic Dependency Impact when they follow naturally from the existing Development Workspace graph, Artifact Overlay status/verify, publication provenance, and dependency-aware validation. Prefer enriching existing typed operations/results rather than introducing separate operations, duplicate state, approval steps, or a new Phase. No additional approval is needed for such bounded implementation within Phase 7's existing acceptance boundary. Do not interpret the candidate journal as an unconditional new checklist or broaden Phase 7 into a general dependency-management system; materially larger scope requires a separate decision. See [candidate journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-21-development-workspace-operation-candidates.md).
 
 ## Validation profiles across participating repositories — 2026-11-02
 

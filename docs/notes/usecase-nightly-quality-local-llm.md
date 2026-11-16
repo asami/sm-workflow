@@ -5,7 +5,7 @@ Status: future driver use case
 Scope: sm-workflow
 Related:
 - docs/notes/managed-test-suites-and-verification-cost-guard.md
-- docs/journal/2026/10/2026-10-06-overnight-development-supervisors-and-provider-escalation.md
+- https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-overnight-development-supervisors-and-provider-escalation.md
 - docs/phase/phase-6.md
 
 ## Goal

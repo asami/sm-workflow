@@ -11,7 +11,7 @@ The E2–E4 contract below adopts [Common Evidence](common-evidence.md) and
 common identity/storage/read and automatic Action-to-Journal recording; Phase 6.4
 owns trial adoption and operational extensions on that same service. Neither
 the original contract update nor E1 acceptance alone declared installed Evidence
-support or E2 success; the subsequent E2–E4 acceptance below supplies that evidence. See the [two-chat handoff](../journal/2026/10/2026-10-20-phase-12-common-evidence-handoff.md).
+support or E2 success; the subsequent E2–E4 acceptance below supplies that evidence. See the [two-chat handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-20-phase-12-common-evidence-handoff.md).
 Native Plan/Usage Contract adoption remains with the existing execution owner;
 no saved request, decision, history, counter or accepted result is rewritten here.
 

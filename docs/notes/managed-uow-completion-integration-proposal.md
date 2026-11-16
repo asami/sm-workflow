@@ -100,24 +100,24 @@ UnitOfWork, UnitOfWorkResource, EventEngine or public Operations. Its native
 boundary is a trusted test double, not proof of production enlistment or actual
 event delivery. Focused-379 passed 294/294 tests across 31 suites, including
 the final control-exception cases and existing UoW regressions. See the
-[participant journal](../journal/2026/10/2026-10-01-isolated-managed-participant.md).
+[participant journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-isolated-managed-participant.md).
 Focused-381 binds actual prepared host storage (299/299, 31 suites); delivery is
 still a test port and nonempty closing/data effects reject. Next enlist the
 actual closing-program/data intents before claiming single-domain UoW completion.
-See the [host participant journal](../journal/2026/10/2026-10-01-host-storage-participant.md).
+See the [host participant journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-host-storage-participant.md).
 Focused-383 verifies internal new-durable native composition with host-admitted
 local revision guards and Create-only records (301/301, 31 suites). The host
 grant is explicit trusted test assembly, not a standard declaration expansion.
 All-retained/transient local composition and actual closing-program interpretation
 are still required before central activation. See the
-[local-intent journal](../journal/2026/10/2026-10-01-native-local-intent-composition.md).
+[local-intent journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-native-local-intent-composition.md).
 Focused-385 adds native local composition for retained/transient/empty as well,
 and typed Completion participant integration across all five event modes
 (304/304, 31 suites). Local reserved EventStore collections are explicitly
 excluded so local writes cannot bypass persistence selection. Actual admitted
 closing-program interpretation, immutable handoff and production configuration
 remain required before central activation. See the
-[all-mode journal](../journal/2026/10/2026-10-01-all-mode-local-completion.md).
+[all-mode journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-all-mode-local-completion.md).
 Default-engine replacement, public
 activation, release, push, publication and sandbox relaxation are not inferred.
 
@@ -129,7 +129,7 @@ outcomes reject, and the ordinary interpreter refuses the staging primitive.
 The actual Action result is held in memory but is not yet bound to the separately
 prepared durable Completion result. Admitted CML Action selection, outer
 authorization/result binding, production declarations and active UoW integration
-remain required. See the [closing preparation journal](../journal/2026/10/2026-10-01-closing-program-preparation.md).
+remain required. See the [closing preparation journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-closing-program-preparation.md).
 
 Focused-390 closes that specific memory-only result gap: the typed Completion
 adapter now consumes the actual closing result and intents from the same
@@ -140,7 +140,7 @@ without reinterpreting the program, and stale claim suppression is verified
 (325/325, 34 suites). The old generic local-only closing adapter was removed.
 This does not prove admitted production Action selection, expected result-type
 contract/security, context-payload retention or central active UoW integration.
-See the [joint-result journal](../journal/2026/10/2026-10-01-joint-closing-result-retention.md).
+See the [joint-result journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-joint-closing-result-retention.md).
 
 Focused-394 adds an explicit internal ManagedCompletionUnitOfWork subtype and
 Indeterminate resource termination while leaving ordinary commit/abort dispatch
@@ -150,7 +150,7 @@ owned resources before test-port delivery, and retains uncertainty/control/
 cleanup diagnostics (429 executed tests, 40 suites; two existing pending).
 Existing persistent resume cannot swap factories because its postcommit claim
 completion is not enlisted; native managed admission/claim/result assembly and
-production delivery remain required. See the [opt-in journal](../journal/2026/10/2026-10-01-managed-uow-opt-in.md).
+production delivery remain required. See the [opt-in journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-managed-uow-opt-in.md).
 
 Focused-397 now gives the managed participant finalized original-order records:
 durable bodies come from exact verified readback, transient bodies carry the
@@ -159,7 +159,7 @@ DefaultEventBus subscribers without a second append. Subscriber failure retains
 Committed storage and cannot retry (440 executed tests, 41 suites; two existing
 pending). This is an internal bus integration, not public Action/security/runtime
 activation or configured durable query/replay acceptance. See the
-[finalized-delivery journal](../journal/2026/10/2026-10-01-finalized-event-bus-delivery.md).
+[finalized-delivery journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-finalized-event-bus-delivery.md).
 
 Focused-398 strengthens those actual-bus examples at the active UoW boundary:
 callback/cleanup/resource failure retains joint SQLite completion with zero
@@ -169,7 +169,7 @@ dispatch. Repeated commit is rejected in every case (440 executed tests, 41
 suites; two existing pending). Physical rollback/readback uncertainty and writer
 competition still need integrated evidence; the public completion Operation still
 uses the legacy separate resume/append route. See the
-[active failure journal](../journal/2026/10/2026-10-01-active-uow-failure-bus-suppression.md).
+[active failure journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-active-uow-failure-bus-suppression.md).
 
 Focused-401 adds internal host-owned canonical claim execution rather than
 swapping the legacy runtime's UoW factory. Exact WorkOrder/current/result/owner
@@ -180,7 +180,7 @@ never release, and a failed release is not retried. Actual bus success/failure,
 replacement-token preservation and interruption examples pass (444 executed
 tests, 41 suites; two existing pending). Public Operation/production host binding
 and broader failure/transport acceptance remain open. See the
-[owned-claim journal](../journal/2026/10/2026-10-01-host-owned-claim-completion.md).
+[owned-claim journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-host-owned-claim-completion.md).
 
 Focused-403 connects that executor to the common public Completion Operation
 through an opaque host binding with per-call verified DataStoreSpace/lease and
@@ -190,4 +190,4 @@ replay. Canonical instance bytes replace object-identity revalidation. Existing
 legacy Provided API regression is included (461 executed tests, 42 suites; two
 existing pending). Actual sm-workflow bootstrap/artifact consumption/CLI and
 broader failure/replay acceptance remain open. See the
-[public binding journal](../journal/2026/10/2026-10-01-public-managed-completion-binding.md).
+[public binding journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-01-public-managed-completion-binding.md).

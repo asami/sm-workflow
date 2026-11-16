@@ -187,4 +187,4 @@ no new installed qualification PASS. Integrated review
 delivery alignment. The current Release documentation FIX, fresh affected checks,
 independent scoped review and ordinary native Final/local closure remain pending;
 Phase completion requires the actual native Terminal result. See the
-[actual evidence and Phase 7 handoff](../journal/2026/10/2026-10-24-phase-65-delivery-and-phase-7-handoff.md).
+[actual evidence and Phase 7 handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-24-phase-65-delivery-and-phase-7-handoff.md).

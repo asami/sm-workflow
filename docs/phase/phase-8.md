@@ -46,7 +46,7 @@ Use real sm-workflow operation as the development driver for CNCF Phase 110 and 
 
 Gaps discovered by this use are fixed in the owning shared layer: CNCF for runtime capability/enforcement/loading admission, CBD Support for lint/review, sm-workflow only for workflow-specific scope/profile definitions. Do not add sm-workflow-specific direct filesystem/process/network bypasses. AI-generated workflow/component code must also not define and invoke its own `main`, Scala `@main`, App-style launcher or equivalent execution root; sm-workflow execution remains owned by CNCF Runtime/Operation boundaries. Reusable logic is an Operation/Service/API, while a real external executable is invoked only through admitted managed process execution.
 
-Detailed rationale: [Safety Sandbox adoption as a development driver](../journal/2026-10-15-safety-sandbox-development-driver.md).
+Detailed rationale: [Safety Sandbox adoption as a development driver](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026-10-15-safety-sandbox-development-driver.md).
 
 Adopt it incrementally against the real workflow in this order: (1) Command/Operation ExecutionContext scope, (2) worktree/resource boundaries, (3) managed Git/SBT process execution and arbitrary-shell rejection, (4) provider/network authority, (5) CAR Loading Admission plus CBD lint/review, and (6) Server Sandbox plus Client->Server ExecutionContext propagation when resident-server operation is introduced. Each slice is accepted through an actual sm-workflow scenario and may create a bounded upstream CNCF Phase 110 or cbd-support Phase 16 gap; re-consume the upstream fix before moving on. Do not build all sandbox families in advance.
 
@@ -151,7 +151,7 @@ selection, native operation integration or consumer verification to Phase 8.
 ## Parent round trips and context transfer (2026-11-09)
 
 Selected operational improvements from the
-[AI cost investigation](../journal/2026/11/2026-11-09-ai-cost-observations-and-phase-workflow-comparison.md).
+[AI cost investigation](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-09-ai-cost-observations-and-phase-workflow-comparison.md).
 Completed sm-workflow examples show about 67% fewer credits per declared Step
 and 64% fewer parent responses under the native route, but different work,
 review policy and unfinished/recovery costs prevent a causal or whole-operation
@@ -307,7 +307,7 @@ one-line authority change still receives a contract review. Distinguish diagnosi
 of an unknown failure from repair of an established cause. Keep issued Requests,
 independent review and runtime validation unchanged. Assess reopened findings
 and handoffs returned for missing evidence. Broader model benchmarking remains in Phase 9.
-See the [work classification journal](../journal/2026/11/2026-11-06-work-classification-precision.md).
+See the [work classification journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-06-work-classification-precision.md).
 
 Use Terra by default for ordinary implementation and repair, including
 prescribed edits. Phase 8 does not assign coding to Luna while Terra is
@@ -403,7 +403,7 @@ Initial cases from November 5–8:
 | Record | What the record establishes | Phase 8 disposition |
 | --- | --- | --- |
 | November 8 formal source-history incident, `P611-SM-FORMAL-SOURCE-HISTORY-FAILURE-CONTINUATION-01`, retained `incident-brief.json` | Actual approval covered bounded repair, verification and continuation; the formal failure had been reported as Wait, as had a missing outcome. | For a known failure within that scope and the remaining repair allowance, continue ordinary repair without another answer. For a live or missing outcome, collect status; do not treat it as a terminated failure. |
-| [GoalTask repair-trend record](../journal/2026/11/2026-11-05-goal-task-human-repair-continuation.md) | A Human approved producer re-entry in a defined scope after NotAccepted. The separately stopped consumer did not thereby receive authority. | Reuse the decision only for the named producer work. Check its target and remaining allowance mechanically; neither reset the budget nor transfer consent to the consumer. |
+| [GoalTask repair-trend record](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-05-goal-task-human-repair-continuation.md) | A Human approved producer re-entry in a defined scope after NotAccepted. The separately stopped consumer did not thereby receive authority. | Reuse the decision only for the named producer work. Check its target and remaining allowance mechanically; neither reset the budget nor transfer consent to the consumer. |
 | [Primary publication recovery](../spec/goal-phase-prerequisite-publication-host-recovery.md), November 8 fixture `canonical-primary-host-episode.json.directed.json` | The contract requires a separate Human direction for a whole-primary successor with possible partial effects. The fixture is not live consent. | Inspect the destination and retained request under existing read authority first. Reuse confirmed success. Retry only when the effect is known absent or repetition is demonstrably safe **and** existing authority covers it. Change and verify the owning contract before enabling any newly automatic route. |
 
 A failure alone is not a question for Human. Exhaust available, authorized
@@ -446,7 +446,7 @@ this is not evidence that Human independently requested a prohibition on normal
 dependency adoption. The subsequent explanation initially treated that split as
 a sufficient reason to ask again without examining whether the split served an
 actual user decision. See the
-[record, analysis and selected correction](../journal/2026/11/2026-11-09-ai-cost-observations-and-phase-workflow-comparison.md#follow-up-example-unnecessary-human-boundaries-in-p611-b5).
+[record, analysis and selected correction](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-09-ai-cost-observations-and-phase-workflow-comparison.md#follow-up-example-unnecessary-human-boundaries-in-p611-b5).
 
 For new work, frame the authorized development objective to include necessary
 same-purpose file additions, target-inventory updates, incorporation of approved
@@ -495,7 +495,7 @@ Its description retains the earlier accepted choice and grants neither CNCF
 republication nor a new primary publication attempt. The current exact-target
 Human contract explains the repeated question; it does not establish a new
 material decision. See the
-[case journal](../journal/2026/11/2026-11-09-ai-cost-observations-and-phase-workflow-comparison.md#follow-up-example-repeated-artifact-adoption-after-candidate-repair-2026-11-11).
+[case journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-09-ai-cost-observations-and-phase-workflow-comparison.md#follow-up-example-repeated-artifact-adoption-after-candidate-repair-2026-11-11).
 
 Selected Phase 8 correction: separate the meaning of an existing artifact
 adoption from mechanical binding to the current consumer candidate. When the
@@ -542,7 +542,7 @@ The retained first description refused a proposal that treated six selected
 consumed program inputs as documents. The corrected description retained all
 six as consumed inputs and reported zero applicability issues. These observations
 support the correction's applicability, not review acceptance or a new validation
-result. The [case journal](../journal/2026/11/2026-11-09-ai-cost-observations-and-phase-workflow-comparison.md#follow-up-example-repositorysync-input-classification-at-frontier44)
+result. The [case journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-09-ai-cost-observations-and-phase-workflow-comparison.md#follow-up-example-repositorysync-input-classification-at-frontier44)
 records the paths and retained descriptions. The
 [current v3 contract](../spec/repository-sync-validation-continuation.md#retained-review-input-classification-continuation-v3)
 requires exact independent Human adoption; that current implementation boundary
@@ -684,7 +684,7 @@ ledger or per-repository confirmation loop for ordinary default synchronization.
 The public contract, normal entry instructions and executable specifications
 must distinguish these behaviors before delivery. Detailed scenario coverage
 and the current implementation gap are recorded in the
-[planning handoff](../journal/2026/11/2026-11-08-repository-sync-uncommitted-policy.md).
+[planning handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-08-repository-sync-uncommitted-policy.md).
 This is planned work, not a change to the currently supported public API.
 
 ## Repository synchronization: local main before GitHub main (2026-11-09)
@@ -714,7 +714,7 @@ successful checks, local integration and existing Session/history/counters;
 remote failure resumes only the unfinished work. This is an adopted target,
 not a claim that the current public input/installed runtime supports both hops.
 See the [target contract and acceptance scenarios](../spec/repository-sync-local-main-integration.md)
-and [decision journal](../journal/2026/11/2026-11-09-repository-sync-local-main-first.md).
+and [decision journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-09-repository-sync-local-main-first.md).
 
 Phase 7 managed dependency worktrees use the distinct
 [isolated dependency route](../spec/repository-sync-local-main-integration.md#phase-7-managed-dependency-route):

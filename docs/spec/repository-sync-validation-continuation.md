@@ -155,7 +155,7 @@ five-suite source qualification (38 distinct examples), independent source and
 fixture closure, normal `publishLocal` and pinned installed public CLI
 qualification (6/6). Image `54ab474d-64c0-4584-ab2d-d62c8c444960` was normally
 created, accepted and activated. Original failed attempts remain recorded in the
-[delivery journal](../journal/2026/10/2026-10-26-repository-sync-validation-continuation.md).
+[delivery journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-26-repository-sync-validation-continuation.md).
 This qualifies the bounded producer contract; real owner Session adoption and
 continuation remain separate. It does not qualify broader RS-C3 recovery.
 

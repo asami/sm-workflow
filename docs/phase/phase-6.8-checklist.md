@@ -12,7 +12,7 @@ facts, not acceptance of all 33 Phase conditions. C5/D4's installed suite and
 seven-skill distribution are authored; no execution result is claimed here.
 Actual D2 dispatch, destination execution/publication, returned result and consumer
 adoption/activation remain outstanding. See the
-[qualification handoff](../journal/2026/10/2026-10-27-phase-6.8-caller-delivery-handoff.md).
+[qualification handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-27-phase-6.8-caller-delivery-handoff.md).
 
 - [ ] P68-01 (C1): Map actual P67/PA/SHR/RRC/ROBS/Git evidence to reused
   capabilities and gaps; no duplicate work or unsupported completion claims.

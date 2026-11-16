@@ -11,8 +11,8 @@ Sequence: Phase 6.7 -> Phase 6.8 -> Phase 6.9 -> Phase 6.10 -> Phase 7
 Specification: [commit completion and recovery](../spec/commit-completion-and-recovery.md)
 Delegation contract: [sm-delegate-task](../spec/delegate-task.md)
 Checklist: [P68 acceptance](phase-6.8-checklist.md)
-Current delivery: [C5/D4 qualification and successor handoff](../journal/2026/10/2026-10-27-phase-6.8-caller-delivery-handoff.md)
-Handoff: [development adoption](../journal/2026/10/2026-10-26-phase-6.8-commit-recovery-handoff.md)
+Current delivery: [C5/D4 qualification and successor handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-27-phase-6.8-caller-delivery-handoff.md)
+Handoff: [development adoption](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-26-phase-6.8-commit-recovery-handoff.md)
 
 ## Purpose and active-work boundary
 
@@ -64,7 +64,7 @@ new-candidate checks -> ordinary commit, without an additional Human/AI approval
 gate or FIX increment. Reuse successful results at their actual scope. Qualify
 re-entry and a real boundary-expansion contrast. The currently approved response
 031 adoption proceeds independently and must not wait for this permanent work.
-See the [English handoff](../journal/2026/10/2026-10-27-phase-6.8-authority-carry-forward-handoff.md).
+See the [English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-27-phase-6.8-authority-carry-forward-handoff.md).
 
 ### C2/C4 completion-record closure — 2026-10-27
 
@@ -82,7 +82,7 @@ post-commit result loss, unfinished records and an older early-Terminal episode
 completed via public closure continuation without resetting/replaying development.
 Connect this C4 path before C5/D4 final qualification. Preserve existing standalone
 test-fix's uncommitted contract, and record best-effort sync separately.
-See the [English handoff](../journal/2026/10/2026-10-27-phase-6.8-terminal-record-closure-handoff.md).
+See the [English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-27-phase-6.8-terminal-record-closure-handoff.md).
 
 ### C1/C2 and D1/D3 malformed issued-work recovery — 2026-10-27
 
@@ -140,7 +140,7 @@ live recovery choice, start 6.8 or direct this operational chat to implement
 sm-workflow-dev features now. The owning development chat keeps the affected
 Task and decides any actual recovery only after delivered qualification and a
 fresh exact public description. See the
-[English handoff](../journal/2026/10/2026-10-27-phase-6.8-malformed-issued-work-handoff.md).
+[English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-27-phase-6.8-malformed-issued-work-handoff.md).
 
 ## Delegated-delivery slice D1–D4 — 2026-10-27
 
@@ -165,7 +165,7 @@ acceptance. Phase 7 retains FIFO/busy-destination scheduling, modes/subtrees and
 explicit whole-Phase composition; initial D2 selects one available existing chat.
 Phase 6.9 optimization is not a prerequisite for basic delegated local delivery.
 Keep ongoing 6.7 and its separately approved response031 adoption independent.
-See the [English handoff](../journal/2026/10/2026-10-27-phase-6.8-delegate-task-handoff.md).
+See the [English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-27-phase-6.8-delegate-task-handoff.md).
 
 ## Reuse map
 
@@ -177,9 +177,9 @@ See the [English handoff](../journal/2026/10/2026-10-27-phase-6.8-delegate-task-
 | [RRC](runtime-repair-control-correction.md) | Reuse convergence/limits; distinguish deterministic preparation from product FIX without refunding history. |
 | [ROBS](../notes/recovery-observations-delivery-plan.md) | Reuse automatic recording and separate recovery from cause resolution. |
 | [Git correction](repository-sync-git-correction.md) | Reuse completed-effect handling and observations, preserving merge parents. |
-| [Hygiene handoff](../journal/2026/10/2026-10-26-commit-hygiene-auto-fix-handoff.md) | Allocate the property and first EOF correction to C3/C4. |
+| [Hygiene handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-26-commit-hygiene-auto-fix-handoff.md) | Allocate the property and first EOF correction to C3/C4. |
 | [Runtime local publication](../spec/runtime-owned-local-publication.md) | Reuse necessity/execution/collection for delivery; no standalone AI publishLocal. |
-| [Candidate recovery complete Resource input](../spec/goal-phase-candidate-recovery.md#complete-resource-input), [repair journal](../journal/2026/10/2026-10-27-candidate-recovery-resource-input.md) | The current existing-API `inputResource` transport repair proceeds independently and does not wait for Phase 6.8. C5/D4 must preserve and adopt its delivered code, public contract and actual qualification, testing only changed integration; do not duplicate its implementation or roll back to an older version. This repair is not Phase 6.8 implementation or acceptance. |
+| [Candidate recovery complete Resource input](../spec/goal-phase-candidate-recovery.md#complete-resource-input), [repair journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-27-candidate-recovery-resource-input.md) | The current existing-API `inputResource` transport repair proceeds independently and does not wait for Phase 6.8. C5/D4 must preserve and adopt its delivered code, public contract and actual qualification, testing only changed integration; do not duplicate its implementation or roll back to an older version. This repair is not Phase 6.8 implementation or acceptance. |
 
 At execution planning, map original acceptance IDs to satisfied capabilities,
 connection-only checks and remaining gaps. Reuse evidence at its actual scope.

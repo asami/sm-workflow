@@ -518,9 +518,9 @@ recovery guarantee is allowed.
 
 Earlier observations retain their historical evidence and original dispositions,
 not a current old codec/envelope API or mandatory recovery/replay coverage:
-[advance input](../journal/2026/10/2026-10-09-split-advance-unused-input-removal.md),
-[physical keys](../journal/2026/10/2026-10-10-split-advance-physical-key-boundary.md),
-[three advance consumers](../journal/2026/10/2026-10-10-three-advance-consumed-input.md),
+[advance input](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-09-split-advance-unused-input-removal.md),
+[physical keys](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-split-advance-physical-key-boundary.md),
+[three advance consumers](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-three-advance-consumed-input.md),
 [Human applicability](native-human-question-applicability.md).
 See the [session contract](session-workflow-context-resolution.md) for current
 routing and separately labelled non-normative historical records.
@@ -607,7 +607,7 @@ or Workflow instances. Do not write SQLite directly, fabricate Workflow history
 or substitute a private runtime for Operation execution. Normal Help/MCP/refusal
 evidence alone is not positive workflow or Phase acceptance. Follow the
 [current acceptance table](../phase/phase-2-executable-specification-checklist.md)
-and [resumption journal](../journal/2026/10/2026-10-07-optimized-plan-resumption.md)
+and [resumption journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-07-optimized-plan-resumption.md)
 for historical admitted results. Current Phase 5.2 work is fixed by
 [Phase 5.2](../phase/phase-5.2.md), not the old recovery/replay acceptance lists.
 

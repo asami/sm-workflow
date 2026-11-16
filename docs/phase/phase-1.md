@@ -4195,7 +4195,7 @@ are verified; Phase 1 is completed.** The closure is the bounded common-contract
 application/fixture scope, not production-ready runtime, Git adapter, SQLite,
 restart/lease infrastructure, installable public skills or CAR publication.
 The public skill distribution contract remains `sm-*`, with independent legacy
-`cncf-*` compatibility. See the [closure journal](../journal/2026/09/2026-09-29-phase-1-closure.md).
+`cncf-*` compatibility. See the [closure journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-phase-1-closure.md).
 
 ## In Scope
 
@@ -4337,11 +4337,11 @@ concrete worker profile への versioned mapping policy を所有する。
 
 ## Decision and Historical Records
 
-- [Phase 1 adoption of CNCF JudgmentAction](../journal/2026/09/2026-09-20-judgment-action-phase-1-adoption.md)
+- [Phase 1 adoption of CNCF JudgmentAction](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-20-judgment-action-phase-1-adoption.md)
   — JudgmentActionの責務、Codex初期実行、provider差し替え境界
-- [Phase 1 common-contract scope reconciliation](../journal/2026/09/2026-09-20-phase-1-common-contract-scope-reconciliation.md)
+- [Phase 1 common-contract scope reconciliation](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-20-phase-1-common-contract-scope-reconciliation.md)
   — current scopeを確定したdecision record
-- [Phase 1 executable-specification scope review handoff](../journal/2026/09/2026-09-20-phase-1-executable-spec-scope-review-handoff.md)
+- [Phase 1 executable-specification scope review handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-20-phase-1-executable-spec-scope-review-handoff.md)
   — CNCF common-contract specialization の review input
 - [Historical Phase 1 design](../notes/phase-1-pre-reconciliation-design.md)
   — SQLite、CLI、CAR、SkillBundle、cost metrics等を含む旧設計の保存版

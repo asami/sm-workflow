@@ -12,7 +12,7 @@ cases; independently accepted ReviewPhase1270/1271 satisfied all eleven conditio
 Accepted Steps, original base, history and Phase repair count4/10 are retained.
 Synchronization is `deferred`; no GitHub convergence is claimed.
 
-See the [actual completion and exact evidence references](../journal/2026/10/2026-10-27-phase-6.7-t4-source-handoff.md#actual-phase-completion-2026-10-27).
+See the [actual completion and exact evidence references](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-27-phase-6.7-t4-source-handoff.md#actual-phase-completion-2026-10-27).
 This status reconciliation follows Final and does not alter its saved candidate.
 
 ## Historical Release repair observations
@@ -34,7 +34,7 @@ Owner: sm-workflow development
 Predecessor: consume the qualified Phase 6.5 execution and Phase 6.6 diagnosis paths
 Checklist: [P67 acceptance](phase-6.7-checklist.md)
 Specifications: [GoalTask](../spec/goal-task.md), [standalone FIX](../spec/standalone-fix-acceptance.md)
-Handoff: [delivery allocation](../journal/2026/10/2026-10-26-phase-6.7-task-fix-priority-handoff.md)
+Handoff: [delivery allocation](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-26-phase-6.7-task-fix-priority-handoff.md)
 
 ## Current Release repair 3 status (Request109)
 
@@ -78,7 +78,7 @@ passed/failed vocabulary, retains terminal references, and reports archive
 conflict/indeterminate and Journal availability truthfully. Six authored native
 regression cases remain unexecuted. Controlled failed/UNKNOWN checkpoint cases
 are test designs, not observed physical timeout or live failure claims. The
-[handoff](../journal/2026/10/2026-10-27-phase-6.7-t4-source-handoff.md)
+[handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-27-phase-6.7-t4-source-handoff.md)
 records exact public artifact paths and remaining qualification. Checklist boxes
 remain pending formal acceptance; the eleven original conditions are unchanged.
 
@@ -200,7 +200,7 @@ acceptance remain owned by their later runtime boundaries.
 
 [Task/FIX delivery](../spec/task-fix-delivery.md) defines the three packaged thin
 adapters, passive actual-result attachment and explicit requester disposition.
-The [English handoff](../journal/2026/10/2026-10-27-phase-6.7-t4-source-handoff.md)
+The [English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-27-phase-6.7-t4-source-handoff.md)
 records public setup, compatibility and actual-evidence gaps. Adopted Plan2 added
 the authored CAR ABI inventory to T4's ownership; its ordinary publication and
 dedicated activation retain the active Phase's separate qualified runtime pin.

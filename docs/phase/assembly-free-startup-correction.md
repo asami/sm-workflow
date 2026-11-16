@@ -4,7 +4,7 @@ Stage Status:
 - Current status: OPEN
 - Owner: sm-workflow development; CNCF owns the runtime prerequisite
 - Specification: [assembly-free runtime startup](../spec/assembly-free-runtime-startup.md)
-- Handoff: [2026-10-27](../journal/2026/10/2026-10-27-assembly-free-startup-handoff.md)
+- Handoff: [2026-10-27](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-27-assembly-free-startup-handoff.md)
 - Allocation: bounded setup/runtime correction, independent of active Phase 6.7 and planned 6.8/6.9 acceptance
 
 ## Main route first

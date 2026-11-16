@@ -376,7 +376,7 @@ same acceptance rules; keep Codex/local and mixed-revision attribution separate.
 Performance hypotheses do not change acceptance. Tuning affects future unissued
 work only; dedicated comparative experiments remain Phase 9.
 
-Handoff: [cost refinement without interrupting active work](../journal/2026/11/2026-11-02-phase-6.10-cost-profile-refinement-handoff.md).
+Handoff: [cost refinement without interrupting active work](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-02-phase-6.10-cost-profile-refinement-handoff.md).
 
 ## Local experiment selection — 2026-11-02
 

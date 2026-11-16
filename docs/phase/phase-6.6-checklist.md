@@ -78,7 +78,7 @@ remain retained. Synchronization is a separate repository operation.
 
 P66-17/P66-18 were later producer planning additions; they are not extra
 acceptance gates in native Plan1 or additional ReviewPhase1438 judgments.
-The [2026-10-26 evidence reconciliation](../journal/2026/10/2026-10-26-phase-66-p66-17-18-evidence-reconciliation.md)
+The [2026-10-26 evidence reconciliation](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-26-phase-66-p66-17-18-evidence-reconciliation.md)
 confirms that both were already performed. Their unchecked state was a stale
 documentation projection, not remaining implementation or successor work.
 No Session operation, Plan amendment or successful execution was repeated.

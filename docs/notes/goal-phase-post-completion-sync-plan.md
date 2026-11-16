@@ -4,7 +4,7 @@ Status: initial completion/safe-deferral delivery verified and locally published
 Owner: sm-workflow development chat
 Decision: 2026-10-23
 Specification: [completion and follow-up](../spec/goal-phase-post-completion-sync.md)
-Handoff: [English developer handoff](../journal/2026/10/2026-10-23-goal-phase-post-completion-sync-handoff.md)
+Handoff: [English developer handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-23-goal-phase-post-completion-sync-handoff.md)
 
 ## Scheduling and scope
 

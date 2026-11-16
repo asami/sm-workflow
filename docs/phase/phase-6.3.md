@@ -12,7 +12,7 @@ Planned: 2026-10-13. Split from Phase 6.
 Owner: sm-workflow. Predecessor: [6.2](phase-6.2.md). Successor: [6.4](phase-6.4.md), then [7](phase-7.md).
 
 CBD-backed P6-SQ01..05 integration moves to [Phase 10](phase-10.md) under the
-[production-first handoff](../journal/2026/10/2026-10-18-production-first-cbd-review-phase-10.md).
+[production-first handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-production-first-cbd-review-phase-10.md).
 This Phase retains ordinary integrated review, Final reuse, aggregate validation
 and initial-use acceptance without waiting for CBD15/15.1 or Phase 10.
 
@@ -90,12 +90,12 @@ is introduced. Install/use instructions are maintained with the first working
 route so there is no separate deployment-discovery project after acceptance.
 Collect already available AI-use/cost, duration, intervention and rework facts
 during actual use; no new telemetry, comparative benchmark or savings threshold
-blocks release. See the [execution-order handoff](../journal/2026/10/2026-10-18-production-cost-first-execution-order.md).
+blocks release. See the [execution-order handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-production-cost-first-execution-order.md).
 
 ### Execution overhead in ordinary production acceptance — 2026-10-18
 
 Own the additional integration follow-up from the
-[Core Phase 3 incident](https://github.com/asami/sm-workflow/blob/main/docs/journal/2026/10/2026-10-18-core-phase3-goal-phase-execution-overhead.md).
+[Core Phase 3 incident](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-core-phase3-goal-phase-execution-overhead.md).
 Phase 6.2 is already in development: keep its adopted plan, issued work, implementation,
 validation and review history intact. Consume its actual delivery here; do not send
 these additional acceptance obligations back to 6.2 or reopen accepted 6/6.1 work.
@@ -137,7 +137,7 @@ proof ledger, or dependency on Phase 6.4/7/10.
 Runtime ownership does not eliminate resource contention. This plan does not
 authorize bypassing the current machine-wide SBT runner/serial wrapper. Product
 execution policy and the shared-skill procedure used to develop it remain distinct.
-Adopt through the [development handoff](../journal/2026/10/2026-10-18-phase-63-execution-overhead-handoff.md).
+Adopt through the [development handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-phase-63-execution-overhead-handoff.md).
 
 ### Known uncommitted failure continuation — 2026-10-19
 
@@ -192,7 +192,7 @@ This bounded normal failure path does not promise general interrupted-effect
 recovery, legacy-run migration or arbitrary command replay. It qualifies the
 general recovery exclusions below without changing them for unknown effects.
 Preserve active 6.2 and all issued work/results; adopt only as 6.3 remaining work.
-See the [development handoff](../journal/2026/10/2026-10-18-phase-63-execution-overhead-handoff.md#known-uncommitted-failure-continuation--2026-10-19).
+See the [development handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-phase-63-execution-overhead-handoff.md#known-uncommitted-failure-continuation--2026-10-19).
 
 ### Known unexecuted validation continuation — 2026-10-19
 
@@ -246,12 +246,12 @@ continuation-only AI calls, no competing dispatch, retained counts/history and
 reuse of applicable earlier results. Reuse existing running/completed/unknown
 cases and fill only missing bounded coverage; no separate test/review campaign
 or work ID. General interrupted-effect recovery remains outside this obligation.
-See the [development handoff](../journal/2026/10/2026-10-18-phase-63-execution-overhead-handoff.md#known-unexecuted-validation-continuation--2026-10-19).
+See the [development handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-phase-63-execution-overhead-handoff.md#known-unexecuted-validation-continuation--2026-10-19).
 
 ### NICT delivery-friction observations — adopted 2026-10-17
 
 This is clarification of existing requirements from the
-[NICT incident handoff](../journal/2026/10/2026-10-17-nict-skill-failures-phase-6-family-handoff.md),
+[NICT incident handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-17-nict-skill-failures-phase-6-family-handoff.md),
 not a new item ID, acceptance gate or retrospective reopening. Preserve current
 issued work, in-flight results and applicable validation/review evidence. The
 owning development chat adopts it at the next ordinary planning/dispatch boundary;
@@ -389,11 +389,11 @@ acceptance, not new IDs or test/review tiers. Keep aggregate full validation and
 ordinary release prerequisites. Do not add an AI reviewer to certify every scope
 choice, a parallel review engine, or hash/TTL/copy-based applicability proofs.
 CBD integration remains Phase 10. The
-[handoff addendum](../journal/2026/10/2026-10-18-phase-63-execution-overhead-handoff.md#review-policy-addendum--2026-10-18)
+[handoff addendum](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-phase-63-execution-overhead-handoff.md#review-policy-addendum--2026-10-18)
 specifies adoption by the active development chat; its later
-[compile/test guarantee addendum](../journal/2026/10/2026-10-18-phase-63-execution-overhead-handoff.md#compiletest-guarantee-reuse-addendum--2026-10-18)
+[compile/test guarantee addendum](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-phase-63-execution-overhead-handoff.md#compiletest-guarantee-reuse-addendum--2026-10-18)
 supersedes the earlier unconditional minor-repair re-review wording. The latest
-[Step/release batching addendum](../journal/2026/10/2026-10-18-phase-63-execution-overhead-handoff.md#steprelease-review-batching-and-ai-cost--2026-10-18)
+[Step/release batching addendum](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-phase-63-execution-overhead-handoff.md#steprelease-review-batching-and-ai-cost--2026-10-18)
 further replaces per-correction omission decisions with these normal boundaries.
 AI cost reduction comes from fewer semantic invocations and repeated context
 loads, not an additional AI service to optimize/review the review process. Reuse
@@ -517,7 +517,7 @@ Phase 7 enables full practical GoalPhase adoption through collaboration with
 related-project resources, artifact operations and RepositorySync. GoalPhase
 continues to own local development/closure in each selected repository; it does
 not absorb multi-repository fetch/push or overlay ownership. See the
-[adoption handoff](../journal/2026/10/2026-10-18-three-skill-production-tiers-handoff.md).
+[adoption handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-three-skill-production-tiers-handoff.md).
 
 ### Single-repository production acceptance — 2026-10-18
 
@@ -572,7 +572,7 @@ repeat an unrelated suite because this obligation is now explicitly named.
 Retain the one ordinary Phase review and aggregate validation policy below;
 P63-USE01 creates no additional full-test or per-scenario review cycle. Adoption
 and evidence handling are specified in the
-[handoff](../journal/2026/10/2026-10-18-phase-63-single-repository-production-handoff.md).
+[handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-phase-63-single-repository-production-handoff.md).
 
 ### Aggregate validation and release
 

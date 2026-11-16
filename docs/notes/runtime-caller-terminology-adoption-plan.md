@@ -52,7 +52,7 @@ development-workstationの配布元と各実行環境の選択済み設定も変
 履歴保存のために全テスト・全レビューを再実行しない。名前変更を口実に追加承認層、
 管理hash、lease、独自snapshot storeや汎用migration engineを導入しない。
 
-引継ぎ: [2026-10-23 journal](../journal/2026/10/2026-10-23-network-host-terminology-handoff.md)。
+引継ぎ: [2026-10-23 journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-23-network-host-terminology-handoff.md)。
 
 ## 2026-10-23の実績対応
 
@@ -61,4 +61,4 @@ N-01の対応表とN-02の接続は実装・通常生成/compile・実caller観�
 目的別表現の整理を残す。N-04はその後、実DBコピーの履歴読取り、元データを残す
 22件の新形式投影、両実行先の設定変更、通常updaterによる切替と両rootのHelpで
 確認済み。実Sessionの進行・復旧やHuman判断はこの切替に含めない。
-[実績記録](../journal/2026/10/2026-10-23-network-host-terminology-adoption-status.md#implemented-and-verified-connected-boundary--2026-10-23)を参照。
+[実績記録](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-23-network-host-terminology-adoption-status.md#implemented-and-verified-connected-boundary--2026-10-23)を参照。

@@ -105,7 +105,7 @@ change. The runtime root and storage paths stay in place.
 - [Caller information return](host-terminal-source.md)
 - [Caller execution bridge](native-host-execution.md)
 - [Runtime composition](normal-three-workflow-host.md)
-- [Developer handoff](../journal/2026/10/2026-10-23-network-host-terminology-handoff.md)
+- [Developer handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-23-network-host-terminology-handoff.md)
 
 The linked existing filenames and old-identifier descriptions are traceability
 locators during implementation, not supported aliases. Move active documentation

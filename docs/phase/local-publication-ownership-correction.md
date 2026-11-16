@@ -28,5 +28,5 @@ The normal runtime publication completed and activated installation
 `f760b768-3fe5-4dc7-95a3-601d430afb90`. The isolated installed-CLI case passed
 against that exact image. The final source decision regressions passed 18/18;
 the focused independent integration review passed with CB-LP-01 resolved.
-See [the delivery record](../journal/2026/10/2026-10-26-runtime-owned-local-publication-handoff.md)
+See [the delivery record](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-26-runtime-owned-local-publication-handoff.md)
 for retained failures, actual publication results, host adoption and scope limits.

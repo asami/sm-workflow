@@ -164,7 +164,7 @@ Unverified TestOnly result is failed. The CLI renders
 
 The writer consumes a known File write acknowledgement, without a write/readback
 success gate. Fresh-process reads are normal retrieval and integration checks.
-The [initial delivery](../journal/2026/10/2026-10-20-phase-12-producer-delivery.md)
+The [initial delivery](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-20-phase-12-producer-delivery.md)
 records the earlier minimum's qualification. E4's changed producer, upstream
 File capability and consumer connection require their own actual validation and
 normal local publication; this specification does not claim those results.

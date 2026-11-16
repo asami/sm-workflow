@@ -5,7 +5,7 @@ planned_at=2026-11-11
 owner=sm-workflow
 depends_on=[Phase 11.1](phase-11.1.md)
 design=[共通開発Journal](../design/development-journal.md)
-split_record=[分割記録](../journal/2026/11/2026-11-11-journal-single-entry-and-batch-split.md)
+split_record=[分割記録](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-11-journal-single-entry-and-batch-split.md)
 
 ## 目的と位置付け
 

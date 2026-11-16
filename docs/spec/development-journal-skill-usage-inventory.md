@@ -76,7 +76,7 @@ Offer a concise human view and bounded detail/query views from the same record.
 
 ## Migration and cost priorities
 
-Use the allocation in the [current handoff](../journal/2026/10/2026-10-20-common-journal-phases-handoff.md)
+Use the allocation in the [current handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-20-common-journal-phases-handoff.md)
 and [design](../design/development-journal.md). Earlier unadopted E2 candidates
 remain historical proposals, not execution instructions.
 

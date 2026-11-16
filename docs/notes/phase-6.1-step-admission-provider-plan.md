@@ -6,7 +6,7 @@ Owner: sm-workflow Phase 6.1, P61-ADMISSION / P6-SQ01
 
 ## Superseding allocation — 2026-10-18
 
-The [production-first decision](../journal/2026/10/2026-10-18-production-first-cbd-review-phase-10.md)
+The [production-first decision](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-production-first-cbd-review-phase-10.md)
 moves this CBD provider integration to [Phase 10](../phase/phase-10.md).
 P61-ADMISSION retains ordinary reviewer-result/authority/commit acceptance in
 6.1, without mandatory CBD. The dependency, authorization and numbered results
@@ -16,7 +16,7 @@ claim the revised initial-use route already works. Keep all source and evidence.
 ## Earlier adopted execution separation — 2026-10-18
 
 The owner separated CBD Phase 15 scoped evaluation from Phase 15.1 external
-ReviewRequest execution. The [handoff](../journal/2026/10/2026-10-18-cbd-phase-15-15.1-review-handoff.md)
+ReviewRequest execution. The [handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-cbd-phase-15-15.1-review-handoff.md)
 and [consumer specification](../spec/goal-phase-scoped-quality-admission.md)
 govern the next implementation boundary. P61-ADMISSION/Phase closure awaits both
 accepted required CBD handoffs; bounded owner acceptance may precede unrelated
@@ -37,7 +37,7 @@ This plan's earlier authorization paragraph and counts remain historical records
 the new allocation changes neither source history nor completed acceptance.
 
 Live adoption and the actual caller/gap map are recorded in the
-[2026-10-18 continuation journal](../journal/2026/10/2026-10-18-phase-6.1-cbd-external-review-adoption.md).
+[2026-10-18 continuation journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-phase-6.1-cbd-external-review-adoption.md).
 SQR-04/RR06 owner acceptance remains pending. Existing evidence is reused only
 for its original conditions; synchronous Submit is not the external-route check.
 
@@ -172,7 +172,7 @@ connection and normal Submit/Advance/local Step commit remain required. Its
 checkout is identified below; no fixture is promoted to real execution evidence.
 
 References: [Phase 6.1](../phase/phase-6.1.md#staged-quality-review-across-projects--2026-10-13),
-[shared review matrix](../journal/2026/10/2026-10-13-staged-quality-review-matrix.md),
+[shared review matrix](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-13-staged-quality-review-matrix.md),
 [security review profile](../phase/phase-6-security-review-profile.md).
 
 ## Actual runtime location and bootstrap contract

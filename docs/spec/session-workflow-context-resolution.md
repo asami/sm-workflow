@@ -324,7 +324,7 @@ do not restore product refusals. Current CML generation and packaged contracts
 were actual test prerequisites. No full association/generation/CAS or R1-R5/E1-E12
 acceptance, actual AI executor/profile/resources/cost or CLI/skill/release claim.
 Same Goal/history/repair3/3/frames; ordinary884through119. See
-[current scoped record](../journal/2026/10/2026-10-10-split-semantic-control-echo-removal.md).
+[current scoped record](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-split-semantic-control-echo-removal.md).
 
 ### R3/E7 connected target-selection examples — authored, UNVERIFIED
 
@@ -350,7 +350,7 @@ serialized three-COMPLETE-suite validation, actual current-result admission and
 connected independent READ-ONLY assessment. Earlier scoped PASS remains historical
 at its actual input boundary. No full E4/E5/E9–E11/R1–R5/Phase/Goal acceptance or
 counter/frame/epoch/permission/commit/publication change.
-See [current causal authoring record](../journal/2026/10/2026-10-10-session-routing-ambiguity.md).
+See [current causal authoring record](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-session-routing-ambiguity.md).
 
 ### Later bounded R3/E7 current executable evidence
 
@@ -365,7 +365,7 @@ supplemental PASS/CurrentBoundaryBlockers[]/newHYG[]/newDEV[] after reading all
 THREE whole programs3363lines, actual connected consumers/current prose/BOTH
 original runtime/full fresh CAR. Actual public two-target Starts, ambiguity and
 foreign-session refusals, minimal selected progress and physical reopen verified.
-[Current evidence and complete original](../journal/2026/10/2026-10-10-session-routing-ambiguity.md).
+[Current evidence and complete original](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-session-routing-ambiguity.md).
 
 No new verifier/ledger/universal selector/newest-target rule or fabricated native
 history. Same full ACTIVE Goal/original9/history/repair3/3/all frames/four HYG;
@@ -391,7 +391,7 @@ This new test-only delta postdates133/E7 PASS and is UNVERIFIED until fresh
 complete changed-suite execution/current-result admission/connected independent
 review. Other families' delayed generations, E4/E5/E11 and full R1–R5 acceptance
 remain open. Same ACTIVE Goal/original9/history/repair3/3/all frames unchanged.
-[Current causal authoring](../journal/2026/10/2026-10-10-session-delayed-answer-generations.md).
+[Current causal authoring](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-session-delayed-answer-generations.md).
 
 ### Later actual Goal-family E9/E10 runtime and independent assessment
 
@@ -403,7 +403,7 @@ read whole591line program/connected native consumers/current prose/complete
 actual runtime/fullCAR and returned supplemental PASS/CurrentBoundaryBlocker[]/
 newHYG[]/newDEV[]. Twelve actual delayed semantic/Human episodes preserve newer
 native facts/history and existing successful whole ordered execution/reopen.
-[Current evidence and original review](../journal/2026/10/2026-10-10-session-delayed-answer-generations.md).
+[Current evidence and original review](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-session-delayed-answer-generations.md).
 
 This is bounded Goal-family E9/E10 coverage, not full R4/E11 or other families'
 generation acceptance. Earlier authored UNVERIFIED is its historical cutoff;
@@ -430,7 +430,7 @@ Repository plus Goal suite execution, current-result admission and connected
 independent read-only assessment. Prior bounded PASS is not current evidence.
 Same ACTIVE Goal/original9/history/repair3/3/all frames/ordinary899through134;
 other families/E4/E5/E11/full R1–R5/full Phase and Goal acceptance remain OPEN.
-[Current causal authoring](../journal/2026/10/2026-10-10-repository-delayed-answer-generations.md).
+[Current causal authoring](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-repository-delayed-answer-generations.md).
 
 ### Later actual Repository E8/E9/E10 evidence
 
@@ -443,7 +443,7 @@ PASS/CurrentBoundaryBlocker[]/newHYG[]/newDEV[]. The three real delayed completi
 episodes leave old/new native histories and the file unchanged, then genuine
 current answers complete the second synchronization. Existing whole scenarios,
 default fixture behavior and physical/separate-JVM reopen remain.
-[Actual evidence and original review](../journal/2026/10/2026-10-10-repository-delayed-answer-generations.md).
+[Actual evidence and original review](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-repository-delayed-answer-generations.md).
 
 Earlier UNVERIFIED/PENDING remains its historical cutoff. Same ACTIVE Goal/
 original9/history/repair3/3/all frames/four HYG, ordinary900through135 separate.
@@ -470,7 +470,7 @@ Prior135 bounded PASS is not current evidence. Same ACTIVE Goal/original9/histor
 repair3/3/all frames/four HYG/ordinary900through135; full scope/reasoning/Human
 generations/E4/E5/E11/R1–R5/Phase and Goal acceptance remain OPEN. No checkbox/
 counter/frame/epoch/policy/permission/commit/full closure change.
-[Current causal authoring](../journal/2026/10/2026-10-10-split-partition-delayed-answer-generations.md).
+[Current causal authoring](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-split-partition-delayed-answer-generations.md).
 
 ### Later actual Split partition E8/E9/E10 evidence
 
@@ -482,7 +482,7 @@ prior134 CAR and returns supplemental PASS/CurrentBoundaryBlocker[]/newHYG[]/
 newDEV[]. Old and new native histories remain unchanged by delayed answers,
 including separate JVMs; genuine current answers finish both full Previews and
 fresh retained observations. Existing whole scenarios/default helpers remain.
-[Actual evidence and original assessment](../journal/2026/10/2026-10-10-split-partition-delayed-answer-generations.md).
+[Actual evidence and original assessment](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-split-partition-delayed-answer-generations.md).
 
 Historical authored cutoffs remain. Same ACTIVE Goal/original9/history/repair3/3/
 all frames/four HYG/ordinary901through136; original114 fulfilled/not reopened.
@@ -500,7 +500,7 @@ necessary request selector, in process and across separate JVMs. Actual native
 facts/history, genuine current completion, both all-source Previews and retained
 reopen are asserted. The existing observer's partition default stays unchanged;
 all older cases remain. Parent authoring has no execution or review result yet.
-[Frozen scope and validation selection](../journal/2026/10/2026-10-10-split-scope-reasoning-human-delayed-answer-generations.md).
+[Frozen scope and validation selection](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-split-scope-reasoning-human-delayed-answer-generations.md).
 Same full ACTIVE Goal/original9/all history/repair3/3/frames/four HYG unchanged.
 No new product verifier, proof ledger, hash, counter or Phase/Goal closure.
 
@@ -525,7 +525,7 @@ selector handling, current completions and native-history/pending invariance
 execute in process and across separate JVMs. Human observation retains typed
 answer/Decision/completing meaning plus physical current issuer revision; it
 does not require stale whole-response equality. Existing cases/defaults remain.
-[Current runtime evidence and complete original assessment](../journal/2026/10/2026-10-10-split-scope-reasoning-human-delayed-answer-generations.md).
+[Current runtime evidence and complete original assessment](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-split-scope-reasoning-human-delayed-answer-generations.md).
 
 Historical authored cutoffs and original137–139 FAILUREs remain. Same full
 ACTIVE Goal/original9/all history/repair3/3/frames/four HYG; ordinary905through140
@@ -546,7 +546,7 @@ valid answer commits via another normal public completion before first afterComm
 Actual native reload/internal expected revision prevents losing staged closing.
 Winner completes exactly once; actual history/full all-source Preview/separate-JVM
 retained outcome survive. No caller revision certificate/new verifier or fake CAS.
-[Bounded current evidence and complete original review](../journal/2026/10/2026-10-10-split-completion-competing-operation.md).
+[Bounded current evidence and complete original review](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-split-completion-competing-operation.md).
 
 Earlier authored UNVERIFIED cutoff stays history. Only this Split partition E11
 boundary is established: E4/E5/other completion-family E11/fullR1–R5/remaining
@@ -568,7 +568,7 @@ bounded reference/source/action-order inspection and diffcheck, no repeated SBT/
 review. Original FINDINGS remains unchanged; no post-tail compile/execution or
 independent PASS claimed. Actual28of28 behavior remains relevant under M0.
 Fresh CAR0FAIL347WARN114OK residual/unwaived; script actual bytes retained.
-[Bounded current evidence and complete original assessment](../journal/2026/10/2026-10-10-split-start-authoritative-result.md).
+[Bounded current evidence and complete original assessment](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-split-start-authoritative-result.md).
 
 Same full ACTIVE Goal/original9/history/repair3/3/all frames/four HYG unchanged,
 ordinary907through142 separate. Original114/two CPB fulfilled historical.

@@ -214,4 +214,4 @@ evidence without converting historical receipts.
 
 See the [development plan](../notes/incremental-sbt-failure-diagnosis-plan.md),
 [design](../design/incremental-sbt-failure-diagnosis.md) and
-[Phase 6.6 English handoff](../journal/2026/10/2026-10-23-phase-6.6-incremental-diagnosis-handoff.md).
+[Phase 6.6 English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-23-phase-6.6-incremental-diagnosis-handoff.md).

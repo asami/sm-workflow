@@ -3,7 +3,7 @@
 Status: adopted target contract; residual source cleanup and runtime delivery pending.
 Adopted: 2026-10-27.
 Plan: [startup correction](../phase/assembly-free-startup-correction.md).
-Handoff: [consumer and producer direction](../journal/2026/10/2026-10-27-assembly-free-startup-handoff.md).
+Handoff: [consumer and producer direction](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-27-assembly-free-startup-handoff.md).
 
 ## Contract
 

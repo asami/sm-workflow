@@ -76,5 +76,5 @@ focused検証と影響範囲のレビューを選び、必要な最終統合検�
 成功検証を再実行せず、過去の結果を新しい計測機能の合格証拠にも置き換えない。
 共通runtimeの進行中変更は所有者と接続差分を合わせ、巻き戻しや同時編集を避ける。
 
-引継ぎ: [2026-10-22 journal](../journal/2026/10/2026-10-22-ai-usage-accounting-handoff.md)。
-取得責務の追記: [2026-10-23 handoff](../journal/2026/10/2026-10-23-codex-caller-information-handoff.md)。
+引継ぎ: [2026-10-22 journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-22-ai-usage-accounting-handoff.md)。
+取得責務の追記: [2026-10-23 handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-23-codex-caller-information-handoff.md)。

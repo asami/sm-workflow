@@ -87,7 +87,7 @@ command-name/registered-definition grants and ordinary shell exclusion are
 CNCF runtime responsibilities. Ordinary resource reads use the normal resource
 DSL with runtime limits; development-file manipulation uses the protected File
 Workspace DSL with logical-root/coarse authority as specified in the
-[Phase 6 handoff](../journal/2026/10/2026-10-15-phase-6-file-workspace-dsl-handoff.md).
+[Phase 6 handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-15-phase-6-file-workspace-dsl-handoff.md).
 There is no application-selected safety-variant read API or per-file ACL matrix. Process
 registration cannot authorize otherwise denied filesystem/network/datastore
 effects. Reuse the shared External Effect vocabulary in CBD instead of building
@@ -101,7 +101,7 @@ under their conditions, adding only checks for uncovered changes. No additional
 per-Step security cycle, evidence certificate or blanket suite is introduced.
 
 Detailed rationale and upstream versions:
-[integration journal](../journal/2026/10/2026-10-15-phase-6-managed-effects-and-sbt-plan.md).
+[integration journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-15-phase-6-managed-effects-and-sbt-plan.md).
 
 ### Existing Step / Phase / Final route
 

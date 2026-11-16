@@ -95,11 +95,11 @@ All eight examples passed focused-309 (107/107 in 14 suites), after Cozy
 prerequisite-306 and two test-fixture corrections. All seven complete multi-guard
 readback examples passed in the same run. Exit 0/0 and lock=released were observed.
 This is focused evidence, not managed runtime or typed Phase/PLAN acceptance.
-See the [resumed validation journal](../journal/2026/09/2026-09-30-focused-validation-resumed.md).
+See the [event persistence selection design](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-event-persistence-selection.md).
 
-The [ordinary-send follow-up](../journal/2026/09/2026-09-30-eventstore-ordinary-send-boundary.md)
+The [ordinary-send follow-up](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-eventstore-ordinary-send-boundary.md)
 records the earlier unexecuted state. Its recovery interpretation was subsequently
-corrected by the [platform recovery journal](../journal/2026/09/2026-09-30-platform-recovery-clause-correction.md);
+corrected by the [platform recovery journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-platform-recovery-clause-correction.md);
 the bounded prerequisite and focused tests have now executed successfully.
 
 ## Historical focused evidence (before the ownership correction)

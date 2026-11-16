@@ -52,7 +52,7 @@ wire/Operation名はCI-01で実際のpublic APIへ接続し、足りない部分
 影響するcontract/caller/serviceのfocused検証と、一つの実接続を中心にする。
 必要な独立レビューは変更した入力帰属と継続境界に絞り、適用可能な旧結果を再利用する。
 旧結果を新経路の合格証拠とはしない。`process_exec_text`は依存関係・完了条件に含めない。
-[開発候補とhandoff](../journal/2026/10/2026-10-23-codex-caller-information-handoff.md)を参照。
+[開発候補とhandoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-23-codex-caller-information-handoff.md)を参照。
 
 ## 2026-10-23の実績対応
 
@@ -63,4 +63,4 @@ CI-03は別revision/source・部分/未取得・重複返却を検証し、証�
 CI-04のlive切替とN-04の必要な選択済みrecord変換も、その後通常updaterと
 実DBコピーによる読取り確認を経て完了した。実SessionへのStart・Submit・Advance・
 復旧・成功済み処理の再実行は含めない。残るCI-02/03の広い実接続条件は保持する。
-[実績・制限・証跡](../journal/2026/10/2026-10-23-codex-caller-information-adoption-status.md#implementation-and-isolated-connected-acceptance--2026-10-23)を参照。
+[実績・制限・証跡](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-23-codex-caller-information-adoption-status.md#implementation-and-isolated-connected-acceptance--2026-10-23)を参照。

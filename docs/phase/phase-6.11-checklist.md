@@ -29,8 +29,8 @@ closed Phase in progress. Existing Step-level evidence is preserved.
 | Same-root installed continuation qualification | Formal failure retained; later fixture correction is unsubmitted and unvalidated. |
 | Fixed-version launcher delivery | Deferred; its original nine delivery conditions are not treated as passed. |
 
-See the [closure record](../journal/2026/11/2026-11-11-phase-6.11-closed-with-unverified-items.md)
-for actual evidence and retained Step commits. Historical source/boundary notes
+The [Phase plan](phase-6.11.md#closed-with-unverified-items--2026-11-11) records
+the ending disposition. Historical source/boundary notes
 below remain as observations at their original dates, not current instructions
 to resume or prerequisites for this administrative ending.
 

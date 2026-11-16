@@ -16,7 +16,7 @@ independent scoped review and native Final/local closure remain pending. Phase
 completion requires an actual native Terminal result. The checked conditions
 below retain their accepted Step scope; unchecked delivery conditions do not
 mean Q4 or whole validation is still unexecuted and do not substitute for Phase
-acceptance. See the [delivery evidence and Phase 7 handoff](../journal/2026/10/2026-10-24-phase-65-delivery-and-phase-7-handoff.md)
+acceptance. See the [delivery evidence and Phase 7 handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-24-phase-65-delivery-and-phase-7-handoff.md)
 for all eight commit/review references and qualification/cost limits.
 
 ## Q1: ordinary Step main route

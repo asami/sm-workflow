@@ -408,7 +408,7 @@ paragraph is its authored cutoff, not the current result. Full application/nativ
 copies, retained/raw/document joins, postcommit proof, locator/index/resource
 predicates and broader acceptance remain OPEN; no blanket endorsement of remaining
 checks, counter/frame change or full Phase/Goal completion follows. See
-[actual evidence and original review](../journal/2026/10/2026-10-10-scope-capture-consuming-boundaries.md).
+[actual evidence and original review](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-scope-capture-consuming-boundaries.md).
 
 ## R13: Commit acknowledgement consumes the owning observation
 
@@ -440,7 +440,7 @@ for subject116. Fresh independent READ-ONLY supplemental PASS/CB[]/newHYG[]/
 newDEV[] assesses this bounded observation-consumption path. Earlier UNVERIFIED
 prose is preserved as its authored cutoff. No blanket necessity endorsement
 of retained reader predicates, formal Phase closure or counter/frame change.
-See [actual evidence and original review](../journal/2026/10/2026-10-10-scope-commit-observation-consumption.md).
+See [actual evidence and original review](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-scope-commit-observation-consumption.md).
 
 ## R14: Planning and Human publishers consume their committed observations
 
@@ -478,7 +478,7 @@ Fresh static CAR0FAIL347WARN114OK is not release/transport acceptance. Earlier
 UNVERIFIED paragraph remains its authored cutoff and124 remains earlier-input
 evidence, not this delta's coverage. Capture/codec/reader/envelope/metadata/resource
 and full Phase/Goal obligations remain OPEN; repair3/3/all frames unchanged.
-See [current evidence and original review](../journal/2026/10/2026-10-10-planning-human-commit-observation-consumption.md).
+See [current evidence and original review](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-planning-human-commit-observation-consumption.md).
 
 ## R15: Passive planning/Human capture and consumed codec data
 
@@ -514,7 +514,7 @@ Current R15/E32–33 UNVERIFIED pending fresh126 complete suites, actual termina
 released lock/parent current-request admission, CAR and independent READ-ONLY
 connected review. Actual125 is prior input evidence only. Same full Goal/history/
 repair3/3/all frames and broader Phase/Goal obligations remain unchanged and OPEN.
-See [frozen causal plan](../journal/2026/10/2026-10-10-planning-human-capture-codec-consumption.md).
+See [frozen causal plan](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-planning-human-capture-codec-consumption.md).
 
 Later Actual128 validates current R15/E32–33: TWO COMPLETE managed/public direct-
 Operation suites163/163, two completed/zero aborted-failed-canceled-ignored-pending,
@@ -530,7 +530,7 @@ Residual raw inspectors/reader joins/nested strict/envelope/metadata/resource
 checks still require individual necessity assessment; broader Phase/Goal and four
 HYG remain OPEN. Same Goal/history/repair3/3/all frames, ordinary893through128
 separate; no new verifier/stamp/hash/policy/epoch/allowance or full closure.
-See [actual evidence and complete original](../journal/2026/10/2026-10-10-planning-human-capture-codec-consumption.md).
+See [actual evidence and complete original](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-planning-human-capture-codec-consumption.md).
 
 ## R16: Actual native state, not payload postimage certificates
 
@@ -563,7 +563,7 @@ physical envelope/metadata/resources and all broader requirements/four HYG remai
 OPEN for necessity assessment, not blanket security/state justifications. Same
 Goal/original9/history/repair3/3/all frames; no new verifier/hash/mark/ledger/policy/
 allowance/epoch/checkbox or full closure.
-See [frozen causal boundary](../journal/2026/10/2026-10-10-planning-human-native-state-consumption.md).
+See [frozen causal boundary](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-planning-human-native-state-consumption.md).
 
 ### Later Actual129 R16/E34–35 evidence
 
@@ -622,7 +622,7 @@ Current three products/three executable specs UNVERIFIED pending fresh registere
 serialized runner and independent READ-ONLY connected review. Actual129 precedes
 this input and is not its validation. Full R5/Phase/Goal acceptance and four HYG
 remain OPEN; original history/repair3/3/all frames unchanged.
-See [frozen causal boundary and current status](../journal/2026/10/2026-10-10-human-passive-field-consumption.md).
+See [frozen causal boundary and current status](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-human-passive-field-consumption.md).
 
 Later Actual130 provides175/175 across all four COMPLETE suites, current-request
 ACCEPTED and fresh CAR0FAIL347WARN114OK. Independent connected code/spec assessment
@@ -688,7 +688,7 @@ three-COMPLETE-suite validation and independent connected READ-ONLY assessment.
 Actual130175/175 and its manual closure precede these inputs, not their validation.
 Same full ACTIVE Goal/original9/history/repair upper3consumed3/all frames/four HYG
 and full acceptance remain unchanged and OPEN.
-See [causal record](../journal/2026/10/2026-10-10-reasoning-human-passive-consumption.md).
+See [causal record](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-reasoning-human-passive-consumption.md).
 
 
 ### Later actual R18/E38–39 bounded validation
@@ -717,7 +717,7 @@ four inherited HYG/full acceptance unchanged and OPEN; ordinary896through131
 separate from repair3/3, original114 fulfilled/not reopened. Prior originals/
 findings/failures/cutoffs stay historical. No acceptance checkbox/new repair
 frame/counter/epoch/permission change, staging/commit/publication/full closure.
-See [actual evidence and retained original](../journal/2026/10/2026-10-10-reasoning-human-passive-consumption.md).
+See [actual evidence and retained original](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-reasoning-human-passive-consumption.md).
 
 ## R19: Fresh Reasoning Human completion consumes native state, not issue copies
 
@@ -772,4 +772,4 @@ Actual1808/8/PASS covers earlier Reasoning inputs, not this increment. Human
 issue/reconstruction/pending-advance/retained and other connected checks remain
 individually OPEN, as do broader Phase/Goal obligations. Same Goal/original9/
 full history/human upper3consumed3/all frames; ordinary945through180 unchanged.
-See [frozen causal boundary](../journal/2026/10/2026-10-11-reasoning-human-fresh-native-consumption.md).
+See [frozen causal boundary](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-11-reasoning-human-fresh-native-consumption.md).

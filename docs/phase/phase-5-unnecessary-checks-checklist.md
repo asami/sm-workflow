@@ -39,7 +39,7 @@ comparison, verifier or proof ledger is introduced by this allocation.
 ## Retained implementation history and Phase 5.1 open evidence
 
 Implementation started 2026-10-08. See the
-[entry and implementation journal](../journal/2026/10/2026-10-08-phase-5-entry-contract-audit.md).
+[entry and implementation journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-08-phase-5-entry-contract-audit.md).
 All completion boxes below remain open. Initial migration generation and
 focused tests have run; their bounded evidence does not establish acceptance
 of the whole supported-path migration and connected execution routing.
@@ -55,7 +55,7 @@ inputs are UNVERIFIED; fresh registered-runner execution and independent review
 are pending. Existing frame/physical-locator/repeated owning-call checks still
 need their own necessity assessment; this increment does not certify them or
 complete all removal/session/executor paths. No repair frame/counter/checkbox
-changes. [Causal record](../journal/2026/10/2026-10-09-split-advance-unused-input-removal.md).
+changes. [Causal record](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-09-split-advance-unused-input-removal.md).
 
 Later2026-10-10 actual106 verifies this specific advance-input connection40/40
 in4 complete suites with released serial lock and current-request admission.
@@ -1216,7 +1216,7 @@ Remaining outer snapshot/legacy/application whole-body and repeated consumption
 gates are not endorsed as necessary or claimed removed. Four inherited HYGOPEN.
 Original9/all history/repair upper3 consumed3/all frames unchanged; ordinary884
 through119. No acceptance box closes or formal review epoch/allowance/release.
-[Current119 and original review](../journal/2026/10/2026-10-10-split-semantic-control-echo-removal.md).
+[Current119 and original review](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-split-semantic-control-echo-removal.md).
 
 Actual121 continues the scope successor's consumed-data path: three passive
 readers discard unused recursive/root diagnostics, private ScopeOutcome projection
@@ -1232,7 +1232,7 @@ resource predicates still require necessity assessment, not blanket endorsement.
 All completion boxes/full R5/Phase/Goal stay OPEN. Same full ACTIVE Goal/original9/
 history/repair upper3 consumed3/all frames; ordinary886through121 separate.
 Four inherited HYG remain OPEN. No new verifier/stamp/hash/epoch/allowance/release.
-[Current121 and original review](../journal/2026/10/2026-10-10-scope-successor-consumed-data.md).
+[Current121 and original review](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-scope-successor-consumed-data.md).
 
 Actual123 continues R5 at the private scope producer/passive publication boundary:
 new-record reinspection, historical-completed/current whole-copy agreement,
@@ -1251,7 +1251,7 @@ index/resource predicates still require individual necessity assessment. Four
 inherited HYG, full R5/Phase/Goal and all completion boxes remain OPEN. Same full
 ACTIVE Goal/original9/history/repair upper3 consumed3/all frames; ordinary888
 through123 separate. No new verifier/stamp/hash/epoch/frame/allowance/release.
-[Current123 and original review](../journal/2026/10/2026-10-10-scope-capture-consuming-boundaries.md).
+[Current123 and original review](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-scope-capture-consuming-boundaries.md).
 
 Actual124 continues R5 at scope publication's committed-observation return:
 final whole prepared-record/ephemeral-receipt/current/next comparisons removed,
@@ -1267,7 +1267,7 @@ envelope/resource predicates and neighboring scope-planning postcommit compariso
 remain OPEN, not implicitly justified. Four inherited HYG and all full R5/Phase/
 Goal boxes remain OPEN. Same ACTIVE Goal/original9/history/repair upper3 consumed3/
 all frames; ordinary889through124 separate. No verifier/stamp/hash/epoch/frame/
-allowance/counter change/commit/publication. [Current124 and original review](../journal/2026/10/2026-10-10-scope-commit-observation-consumption.md).
+allowance/counter change/commit/publication. [Current124 and original review](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-scope-commit-observation-consumption.md).
 
 Actual125 continues the same R5 removal across BOTH adjacent scope planning and
 Human successor publishers. Their final prepared-record/temporary-receipt/current/
@@ -1289,7 +1289,7 @@ exemption or replacement verifier is adopted. Four inherited HYG and ALL full
 R5/Phase/Goal completion boxes remain OPEN. Same full ACTIVE Goal/original9/
 history/repair upper3 consumed3/all frames; ordinary890through125 separate.
 No epoch/frame/allowance/counter/policy change, commit/publication or completion.
-[Current125 and complete original](../journal/2026/10/2026-10-10-planning-human-commit-observation-consumption.md).
+[Current125 and complete original](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-planning-human-commit-observation-consumption.md).
 
 Actual128 continues R5 across planning/Human private capture, passive preparation
 and two codecs: historical/current/lifecycle freshness, repeated producer
@@ -1315,7 +1315,7 @@ Same full ACTIVE Goal/original9/history/repair upper3 consumed3/all frames;
 ordinary893through128 separate. Original114 sole recovery/two-CPB closure not
 reopened. No verifier/stamp/hash/epoch/policy/frame/allowance/counter change,
 commit/publication or full completion.
-[Current128 and complete original](../journal/2026/10/2026-10-10-planning-human-capture-codec-consumption.md).
+[Current128 and complete original](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-planning-human-capture-codec-consumption.md).
 
 ## Planning/Human native-state readers — Actual129 bounded evidence
 
@@ -1345,7 +1345,7 @@ consumed3/all frames; ordinary894through129 separate. Original126/127 failures
 and128 bounded PASS retained; original114 fulfillment not reopened. No checkbox/
 epoch/policy/allowance/frame/counter change, commit/publication or full closure;
 observed durations are not comparative AI-cost evidence.
-[Actual129 evidence and complete original](../journal/2026/10/2026-10-10-planning-human-native-state-consumption.md).
+[Actual129 evidence and complete original](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-planning-human-native-state-consumption.md).
 
 ## Human passive codecs — R17 implementation UNVERIFIED
 
@@ -1366,7 +1366,7 @@ runner and connected independent READ-ONLY review after actual result/fresh CAR.
 ALL full R5/Phase/Goal checkboxes and four inherited HYG remain OPEN. Same full
 ACTIVE Goal/history/repair3/3/all frames/ordinary894through129 unchanged, no new
 repair allowance/epoch/policy/counter/commit/publication/full closure.
-[Frozen boundary and current implementation](../journal/2026/10/2026-10-10-human-passive-field-consumption.md).
+[Frozen boundary and current implementation](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-human-passive-field-consumption.md).
 
 ### Later Actual130 — runtime verified, manual blocker not closed
 
@@ -1383,7 +1383,7 @@ R5/Phase/Goal obligations/four HYG remain OPEN, no blanket necessity justificati
 Same ACTIVE Goal/original9/history/repair upper3 consumed3/all frames;
 ordinary895through130 separate, original114 fulfilled/not reopened. No checkbox,
 new repair frame/counter/epoch/policy/allowance/commit/publication/full closure.
-[Actual130 evidence and complete original](../journal/2026/10/2026-10-10-human-passive-field-consumption.md).
+[Actual130 evidence and complete original](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-human-passive-field-consumption.md).
 
 ### Later R17 public-manual alignment — focused PASS
 
@@ -1403,7 +1403,7 @@ Answer codec/spec, normative Human pair, original review/runtime record and
 complete fresh CAR report assessed. Only the stable
 CB-SESSION130-HUMAN-PASSIVE-ANSWER-MANUAL is resolved. Original FINDINGS retained,
 not relabeled; actual130175/175 remains original runtime evidence, no new SBT.
-[Evidence and separate focused original](../journal/2026/10/2026-10-10-human-passive-field-consumption.md).
+[Evidence and separate focused original](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-human-passive-field-consumption.md).
 
 Same full ACTIVE Goal/original9/all history/repair upper3 consumed3/all frames;
 ordinary895through130 unchanged, original114 fulfilled/not reopened. Four inherited
@@ -1426,7 +1426,7 @@ UNVERIFIED: fresh registered serialized three-COMPLETE-suite validation,
 current-result admission, fresh CAR and connected independent READ-ONLY review
 remain. Actual130175/175/manual PASS precede these inputs. No old request replay,
 filter/skip/new common validator/verified stamp/hash/comparison ledger.
-[Current causal boundary](../journal/2026/10/2026-10-10-reasoning-human-passive-consumption.md).
+[Current causal boundary](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-reasoning-human-passive-consumption.md).
 
 All broader predicate/resource/comparative-cost/Phase/Goal obligations/four HYG
 remain OPEN. Same full ACTIVE Goal/original9/history/repair upper3 consumed3/all
@@ -1445,7 +1445,7 @@ Fresh independent READ-ONLY /root/reasoning_human_passive_readonly_review return
 supplemental PASS, CurrentBoundaryBlockers[], newHYG[], newDEV[], owner sm-workflow,
 for ONLY frozen R18/E38–39: six whole owned programs2811lines, actual connected
 consumers, current normative/public prose, original runtime and full CAR assessed.
-[Actual evidence and retained original](../journal/2026/10/2026-10-10-reasoning-human-passive-consumption.md).
+[Actual evidence and retained original](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-reasoning-human-passive-consumption.md).
 
 All three reasoning Human directions/both stopped alternatives/saved annotations/
 retained/owning advance/separate-JVM reopen and genuine harmful-input negatives
@@ -1481,7 +1481,7 @@ Same full ACTIVE Goal/original9/history/repair upper3 consumed3/all frames/four
 HYG unchanged, ordinary917through152 separate. All other adopted removal and
 full Phase/Goal obligations remain OPEN, not certified necessary by this delta.
 No checkbox/counter/reset/refund/frame/epoch/allowance/commit/publication/whole
-closure. [Current bounded record](../journal/2026/10/2026-10-10-generated-document-consumption.md).
+closure. [Current bounded record](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-generated-document-consumption.md).
 
 ### Scope native result and legacy locators — bounded verification
 
@@ -1506,7 +1506,7 @@ Phase5/5.1/later6–8/fullGoal remain OPEN, not certified needed by unchanged pr
 Same full ACTIVE Goal/original9/all history/repair upper3 consumed3/allframes/four
 HYG unchanged, ordinary919through154 separate. No checkbox/reset/refund/newframe/
 epoch/allowance/commit/publication/whole acceptance.
-[Frozen causal boundary and complete evidence](../journal/2026/10/2026-10-10-scope-native-result-consumption.md).
+[Frozen causal boundary and complete evidence](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-scope-native-result-consumption.md).
 
 ### Human native result and original source — bounded verification
 
@@ -1526,7 +1526,7 @@ Same full ACTIVE Goal/original9/history/repair3/3/allframes/fourHYG unchanged,
 ordinary920through155 separate. ScopePlanning/repeated resolution/frontier/source/
 resource and all other adopted removal/full Phase/Goal obligations stay OPEN.
 No checkbox/newframe/reset/refund/allowance/commit/publication/whole acceptance.
-[Complete current evidence and original report](../journal/2026/10/2026-10-10-human-native-result-consumption.md).
+[Complete current evidence and original report](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-human-native-result-consumption.md).
 
 ### ScopePlanning native result and original source — bounded verification
 
@@ -1543,4 +1543,4 @@ No checkbox or complete removal claim. Native nested-state copies and remaining
 source/frontier/storage/resource/other adopted removals and wider obligations
 stay OPEN. Same ACTIVE Goal/original9/history/repair3/3/allframes/four HYG;
 ordinary921through156 separate, no reset/refund/newframe/allowance/commit.
-[Complete evidence and original result](../journal/2026/10/2026-10-10-scope-planning-native-result-consumption.md).
+[Complete evidence and original result](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-scope-planning-native-result-consumption.md).

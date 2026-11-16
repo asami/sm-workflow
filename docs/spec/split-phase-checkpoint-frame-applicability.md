@@ -110,7 +110,7 @@ specs and actual owners. The preceding UNVERIFIED statement retains its authored
 cutoff. Separate observer comparisons, legacy nested fields and fresh pending
 reconstruction remain OPEN, not certified necessary. No broader acceptance or
 counter/frame change. See
-../journal/2026/10/2026-10-10-split-completion-inert-capture-codec.md.
+https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-split-completion-inert-capture-codec.md.
 
 ## Native completion observation
 
@@ -139,7 +139,7 @@ restore/reopen assertions remain unverified. Source assessment found no addition
 product defect in this frozen delta. The exact additional test correction is
 proposed, not admitted or executed. Prior UNVERIFIED paragraph retains its cutoff;
 this is no broader acceptance, counter change or reopened original four findings.
-See ../journal/2026/10/2026-10-10-split-completion-native-observation.md.
+See https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-split-completion-native-observation.md.
 
 Subsequently, the human admits only that oracle correction without counter/frame
 change. Actual151 runs the complete ManagedPlanningCheckpoint suite141/141,
@@ -171,7 +171,7 @@ This delta is implemented but UNVERIFIED pending fresh complete ManagedPlanning-
 Checkpoint/DirectOperation suites and independent connected read-only review.
 Earlier Actual151 and its oracle closure cover previous inputs only. Same full
 Goal/history/repair3/3/frames; no new repair allowance or overall acceptance.
-See ../journal/2026/10/2026-10-10-generated-document-consumption.md.
+See https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-generated-document-consumption.md.
 
 Subsequently Actual152 executes both complete selected suites168/168, no failed/
 aborted/canceled/ignored/pending, SBT0/wrapper0/lockreleased19:31:48JST, current
@@ -210,7 +210,7 @@ first work, not certified necessary by this correction.
 
 UNVERIFIED pending fresh complete affected executable suites and read-only
 review. Same full Goal/history/repair3/3/frames; earlier152 is prior-input evidence.
-See ../journal/2026/10/2026-10-10-scope-native-result-consumption.md.
+See https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-scope-native-result-consumption.md.
 
 ## Human native result without an application locator
 
@@ -237,7 +237,7 @@ first work, not collectively justified.
 Current implementation UNVERIFIED pending fresh complete affected executable
 suites, current-result admission and independent read-only connected review.
 Same full Goal/history/repair3/3/frames, earlier154 not current coverage.
-See ../journal/2026/10/2026-10-10-human-native-result-consumption.md.
+See https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-human-native-result-consumption.md.
 
 Subsequent Actual155 executes all THREE COMPLETE affected suites175/175, no
 failed/aborted/canceled/ignored/pending, SBT0/wrapper0/shared lockreleased20:52:23JST,
@@ -271,7 +271,7 @@ Current implementation UNVERIFIED pending fresh complete affected executable
 suites, current-result admission, CAR and independent read-only connected review.
 Earlier Human155 is prior-input coverage only. Same full Goal/history/repair3/3/
 allframes; no new allowance or whole acceptance. See
-../journal/2026/10/2026-10-10-scope-planning-native-result-consumption.md.
+https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-scope-planning-native-result-consumption.md.
 
 Subsequent Actual156 runs BOTH COMPLETE affected suites168/168, no failed/
 aborted/canceled/ignored/pending, compile_failed=false, SBT0/wrapper0/lockreleased
@@ -621,7 +621,7 @@ fresh CAR and fresh independent strictly read-only connected assessment.
 Actual159 four-suite176/176 and its original independent source PASS cover only
 that earlier input. Same full ACTIVE Goal/original9/history/repair3/3/allframes/
 fourHYG/ordinary924through159; no new allowance/reset/refund/Phase acceptance.
-See ../journal/2026/10/2026-10-10-checkpoint-assembly-declaration-readmission-trace.md.
+See https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-checkpoint-assembly-declaration-readmission-trace.md.
 
 ## Later native-only successor bounded verification (2026-10-11)
 

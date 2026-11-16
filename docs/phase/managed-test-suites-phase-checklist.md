@@ -114,7 +114,7 @@ not exhaustively reverified by sm-workflow. The original IDs and evidence stay
 historical; no new coverage or review observation automatically becomes a gate.
 See [current fixed completion conditions](phase-5.1.md#current-fixed-acceptance-boundary--2026-10-11).
 Design: [Managed Test Suites and Verification Cost Guard](../notes/managed-test-suites-and-verification-cost-guard.md)
-Decision: [cost-feedback journal](../journal/2026/10/2026-10-06-managed-test-suites-cost-feedback.md)
+Decision: [cost-feedback journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-managed-test-suites-cost-feedback.md)
 
 Rows track connected behavior, not separate review cycles per helper. Use existing
 tests/selectors as suite compositions; no duplicated test-code hierarchy is
@@ -326,7 +326,7 @@ the sole full Phase review and local release remain open. Preserve Phase
       partial read, respecting runtime line/byte caps without whole-file buffering,
       and report its range/truncation meaning. Line/chunk streaming remains a
       later extension, not an additional Phase 6 completion requirement.
-      See the [handoff](../journal/2026/10/2026-10-15-phase-6-file-workspace-dsl-handoff.md).
+      See the [handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-15-phase-6-file-workspace-dsl-handoff.md).
 - [x] P6-SBX04: **Owner: [Phase 6](phase-6.md).** Unconfigured external command
       and outbound HTTP destination are denied by default; an explicitly admitted
       command/provider succeeds within declared scope. Metadata request alone
@@ -456,7 +456,7 @@ Ordinary Step review/Admission/commit remains in 6.1; affected repair in 6.2;
 integrated review, Final reuse and aggregate full validation remain in 6.3.
 Required independence, meaningful coverage and blocker handling stay enforced.
 No unchecked CBD item is marked PASS by this scope transfer. See the
-[decision/handoff](../journal/2026/10/2026-10-18-production-first-cbd-review-phase-10.md).
+[decision/handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-production-first-cbd-review-phase-10.md).
 
 ### Phase 6.3 production-use acceptance — 2026-10-18
 
@@ -544,7 +544,7 @@ The ordinary acceptance records cover:
 
 USE01's actual push/convergence and USE02's usable split output remain mandatory.
 No additional per-repair gate or automatic scheduling/batching engine is added.
-See the [active-chat handoff](../journal/2026/10/2026-10-18-phase-63-execution-overhead-handoff.md).
+See the [active-chat handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-phase-63-execution-overhead-handoff.md).
 
 Under the [review scope and reuse policy](phase-6.3.md#review-scope-and-reuse-acceptance--2026-10-18),
 P63-USE03 and the existing integrated review/Final acceptance also retain actual

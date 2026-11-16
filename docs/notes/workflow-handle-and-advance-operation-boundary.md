@@ -3,10 +3,10 @@
 Status: normative design input for the public Workflow Operation boundary
 
 Source decision:
-[`2026-09-18-workflow-handle-advance-operation-boundary.md`](../journal/2026/09/2026-09-18-workflow-handle-advance-operation-boundary.md)
+[`2026-09-18-workflow-handle-advance-operation-boundary.md`](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-18-workflow-handle-advance-operation-boundary.md)
 
 Operation-surface refinement:
-[`2026-09-21-sm-workflow-skill-adapter-review-fix-handoff.md`](../journal/2026/09/2026-09-21-sm-workflow-skill-adapter-review-fix-handoff.md)
+[`2026-09-21-sm-workflow-skill-adapter-review-fix-handoff.md`](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-21-sm-workflow-skill-adapter-review-fix-handoff.md)
 
 ## Purpose
 

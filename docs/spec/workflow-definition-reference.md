@@ -186,4 +186,4 @@ The corrected CNCF producer suites passed 51 tests; after the normal local
 SNAPSHOT refresh, the eight affected sm-workflow definition/native/direct
 Operation suites passed 176 tests on their earlier inputs, before R4. All actual failures/interruptions and prior
 superseded evidence remain historical. See the
-[implementation record](../journal/2026/10/2026-10-08-phase-5-entry-contract-audit.md).
+[implementation record](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-08-phase-5-entry-contract-audit.md).

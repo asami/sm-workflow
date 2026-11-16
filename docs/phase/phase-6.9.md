@@ -6,7 +6,7 @@ Owner: sm-workflow development
 Sequence: Phase 6.7 -> Phase 6.8 -> Phase 6.9 -> Phase 6.10 -> Phase 6.11 -> Phase 7
 Contract: [runtime orchestration](../spec/repository-sync-runtime-orchestration.md)
 Checklist: [P69 acceptance](phase-6.9-checklist.md)
-Handoff: [development adoption](../journal/2026/10/2026-10-27-phase-6.9-repository-sync-handoff.md)
+Handoff: [development adoption](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-27-phase-6.9-repository-sync-handoff.md)
 
 ## Scope and preservation
 

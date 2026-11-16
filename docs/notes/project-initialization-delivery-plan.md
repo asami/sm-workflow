@@ -4,7 +4,7 @@ Date: 2026-10-24 (Asia/Tokyo)
 Status: planned; no installed initialization Operation claimed
 Producer: sm-workflow development; representative consumer: textus-control-center
 Specification: [project initialization](../spec/project-initialization.md)
-Handoff: [English developer instructions](../journal/2026/10/2026-10-24-project-initialization-handoff.md)
+Handoff: [English developer instructions](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-24-project-initialization-handoff.md)
 
 ## Scheduling
 

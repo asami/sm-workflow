@@ -268,7 +268,7 @@ existing supported configuration, but failure to adopt it does not block 6.5
 acceptance using an adequate existing profile. Model comparison stays with the
 future Phase 9 work, without a Local LLM evaluation prerequisite.
 Current Phase 6.4/12 execution and earlier accepted evidence are not modified.
-See the [adoption handoff](../journal/2026/10/2026-10-21-phase-65-deterministic-assessment-handoff.md).
+See the [adoption handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-21-phase-65-deterministic-assessment-handoff.md).
 
 ## Native Step policy and admission (Q1)
 

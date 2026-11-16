@@ -10,7 +10,7 @@ depends only on the installed CLI and existing CNCF resource/configuration
 facilities. It does not wait for the broader dependencies above. See
 [initializeProject specification](../spec/project-initialization.md),
 [INIT-1–4 delivery/checklist](../notes/project-initialization-delivery-plan.md) and
-[English handoff](../journal/2026/10/2026-10-24-project-initialization-handoff.md).
+[English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-24-project-initialization-handoff.md).
 Deliver a minimal entry callable without project configuration, then GoalPhase
 setup and existing-installation reuse. Preserve live Sessions and overrides;
 initialization is separate from Start and does not regenerate the product project.

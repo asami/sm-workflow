@@ -39,7 +39,7 @@ Cozy classpath failure was then closed by prerequisite-244. Regression-245
 completed 124 suites with 1024 succeeded, 0 failed, 8 existing live MySQL cases
 canceled and 5 existing examples pending. This is selected producer regression,
 not whole-CNCF full-test, downstream artifact or production acceptance. See the
-[S3 journal](../journal/2026/09/2026-09-29-cncf-phase-88-paired-suspension.md).
+[S3 journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-cncf-phase-88-paired-suspension.md).
 
 Owned producer sources: WorkflowInstanceDataStorePersistence.scala,
 WorkflowContinuationDataStorePersistence.scala and
@@ -70,7 +70,7 @@ Focused-248 passed 34/34 tests in four suites, including all nine S4 examples.
 Regression-249 completed 125 suites: 1033 succeeded, 0 failed, 8 existing live
 MySQL cases canceled and 5 existing examples pending. Both completed with
 SBT/wrapper exit 0 and lock=released, binding unchanged S4 source identities.
-See the [S4 journal](../journal/2026/09/2026-09-29-cncf-phase-88-issued-work-publication.md).
+See the [S4 journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-cncf-phase-88-issued-work-publication.md).
 Claim/release/complete preserve the immutable issued property, including SQLite
 resource reopen. Read/retry confer no claim or execution authority.
 
@@ -107,7 +107,7 @@ thirteen Workflow S5 examples. Regression-255 completed 127 suites with
 1054 succeeded, 0 failed/aborted, 8 existing MySQL cases canceled and 5 existing
 placeholders pending. Accepted receipts bind the same complete tree and all
 nine owned source identities, with exits 0/0 and lock=released. See the
-[S5 journal](../journal/2026/09/2026-09-29-cncf-phase-88-guarded-completion.md).
+[S5 journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-cncf-phase-88-guarded-completion.md).
 
 ## S6 bounded application payload/scope retention
 
@@ -129,7 +129,7 @@ examples. Regression-258 completed 129 suites with 1068 succeeded, 0 failed/abor
 8 existing opt-in MySQL examples canceled and 5 placeholders pending. Both
 successful receipts bind the same complete tree and three owned source hashes,
 with exits 0/0 and lock=released; all nine S5 source hashes are unchanged. See the
-[S6 journal](../journal/2026/09/2026-09-29-cncf-phase-88-admission-evidence.md).
+[S6 journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-cncf-phase-88-admission-evidence.md).
 This is producer record retention and same-process resource reopen, not a
 production host binding, separate-process restart or active UoW implementation.
 
@@ -150,7 +150,7 @@ passed 70/70 tests in seven suites. Regression-260 completed 141 suites with
 1158 succeeded, zero failed/aborted, eight existing opt-in MySQL examples canceled
 and nine existing placeholders pending. Both accepted receipts bind the same
 complete tree and seven owned source hashes; S6 remains unchanged. See the
-[S7 journal](../journal/2026/09/2026-09-29-cncf-phase-88-prepared-record-commit.md).
+[S7 journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-cncf-phase-88-prepared-record-commit.md).
 
 This is P2-U10, a Work B prerequisite for full P2-U05. It supplies no EventStore
 adapter, active UoW data interception, closing-program interpreter or atomic
@@ -173,7 +173,7 @@ suites. Regression-266 completed 142 suites with 1172 successful tests, zero
 failed/aborted, eight existing opt-in MySQL examples canceled and nine existing
 placeholders pending. Both accepted receipts bind the same complete tree and
 eight owned source hashes, exits 0/0 and lock=released. P2-U11 is checked; see the
-[S8 journal](../journal/2026/09/2026-09-29-cncf-phase-88-create-only-side-records.md).
+[S8 journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-cncf-phase-88-create-only-side-records.md).
 This supplies no EventRecord serialization, sequence allocator, EventStore,
 active UoW enlistment or AtomicWorkflowSuspensionEngine; P2-U05 remains open.
 
@@ -195,7 +195,7 @@ before tests. Accepted Cozy refresh-278, final focused-279 (44/44) and
 regression-280 (1190 successful / 143 suites) bind the same complete tree
 `88bbea9f991d101e33b853c506b6904208b4742b0cf4217854d80000ec3a78ea`.
 P2-U13 is checked; P2-U05 remains open. See the
-[S10 journal](../journal/2026/09/2026-09-30-cncf-phase-88-prepared-event-batch.md).
+[S10 journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-cncf-phase-88-prepared-event-batch.md).
 No global sequence authority, durable delivery-key index, EventStore adapter,
 active UoW data interception or closing-program enlistment is supplied.
 
@@ -211,7 +211,7 @@ records and Create-only side effects: it cannot atomically reserve an
 independent global EventStore sequence cursor without a new admitted
 multi-guard transaction capability. P2-U14 is checked; S11 does not claim that
 capability or close P2-U05. See the
-[S11 journal](../journal/2026/09/2026-09-30-cncf-phase-88-event-readback-candidate.md).
+[S11 journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-30-cncf-phase-88-event-readback-candidate.md).
 
 The next bounded prerequisite is S12's independently guarded third-record
 capability, not a side-effect Save of the global sequence cursor. Its
@@ -228,7 +228,7 @@ and scoped repair of five focused-269 failures, focused-270 passed 50/50 and
 regression-271 passed 1184 tests / 143 suites on one complete tree. P2-U12 is
 checked; full P2-U05 remains open. Historical rejected-267 stays unaccepted.
 See the
-[S9 journal](../journal/2026/09/2026-09-29-cncf-phase-88-event-record-storage-codec.md).
+[S9 journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/09/2026-09-29-cncf-phase-88-event-record-storage-codec.md).
 
 The existing AtomicWorkflowSuspensionEngine contract requires the active
 UnitOfWork's event/data effects to share the same prepare/commit/abort boundary.

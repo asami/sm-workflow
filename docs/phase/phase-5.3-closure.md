@@ -84,7 +84,7 @@ non-convergence0. No counter reset/refund or new repair frame. Preserve the
 predecessor's original nine findings, all history and exhausted3-of-3 allowance.
 
 Accepted nonblocking Hygiene records are persisted exactly once each in the
-[canonical journal](../journal/2026/10/2026-10-12-phase-5.3-hygiene-follow-up.md):
+[canonical journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-12-phase-5.3-hygiene-follow-up.md):
 
 - HYG-S53-FULL-01-01: unchanged legacy naming maintenance.
 - HYG-S53-FULL-01-02: authored packaged-ABI reference/fixture maintenance.

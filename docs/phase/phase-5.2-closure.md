@@ -64,7 +64,7 @@ document alone, establish actual Git closure.
 
 - Current Phase Blockers: none.
 - Accepted Hygiene: HYG-S52-STEP-01 remains OPEN/nonblocking, exactly once in
-  [the canonical journal](../journal/2026/10/2026-10-11-phase-5.2-hygiene-follow-up.md).
+  [the canonical journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-11-phase-5.2-hygiene-follow-up.md).
   No naming cleanup or duplicate record is added.
 - Accepted Development Candidates: none; no empty journal is created.
 - Unpersisted accepted Hygiene / Development Candidate IDs: none.

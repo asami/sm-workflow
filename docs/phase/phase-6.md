@@ -35,7 +35,7 @@ the active private workflow storage; it is not a repository evidence package.
 
 ## Goal and connected implementation order
 
-The [production-first handoff](../journal/2026/10/2026-10-18-production-first-cbd-review-phase-10.md)
+The [production-first handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-18-production-first-cbd-review-phase-10.md)
 transfers unfinished CBD-backed P6-SQ01..05 integration to [Phase 10](phase-10.md).
 Phase 6.1 ordinary Step Admission, 6.2 repair and 6.3 integrated review/Final use
 the existing reviewer route without CBD15/15.1 waits. This does not reopen this
@@ -61,7 +61,7 @@ standalone skill text, command-only tests or fabricated results cannot close it.
 ### NICT delivery-friction observations — adopted 2026-10-17
 
 This is clarification of existing requirements from the
-[NICT incident handoff](../journal/2026/10/2026-10-17-nict-skill-failures-phase-6-family-handoff.md),
+[NICT incident handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-17-nict-skill-failures-phase-6-family-handoff.md),
 not a new item ID, acceptance gate or retrospective reopening. Preserve current
 issued work, in-flight results and applicable validation/review evidence. The
 owning development chat adopts it at the next ordinary planning/dispatch boundary;
@@ -368,7 +368,7 @@ and source-observation command results are recorded below. The initial authored
 snapshot preserved the original Goal/start/binding and bases, epoch1,
 repair77/streak0 and 22 pending obligations at that time, protected Step review
 history and Phase 6.3's sole aggregate full-suite ownership. See the
-[adoption journal](../journal/2026/10/2026-10-17-phase-6-cbd-managed-effect-adoption.md).
+[adoption journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-17-phase-6-cbd-managed-effect-adoption.md).
 
 The authorized existing CBD/CNCF dependency integration is authored as of
 2026-10-17 under S6-01D35. CNCF main now contains the selected static Component
@@ -394,7 +394,7 @@ accepted this bounded integration and P6-SBX05. The whole Phase remains in
 progress pending Step commits and Phase review/release, with the original
 Goal/start/binding/bases, epoch1, repair79/streak0 and PHASE-6.3 full-suite
 ownership. All 24 original independent repair obligations are resolved. See the
-[dependency integration journal](../journal/2026/10/2026-10-17-phase-6-cbd-cncf-dependency-integration.md).
+[dependency integration journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-17-phase-6-cbd-cncf-dependency-integration.md).
 
 Adopt the GitHub Phase 6 correction from `cd73fe3` into this split plan. The
 observed defect is Process Execution used for ordinary file reads/writes:
@@ -403,7 +403,7 @@ observed defect is Process Execution used for ordinary file reads/writes:
 fixed argv alone do not authorize its filesystem effects. Classify this as
 Capability Laundering; remove the route rather than approving its Java wrapper.
 Detailed inventory, upstream references and rationale are in the
-[integration journal](../journal/2026/10/2026-10-15-phase-6-managed-effects-and-sbt-plan.md).
+[integration journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-15-phase-6-managed-effects-and-sbt-plan.md).
 
 Phase 6 drives CNCF Phase 110 P110-01 and the necessary P110-04 process/HTTP,
 Git/SBT and shared External Effect classification slice. CNCF owns enforcement
@@ -510,7 +510,7 @@ they compose in UoW. No separate executor or custom main is added.
 
 Adopt the [GitHub design input at 959a869](https://github.com/asami/sm-workflow/blob/959a869/docs/journal/2026-10-15-file-workspace-dsl-safety-sandbox.md).
 The implementation handoff is the
-[File Workspace journal](../journal/2026/10/2026-10-15-phase-6-file-workspace-dsl-handoff.md).
+[File Workspace journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-15-phase-6-file-workspace-dsl-handoff.md).
 This refines P6-SBX03, not a new Phase or a second delivery checklist.
 
 Keep logical-resource reads on `read_resource` / `read_resource_text`. Move the

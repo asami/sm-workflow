@@ -123,7 +123,7 @@ interrupted acknowledgements, occupied-child refusal and runtime grant recovery.
 Whole-family982 passed 1,171/1,171 tests across 138 suites. Normal runtime installation and semantic/
 Human document-conflict continuation remain unfinished.
 This is not normal three-profile acceptance. GoalPhase Phase closure and actual RepositorySync Git effects remain
-in progress; see the [resumption record](docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
+in progress; see the [resumption record](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-06-three-workflow-resumption.md).
 
 Phase 1 complete Textus CAR project for software-development workflows.
 The CML defines GoalPhaseWorkflow, SplitPhaseWorkflow, and RepositorySyncWorkflow

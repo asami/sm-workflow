@@ -146,7 +146,7 @@ operation as a usable workaround or claim this design as completed adoption.
 Both operations and passive
 `NativeHostPreparationService.prepareEvidence(kind=remaining-plan-adoption)`
 are locally published and qualified through the normal installed CLI. The
-[producer delivery](../journal/2026/10/2026-10-20-phase-12-producer-delivery.md)
+[producer delivery](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-20-phase-12-producer-delivery.md)
 describes actual description → independent host directive admission → ordinary
 StartupImport → adoption → Advance. Passive preparation does not create consent
 or grant authority. Fixture directive records are specification-owned and cannot

@@ -67,7 +67,7 @@ report that producer gap without bypassing the actual pending request. Preserve
 explicit user deferrals/revocations. No mandatory additional independent review
 per comment; use existing Step/Release policy and affected validation.
 
-See the [English handoff](../journal/2026/10/2026-10-26-source-history-recovery-and-result-collection-handoff.md).
+See the [English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-26-source-history-recovery-and-result-collection-handoff.md).
 
 ## Producer boundary at the original handoff
 
@@ -116,7 +116,7 @@ Submit, live consumer Operation or storage edit was performed. The separate
 RS-GIT validation-intent/current-candidate continuation gap remains in its
 existing correction plan and does not reopen these producer checks.
 
-See the [producer delivery journal](../journal/2026/10/2026-10-26-source-history-normalization-producer-delivery.md)
+See the [producer delivery journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-26-source-history-normalization-producer-delivery.md)
 for the retained evidence location and consumer handoff.
 
 ## Verified consumer completion — 2026-10-26
@@ -132,6 +132,6 @@ completed the same Session with Plan1 and its original base.
 
 This resolves the former owner-held adoption item; it does not turn isolated
 producer fixtures into real consent or resolve the historical UNKNOWN outcome.
-The [P66-17/P66-18 evidence reconciliation](../journal/2026/10/2026-10-26-phase-66-p66-17-18-evidence-reconciliation.md)
+The [P66-17/P66-18 evidence reconciliation](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-26-phase-66-p66-17-18-evidence-reconciliation.md)
 records original receipts, separate publication/activation/qualification facts,
 consumer responses and the limits of this documentation-only verification.

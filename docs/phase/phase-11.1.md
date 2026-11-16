@@ -6,7 +6,7 @@ owner=sm-workflow
 depends_on=phase-11.md
 design=[共通開発Journal](../design/development-journal.md)
 sequence=Phase 7 -> Phase 11.1 -> Phase 8 -> Phase 8.1 -> Phase 9 -> Phase 18
-split_record=[分割記録](../journal/2026/11/2026-11-11-journal-single-entry-and-batch-split.md)
+split_record=[分割記録](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-11-journal-single-entry-and-batch-split.md)
 
 ## 目的と順序
 

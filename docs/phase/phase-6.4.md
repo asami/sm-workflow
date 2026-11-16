@@ -110,7 +110,7 @@ explicit host-prepared directory prerequisite. Later directory/compression
 producer delivery remains required. This semantic handoff does not accept E1
 or check any outcome; storage implementation, native validation, independent
 review and closure retain their own gates.
-See the [execution record](../journal/2026/10/2026-10-20-phase-6.4-evidence-storage.md)
+See the [execution record](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-20-phase-6.4-evidence-storage.md)
 for the actual session and host-owned routing location.
 
 ## Common Evidence adoption — 2026-10-20
@@ -120,7 +120,7 @@ Evidence service and actual automatic Action -> archive -> Journal -> read route
 before E2 integration. This Phase, owned by sm-workflow-dev開発, adopts that
 delivery and completes operational failure/batch/compression/retention use.
 See the [common specification](../spec/common-evidence.md) and
-[two-chat handoff](../journal/2026/10/2026-10-20-phase-12-common-evidence-handoff.md).
+[two-chat handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-20-phase-12-common-evidence-handoff.md).
 One common implementation is extended; no separate 6.4 Evidence/Journal store.
 
 Existing E1 acceptance, Goal/Session/base, native Plan, pending decisions, counters,

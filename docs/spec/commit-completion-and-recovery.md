@@ -89,7 +89,7 @@ including its actual selection/commit connection, and a contrasting uncovered
 operation that still requests Human. The current bounded inventory-adoption
 implementation requires fresh Human admission and is reuse material, not proof
 of this permanent contract. No incident-specific exception or new approval
-ledger is needed. See the [adoption handoff](../journal/2026/10/2026-10-27-phase-6.8-authority-carry-forward-handoff.md).
+ledger is needed. See the [adoption handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-27-phase-6.8-authority-carry-forward-handoff.md).
 
 ## Mechanical commit hygiene
 

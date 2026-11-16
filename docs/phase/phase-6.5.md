@@ -8,7 +8,7 @@ spec=[Step assessment and conditional escalation](../spec/goal-phase-step-assess
 cross_workflow_spec=[Workflow-specific semantic gaps](../spec/workflow-semantic-gap-routing.md)
 
 Owner: sm-workflow. Predecessor: [6.4](phase-6.4.md). Successor: [7](phase-7.md).
-Adoption and development instructions: [handoff journal](../journal/2026/10/2026-10-20-phase-65-workflow-optimization-handoff.md).
+Adoption and development instructions: [handoff journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-20-phase-65-workflow-optimization-handoff.md).
 
 ## Goal and preservation boundary
 
@@ -26,18 +26,18 @@ Step is cheap early warning; Release is one integrated semantic review. A Step
 satisfies its own acceptance and subsequent prerequisites without proving the
 whole Plan's semantics. Release checks the integrated Plan/Usage Contract,
 Given/When/Then and implementation correspondence in that single review, reusing
-existing results. See the [handoff addendum](../journal/2026/10/2026-10-21-phase-65-three-workflow-optimization-handoff.md#追記-step早期警告release単一統合レビュー).
+existing results. See the [handoff addendum](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-21-phase-65-three-workflow-optimization-handoff.md#追記-step早期警告release単一統合レビュー).
 
 Adopted 2026-10-21: runtime deterministic assessment accepts an ordinary Step
 without AI when its declared conditions are met and no unresolved semantic signal
 requires escalation. AI Bad Smell Triage is a conditional second assessment,
-never an all-Step gate. See the [latest handoff](../journal/2026/10/2026-10-21-phase-65-deterministic-assessment-handoff.md).
+never an all-Step gate. See the [latest handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-21-phase-65-deterministic-assessment-handoff.md).
 
 Further adopted 2026-10-21: extend this principle to RepositorySync's formal
 reviewless merge admission and SplitPhase's unknown-only semantic work/context
 reuse. Establish GoalPhase first, then RepositorySync, then SplitPhase, before
 integrated delivery. See the [cross-workflow specification](../spec/workflow-semantic-gap-routing.md)
-and [combined handoff](../journal/2026/10/2026-10-21-phase-65-three-workflow-optimization-handoff.md).
+and [combined handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-21-phase-65-three-workflow-optimization-handoff.md).
 LLM evaluation is outside scope. Luna adoption is optional where an existing
 supported route suffices; unsuccessful or unavailable Luna adoption does not
 prevent Phase acceptance with an adequate existing profile.
@@ -375,4 +375,4 @@ use boundary remain; this Phase does not implement workspace/artifact overlays.
 At this snapshot, Q1 through Q3-S had accepted independent reviews and native Step
 commits in the existing Session. Q4 client integration, full validation, integrated
 Phase review and local closure were pending. Later delivery evidence belongs in the
-[actual evidence and Phase 7 handoff](../journal/2026/10/2026-10-24-phase-65-delivery-and-phase-7-handoff.md).
+[actual evidence and Phase 7 handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-24-phase-65-delivery-and-phase-7-handoff.md).

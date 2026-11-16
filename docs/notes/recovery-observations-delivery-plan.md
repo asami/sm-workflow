@@ -4,7 +4,7 @@ Date: 2026-10-24 (Asia/Tokyo)
 Status: ROBS-1 producer correction qualified; ROBS-2/3 planned; real Session adoption remains owner-controlled
 Producer: sm-workflow開発; consumer: sm-workflow-dev開発
 Specification: [recovery observations](../spec/recovery-observations-and-cause-resolution.md)
-Handoff: [English developer instructions](../journal/2026/10/2026-10-24-recovery-observations-handoff.md)
+Handoff: [English developer instructions](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-24-recovery-observations-handoff.md)
 
 ## Delivery position
 
@@ -89,7 +89,7 @@ separately. This checklist records acceptance, not new per-invocation approvals.
 Producer qualification for A01/A02 is bounded to the correction and isolated
 installed generations; it is not acceptance of a consumer Phase or the pending
 observation features. Same-Session consumer instructions are in the
-[ordinary-continuation handoff](../journal/2026/10/2026-10-24-selected-closure-continuation-adoption.md).
+[ordinary-continuation handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-24-selected-closure-continuation-adoption.md).
 The existing consumer already reported progress beyond its former Q1 closure;
 adoption must preserve that progress rather than repeat that effect.
 Actual qualification records remain outside Git at

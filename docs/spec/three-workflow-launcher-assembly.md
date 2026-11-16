@@ -48,7 +48,7 @@ Pure evidence codec/binding checks also pass.1066..1068 failures are retained.
 This verifies normal composition, not positive Start/Preview/Apply or genuine
 host-issued result installation/completion. Follow the
 [current acceptance table](../phase/phase-2-executable-specification-checklist.md)
-and [resumption journal](../journal/2026/10/2026-10-07-optimized-plan-resumption.md)
+and [resumption journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-07-optimized-plan-resumption.md)
 for admitted results and remaining positive workflow scenarios.
 
 ## Executable scenarios

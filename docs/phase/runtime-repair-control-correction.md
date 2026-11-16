@@ -76,7 +76,7 @@ The common owner and public adoption are implemented and independently reviewed.
 Focused source and isolated installed qualification, normal local publication and
 runtime activation are complete. Completed results were recovered from their
 original receipts after caller interruption. No successful check/publication was
-repeated to obtain a chat summary. See the [producer delivery](../journal/2026/10/2026-10-25-runtime-repair-control-producer-delivery.md).
+repeated to obtain a chat summary. See the [producer delivery](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-25-runtime-repair-control-producer-delivery.md).
 
 RRC-06 and RRC-08 remain open only for actual consumer selection/adoption and
 continuation. The isolated same-Session restoration link and failure-to-FIX tests

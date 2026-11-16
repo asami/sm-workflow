@@ -84,7 +84,7 @@ same-Session continuation correction at the next coherent delivery boundary.
 This observation does not broaden the current SHR validation or reopen its
 accepted results. No real consumer state was read or changed by the producer.
 
-See the [English handoff](../journal/2026/10/2026-10-26-git-execution-and-recovery-handoff.md).
+See the [English handoff](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-26-git-execution-and-recovery-handoff.md).
 
 ### RS-VC1 bounded validation/candidate continuation — 2026-10-26
 
@@ -111,7 +111,7 @@ remains owner-held and was not inspected or operated by this implementation.
 
 The authoring checkbox alone establishes no validation or installed PASS.
 The accepted source/review evidence is recorded in the
-[implementation journal](../journal/2026/10/2026-10-26-repository-sync-validation-continuation.md).
+[implementation journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-26-repository-sync-validation-continuation.md).
 
 Source acceptance update: selected five-suite scope 38/38 passed (retaining the
 actual earlier failures and eight successful pure examples), independent source

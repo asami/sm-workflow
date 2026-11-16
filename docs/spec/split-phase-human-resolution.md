@@ -299,7 +299,7 @@ still need individual necessity assessment. Fresh CAR0FAIL347WARN114OK is not
 runtime Help/CLI/MCP/skill acceptance or warning waiver. Same full ACTIVE Goal,
 all originals/history/repair3/3/all frames/four HYG and full acceptance boxes
 remain unchanged and OPEN.
-See [current evidence and original review](../journal/2026/10/2026-10-10-planning-human-native-state-consumption.md).
+See [current evidence and original review](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-planning-human-native-state-consumption.md).
 
 ## R17 follow-through — passive declared fields, not annotation certificates
 
@@ -327,7 +327,7 @@ Three products and three executable specs UNVERIFIED pending fresh four-COMPLETE
 suite registered-runner validation and independent READ-ONLY connected review.
 129 is earlier-input evidence only. Same full ACTIVE Goal/original9/history/
 repair3/3/all frames and full acceptance boxes/four HYG unchanged and OPEN.
-See [causal boundary and current evidence](../journal/2026/10/2026-10-10-human-passive-field-consumption.md).
+See [causal boundary and current evidence](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-human-passive-field-consumption.md).
 
 Later Actual130 confirms175/175/four COMPLETE suites/current-request ACCEPTED/
 fresh CAR0FAIL347WARN114OK; independent code/spec assessment bounded PASS. Original
@@ -393,7 +393,7 @@ three-COMPLETE-suite validation and independent connected READ-ONLY assessment.
 Actual130175/175 and its manual closure precede these inputs, not their validation.
 Same full ACTIVE Goal/original9/history/repair upper3consumed3/all frames/four HYG
 and full acceptance remain unchanged and OPEN.
-See [causal record](../journal/2026/10/2026-10-10-reasoning-human-passive-consumption.md).
+See [causal record](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-reasoning-human-passive-consumption.md).
 
 
 ### Later actual R18/E38–39 bounded validation
@@ -422,4 +422,4 @@ four inherited HYG/full acceptance unchanged and OPEN; ordinary896through131
 separate from repair3/3, original114 fulfilled/not reopened. Prior originals/
 findings/failures/cutoffs stay historical. No acceptance checkbox/new repair
 frame/counter/epoch/permission change, staging/commit/publication/full closure.
-See [actual evidence and retained original](../journal/2026/10/2026-10-10-reasoning-human-passive-consumption.md).
+See [actual evidence and retained original](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-10-reasoning-human-passive-consumption.md).

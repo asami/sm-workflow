@@ -31,7 +31,7 @@ CLI配線・スキル接続・抽象思考モードはPhase 6、workspace／over
 | 1122 | 全体1487件中1471成功・16失敗、166 suite完了・1 suite中断 | 全体FAILを保持し、未解決2参照の補正後に必要な再検証 |
 | 実行状態 | 追加2参照の補正承認待ちが続き、既存Goalはblocked | 実行再開・補正範囲の反映を既存タスクで扱う。本書の作成だけでは再開しない |
 
-最新の詳細は[統合検証journal](../journal/2026/10/2026-10-07-three-workflow-integrated-validation.md)
+最新の詳細は[統合検証journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-07-three-workflow-integrated-validation.md)
 の `Actual1121`、`Actual1122`、`Read-only cause established`、`Goal BLOCKED`。
 チェックリストの現在の境界表も参照する。古いroute-mapや過去のCURRENT段落にある
 「未接続」「全機能必須」を、現時点の未実装リストとして再採用しない。

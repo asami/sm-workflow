@@ -15,7 +15,7 @@ Historical completion handoff (2026-10-07):
 It retains the blocked state after1122. Subsequent execution, correction and
 acceptance are recorded below and in the linked journal, not retroactively in
 that handoff.
-Current evidence: [three-workflow validation](../journal/2026/10/2026-10-07-three-workflow-integrated-validation.md)
+Current evidence: [three-workflow validation](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-07-three-workflow-integrated-validation.md)
 records1123:40/40,1124:1492/1492 in167 complete suites and actual1125 local
 CAR/manual verification, followed by actual integrated recovery-full-review PASS
 with no Current Boundary Blockers, recorded in retained ledgerR7. P2-M02..M04
@@ -40,7 +40,7 @@ recorded above; the preparation account does not describe current pending work.
 Plan revision: 2026-10-07, requested by the user after stopping development.
 The planning edit alone did not resume execution. The subsequent explicit user
 resume adopts this sequence under the same Goal and retained history; see
-[resume record](../journal/2026/10/2026-10-07-optimized-plan-resumption.md).
+[resume record](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-07-optimized-plan-resumption.md).
 
 ## Current delivery contract
 
@@ -75,7 +75,7 @@ remains the completion boundary; no accepted result is upgraded by this revision
 | Installed runtime | ComponentFactory still selects GoalPhaseLauncherAssembly; ThreeWorkflowLauncherAssembly has a HostDecoder contract but no production implementation | Connect normal host configuration, storage, process effects and result ingress first |
 | Actual Goal | Same identity `01a103b3-5f45-7ec2-ac5c-7f9fb01df42a`, ACTIVE after explicit resume; stopped 1060 preparation never submitted | Allocate a fresh current-resume request through the normal registered route |
 
-Source: [stopped handoff and original validation references](../journal/2026/10/2026-10-07-approved-help-and-runtime-bootstrap-resumption.md).
+Source: [stopped handoff and original validation references](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-07-approved-help-and-runtime-bootstrap-resumption.md).
 The approved SimpleModeler addition is retained in ledger R6, with R5 history;
 original bases, PLAN epoch, original nine findings, review history and recorded
 repair counts remain intact. Replanning creates no fresh repair allowance.
@@ -222,4 +222,4 @@ Do not introduce a new metric collector, status ledger or automated replanner.
 
 Related: [route map](phase-2-practical-route-map.md),
 [rollout](README.md),
-[replanning decision](../journal/2026/10/2026-10-07-development-plan-optimization.md).
+[replanning decision](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/10/2026-10-07-development-plan-optimization.md).
