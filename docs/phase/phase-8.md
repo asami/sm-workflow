@@ -784,6 +784,144 @@ Phase 6.11 closure prerequisite, changes no active Session or historical result,
 and does not retroactively waive its unexecuted validation. Apply the existing
 user's closure direction through that Session's owning public route.
 
+## Program-owned host initialization and Evidence setup — 2026-11-12
+
+Observed during Phase 7 startup: ordinary `prepareGoalStart` returned
+`setup-required` for derived-import CommonEvidence retention. The parent AI
+inspected implementation/test fixtures, extracted storage declarations from a
+CAR, and assembled collection/workspace/configuration entries before retrying.
+Isolating storage can be legitimate; making that investigation and assembly a
+routine AI responsibility is the operational gap selected here.
+
+Use the existing [project initialization contract](../spec/project-initialization.md)
+and its [Phase 15 early slice](phase-15.md), current installed typed defaults,
+normal configuration resolution and the existing CommonEvidence/CNCF owners.
+Phase 8 owns practical startup integration of that same route, not a second
+initializer, new executor or skill-owned configuration generator. Deliver/reuse
+only the needed initialization capability; whole Phase 15 or Docker Phase 19
+qualification is not an entry/completion gate for this bounded improvement.
+
+- Resolve home/project/Component configuration and explicit overrides through
+  their normal precedence. Program-owned defaults select a conventional host
+  installation and Evidence storage when applicable; explicit isolation remains
+  a supported policy choice, not a new mandatory installation per Phase. Keep
+  the runtime host distinct from the repository being developed: a target
+  project does not acquire mandatory fixed configuration files merely to use
+  a skill. Never bake user names, checkout layouts or Phase numbers into defaults.
+- Provision/reuse the needed managed storage collection, File workspace and
+  service bindings through the installed typed initialization/configuration
+  owners within actual admitted authority. Use authoritative constructors and
+  packaged definitions rather than AI inspection of CAR internals, copied test
+  fixtures or handwritten process-plan JSON. Initialization readiness is not
+  permission to fabricate grants, Human evidence or successful workflow results.
+- Keep initialization, passive preparation, trusted provisioning and Start
+  distinct. The ordinary caller invokes their supported public composition and
+  consumes actual readiness/created/reused/setup results. Preparation does not
+  silently import its generated authority rows. A repeat invocation reuses the
+  valid installation and settings; missing real permissions or unresolved user
+  policy choices return one concrete setup request, not an AI trial-and-error
+  loop, automatic legacy-full fallback or direct access to private storage.
+- Preserve existing Evidence locations, allocations, collections, explicit
+  settings, active Sessions, accepted work, UNKNOWN/failures and repair counts.
+  Updating an older host must neither relocate historical data nor reset work.
+  The caller supplies objectives and genuine storage/authority choices; it does
+  not derive internal collection names or reconstruct the runtime assembly on
+  each Phase. Skills remain thin invokers and result renderers.
+
+Qualify a small ordinary installed preparation/start route with configured
+Evidence retention and needed reference retrieval, then repeat initialization
+and check existing-installation reuse. Include the relevant override/missing-
+permission outcome in that same focused scenario. Demonstrate that the AI need
+not inspect source/CARs or manually assemble storage/process declarations.
+Reuse applicable owner tests and the proportionate-validation policy above;
+no broad migration matrix, extra full-repository campaign or review ceremony is
+added just to prove this startup improvement. Missing capability remains pending,
+not a claim that a proposed initialization Operation is already installed.
+
+This is planned Phase 8 work. It changes no running Phase 7 host, Session or
+storage and starts no repair/delegation/publication. Phase 7's actual startup
+work remains historical evidence, not retroactive qualification of this route.
+
+## Session-owned operational state and thin skill inputs — 2026-11-12
+
+Extend the program-owned host initialization above to Session-bound operational
+state. The reported RepositorySync wait for an unconfigured dirty-purpose
+validation slot shows why exposing internal setup recipes to a skill does not
+supply the runtime capability. Keep this improvement within Phase 8, reusing
+the existing initialization, workspace, validation and continuation owners.
+
+- Runtime owns candidate workspace/slot allocation, check bindings, progress,
+  accepted results, history and repair accounting. Resolve these from ordinary
+  project validation, reusable host policy and admitted resources; callers must
+  not hand-construct per-Session `dirty-purposes` slot/check-policy objects.
+- External inputs remain synchronization targets, business intent and genuine
+  operator choices such as permitted workspace roots, resources and execution
+  authority. A configuration property is not a substitute for runtime-owned
+  allocation or permission; missing real resources/authority return one concrete
+  setup request through the existing owner.
+- The caller adapter retains and mechanically forwards opaque typed continuation
+  references and their original context. Semantic skills receive only their
+  needed targets, constraints, input/evidence references and result contract.
+  They do not reconstruct Session internals or choose the next mechanical
+  operation. Needed diagnostics remain available through scoped public reads.
+- Replace skill instructions for assembling internal slot/state configuration
+  with this thin work/return boundary. Preserve the same Sessions, accepted
+  grouping, prepared candidates, checks, UNKNOWN/failure history and counters.
+  Use supported continuation without private-storage edits, a new Start or
+  replay of accepted work; add no parallel Session store or setup engine.
+
+Qualify one bounded connected RepositorySync example: normal initialization
+resolves the required candidate workspace/check connection without AI-authored
+slot JSON, and a retained setup wait continues in the same Session after its
+actual external prerequisite is supplied. Cover the relevant real permission
+or resource shortage and show the minimal semantic input/opaque caller context.
+Reuse applicable existing checks; this adds no separate broad test campaign.
+Implementation and acceptance remain pending. This planning update does not
+provision a slot, modify a live Session or resume the current synchronization.
+
+## Program-owned semantic result submission — 2026-11-12
+
+Observed in Phase 7 P7-A: the saved worker return was a versioned envelope
+`{schemaVersion, payload}`. Its `payload.summary` existed, but the parent placed
+the complete envelope into the public `GoalPhaseWorkResult` input. The public
+reader correctly refused the missing top-level `summary`; supplying the actual
+public payload was subsequently accepted. This is a caller/adapter format-boundary
+gap, not evidence that required public fields should become optional.
+
+Make the existing caller/dispatch adapter produce the declared public submission
+DTO deterministically through the owning typed construction/serialization contract.
+Do not make parent or child AI inspect generated DTO source, unwrap JSON by trial
+and error or reconstruct the submission envelope for each returned result.
+
+- Distinguish saved/transport envelopes, native retained-detail wrappers and the
+  semantic public result. Select the declared result type and supported format
+  from the actual issued Request, not guessed field names, current unrelated
+  configuration or an arbitrary object containing a `payload` key. Reuse existing
+  codecs/adapters; do not introduce another workflow engine or schema registry.
+- Preserve the actual summary, findings, outcome, acceptance/decision-needed
+  facts and applicable proposal/diagnostic fields. Keep original result artifacts,
+  their attributable references, execution evidence and unchanged issued context
+  associated through the declared projection. Shape conversion does not create
+  Human consent, reviewer identity, verification PASS or native acceptance.
+- Use one coherent typed construction/loading boundary to report genuinely
+  missing required fields, unsupported/ambiguous formats and crossed type/context
+  before semantic Submit. Do not fabricate a summary, silently drop fields or
+  weaken public DTO validation to pass the request. A transport refusal is not
+  a new semantic repair attempt; no automatic retry or new authority follows.
+- Keep supported direct public results and retained-reference/detail routes
+  usable. Read only needed exact owner revisions. An already accepted result
+  is not resubmitted to exercise the conversion; rejected/unaccepted attempts,
+  history and actual effect uncertainty remain preserved.
+
+Qualify a small connected worker-return -> adapter -> existing public reader
+case: supported wrapped and direct forms preserve the same complete public
+semantic value, and malformed/crossed input refuses before Submit without a
+fabricated result. Include needed retained-detail handling in that same focused
+case, reusing existing codec/caller tests. Use the proportionate-validation policy;
+no per-format publication, broad recovery matrix or new full-repository campaign
+is added solely to qualify this adapter. This is planned Phase 8 work and changes
+no current Phase 7 result, submission, Session or runtime behavior.
+
 ## Selection and execution
 
 Carry forward Phase 6 command ownership and live Phase-document synchronization
@@ -813,6 +951,28 @@ scenarios and retains its owning project's responsibilities.
 
 ## Completion
 
+- [ ] Runtime owns Session-bound candidate slots, validation connections and
+      progress; reusable host policy and real operator choices remain external.
+      Caller adapters forward opaque typed continuation context, while semantic
+      skills receive only needed work inputs and result contracts, without
+      hand-assembling internal `dirty-purposes` configuration.
+- [ ] A bounded RepositorySync setup/continuation example resolves the candidate
+      workspace through the existing initialization owner and resumes retained
+      work in the same Session. Accepted grouping/candidates, results, history
+      and counters remain; a genuine resource/permission gap is precise, without
+      a new Start, private-storage edits or accepted-effect replay.
+- [ ] The caller/dispatch adapter deterministically constructs the issued public
+      result DTO from supported worker/retained transport forms. A small connected
+      example preserves all semantic fields, original references/evidence and
+      issued context; missing/ambiguous/crossed input refuses before Submit.
+      No parent-AI JSON reconstruction, invented fields, weakened public reader,
+      accepted-result replay or new semantic repair count is required.
+- [ ] Ordinary host preparation uses the shared typed initialization route to
+      resolve/reuse CommonEvidence settings and required admitted storage/File
+      bindings without AI source/CAR inspection or handwritten host declarations.
+      A focused installed example covers retention/detail read, repeated setup,
+      existing-data preservation and the relevant override/permission outcome;
+      initialization, preparation, consent and Start remain distinct.
 - [ ] A representative small repair demonstrates impact/risk-selected checks,
       applicable successful-evidence reuse and grouped connected qualification.
       Existing records show actual stages/AI interventions and available elapsed

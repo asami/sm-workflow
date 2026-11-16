@@ -19,6 +19,16 @@ initialization is separate from Start and does not regenerate the product projec
 Docker HEAVY suite. It owns installation/customization qualification, not another
 bootstrap implementation; its broader matrix is not an INIT completion gate.
 
+## Phase 8 ordinary-host startup integration — 2026-11-12
+
+[Phase 8](phase-8.md#program-owned-host-initialization-and-evidence-setup--2026-11-12)
+selects the observed manual CommonEvidence setup gap as an operational repair.
+Reuse this same early initializer and INIT-1–4 ownership for typed defaults,
+admitted storage/File binding preparation and existing-installation reuse; do
+not implement or qualify a second initialization engine. Deliver the needed
+capability without waiting for broader Phase 15 workspace or Phase 19 coverage.
+Existing INIT IDs/statuses and active installations remain unchanged.
+
 ## Goal
 
 Expose coherent user-facing workspace preparation, inspection and dependency update operations.
