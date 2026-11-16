@@ -11,7 +11,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Pure contracts; NativeGoalCurrentInventoryCliSpec owns actual native provenance.
   * @since   Nov. 3, 2026
-  * @version Nov. 9, 2026
+  * @version Nov. 16, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -122,6 +122,22 @@ final class GoalPhaseCurrentInventoryContinuationSpec extends AnyWordSpec with M
       selected.candidate shouldBe None
       selected.checksReceipt shouldBe None
       selected.closureIntent shouldBe None
+    }
+
+    "qualify a reused revision only when the remaining delta is an exact literal inventory append" in {
+      Given("an actual current-Step proposal reusing the current Plan revision")
+      val source = _decision(_closed(_started))
+      val proposal = _proposal(source).copy(plan = _proposal(source).plan.copy(revision = source.plan.revision))
+      val result = W.Result("decision-needed", "Need the same inventory", Vector.empty, planRevision = Some(proposal))
+      When("the automatic selector assesses the original result")
+      Then("the revision collision alone is eligible while mixed effects and unsafe paths remain concerns")
+      C.pureProposal(source, _request(source), result) shouldBe true
+      result.planRevision shouldBe Some(proposal)
+      val mixed = proposal.copy(plan = proposal.plan.copy(repository = "other-component"))
+      C.pureProposal(source, _request(source), result.copy(planRevision = Some(mixed))) shouldBe false
+      val unsafe = proposal.copy(plan = proposal.plan.copy(steps = proposal.plan.steps.updated(source.cursor,
+        source.step.copy(ownedPaths = source.step.ownedPaths :+ "../escape"))))
+      C.pureProposal(source, _request(source), result.copy(planRevision = Some(unsafe))) shouldBe false
     }
 
     "keep purpose acceptance repository checks and future Step changes as actual concerns" in {

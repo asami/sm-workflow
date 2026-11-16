@@ -19,7 +19,7 @@ import GoalPhasePlanRevision as R
 /** Automatic inventory under the retained original-purpose execution. A decoded
   * proposal is data; only the native issue/completion walker constructs Source.
   * @since   Nov. 3, 2026
-  * @version Nov. 9, 2026
+  * @version Nov. 16, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseCurrentInventoryContinuation {
@@ -60,7 +60,8 @@ private[smworkflow] object GoalPhaseCurrentInventoryContinuation {
       _absent(result.repairFindingSources) && _absent(result.reviewObservations) &&
       result.planRevision != null && result.planRevision.exists { proposal =>
         R.validateProposalC(proposal).isSuccess && O.currentInventoryPathsC(controller.plan,
-          proposal.plan.copy(effectiveAcceptance = controller.plan.effectiveAcceptance), controller.step.identity).isSuccess
+          _effective_proposal(controller.plan, proposal, "qualification").plan.copy(
+            effectiveAcceptance = controller.plan.effectiveAcceptance), controller.step.identity).isSuccess
       }
 
   private[admission] def selectC(session: F.Session, from: InstanceRecord, controller: O.State,
@@ -107,14 +108,27 @@ private[smworkflow] object GoalPhaseCurrentInventoryContinuation {
     } yield () }
   } yield new Source(session, from, controller, input, result, human)
 
+  final case class RevisionCorrection(original: String, effective: String)
+  private def _effective_proposal(current: O.Plan, proposal: R.Proposal, suffix: String): R.Proposal =
+    if (proposal.plan.revision == current.revision)
+      proposal.copy(plan = proposal.plan.copy(revision = current.revision + "-inventory-" + suffix))
+    else proposal
+
   final case class Target(schemaVersion: String, componentInstance: String, sessionId: String,
     sourceRevision: String, frontierRevision: String, plan: O.Plan, base: O.Snapshot,
     completed: Vector[O.ClosedStep], generation: Long, repairProgress: GoalPhaseRepairProgress.Snapshot,
     requestingWork: ContextReference, requestingResult: ContextReference, stepIdentity: String,
-    questionIdentity: Option[String], candidatePaths: Vector[String], appendedPaths: Vector[String], captured: R.Captured)
+    questionIdentity: Option[String], candidatePaths: Vector[String], appendedPaths: Vector[String], captured: R.Captured,
+    revisionCorrection: Option[RevisionCorrection] = None)
   final case class Payload(target: Target, decision: String, participant: String, rationale: String)
   object Payload {
-    given Encoder[Payload] = deriveEncoder
+    private val _encoder: Encoder[Payload] = deriveEncoder
+    given Encoder[Payload] = Encoder.instance { value =>
+      val json = _encoder(value)
+      if (value.target.revisionCorrection.nonEmpty) json
+      else json.mapObject(obj => obj("target").fold(obj)(target =>
+        obj.add("target", target.mapObject(_.remove("revisionCorrection")))))
+    }
     private val _decoder: Decoder[Payload] = deriveDecoder
     given Decoder[Payload] = Decoder.instance(cursor => _decoder(cursor).flatMap(value =>
       if (value != null && value.decision == decision && _exact(value.participant) &&
@@ -151,6 +165,9 @@ private[smworkflow] object GoalPhaseCurrentInventoryContinuation {
     value.questionIdentity != null && value.questionIdentity.forall(_ == value.sessionId + ":ordered-human:" + value.sourceRevision) &&
     BigInt(value.frontierRevision) == BigInt(value.sourceRevision) + (if (value.questionIdentity.nonEmpty) 1 else 0) &&
     _paths(value.candidatePaths) && value.appendedPaths != null &&
+    value.revisionCorrection != null && value.revisionCorrection.forall(correction => correction != null &&
+      correction.original == value.plan.revision && correction.effective == value.captured.plan.revision &&
+      correction.original != correction.effective) &&
     R.validateCapturedC(value.captured).isSuccess && value.captured.revisionScope.isEmpty &&
     O.currentInventoryPathsC(value.plan, value.captured.plan, value.stepIdentity).toOption.contains(value.appendedPaths) &&
     value.appendedPaths.forall(value.candidatePaths.contains)
@@ -158,7 +175,10 @@ private[smworkflow] object GoalPhaseCurrentInventoryContinuation {
   private[admission] def targetForC(source: Source, d: F.Declaration, core: ActionCall.Core): Consequence[Target] = for {
     _ <- sourceC(source.session, source.from, source.controller, source.input, source.result, source.human)
     proposal <- source.result.result.value.planRevision.map(Consequence.success).getOrElse(F.invalid("inventory proposal is absent"))
-    captured = R.Captured(proposal, proposal.plan.copy(effectiveAcceptance = source.controller.plan.effectiveAcceptance), source.input.documents)
+    effective = _effective_proposal(source.controller.plan, proposal,
+      source.from.identity.value + "-" + source.from.revision.value.toString)
+    correction = if (effective == proposal) None else Some(RevisionCorrection(proposal.plan.revision, effective.plan.revision))
+    captured = R.Captured(effective, effective.plan.copy(effectiveAcceptance = source.controller.plan.effectiveAcceptance), source.input.documents)
     _ <- R.validateCapturedC(captured)
     added <- O.currentInventoryPathsC(source.controller.plan, captured.plan, source.controller.step.identity)
     _ <- _check(d.input.repositoryIdentity == source.controller.plan.repository && _paths(d.candidatePaths) &&
@@ -168,7 +188,7 @@ private[smworkflow] object GoalPhaseCurrentInventoryContinuation {
       source.from.revision.value.toString, frontier.revision.value.toString, source.controller.plan, source.controller.base,
       source.controller.completed, source.controller.generation, GoalPhaseRepairProgress.snapshot(source.controller),
       ContextReference(source.result.continuationId.value, source.input.sourceRevision), source.result.resultReference,
-      source.controller.step.identity, source.human.map(H.identity(_).value), d.candidatePaths, added, captured)
+      source.controller.step.identity, source.human.map(H.identity(_).value), d.candidatePaths, added, captured, correction)
     _ <- _check(targetValid(target), "captured target is invalid")
   } yield target
 

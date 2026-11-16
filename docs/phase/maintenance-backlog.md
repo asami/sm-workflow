@@ -22,6 +22,11 @@ established by collecting that successful receipt.
 - `HYG-RS-REFRESH-PRIVATE-NAMING-01`: older helper names in
   `RepositorySyncDirectoryListPurposeSpec.scala` retain their separately owned,
   nonblocking naming follow-up. Do not bundle it into workspace repair.
+- `HYG-SYNC-INVENTORY-SPEC-NAMING-01` (OPEN, low priority; observed 2026-11-16
+  during sync review): sm-workflow's `NativeGoalCurrentInventoryCliSpec.scala`
+  retains `_configuredResult` and `_unobservedStage` from both merge parents.
+  Naming only; no behavioral risk. Optional separate cleanup, outside this
+  journal consolidation and integration; no repair is started here.
 
 These are the recorded scopes, not a fresh whole-source review or acceptance
 of their proposed fixes. Original locations and wording remain in the archived
