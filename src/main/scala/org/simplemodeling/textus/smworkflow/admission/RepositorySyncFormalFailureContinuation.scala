@@ -1,6 +1,6 @@
 package org.simplemodeling.textus.smworkflow.admission
 
-import io.circe.{Decoder, DecodingFailure, Encoder, Json}
+import io.circe.{Decoder, DecodingFailure, Encoder, Json, JsonObject}
 import io.circe.generic.auto.*
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
@@ -139,27 +139,25 @@ private[smworkflow] object RepositorySyncFormalFailureContinuation {
   /** Keep opaque host-map keys outside the public Record naming projection. */
   private[admission] def publicRecord(value: Target): Record =
     GoalPhaseNativeMetadata.record(_public_json(value.asJson))
-  private def _public_json(value: Json): Json = value.arrayOrObject(value,
-    values => Json.fromValues(values.map(_public_json)),
-    fields => Json.fromFields(fields.toVector.map { (key, nested) =>
-      key -> (if (key == "processPlan" && nested.isObject) Json.fromString(nested.noSpaces) else _public_json(nested))
+  private def _public_json(value: Json): Json = value.mapObject(fields =>
+    JsonObject.fromIterable(fields.toVector.map { (key, nested) =>
+      key -> (if ((key == "processPlan" || key == "purpose") && nested.isObject) Json.fromString(nested.noSpaces) else nested)
     }))
   private def _restore_public_json(value: Json): Either[String, Json] = value.arrayOrObject[Either[String, Json]](Right(value),
-    values => values.foldLeft[Either[String, Vector[Json]]](Right(Vector.empty)) { (prior, nested) => for {
-      accumulated <- prior
-      restored <- _restore_public_json(nested)
-    } yield accumulated :+ restored }.map(Json.fromValues),
+    _ => Right(value),
     fields => fields.toVector.foldLeft[Either[String, Vector[(String, Json)]]](Right(Vector.empty)) {
       case (prior, (key, nested)) => for {
         accumulated <- prior
-        restored <- if (key == "processPlan") _restore_process_plan(nested) else _restore_public_json(nested)
+        restored <- if (key == "processPlan") _restore_opaque_object(key, nested)
+          else if (key == "purpose" && nested.isString) _restore_opaque_object(key, nested)
+          else Right(nested)
       } yield accumulated :+ (key -> restored)
     }.map(Json.fromFields))
-  private def _restore_process_plan(value: Json): Either[String, Json] =
+  private def _restore_opaque_object(key: String, value: Json): Either[String, Json] =
     if (value.isObject) Right(value) else for {
-      text <- value.asString.toRight("Formal failure processPlan requires an opaque JSON object or its complete JSON text")
+      text <- value.asString.toRight(s"Formal failure $key requires an opaque JSON object or its complete JSON text")
       parsed <- io.circe.parser.parse(text).left.map(_.message)
-      plan <- Either.cond(parsed.isObject, parsed, "Formal failure processPlan text must restore an exact JSON object")
+      plan <- Either.cond(parsed.isObject, parsed, s"Formal failure $key text must restore an exact JSON object")
     } yield plan
   private def _progress_json(value: P.Progress): Json = {
     val wire = canonical(value.asJson).mapObject(_.add("request", RepositorySyncPurposeContentContinuation.requestJson(value.request))
@@ -255,8 +253,26 @@ private[smworkflow] object RepositorySyncFormalFailureContinuation {
   private[admission] def validPurposeAttempt(progress: P.Progress, direction: Direction): Boolean =
     direction.target.purpose.exists(original => progress == original.copy(
       receipts = progress.receipts, assessment = progress.assessment, review = progress.review,
-      selection = attemptSelection(direction.target), hostContinuation = Some(direction)) &&
+      selection = attemptSelection(direction.target), hostContinuation = Some(direction), ordinaryGroups = progress.ordinaryGroups) &&
+      _ordinary_attempt_valid(original, progress, direction.target.check) &&
       progress.receipts.take(direction.target.successfulPrefix.size) == direction.target.successfulPrefix)
+  private def _ordinary_attempt_valid(original: P.Progress, current: P.Progress, check: C.Check): Boolean =
+    original.ordinaryGroups.get(check.identity) match {
+      case None => current.ordinaryGroups == original.ordinaryGroups
+      case Some(failed) =>
+        val others = original.ordinaryGroups - check.identity
+        (current.ordinaryGroups - check.identity) == others && current.ordinaryGroups.get(check.identity).fold(
+          current.receipts.exists(receipt => receipt.identity == check.identity && C.productSuccessful(receipt, check.kind))) { group =>
+          group.copy(batches = failed.batches, pending = failed.pending) == failed &&
+            group.batches.startsWith(failed.batches.dropRight(1)) && group.pending.isEmpty
+        }
+    }
+  private def _ordinary_failure_key(progress: P.Progress, index: Int, check: C.Check): Option[String] =
+    progress.ordinaryGroups.get(check.identity).filter(group => check.ordinaryDiscovery && group.batches.nonEmpty &&
+      group.batches.last.facts.outcome == WorkflowSbtValidation.Outcome.Failed && group.pending.isEmpty &&
+      progress.receipts.lastOption.exists(receipt => receipt.identity == check.identity &&
+        receipt.sbt.contains(group.batches.last.facts) && receipt.processObservation.contains(group.batches.last.process)))
+      .map(group => RepositorySyncPurposeRuntime.attemptPrefix(progress) + "-ordinary-" + index + "-batch-" + (group.batches.size - 1))
   private def _valid_source_keys(t: Target): Boolean = t.purpose match {
     case None => t.candidateKey == N.candidateKey(t.sourceNamespace, "pending-merge") &&
       t.failureKey == N.candidateKey(t.sourceNamespace, "validation-result-" + (t.checkIndex + 2)) &&
@@ -264,8 +280,9 @@ private[smworkflow] object RepositorySyncFormalFailureContinuation {
     case Some(progress) => progress.cursor >= 0 && progress.attempt >= 0 && progress.slotCursor >= 0 && t.sourceNamespace.isEmpty &&
       t.candidateKey == "purpose-" + (progress.cursor + 1) +
         (if (progress.attempt == 0) "" else "-repair-" + progress.attempt) + "-prepared" &&
-      t.failureKey == RepositorySyncPurposeRuntime.attemptPrefix(progress) + "-check-" + t.checkIndex + "-result" &&
-      t.intentKey == RepositorySyncPurposeRuntime.attemptPrefix(progress) + "-check-" + t.checkIndex + "-intent"
+      (Vector(RepositorySyncPurposeRuntime.attemptPrefix(progress) + "-check-" + t.checkIndex) ++
+        _ordinary_failure_key(progress, t.checkIndex, t.check)).exists(base =>
+          t.failureKey == base + "-result" && t.intentKey == base + "-intent")
   }
   def decodeTarget(value: Json): Either[String, Target] = Option(value).toRight("Formal failure target is absent")
     .flatMap(_.as[Target].left.map(_.message))
@@ -314,10 +331,13 @@ private[smworkflow] object RepositorySyncFormalFailureContinuation {
         checks <- progress.selection.map(s => Consequence.success(s.checks)).getOrElse(N.invalid("formal purpose failure has no selection"))
         index = progress.receipts.size - 2
         check <- checks.lift(index).map(Consequence.success).getOrElse(N.invalid("structural failure is not eligible"))
-        slot <- RepositorySyncPurpose.slots(store.declaration.purposePolicy, store.context.repositoryIdentity).lift(progress.slotCursor)
+        slot <- RepositorySyncPurpose.slot(store.declaration.purposePolicy, store.context.repositoryIdentity, progress)
           .map(Consequence.success).getOrElse(N.invalid("failed purpose slot is absent"))
         prefix = RepositorySyncPurposeRuntime.attemptPrefix(progress)
-        intent <- _load_c(store, prefix + "-check-" + index + "-intent")
+        failurebase = _ordinary_failure_key(progress, index, check).getOrElse(prefix + "-check-" + index)
+        _ <- if (_key(failed, store.identity) == failurebase + "-result") Consequence.unit
+          else N.invalid("Formal purpose failure does not match its actual check or batch result")
+        intent <- _load_c(store, failurebase + "-intent")
         candidate <- _load_c(store, "purpose-" + (progress.cursor + 1) +
           (if (progress.attempt == 0) "" else "-repair-" + progress.attempt) + "-prepared")
       } yield Source(store, candidate, failed, intent, checks, check, index, progress.receipts.dropRight(1),
@@ -377,11 +397,19 @@ private[smworkflow] object RepositorySyncFormalFailureContinuation {
       _ <- (seed.size until receipts.size).foldLeft(Consequence.unit) { (prior, index) => prior.flatMap { _ =>
         val progress = purpose
         val prefix = progress.map(RepositorySyncPurposeRuntime.attemptPrefix)
-        val resultkey = prefix.map(p => if (index == 0) p + "-structural" else p + "-check-" + (index - 1) + "-result")
+        val ordinaryFailure = progress.flatMap(p => if (index == source.index + structural)
+          _ordinary_failure_key(p, source.index, source.check) else None)
+        val resultkey = ordinaryFailure.map(_ + "-result").orElse(prefix.map(p => if (index == 0) p + "-structural" else p + "-check-" + (index - 1) + "-result"))
           .getOrElse(N.candidateKey(source.namespace, "validation-result-" + index))
-        val intentkey = prefix.map(p => if (index == 0) p + "-structural-intent" else p + "-check-" + (index - 1) + "-intent")
+        val intentkey = ordinaryFailure.map(_ + "-intent").orElse(prefix.map(p => if (index == 0) p + "-structural-intent" else p + "-check-" + (index - 1) + "-intent"))
           .getOrElse(N.candidateKey(source.namespace, "validation-intent-" + index))
-        for {
+        if (purpose.nonEmpty && index > 0 && receipts(index).group.nonEmpty) for {
+          completed <- _load_c(store, prefix.get + "-ordinary-" + (index - 1) + "-complete")
+          _ <- _history_c(current, completed)
+          _ <- if (completed.payload.purposes.exists(_.receipts == receipts.take(index + 1)) &&
+            receipts(index).group.exists(_.successful)) Consequence.unit
+            else N.invalid("Retained ordinary successful group crosses its completed check")
+        } yield () else for {
           intent <- _load_c(store, intentkey)
           result <- _load_c(store, resultkey)
           _ <- _history_c(current, intent)
@@ -455,11 +483,12 @@ private[smworkflow] object RepositorySyncFormalFailureContinuation {
   } yield Observation(session, source, target, inspected.map(_._2))
   private def _live_source_c(source: Source): Consequence[Unit] = source.failed.payload.purposes match {
     case Some(progress) => for {
-      _ <- RepositorySyncPurposeRuntime.candidateWorkspaceC(source.store, source.slot.get, progress.candidate.get)
+      _ <- RepositorySyncPurposeRuntime.candidateWorkspaceC(source.store, source.slot.get, progress.candidate.get, progress.sessionWorkspace)
+      scoped <- RepositorySyncPurposeRuntime.candidateCoreC(source.store, progress)
       _ <- source.checks.foldLeft(Consequence.unit)((prior, check) => prior.flatMap(_ =>
         source.slot.get.checkWorkspaces.get(check.identity).fold(Consequence.unit)(workspace => for {
-          actual <- WorkflowManagedProcessExecution.executeGitC(source.store.core, org.goldenport.cncf.processexecution.GitOperation.Root, workspace).flatMap(_.valueC)
-          expected <- WorkflowManagedProcessExecution.executeGitC(source.store.core, org.goldenport.cncf.processexecution.GitOperation.Root, source.slot.get.workspace).flatMap(_.valueC)
+          actual <- WorkflowManagedProcessExecution.executeGitC(scoped, org.goldenport.cncf.processexecution.GitOperation.Root, workspace).flatMap(_.valueC)
+          expected <- WorkflowManagedProcessExecution.executeGitC(scoped, org.goldenport.cncf.processexecution.GitOperation.Root, source.slot.get.workspace).flatMap(_.valueC)
           _ <- if (actual == expected) Consequence.unit else N.invalid("formal check workspace no longer consumes its candidate")
         } yield ())))
     } yield ()
@@ -592,7 +621,7 @@ private[smworkflow] object RepositorySyncFormalFailureContinuation {
     _ <- store.scopeC(actual.observed)
     _ <- if (host == target.processPlan && validation == target.validationPolicy && actual == target.actual && tree == target.indexTree &&
         store.core.component.get.core.instanceId.canonicalKey == target.componentInstance &&
-        target.purposeSlot == target.purpose.flatMap(p => RepositorySyncPurpose.slots(store.declaration.purposePolicy, store.context.repositoryIdentity).lift(p.slotCursor)))
+        target.purposeSlot == target.purpose.flatMap(p => RepositorySyncPurpose.slot(store.declaration.purposePolicy, store.context.repositoryIdentity, p)))
       Consequence.unit else N.invalid("formal host, candidate, index or selected policy changed after description")
   } yield ()
   def authenticateCandidateC(store: N.Store, current: InstanceRecord, candidate: N.Stage, selected: String): Consequence[Unit] = for {
@@ -655,7 +684,9 @@ private[smworkflow] object RepositorySyncFormalFailureContinuation {
       case Some(progress) => store.saveC(namespace(target) + "-purpose", "native-formal-failure-purpose-prepared", current,
         source.failed.payload.copy(stage = "PurposeMaterialized", formalFailure = Some(direction),
           purposes = Some(progress.copy(receipts = target.successfulPrefix, assessment = None, review = None,
-            selection = attemptSelection(target), hostContinuation = Some(direction)))))
+            selection = attemptSelection(target), hostContinuation = Some(direction),
+            ordinaryGroups = progress.ordinaryGroups.get(target.check.identity).fold(progress.ordinaryGroups)(group =>
+              progress.ordinaryGroups.updated(target.check.identity, group.copy(batches = group.batches.dropRight(1))))))))
       case None => store.saveC(N.candidateKey(namespace(target), "pending-merge"), "native-formal-failure-merge-prepared", current,
         source.candidate.payload.copy(stage = "PendingMergePrepared", validation = None, formalFailure = Some(direction),
           requiredLint = None, reviewInputs = None))

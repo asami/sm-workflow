@@ -124,7 +124,16 @@ private[smworkflow] object GoalPhaseStepAssessment {
         org.goldenport.cncf.processexecution.GitIndexCheck.parseStoredC(0, structural.stdout, structural.stderr).isSuccess)
       Consequence.unit else invalid("purpose assessment requires its actual structural receipt and selected policy")
     _ <- if (policy.kind == "documentation" && selected.isEmpty && receipts.isEmpty) Consequence.unit
-      else WorkflowRepairAssessment.checksC(policy.kind, policy.scalaLint, selected, receipts)
+      else if (policy.kind == "code" && receipts.exists(_.group.nonEmpty)) {
+        val complete = selected.nonEmpty && selected.map(_.identity) == receipts.map(_.identity) &&
+          selected.zip(receipts).forall((check, receipt) => RepositorySyncNativeMergeValidation.productSuccessful(receipt, check.kind))
+        // Group.successful binds the complete compiled discovery and every exact
+        // mode/provider batch. Modern batches deliberately have no legacy selection counters.
+        val ordinary = receipts.flatMap(_.group).exists(_.successful)
+        val lint = policy.scalaLint != "required" || selected.exists(_.kind == WorkflowSbtValidation.Kind.FixCheck)
+        if (complete && ordinary && lint) Consequence.unit
+        else invalid("Purpose code admission requires actual compiled ordinary discovery and nonempty successful test batches")
+      } else WorkflowRepairAssessment.checksC(policy.kind, policy.scalaLint, selected, receipts)
     immediate = policy.observations.exists(_.timing == "immediate")
     branch = if (policy.detailedReview == "required" || immediate) "detailed-review" else "admit"
   } yield Result(policy, candidate, reference, selected.map(_.identity), branch,

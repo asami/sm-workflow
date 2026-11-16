@@ -438,7 +438,13 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
               (_, _) => Consequence.success(Vector.empty))
             done <- completions.loadRetainedC(ContinuationIdentity(parts(1)))(using core.executionContext)
               .flatMap(_.map(x => Consequence.success(x.completion.result)).getOrElse(invalid("Actual completion is missing")))
-            next <- S.completedC(S.Work(id, revision.toString, payload.state.stage, payload.state), done.result.value, done.resultReference)
+            work = S.Work(id, revision.toString, payload.state.stage, payload.state)
+            allowance <- if (task && !delegation && work.kind == "Repair" &&
+              payload.state.automaticCount == GoalPhaseRuntimeRepairControl.ceiling &&
+              GoalTaskRepairContinuation.hasScopedDirection(payload))
+              GoalTaskRepairContinuation.completionAllowanceC(storage, current, core, work)
+              else Consequence.success(None)
+            next <- S.completedC(work, done.result.value, done.resultReference, allowance)
             references <- recordSemanticEvidenceC(h, core, id, current.revision.value,
               payload.state.stage, done.result.value)
             retained = next.copy(evidenceReferences = next.evidenceReferences ++ references)

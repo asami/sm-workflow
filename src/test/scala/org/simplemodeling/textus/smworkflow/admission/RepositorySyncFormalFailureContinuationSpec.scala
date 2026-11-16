@@ -155,6 +155,18 @@ final class RepositorySyncFormalFailureContinuationSpec extends AnyWordSpec with
         next.copy(receipts = Vector.empty)).foreach(value => N.validPurposeAttempt(value, direction) shouldBe false)
       next.asJson.as[P.Progress] shouldBe Right(next)
     }
+    "keep the allocated candidate identity across a host correction while advancing validation effects" in {
+      val direction = N.Direction(corrected, N.selectionChoices.head, "Correct host validation",
+        "participant", ContextReference("selection-correction", "1"), false, false)
+      val original = corrected.purpose.get
+      val continued = original.copy(hostContinuation = Some(direction))
+      val runtime = RepositorySyncPurposeRuntime
+      runtime.allocationIdentity(continued) shouldBe runtime.allocationIdentity(original)
+      runtime.attemptPrefix(continued) should not be runtime.attemptPrefix(original)
+      runtime.allocationIdentity(original.copy(cursor = original.cursor + 1)) should not be runtime.allocationIdentity(original)
+      runtime.allocationIdentity(original.copy(attempt = original.attempt + 1)) should not be runtime.allocationIdentity(original)
+      runtime.allocationIdentity(original.copy(preparationNamespace = Some("new-preparation"))) should not be runtime.allocationIdentity(original)
+    }
     "preserve opaque host-map keys nulls and nested prior directions through the real public Record roundtrip" in {
       Given("merge and Purpose targets containing a declaration-shaped host plan and a fixture-owned prior direction")
       val hostplan = Json.obj(
@@ -175,6 +187,7 @@ final class RepositorySyncFormalFailureContinuationSpec extends AnyWordSpec with
             "stderrBytes" -> 16384.asJson, "argumentCount" -> 16.asJson, "argumentBytes" -> 131072.asJson,
             "artifactCount" -> 1.asJson, "artifactBytes" -> 131072.asJson, "workAreaBytes" -> 4194304.asJson))),
         "opaqueHostFacts" -> Json.obj("NullableFact" -> Json.Null,
+          "purpose" -> "retain this prose exactly".asJson,
           "nested.Array-With:Case" -> Json.arr(Json.obj("JAVA_HOME" -> "nested value".asJson, "HOME" -> Json.Null),
             Json.arr("PATH".asJson, Json.Null, Json.obj("MixedCASE.Key" -> true.asJson))),
           "processPlan" -> Json.obj("Preserve_This:Key" -> Json.Null)))
@@ -211,11 +224,30 @@ final class RepositorySyncFormalFailureContinuationSpec extends AnyWordSpec with
         expected.asJson.hcursor.downField("processPlan").focus shouldBe Some(hostplan)
         N.decodeTarget(expected.asJson) shouldBe Right(expected)
       }
+      val legacyPurpose = selectedpurpose.asJson
+      N.decodeTarget(legacyPurpose) shouldBe Right(selectedpurpose)
+      legacyPurpose.hcursor.downField("processPlan").downField("opaqueHostFacts").get[String]("purpose") shouldBe
+        Right("retain this prose exactly")
       val nestedwire = projected.last.toOption.get._1
-      nestedwire.hcursor.downField("purpose").downField("hostContinuation").downField("target")
-        .get[String]("processPlan").toOption shouldBe Some(hostplan.noSpaces)
+      val opaquePurpose = nestedwire.hcursor.get[String]("purpose").toOption.get
+      io.circe.parser.parse(opaquePurpose).toOption.get.hcursor.downField("hostContinuation").downField("target")
+        .downField("processPlan").focus shouldBe Some(hostplan)
       projected.last.toOption.get._2.purpose.get.hostContinuation shouldBe Some(previous)
       projected.last.toOption.get._2.purpose.get.hostContinuation.get.target.processPlan shouldBe hostplan
+    }
+    "preserve hyphenated ordinary group identities across the public Record boundary" in {
+      val identity = "ordinary-project-full"
+      val group = RepositorySyncProgramImpact.Group(candidate.tree, "purpose-slot-1")
+      val original = purpose.copy(purpose = purpose.purpose.map(_.copy(ordinaryGroups = Map(identity -> group))))
+      val decoded = for {
+        raw <- N.publicRecord(original).toJsonStringC.toOption.toRight("Public Record serialization failed")
+        parsed <- io.circe.parser.parse(raw).left.map(_.message)
+        normalized <- GoalPhaseNativeMetadata.normalizePublicJson(parsed)
+        result <- N.decodeTarget(normalized)
+      } yield result
+      decoded shouldBe Right(original)
+      decoded.toOption.get.purpose.get.ordinaryGroups.keySet shouldBe Set(identity)
+      N.decodeTarget(original.asJson) shouldBe Right(original)
     }
     "refuse malformed nonobject or null host-plan text while preserving strict target canonicality" in {
       Given("the original canonical stored target and malformed public host-plan representations")

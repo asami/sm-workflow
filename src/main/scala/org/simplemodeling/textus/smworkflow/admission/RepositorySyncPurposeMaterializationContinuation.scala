@@ -192,6 +192,7 @@ private[smworkflow] object RepositorySyncPurposeMaterializationContinuation {
         if (result.entries.isEmpty) Consequence.unit else N.invalid("materialization destination is occupied"))
     def execute(): Consequence[OperationResponse] = N.invalid("materialization preflight reader is not an Operation")
   }
+  private[admission] def hostPlanC(core: ActionCall.Core): Consequence[Json] = new Read(core).hostC
   private[admission] def selectWorkspaceC(plan: Json, root: String, selected: String): Consequence[Host] = for {
     _ <- if (plan != null && plan.asObject.exists(_.nonEmpty) && exact(root) && exact(selected)) Consequence.unit
       else N.invalid("materialization requires its complete resolved host plan and fixed slot")
@@ -217,7 +218,7 @@ private[smworkflow] object RepositorySyncPurposeMaterializationContinuation {
       else N.invalid("materialization requires an ordinary absolute fixed destination disjoint from the actual source root")
   } yield Host(plan, selected, targetroot)
   def preflightC(store: N.Store, p: P.Progress): Consequence[Host] = for {
-    slot <- RepositorySyncPurpose.slots(store.declaration.purposePolicy, store.context.repositoryIdentity).lift(p.slotCursor).map(Consequence.success)
+    slot <- RepositorySyncPurpose.slot(store.declaration.purposePolicy, store.context.repositoryIdentity, p).map(Consequence.success)
       .getOrElse(N.invalid("materialization fixed Purpose slot is absent"))
     root <- G.rootC(store.core)
     _ <- if (root == store.original.repositoryRoot && root == store.declaration.target.root.toString && root == p.request.root)

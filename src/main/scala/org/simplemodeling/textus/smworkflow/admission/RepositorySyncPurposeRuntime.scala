@@ -92,7 +92,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
         } yield output
     } yield output
     val group = RepositorySyncPurposeOwnership.effectiveGroup(progress, groups(progress.cursor))
-    val slot = RepositorySyncPurpose.slots(store.declaration.purposePolicy, store.context.repositoryIdentity).lift(progress.slotCursor)
+    val slot = RepositorySyncPurpose.slot(store.declaration.purposePolicy, store.context.repositoryIdentity, progress)
     source.payload.stage match {
       case "PurposeGrouped" | "PurposeInstalled" => for {
         _ <- RepositorySyncPurposePreparationContinuation.authenticateC(store, source)
@@ -137,7 +137,27 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
         }
       } yield output
       case "PurposePrepared" => slot match {
-        case None => _wait_("Missing fixed validation workspace slot for purpose " + group.identity + "; source work and prepared native candidate are preserved", "purpose-materialization-preflight")
+        case None => RepositorySyncSessionWorkspace.resolveC(store, progress, policy) match {
+          case Consequence.Failure(conclusion) => _wait_("Session candidate setup is unavailable before allocation: " +
+            conclusion.show + "; the prepared candidate remains in this Session", "purpose-materialization-preflight")
+          case Consequence.Success(resolved) => for {
+            sourceId <- WorkspaceId.parseC(resolved.source)
+            parentId <- WorkspaceId.parseC(resolved.parent)
+            aliasId <- WorkspaceId.parseC(resolved.alias)
+            intent <- _save_("allocate-intent", "PurposeAllocating", source, progress)
+            prepared <- E.prepareSessionCandidateC(store.core, sourceId, parentId, aliasId, resolved.session, resolved.candidate) match {
+              case Consequence.Success(actual) if actual.reference.record == RepositorySyncSessionWorkspace.record(resolved) =>
+                _save_("allocated", "PurposeAllocated", intent, progress.copy(sessionWorkspace = Some(resolved)))
+              case Consequence.Success(_) => N.uncertain("Session candidate allocation returned a crossed reference; retained intent is not replayed")
+              case Consequence.Failure(conclusion) => for {
+                _ <- _save_("allocate-result", "PurposeUnfinished", intent, progress.copy(effects = progress.effects :+
+                  io.circe.Json.obj("allocationFailure" -> io.circe.Json.fromString(conclusion.show))))
+                failed <- N.uncertain("Session candidate allocation did not return an attributable result; retained intent is not replayed")
+              } yield failed
+            }
+            output <- _drive_c(store, prepared, policy, authority, review, finish)
+          } yield output
+        }
         case Some(selected) => (for {
           _ <- RepositorySyncPurposeMaterializationContinuation.authenticateC(store, source)
           host <- RepositorySyncPurposeMaterializationContinuation.preflightC(store, progress)
@@ -162,13 +182,44 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
           } yield output
         }
       }
+      case "PurposeAllocated" => for {
+        selected <- progress.sessionWorkspace.map(Consequence.success).getOrElse(N.invalid("Retained Session candidate allocation is absent"))
+        scoped <- RepositorySyncSessionWorkspace.emptyCoreC(store.core, selected)
+        candidate <- P.producerC(progress.candidate.get)
+        selection <- _selection_c(group)
+        workspace <- WorkspaceId.parseC(selected.alias)
+        intent <- _save_("materialize-intent", "PurposeMaterializing", source, progress)
+        result <- E.executePurposeC(scoped, GitOperation.MaterializePurposeCandidate(selection.identity, candidate, workspace), selection)
+        output <- if (result.outcome != GitExecutionOutcome.Succeeded)
+          _failed_c(store, intent, prefix + "-materialize-result", result, "Session candidate materialization failed or is unknown")
+        else for {
+          receipt <- RepositorySyncSessionWorkspaceReceipt.materializationC(progress.candidate.get, result)
+          materialized <- _save_("materialized", "PurposeMaterialized", intent,
+            progress.copy(sessionWorkspace = Some(selected.copy(materialization = Some(receipt), materialCandidate = progress.candidate)), effects = progress.effects :+ _effect_json(result)))
+          next <- _drive_c(store, materialized, policy, authority, review, finish)
+        } yield next
+      } yield output
+      case "PurposeMaterialized" if progress.sessionWorkspace.exists(_.root.isEmpty) => for {
+        selected <- progress.sessionWorkspace.map(Consequence.success).getOrElse(N.invalid("Session workspace is absent"))
+        _ <- if (selected.materialization.nonEmpty) Consequence.unit else N.invalid("Actual materialization receipt is absent")
+        scoped <- RepositorySyncSessionWorkspace.observationCoreC(store.core, selected)
+        root <- E.executeGitC(scoped, GitOperation.Root, selected.alias)
+        head <- E.executeGitC(scoped, GitOperation.Head, selected.alias)
+        rootReceipt <- RepositorySyncSessionWorkspaceReceipt.rootC(root)
+        headReceipt <- RepositorySyncSessionWorkspaceReceipt.headC(head)
+        nextWorkspace = selected.copy(root = Some(rootReceipt), head = Some(headReceipt))
+        _ <- RepositorySyncSessionWorkspace.materializedCoreC(store.core, nextWorkspace, progress.candidate.get)
+        observed <- _save_("workspace-observed", "PurposeMaterialized", source, progress.copy(sessionWorkspace = Some(nextWorkspace)))
+        output <- _drive_c(store, observed, policy, authority, review, finish)
+      } yield output
       case "PurposeMaterialized" if progress.selection.nonEmpty && progress.receipts.nonEmpty =>
         slot.map(selected => _checks_c(store, source, selected, progress.reusable.map(value => value.identity -> value).toMap,
           policy, authority, review, finish)).getOrElse(N.invalid("retained purpose checks have no configured workspace slot"))
       case "PurposeMaterialized" => for {
         selected <- slot.map(Consequence.success).getOrElse(N.invalid("purpose slot mapping is absent"))
         candidate = progress.candidate.get
-        _ <- candidateWorkspaceC(store, selected, candidate)
+        _ <- candidateWorkspaceC(store, selected, candidate, progress.sessionWorkspace)
+        scoped <- candidateCoreC(store, progress)
         parent <- GitObjectId.parseC(candidate.parent)
         tree <- GitObjectId.parseC(candidate.tree)
         delta <- E.executeGitC(store.core, GitOperation.TreeChanges(parent, tree)).flatMap(_.valueC)
@@ -188,7 +239,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
           selected.actionPolicy.kind == (if (document) "documentation" else "code")) Consequence.unit
           else N.invalid("purpose candidate checks or assessment kind differ from the fixed slot contract")
         intent <- _save_("structural-intent", "PurposeChecking", source, progress.copy(selection = Some(chosen._1)))
-        result <- E.executeGitC(store.core, GitOperation.CheckPendingIndex(parent), selected.workspace)
+        result <- E.executeGitC(scoped, GitOperation.CheckPendingIndex(parent), selected.workspace)
         receipt <- C.receiptC("index-local", result.processResult)
         output <- if (result.outcome != GitExecutionOutcome.Succeeded || receipt.exitCode != Some(0))
           _failed_c(store, intent, prefix + "-structural-result", result, "Actual purpose structural check failed or is unknown")
@@ -216,7 +267,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
         }
         else for {
           selected <- slot.map(Consequence.success).getOrElse(N.invalid("purpose validation slot is absent"))
-          _ <- candidateWorkspaceC(store, selected, progress.candidate.get)
+          _ <- candidateWorkspaceC(store, selected, progress.candidate.get, progress.sessionWorkspace)
           granted <- authority.map(Consequence.success).getOrElse(N.invalid("purpose commit has no current host authority"))
           _ <- granted.admitC(store.core, store.context, store.declaration.target, RepositorySyncNativeConvergence.Effect.PurposeCommit)
           candidate <- P.producerC(progress.candidate.get)
@@ -233,7 +284,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
               projected <- if (progress.ownership.nonEmpty) _installed_worktree_c(store, progress, group)
                 else Consequence.success(Vector.empty[P.Content])
               installed <- _save_("installed", "PurposeInstalled", intent, progress.copy(cursor = progress.cursor + 1, slotCursor = progress.slotCursor + 1, attempt = 0, baselineTree = None, preparationNamespace = None,
-                candidate = None, receipts = Vector.empty, assessment = None, selection = None, review = None, reusable = Vector.empty, commits = progress.commits :+ candidate.commit.value, effects = progress.effects :+ _effect_json(result),
+                candidate = None, sessionWorkspace = None, ordinaryGroups = Map.empty, receipts = Vector.empty, assessment = None, selection = None, review = None, reusable = Vector.empty, commits = progress.commits :+ candidate.commit.value, effects = progress.effects :+ _effect_json(result),
                 projectedWorktree = if (progress.ownership.nonEmpty)
                   Some(RepositorySyncPurposeOwnership.project(progress, projected)) else progress.projectedWorktree))
               output <- _drive_c(store, installed, policy, authority, review, finish)
@@ -257,12 +308,17 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
         "The retained actual failed or unknown purpose check requires its owning FIX disposition; no replay or success is inferred", "purpose-check-failed"))
     if (done < selected.size) {
       val check = selected(done)
+      val forceFresh = progress.hostContinuation.exists(direction =>
+        direction.target.proposedChecks.exists(_.contains(check)) && !direction.target.selectedChecks.contains(check))
+      if (check.ordinaryDiscovery && (!reused.contains(check.identity) || forceFresh))
+        return _ordinary_c(store, source, slot, check, done, reused, policy, authority, review, finish)
       for {
         _ <- RepositorySyncFormalFailureContinuation.authenticatePurposeAttemptC(store, source, policy)
-        _ <- candidateWorkspaceC(store, slot, progress.candidate.get)
+        _ <- candidateWorkspaceC(store, slot, progress.candidate.get, progress.sessionWorkspace)
+        scoped <- candidateCoreC(store, progress)
         _ <- slot.checkWorkspaces.get(check.identity).fold(Consequence.unit)(workspace => for {
-          actual <- E.executeGitC(store.core, GitOperation.Root, workspace).flatMap(_.valueC)
-          expected <- E.executeGitC(store.core, GitOperation.Root, slot.workspace).flatMap(_.valueC)
+          actual <- E.executeGitC(scoped, GitOperation.Root, workspace).flatMap(_.valueC)
+          expected <- E.executeGitC(scoped, GitOperation.Root, slot.workspace).flatMap(_.valueC)
           _ <- if (actual == expected) Consequence.unit else N.invalid("purpose check workspace does not consume the actual materialized candidate root")
         } yield ())
         intent <- _save_("check-" + done + "-intent", "PurposeChecking", source, progress)
@@ -271,7 +327,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
         receipt <- reused.get(check.identity).filterNot(_ => progress.hostContinuation.exists(direction =>
           direction.target.proposedChecks.exists(_.contains(check)) && !direction.target.selectedChecks.contains(check))) match {
           case Some(value) => Consequence.success(value)
-          case None => E.repositoryValidationAttemptC(store.core, check.ordinal, check.kind, Some(slot.checkWorkspaces.getOrElse(check.identity, slot.workspace))).flatMap {
+          case None => E.repositoryValidationAttemptC(scoped, check.ordinal, check.kind, Some(slot.checkWorkspaces.getOrElse(check.identity, slot.workspace))).flatMap {
             case SbtExecutionAttempt.Observed(value) => C.sbtReceiptC(check.identity, check.kind, value)
             case _ => N.uncertain("purpose check admission/execution is unavailable or unknown; no PASS, review acceptance or replay")
           }
@@ -285,9 +341,18 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
       } yield output
     } else for {
       _ <- RepositorySyncFormalFailureContinuation.authenticatePurposeAttemptC(store, source, policy)
-      _ <- candidateWorkspaceC(store, slot, progress.candidate.get)
+      _ <- candidateWorkspaceC(store, slot, progress.candidate.get, progress.sessionWorkspace)
       _ <- if (selected.zip(progress.receipts.drop(1)).forall((check, receipt) => C.productSuccessful(receipt, check.kind))) Consequence.unit
         else N.invalid("retained failed/unknown purpose check cannot become success")
+      // A foreign-tree group needs the current native input-equivalence owner,
+      // including its exact retained reuse reference; a retained map alone is not authority.
+      currentReuse <- if (progress.receipts.drop(1).exists(_.group.exists(_.sourceTree != progress.candidate.get.tree)))
+        policy.flatMap(_.impact).map(p => RepositorySyncProgramImpact.reuseForTreeC(store,
+          progress.candidate.get.tree, p, progress.selection.get.copy(reused = Vector.empty)))
+          .getOrElse(N.invalid("purpose grouped receipt has no current native reuse policy"))
+        else Consequence.success(progress.selection.get.copy(reused = Vector.empty) -> Map.empty[String, C.Receipt])
+      _ <- if (progress.receipts.drop(1).forall(groupReceiptBound(_, progress.candidate.get.tree, progress.selection.get, currentReuse)))
+        Consequence.unit else N.invalid("purpose grouped receipt crosses its candidate without exact current qualified reuse")
       assessment <- GoalPhaseStepAssessment.assessPurposeC(slot.actionPolicy,
         GoalPhaseOrderedProgression.Snapshot(progress.candidate.get.parent, progress.candidate.get.tree),
         store.reference(prefix + "-assessment").identity, progress.receipts.head,
@@ -300,13 +365,131 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
     } yield output
   }
 
-  def candidateWorkspaceC(store: N.Store, slot: P.Slot, candidate: P.Candidate): Consequence[Unit] = for {
-    head <- E.executeGitC(store.core, GitOperation.Head, slot.workspace).flatMap(_.valueC)
-    index <- E.executeGitC(store.core, GitOperation.IndexTree, slot.workspace).flatMap(_.valueC)
-    dirty <- E.executeGitC(store.core, GitOperation.Status, slot.workspace).flatMap(_.valueC)
+  /** Receipt binding at this owner's acceptance boundary. The actual current
+    * reuse selection/map comes only from ProgramImpact.reuseForTreeC above.
+    */
+  private[admission] def groupReceiptBound(receipt: C.Receipt, candidateTree: String,
+    retained: RepositorySyncProgramImpact.Selection,
+    current: (RepositorySyncProgramImpact.Selection, Map[String, C.Receipt])): Boolean =
+    receipt.group.forall(group => group.sourceTree == candidateTree ||
+      (current._2.get(receipt.identity).contains(receipt) && retained.reused.exists(reference =>
+        reference.check == receipt.identity && current._1.reused.contains(reference))))
+
+  /** Each discovery build and test batch has its own native intent/result.
+    * A resultless intent remains at PurposeChecking and is never replayed. */
+  private def _ordinary_c(store: N.Store, source: N.Stage, slot: P.Slot, check: C.Check, ordinal: Int,
+    reused: Map[String, C.Receipt], policy: Option[C.Policy], authority: Option[RepositorySyncNativeConvergence.AuthorityPort],
+    review: Option[RepositorySyncNativeMergeReviewContinuation.Port], finish: Finish): Consequence[V.RepositorySyncAdvanceResult] = {
+    val progress = source.payload.purposes.get
+    val key = attemptPrefix(progress) + "-ordinary-" + ordinal
+    val candidate = progress.candidate.get
+    val group = progress.ordinaryGroups.getOrElse(check.identity, RepositorySyncProgramImpact.Group(candidate.tree, slot.workspace))
+    def save(suffix: String, stage: String, from: N.Stage, next: RepositorySyncProgramImpact.Group): Consequence[N.Stage] =
+      store.saveC(key + "-" + suffix, "purpose-progress", from.record,
+        from.payload.copy(stage = stage, purposes = Some(from.payload.purposes.get.copy(
+          ordinaryGroups = from.payload.purposes.get.ordinaryGroups.updated(check.identity, next)))))
+    def drive(next: N.Stage): Consequence[V.RepositorySyncAdvanceResult] =
+      _checks_c(store, next, slot, reused, policy, authority, review, finish)
+    if (group.refusal.nonEmpty || group.knownFailure || group.batches.exists(_.facts.outcome != WorkflowSbtValidation.Outcome.Succeeded))
+      return Consequence.success(NativeWorkflowOperationOutput.repositoryWait(store.identity,
+        "Ordinary purpose validation failed or was refused; actual retained observations require their owning disposition", "purpose-check-failed"))
+    for {
+      _ <- RepositorySyncFormalFailureContinuation.authenticatePurposeAttemptC(store, source, policy)
+      _ <- candidateWorkspaceC(store, slot, candidate, progress.sessionWorkspace)
+      scoped <- candidateCoreC(store, progress)
+      result <- if (group.build.isEmpty) for {
+        intent <- save("build-intent", "PurposeChecking", source, group.copy(pending = Some("build")))
+        actual <- E.discoveryBuildAttemptC(scoped, slot.workspace)
+        observed <- actual match {
+          case SbtExecutionAttempt.Observed(value) =>
+            val binding = value.discovery.collect { case org.goldenport.cncf.processexecution.SbtValidationDiscovery.Result.Available(build) => build.binding }
+            val unavailable = value.discovery.collect { case org.goldenport.cncf.processexecution.SbtValidationDiscovery.Result.Unavailable(reason) => reason }
+            Consequence.success(group.copy(build = Some(RepositorySyncProgramImpact.BuildRecord(slot.workspace, binding, value.processResult)),
+              pending = None, refusal = unavailable))
+          case SbtExecutionAttempt.AdmissionRejected(_, _, conclusion) => Consequence.success(group.copy(pending = None, refusal = Some(conclusion.show)))
+          case SbtExecutionAttempt.Uncertain(_, _, conclusion) => N.uncertain("Ordinary purpose build remains UNKNOWN: " + conclusion.show)
+        }
+        saved <- save("build-result", "PurposeMaterialized", intent, observed)
+        next <- drive(saved)
+      } yield next else if (group.inventory.isEmpty && group.build.exists(_.available.nonEmpty)) for {
+        selected <- RepositorySyncProgramImpact.selectBuiltC(check.copy(workspace = Some(slot.workspace)), candidate.tree, group.build.get)
+        workspace <- WorkspaceId.parseC(slot.workspace)
+        planned <- org.goldenport.cncf.processexecution.SbtValidationMode.groupCasesC(scoped.executionContext, workspace, selected._2)
+        saved <- save("selection", "PurposeMaterialized", source,
+          group.copy(inventory = Some(selected._1), cases = selected._2, planned = planned))
+        next <- drive(saved)
+      } yield next else if (group.inventory.isEmpty) Consequence.success(NativeWorkflowOperationOutput.repositoryWait(
+        store.identity, "Ordinary candidate build did not yield usable discovery; its actual result is retained", "purpose-check-failed"))
+      else if (group.batches.size < group.planned.size) {
+        val index = group.batches.size
+        val cases = group.planned(index)
+        for {
+        intent <- save("batch-" + index + "-intent", "PurposeChecking", source, group.copy(pending = Some("batch-" + index)))
+        actual <- E.validationBatchAttemptC(scoped, slot.workspace, cases)
+        next <- actual match {
+          case SbtExecutionAttempt.Observed(value) => for {
+            facts <- WorkflowSbtValidation.factsC(WorkflowSbtValidation.Kind.TestOnly, value)
+            observed = group.copy(batches = group.batches :+ RepositorySyncProgramImpact.BatchRecord(cases, facts, value.processResult), pending = None)
+            result <- if (facts.outcome == WorkflowSbtValidation.Outcome.Failed &&
+                (value.processResult.termination match { case ProcessExecutionTermination.Exited(code) => code != 0; case _ => false })) for {
+              receipt <- C.sbtReceiptC(check.identity, WorkflowSbtValidation.Kind.TestOnly, value)
+              failed <- store.saveC(key + "-batch-" + index + "-result", "purpose-progress", intent.record,
+                intent.payload.copy(stage = "PurposeRepairRequired", purposes = Some(progress.copy(
+                  ordinaryGroups = progress.ordinaryGroups.updated(check.identity, observed), receipts = progress.receipts :+ receipt))))
+            } yield NativeWorkflowOperationOutput.repositoryWait(store.identity,
+              "Actual ordinary purpose test batch failed; the native formal-failure and repair owners retain its receipt", "purpose-check-failed")
+            else for {
+              saved <- save("batch-" + index + "-result", "PurposeMaterialized", intent, observed)
+              continued <- drive(saved)
+            } yield continued
+          } yield result
+          case SbtExecutionAttempt.AdmissionRejected(_, _, conclusion) => for {
+            saved <- save("batch-" + index + "-result", "PurposeMaterialized", intent,
+              group.copy(pending = None, refusal = Some(conclusion.show)))
+            continued <- drive(saved)
+          } yield continued
+          case SbtExecutionAttempt.Uncertain(_, _, conclusion) => N.uncertain("Ordinary purpose validation remains UNKNOWN: " + conclusion.show)
+        }
+        } yield next
+      } else if (!group.successful) Consequence.success(NativeWorkflowOperationOutput.repositoryWait(
+        store.identity, "Ordinary candidate validation is incomplete; no passing receipt is inferred", "purpose-check-failed"))
+      else {
+        val receipt = RepositorySyncProgramImpact.groupReceipt(check.identity, group)
+        for {
+        completed <- store.saveC(key + "-complete", "purpose-progress", source.record,
+          source.payload.copy(stage = "PurposeMaterialized", purposes = Some(progress.copy(
+            receipts = progress.receipts :+ receipt, ordinaryGroups = progress.ordinaryGroups - check.identity))))
+        next <- drive(completed)
+        } yield next
+      }
+    } yield result
+  }
+
+  def candidateCoreC(store: N.Store, progress: P.Progress): Consequence[org.goldenport.cncf.action.ActionCall.Core] =
+    progress.sessionWorkspace.fold(Consequence.success(store.core))(workspace => {
+      val actualSource = RepositorySyncDirectoryList.workspace(store.core, "sm-workflow-repository")
+      if (workspace.session != store.identity || workspace.source != actualSource || workspace.candidate != allocationIdentity(progress))
+        N.invalid("Retained candidate allocation crosses its Session, source or purpose attempt")
+      else progress.candidate.map(candidate => RepositorySyncSessionWorkspace.materializedCoreC(store.core, workspace, candidate))
+        .getOrElse(N.invalid("Session candidate is absent"))
+    })
+
+  def candidateWorkspaceC(store: N.Store, slot: P.Slot, candidate: P.Candidate,
+    session: Option[P.SessionWorkspace] = None): Consequence[Unit] = for {
+    _ <- if (session.forall(value => value.session == store.identity && value.slot == slot &&
+      value.source == RepositorySyncDirectoryList.workspace(store.core, "sm-workflow-repository"))) Consequence.unit
+      else N.invalid("Retained candidate workspace crosses its Session or source")
+    core <- session.fold(Consequence.success(store.core))(value => RepositorySyncSessionWorkspace.materializedCoreC(store.core, value, candidate))
+    head <- E.executeGitC(core, GitOperation.Head, slot.workspace).flatMap(_.valueC)
+    index <- E.executeGitC(core, GitOperation.IndexTree, slot.workspace).flatMap(_.valueC)
+    dirty <- E.executeGitC(core, GitOperation.Status, slot.workspace).flatMap(_.valueC)
     _ <- if (head.value == candidate.commit && index.value == candidate.tree && dirty.isEmpty) Consequence.unit
       else N.invalid("purpose validation workspace no longer contains the exact clean candidate; no check/evidence reuse or commit")
   } yield ()
+
+  private[admission] def allocationIdentity(progress: P.Progress): String =
+    "purpose-" + (progress.cursor + 1) + (if (progress.attempt == 0) "" else "-repair-" + progress.attempt) +
+      progress.preparationNamespace.map("-" + _).getOrElse("")
 
   private[admission] def attemptPrefix(progress: P.Progress): String =
     "purpose-" + (progress.cursor + 1) + (if (progress.attempt == 0) "" else "-repair-" + progress.attempt) +
@@ -377,9 +560,9 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
     _ <- if (retained == failed) Consequence.unit else N.invalid("Purpose failure crosses the actual retained progress")
     progress = failed.payload.purposes.get
     candidate <- progress.candidate.map(Consequence.success).getOrElse(N.invalid("Failed Purpose candidate is absent"))
-    slot <- RepositorySyncPurpose.slots(store.declaration.purposePolicy, store.context.repositoryIdentity).lift(progress.slotCursor).map(Consequence.success)
+    slot <- RepositorySyncPurpose.slot(store.declaration.purposePolicy, store.context.repositoryIdentity, progress).map(Consequence.success)
       .getOrElse(N.invalid("Failed Purpose validation slot is absent"))
-    _ <- candidateWorkspaceC(store, slot, candidate)
+    _ <- candidateWorkspaceC(store, slot, candidate, progress.sessionWorkspace)
     actual <- G.inspectC(store.core)
     _ <- store.scopeC(actual.observed)
     index <- G.indexTreeC(store.core)
@@ -398,7 +581,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
     } yield () }
     after <- G.inspectC(store.core)
     afterIndex <- G.indexTreeC(store.core)
-    _ <- candidateWorkspaceC(store, slot, candidate)
+    _ <- candidateWorkspaceC(store, slot, candidate, progress.sessionWorkspace)
     _ <- if (after == actual && afterIndex == index) Consequence.unit else N.invalid("Purpose original repository drifted during observation")
   } yield snapshot
 
@@ -434,7 +617,7 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
       baselineexpectations)) else progress.projectedWorktree
   } yield progress.copy(preparationNamespace = None, request = if (overlap) progress.request else progress.request.copy(files = progress.request.files ++ baselines),
     plan = Some(plan), attempt = progress.attempt + 1, slotCursor = progress.slotCursor + 1,
-    baselineTree = Some(candidate.tree), candidate = None, receipts = Vector.empty, selection = None,
+    baselineTree = Some(candidate.tree), candidate = None, sessionWorkspace = None, ordinaryGroups = Map.empty, receipts = Vector.empty, selection = None,
     assessment = None, review = None, reusable = Vector.empty, ownership = ownership, projectedWorktree = projected)
 
   def repairC(store: N.Store, basis: RepositorySyncNativeMergeRepair.Basis,

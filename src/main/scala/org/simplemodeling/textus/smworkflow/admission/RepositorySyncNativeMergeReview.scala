@@ -87,15 +87,16 @@ private[smworkflow] object RepositorySyncNativeMergeReview {
     _ <- policy.validateC
     progress <- source.payload.purposes.map(Consequence.success).getOrElse(invalid("purpose review lacks its native content candidate"))
     candidate <- progress.candidate.map(Consequence.success).getOrElse(invalid("purpose review lacks its actual candidate"))
-    slot <- RepositorySyncPurpose.slots(store.declaration.purposePolicy, store.context.repositoryIdentity).lift(progress.slotCursor).map(Consequence.success)
+    slot <- RepositorySyncPurpose.slot(store.declaration.purposePolicy, store.context.repositoryIdentity, progress).map(Consequence.success)
       .getOrElse(invalid("purpose review lacks its fixed candidate workspace"))
-    _ <- RepositorySyncPurposeRuntime.candidateWorkspaceC(store, slot, candidate)
-    diff <- diffC(store, source, candidate.parent, "purpose-diff", policy.maximumDiffBytes, Some(slot.workspace))
+    _ <- RepositorySyncPurposeRuntime.candidateWorkspaceC(store, slot, candidate, progress.sessionWorkspace)
+    scoped <- RepositorySyncPurposeRuntime.candidateCoreC(store, progress)
+    diff <- diffC(store.withCore(scoped), source, candidate.parent, "purpose-diff", policy.maximumDiffBytes, Some(slot.workspace))
     parent <- GitObjectId.parseC(candidate.parent)
     tree <- GitObjectId.parseC(candidate.tree)
     delta <- E.executeGitC(store.core, GitOperation.TreeChanges(parent, tree)).flatMap(_.valueC)
     selection <- progress.selection.map(Consequence.success).getOrElse(invalid("purpose review lacks its actual check selection"))
-    _ <- RepositorySyncPurposeRuntime.candidateWorkspaceC(store, slot, candidate)
+    _ <- RepositorySyncPurposeRuntime.candidateWorkspaceC(store, slot, candidate, progress.sessionWorkspace)
   } yield Request(store.identity, source.record.revision.value.toString, candidate.parent, candidate.parent,
     candidate.tree, delta.map(_.path.value), diff.text, diff.text, selection.depth, selection.reason,
     selection.checks.map(_.identity), progress.receipts.drop(1), uncertainties = diff.uncertainties)

@@ -156,6 +156,8 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     def scoped(namespace: String, direction: Option[RepositorySyncValidationContinuation.Direction] = None,
       pushDirection: Option[RepositorySyncPushContinuation.Direction] = None): Store =
       new Store(declaration, core, original, context, identity, adapter, storage, acknowledgement, namespace, direction, pushDirection)
+    def withCore(selected: ActionCall.Core): Store =
+      new Store(declaration, selected, original, context, identity, adapter, storage, acknowledgement, namespace, continuation, pushContinuation)
     def key(key: String): String = candidateKey(namespace, key)
     def reference(key: String): WorkflowMechanicalTransition.Reference =
       WorkflowMechanicalTransition.Reference(identity + ":native-" + this.key(key), "1")

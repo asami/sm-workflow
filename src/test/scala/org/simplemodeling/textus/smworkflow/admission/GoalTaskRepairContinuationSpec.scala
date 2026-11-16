@@ -48,6 +48,16 @@ private[smworkflow] object GoalTaskRepairContinuationFixture {
         completed, ContextReference("fixture-repair-" + ordinal, "1")))
     }
   }
+  def exhausted(state: S.State): S.State = {
+    val seeded = state.copy(stage = "Inspect", automaticCount = 10, ordinaryCount = 10,
+      generation = 11, repairControl = state.repairControl.copy(observations = Vector.empty))
+    val intent = take(S.intentC(take(S.candidateC(seeded, seeded.candidate.get))))
+    val check = intent.selected.head
+    val receipt = RepositorySyncNativeMergeValidation.Receipt(check.identity, "exited", Some(1),
+      "[error] retained exhausted specification check failure", "", Some(WorkflowSbtValidation.Facts(check.kind,
+        WorkflowSbtValidation.Outcome.Failed, None, None)))
+    take(S.observedC(intent, receipt))
+  }
   val input = S.Input("fixture-repository", "fixture-trend", "Preserve this Task", Vector("src"), Vector("compile"),
     Vector("objective"), Vector(ContextReference("fixture-source", "1")), false, scalaLint = "off",
     task = Some(S.Task("direct-instruction", Vector.empty)))
@@ -161,6 +171,11 @@ final class GoalTaskRepairContinuationSpec extends AnyWordSpec with GivenWhenThe
       })
       advance(session).kind shouldBe "Human"
     }
+    // Seed the already exhausted budget as explicit specification-owned facts,
+    // then obtain the exact exhaustion Human reason from the real observation
+    // rule. Merely changing a trend stop's counter is deliberately insufficient.
+    def exhaustedQualification(session: String): Unit = save(session, payload =>
+      payload.copy(state = GoalTaskRepairContinuationFixture.exhausted(payload.state)))
     def provision(description: V.GoalTaskRepairContinuationDescriptionResult, choice: String, name: String): V.GoalTaskRepairContinuationInput = {
       val reference = V.WorkflowArtifactReference("specification-human-" + name, "1")
       val answer = V.GoalTaskRepairContinuationInput(description.sessionId, description.target, choice,
@@ -209,6 +224,214 @@ final class GoalTaskRepairContinuationSpec extends AnyWordSpec with GivenWhenThe
   private def _json(record: InstanceRecord): Json = io.circe.parser.parse(take(WorkflowInstanceRecordJsonV1.encodeC(record))).toOption.get
 
   "Same Task repair-trend continuation" should {
+    "admit one exact scoped exhaustion direction and charge only its native Repair completion across reopen" in {
+      val directory = _root()
+      var session = ""
+      var answer = Option.empty[V.GoalTaskRepairContinuationInput]
+      var ordinary = Option.empty[V.GoalTaskRepairContinuationInput]
+      var original = Option.empty[R.Target]
+      var issued = Option.empty[V.GoalTaskView]
+      var sourceRevision = 0L
+      Given("a fixture-managed exhausted terminal qualification with its prior ordinary direction retained")
+      _episode(directory) { episode =>
+        session = episode.start()
+        ordinary = Some(episode.provision(episode.describe(session), "ContinueRepair", "before-exception"))
+        episode.resume(ordinary.get).outcome shouldBe "resumed-awaiting-advance"
+        episode.completeRepair(session, episode.advance(session), "before-exception")
+        episode.failedQualification(session)
+        episode.exhaustedQualification(session)
+        val before = episode.current(session)
+        val description = episode.describe(session)
+        val target = take(R.targetC(description.target))
+        val source = episode.source()
+        description.choices shouldBe R.choices
+        description.message should include ("one scoped additional repair batch")
+        R.eligible(target.business) shouldBe false
+        R.eligibleScoped(target.business) shouldBe true
+        target.business.state.automaticCount shouldBe 10
+        target.business.state.ordinaryCount shouldBe 10
+        target.business.state.repairControl.stop shouldBe None
+        target.business.repairContinuation.get.choice shouldBe "ContinueRepair"
+        val missing = V.GoalTaskRepairContinuationInput(session, description.target, "ContinueRepair",
+          "Missing exact separate Human evidence", "participant", V.WorkflowArtifactReference("unadmitted-scoped", "1"))
+        When("the exhausted target lacks its own exact Human evidence or attempts to reuse the earlier trend direction")
+        episode.call(R.resumeOperation, List(Property("input", missing, None))).isSuccess shouldBe false
+        episode.call(R.resumeOperation, List(Property("input", ordinary.get.copy(target = description.target), None))).isSuccess shouldBe false
+        val rejectedChoice = R.bindingC(target.componentInstance, target, "ContinueScopedRepair", "Unsupported public choice",
+          target.participant, ContextReference("fixture-human", "1"))
+        rejectedChoice.isSuccess shouldBe false
+        val deferred = episode.provision(description, "Defer", "scoped-defer")
+        episode.resume(deferred).outcome shouldBe "deferred"
+        _json(episode.current(session)) shouldBe _json(before)
+        val stale = episode.provision(description, "ContinueRepair", "stale-scoped")
+        episode.save(session, identity)
+        val moved = episode.current(session)
+        episode.call(R.resumeOperation, List(Property("input", stale, None))).isSuccess shouldBe false
+        _json(episode.current(session)) shouldBe _json(moved)
+        val fresh = episode.describe(session)
+        original = Some(take(R.targetC(fresh.target)))
+        answer = Some(episode.provision(fresh, "ContinueRepair", "one-scoped"))
+        NativeReviewPreparation.taskRepairContinuationC(fresh.copy(choices = Vector("ContinueScopedRepair", "Defer")), answer.get,
+          answer.get.reference, V.WorkflowExecutionEvidence(Vector(answer.get.reference), Some("participant"), None, None),
+          "participant", "normal-development-host", java.time.Instant.parse("2026-11-17T00:00:00Z")).isSuccess shouldBe false
+        val crossed = Vector(
+          original.get.copy(componentInstance = "foreign-owner"),
+          original.get.copy(sessionId = "foreign-session"),
+          original.get.copy(business = original.get.business.copy(root = "/foreign-source")),
+          original.get.copy(business = original.get.business.copy(branch = "foreign-branch")),
+          original.get.copy(business = original.get.business.copy(state = original.get.business.state.copy(
+            input = original.get.business.state.input.copy(objective = "Foreign objective")))),
+          original.get.copy(business = original.get.business.copy(state = original.get.business.state.copy(
+            candidate = original.get.business.state.candidate.map(_.copy(tree = "c" * 40))))))
+        crossed.foreach(target => episode.call(R.resumeOperation, List(Property("input",
+          answer.get.copy(target = target.asJson.noSpaces), None))).isSuccess shouldBe false)
+        Then("crossed and stale directions preserve all native and physical source facts")
+        _json(episode.current(session)) shouldBe _json(moved)
+        episode.source() shouldBe source
+        When("the exact separate scoped direction is adopted")
+        episode.resume(answer.get).outcome shouldBe "resumed-awaiting-advance"
+        val resumed = episode.current(session)
+        val payload = episode.payload(session, resumed.revision.value)
+        resumed.history.dropRight(1) shouldBe moved.history
+        resumed.revision shouldBe moved.revision.next
+        resumed.suspension shouldBe None
+        payload shouldBe original.get.business.copy(state = original.get.business.state.copy(stage = "Repair"),
+          repairContinuation = Some(R.Direction(original.get.asJson, answer.get.choice, answer.get.rationale,
+            answer.get.participant, ContextReference(answer.get.reference.identity, answer.get.reference.revision))))
+        payload.state.automaticCount shouldBe 10
+        payload.state.ordinaryCount shouldBe 10
+        payload.state.repairControl.effectiveLimit shouldBe 10
+        episode.resume(answer.get).outcome shouldBe "already-resumed"
+        episode.resume(ordinary.get).outcome shouldBe "already-resumed"
+        _json(episode.current(session)) shouldBe _json(resumed)
+        issued = Some(episode.advance(session))
+        issued.get.kind shouldBe "Request"
+        sourceRevision = episode.current(session).revision.value - 1L
+      }
+      When("the same native Session is physically reopened and public Submit retains its actual Repair completion")
+      _episode(directory) { episode =>
+        val pending = episode.current(session)
+        episode.resume(answer.get).outcome shouldBe "already-resumed"
+        episode.advance(session).issuedWorkContext shouldBe issued.get.issuedWorkContext
+        _json(episode.current(session)) shouldBe _json(pending)
+        episode.completeRepair(session, issued.get, "one-scoped")
+        val submitted = episode.current(session)
+        episode.project(call => for {
+          storage <- call.taskStorageC()
+          instances <- storage.bindInstancesC()(using call.executionContext)
+          canonical <- instances.loadC(InstanceIdentity(session))(using call.executionContext)
+          _ = _json(canonical.get) shouldBe _json(submitted)
+          payload <- _native.loadPayloadC(storage, session, sourceRevision, call.core)
+          work = S.Work(session, sourceRevision.toString, "Repair", payload.state)
+          changedCause = CausationReference("foreign-submitted-frontier")
+          changedIndex = submitted.history.size - 2
+          changedHistory = submitted.history.updated(changedIndex,
+            submitted.history(changedIndex).copy(causation = changedCause))
+          crossed = submitted.copy(history = changedHistory)
+          _ = crossed.validateC.isSuccess shouldBe true
+          _ = R.completionAllowanceC(storage, crossed, call.core, work).isSuccess shouldBe false
+          allowance <- R.completionAllowanceC(storage, submitted, call.core, work)
+          _ = allowance.nonEmpty shouldBe true
+          result = S.Result("completed", "Fixture source readiness", Vector.empty,
+            work.state.input.conditions.map(id => S.Condition(id, true, "Fixture ready")), Vector.empty)
+          _ = S.completedC(work, result, ContextReference("fixture-result", "1")).isSuccess shouldBe false
+          _ = Vector(work.copy(session = "foreign-session"), work.copy(sourceRevision = (sourceRevision + 1L).toString),
+            work.copy(kind = "Review"), work.copy(state = work.state.copy(generation = work.state.generation + 1L)),
+            work.copy(state = work.state.copy(automaticCount = 9)),
+            work.copy(state = work.state.copy(input = work.state.input.copy(objective = "Foreign objective"))),
+            work.copy(state = work.state.copy(candidate = work.state.candidate.map(_.copy(tree = "c" * 40)))))
+            .foreach { changed =>
+              allowance.get.limitForC(changed).isSuccess shouldBe false
+              S.completedC(changed, result, ContextReference("fixture-result", "1"), allowance).isSuccess shouldBe false
+            }
+        } yield ())
+        episode.resume(answer.get).outcome shouldBe "already-resumed"
+        _json(episode.current(session)) shouldBe _json(submitted)
+        Then("only ordinary native Advance consumes the one additional batch and preserves the frozen policy and ancestry")
+        episode.advance(session).kind shouldBe "Wait"
+        val after = episode.current(session)
+        val payload = episode.payload(session, after.revision.value)
+        payload.state.automaticCount shouldBe 11
+        payload.state.ordinaryCount shouldBe 11
+        payload.state.generation shouldBe original.get.business.state.generation + 1L
+        payload.state.input shouldBe original.get.business.state.input
+        payload.state.repairControl shouldBe original.get.business.state.repairControl
+        payload.repairContinuation.get.target shouldBe original.get.asJson
+        episode.project(call => for {
+          storage <- call.taskStorageC()
+          originalPayload <- _native.loadPayloadC(storage, session, sourceRevision, call.core)
+          work = S.Work(session, sourceRevision.toString, "Repair", originalPayload.state)
+          _ = R.completionAllowanceC(storage, submitted, call.core, work).isSuccess shouldBe false
+        } yield ())
+        episode.payload(session, original.get.frontierRevision) shouldBe original.get.business
+        after.history.take(submitted.history.size) shouldBe submitted.history
+        episode.advance(session).kind shouldBe "Wait"
+        episode.payload(session, episode.current(session).revision.value).state.automaticCount shouldBe 11
+        episode.failedQualification(session)
+        val stopped = episode.current(session)
+        val exhausted = episode.payload(session, stopped.revision.value)
+        exhausted.state.automaticCount shouldBe 11
+        R.eligible(exhausted) shouldBe false
+        R.eligibleScoped(exhausted) shouldBe false
+        episode.call("describeGoalTaskRepairContinuation", List(Property("input",
+          V.GoalTaskRepairContinuationDescriptionInput(session), None))).isSuccess shouldBe false
+        val second = exhausted.copy(state = exhausted.state.copy(automaticCount = 10))
+        R.eligibleScoped(second) shouldBe false
+        R.decodeTarget(original.get.copy(frontierRevision = stopped.revision.value, business = second).asJson).isLeft shouldBe true
+        val repair = exhausted.state.copy(stage = "Repair")
+        val result = S.Result("completed", "No second allowance", Vector.empty,
+          repair.input.conditions.map(id => S.Condition(id, true, "Fixture ready")), Vector.empty)
+        S.completedC(S.Work(session, stopped.revision.value.toString, "Repair", repair), result,
+          ContextReference("second-result", "1")).isSuccess shouldBe false
+        Vector(answer.get, ordinary.get).foreach(direction => episode.resume(direction).outcome shouldBe "already-resumed")
+        episode.call(R.resumeOperation, List(Property("input", answer.get.copy(rationale = "Changed admitted exception"), None))).isSuccess shouldBe false
+        _json(episode.current(session)) shouldBe _json(stopped)
+      }
+      When("the completed batch and exhausted frontier are reopened again")
+      _episode(directory) { episode =>
+        val before = episode.current(session)
+        episode.resume(answer.get).outcome shouldBe "already-resumed"
+        episode.resume(ordinary.get).outcome shouldBe "already-resumed"
+        episode.advance(session).kind shouldBe "Human"
+        _json(episode.current(session)) shouldBe _json(before)
+        episode.payload(session, before.revision.value).state.automaticCount shouldBe 11
+      }
+    }
+
+    "offer unchanged public choices with scoped eligibility only for the exact exhausted terminal failed Task qualification" in {
+      Given("a specification-owned terminal failed qualification at the unchanged native ten-batch limit")
+      val base = GoalTaskRepairContinuationFixture.payload
+      val payload = base.copy(state = GoalTaskRepairContinuationFixture.exhausted(base.state))
+      val target = GoalTaskRepairContinuationFixture.target.copy(business = payload)
+      When("the target is described and all other Human reasons, budgets and incomplete effects are considered")
+      R.decodeTarget(target.asJson) shouldBe Right(target)
+      R.choicesFor(target) shouldBe R.choices
+      R.eligible(payload) shouldBe false
+      R.eligibleScoped(payload) shouldBe true
+      Vector(
+        payload.copy(state = payload.state.copy(message = "Different Human reason")),
+        payload.copy(state = payload.state.copy(automaticCount = 9)),
+        payload.copy(state = payload.state.copy(automaticCount = 11)),
+        payload.copy(state = payload.state.copy(input = payload.state.input.copy(repairLimit = 9))),
+        payload.copy(state = payload.state.copy(repairControl = payload.state.repairControl.copy(selectedLimit = 9))),
+        payload.copy(state = payload.state.copy(generation = Long.MaxValue)),
+        payload.copy(state = payload.state.copy(pendingCheck = Some("compile"))),
+        payload.copy(state = payload.state.copy(receipts = Vector.empty)),
+        payload.copy(state = payload.state.copy(receipts = payload.state.receipts.map(_.copy(termination = "unknown")))),
+        payload.copy(state = payload.state.copy(receipts = payload.state.receipts.map(_.copy(exitCode = Some(0))))),
+        payload.copy(state = payload.state.copy(input = payload.state.input.copy(task = None))),
+        payload.copy(state = payload.state.copy(input = payload.state.input.copy(kind = "validation"))),
+        payload.copy(state = payload.state.copy(commit = Some(S.Commit("c" * 40, "a" * 40, "b" * 40)))),
+        payload.copy(supersededWork = Some("pending-work")))
+        .foreach(value => R.eligibleScoped(value) shouldBe false)
+      Then("counter-only changes to an ordinary trend stop and unsupported public choices still refuse")
+      R.eligibleScoped(base.copy(state = base.state.copy(automaticCount = 10))) shouldBe false
+      R.bindingC(GoalTaskRepairContinuationFixture.target.componentInstance, GoalTaskRepairContinuationFixture.target,
+        "ContinueScopedRepair", "Unsupported public choice at ordinary trend stop", base.state.participant,
+        ContextReference("fixture-human", "1")).isSuccess shouldBe false
+      R.choicesFor(GoalTaskRepairContinuationFixture.target) shouldBe R.choices
+    }
+
     "append only Repair, preserve the stop and collect the same direction after ordinary Advance and physical reopen" in {
       val directory = _root()
       var session = ""

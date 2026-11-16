@@ -1,10 +1,12 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import org.goldenport.Consequence
+import org.goldenport.ConsequenceT
+import cats.free.Free
 import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall}
 import org.goldenport.cncf.processexecution.*
-import org.goldenport.cncf.workspace.WorkspaceId
-import org.goldenport.cncf.unitofwork.ExecUowM
+import org.goldenport.cncf.workspace.{WorkspaceId, SessionCandidateWorkspaceSelection}
+import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWorkOp}
 import org.goldenport.cncf.validation.ValidationOperationBindingV1 as B
 import org.goldenport.protocol.operation.OperationResponse
 
@@ -19,6 +21,11 @@ import org.goldenport.protocol.operation.OperationResponse
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowManagedProcessExecution {
+  def prepareSessionCandidateC(core: ActionCall.Core, source: WorkspaceId, parent: WorkspaceId,
+    alias: WorkspaceId, session: String, candidate: String): Consequence[SessionCandidateWorkspaceSelection] = {
+    val execution = new Execution(core)
+    execution.prepareSessionCandidateC(source, parent, alias, session, candidate)
+  }
   /** Logical Git intent interpreted in the owning call's current UnitOfWork. */
   def executeGitC[A](core: ActionCall.Core, operation: GitOperation[A],
     workspaceIdentity: String = "sm-workflow-repository"): Consequence[GitExecutionResult[A]] = for {
@@ -220,6 +227,9 @@ private[smworkflow] object WorkflowManagedProcessExecution {
   } yield value
 
   private final class Execution(val core: ActionCall.Core) extends ProcedureActionCall {
+    def prepareSessionCandidateC(source: WorkspaceId, parent: WorkspaceId, alias: WorkspaceId,
+      session: String, candidate: String): Consequence[SessionCandidateWorkspaceSelection] =
+      executeProgram(ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.SessionCandidatePrepare(source, parent, alias, session, candidate))))
     def prepareDiscovery(target: SbtTarget): ExecUowM[SbtExecutionAttempt] = sbt_test_compile_attempt(target)
     def preparePublication(target: SbtTarget): ExecUowM[SbtExecutionAttempt] = sbt_publish_local_attempt(target)
     // Typed constructors and executeProgram borrow the actual owning UoW.

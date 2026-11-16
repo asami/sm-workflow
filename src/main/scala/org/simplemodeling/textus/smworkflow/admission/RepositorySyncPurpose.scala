@@ -38,6 +38,24 @@ private[smworkflow] object RepositorySyncPurpose {
     io.circe.generic.semiauto.deriveDecoder[Slot].decodeJson(normalized)
   }
   final case class Policy(slots: Vector[Slot], sources: Vector[Source])
+  /** The host selection is retained with the purpose attempt, not installed as
+    * a component-wide slot.  The identity contains logical workspace names;
+    * it does not itself convey permission to use them. */
+  final case class SessionWorkspace(component: String, source: String, parent: String,
+    alias: String, session: String, candidate: String, slot: Slot,
+    materialization: Option[RepositorySyncSessionWorkspaceReceipt.Result] = None,
+    materialCandidate: Option[Candidate] = None,
+    root: Option[RepositorySyncSessionWorkspaceReceipt.Result] = None,
+    head: Option[RepositorySyncSessionWorkspaceReceipt.Result] = None)
+  private def validSessionWorkspace(value: SessionWorkspace): Boolean =
+    value != null && value.slot != null && value.materialization != null && value.materialCandidate != null &&
+      value.materialization.isDefined == value.materialCandidate.isDefined && value.root != null && value.head != null &&
+      value.root.isEmpty == value.head.isEmpty && (value.root.isEmpty || value.materialization.nonEmpty) &&
+      value.alias == value.slot.workspace &&
+      org.goldenport.cncf.workspace.SessionCandidateWorkspaceReference.fromRecordC(
+        org.goldenport.cncf.workspace.SessionCandidateWorkspaceRecord(value.component, value.source,
+          value.parent, value.alias, value.session, value.candidate)).isSuccess &&
+      validatePolicyC(Policy(Vector(value.slot), Vector.empty)).isSuccess
   final case class File(path: String, indexCode: String, worktreeCode: String,
     original: Option[String], indexed: Option[String], worktree: Option[String], unexamined: Option[String])
   final case class Request(repository: String, root: String, branch: String, parent: String, indexTree: String,
@@ -84,7 +102,8 @@ private[smworkflow] object RepositorySyncPurpose {
     selection: Option[RepositorySyncProgramImpact.Selection] = None, review: Option[org.goldenport.cncf.workflow.ContextReference] = None, reusable: Vector[RepositorySyncNativeMergeValidation.Receipt] = Vector.empty, effects: Vector[Json] = Vector.empty,
     hostContinuation: Option[RepositorySyncFormalFailureContinuation.Direction] = None,
     ownership: Option[OwnershipContinuation] = None, projectedWorktree: Option[Vector[Content]] = None,
-    preparationNamespace: Option[String] = None)
+    preparationNamespace: Option[String] = None, sessionWorkspace: Option[SessionWorkspace] = None,
+    ordinaryGroups: Map[String, RepositorySyncProgramImpact.Group] = Map.empty)
 
   /** Immutable failed progress and the original repository observation. The
     * virtual candidate tree deliberately differs from the original index. */
@@ -134,16 +153,61 @@ private[smworkflow] object RepositorySyncPurpose {
   }
   val inputCodec: WorkflowResultJsonV1.PayloadCodec[Request] = new Codec("RepositorySyncPurposeRequest")
   val resultCodec: WorkflowResultJsonV1.PayloadCodec[Result] = new Codec("RepositorySyncPurposeResult")
-  given Encoder[Progress] = io.circe.generic.semiauto.deriveEncoder[Progress].mapJson(_.mapObject(_.filter {
-    case ("hostContinuation" | "ownership" | "projectedWorktree" | "preparationNamespace", value) => !value.isNull
+  given Encoder[Progress] = Encoder.instance[Progress](value => Json.obj(
+    "request" -> value.request.asJson,
+    "plan" -> value.plan.asJson,
+    "cursor" -> value.cursor.asJson,
+    "attempt" -> value.attempt.asJson,
+    "slotCursor" -> value.slotCursor.asJson,
+    "baselineTree" -> value.baselineTree.asJson,
+    "candidate" -> value.candidate.asJson,
+    "receipts" -> value.receipts.asJson,
+    "assessment" -> value.assessment.asJson,
+    "commits" -> value.commits.asJson,
+    "selection" -> value.selection.asJson,
+    "review" -> value.review.asJson,
+    "reusable" -> value.reusable.asJson,
+    "effects" -> value.effects.asJson,
+    "hostContinuation" -> value.hostContinuation.asJson,
+    "ownership" -> value.ownership.asJson,
+    "projectedWorktree" -> value.projectedWorktree.asJson,
+    "preparationNamespace" -> value.preparationNamespace.asJson,
+    "sessionWorkspace" -> value.sessionWorkspace.asJson,
+    "ordinaryGroups" -> value.ordinaryGroups.asJson)).mapJson(_.mapObject(_.filter {
+    case ("hostContinuation" | "ownership" | "projectedWorktree" | "preparationNamespace" | "sessionWorkspace", value) => !value.isNull
+    case ("ordinaryGroups", value) => value != Json.obj()
     case _ => true
   }))
-  private val _progress_decoder: Decoder[Progress] = io.circe.generic.semiauto.deriveDecoder
+  private val _progress_decoder: Decoder[Progress] = Decoder.instance(cursor => for {
+    request <- cursor.get[Request]("request")
+    plan <- cursor.get[Option[Result]]("plan")
+    position <- cursor.get[Int]("cursor")
+    attempt <- cursor.get[Int]("attempt")
+    slotCursor <- cursor.get[Int]("slotCursor")
+    baselineTree <- cursor.get[Option[String]]("baselineTree")
+    candidate <- cursor.get[Option[Candidate]]("candidate")
+    receipts <- cursor.get[Vector[RepositorySyncNativeMergeValidation.Receipt]]("receipts")
+    assessment <- cursor.get[Option[GoalPhaseStepAssessment.Result]]("assessment")
+    commits <- cursor.get[Vector[String]]("commits")
+    selection <- cursor.get[Option[RepositorySyncProgramImpact.Selection]]("selection")
+    review <- cursor.get[Option[org.goldenport.cncf.workflow.ContextReference]]("review")
+    reusable <- cursor.get[Vector[RepositorySyncNativeMergeValidation.Receipt]]("reusable")
+    effects <- cursor.get[Vector[Json]]("effects")
+    hostContinuation <- cursor.get[Option[RepositorySyncFormalFailureContinuation.Direction]]("hostContinuation")
+    ownership <- cursor.get[Option[OwnershipContinuation]]("ownership")
+    projectedWorktree <- cursor.get[Option[Vector[Content]]]("projectedWorktree")
+    preparationNamespace <- cursor.get[Option[String]]("preparationNamespace")
+    sessionWorkspace <- cursor.get[Option[SessionWorkspace]]("sessionWorkspace")
+    ordinaryGroups <- cursor.get[Map[String, RepositorySyncProgramImpact.Group]]("ordinaryGroups")
+  } yield Progress(request, plan, position, attempt, slotCursor, baselineTree, candidate, receipts, assessment, commits, selection, review, reusable, effects, hostContinuation, ownership, projectedWorktree, preparationNamespace, sessionWorkspace, ordinaryGroups))
   given Decoder[Progress] = Decoder.instance(cursor =>
-    if (Vector("hostContinuation", "ownership", "projectedWorktree", "preparationNamespace").exists(name => cursor.downField(name).focus.exists(_.isNull)))
+    if (Vector("hostContinuation", "ownership", "projectedWorktree", "preparationNamespace", "sessionWorkspace").exists(name => cursor.downField(name).focus.exists(_.isNull)))
       Left(io.circe.DecodingFailure("Purpose optional continuation/projection cannot be explicitly null", cursor.history))
-    else _progress_decoder(cursor).flatMap(value =>
-      if (RepositorySyncPurposeOwnership.validProgress(value)) Right(value)
+    else _progress_decoder.decodeJson(if (cursor.downField("ordinaryGroups").focus.isEmpty)
+      cursor.value.mapObject(_.add("ordinaryGroups", Json.obj())) else cursor.value).flatMap(value =>
+      if (RepositorySyncPurposeOwnership.validProgress(value) && value.sessionWorkspace != null &&
+          value.sessionWorkspace.forall(validSessionWorkspace) && value.ordinaryGroups != null &&
+          value.ordinaryGroups.forall((identity, group) => identity != null && identity.nonEmpty && group != null && group.valid)) Right(value)
       else Left(io.circe.DecodingFailure("Purpose ownership or expected worktree projection crosses original provenance", cursor.history))))
 
   val declaration: ComponentParameterKey[Policy] = ComponentParameterKey.optional("sm-workflow.repository-sync.dirty-purposes",
@@ -156,6 +220,8 @@ private[smworkflow] object RepositorySyncPurpose {
   def resolveC(parameters: ComponentInitializationParameters): Consequence[Option[Policy]] = parameters.resolve(declaration).map(_.value)
   def slots(policy: Option[Policy], repository: String): Vector[Slot] =
     policy.toVector.flatMap(_.slots).filter(_.repositoryIdentity.forall(_ == repository))
+  def slot(policy: Option[Policy], repository: String, progress: Progress): Option[Slot] =
+    progress.sessionWorkspace.map(_.slot).orElse(slots(policy, repository).lift(progress.slotCursor))
   private def _decode_policy_c(json: Json): Consequence[Policy] = json.as[Policy].fold(
     _ => Consequence.configurationInvalid("Dirty purpose policy is incomplete"), value => validatePolicyC(value).map(_ => value))
   def validatePolicyC(value: Policy): Consequence[Unit] = {
