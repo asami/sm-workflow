@@ -442,3 +442,21 @@ final class NativeDelegateTaskSemanticContinuationCliSpec extends AnyWordSpec wi
     }
   }
 }
+
+/** Installed Review continuation qualification on a specification-owned Session. */
+@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class NativeDelegateTaskReviewContinuationCliSpec extends AnyWordSpec with Matchers {
+  "Installed DelegateTask Review continuation" should {
+    "admit and separately advance the original Review stop after reopen" in {
+      val executable = Path.of(sys.props.get("smworkflow.spec.installedCommand")
+        .orElse(sys.env.get("SM_WORKFLOW_SPEC_INSTALLED_COMMAND"))
+        .getOrElse(fail("Select SM_WORKFLOW_SPEC_INSTALLED_COMMAND")))
+      val component = Path.of(sys.props.get("smworkflow.spec.componentFile")
+        .orElse(sys.env.get("SM_WORKFLOW_SPEC_COMPONENT_FILE"))
+        .getOrElse(fail("Select SM_WORKFLOW_SPEC_COMPONENT_FILE")))
+      new DelegateTaskReviewContinuationOperationSpec().qualify(Some(executable -> component))
+    }
+  }
+}

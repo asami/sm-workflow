@@ -48,6 +48,7 @@ private[smworkflow] object BoundedWorkRuntime {
     repairContinuation: Option[GoalTaskRepairContinuation.Direction] = None,
     delegateRepairContinuation: Option[DelegateTaskRepairContinuation.Direction] = None,
     delegateSemanticContinuation: Option[DelegateTaskSemanticContinuation.Direction] = None,
+    delegateReviewContinuation: Option[DelegateTaskReviewContinuation.Direction] = None,
     validationContinuation: Option[GoalTaskValidationContinuation.Direction] = None,
     validationRecovery: Option[DelegateTaskValidationRecovery.Direction] = None,
     validationCaptureReservation: Option[ValidationCaptureReservation] = None)
@@ -58,7 +59,7 @@ private[smworkflow] object BoundedWorkRuntime {
   private given Encoder[G.DirtyPath] = deriveEncoder
   private given Decoder[G.DirtyPath] = deriveDecoder
   given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
-    case ("unrelated" | "implementationWorkers" | "supersededWork" | "hygiene" | "records" | "validationCompilations" | "candidateContinuation" | "repairContinuation" | "delegateRepairContinuation" | "delegateSemanticContinuation" | "validationContinuation" | "validationRecovery" | "validationCaptureReservation", value) => !value.isNull
+    case ("unrelated" | "implementationWorkers" | "supersededWork" | "hygiene" | "records" | "validationCompilations" | "candidateContinuation" | "repairContinuation" | "delegateRepairContinuation" | "delegateSemanticContinuation" | "delegateReviewContinuation" | "validationContinuation" | "validationRecovery" | "validationCaptureReservation", value) => !value.isNull
     case _ => true
   }))
   given Decoder[Payload] = deriveDecoder
@@ -1040,7 +1041,10 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
       else if (payload.state.stage == "DeliveryAcceptance") _delivery_fresh_c(payload, core) else freshC(payload, core)
     required <- _required_c(payload.state.stage)
     work = S.Work(from.identity.value, from.revision.value.toString, payload.state.stage, payload.state)
-    bundle = ContextBundle("Return only the assigned semantic result within the adopted objective and ownership. DeliveryAcceptance evaluates retained later conditions against actual validation, publication and application evidence; it is read-only and must not repeat implementation, validation, commit or publication. Conditions not assigned to submission remain false during Implement/Repair/Review and require genuine evidence before DeliveryAcceptance accepts. Native runtime owns validation, limits and acceptance. Review is independent and read-only; never execute commands or commit. If a prior review exists, judge only its retained findings, repair delta against priorReviewCandidate and affected meaning; preserve settled scope and applicable successful checks. Review-origin input retains the original review/context/findings: repair only these findings and affected meaning, return exact reviewDispositions and never repeat the original whole-repository review.",
+    reviewReevaluation = delegation && payload.state.stage == "Review" && payload.delegateReviewContinuation.exists(d =>
+      d.target.hcursor.downField("original").downField("resultReference").get[String]("identity").toOption == payload.state.reviewReference.map(_.identity) &&
+      d.target.hcursor.downField("original").downField("resultReference").get[String]("revision").toOption == payload.state.reviewReference.map(_.revision))
+    bundle = ContextBundle((if (reviewReevaluation) "Independently reevaluate the unchanged candidate against the original purpose and all retained evidence, including the original Review result and Human clarification. Do not treat a prior review repair as the sole scope or accept an earlier verdict automatically. " else "") + "Return only the assigned semantic result within the adopted objective and ownership. DeliveryAcceptance evaluates retained later conditions against actual validation, publication and application evidence; it is read-only and must not repeat implementation, validation, commit or publication. Conditions not assigned to submission remain false during Implement/Repair/Review and require genuine evidence before DeliveryAcceptance accepts. Native runtime owns validation, limits and acceptance. Review is independent and read-only; never execute commands or commit." + (if (reviewReevaluation) "" else " If a prior review exists, judge only its retained findings, repair delta against priorReviewCandidate and affected meaning; preserve settled scope and applicable successful checks.") + " Review-origin input retains the original review/context/findings: repair only these findings and affected meaning, return exact reviewDispositions and never repeat the original whole-repository review.",
       (payload.state.input.sourceReferences ++ payload.state.input.reviewOrigin.toVector.flatMap(StandaloneReviewFix.references) ++ payload.state.evidenceReferences).distinct,
       payload.supersededWork.toVector.map(id => ContextReference(id, "1")),
       ContextSnapshot(from.definition.workflowRevision.value, evidenceRevision = Some(work.sourceRevision)))

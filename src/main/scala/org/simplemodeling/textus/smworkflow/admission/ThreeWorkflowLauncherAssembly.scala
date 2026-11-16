@@ -41,6 +41,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     "WorkflowRetainedWorkService.readWorkflowRetainedSnapshot",
     "DelegateTaskService.startDelegateTask", "DelegateTaskService.advanceDelegateTask",
     "DelegateTaskService.submitDelegateTaskWorkResult", "DelegateTaskService.resolveDelegateTaskDiagnosticInformation",
+    "DelegateTaskService.describeDelegateTaskReviewContinuation", "DelegateTaskService.resumeDelegateTaskReviewContinuation",
     "DelegateTaskService.describeDelegateTaskSemanticContinuation", "DelegateTaskService.resumeDelegateTaskSemanticContinuation",
     "DelegateTaskService.describeDelegateTaskRepairContinuation", "DelegateTaskService.resumeDelegateTaskRepair",
     "DelegateTaskService.describeDelegateTaskValidationRecovery", "DelegateTaskService.recoverDelegateTaskValidation",

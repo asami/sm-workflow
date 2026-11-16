@@ -54,7 +54,8 @@ private[admission] final class BoundedTaskService(N: BoundedWorkNativeRun) {
     recovery = if (N.delegation) (DelegateTaskScopeCorrection.operations(h, definition, selections) ++ DelegateTaskCandidateContinuation.operations(h, definition, selections) ++ DelegateTaskValidationRecovery.operations(h, definition, new ThreeWorkflowExternalEvidencePorts(reader).delegateTaskValidationRecovery)) else GoalTaskMalformedIssuedWorkRecovery.operations(h, definition,
       new ThreeWorkflowExternalEvidencePorts(reader).goalTaskMalformedIssuedWorkRecovery)
     continuation = (if (N.delegation) DelegateTaskSemanticContinuation.operations(h, definition,
-      new ThreeWorkflowExternalEvidencePorts(reader).delegateTaskSemanticContinuation) ++ DelegateTaskRepairContinuation.operations(h, definition,
+      new ThreeWorkflowExternalEvidencePorts(reader).delegateTaskSemanticContinuation) ++ DelegateTaskReviewContinuation.operations(h, definition,
+      new ThreeWorkflowExternalEvidencePorts(reader).delegateTaskReviewContinuation) ++ DelegateTaskRepairContinuation.operations(h, definition,
       new ThreeWorkflowExternalEvidencePorts(reader).delegateTaskRepairContinuation) else GoalTaskRepairContinuation.operations(h, definition,
       new ThreeWorkflowExternalEvidencePorts(reader).goalTaskRepairContinuation) ++ GoalTaskValidationContinuation.operations(h, definition,
       new ThreeWorkflowExternalEvidencePorts(reader).goalTaskValidationContinuation)) ++

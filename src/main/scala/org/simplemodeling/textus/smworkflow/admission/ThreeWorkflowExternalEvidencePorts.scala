@@ -59,6 +59,10 @@ private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: Nativ
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json): Consequence[Unit] =
       _admit_evidence_c(core, Purpose.DelegateTaskSemanticContinuation, key(reference.identity, reference.revision), binding)
   }
+  val delegateTaskReviewContinuation: DelegateTaskReviewContinuation.EvidencePort = new DelegateTaskReviewContinuation.EvidencePort {
+    def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json): Consequence[Unit] =
+      _admit_evidence_c(core, Purpose.DelegateTaskReviewContinuation, key(reference.identity, reference.revision), binding)
+  }
   val goalTaskRepairContinuation: GoalTaskRepairContinuation.EvidencePort = new GoalTaskRepairContinuation.EvidencePort {
     def admitC(core: ActionCall.Core, reference: ContextReference, binding: Json) =
       _admit_evidence_c(core, Purpose.GoalTaskRepairContinuation, key(reference.identity, reference.revision), binding)

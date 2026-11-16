@@ -14586,6 +14586,14 @@ operation = DelegateTaskService.describeDelegateTaskSemanticContinuation
 
 operation = DelegateTaskService.resumeDelegateTaskSemanticContinuation
 
+#### describeDelegateTaskReviewContinuation
+
+operation = DelegateTaskService.describeDelegateTaskReviewContinuation
+
+#### resumeDelegateTaskReviewContinuation
+
+operation = DelegateTaskService.resumeDelegateTaskReviewContinuation
+
 #### describeDelegateTaskRepairContinuation
 
 operation = DelegateTaskService.describeDelegateTaskRepairContinuation
@@ -14702,6 +14710,62 @@ DelegateTaskSemanticContinuationInput
 ###### TYPE
 
 DelegateTaskSemanticContinuationDescriptionResult
+
+#### describeDelegateTaskReviewContinuation
+
+##### DESCRIPTION
+
+Describe the exact materialized destination Review decision-needed Human stop without advancing it.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskReviewContinuationDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | DelegateTaskReviewContinuationDescriptionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskReviewContinuationDescriptionResult
+
+#### resumeDelegateTaskReviewContinuation
+
+##### DESCRIPTION
+
+Admit independently verified covering Human direction and actual upstream references for the exact target. A separate ordinary Advance issues the successor.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskReviewContinuationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | DelegateTaskReviewContinuationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskReviewContinuationDescriptionResult
 
 #### describeDelegateTaskRepairContinuation
 
@@ -15886,6 +15950,46 @@ Explicit ad hoc Task request selection metadata and absolute local file: URI ref
 | resumeOperation | string | 1 |
 
 ## DelegateTaskSemanticContinuationInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | string | 1 |
+| choice | string | 1 |
+| rationale | string | 1 |
+| participant | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+| upstream | WorkflowArtifactReference | * |
+
+## DelegateTaskReviewContinuationDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+## DelegateTaskReviewContinuationDescriptionResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| componentInstance | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| target | string | 1 |
+| choices | string | * |
+| resumeOperation | string | 1 |
+
+## DelegateTaskReviewContinuationInput
 
 - input-kind :: COMMAND
 
