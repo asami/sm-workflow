@@ -1,7 +1,9 @@
 # Initial adoption without hand-built runtime configuration
 
 Date: 2026-10-24 (Asia/Tokyo)
-Status: planned; no installed initialization Operation claimed
+Status: historical plan; 2026-11-16 Human direction replaces the separate
+initializer with preparation inside ordinary Start. Installed qualification
+remains pending.
 Producer: sm-workflow development; representative consumer: textus-control-center
 Specification: [project initialization](../spec/project-initialization.md)
 Handoff: [English developer instructions](../journal/2026/10/2026-10-24-project-initialization-handoff.md)

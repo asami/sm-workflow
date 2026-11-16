@@ -762,10 +762,12 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
                 "recoverGoalPhaseReleaseRepairContinuation", "describeGoalPhaseDependencySourceRevision",
                 "adoptGoalPhaseDependencySourceRevision", "recoverGoalPhasePrerequisitePublication",
                 "adoptRepositorySyncValidationContinuation", "adoptGoalPhaseSourceHistoryNormalization",
-                "reconstructGoalPhaseDevelopment").contains(operation.name)) {
-              operation.specification.request.parameters.map(_.name) shouldBe Vector("input", "inputResource")
+                "reconstructGoalPhaseDevelopment", "describeGoalPhasePrerequisitePublicationRecovery").contains(operation.name)) {
+              val names = if (operation.name == "describeGoalPhasePrerequisitePublicationRecovery")
+                Vector("sessionId", "input", "inputResource") else Vector("input", "inputResource")
+              operation.specification.request.parameters.map(_.name) shouldBe names
               operation.specification.request.parameters.map(_.domain.multiplicity) shouldBe
-                Vector(Multiplicity.ZeroOne, Multiplicity.ZeroOne)
+                Vector.fill(names.size)(Multiplicity.ZeroOne)
             } else operation.specification.request.parameters.head.domain.multiplicity shouldBe Multiplicity.One
           }
         }

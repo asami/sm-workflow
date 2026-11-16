@@ -226,3 +226,24 @@ the affected check gets a fresh native attempt on a later Advance after candidat
 freshness. No repair count, review exclusion or successful check is reset.
 Unconfirmed termination and unresolved intents remain Wait. This internal
 continuation adds no public operation or caller-supplied execution proof.
+
+### Pending GoalTask scope correction
+
+`GoalTaskService.describeGoalTaskScopeCorrection` describes an exact active,
+unclaimed Implement or Repair issue and additive repository-relative owned
+paths. It is passive. `NativeWorkflowPreparationService.prepareGoalTaskScopeCorrection`
+prepares the complete input for the existing independent selection importer;
+`GoalTaskService.correctGoalTaskScope` admits that exact selection and current
+native target. A standing attributable Human direction may cover the same
+purpose; a new per-file AI approval is not required. Preparation or a path
+proposal alone grants no authority.
+
+The correction retires the old issue through managed WorkOrder supersession and
+retains its immutable history. A separate ordinary Advance issues the amended
+same-Session work. Original objective, ordered conditions, condition timing,
+checks, source references, participant, repository, base, branch, counters and
+successful evidence remain in force. The correction does not execute work,
+Git, SBT, commit or publication. Repeating the same correction collects its
+retained result; changed, claimed, closed, foreign or unsupported targets are
+refused. After correction, submissions must carry the actual current issued-work
+context; a retired issue cannot submit to its successor.

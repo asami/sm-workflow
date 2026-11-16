@@ -337,6 +337,17 @@ verified through their actual runtime transports before release; MCP is not
 assumed to be an ordinary GET page.
 
 
+## Correct a pending GoalTask scope
+
+Use `GoalTaskService.describeGoalTaskScopeCorrection` with the Session, pending
+continuation and additional owned paths. The description is passive. Prepare an
+exact attributable Human selection with
+`NativeWorkflowPreparationService.prepareGoalTaskScopeCorrection`, then call
+`GoalTaskService.correctGoalTaskScope` using that selection and the unchanged
+target. A correction retires the pending issue through managed supersession;
+ordinary Advance issues the successor. It retains the original condition timing,
+source references, history and successful evidence and performs no work itself.
+
 ## Continue a GoalTask repair-trend stop
 
 Call `GoalTaskService.describeGoalTaskRepairContinuation` with `sessionId`.
@@ -390,3 +401,14 @@ one ordinary JVM or Scala-cross library. Remaining overlay lifecycle, managed
 worktree acquisition, generation and parallel Goal continuation are pending
 Phase 7 work. See the authored development-artifact-overlay specification for
 host policy, plugin opt-in and actual supported boundaries.
+
+### Start intent and managed preparation
+
+A new GoalPhase caller may pass `intent` to `startGoalPhase` with the selected
+Plan's local file URI, selection ID, authenticated participant, `ExplicitHuman`
+origin and idempotency key. The runtime prepares the selected input and Plan in
+its configured managed collections before ordinary Start. `startGoalTask` accepts
+an optional intent containing the explicit origin alongside its existing input,
+selection ID, participant and idempotency key. Existing preprovisioned calls can
+omit intent. A conflicting existing selection or Plan is an error and is never
+replaced. Start itself does not Advance or grant Git, SBT or other effect authority.

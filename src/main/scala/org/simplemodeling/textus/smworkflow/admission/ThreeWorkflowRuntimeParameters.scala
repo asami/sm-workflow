@@ -169,7 +169,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
       projectacceptance <- GoalPhaseAcceptanceBoundary.resolveProjectC(parameters)
       findingpolicy <- GoalPhaseFindingRecording.resolvePolicyC(parameters)
       journalpolicy <- DevelopmentJournal.resolvePolicyC(parameters, persistence.instances, persistence.continuations)
-      evidencepolicy <- CommonEvidence.resolvePolicyC(parameters, Vector(persistence.instances, persistence.continuations) ++ journalpolicy.map(_.collection))
+      evidencepolicy <- CommonEvidence.resolveForCallC(parameters, Vector(persistence.instances, persistence.continuations) ++ journalpolicy.map(_.collection), context, creation.configuration.configuration.values)
       observation <- parameters.resolve(developmentObservation).map(_.value)
       publication <- parameters.resolve(LocalPublicationRuntime.declaration).map(_.value)
       managedDevelopment <- parameters.resolve(ManagedDevelopmentRuntime.declaration).map(_.value)

@@ -90,7 +90,7 @@ private[smworkflow] trait GoalPhaseGeneratedAbiBehavior extends AnyWordSpec with
       val optionaltransport = Set("recoverGoalPhaseCandidate", "recoverGoalPhaseWholePhaseCandidate", "describeGoalPhaseValidationRepair",
         "adoptGoalPhaseValidationRepair", "describeGoalPhaseReleaseRepairContinuation", "recoverGoalPhaseReleaseRepairContinuation",
         "describeGoalPhaseDependencySourceRevision", "adoptGoalPhaseDependencySourceRevision", "recoverGoalPhasePrerequisitePublication",
-        "adoptGoalPhaseSourceHistoryNormalization", "reconstructGoalPhaseDevelopment")
+        "adoptGoalPhaseSourceHistoryNormalization", "reconstructGoalPhaseDevelopment", "describeGoalPhasePrerequisitePublicationRecovery")
       When("the generated Start and Advance readers construct actions from named parameters")
       val started = operations(0).createOperationRequest(request(operations(0), start))
       val advanced = operations(1).createOperationRequest(request(operations(1), advance))
@@ -101,14 +101,16 @@ private[smworkflow] trait GoalPhaseGeneratedAbiBehavior extends AnyWordSpec with
       started.isSuccess shouldBe true
       advanced.isSuccess shouldBe true
       absent.foreach { (operation, result) => withClue(operation.specification.name) { result.isSuccess shouldBe false } }
-      And("only the eleven declared optional transport operations permit inert generated request syntax without business admission")
+      And("only the twelve declared optional transport operations permit inert generated request syntax without business admission")
       optionaloperations.map(_.specification.name).toSet shouldBe optionaltransport
-      optionaloperations should have size 11
+      optionaloperations should have size 12
       optionaloperations.foreach { operation =>
         withClue(operation.specification.name) {
-          operation.specification.request.parameters.map(_.name) shouldBe Vector("input", "inputResource")
+          val names = if (operation.specification.name == "describeGoalPhasePrerequisitePublicationRecovery")
+            Vector("sessionId", "input", "inputResource") else Vector("input", "inputResource")
+          operation.specification.request.parameters.map(_.name) shouldBe names
           operation.specification.request.parameters.map(_.domain.multiplicity) shouldBe
-            Vector(Multiplicity.ZeroOne, Multiplicity.ZeroOne)
+            Vector.fill(names.size)(Multiplicity.ZeroOne)
           operation.createOperationRequest(request(operation, Nil)).isSuccess shouldBe true
         }
       }
@@ -168,8 +170,16 @@ private[smworkflow] trait GoalPhaseGeneratedAbiBehavior extends AnyWordSpec with
         "adoptGoalPhaseFailedPhaseRepair" -> Some("GoalPhaseFailedPhaseRepairAdoptionInput"),
         "describeGoalPhaseValidationRepair" -> Some("GoalPhaseValidationRepairDescriptionInput"),
         "adoptGoalPhaseValidationRepair" -> Some("GoalPhaseValidationRepairAdoptionInput"))
-      operations.find(_.name == "submitGoalPhaseFindingRecording").get.specification.request.parameters.map(_.name) shouldBe Vector(
-        "sessionId", "result", "resultReference", "completionFacts", "executionEvidence")
+      val findingParameters = operations.find(_.name == "submitGoalPhaseFindingRecording").get.specification.request.parameters
+      findingParameters.map(_.name) shouldBe Vector(
+        "sessionId", "result", "resultResource", "resultReference", "completionFacts", "executionEvidence")
+      findingParameters.map(_.domain.datatype) shouldBe Vector(
+        org.goldenport.schema.XString, DataType.Named("goalphasefindingrecordingresult"),
+        org.goldenport.schema.XString, DataType.Named("workflowartifactreference"),
+        DataType.Named("workflowartifactreference"), DataType.Named("workflowexecutionevidence"))
+      findingParameters.map(_.domain.multiplicity) shouldBe Vector(
+        Multiplicity.One, Multiplicity.ZeroOne, Multiplicity.ZeroOne, Multiplicity.One,
+        Multiplicity.ZeroMore, Multiplicity.ZeroOne)
       provided.find(_.name == "reconstructGoalPhaseDevelopment").get.resultType shouldBe
         Some("GoalPhaseAdvanceResult")
       provided.find(_.name == "submitGoalPhaseFindingRecording").get.resultType shouldBe

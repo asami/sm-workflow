@@ -20,7 +20,6 @@ import org.simplemodeling.textus.smworkflow.{SmWorkflowComponent, value as V}
 import BoundedWorkRuntime.*
 import BoundedWorkRuntime.given
 import StandaloneFixExecution as S
-import DelegateTaskNativeRun as N
 
 /** Same-purpose inventory correction for pending implementation or repair work.
   * Condition timing remains an initial-implementation selection only.
@@ -28,22 +27,74 @@ import DelegateTaskNativeRun as N
   * issues its successor. Neither retirement nor an unclaimed issue establishes
   * that external effects did not occur.
   */
-private[smworkflow] object DelegateTaskScopeCorrection {
-  val operation = StateMachineOperationIdentity("DelegateTaskService", "correctDelegateTaskScope")
-  val inputType = "DelegateTaskScopeCorrectionInput"
-  val resumeCause = "delegate-task-scope-corrected:"
+private[smworkflow] object DelegateTaskScopeCorrection extends ScopeCorrectionNativeOwner(
+  DelegateTaskNativeRun,
+  StateMachineOperationIdentity("DelegateTaskService", "correctDelegateTaskScope"),
+  "DelegateTaskScopeCorrectionInput", "delegate-task-scope-corrected:",
+  "DelegateTaskScopeCorrectionCheckpoint", allowConditionTiming = true, preserveOriginalSources = false,
+  acceptsInput = input => input.delegation.exists(_.role == "destination")) {
   final case class Target(componentInstance: String, sessionId: String, participant: String,
     frontierRevision: Long, oldContinuationId: String, frontier: Json, issued: Json,
     business: Payload, continuationRevision: String, additionalOwnedPaths: Vector[String], submissionConditions: Option[Vector[String]] = None)
   given Encoder[Target] = deriveEncoder[Target].mapJson(_.mapObject(_.filter { case ("submissionConditions", v) => !v.isNull; case _ => true }))
   given Decoder[Target] = deriveDecoder
   final case class Checkpoint(target: Target, reference: ContextReference)
+
+  protected def declaredOperation(correct: Boolean): spec.OperationDefinition = if (correct)
+    SmWorkflowComponent.DelegateTaskServiceService.CorrectDelegateTaskScopeOperation
+    else SmWorkflowComponent.DelegateTaskServiceService.DescribeDelegateTaskScopeCorrectionOperation
+}
+
+private[smworkflow] object ScopeCorrectionNativeOwner {
+  import DelegateTaskScopeCorrection.{Target, given}
+  /** Public operation declarations are supplied by the composition layer. */
+  def goalTask(description: spec.OperationDefinition, correction: spec.OperationDefinition): ScopeCorrectionNativeOwner =
+    new ScopeCorrectionNativeOwner(GoalTaskNativeRun,
+      StateMachineOperationIdentity("GoalTaskService", "correctGoalTaskScope"),
+      "GoalTaskScopeCorrectionInput", "goal-task-scope-corrected:",
+      "GoalTaskScopeCorrectionCheckpoint", allowConditionTiming = false, preserveOriginalSources = true,
+      acceptsInput = input => input.task.nonEmpty && input.delegation.isEmpty) {
+      protected def declaredOperation(correct: Boolean): spec.OperationDefinition = if (correct) correction else description
+      override def inputForCallC(incoming: Request, call: ActionCall.Core): Consequence[V.DelegateTaskScopeCorrectionInput] = {
+        final class Reader extends ProcedureActionCall {
+          val core = call
+          def readC = for {
+            source <- NativeWorkflowResourceInput.selectC[V.GoalTaskScopeCorrectionInput](incoming)
+            input <- NativeWorkflowResourceInput.readC(source, reference => read_resource_text(reference, Some(UTF_8)))
+          } yield GoalTaskScopeCorrection.internalInput(input)
+          def execute(): Consequence[OperationResponse] = GoalTaskNativeRun.invalid("Scope correction input reader is not an Operation")
+        }
+        new Reader().readC
+      }
+      override protected def descriptionInputC(incoming: Request): Consequence[V.DelegateTaskScopeCorrectionDescriptionInput] =
+        NativeWorkflowOperationInput.valueC[V.GoalTaskScopeCorrectionDescriptionInput](incoming, "input").map(input =>
+          V.DelegateTaskScopeCorrectionDescriptionInput(input.sessionId, input.oldContinuationId, input.additionalOwnedPaths, Vector.empty))
+      override protected def response(target: Target, outcome: String, message: String, paths: Vector[String]): OperationResponse =
+        NativeWorkflowOperationOutput.response(V.GoalTaskScopeCorrectionView(target.sessionId, outcome, message, target.asJson.noSpaces, paths))
+    }
+}
+
+/** The canonical managed WorkOrder supersession owner shared by bounded Tasks.
+  * The caller supplies the native codec/definition family and exact input policy;
+  * this owner never executes business work or writes a separate application store.
+  */
+private[smworkflow] abstract class ScopeCorrectionNativeOwner(
+  N: BoundedWorkNativeRun, val operation: StateMachineOperationIdentity, val inputType: String,
+  val resumeCause: String, checkpointType: String, allowConditionTiming: Boolean,
+  preserveOriginalSources: Boolean, acceptsInput: S.Input => Boolean) {
+  import DelegateTaskScopeCorrection.{Target, Checkpoint}
+  import DelegateTaskScopeCorrection.given
   import io.circe.generic.auto.*
-  val checkpointCodec = N.codec[Checkpoint]("DelegateTaskScopeCorrectionCheckpoint")
+  protected def declaredOperation(correct: Boolean): spec.OperationDefinition
+  protected def descriptionInputC(incoming: Request): Consequence[V.DelegateTaskScopeCorrectionDescriptionInput] =
+    NativeWorkflowOperationInput.valueC[V.DelegateTaskScopeCorrectionDescriptionInput](incoming, "input")
+  protected def response(target: Target, outcome: String, message: String, paths: Vector[String]): OperationResponse =
+    NativeWorkflowOperationOutput.response(V.DelegateTaskScopeCorrectionView(target.sessionId, outcome, message, target.asJson.noSpaces, paths))
+  lazy val checkpointCodec = N.codec[Checkpoint](checkpointType)
 
   def correctedInputC(input: S.Input, additional: Vector[String], submission: Option[Vector[String]] = None): Consequence[S.Input] = for {
-    _ <- if (input != null && input.delegation.exists(_.role == "destination") &&
-        additional != null && (additional.nonEmpty || submission.exists(next => !input.submissionConditions.contains(next))) && additional.distinct == additional &&
+    _ <- if (input != null && acceptsInput(input) &&
+        (allowConditionTiming || submission.isEmpty) && additional != null && (additional.nonEmpty || submission.exists(next => !input.submissionConditions.contains(next))) && additional.distinct == additional &&
         !additional.exists(input.ownedPaths.contains)) Consequence.unit
       else N.invalid("Scope correction needs new literal paths or changed condition timing for the same destination Task")
     corrected = input.copy(ownedPaths = input.ownedPaths ++ additional, submissionConditions = submission.orElse(input.submissionConditions))
@@ -96,6 +147,9 @@ private[smworkflow] object DelegateTaskScopeCorrection {
     adapter <- storage.bindWorkOrderSupersessionC(N.completionOperation, N.inputCodec, checkpointCodec)
     pending <- adapter.inspectC(ContinuationIdentity(old), InstanceIdentity(session))(using core.executionContext)
       .flatMap(_.map(Consequence.success).getOrElse(N.invalid("Exact pending Task issue is absent or already claimed")))
+    _ <- if (!preserveOriginalSources || (pending.continuation.status == ContinuationRuntimePersistence.Status.Available &&
+        pending.continuation.claimId.isEmpty)) Consequence.unit
+      else N.invalid("Exact pending Task issue is not available and unclaimed")
     _ <- if (pending.current.definition == definition && pending.current.lifecycle == Lifecycle.Active)
       Consequence.unit else N.invalid("Scope correction crosses the native definition or lifecycle")
     order <- pending.issued.current match {
@@ -144,6 +198,75 @@ private[smworkflow] object DelegateTaskScopeCorrection {
     correctedInputC(saved.target.business.state.input, saved.target.additionalOwnedPaths, saved.target.submissionConditions)
   }
 
+  /** Prove the legacy GoalTask input through actual managed supersessions.
+    * Only the already loaded native history supplies receipt addresses. A later
+    * mechanical checkpoint must retain exactly the same admitted input chain.
+    */
+  private[admission] def effectiveValidationInputC(storage: WorkflowComponentStorage, current: InstanceRecord,
+    core: ActionCall.Core, target: GoalTaskValidationContinuation.Target,
+    direction: GoalTaskValidationContinuation.Direction): Consequence[S.Input] = {
+    for {
+    _ <- if (preserveOriginalSources && !allowConditionTiming && N.entry == "GoalTask")
+      Consequence.unit else N.invalid("Validation scope lineage requires the GoalTask family and source-preserving additive policy")
+    _ <- if (current.identity.value == target.sessionId) Consequence.unit
+      else N.invalid("Validation scope lineage crosses its exact Session")
+    _ <- if (target.componentInstance == core.component.get.core.instanceId.canonicalKey) Consequence.unit
+      else N.invalid("Validation scope lineage crosses its exact component owner")
+    _ <- if (GoalTaskValidationContinuation.decodeTarget(direction.target).contains(target)) Consequence.unit
+      else N.invalid("Validation scope lineage differs from its decoded original target")
+    _ <- current.validateC
+    // The caller already admitted this binding. DefinitionBinding has reference
+    // identity, so a newly resolved binding cannot prove the current frontier.
+    catalog <- WorkflowInstanceRecordJsonV1.catalogC(Vector(current.definition))
+    original <- WorkflowInstanceRecordJsonV1.decodeC(target.frontier.noSpaces, catalog)
+    _ <- if (original.definition == current.definition && original.identity == current.identity && original.revision.value == target.frontierRevision &&
+        original.revision.value < current.revision.value && original.history == current.history.take(original.history.size))
+      Consequence.unit else N.invalid("Validation scope lineage crosses the original native frontier")
+    business <- N.loadPayloadC(storage, target.sessionId, target.frontierRevision, core)
+    _ <- if (business == target.business) Consequence.unit
+      else N.invalid("Validation scope lineage differs from the original native checkpoint")
+    adapter <- storage.bindWorkOrderSupersessionC(N.completionOperation, N.inputCodec, checkpointCodec)
+    issued <- storage.bindIssuedC(N.completionOperation, N.inputCodec)
+    entries = current.history.filter(entry => entry.revision.value > target.frontierRevision &&
+      entry.revision.value <= current.revision.value && entry.causation.value.startsWith(resumeCause))
+    effective <- entries.foldLeft(Consequence.success(business.state.input)) { (previous, entry) => for {
+      expected <- previous
+      old = entry.causation.value.stripPrefix(resumeCause)
+      retained <- adapter.loadRetainedC(ContinuationIdentity(old), current.identity)(using core.executionContext)
+        .flatMap(_.map(Consequence.success).getOrElse(N.invalid("Validation scope lineage receipt is absent")))
+      receipt = retained.receipt
+      correction <- targetC(receipt.payload.target.asJson.noSpaces)
+      frontier <- WorkflowInstanceRecordJsonV1.decodeC(correction.frontier.noSpaces, catalog)
+      actual <- issued.loadC(ContinuationIdentity(old))(using core.executionContext)
+        .flatMap(_.map(Consequence.success).getOrElse(N.invalid("Validation scope lineage issue is absent")))
+      wire <- WorkflowWorkOrderJsonV1.encodeC(actual, N.inputCodec).flatMap(_parse_c)
+      work <- actual.current match {
+        case order: WorkflowContinuation.WorkOrder[S.Work] if order.request.completionOperation == N.completionOperation =>
+          order.request.input.map(value => Consequence.success(value.value))
+            .getOrElse(N.invalid("Validation scope lineage business input is absent"))
+        case _ => N.invalid("Validation scope lineage is not the original GoalTask WorkOrder")
+      }
+      revision <- work.sourceRevision.toLongOption.map(Consequence.success)
+        .getOrElse(N.invalid("Validation scope lineage source revision is invalid"))
+      checkpoint <- N.loadPayloadC(storage, current.identity.value, revision, core)
+      _ <- if (retained.current == current && receipt.identity.value == old && receipt.nextRevision == entry.revision &&
+          receipt.sourceRevision == frontier.revision && receipt.nextRevision == receipt.sourceRevision.next &&
+          correction.frontierRevision == frontier.revision.value && frontier.identity == current.identity &&
+          frontier.history == current.history.take(frontier.history.size) &&
+          current.history.find(_.revision == entry.revision).contains(entry) &&
+          correction.componentInstance == target.componentInstance && correction.sessionId == target.sessionId &&
+          correction.participant == target.participant && correction.oldContinuationId == old && correction.issued == wire &&
+          checkpoint == correction.business && work.session == target.sessionId && work.state == checkpoint.state &&
+          Set("Implement", "Repair")(work.kind) && work.kind == checkpoint.state.stage &&
+          checkpoint.validationContinuation.contains(direction) && checkpoint.state.input == expected &&
+          checkpoint.root == target.business.root && checkpoint.branch == target.business.branch &&
+          checkpoint.baseHead == target.business.baseHead && correction.submissionConditions.isEmpty)
+        Consequence.unit else N.invalid("Validation scope lineage receipt crosses its native owner, issue or preceding input")
+      next <- correctedInputC(expected, correction.additionalOwnedPaths)
+    } yield next }
+  } yield effective
+  }
+
   def resumeC(h: Host, storage: WorkflowComponentStorage, current: InstanceRecord,
     core: ActionCall.Core): Consequence[InstanceRecord] = for {
     saved <- _checkpoint_c(storage, current, core)
@@ -152,9 +275,9 @@ private[smworkflow] object DelegateTaskScopeCorrection {
     _ <- if (input.ownedPaths.forall(h.paths.contains)) Consequence.unit else N.invalid("Corrected host ownership changed")
     original = saved.target.business
     // Preserve base, generation, repair counts, results and old source references.
-    state = original.state.copy(input = if (saved.target.additionalOwnedPaths.nonEmpty) input.copy(sourceReferences =
+    state = original.state.copy(input = if (!preserveOriginalSources && saved.target.additionalOwnedPaths.nonEmpty) input.copy(sourceReferences =
       (input.sourceReferences :+ saved.reference).distinct) else input,
-      evidenceReferences = if (saved.target.submissionConditions.nonEmpty)
+      evidenceReferences = if (!preserveOriginalSources && saved.target.submissionConditions.nonEmpty)
         (original.state.evidenceReferences :+ saved.reference).distinct else original.state.evidenceReferences)
     unrelated = original.unrelated.map(_.filterNot(path => S.owned(path.path, saved.target.additionalOwnedPaths) &&
       path.renamedFrom.forall(S.owned(_, saved.target.additionalOwnedPaths))))
@@ -167,9 +290,7 @@ private[smworkflow] object DelegateTaskScopeCorrection {
 
   private final class Operation(correct: Boolean, h: Host, definition: DefinitionBinding,
     selections: ProfileStartAdmission.CallScopedSelectionPort) extends spec.OperationDefinition {
-    val specification = NativeWorkflowDescriptionMetadata.operation(if (correct)
-      SmWorkflowComponent.DelegateTaskServiceService.CorrectDelegateTaskScopeOperation
-      else SmWorkflowComponent.DelegateTaskServiceService.DescribeDelegateTaskScopeCorrectionOperation)
+    val specification = NativeWorkflowDescriptionMetadata.operation(declaredOperation(correct))
     def createOperationRequest(incoming: Request): Consequence[OperationRequest] = Consequence.success(new CommandAction {
       val request = incoming
       override def commandExecutionMode = CommandExecutionMode.Sync
@@ -178,7 +299,7 @@ private[smworkflow] object DelegateTaskScopeCorrection {
         def execute(): Consequence[OperationResponse] = for {
           input <- if (correct) inputForCallC(incoming, core)
             .map[Either[V.DelegateTaskScopeCorrectionInput, V.DelegateTaskScopeCorrectionDescriptionInput]](Left(_))
-            else NativeWorkflowOperationInput.valueC[V.DelegateTaskScopeCorrectionDescriptionInput](incoming, "input")
+            else descriptionInputC(incoming)
               .map[Either[V.DelegateTaskScopeCorrectionInput, V.DelegateTaskScopeCorrectionDescriptionInput]](Right(_))
           session = input.fold(_.sessionId, _.sessionId)
           old = input.fold(_.oldContinuationId, _.oldContinuationId)
@@ -236,8 +357,19 @@ private[smworkflow] object DelegateTaskScopeCorrection {
   }
   private def _output_c(target: Target, outcome: String): Consequence[OperationResponse] = for {
     input <- correctedInputC(target.business.state.input, target.additionalOwnedPaths, target.submissionConditions)
-  } yield NativeWorkflowOperationOutput.response(V.DelegateTaskScopeCorrectionView(target.sessionId, outcome,
+  } yield response(target, outcome,
     "Original issue and partial work are retained. External effects remain unchanged and unknown effects remain UNKNOWN. " +
       "All condition identities remain adopted; later acceptance conditions remain pending. Correction executes no work; ordinary Advance issues the amended same-purpose request.",
-    target.asJson.noSpaces, input.ownedPaths))
+    input.ownedPaths)
+}
+
+/** Stable GoalTask owner; wire DTOs are translated only at the boundary. */
+private[smworkflow] object GoalTaskScopeCorrection {
+  private val owner = ScopeCorrectionNativeOwner.goalTask(
+    SmWorkflowComponent.GoalTaskServiceService.DescribeGoalTaskScopeCorrectionOperation,
+    SmWorkflowComponent.GoalTaskServiceService.CorrectGoalTaskScopeOperation)
+  export owner.*
+  def internalInput(input: V.GoalTaskScopeCorrectionInput): V.DelegateTaskScopeCorrectionInput =
+    V.DelegateTaskScopeCorrectionInput(input.sessionId, input.oldContinuationId, input.target, input.selectionId,
+      input.participant, input.idempotencyKey, input.reference)
 }

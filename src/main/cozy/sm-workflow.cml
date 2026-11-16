@@ -191,6 +191,20 @@ org.simplemodeling.textus.smworkflow
 | phaseIdentity      | string | 1            |
 | repositoryIdentity | string | 1            |
 
+## GoalPhaseStartIntent
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| plan | string | 1 |
+| selectionId | string | 1 |
+| participant | string | 1 |
+| origin | string | 1 |
+| idempotencyKey | string | 1 |
+
 ## GoalPhaseStartResult
 
 ### EXTENDS
@@ -8844,6 +8858,7 @@ GoalPhaseStartInput
 | input | GoalPhaseStartInput | 1 |
 | sessionId | string | ? |
 | profile | string | ? |
+| intent | GoalPhaseStartIntent | ? |
 
 ##### OUTPUT
 
@@ -11501,6 +11516,16 @@ Explicit ad hoc Task request selection metadata and absolute local file: URI ref
 | idempotencyKey | string | 1 |
 | selectionCollection | string | 1 |
 
+## GoalTaskStartIntent
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| origin | string | 1 |
+
 ## WorkflowSplitStartPreparationInput
 
 - input-kind :: COMMAND
@@ -12552,6 +12577,37 @@ WorkflowDelegateTaskStartPreparationInput
 | name | type | multiplicity |
 |------+------|--------------|
 | input | WorkflowDelegateTaskStartPreparationInput | 1 |
+| preparationFormat | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowPreparationResult
+
+#### prepareGoalTaskScopeCorrection
+
+##### DESCRIPTION
+
+Default compact format retains only the derived importer through configured CommonEvidence/File authority and returns its confirmed reference. Use readPreparedImport with retainedImport for complete importer data. Explicit --preparationFormat legacy-full preserves historical complete output without retention. Missing setup/storage never falls back to full bodies. Preparation is prepared, never check acceptance.
+
+Passively prepare the complete scope-correction input for exact attributable Human selection; the import alone grants no authority.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+WorkflowGoalTaskScopeCorrectionPreparationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowGoalTaskScopeCorrectionPreparationInput | 1 |
 | preparationFormat | string | ? |
 
 ##### OUTPUT
@@ -13816,6 +13872,14 @@ operation = GoalTaskService.submitGoalTaskWorkResult
 
 operation = GoalTaskService.resolveGoalTaskDiagnosticInformation
 
+#### describeGoalTaskScopeCorrection
+
+operation = GoalTaskService.describeGoalTaskScopeCorrection
+
+#### correctGoalTaskScope
+
+operation = GoalTaskService.correctGoalTaskScope
+
 #### describeGoalTaskRepairContinuation
 
 operation = GoalTaskService.describeGoalTaskRepairContinuation
@@ -13885,6 +13949,64 @@ on = task-accepted
 Ad hoc single-repository development from journal or direct instructions. Native WorkOrder, shared validation/repair, integrated independent Task review and actual typed selected local commit own completion. Push and publication are separate effects.
 
 ### OPERATION
+
+#### describeGoalTaskScopeCorrection
+
+##### DESCRIPTION
+
+Describe additive owned paths for the same unclaimed implementation or Repair. Condition timing, existing authority and history remain unchanged. Passive description changes no Session or effect.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalTaskScopeCorrectionDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalTaskScopeCorrectionDescriptionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalTaskScopeCorrectionView
+
+#### correctGoalTaskScope
+
+##### DESCRIPTION
+
+Admit an exact independently selected same-purpose scope correction. Retain the immutable old issue and all results, base and repair counts; retire it through managed supersession. Only ordinary Advance issues the amended work. Unknown external effects remain unknown.
+Supply exactly one of input or inputResource; the Resource form reads the complete selected correction from an authorized local file when retained check captures exceed CLI argument limits.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalTaskScopeCorrectionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalTaskScopeCorrectionInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalTaskScopeCorrectionView
 
 #### describeGoalTaskRepairContinuation
 
@@ -14108,6 +14230,7 @@ GoalTaskInput
 | participant | string | 1 |
 | idempotencyKey | string | 1 |
 | sessionId | string | ? |
+| intent | GoalTaskStartIntent | ? |
 
 ##### OUTPUT
 
@@ -15625,6 +15748,73 @@ ForceCloseWorkflowInput
 ###### TYPE
 
 WorkflowForceClosureView
+
+# VALUE
+
+## GoalTaskScopeCorrectionDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| oldContinuationId | string | 1 |
+| additionalOwnedPaths | string | * |
+
+# VALUE
+
+## GoalTaskScopeCorrectionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| oldContinuationId | string | 1 |
+| target | string | 1 |
+| selectionId | string | 1 |
+| participant | string | 1 |
+| idempotencyKey | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+
+# VALUE
+
+## GoalTaskScopeCorrectionView
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| target | string | 1 |
+| ownedPaths | string | * |
+
+# VALUE
+
+## WorkflowGoalTaskScopeCorrectionPreparationInput
+
+- input-kind :: COMMAND
+
+### DESCRIPTION
+
+Explicit ad hoc Task request selection metadata and absolute local file: URI reference. Supplied facts authenticate no origin and grant no effect.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | string | 1 |
+| selectionId | string | 1 |
+| participant | string | 1 |
+| origin | string | 1 |
+| idempotencyKey | string | 1 |
+| selectionCollection | string | 1 |
 
 # VALUE
 

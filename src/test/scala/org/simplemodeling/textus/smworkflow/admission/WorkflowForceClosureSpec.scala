@@ -136,6 +136,9 @@ final class WorkflowForceClosureSpec extends AnyWordSpec with GivenWhenThen with
         after.revision shouldBe before.revision.next
         after.suspension shouldBe None
         after.lifecycle shouldBe Lifecycle.Completed
+        call("GoalTaskService", "describeGoalTaskScopeCorrection", List(Property("input",
+          V.GoalTaskScopeCorrectionDescriptionInput(started.sessionId, pending.issuedWorkContext.get.continuationId,
+            Vector("docs/extra.md")), None))).isSuccess shouldBe false
         take(GoalPhaseNativeObservation.projectC(after)).workflowState shouldBe "forced-closed"
         take(GoalPhaseNativeObservation.projectC(after)).attention shouldBe "unfinished"
         after.correlation shouldBe before.correlation

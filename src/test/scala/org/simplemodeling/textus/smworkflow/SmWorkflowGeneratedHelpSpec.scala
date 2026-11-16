@@ -40,7 +40,7 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
       "prepareGoalStart", "prepareRepositoryStart", "prepareSplitStart", "prepareRepositoryEffect", "prepareAuthority", "prepareEvidence", "readPreparedImport",
       "prepareExecution", "recordExecution", "prepareCallerInformation", "recordCallerInformation",
       "prepareStandaloneFixStart", "prepareStandaloneReviewFixStart", "prepareGoalTaskStart", "prepareTaskFixDelivery", "prepareTaskFixAdoption",
-      "prepareDelegateTaskStart", "prepareDelegateTaskScopeCorrection", "prepareDelegateTaskCandidateContinuation"
+      "prepareDelegateTaskStart", "prepareDelegateTaskScopeCorrection", "prepareGoalTaskScopeCorrection", "prepareDelegateTaskCandidateContinuation"
     ),
     SmWorkflowComponent.GoalPhaseServiceService -> Vector(
       "startGoalPhase", "advanceGoalPhase", "submitGoalPhaseWorkResult", "submitGoalPhaseOrderedDecision", "submitGoalPhaseFindingRecording",
@@ -86,7 +86,7 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
     SmWorkflowComponent.StandaloneFixSemanticAdmissionServiceService -> Vector("admitStandaloneFixReview"),
     SmWorkflowComponent.GoalTaskServiceService -> Vector("startGoalTask", "advanceGoalTask", "submitGoalTaskWorkResult", "resolveGoalTaskDiagnosticInformation",
       "describeGoalTaskMalformedIssuedWorkRecovery", "recoverGoalTaskMalformedIssuedWork",
-      "describeGoalTaskRepairContinuation", "resumeGoalTaskRepair",
+      "describeGoalTaskScopeCorrection", "correctGoalTaskScope", "describeGoalTaskRepairContinuation", "resumeGoalTaskRepair",
       "describeGoalTaskValidationContinuation", "adoptGoalTaskValidationContinuation",
       "describeGoalTaskUnverifiedValidationContinuation", "adoptGoalTaskUnverifiedValidationContinuation"),
     SmWorkflowComponent.DelegateTaskServiceService -> Vector("startDelegateTask", "advanceDelegateTask",

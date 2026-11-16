@@ -91,8 +91,13 @@ private[admission] trait ThreeWorkflowDirectOperationFixture extends Matchers wi
     declaration.instances, declaration.continuations)
   protected val typedStart = F.record
   protected val startWire = NativeWorkflowOperationInputFixture.start(F.input)
-  protected def _business_value[A: org.goldenport.convert.ValueReader](value: OperationResponse): A = value match {
+  private val _split_details = new scala.util.DynamicVariable[Option[Record => Record]](None)
+  protected def _control_value[A: org.goldenport.convert.ValueReader](value: OperationResponse): A = value match {
     case OperationResponse.RecordResponse(record) => take(summon[org.goldenport.convert.ValueReader[A]].readC(record))
+    case other => fail(s"Expected declared public business value: $other")
+  }
+  protected def _business_value[A: org.goldenport.convert.ValueReader](value: OperationResponse): A = value match {
+    case OperationResponse.RecordResponse(record) => take(summon[org.goldenport.convert.ValueReader[A]].readC(_split_details.value.fold(record)(_(record))))
     case other => fail(s"Expected declared public business value: $other")
   }
   protected final class Setup(val core: ActionCall.Core, task: Setup => Consequence[Unit]) extends ProcedureActionCall {
@@ -336,7 +341,49 @@ private[admission] trait ThreeWorkflowDirectOperationFixture extends Matchers wi
       component.mcpReadyOperations shouldBe ThreeWorkflowLauncherAssembly.publishedMcpOperations
       component.mcpReadyOperations should contain allOf (
         "GoalPhaseService.describeGoalPhaseValidationRepair", "GoalPhaseService.adoptGoalPhaseValidationRepair")
-      task(owner, component, actor, prepare)
+      def fullDetail(record: Record): Record = {
+        val work = record.getRecord("retainedWork") match {
+          case Some(reference) =>
+            val retained = _control_value[V.WorkflowRetainedWorkReadResult](take(owner.executeOperationResponseInContext(
+              Request.of(component = component.name, service = WorkflowRetainedWork.serviceName,
+                operation = WorkflowRetainedWork.readOperation, properties = List(Property("input", reference, None))), actor))).response
+            record.getRecord("journalRecording") match {
+              case Some(recording) => Record.createFull(retained.fields.filterNot(_.key == "journalRecording")
+                .map(value => value.key -> value.value.single)) ++ Record.data("journalRecording" -> recording)
+              case None => retained
+            }
+          case None => record
+        }
+        val materials = record.getAny("retainedMaterials").collect { case values: Seq[?] =>
+          values.collect { case value: Record => take(V.WorkflowRetainedFieldReference.createC(value)) }.toVector
+        }.getOrElse(Vector.empty)
+        val selected = materials.foldLeft(work) { (prior, field) =>
+          val detail = _control_value[V.WorkflowRetainedSnapshotReadResult](take(owner.executeOperationResponseInContext(
+            Request.of(component = component.name, service = WorkflowRetainedWork.serviceName,
+              operation = WorkflowRetainedSnapshot.readOperation,
+              properties = List(Property("input", field.reference, None))), actor)))
+          val overlay = record.getRecord("controlSummary").flatMap(_.getRecord(field.fieldName)).getOrElse(Record.empty)
+          val restored = Record.createFull(detail.material.fields.filterNot(value => overlay.getAny(value.key).nonEmpty)
+            .map(value => value.key -> value.value.single)) ++ overlay
+          Record.createFull(prior.fields.filterNot(_.key == field.fieldName).map(value => value.key -> value.value.single)) ++
+            Record.data(field.fieldName -> restored)
+        }
+        val expanded = take(WorkflowRetainedSnapshot.expandTextC(take(selected.toJsonStringC), {
+          case reference: org.goldenport.cncf.resource.ResourceReference.Url if reference.scheme == "sm-workflow-snapshot" =>
+            WorkflowRetainedSnapshot.decodeResourceC(reference.uri.toString).flatMap { snapshot =>
+              owner.executeOperationResponseInContext(Request.of(component = component.name, service = WorkflowRetainedWork.serviceName,
+                operation = WorkflowRetainedSnapshot.readOperation,
+                properties = List(Property("input", WorkflowRetainedSnapshot.publicReference(snapshot), None))), actor)
+                .flatMap {
+                  case OperationResponse.RecordResponse(value) => V.WorkflowRetainedSnapshotReadResult.createC(value).flatMap(_.material.toJsonStringC)
+                  case _ => Consequence.stateConflict("Explicit fixture detail read returned no business record")
+                }
+            }
+          case _ => Consequence.stateConflict("Legacy fixture detail requires an actual native snapshot reference")
+        }))
+        take(NativeWorkflowOperationInput.decodeValueC[Record](expanded, "response"))
+      }
+      _split_details.withValue(Some(fullDetail))(task(owner, component, actor, prepare))
     } finally {
       bootstrap.foreach(value => take(value.shutdownC()))
       if (embeddedhandle.nonEmpty) embeddedhandle.foreach(_.close())

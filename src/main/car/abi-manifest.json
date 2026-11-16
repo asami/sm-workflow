@@ -905,6 +905,13 @@
         },
         {
           "service": "NativeWorkflowPreparationService",
+          "name": "prepareGoalTaskScopeCorrection",
+          "kind": "COMMAND",
+          "input": "WorkflowGoalTaskScopeCorrectionPreparationInput",
+          "output": "WorkflowPreparationResult"
+        },
+        {
+          "service": "NativeWorkflowPreparationService",
           "name": "prepareDelegateTaskScopeCorrection",
           "kind": "COMMAND",
           "input": "WorkflowDelegateTaskScopeCorrectionPreparationInput",
@@ -918,11 +925,25 @@
           "output": "GoalPhaseAdvanceResult"
         },
         {
+          "service": "GoalTaskService",
+          "name": "describeGoalTaskScopeCorrection",
+          "kind": "COMMAND",
+          "input": "GoalTaskScopeCorrectionDescriptionInput",
+          "output": "GoalTaskScopeCorrectionView"
+        },
+        {
           "service": "DelegateTaskService",
           "name": "describeDelegateTaskScopeCorrection",
           "kind": "COMMAND",
           "input": "DelegateTaskScopeCorrectionDescriptionInput",
           "output": "DelegateTaskScopeCorrectionView"
+        },
+        {
+          "service": "GoalTaskService",
+          "name": "correctGoalTaskScope",
+          "kind": "COMMAND",
+          "input": "GoalTaskScopeCorrectionInput",
+          "output": "GoalTaskScopeCorrectionView"
         },
         {
           "service": "DelegateTaskService",
@@ -1546,6 +1567,42 @@
             },
             {
               "name": "repositoryIdentity",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalPhaseStartIntent",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "plan",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "origin",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
               "type": "string",
               "multiplicity": "1",
               "required": true
@@ -4164,6 +4221,18 @@
             },
             {
               "name": "selectionCollection",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "GoalTaskStartIntent",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "origin",
               "type": "string",
               "multiplicity": "1",
               "required": true
@@ -8550,6 +8619,30 @@
           ]
         },
         {
+          "name": "GoalTaskScopeCorrectionDescriptionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "oldContinuationId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "additionalOwnedPaths",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
           "name": "DelegateTaskScopeCorrectionDescriptionInput",
           "kind": "value",
           "fields": [
@@ -8576,6 +8669,54 @@
               "type": "string",
               "multiplicity": "*",
               "required": false
+            }
+          ]
+        },
+        {
+          "name": "GoalTaskScopeCorrectionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "oldContinuationId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
             }
           ]
         },
@@ -8628,6 +8769,42 @@
           ]
         },
         {
+          "name": "GoalTaskScopeCorrectionView",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "ownedPaths",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
           "name": "DelegateTaskScopeCorrectionView",
           "kind": "value",
           "fields": [
@@ -8660,6 +8837,48 @@
               "type": "string",
               "multiplicity": "*",
               "required": false
+            }
+          ]
+        },
+        {
+          "name": "WorkflowGoalTaskScopeCorrectionPreparationInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "input",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "origin",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "idempotencyKey",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "selectionCollection",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
             }
           ]
         },

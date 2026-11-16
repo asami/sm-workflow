@@ -46,6 +46,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     "DelegateTaskDeliveryService.observeDelegateTaskDelivery", "DelegateTaskDeliveryService.describeDelegateTaskAdoption",
     "GoalTaskService.startGoalTask", "GoalTaskService.advanceGoalTask",
     "GoalTaskService.submitGoalTaskWorkResult", "GoalTaskService.resolveGoalTaskDiagnosticInformation",
+    "GoalTaskService.describeGoalTaskScopeCorrection", "GoalTaskService.correctGoalTaskScope",
     "GoalTaskService.describeGoalTaskValidationContinuation", "GoalTaskService.adoptGoalTaskValidationContinuation",
     "GoalTaskService.describeGoalTaskRepairContinuation", "GoalTaskService.resumeGoalTaskRepair",
     "GoalTaskService.describeGoalTaskMalformedIssuedWorkRecovery", "GoalTaskService.recoverGoalTaskMalformedIssuedWork",

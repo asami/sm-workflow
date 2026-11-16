@@ -35,7 +35,7 @@ private[smworkflow] object StandardWorkflowRuntime {
 
   def bindForCallC(creation: ComponentCreate, parameters: ComponentInitializationParameters,
     request: Request, core: ActionCall.Core): Consequence[Vector[spec.ServiceDefinition]] = for {
-    shared <- sharedC(creation, parameters)
+    shared <- sharedC(creation, parameters, core.executionContext)
     services <- request.service match {
       case Some("WorkflowRetainedWorkService") => Consequence.success(Vector(WorkflowRetainedWork.bind))
       case Some("SplitPhaseService") => splitC(creation, parameters, shared, core).map(Vector(_))
@@ -66,7 +66,8 @@ private[smworkflow] object StandardWorkflowRuntime {
     }
   } yield services
 
-  private def sharedC(creation: ComponentCreate, parameters: ComponentInitializationParameters): Consequence[Shared] = for {
+  private def sharedC(creation: ComponentCreate, parameters: ComponentInitializationParameters,
+    context: ExecutionContext): Consequence[Shared] = for {
     persistence <- GoalPhaseRuntimeParameters.decodeC(parameters)
     reader <- NativeExternalEvidence.bindC(creation.configuration, persistence)
     profiles <- WorkflowExecutionProfileParameters.resolveC(parameters)
@@ -82,7 +83,7 @@ private[smworkflow] object StandardWorkflowRuntime {
     hygiene <- CommitHygiene.resolveC(parameters)
     records <- parameters.resolve(CompletionRecords.declaration).map(_.value)
     journal <- DevelopmentJournal.resolvePolicyC(parameters, persistence.instances, persistence.continuations)
-    evidence <- CommonEvidence.resolvePolicyC(parameters, Vector(persistence.instances, persistence.continuations) ++ journal.map(_.collection))
+    evidence <- CommonEvidence.resolveForCallC(parameters, Vector(persistence.instances, persistence.continuations) ++ journal.map(_.collection), context, creation.configuration.configuration.values)
   } yield Shared(persistence, new ThreeWorkflowExternalEvidencePorts(reader), profiles, origin, journal, evidence,
     operatingcontext, publication, hygiene, records, WorkflowValidationInitialization.Context(creation.configuration, parameters))
 
@@ -115,8 +116,10 @@ private[smworkflow] object StandardWorkflowRuntime {
       else reconstruction.map(value => Consequence.success(Some(value.sessionId))).getOrElse(
         ownerSession.map(value => Consequence.success(Some(value))).getOrElse(goalSessionC(request).map(Some(_))))
     loaded <- if (request.operation == "startGoalPhase") for {
-      business <- NativeWorkflowOperationInput.recordC(request, "input").flatMap(
-        NativeWorkflowStartInput.fromRecordC(NativeWorkflowStartInput.Kind.GoalPhase, _))
+      input <- NativeWorkflowOperationInput.recordC(request, "input")
+      intent <- NativeWorkflowOperationInput.optionalValueC[org.simplemodeling.textus.smworkflow.value.GoalPhaseStartIntent](request, "intent")
+      _ <- intent.fold(Consequence.unit)(GoalPhaseStartPreparation.prepareC(core, input, _))
+      business <- NativeWorkflowStartInput.fromRecordC(NativeWorkflowStartInput.Kind.GoalPhase, input)
       records <- GoalPhaseInputRecordReadPolicy.decodeC(creation.configuration)
       selected <- new ProfileSelectionDataStorePort(records.storeName,
         records.collections.find(_._1 == GoalPhaseInputRecordReadPolicy.Purpose.Selection).get._2)
@@ -449,6 +452,11 @@ private[smworkflow] object StandardWorkflowRuntime {
     paths <- input.hcursor.get[Vector[String]]("ownedPaths").fold(e => invalid(e.message), Consequence.success)
     checkIds <- input.hcursor.get[Vector[String]]("checks").fold(e => invalid(e.message), Consequence.success)
     checks <- standardChecksC(checkIds)
+    proposed <- if (request.service.contains("GoalTaskService")) _goal_scope_paths_c(request, core)
+      else Consequence.success(Vector.empty[String])
+    hostPaths = (paths ++ proposed).distinct
+    _ <- if (proposed.isEmpty || GoalPhasePurposeRepair.paths(hostPaths)) Consequence.unit
+      else invalid("Scope inventory must contain valid repository-relative paths")
     destination = delegation && (retained.flatMap(_.state.input.delegation).exists(_.role == "destination") ||
       input.hcursor.downField("delegation").get[String]("role").contains("destination"))
     plan <- GoalPhaseInputRecordReadPolicy.storedValue(creation.configuration.configuration.values,
@@ -465,7 +473,7 @@ private[smworkflow] object StandardWorkflowRuntime {
       else invalid("Bounded host differs from the original native Session source")
     p = shared.persistence
     host = BoundedWorkRuntime.Host(p.configuration, p.instances, p.continuations, repository, target.root.toString,
-      target.localBranch, paths, checks, shared.profiles, shared.origin, Some(shared.ports.goalReview), shared.evidence, shared.journal,
+      target.localBranch, hostPaths, checks, shared.profiles, shared.origin, Some(shared.ports.goalReview), shared.evidence, shared.journal,
       shared.publication, shared.hygienemode, shared.completionrecords, Some(shared.operatingcontext),
       development.filter(p => p.dependencyWorkEdge.exists(id => p.definition.edges.exists(e => e.identity == id && e.provider.repository == repository))))
     records <- GoalPhaseInputRecordReadPolicy.decodeC(creation.configuration)
@@ -481,11 +489,27 @@ private[smworkflow] object StandardWorkflowRuntime {
   private def _bounded_session_c(request: Request, core: ActionCall.Core): Consequence[String] =
     if (request.operation == "adoptGoalTaskValidationContinuation") GoalTaskValidationContinuation.inputForCallC(request, core).map(_.sessionId)
     else if (request.operation == "correctDelegateTaskScope") DelegateTaskScopeCorrection.inputForCallC(request, core).map(_.sessionId)
+    else if (request.operation == "correctGoalTaskScope") GoalTaskScopeCorrection.inputForCallC(request, core).map(_.sessionId)
     else NativeWorkflowOperationInput.optionalTextC(request, "sessionId").flatMap {
       case Some(value) => Consequence.success(value)
       case None => NativeWorkflowOperationInput.recordC(request, "input").flatMap(record =>
         record.getString("sessionId").map(Consequence.success).getOrElse(invalid("Bounded input requires its actual sessionId")))
     }
+
+  /** A proposal only widens this call's inspection host. Mutation still requires
+    * the independent complete-input selection and the observed native frontier;
+    * Git selections continue to use the previously admitted retained inventory.
+    */
+  private def _goal_scope_paths_c(request: Request, core: ActionCall.Core): Consequence[Vector[String]] =
+    if (request.operation == "describeGoalTaskScopeCorrection")
+      NativeWorkflowOperationInput.valueC[org.simplemodeling.textus.smworkflow.value.GoalTaskScopeCorrectionDescriptionInput](request, "input")
+        .map(_.additionalOwnedPaths.toVector)
+    else if (request.operation == "correctGoalTaskScope") for {
+      input <- GoalTaskScopeCorrection.inputForCallC(request, core)
+      _ <- GoalTaskScopeCorrection.selectionInputC(input)
+      target <- GoalTaskScopeCorrection.targetC(input.target)
+    } yield target.additionalOwnedPaths
+    else Consequence.success(Vector.empty[String])
 
   /** Read the normally admitted typed host plan's repository data, not a
     * second command driver, environment override or fabricated Git target.

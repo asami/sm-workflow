@@ -21,10 +21,10 @@ final class RepositorySyncRecordedPurposeSpec extends AnyWordSpec with Matchers 
   private val files = Vector("docs/a.md", "docs/b.md").map(path =>
     P.File(path, "M", " ", Some("original\n"), Some(path + " changed\n"), Some(path + " changed\n"), None))
   private def task(id: String, paths: Vector[String], dependencies: Vector[String] = Vector.empty): BoundedWorkRuntime.Payload = {
-    val input = S.Input("fixture-repository", id, "Document " + id, Vector("docs"), Vector.empty, Vector.empty,
+    val input = S.Input("fixture-repository", id, "Document " + id, Vector("docs"), Vector("test"), Vector("fixture-condition"),
       Vector(ContextReference("original-instruction-" + id, "1")), false, kind = "documentation", scalaLint = "off",
       task = Some(S.Task("direct-instruction", dependencies)))
-    val initial = take(S.startC(input, "fixture-participant", Vector.empty))
+    val initial = take(S.startC(input, "fixture-participant", Vector(GoalPhaseNativeValidation.Check("test", 1))))
     BoundedWorkRuntime.Payload(initial.copy(stage = "Assess", semanticReference = Some(ContextReference("implementation-" + id, "1")),
       candidate = Some(S.Candidate(head, tree, paths, "actual fixture candidate projection"))), "/fixture/repository", "main", head)
   }

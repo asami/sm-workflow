@@ -1,6 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
+import io.circe.syntax.*
 import java.nio.file.{Files, Path}
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{ComponentCreate, ComponentOrigin}
@@ -136,24 +137,51 @@ final class StandardWorkflowStartOperationSpec extends AnyWordSpec with Matchers
         first.steps.head.copy(purpose = "Implement the actual next behavior", ownedPaths = Vector("src/Next.scala"))))
       val sessions = Vector("standard-session-7", "standard-session-8")
       When("the ordinary public Start Operation receives each specification-selected business input and complete Plan")
-      _with_runtime_(directory, "Goal") { (owner, component, actor, prepare) =>
+      _with_runtime_(directory, "Goal", hostParameters = Map(
+        "textus.resource.url.file.roots" -> directory.toString)) { (owner, component, actor, prepare) =>
         take(component.initializationParameters.resolve(ThreeWorkflowRuntimeParameters.definition)).value shouldBe None
         prepare(call => call.setupC(_setup_commands_(directory, "Goal").size, scenario = "Goal"))
-        Vector(first,second).zip(sessions).foreach { (plan,session) =>
+        val branchRef = directory.resolve("repository/.git/refs/heads/main")
+        val originalHead = Files.readString(branchRef)
+        Vector(first,second).zip(sessions).zipWithIndex.foreach { case ((plan,session), index) =>
           val input = V.GoalPhaseStartInput(plan.phase, plan.repository)
           val selection = _goal_selection_(input, plan.identity, "start-" + plan.identity)
-          prepare(call => for {
+          if (index == 1) prepare(call => for {
             selectionWire <- ProfileSelectionJsonV1.encodeStorageC(selection)
             planWire <- GoalPhaseSelectedPlanJsonV1.encodeStorageC(GoalPhaseNativeRun.SelectedPlan(plan.identity, "participant", plan))
             _ <- call.createC("goal_selection", NativeWorkflowStartBusinessKey(NativeWorkflowStartInput.Goal(input), "participant"),
               Record.data(ProfileSelectionJsonV1.storageField -> selectionWire))
             _ <- call.createC("goal_plans", plan.identity, Record.data(GoalPhaseSelectedPlanJsonV1.storageField -> planWire))
           } yield ())
+          val planPath = directory.resolve("selected-plan-" + index + ".json")
+          Files.writeString(planPath, plan.asJson.noSpaces)
+          val intent = V.GoalPhaseStartIntent(planPath.toUri.toASCIIString, plan.identity,
+            "participant", "ExplicitHuman", "start-" + plan.identity)
+          val properties = List(Property("input", input, None), Property("sessionId", session, None)) ++
+            (if (index == 0) List(Property("intent", intent, None)) else Nil)
           val result = read_value[V.GoalPhaseStartResult](take(owner.executeOperationResponseInContext(Request.of(
             component = component.name, service = "GoalPhaseService", operation = "startGoalPhase",
-            properties = List(Property("input", input, None), Property("sessionId", session, None))), actor)))
+            properties = properties), actor)))
           result.sessionId shouldBe session
           result.outcome shouldBe "started"
+          Files.exists(directory.resolve("sbt-executions.txt")) shouldBe false
+          Files.readString(branchRef) shouldBe originalHead
+          // Read the actual retained Start before issuing Advance. The selected
+          // Plan must already belong to this Session, not an ambient profile.
+          prepare(call => savedC(call, session).map { payload =>
+            payload.plan shouldBe plan
+          })
+          if (index == 0) {
+            // Repeated preparation reuses the exact records. A different Plan
+            // at the same selection must fail without replacing the first one.
+            prepare(call => GoalPhaseStartPreparation.prepareC(call.core, input.toRecord(), intent))
+            Files.writeString(planPath, plan.copy(revision = "conflicting-revision").asJson.noSpaces)
+            prepare { call =>
+              GoalPhaseStartPreparation.prepareC(call.core, input.toRecord(), intent).isSuccess shouldBe false
+              Consequence.unit
+            }
+            prepare(call => savedC(call, session).map(_.plan shouldBe plan))
+          }
         }
       }
       Then("the reopened runtime retains both actual Plans and Advance issues only the first run's assigned work")

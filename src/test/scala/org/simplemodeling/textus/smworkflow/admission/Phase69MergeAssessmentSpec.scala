@@ -232,8 +232,10 @@ final class Phase69MergeAssessmentSpec extends AnyWordSpec with Matchers with Gi
           component = component.name, service = "RepositorySyncService", operation = "startRepositorySync", properties = startInput), actor)))
         val result = owner.executeOperationResponseInContext(Request.of(component = component.name, service = "RepositorySyncService",
           operation = "advanceRepositorySync", properties = List(Property("sessionId", started.sessionId, None))), actor)
-        result.isSuccess shouldBe false
-        result.toString should include("consumed=docs/local.md,docs/remote.md")
+        val waiting = read_value[V.RepositorySyncAdvanceResult](take(result))
+        waiting.kind shouldBe "Wait"
+        waiting.condition shouldBe Some("ValidationSetupRequired")
+        waiting.message should include("consumed=docs/local.md,docs/remote.md")
         Files.exists(directory.resolve("sbt-executions.txt")) shouldBe false
         Files.exists(directory.resolve("repository/.git/MERGE_HEAD")) shouldBe true
       }

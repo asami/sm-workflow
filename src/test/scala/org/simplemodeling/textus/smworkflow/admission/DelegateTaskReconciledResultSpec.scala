@@ -164,13 +164,21 @@ private[admission] abstract class DelegateTaskReconciledResultFixture extends An
         }
         result.get
     }
-    def advance(id: String): V.DelegateTaskView = value("DelegateTaskService", "advanceDelegateTask",
-      List(Property("sessionId", id, None)), Vector("--sessionId", id))
+    def hydrate(view: V.DelegateTaskView): V.DelegateTaskView =
+      view.retainedMaterials.find(_.fieldName == "state") match {
+        case Some(field) =>
+          val detail = value[V.WorkflowRetainedSnapshotReadResult]("WorkflowRetainedWorkService", "readWorkflowRetainedSnapshot",
+            List(Property("input", field.reference, None)), Vector("--input", _json(field.reference)))
+          view.copy(state = Some(detail.material))
+        case None => view
+      }
+    def advance(id: String): V.DelegateTaskView = hydrate(value("DelegateTaskService", "advanceDelegateTask",
+      List(Property("sessionId", id, None)), Vector("--sessionId", id)))
     def observation(event: String, result: Option[Record] = None, artifact: Option[Record] = None) = V.DelegateTaskObservationInput(
       requester, event, V.WorkflowArtifactReference("specification-transport-" + event, "1"), Some(destination), result, artifact,
       "SPECIFICATION-OWNED observation; no real chat transport, consent, publication or activation claimed")
-    def observe(input: V.DelegateTaskObservationInput): V.DelegateTaskView = value("DelegateTaskDeliveryService",
-      "observeDelegateTaskDelivery", List(Property("input", input, None)), Vector("--input", _json(input)))
+    def observe(input: V.DelegateTaskObservationInput): V.DelegateTaskView = hydrate(value("DelegateTaskDeliveryService",
+      "observeDelegateTaskDelivery", List(Property("input", input, None)), Vector("--input", _json(input))))
     val sent = observe(observation("dispatch-observed"))
     _state(sent).stage shouldBe "AwaitResult"
     var failed = Option.empty[S.State]

@@ -11,6 +11,7 @@ import org.goldenport.Consequence
 import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.config.{ComponentInitializationParameters, ComponentParameterDecoder, ComponentParameterKey}
+import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datastore.{ComponentDataStore, ComponentRecordStorage, DataStore, QueryDirective}
 import org.goldenport.cncf.workflow.ContextReference
 import org.goldenport.cncf.workspace.*
@@ -82,6 +83,56 @@ private[smworkflow] object CommonEvidence {
     else Consequence.configurationInvalid("Evidence requires a separate managed collection and canonical File target")
   def resolvePolicyC(parameters: ComponentInitializationParameters, forbidden: Vector[DataStore.CollectionId]): Consequence[Option[Policy]] =
     parameters.resolve(declaration).flatMap(p => validatePolicyC(p.value, forbidden).map(_ => p.value))
+
+  // The default is usable only when the actual host has admitted both owners.
+  // In particular, an explicitly supplied storage or process plan is never
+  // amended here, and an explicit evidence policy always takes precedence.
+  private val _default_collection = "smworkflow-local-entity_collection-ec1_10_smworkflow_5_local_15_common_evidence-0-stable"
+  private[admission] def defaultPolicy(storage: Json, process: Json): Option[Policy] = {
+    val component = SmWorkflowComponent.componentId.name
+    def rows(json: Json, key: String) = json.hcursor.get[Vector[Json]](key).getOrElse(Vector.empty)
+    val records = rows(storage, "records").exists(row =>
+      row.hcursor.get[String]("componentId").contains(component) &&
+      row.hcursor.get[String]("storeName").contains("workflow") &&
+      row.hcursor.get[String]("collection").contains(_default_collection))
+    val workspace = rows(process, "workspaces").exists(row =>
+      row.hcursor.get[String]("identity").contains("sm-workflow-repository") &&
+      row.hcursor.get[String]("root").toOption.exists { root =>
+        try { val path = java.nio.file.Paths.get(root); path.isAbsolute && path.normalize == path }
+        catch { case NonFatal(_) => false }
+      })
+    val grant = rows(process, "workspaceGrants").exists(row =>
+      row.hcursor.get[String]("componentId").contains(component) &&
+      row.hcursor.get[String]("workspaceId").contains("sm-workflow-repository") &&
+      row.hcursor.get[String]("access").contains("manage"))
+    if (records && workspace && grant) EntityCollectionId.parse(_default_collection).toOption.map(id =>
+      Policy("workflow", DataStore.CollectionId.EntityStore(id), "sm-workflow-standard",
+        "sm-workflow-repository", ".codex-workflow/evidence"))
+    else None
+  }
+
+  def resolveForCallC(parameters: ComponentInitializationParameters, forbidden: Vector[DataStore.CollectionId],
+    context: ExecutionContext, hostConfiguration: Map[String, ConfigurationValue]): Consequence[Option[Policy]] = for {
+    configured <- resolvePolicyC(parameters, forbidden)
+    workflowStore <- parameters.resolve(GoalPhaseRuntimeParameters.storeName)
+    selected = configured.orElse {
+      def plan(key: String): Option[Json] = Option(context).flatMap(c => Option(c.resolvedParameters))
+        .flatMap(_.get(key).map(_.value))
+        .orElse(GoalPhaseInputRecordReadPolicy.storedValue(hostConfiguration, key))
+        .flatMap {
+          case ConfigurationValue.StringValue(text) => io.circe.parser.parse(text).toOption
+          case value: ConfigurationValue.ObjectValue => Some(_json(value))
+          case _ => None
+        }
+      for {
+        storage <- plan("textus.subsystem.storage.plan")
+        process <- plan("textus.subsystem.process-execution.plan")
+        policy <- defaultPolicy(storage, process)
+        if policy.storeName == workflowStore.value.getOrElse(GoalPhaseRuntimeParameters.defaultStoreName)
+      } yield policy
+    }
+    _ <- validatePolicyC(selected, forbidden)
+  } yield selected
 
   /** Reversible business source key, not a content digest or authority. */
   def identity(source: Source): String = _prefix + Base64.getUrlEncoder.withoutPadding.encodeToString(

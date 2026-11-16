@@ -228,6 +228,7 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
       val preparation = Map("prepareStandaloneFixStart" -> "WorkflowStandaloneFixStartPreparationInput", "prepareGoalStart" -> "WorkflowGoalStartPreparationInput",
         "prepareStandaloneReviewFixStart" -> "WorkflowStandaloneReviewFixStartPreparationInput", "prepareGoalTaskStart" -> "WorkflowGoalTaskStartPreparationInput",
         "prepareDelegateTaskStart" -> "WorkflowDelegateTaskStartPreparationInput",
+        "prepareGoalTaskScopeCorrection" -> "WorkflowGoalTaskScopeCorrectionPreparationInput",
         "prepareDelegateTaskScopeCorrection" -> "WorkflowDelegateTaskScopeCorrectionPreparationInput",
         "prepareDelegateTaskCandidateContinuation" -> "WorkflowDelegateTaskCandidateContinuationPreparationInput",
         "prepareRepositoryStart" -> "WorkflowRepositoryStartPreparationInput", "prepareSplitStart" -> "WorkflowSplitStartPreparationInput",

@@ -26,7 +26,7 @@ private[smworkflow] object NativeWorkflowCompactResponse {
       val json = DevelopmentOperationalView.json(field.value.single)
       val names = Set("kind", "purpose", "stepIdentity", "rationale", "reason", "choices", "judgmentMode", "stage", "generation",
         "repairCount", "repairLimit", "synchronization", "repository", "metrics", "originalBase", "reviewedCandidate",
-        "evidenceRecording", "assessmentJournal", "documentEffect", "candidate", "sourceRevision", "scopeIdentity", "outcome", "selectedChecks")
+        "evidenceRecording", "assessmentJournal", "effectStatus", "candidate", "sourceRevision", "scopeIdentity", "outcome", "selectedChecks")
       json.asObject.map(fields => field.key -> GoalPhaseNativeMetadata.record(Json.fromJsonObject(fields.filter {
         case (key, value) => names(key) && !value.isNull
       })))

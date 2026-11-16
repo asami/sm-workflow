@@ -10,6 +10,7 @@ lazy val prepareTestArtifacts = taskKey[Unit]("Prepare the fresh component JAR a
 lazy val runtimeTestOnly = inputKey[Unit]("Select canonical metadata, prepare selected runtime requirements and execute exact tests")
 lazy val labelledFullTests = taskKey[Seq[LabelledTests.Selected]]("Canonical default FULL operations")
 lazy val labelledTestSelection = inputKey[Seq[TestDefinition]]("Inspect canonical test selection without executing selected bodies")
+lazy val preparePackagedTestCar = taskKey[Unit]("Build and locate the candidate CAR for selected packaged-runtime tests")
 lazy val prepareFullTests = taskKey[Unit]("Prepare prerequisites required by default FULL metadata")
 lazy val labelledTestExecution = inputKey[Unit]("Internal standard SBT execution for exact metadata-selected suite operations")
 lazy val cncfSourceDirectory = SmWorkflowCncfDevelopmentBuild.resolve(file("."), sys.env.get("TEXTUS_SM_WORKFLOW_CNCF_SOURCE_ROOT"))
@@ -85,8 +86,13 @@ lazy val root = project
     labelledFullTests := LabelledTests.select((Test / fullClasspath).value.files,
       (Test / classDirectory).value, version.value, "FULL", (Test / definedTests).value),
     Test / test / definedTests := labelledFullTests.value.map(_.definition),
+    preparePackagedTestCar := {
+      val car = cozyBuildCar.value
+      IO.write(target.value / "sm-workflow" / "packaged-test-car.txt", car.getCanonicalPath, java.nio.charset.StandardCharsets.UTF_8)
+    },
     prepareFullTests := Def.taskDyn {
-      if (labelledFullTests.value.exists(_.requiresRuntime)) Def.task { cozyPrepareRuntime.value; prepareTestArtifacts.value; () }
+      if (labelledFullTests.value.exists(_.requiresPackagedCar)) Def.task { cozyPrepareRuntime.value; prepareTestArtifacts.value; preparePackagedTestCar.value; () }
+      else if (labelledFullTests.value.exists(_.requiresRuntime)) Def.task { cozyPrepareRuntime.value; prepareTestArtifacts.value; () }
       else Def.task { prepareTestArtifacts.value; () }
     }.value,
     Test / test := (Test / test).dependsOn(prepareFullTests).value,
@@ -122,7 +128,12 @@ lazy val root = project
         val runs = Def.task {
           resultLogger.run(log, execution.value, "Test / labelledTestExecution")
         }
-        val prepared = if (selected.exists(_.requiresRuntime)) Def.taskDyn {
+        val prepared = if (selected.exists(_.requiresPackagedCar)) Def.taskDyn {
+          cozyPrepareRuntime.value
+          prepareTestArtifacts.value
+          preparePackagedTestCar.value
+          runs
+        } else if (selected.exists(_.requiresRuntime)) Def.taskDyn {
           cozyPrepareRuntime.value
           prepareTestArtifacts.value
           runs

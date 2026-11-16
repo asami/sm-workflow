@@ -59,7 +59,9 @@ private[admission] trait NativePreparationOperationFixture extends ThreeWorkflow
     val root = Files.createTempDirectory(Files.createDirectories(
       Path.of("target/sm-workflow/work/normal-preparation").toAbsolutePath), "明示-")
     val parameters = Map("textus.resource.url.file.roots" -> root.toString) ++
-      cap.map(value => "textus.resource.read.max-bytes" -> value.toString)
+      cap.toVector.flatMap(value => Vector(
+        "textus.resource.read.max-bytes" -> value.toString,
+        "workflow.artifact.max-bytes" -> value.toString))
     _with_runtime_(root, "UpToDate", hostParameters = parameters) {
       (owner, component, actor, project) => task(new PreparationEpisode(root, owner, component, actor, project))
     }

@@ -40,6 +40,13 @@ class RuntimeTestDeclaration extends ValidationDeclarationProvider {
       RiskLevel("local"), ReasoningLevel.Standard, reviewRequired = false)))
 }
 
+/** Runtime tests that consume a normally packaged candidate CAR. */
+class PackagedRuntimeTestDeclaration extends RuntimeTestDeclaration {
+  override def declaration: Declaration = super.declaration.copy(executionRequirement =
+    super.declaration.executionRequirement.map(value => value.copy(capabilities =
+      value.capabilities :+ CapabilityRequirement("sm-workflow.packaged-car"))))
+}
+
 /** Separately started/required services remain outside default/FULL.
   * @since Oct. 24, 2026
   * @version Oct. 24, 2026

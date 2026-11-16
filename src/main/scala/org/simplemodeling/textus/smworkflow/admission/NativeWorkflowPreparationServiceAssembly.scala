@@ -54,6 +54,11 @@ private[smworkflow] object NativeWorkflowPreparationServiceAssembly {
           "input" -> input.input, "selection-id" -> input.selectionId, "participant" -> input.participant,
           "origin" -> input.origin, "idempotency-key" -> input.idempotencyKey,
           "selection-collection" -> input.selectionCollection), reader)),
+      new BoundOperation[V.WorkflowGoalTaskScopeCorrectionPreparationInput](_declared.PrepareGoalTaskScopeCorrectionOperation,
+        (input, reader) => NativeGoalTaskScopeCorrectionInput.prepareC(Map(
+          "input" -> input.input, "selection-id" -> input.selectionId, "participant" -> input.participant,
+          "origin" -> input.origin, "idempotency-key" -> input.idempotencyKey,
+          "selection-collection" -> input.selectionCollection), reader)),
       new BoundOperation[V.WorkflowDelegateTaskScopeCorrectionPreparationInput](_declared.PrepareDelegateTaskScopeCorrectionOperation,
         (input, reader) => NativeDelegateTaskScopeCorrectionInput.prepareC(Map(
           "input" -> input.input, "selection-id" -> input.selectionId, "participant" -> input.participant,

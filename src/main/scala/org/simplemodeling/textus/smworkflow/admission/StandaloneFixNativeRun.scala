@@ -161,6 +161,8 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
       } yield value.state.input
       case None if delegation && current.causation.value.startsWith(DelegateTaskScopeCorrection.resumeCause) =>
         DelegateTaskScopeCorrection.retainedInputC(storage, current, selected)
+      case None if task && !delegation && current.causation.value.startsWith(GoalTaskScopeCorrection.resumeCause) =>
+        GoalTaskScopeCorrection.retainedInputC(storage, current, selected)
       case None if task && current.causation.value.startsWith(GoalTaskMalformedIssuedWorkRecovery.resumeCause) =>
         GoalTaskMalformedIssuedWorkRecovery.retainedInputC(storage, current, selected)
       case None =>
@@ -194,6 +196,8 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
       } yield value
       case None if delegation && current.causation.value.startsWith(DelegateTaskScopeCorrection.resumeCause) =>
         DelegateTaskScopeCorrection.retainedPayloadC(storage, current, selected)
+      case None if task && !delegation && current.causation.value.startsWith(GoalTaskScopeCorrection.resumeCause) =>
+        GoalTaskScopeCorrection.retainedPayloadC(storage, current, selected)
       case None if task && current.causation.value.startsWith(GoalTaskMalformedIssuedWorkRecovery.resumeCause) =>
         GoalTaskMalformedIssuedWorkRecovery.retainedPayloadC(storage, current, selected)
       case None =>
@@ -446,12 +450,16 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
           } yield saved
         } else if (delegation && current.causation.value.startsWith(DelegateTaskScopeCorrection.resumeCause))
           DelegateTaskScopeCorrection.resumeC(h, storage, current, core)
+        else if (task && !delegation && current.causation.value.startsWith(GoalTaskScopeCorrection.resumeCause))
+          GoalTaskScopeCorrection.resumeC(h, storage, current, core)
         else if (task && current.causation.value.startsWith(GoalTaskMalformedIssuedWorkRecovery.resumeCause))
           GoalTaskMalformedIssuedWorkRecovery.resumeC(h, storage, current, core)
         else Consequence.success(current)
         payload <- loadPayloadC(storage, id, state.revision.value, core)
         _ <- GoalPhaseParticipantAdmission.admitC(payload.state.participant, core.executionContext)
-        _ <- if (task) GoalTaskValidationContinuation.retainedC(payload, core.component.get.core.instanceId.canonicalKey, id, state.revision.value) else Consequence.unit
+        _ <- if (task && !delegation) GoalTaskValidationContinuation.retainedC(storage, state, core, payload)
+          else if (task) GoalTaskValidationContinuation.retainedC(payload, core.component.get.core.instanceId.canonicalKey, id, state.revision.value)
+          else Consequence.unit
         response <- _progress_c(h, definition, storage, state, payload, core, 0)
       } yield response
     }

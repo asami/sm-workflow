@@ -132,7 +132,8 @@ private[smworkflow] object WorkflowPreparedImport {
     actualReference = input.getString("reference").flatMap(reads.get).flatMap(io.circe.parser.parse(_).toOption)
     source <- associationC(component.core.instanceId.canonicalKey, participant, operation, inputjson, request, actualReference)
     text <- prepared.toJsonStringC
-    policy <- CommonEvidence.resolvePolicyC(component.initializationParameters, Vector.empty)
+    policy <- CommonEvidence.resolveForCallC(component.initializationParameters, Vector.empty, core.executionContext,
+      component.subsystem.map(_.configuration.configuration.values).getOrElse(Map.empty))
     result <- policy match {
       case None => Consequence.success(resultRecord("setup-required", "Derived import retention requires the configured CommonEvidence policy; select explicit legacy-full for the historical complete output", None))
       case Some(p) => for {
@@ -185,7 +186,8 @@ private[smworkflow] object WorkflowPreparedImport {
     _ <- GoalPhaseParticipantAdmission.admitC(input.participantIdentity, core.executionContext)
     component <- core.component.map(Consequence.success).getOrElse(invalid("Component is unavailable"))
     _ <- if (component.core.instanceId.canonicalKey == input.componentInstance) Consequence.unit else invalid("detail crosses its Component")
-    policy <- CommonEvidence.resolvePolicyC(component.initializationParameters, Vector.empty)
+    policy <- CommonEvidence.resolveForCallC(component.initializationParameters, Vector.empty, core.executionContext,
+      component.subsystem.map(_.configuration.configuration.values).getOrElse(Map.empty))
     p <- policy.map(Consequence.success).getOrElse(invalid("detail requires the owning CommonEvidence policy"))
     store = CommonEvidence.storage(core, p)
     retained <- CommonEvidence.loadedC(store, input.evidence.identity)

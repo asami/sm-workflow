@@ -94,7 +94,8 @@ private[smworkflow] object GoalTaskValidationContinuation {
 
   def decodeTarget(value: Json): Either[String, Target] = _decode_target(value)
 
-  private def _retained(payload: Payload, owner: String, session: String, revision: Long): Either[String, Vector[(Direction, Target)]] =
+  private def _retained(payload: Payload, owner: String, session: String, revision: Long,
+    effectiveinput: Option[StandaloneFixExecution.Input] = None): Either[String, Vector[(Direction, Target)]] =
     payload.validationContinuation match {
       case None => Right(Vector.empty)
       case Some(direction) => decodeTarget(direction.target).flatMap { target =>
@@ -104,7 +105,7 @@ private[smworkflow] object GoalTaskValidationContinuation {
         if (target.componentInstance == owner && target.sessionId == session && target.frontierRevision < revision &&
             direction.choice == choices.head && direction.participant == target.participant && _exact(direction.rationale) &&
             direction.reference != null && _exact(direction.reference.identity) && _exact(direction.reference.revision) &&
-            state.input == original.input && state.selected == original.selected ++ suffix &&
+            state.input == effectiveinput.getOrElse(original.input) && state.selected == original.selected ++ suffix &&
             state.generation >= original.generation && state.automaticCount >= original.automaticCount &&
             state.ordinaryCount >= original.ordinaryCount &&
             state.repairControl.policy == original.repairControl.policy &&
@@ -133,6 +134,23 @@ private[smworkflow] object GoalTaskValidationContinuation {
     if (payload.validationContinuation.exists(d => BoundedSelectedValidationContinuation.isTarget(d.target)))
       BoundedSelectedValidationContinuation.retainedC(payload, owner, session, revision)
     else _retained(payload, owner, session, revision).fold(N.invalid(_), _ => Consequence.unit)
+
+  private def _retained_c(storage: WorkflowComponentStorage, current: InstanceRecord,
+    core: ActionCall.Core, payload: Payload): Consequence[Vector[(Direction, Target)]] = payload.validationContinuation match {
+    case None => Consequence.success(Vector.empty)
+    case Some(direction) => for {
+      target <- decodeTarget(direction.target).fold(N.invalid(_), Consequence.success)
+      input <- GoalTaskScopeCorrection.effectiveValidationInputC(storage, current, core, target, direction)
+      retained <- _retained(payload, _owner(core), current.identity.value, current.revision.value, Some(input))
+        .fold(N.invalid(_), Consequence.success)
+    } yield retained
+  }
+
+  private[admission] def retainedC(storage: WorkflowComponentStorage, current: InstanceRecord,
+    core: ActionCall.Core, payload: Payload): Consequence[Unit] =
+    if (payload.validationContinuation.exists(d => BoundedSelectedValidationContinuation.isTarget(d.target)))
+      BoundedSelectedValidationContinuation.retainedC(payload, _owner(core), current.identity.value, current.revision.value)
+    else _retained_c(storage, current, core, payload).map(_ => ())
   def targetC(text: String): Consequence[Target] =
     if (text == null) N.invalid("Task continuation target is absent")
     else io.circe.parser.parse(text).left.map(_.message).flatMap(decodeTarget).fold(N.invalid(_), Consequence.success)
@@ -174,7 +192,11 @@ private[smworkflow] object GoalTaskValidationContinuation {
       else if (current.causation.value.startsWith("standalone-completed:"))
         current.causation.value.stripPrefix("standalone-completed:").takeWhile(_ != ':').toLongOption
       else Some(current.revision.value)
-    source.map(N.loadPayloadC(storage, current.identity.value, _, core))
+    if (current.causation.value.startsWith(GoalTaskScopeCorrection.resumeCause)) for {
+      payload <- GoalTaskScopeCorrection.retainedPayloadC(storage, current, core)
+      input <- GoalTaskScopeCorrection.retainedInputC(storage, current, core)
+    } yield payload.copy(state = payload.state.copy(input = input))
+    else source.map(N.loadPayloadC(storage, current.identity.value, _, core))
       .getOrElse(N.invalid("Task continuation has no canonical source checkpoint"))
   }
 
@@ -225,7 +247,7 @@ private[smworkflow] object GoalTaskValidationContinuation {
           _ <- if (!Set("Completed", "NoChange")(payload.state.stage)) Consequence.unit
             else N.invalid("Task continuation cannot reopen a terminal Task")
           _ <- GoalPhaseParticipantAdmission.admitC(payload.state.participant, context)
-          retained <- _retained(payload, _owner(selected), session, current.revision.value).fold(N.invalid(_), Consequence.success)
+          retained <- _retained_c(storage, current, selected, payload)
           requested <- input.fold(i => targetC(i.target).map(Some(_)), _ => Consequence.success(None))
           previous = requested.flatMap(target => retained.find(_._2 == target))
           result <- previous match {
