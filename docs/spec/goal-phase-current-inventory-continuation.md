@@ -4,8 +4,13 @@ AUTO-FILE-GP-01 fixes automatic file inventory for the retained current Step.
 
 R1. An authentic completed ImplementStep or current-Step RepairStep may return
 `decision-needed` with its actual complete raw `planRevision` and causal reason.
-Only a fresh revision and literal append to the current Step's ownedPaths may
-change. Repository, Component, purpose, Usage, raw/effective acceptance, checks,
+A literal append to the current Step's ownedPaths and a fresh Plan revision may
+change. If the sole defect of an otherwise exact proposal is that its Plan
+revision equals the current revision, native continuation derives a fresh technical
+revision from that revision and the authenticated Session and source revision.
+The continuation receipt records the original and effective revisions, while the
+accepted semantic result remains unchanged. Historical receipts without a
+correction remain readable. Repository, Component, purpose, Usage, raw/effective acceptance, checks,
 dependencies, operations, all other Steps and accepted prefix remain exact.
 Finite concrete path data has no arbitrary file-count ceiling. Relative-path,
 workspace, capability and actual-effect admission still applies. A registered
@@ -81,3 +86,8 @@ Executable specifications: `GoalPhaseCurrentInventoryContinuationSpec` and
 small isolated normal host and the same installed CLI when
 `smworkflow.spec.installedCommand` is selected. All semantic and independent
 review/closure evidence in that fixture is explicitly specification-owned.
+
+E5. An accepted exact inventory proposal that repeats the current Plan revision
+continues through ordinary Advance with a recorded original-to-effective revision
+correction. It preserves the source result, base, history and acceptance duties;
+reentry reconstructs the same successor without replaying Submit.

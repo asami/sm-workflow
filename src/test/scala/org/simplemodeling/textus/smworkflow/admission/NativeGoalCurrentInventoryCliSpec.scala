@@ -25,7 +25,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * and Git closure. All semantic/review/closure inputs are specification-owned.
   * The same scenario uses the selected installed command without source fallback.
   * @since   Nov. 3, 2026
-  * @version Nov. 9, 2026
+  * @version Nov. 16, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -258,6 +258,42 @@ final class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers 
       // The one-time commit-hygiene note is presentation; every business field stays exact.
       repeated.copy(message = next.message) shouldBe next
       scenario.candidateHead shouldBe next.work.get.completed.head.commit.identity
+
+      Given("the completed first Step and an accepted inventory proposal for the remaining Step reusing its revision")
+      val beforeSecond = _stored(scenario)
+      val secondPlan = next.work.get.selectedPlan
+      val internalplan = _proposal(scenario).plan
+      val secondProposal = R.Proposal("second-inventory", "1", "SPECIFICATION-OWNED second Step needs one source",
+        internalplan.copy(steps = internalplan.steps.updated(1,
+          internalplan.steps(1).copy(ownedPaths = internalplan.steps(1).ownedPaths :+ "src/SecondNeeded.scala"))))
+      val secondResult = _configuredResult("decision-needed", Some(secondProposal))
+      When("the actual remaining work is submitted and normal Advance continues it")
+      _submit(scenario, next, secondResult, "second-colliding-inventory")
+        .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+      val acceptedSecond = _stored(scenario)
+      val originalSecondResult = acceptedSecond.filter(value => value.contains("second-colliding-inventory") &&
+        value.contains("sm-workflow.goal-phase-native-work-result.v1"))
+      originalSecondResult should not be empty
+      val secondContinued = scenario.advance(task).business[V.GoalPhaseAdvanceResult]
+      Then("the original base, accepted commit chain, duties and prior history survive subsequent reentry")
+      secondContinued.kind shouldBe "Request"
+      secondContinued.human shouldBe None
+      secondContinued.work.get.stepIdentity shouldBe next.work.get.stepIdentity
+      secondContinued.work.get.originalBase shouldBe original.work.get.originalBase
+      secondContinued.work.get.completed shouldBe next.work.get.completed
+      secondContinued.repairProgress shouldBe next.repairProgress
+      secondContinued.work.get.selectedPlan.revision should not be secondPlan.revision
+      secondContinued.work.get.selectedPlan shouldBe secondPlan.copy(revision = secondContinued.work.get.selectedPlan.revision,
+        steps = secondPlan.steps.updated(1, secondPlan.steps(1).copy(
+          ownedPaths = secondPlan.steps(1).ownedPaths :+ "src/SecondNeeded.scala")))
+      val restored = _stored(scenario)
+      beforeSecond.foreach(value => restored should contain(value))
+      originalSecondResult.foreach(value => restored should contain(value))
+      restored.exists(value => value.contains("revisionCorrection") && value.contains(secondPlan.revision) &&
+        value.contains(secondContinued.work.get.selectedPlan.revision)) shouldBe true
+      restored.exists(_.contains("second-colliding-inventory")) shouldBe true
+      restored.exists(_.contains(":ordered-human:")) shouldBe false
+      scenario.advance(task).business[V.GoalPhaseAdvanceResult] shouldBe secondContinued
     }
 
     "retain a purpose concern as Human and supersede only a proven unanswered inventory question without an answer" in {
