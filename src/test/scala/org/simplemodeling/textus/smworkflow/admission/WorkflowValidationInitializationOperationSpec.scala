@@ -16,7 +16,8 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Real public Operations with standard composition and no per-run impact JSON.
   * The isolated product has Java source and two actually declared SBT checks.
   * @since   Nov.  9, 2026
-  * @version Nov.  9, 2026
+  *  version Nov.  9, 2026
+  * @version Nov. 16, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -43,7 +44,8 @@ final class WorkflowValidationInitializationOperationSpec extends AnyWordSpec wi
   override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
     val descriptor = take(GenericSubsystemDescriptor.loadComponentArchive(Path.of("src/main/car").toAbsolutePath))
     val template = io.circe.parser.parse(descriptor.config("textus.subsystem.process-execution.plan")).toOption.get
-    val values = Map("repository.root" -> root.resolve("repository").toString, "git.branch" -> "main", "git.remote" -> "origin",
+    val values = Map("runtime.root" -> root.resolve("repository").toString, "runtime.parent" -> root.toString,
+      "repository.root" -> root.resolve("repository").toString, "git.branch" -> "main", "git.remote" -> "origin",
       "git.remote-branch" -> "main", "git.endpoint" -> root.resolve("upstream.git").toString,
       "git.user-name" -> "Fixture", "git.user-email" -> "fixture@example.invalid", "environment.path" -> "/usr/bin:/bin",
       "environment.java-home" -> "", "environment.ssh-auth-sock" -> "")
@@ -55,12 +57,17 @@ final class WorkflowValidationInitializationOperationSpec extends AnyWordSpec wi
       TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable, Vector(2)))
     val programs = plans.flatMap(array(_, "sbtPrograms"))
     val oldCapabilities = array(base, "sbtPrograms").map(_.hcursor.get[Json]("capability").toOption.get).toSet
-    val oldWorkspaces = array(base, "sbtPrograms").map(_.hcursor.get[String]("target").toOption.get).toSet - "sm-workflow-repository"
-    base.mapObject(fields => fields.add("sbtPrograms", Json.fromValues(programs))
-      .add("workspaces", Json.fromValues(array(base, "workspaces").filterNot(v => oldWorkspaces(v.hcursor.get[String]("identity").toOption.get)) ++ plans.flatMap(array(_, "workspaces"))))
-      .add("workspaceGrants", Json.fromValues(array(base, "workspaceGrants").filterNot(v => oldWorkspaces(v.hcursor.get[String]("workspaceId").toOption.get)) ++ plans.flatMap(array(_, "workspaceGrants"))))
+    val retainedtargets = Vector("gitRepositories", "gitPrograms", "programs").flatMap(key =>
+      array(base, key).flatMap(_.hcursor.get[String]("target").toOption)).toSet ++
+      array(base, "sessionCandidateWorkspaces").flatMap(row => Vector("parent", "alias").map(key =>
+        row.hcursor.get[String](key).toOption.get))
+    val removedworkspaces = array(base, "sbtPrograms").map(_.hcursor.get[String]("target").toOption.get).toSet -- retainedtargets
+    val complete = base.mapObject(fields => fields.add("sbtPrograms", Json.fromValues(programs))
+      .add("workspaces", Json.fromValues(array(base, "workspaces").filterNot(v => removedworkspaces(v.hcursor.get[String]("identity").toOption.get)) ++ plans.flatMap(array(_, "workspaces"))))
+      .add("workspaceGrants", Json.fromValues(array(base, "workspaceGrants").filterNot(v => removedworkspaces(v.hcursor.get[String]("workspaceId").toOption.get)) ++ plans.flatMap(array(_, "workspaceGrants"))))
       .add("grants", fields("grants").get.mapArray(_.map(_.mapObject(g => g.add("capabilities",
         g("capabilities").get.mapArray(v => v.filterNot(oldCapabilities) ++ programs.map(_.hcursor.get[Json]("capability").toOption.get))))))))
+    Phase69ConfiguredRepositoryFixture.withInitializationSources(complete)
   }
   private def root(name: String) = Files.createTempDirectory(Files.createDirectories(Path.of("target/validation-initialization").toAbsolutePath), name + "-")
   private def start(owner: org.goldenport.cncf.subsystem.Subsystem, component: org.goldenport.cncf.component.Component,

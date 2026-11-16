@@ -2,7 +2,7 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
 import io.circe.syntax.*
-import java.nio.file.{Files, Path}
+import java.nio.file.{Files, LinkOption, Path}
 import org.goldenport.Consequence
 import org.goldenport.cncf.processexecution.{GitOperation, SbtOperation}
 import org.goldenport.cncf.validation.ValidationDiscoveryV1 as D
@@ -25,10 +25,11 @@ import RepositorySyncPurpose.given
 import RepositorySyncPurposeWorkspace as W
 import SplitPhaseExplicitPartitionFixture.take
 
-/** Real local candidates use host v7 resource admission and native UoW effects.
+/** Real local candidates use host V7 admission or V8 initialization and native UoW effects.
   * These isolated fixtures do not qualify an installed consumer configuration.
   * @since   Nov. 12, 2026
-  * @version Nov. 12, 2026
+  *  version Nov. 12, 2026
+  * @version Nov. 16, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
@@ -53,9 +54,14 @@ final class RepositorySyncSessionCandidateWorkspaceSpec extends AnyWordSpec with
     RepositorySyncProgramImpact.declaration.name -> _coverage.asJson.noSpaces)
 
   override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
-    val base = super.process_plan(root, "Equal", goal)
-    val parent = Files.createDirectories(root.resolve("managed-candidates"))
-    val placeholder = Files.createDirectories(root.resolve("candidate-alias"))
+    val base = Phase69ConfiguredRepositoryFixture.withoutManagedCandidates(super.process_plan(root, "Equal", goal))
+    val initialized = scenario == "Initialized"
+    val parent = root.resolve("managed-candidates")
+    val placeholder = root.resolve("candidate-alias")
+    if (!initialized) {
+      Files.createDirectories(parent)
+      Files.createDirectories(placeholder)
+    }
     val git = TypedGitHostPlanFixture.plan(Target(root.resolve("repository"), "main", "origin", "main",
       root.resolve("upstream.git").toString))
     val observations = git.hcursor.get[Vector[Json]]("gitPrograms").toOption.get.filter(row =>
@@ -75,7 +81,8 @@ final class RepositorySyncSessionCandidateWorkspaceSpec extends AnyWordSpec with
     val capabilities = (observations ++ sbt).map(_.hcursor.get[Json]("capability").toOption.get)
     val policies = if (scenario == "MissingPolicy") Vector.empty else Vector(Json.obj(
       "componentId" -> owner.asJson, "parent" -> _parent.asJson, "alias" -> _alias.asJson))
-    base.mapObject(fields => fields.add("schema", "cncf.runtime-process-execution.v7".asJson)
+    val planned = base.mapObject(fields => fields.add("schema",
+      (if (initialized) "cncf.runtime-process-execution.v8" else "cncf.runtime-process-execution.v7").asJson)
       .add("sessionCandidateWorkspaces", Json.fromValues(policies)).add("validationChecks", Json.arr())
       .add("sbtPrograms", Json.fromValues(sbt))
       .add("gitPrograms", fields("gitPrograms").get.mapArray(_ ++ observations))
@@ -86,6 +93,11 @@ final class RepositorySyncSessionCandidateWorkspaceSpec extends AnyWordSpec with
         Json.obj("componentId" -> owner.asJson, "workspaceId" -> identity.asJson, "access" -> "manage".asJson))))
       .add("grants", fields("grants").get.mapArray(_.map(_.mapObject(grant =>
         grant.add("capabilities", grant("capabilities").get.mapArray(_ ++ capabilities)))))))
+    if (!initialized) planned else Phase69ConfiguredRepositoryFixture.withInitializationSources(
+      planned.mapObject(_.add("workspaceInitializations", Json.arr(Json.obj(
+        "componentId" -> owner.asJson, "anchor" -> root.toString.asJson, "sources" -> Json.arr(),
+        "parent" -> _parent.asJson, "alias" -> _alias.asJson,
+        "parentPath" -> "managed-candidates".asJson, "aliasPath" -> "candidate-alias".asJson)))))
   }
 
   override protected def _prepare_sbt_build_(root: Path, scenario: String): Unit = {
@@ -159,18 +171,28 @@ final class RepositorySyncSessionCandidateWorkspaceSpec extends AnyWordSpec with
   }
 
   "Session-owned Purpose candidate workspace" should {
-    for (document <- Vector(true, false)) {
-      s"materialize and reopen the actual candidate with ordinary validation, documentation=$document" in {
-        val root = _root(if (document) "document" else "product")
+    for ((document, initialized) <- Vector((true, false), (false, false), (false, true))) {
+      s"materialize and reopen the actual candidate with ordinary validation, documentation=$document, initialized=$initialized" in {
+        Given("ordinary candidate coverage and preserved source work, with existing V7 roots or absent V8 roots")
+        val root = _root(if (document) "document" else if (initialized) "initialized-product" else "product")
+        val scenario = if (initialized) "Initialized" else "Equal"
         val path = if (document) "docs/purpose.md" else "value.txt"
         val content = if (document) "one accepted document purpose\n" else "expected\n"
         var retained = Option.empty[N.Stage]
         var retainedresult = Option.empty[V.RepositoryDirectoryBatchResult]
         var candidateroot = ""
-        Given("a normal v7 candidate parent/alias and ordinary coverage, with distinct original source work preserved for the product case")
         val sourcecontent = if (document) content else "pending incorrect\n"
         _parameters(root).contains(P.declaration.name) shouldBe false
-        _with_runtime_(root, "Equal", hostParameters = _parameters(root)) { (owner, component, actor, prepare) =>
+        if (initialized) {
+          Files.notExists(root.resolve("managed-candidates"), LinkOption.NOFOLLOW_LINKS) shouldBe true
+          Files.notExists(root.resolve("candidate-alias"), LinkOption.NOFOLLOW_LINKS) shouldBe true
+        }
+        When("the public fixture runtime initializes the selected ordinary candidate plan")
+        _with_runtime_(root, scenario, hostParameters = _parameters(root)) { (owner, component, actor, prepare) =>
+          Then("the declared candidate parent and dormant alias are available")
+          Files.isDirectory(root.resolve("managed-candidates")) shouldBe true
+          Files.isDirectory(root.resolve("candidate-alias")) shouldBe true
+          Given("the ordinary repository and its actual pending purpose input")
           prepare(_.setupC(_setup_commands_(root, "Equal").size))
           Files.writeString(root.resolve("repository").resolve(path), sourcecontent)
           def _invoke_[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A =
@@ -281,7 +303,7 @@ final class RepositorySyncSessionCandidateWorkspaceSpec extends AnyWordSpec with
             "purpose-1-check-0-intent").map { saved => saved shouldBe None; () })
         }
         When("the same isolated runtime reopens and rebinds only the known materialized candidate")
-        _with_runtime_(root, "Equal", hostParameters = _parameters(root)) { (owner, component, actor, prepare) =>
+        _with_runtime_(root, scenario, hostParameters = _parameters(root)) { (owner, component, actor, prepare) =>
           val stage = retained.get
           val progress = stage.payload.purposes.get
           val binding = progress.managedWorkspace.get

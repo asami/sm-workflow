@@ -18,7 +18,8 @@ import SplitPhaseExplicitPartitionFixture.take
   * or Plan. Business selection below is specification input, not live Human
   * evidence. Subject calls are the actual public Start/Advance Operations.
   * @since Oct. 27, 2026
-  * @version Oct. 27, 2026
+  *  version Oct. 27, 2026
+  * @version Nov. 16, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -32,7 +33,8 @@ final class StandardWorkflowStartOperationSpec extends AnyWordSpec with Matchers
       .orElse(sys.env.getOrElse("PATH", "").split(java.io.File.pathSeparator).iterator.filter(_.nonEmpty)
         .map(value => Path.of(value).resolve("sbt")).find(path => Files.isRegularFile(path) && Files.isExecutable(path)))
       .getOrElse(fail("The standard profile requires an installed SBT executable"))
-    val values = Map("repository.root" -> root.resolve("repository").toString, "git.branch" -> "main", "git.remote" -> "origin",
+    val values = Map("runtime.root" -> root.resolve("repository").toString, "runtime.parent" -> root.toString,
+      "repository.root" -> root.resolve("repository").toString, "git.branch" -> "main", "git.remote" -> "origin",
       "git.remote-branch" -> "main", "git.endpoint" -> root.resolve("upstream.git").toString,
       "git.user-name" -> "Fixture", "git.user-email" -> "fixture@example.invalid",
       "executable.sbt" -> sbt.toRealPath().toString,

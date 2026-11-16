@@ -12,7 +12,8 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Publication is not a commit. Only sync may adopt its ordinary catalog
   * outputs before pushing the final clean tree.
   * @since   Oct. 30, 2026
-  * @version Oct. 30, 2026
+  *  version Oct. 30, 2026
+  * @version Nov. 16, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -41,14 +42,19 @@ final class RepositorySyncPublicationSpec extends AnyWordSpec with Matchers with
     }
 
     "ship an ordinary default publication target using CNCF's existing PATH-based sbt resolution" in {
+      Given("the packaged publication policy and its ordinary process declarations")
       val descriptor = take(GenericSubsystemDescriptor.loadComponentArchive(Path.of("src/main/car").toAbsolutePath))
       val publication = io.circe.parser.parse(descriptor.config("sm-workflow.local-publication")).toOption.get
       val plan = io.circe.parser.parse(descriptor.config("textus.subsystem.process-execution.plan")).toOption.get
       val target = publication.hcursor.get[Vector[Json]]("targets").toOption.get.head
+      val workspace = target.hcursor.get[String]("workspace").toOption.get
+      When("PublishLocal is selected for the configured publication workspace")
+      val programs = plan.hcursor.get[Vector[Json]]("sbtPrograms").toOption.get
+        .filter(row => row.hcursor.get[String]("operation").toOption.contains("publish-local") &&
+          row.hcursor.get[String]("target").toOption.contains(workspace))
+      Then("that target has exactly one ordinary PATH-resolved SBT publication declaration")
       target.hcursor.get[String]("identity").toOption shouldBe Some("repository")
       target.hcursor.get[String]("workspace").toOption shouldBe Some("sm-workflow-repository")
-      val programs = plan.hcursor.get[Vector[Json]]("sbtPrograms").toOption.get
-        .filter(_.hcursor.get[String]("operation").toOption.contains("publish-local"))
       programs.size shouldBe 1
       programs.head.hcursor.get[String]("sbtExecutable").toOption shouldBe Some("${executable.sbt}")
       programs.head.hcursor.get[String]("target").toOption shouldBe Some("sm-workflow-repository")

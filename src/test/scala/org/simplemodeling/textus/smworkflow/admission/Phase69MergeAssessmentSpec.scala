@@ -16,7 +16,8 @@ import SplitPhaseExplicitPartitionFixture.take
   * document consumption is specification data; no review, consent or successful
   * check is fabricated. Product test bindings/grants are deliberately absent.
   * @since   Oct. 28, 2026
-  * @version Oct. 27, 2026
+  *  version Oct. 27, 2026
+  * @version Nov. 16, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -67,14 +68,15 @@ final class Phase69MergeAssessmentSpec extends AnyWordSpec with Matchers with Gi
     Files.createDirectories(root.resolve("evidence"))
     val descriptor = take(GenericSubsystemDescriptor.loadComponentArchive(Path.of("src/main/car").toAbsolutePath))
     val template = io.circe.parser.parse(descriptor.config("textus.subsystem.process-execution.plan")).toOption.get
-    val values = Map("repository.root" -> root.resolve("repository").toString, "git.branch" -> "main", "git.remote" -> "origin",
+    val values = Map("runtime.root" -> root.resolve("repository").toString, "runtime.parent" -> root.toString,
+      "repository.root" -> root.resolve("repository").toString, "git.branch" -> "main", "git.remote" -> "origin",
       "git.remote-branch" -> "main", "git.endpoint" -> root.resolve("upstream.git").toString,
       "git.user-name" -> "Fixture", "git.user-email" -> "fixture@example.invalid",
       "environment.path" -> "/usr/bin:/bin", "environment.java-home" -> "", "environment.ssh-auth-sock" -> "")
     def expand(value: Json): Json = value.mapString(text => values.foldLeft(text) { case (prior, (key, value)) =>
       prior.replace("${" + key + "}", value) }).mapArray(_.map(expand)).mapObject(_.mapValues(expand))
     val removed = template.hcursor.get[Vector[Json]]("sbtPrograms").toOption.get.map(_.hcursor.get[Json]("capability").toOption.get).toSet
-    expand(template).mapObject(fields => fields.add("sbtPrograms", Json.arr()).add("grants",
+    val complete = expand(template).mapObject(fields => fields.add("sbtPrograms", Json.arr()).add("grants",
       fields("grants").get.mapArray(_.map(_.mapObject(grant => grant.add("capabilities",
         grant("capabilities").get.mapArray(_.filterNot(removed)))))))
       .add("workspaces", fields("workspaces").get.mapArray(_ :+ Json.obj("identity" -> Json.fromString("merge-evidence"),
@@ -82,6 +84,7 @@ final class Phase69MergeAssessmentSpec extends AnyWordSpec with Matchers with Gi
       .add("workspaceGrants", fields("workspaceGrants").get.mapArray(_ :+ Json.obj(
         "componentId" -> Json.fromString(SmWorkflowComponent.componentId.name), "workspaceId" -> Json.fromString("merge-evidence"),
         "access" -> Json.fromString("manage")))))
+    Phase69ConfiguredRepositoryFixture.withInitializationSources(complete)
   }
 
   private def parameters(root: Path, consumed: Boolean = false): Map[String, String] = {
@@ -225,15 +228,22 @@ final class Phase69MergeAssessmentSpec extends AnyWordSpec with Matchers with Gi
     }
 
     "exclude consumed documents from the document-only shortcut and leave their program validation unresolved" in {
+      Given("configured consumed documents in divergent repositories without actual project validation checks")
       val directory = root()
       _with_runtime_(directory, "Documents", hostParameters = parameters(directory, consumed = true)) { (owner, component, actor, prepare) =>
         prepare(call => call.setupC(_setup_commands_(directory, "Documents").size, scenario = "Documents"))
         val started = read_value[V.RepositorySyncStartResult](take(owner.executeOperationResponseInContext(Request.of(
           component = component.name, service = "RepositorySyncService", operation = "startRepositorySync", properties = startInput), actor)))
-        val result = owner.executeOperationResponseInContext(Request.of(component = component.name, service = "RepositorySyncService",
-          operation = "advanceRepositorySync", properties = List(Property("sessionId", started.sessionId, None))), actor)
-        result.isSuccess shouldBe false
-        result.toString should include("consumed=docs/local.md,docs/remote.md")
+        When("normal Advance reaches the pending merge and evaluates its consumed program inputs")
+        val result = read_value[V.RepositorySyncAdvanceResult](take(owner.executeOperationResponseInContext(Request.of(
+          component = component.name, service = "RepositorySyncService", operation = "advanceRepositorySync",
+          properties = List(Property("sessionId", started.sessionId, None))), actor)))
+        Then("validation setup remains required with no accepted review, convergence or SBT execution and the pending merge retained")
+        result.kind shouldBe "Wait"
+        result.condition shouldBe Some("ValidationSetupRequired")
+        result.message should include("consumed=docs/local.md,docs/remote.md")
+        result.review shouldBe None
+        result.convergence shouldBe None
         Files.exists(directory.resolve("sbt-executions.txt")) shouldBe false
         Files.exists(directory.resolve("repository/.git/MERGE_HEAD")) shouldBe true
       }

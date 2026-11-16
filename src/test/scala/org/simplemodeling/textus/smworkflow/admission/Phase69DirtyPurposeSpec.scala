@@ -21,7 +21,8 @@ import RepositorySyncPurpose as P
 /** Real repositories and public standard Operations consume genuine issued
   * purpose contexts. Authored fixtures are distinct from installed evidence.
   * @since   Oct. 28, 2026
-  * @version Nov.  3, 2026
+  *  version Nov.  3, 2026
+  * @version Nov. 16, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -37,7 +38,8 @@ final class Phase69DirtyPurposeSpec extends AnyWordSpec with Matchers with Given
   override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
     val descriptor = take(GenericSubsystemDescriptor.loadComponentArchive(Path.of("src/main/car").toAbsolutePath))
     val template = io.circe.parser.parse(descriptor.config("textus.subsystem.process-execution.plan")).toOption.get
-    val values = Map("repository.root" -> root.resolve("repository").toString, "git.branch" -> "main",
+    val values = Map("runtime.root" -> root.resolve("repository").toString, "runtime.parent" -> root.toString,
+      "repository.root" -> root.resolve("repository").toString, "git.branch" -> "main",
       "git.remote" -> "origin", "git.remote-branch" -> "main", "git.endpoint" -> root.resolve("upstream.git").toString,
       "git.user-name" -> "Fixture", "git.user-email" -> "fixture@example.invalid",
       "environment.path" -> "/usr/bin:/bin", "environment.java-home" -> "", "environment.ssh-auth-sock" -> "")
@@ -64,7 +66,7 @@ final class Phase69DirtyPurposeSpec extends AnyWordSpec with Matchers with Given
       .add("workspaceGrants", fields("workspaceGrants").get.mapArray(_ ++ (1 to 3).map(index => Json.obj(
         "componentId" -> Json.fromString(SmWorkflowComponent.componentId.name), "workspaceId" -> Json.fromString("purpose-slot-" + index),
         "access" -> Json.fromString("manage"))))))
-    if (!Set("check-failed", "check-unknown")(scenario)) planned else {
+    val complete = if (!Set("check-failed", "check-unknown")(scenario)) planned else {
       val sbt = TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable, Vector(1),
         executionTimeoutMillis = if (scenario == "check-unknown") 1L else 180000L)
         .hcursor.get[Vector[Json]]("sbtPrograms").toOption.get.map(_.mapObject(
@@ -73,6 +75,7 @@ final class Phase69DirtyPurposeSpec extends AnyWordSpec with Matchers with Given
         fields("grants").get.mapArray(_.map(_.mapObject(grant => grant.add("capabilities",
           grant("capabilities").get.mapArray(_ ++ sbt.map(_.hcursor.get[Json]("capability").toOption.get))))))))
     }
+    Phase69ConfiguredRepositoryFixture.withInitializationSources(complete)
   }
   override protected def _prepare_sbt_build_(root: Path, scenario: String): Unit = {
     TypedSbtHostPlanFixture.build(root, true)

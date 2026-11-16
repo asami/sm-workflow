@@ -14,6 +14,7 @@ import org.goldenport.record.RecordPresentable
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.value as V
 import NativeWorkflowCliFixture as F
 import GoalPhasePlanRevision as R
@@ -25,7 +26,8 @@ import SplitPhaseExplicitPartitionFixture.take
   * and Git closure. All semantic/review/closure inputs are specification-owned.
   * The same scenario uses the selected installed command without source fallback.
   * @since   Nov. 3, 2026
-  * @version Nov. 9, 2026
+  *  version Nov. 9, 2026
+  * @version Nov. 16, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -54,7 +56,8 @@ final class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers 
     val config = _read(path)
     val descriptor = take(GenericSubsystemDescriptor.loadComponentArchive(Path.of("src/main/car").toAbsolutePath))
     val template = parse(descriptor.config("textus.subsystem.process-execution.plan")).toOption.get
-    val values = Map("repository.root" -> scenario.root.resolve("repository").toString, "git.branch" -> "main",
+    val values = Map("runtime.root" -> scenario.root.resolve("repository").toString, "runtime.parent" -> scenario.root.toString,
+      "repository.root" -> scenario.root.resolve("repository").toString, "git.branch" -> "main",
       "git.remote" -> "origin", "git.remote-branch" -> "main", "git.endpoint" -> scenario.root.resolve("upstream.git").toString,
       "git.user-name" -> "Fixture", "git.user-email" -> "fixture@example.invalid",
       "environment.path" -> "/usr/bin:/bin", "environment.java-home" -> "", "environment.ssh-auth-sock" -> "")
@@ -72,12 +75,22 @@ final class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers 
         .flatMap(_array_(_, "capabilities"))
       grant.mapObject(_.add("capabilities", Json.fromValues((capabilities ++ added).distinct)))
     }
+    // Replacing product SBT declarations must retain the existing evidence
+    // binding that F.fresh already created for public prepared-import storage.
+    val original = parse(config.hcursor.get[String]("textus.subsystem.process-execution.plan").toOption.get).toOption.get
+    val evidence = parse(config.hcursor.get[String](CommonEvidence.declaration.name).toOption.get).toOption.get
+    val evidenceworkspace = evidence.hcursor.get[String]("workspaceIdentity").toOption.get
+    val evidenceworkspaces = _array_(original, "workspaces").filter(_.hcursor.get[String]("identity").contains(evidenceworkspace))
+    val evidencegrants = _array_(original, "workspaceGrants").filter(row =>
+      row.hcursor.get[String]("componentId").contains(SmWorkflowComponent.componentId.name) &&
+        row.hcursor.get[String]("workspaceId").contains(evidenceworkspace) &&
+        row.hcursor.get[String]("access").contains("manage"))
     val process = selected.mapObject(_.add("sbtPrograms", Json.fromValues(_array_(sbt, "sbtPrograms")))
-      .add("workspaces", Json.fromValues((_array_(selected, "workspaces") ++ _array_(sbt, "workspaces")).distinct))
-      .add("workspaceGrants", Json.fromValues((_array_(selected, "workspaceGrants") ++ _array_(sbt, "workspaceGrants")).distinct))
+      .add("workspaces", Json.fromValues((_array_(selected, "workspaces") ++ _array_(sbt, "workspaces") ++ evidenceworkspaces).distinct))
+      .add("workspaceGrants", Json.fromValues((_array_(selected, "workspaceGrants") ++ _array_(sbt, "workspaceGrants") ++ evidencegrants).distinct))
       .add("grants", Json.fromValues(grants)))
     Files.writeString(path, config.mapObject(_.add("textus.subsystem.process-execution.plan",
-      Json.fromString(process.noSpaces)).add("textus.assembly.descriptor",
+       Json.fromString(Phase69ConfiguredRepositoryFixture.withInitializationSources(process).noSpaces)).add("textus.assembly.descriptor",
       Json.fromString(scenario.root.resolve(".textus/assembly.yaml").toString))).noSpaces, UTF_8)
     if (configured) Files.writeString(path, _read(path).mapObject(_.add(A.declaration.name,
       Json.fromString(Json.obj("schemaVersion" -> Json.fromString(A.schemaVersion), "conditions" -> Json.arr(
@@ -91,6 +104,41 @@ final class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers 
     scenario.retain(task, scenario.start().business[V.GoalPhaseStartResult])
     task
   }
+  private def _advance(scenario: F.Scenario, task: Path): V.GoalPhaseAdvanceResult =
+    _advance(scenario, scenario.advance(task))
+
+  private def _observed_resource(result: F.Result): String =
+    result.business[V.GoalPhaseAdvanceResult].retainedWork.map(_.resource)
+      .getOrElse(result.invocation.stdout.toUri.toASCIIString)
+
+  /** Keep the original invocation when its log is also a public evidence input. */
+  private def _advance(scenario: F.Scenario, result: F.Result): V.GoalPhaseAdvanceResult = {
+    val control = result.business[V.GoalPhaseAdvanceResult]
+    control.retainedWork match {
+      case None => control
+      case Some(reference) =>
+        val retained = scenario.readRetainedWork(reference).business[V.WorkflowRetainedWorkReadResult]
+        retained.availability shouldBe "available"
+        retained.reference shouldBe reference
+        reference.sessionId shouldBe control.submitSessionId.getOrElse(control.sessionId)
+        val detail = take(V.GoalPhaseAdvanceResult.createC(retained.response))
+        detail.sessionId shouldBe control.sessionId
+        detail.kind shouldBe control.kind
+        detail.submitOperation shouldBe control.submitOperation
+        detail.submitSessionId shouldBe control.submitSessionId
+        detail.resultType shouldBe control.resultType
+        detail.issuedWorkContext shouldBe control.issuedWorkContext
+        detail.repairProgress shouldBe control.repairProgress
+        detail.issuedWorkContext.foreach { context =>
+          context.runId shouldBe reference.sessionId
+          context.continuationId shouldBe reference.identity
+          context.expectedRevision shouldBe reference.revision
+          context.completionOperation.getString("operation") shouldBe Some(reference.completionOperation)
+        }
+        detail
+    }
+  }
+
   private def _proposal(scenario: F.Scenario): R.Proposal = R.Proposal("needed-inventory", "1",
     "SPECIFICATION-OWNED: the retained product requires its existing build definition and one concrete new compiled source",
     scenario.plan.copy(revision = "inventory-2", steps = scenario.plan.steps.updated(0,
@@ -168,7 +216,7 @@ final class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers 
       Given("docs/spec/goal-phase-current-inventory-continuation.md R1–R3 E1: one small isolated normal host and specification-owned semantic inputs")
       val scenario = _fresh("auto-file-gp-native", configured = true)
       val task = _start(scenario)
-      val original = scenario.advance(task).business[V.GoalPhaseAdvanceResult]
+      val original = _advance(scenario, task)
       val repository = Path.of(scenario.host.target.root)
       val build = Files.readString(repository.resolve("build.sbt"), UTF_8)
       val proposal = _proposal(scenario)
@@ -176,11 +224,11 @@ final class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers 
       When("the actual issued implementation submits its concrete inventory-only proposal and ordinary Advance evaluates it")
       val inventoryResult = _configuredResult("decision-needed", Some(proposal))
       _submit(scenario, original, inventoryResult.copy(acceptance = None), "missing-required-report").exitCode should not be 0
-      scenario.advance(task).business[V.GoalPhaseAdvanceResult] shouldBe original
+      _advance(scenario, task) shouldBe original
       _submit(scenario, original, inventoryResult, "actual-inventory-source")
         .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
       val old = _stored(scenario)
-      val continued = scenario.advance(task).business[V.GoalPhaseAdvanceResult]
+      val continued = _advance(scenario, task)
       Then("the same Session issues the current implementation under the appended inventory without a fresh Human grant")
       continued.kind shouldBe "Request"
       continued.human shouldBe None
@@ -194,7 +242,7 @@ final class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers 
         steps = original.work.get.selectedPlan.steps.updated(0, original.work.get.selectedPlan.steps.head.copy(
           ownedPaths = original.work.get.selectedPlan.steps.head.ownedPaths ++ _added)))
       Files.readString(repository.resolve("build.sbt"), UTF_8) shouldBe build
-      scenario.advance(task).business[V.GoalPhaseAdvanceResult] shouldBe continued
+      _advance(scenario, task) shouldBe continued
       val retained = _stored(scenario)
       val semantic = old.filter(value => value.contains("actual-inventory-source") &&
         value.contains("sm-workflow.goal-phase-native-work-result.v1"))
@@ -215,21 +263,21 @@ final class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers 
       _submit(scenario, continued, _configuredResult("completed"), "inventory-implementation")
         .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
       val checked = scenario.advance(task)
-      val review = checked.business[V.GoalPhaseAdvanceResult]
+      val review = _advance(scenario, checked)
       Then("native independent review receives the appended Plan, concrete source diff and actual successful checks")
       review.work.get.kind shouldBe "ReviewStep"
       review.work.get.selectedPlan shouldBe continued.work.get.selectedPlan
       review.work.get.review.get.toString should include(_source)
       review.work.get.review.get.checks.head.exitCode shouldBe Some(0)
       review.work.get.review.get.checks.head.sbt.get.outcome shouldBe "succeeded"
-      scenario.advance(task).business[V.GoalPhaseAdvanceResult] shouldBe review
+      _advance(scenario, task) shouldBe review
 
       Given("separate specification-owned independent review evidence for this exact actual candidate")
       val result = _configuredResult("accept")
       val reference = V.WorkflowArtifactReference("inventory-independent-review", "1")
       val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("specification-independent-reviewer"), None, None)
       val prepared = scenario.prepareHostInput("prepareEvidence", V.WorkflowEvidencePreparationInput("GoalPhase", "review",
-        checked.invocation.stdout.toUri.toASCIIString, _file(scenario, "review-result", result),
+        _observed_resource(checked), _file(scenario, "review-result", result),
         _file(scenario, "review-reference", reference), _file(scenario, "review-execution", execution),
         "normal-development-host", Instant.now().minusSeconds(60).toString, "entity:smworkflow.cli.host_evidence", None).toRecord())
       scenario.selectPreparedImport(prepared)
@@ -238,13 +286,13 @@ final class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers 
         "--result", _json(result), "--resultReference", _json(reference), "--executionEvidence", _json(execution)))
         .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
       val waiting = scenario.advance(task)
-      waiting.business[V.GoalPhaseAdvanceResult].authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
+      _advance(scenario, waiting).authorityContext.get.purpose shouldBe NativeExternalEvidence.Purpose.StepClosure.identity
       val authority = scenario.prepareHostInput("prepareAuthority", V.WorkflowAuthorityPreparationInput(
-        waiting.invocation.stdout.toUri.toASCIIString, _file(scenario, "step-authority", V.WorkflowArtifactReference("inventory-step-authority", "1")),
+        _observed_resource(waiting), _file(scenario, "step-authority", V.WorkflowArtifactReference("inventory-step-authority", "1")),
         "participant", "normal-development-host", Instant.now().minusSeconds(60).toString,
         "entity:smworkflow.cli.host_evidence").toRecord())
       scenario.selectPreparedImport(authority)
-      val next = scenario.advance(task).business[V.GoalPhaseAdvanceResult]
+      val next = _advance(scenario, task)
       Then("a real scoped Step commit contains the new source and the next Step retains original base and repair accounting")
       next.work.get.kind shouldBe "ImplementStep"
       next.work.get.stepIdentity shouldBe Some("step-2")
@@ -254,7 +302,7 @@ final class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers 
       next.work.get.completed.head.commit.parent shouldBe original.work.get.originalBase.head
       next.repairProgress shouldBe original.repairProgress
       Files.readString(repository.resolve(_source), UTF_8) should include("value = 42")
-      val repeated = scenario.advance(task).business[V.GoalPhaseAdvanceResult]
+      val repeated = _advance(scenario, task)
       // The one-time commit-hygiene note is presentation; every business field stays exact.
       repeated.copy(message = next.message) shouldBe next
       scenario.candidateHead shouldBe next.work.get.completed.head.commit.identity
@@ -264,32 +312,32 @@ final class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers 
       Given("docs/spec/goal-phase-current-inventory-continuation.md R3,R4 E2: an explicit purpose revision in a small normal host")
       val concern = _fresh("auto-file-gp-concern", configured = true)
       val task = _start(concern)
-      val initial = concern.advance(task).business[V.GoalPhaseAdvanceResult]
+      val initial = _advance(concern, task)
       val purpose = R.Proposal("actual-purpose-concern", "1", "SPECIFICATION-OWNED unresolved product purpose",
         concern.plan.copy(revision = "purpose-2", steps = concern.plan.steps.updated(0,
           concern.plan.steps.head.copy(purpose = "Implement a different product requirement"))))
       When("the authentic semantic completion changes the product purpose")
       _submit(concern, initial, _configuredResult("decision-needed", Some(purpose)), "purpose-source")
         .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
-      val question = concern.advance(task).business[V.GoalPhaseAdvanceResult]
+      val question = _advance(concern, task)
       Then("the real judgment remains an unanswered ordinary Human question")
       question.kind shouldBe "Human"
-      concern.advance(task).business[V.GoalPhaseAdvanceResult] shouldBe question
+      _advance(concern, task) shouldBe question
       _stored(concern).exists(_.contains(C.decision)) shouldBe false
 
       Given("an actual current implementation reporting both a concrete inventory proposal and an unresolved finding")
       val mixed = _fresh("auto-file-gp-mixed-finding")
       val mixedtask = _start(mixed)
-      val mixedwork = mixed.advance(mixedtask).business[V.GoalPhaseAdvanceResult]
+      val mixedwork = _advance(mixed, mixedtask)
       val mixedresult = _result("decision-needed", Some(_proposal(mixed))).copy(
         findings = Vector("SPECIFICATION-OWNED unresolved requirement judgment alongside the needed files"))
       When("ordinary semantic Submit retains the complete mixed result and Advance considers automatic inventory")
       _submit(mixed, mixedwork, mixedresult, "mixed-inventory-finding-source")
         .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
-      val mixedquestion = mixed.advance(mixedtask).business[V.GoalPhaseAdvanceResult]
+      val mixedquestion = _advance(mixed, mixedtask)
       Then("the genuine finding remains Human and reopening never supersedes it with an automatic inventory receipt")
       mixedquestion.kind shouldBe "Human"
-      mixed.advance(mixedtask).business[V.GoalPhaseAdvanceResult] shouldBe mixedquestion
+      _advance(mixed, mixedtask) shouldBe mixedquestion
       val mixedstored = _stored(mixed)
       mixedstored.exists(_.contains("mixed-inventory-finding-source")) shouldBe true
       mixedstored.exists(_.contains(mixedresult.findings.head)) shouldBe true
@@ -299,10 +347,10 @@ final class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers 
       Given("an actual fixed host with a missing literal capability which has already issued a file-only question")
       val pending = _fresh("auto-file-gp-unanswered", normal = false, configured = true)
       val pendingtask = _start(pending)
-      val work = pending.advance(pendingtask).business[V.GoalPhaseAdvanceResult]
+      val work = _advance(pending, pendingtask)
       _submit(pending, work, _configuredResult("decision-needed", Some(_proposal(pending))), "unanswered-inventory-source")
         .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
-      val unanswered = pending.advance(pendingtask).business[V.GoalPhaseAdvanceResult]
+      val unanswered = _advance(pending, pendingtask)
       unanswered.kind shouldBe "Human"
       val old = _stored(pending)
       When("normal standard composition admits invocation-local inventory under the original purpose")
@@ -310,14 +358,14 @@ final class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers 
       val staleDescription = pending.call("command", GoalPhaseRemainingPlanAdoption.describeOperation, Vector("--input",
         _json(V.GoalPhaseRemainingPlanDescriptionInput(work.sessionId, R.publicProposal(Some(_proposal(pending))).get))))
         .business[V.GoalPhaseRemainingPlanDescriptionResult]
-      val continued = pending.advance(pendingtask).business[V.GoalPhaseAdvanceResult]
+      val continued = _advance(pending, pendingtask)
       Then("native supersession retains the actual question and source result without manufacturing a Human answer")
       continued.work.get.kind shouldBe "ImplementStep"
       continued.human shouldBe None
       continued.work.get.selectedPlan.steps.head.ownedPaths shouldBe work.work.get.selectedPlan.steps.head.ownedPaths ++ _added
       continued.work.get.originalBase shouldBe work.work.get.originalBase
       continued.repairProgress shouldBe work.repairProgress
-      pending.advance(pendingtask).business[V.GoalPhaseAdvanceResult] shouldBe continued
+      _advance(pending, pendingtask) shouldBe continued
       val retained = _stored(pending)
       val semantic = old.filter(value => value.contains("unanswered-inventory-source") &&
         value.contains("sm-workflow.goal-phase-native-work-result.v1"))
@@ -335,16 +383,16 @@ final class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers 
           V.WorkflowArtifactReference("stale-inventory-target", "1")))))
       Then("the retired target cannot change the current work or manufacture an answer")
       stale.exitCode should not be 0
-      pending.advance(pendingtask).business[V.GoalPhaseAdvanceResult] shouldBe continued
+      _advance(pending, pendingtask) shouldBe continued
     }
 
     "retain progressing actual Repair observations and refuse stale or foreign work while pending work has no completion" in {
       Given("docs/spec/goal-phase-current-inventory-continuation.md R2,R3: a configured native host with an actual incomplete semantic assignment")
       val scenario = _fresh("auto-file-gp-repair", configured = true)
       val task = _start(scenario)
-      val original = scenario.advance(task).business[V.GoalPhaseAdvanceResult]
+      val original = _advance(scenario, task)
       When("Advance has no completion observation, including when an external worker's progress is unreported")
-      val pending = scenario.advance(task).business[V.GoalPhaseAdvanceResult]
+      val pending = _advance(scenario, task)
       Then("the same pending work remains pending; no live/unknown worker outcome is inferred or adopted")
       pending shouldBe original
       _stored(scenario).exists(_.contains(C.decision)) shouldBe false
@@ -357,13 +405,13 @@ final class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers 
       val foreign = try scenario.advance(task) finally Files.writeString(assembly, normal, UTF_8)
       Then("ownership is refused and the original owner's current work remains exact")
       foreign.exitCode should not be 0
-      scenario.advance(task).business[V.GoalPhaseAdvanceResult] shouldBe original
+      _advance(scenario, task) shouldBe original
 
       Given("a specification-owned incorrect candidate which runs the ordinary selected test and issues a real RepairStep")
       Files.writeString(Path.of(scenario.host.target.root).resolve("value.txt"), "incorrect\n", UTF_8)
       _submit(scenario, original, _configuredResult("completed"), "actual-repair-initial")
         .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
-      val repair = scenario.advance(task).business[V.GoalPhaseAdvanceResult]
+      val repair = _advance(scenario, task)
       repair.work.get.kind shouldBe "RepairStep"
       val assigned = repair.work.get.issues.get.issues.filter(issue => issue.repository == repair.work.get.selectedPlan.repository &&
         issue.step == repair.work.get.stepIdentity.get && issue.status != "RESOLVED" && issue.status != "DECLINED")
@@ -378,7 +426,7 @@ final class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers 
       When("the actual Repair returns its required report, descriptive findings, retained BLOCKED issues and progressing metadata")
       _submit(scenario, repair, result, "actual-progressing-inventory")
         .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
-      val continued = scenario.advance(task).business[V.GoalPhaseAdvanceResult]
+      val continued = _advance(scenario, task)
       Then("native continuation retains all original evidence and accounting without accepting or resolving the repair")
       continued.work.get.kind shouldBe "ImplementStep"
       continued.human shouldBe None
@@ -392,14 +440,14 @@ final class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers 
       stored.exists(_.contains("PROGRESSING")) shouldBe true
       _findings.foreach(finding => stored.exists(_.contains(finding)) shouldBe true)
 
-      scenario.advance(task).business[V.GoalPhaseAdvanceResult] shouldBe continued
+      _advance(scenario, task) shouldBe continued
     }
 
     "hold an actual unobserved stage intent without interpreting it as a completed inventory source" in {
       Given("docs/spec/goal-phase-current-inventory-continuation.md R3: configured acceptance and a native durable stage intent without its result")
       val scenario = _fresh("auto-file-gp-unknown", configured = true)
       val task = _start(scenario)
-      val original = scenario.advance(task).business[V.GoalPhaseAdvanceResult]
+      val original = _advance(scenario, task)
       Files.writeString(Path.of(scenario.host.target.root).resolve("value.txt"), "expected\n", UTF_8)
       _submit(scenario, original, _configuredResult("completed"), "unknown-stage-implementation")
         .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
@@ -408,10 +456,10 @@ final class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers 
       before.exists(_.contains("ordered-candidate:stage-intent-0")) shouldBe true
       before.exists(_.contains("ordered-candidate:stage-result-0")) shouldBe false
       When("normal public Advance reopens an effect whose result and termination remain unknown to the runtime")
-      val waiting = scenario.advance(task).business[V.GoalPhaseAdvanceResult]
+      val waiting = _advance(scenario, task)
       Then("it waits without adopting an inventory, replaying a stage or claiming that an external process ended")
       waiting.kind shouldBe "Wait"
-      scenario.advance(task).business[V.GoalPhaseAdvanceResult] shouldBe waiting
+      _advance(scenario, task) shouldBe waiting
       val after = _stored(scenario)
       after.exists(_.contains("ordered-candidate:stage-result-0")) shouldBe false
       after.exists(_.contains(C.decision)) shouldBe false

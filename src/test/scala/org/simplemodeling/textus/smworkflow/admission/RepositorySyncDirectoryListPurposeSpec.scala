@@ -22,7 +22,8 @@ import RepositorySyncPurpose as P
 /** Public directory entry exercises the existing purpose candidate owner in a
   * non-default configured workspace. Fixture authorship is not qualification.
   * @since   Nov.  8, 2026
-  * @version Nov. 12, 2026
+  *  version Nov. 12, 2026
+  * @version Nov. 16, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
@@ -37,7 +38,8 @@ final class RepositorySyncDirectoryListPurposeSpec extends AnyWordSpec with Give
   override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
     val descriptor = take(GenericSubsystemDescriptor.loadComponentArchive(Path.of("src/main/car").toAbsolutePath))
     val template = io.circe.parser.parse(descriptor.config("textus.subsystem.process-execution.plan")).toOption.get
-    val values = Map("repository.root" -> root.resolve("repository").toString, "git.branch" -> "main",
+    val values = Map("runtime.root" -> root.resolve("repository").toString, "runtime.parent" -> root.toString,
+      "repository.root" -> root.resolve("repository").toString, "git.branch" -> "main",
       "git.remote" -> "origin", "git.remote-branch" -> "main", "git.endpoint" -> root.resolve("upstream.git").toString,
       "git.user-name" -> "Fixture", "git.user-email" -> "fixture@example.invalid",
       "environment.path" -> "/usr/bin:/bin", "environment.java-home" -> "", "environment.ssh-auth-sock" -> "")
@@ -74,7 +76,7 @@ final class RepositorySyncDirectoryListPurposeSpec extends AnyWordSpec with Give
       .add("workspaceGrants", fields("workspaceGrants").get.mapArray(_ ++ (1 to 3).map(index => Json.obj(
         "componentId" -> Json.fromString(SmWorkflowComponent.componentId.name), "workspaceId" -> Json.fromString("purpose-slot-" + index),
         "access" -> Json.fromString("manage"))))))
-    if (scenario != "Questions") planned else {
+    val complete = if (scenario != "Questions") planned else {
       val other = planned.hcursor.get[Vector[Json]]("gitRepositories").toOption.get.head.mapObject(fields => fields
         .add("target", Json.fromString("batch-other")).add("identity", Json.fromString("batch-other-git"))
         .add("capability", Json.fromString("batch-other-git"))
@@ -89,6 +91,9 @@ final class RepositorySyncDirectoryListPurposeSpec extends AnyWordSpec with Give
         .add("grants", fields("grants").get.mapArray(_.map(_.mapObject(grant => grant.add("capabilities",
           grant("capabilities").get.mapArray(_ :+ Json.fromString("batch-other-git"))))))))
     }
+    val initialized = Phase69ConfiguredRepositoryFixture.withInitializationSources(complete)
+    if (scenario == "LegacyOnly") Phase69ConfiguredRepositoryFixture.withoutManagedCandidates(initialized)
+    else initialized
   }
   override protected def _prepare_sbt_build_(root: Path, scenario: String): Unit =
     TypedSbtHostPlanFixture.build(root, true)
@@ -165,8 +170,8 @@ final class RepositorySyncDirectoryListPurposeSpec extends AnyWordSpec with Give
         val selected = repository.resolve(path)
         Option.when(Files.exists(selected))(Files.readAllBytes(selected).toVector)
       }
-      Given("the configured legacy fixture's admitted candidate roots with only its purpose policy omitted")
-      _with_runtime_(root, "Equal", hostParameters = parameters(root) - P.declaration.name) { (owner, component, actor, prepare) =>
+      Given("the explicit legacy-slot fixture with both managed candidate policy absent and legacy purpose policy omitted")
+      _with_runtime_(root, "LegacyOnly", hostParameters = parameters(root) - P.declaration.name) { (owner, component, actor, prepare) =>
         prepare(call => call.setupC(_setup_commands_(root, "Equal").size))
         Files.writeString(repository.resolve("shared.md"), first)
         sourcehead = Files.readString(repository.resolve(".git/refs/heads/main")).trim

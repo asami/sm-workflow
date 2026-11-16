@@ -442,3 +442,66 @@ workspace selection, ordered shared-file commits, excluded remainders and
 same-Session recollection. No compiler, test, lint, independent review, installed
 qualification, acceptance or repository effect was run by this semantic author.
 Compact public handbacks and the full retained-response inventory remain B4/B5.
+
+## Packaged ordinary candidate binding
+
+The Component's `src/main/car/assembly-descriptor.yaml` supplies a V8 ordinary
+process plan with one `sessionCandidateWorkspaces` policy for
+`org.simplemodeling.textus.SmWorkflow`. Its logical parent is
+`sm-workflow-session-candidates` and its dormant alias is
+`sm-workflow-session-candidate`. The source retains its existing
+`sm-workflow-repository` binding. The owner has Manage authority for all three.
+
+The parent root is `${runtime.parent}/.sm-workflow/session-candidates` and the
+alias root is `${runtime.parent}/.sm-workflow/candidate-alias`.
+The source and all sixteen ordinary validation bindings use `${repository.root}`.
+The standard `runtime.parent` token is derived from the actual runtime root;
+when running at the checkout root, it keeps these managed roots as separate
+siblings outside the source checkout. An arbitrary subdirectory working
+directory does not guarantee that separation. A different RuntimeRoot or layout
+whose declared roots overlap the source requires explicit normal CNCF
+configuration.
+One matching `workspaceInitializations` declaration names the same owner,
+parent and alias, anchors at `${runtime.parent}`, and declares the relative
+`parentPath` `.sm-workflow/session-candidates` and `aliasPath`
+`.sm-workflow/candidate-alias`. Its complete `sources` list contains the
+source and all sixteen ordinary validation workspace IDs.
+
+Parsing and round-tripping the registered process-plan declaration has no
+filesystem effects. Normal initialization of the selected trusted plan checks
+its ownership, complete source bindings and Manage authority, then creates the
+explicit parent and alias roots when absent. Repeat initialization reuses these
+roots and preserves their content. Missing parent Manage authority or a crossed
+policy owner refuses initialization before managed directories are created.
+Directory selection and semantic answers supply no allocation authority.
+
+The alias uses the same ordinary `gitRepositories` declaration mechanism as
+the source, with its own `sm-workflow-purpose-git` identity/capability and the
+same configured Git destination, identity, executable, environment and finite
+limits. CNCF expands the declaration into typed Git programs. One alias
+`sbtPrograms` declaration per ordinary operation supplies compile, test,
+fix-check and publish-local with `sm-workflow-purpose-<operation>`
+identities/capabilities. The declarations neither select checks nor establish
+successful validation or publication.
+
+All original source declarations, the sixteen ordinary validation bindings,
+Git destination, executable/environment placeholders and other packaged
+settings remain present. User configuration overrides Component defaults
+through normal resolution; a replacement process plan receives no extra
+packaged authority.
+
+`RepositorySyncPackagedWorkspaceSpec` loads the real assembly YAML through
+the framework loader and round-trips the public registered declaration. Its
+isolated fixture creates only the ordinary source and controlled descriptor/home
+metadata before public `CncfRuntime.initializeForEmbedding` initializes the
+same expanded plan. It covers first use, reuse with retained parent content,
+bindings, grants, Git/SBT declarations and initialization refusals.
+`RepositorySyncSessionCandidateWorkspaceSpec` separately covers native candidate
+lifecycle with its explicit existing-root V7 fixture.
+
+Host-root initialization, native Session candidate lifecycle and installed
+consumer continuation are separate obligations. Existing Sessions retain their
+accepted Plans, prepared candidates, successful checks, history and repair
+counts. The supported same-Session continuation and pre-effect configuration
+refresh remain their entry points; this declaration supplies no replay, reset,
+or acceptance of a live or unknown effect.

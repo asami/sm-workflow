@@ -25,7 +25,8 @@ import org.simplemodeling.textus.smworkflow.value.{GoalPhaseDevelopmentReconstru
   *  version Oct. 28, 2026
   *  version Nov.  7, 2026
   *  version Nov.  8, 2026
-  * @version Nov.  9, 2026
+  *  version Nov.  9, 2026
+  * @version Nov. 16, 2026
   */
 private[smworkflow] object StandardWorkflowRuntime {
   private final case class Shared(persistence: GoalPhaseRuntimeParameters.Persistence,
@@ -258,12 +259,25 @@ private[smworkflow] object StandardWorkflowRuntime {
         input <- NativeWorkflowOperationInput.recordC(request, "input")
         identity <- input.getString("repositoryIdentity").map(Consequence.success)
           .getOrElse(invalid("RepositorySync requires an explicit repositoryIdentity"))
-        repositories <- plan.hcursor.get[Vector[Json]]("gitRepositories").fold(e => invalid(e.message), Consequence.success)
-        matching = repositories.filter(repository => repository.hcursor.get[String]("identity").contains(identity) ||
+        policies <- plan.hcursor.downField("sessionCandidateWorkspaces").focus match {
+          case None => Consequence.success(Vector.empty[Json])
+          case Some(value) => value.as[Vector[Json]].fold(e => invalid(e.message), Consequence.success)
+        }
+        owner = creation.instanceMetadata.flatMap(_.componentId).getOrElse(SmWorkflowComponent.componentId).name
+        aliases <- policies.foldLeft(Consequence.success(Set.empty[String])) { (prior, policy) => for {
+          values <- prior
+          component <- policy.hcursor.get[String]("componentId").fold(e => invalid(e.message), Consequence.success)
+          alias <- policy.hcursor.get[String]("alias").fold(e => invalid(e.message), Consequence.success)
+          _ <- org.goldenport.cncf.workspace.WorkspaceId.parseC(alias)
+        } yield if (component == owner) values + alias else values }
+        families <- plan.hcursor.get[Vector[Json]]("gitRepositories").fold(e => invalid(e.message), Consequence.success)
+        repositories = families.filterNot(_.hcursor.get[String]("target").toOption.exists(aliases))
+        matching = families.filter(repository => repository.hcursor.get[String]("identity").contains(identity) ||
           repository.hcursor.get[String]("target").contains(identity))
         // A single explicitly configured legacy binding retains its caller's
         // business repository identity. Multiple bindings require an exact one.
-        repository <- uniqueC(if (matching.nonEmpty) matching else if (repositories.size == 1) repositories else Vector.empty,
+        repository <- uniqueC(if (matching.nonEmpty) matching.filterNot(_.hcursor.get[String]("target").toOption.exists(aliases))
+          else if (repositories.size == 1) repositories else Vector.empty,
           "RepositorySync requires one configured repository identity; no destination is guessed")
         workspace <- repository.hcursor.get[String]("target").fold(e => invalid(e.message), Consequence.success)
         workspaces <- plan.hcursor.get[Vector[Json]]("workspaces").fold(e => invalid(e.message), Consequence.success)

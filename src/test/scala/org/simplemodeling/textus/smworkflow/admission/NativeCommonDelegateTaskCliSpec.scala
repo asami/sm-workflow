@@ -19,7 +19,8 @@ import S.given
 /** Tiny build and ordinary host declarations only. The fixed focused suite is
   * host configuration, never a request-supplied class or command argument.
   * @since   Nov.  5, 2026
-  * @version Nov. 11, 2026
+  *  version Nov. 11, 2026
+  * @version Nov. 16, 2026
   */
 private[admission] object NativeCommonDelegateTaskFixture {
   val suite = "org.simplemodeling.textus.smworkflow.p62authored.LineWriterSpec"
@@ -30,7 +31,8 @@ private[admission] object NativeCommonDelegateTaskFixture {
   def processPlan(root: Path, focused: Boolean = true): Json = {
     val descriptor = take(GenericSubsystemDescriptor.loadComponentArchive(Path.of("src/main/car").toAbsolutePath))
     val template = parser.parse(descriptor.config("textus.subsystem.process-execution.plan")).toOption.get
-    val values = Map("repository.root" -> root.resolve("repository").toString, "git.branch" -> "main",
+    val values = Map("runtime.root" -> root.resolve("repository").toString, "runtime.parent" -> root.toString,
+      "repository.root" -> root.resolve("repository").toString, "git.branch" -> "main",
       "git.remote" -> "origin", "git.remote-branch" -> "main", "git.endpoint" -> root.resolve("upstream.git").toString,
       "git.user-name" -> "Fixture", "git.user-email" -> "fixture@example.invalid",
       "executable.sbt" -> TypedSbtHostPlanFixture.normalExecutable.toString,

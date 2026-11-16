@@ -18,7 +18,8 @@ import WorkflowManagedProcessExecution as E
 /** Logical Session candidate selection and actual native materialization facts.
   * CNCF owns allocation, paths, executable admission and scoped reacquisition.
   * @since   Nov. 12, 2026
-  * @version Nov. 12, 2026
+  *  version Nov. 12, 2026
+  * @version Nov. 16, 2026
   */
 private[smworkflow] object RepositorySyncPurposeWorkspace {
   final case class Materialization(source: String, destination: String, candidate: String,
@@ -61,7 +62,8 @@ private[smworkflow] object RepositorySyncPurposeWorkspace {
     _ <- if (progress != null && progress.candidate.nonEmpty && progress.plan.exists(_.groups.lift(progress.cursor).nonEmpty))
       Consequence.unit else N.invalid("Managed Purpose reference has no actual current prepared candidate and accepted group")
     component <- _component_c(store.core)
-    _ <- if (plan.hcursor.get[String]("schema").contains("cncf.runtime-process-execution.v7")) Consequence.unit
+    _ <- if (plan.hcursor.get[String]("schema").exists(schema =>
+      schema == "cncf.runtime-process-execution.v7" || schema == "cncf.runtime-process-execution.v8")) Consequence.unit
       else N.invalid(_setup_message)
     policies <- _rows_c(plan, "sessionCandidateWorkspaces")
     selected = policies.filter(_.hcursor.get[String]("componentId").contains(component))

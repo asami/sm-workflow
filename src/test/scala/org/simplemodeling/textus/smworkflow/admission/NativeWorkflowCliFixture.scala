@@ -26,7 +26,8 @@ import GoalPhaseAcceptanceBoundary as A
   * @since   Oct. 13, 2026
   *  version Oct. 28, 2026
   *  version Nov.  8, 2026
-  * @version Nov. 11, 2026
+  *  version Nov. 11, 2026
+  * @version Nov. 16, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeWorkflowCliFixture {
@@ -221,9 +222,12 @@ private[admission] object NativeWorkflowCliFixture {
               "componentId" -> Json.fromString(_component), "workspaceId" -> Json.fromString(workspace),
               "access" -> Json.fromString("manage"))))
         }
+        val complete = if (process.hcursor.downField("workspaceInitializations").focus.nonEmpty)
+          Phase69ConfiguredRepositoryFixture.withInitializationSources(process)
+        else process
         Files.writeString(config, current.mapObject(_.add(CommonEvidence.declaration.name, Json.fromString(policy.noSpaces))
           .add("textus.subsystem.storage.plan", Json.fromString(storage.noSpaces))
-          .add("textus.subsystem.process-execution.plan", Json.fromString(process.noSpaces))).noSpaces)
+          .add("textus.subsystem.process-execution.plan", Json.fromString(complete.noSpaces))).noSpaces)
       }
     }
 
@@ -317,6 +321,9 @@ private[admission] object NativeWorkflowCliFixture {
     def readEvidence(input: V.EvidenceReadInput): Result =
       _run(_operation_argv("command", s"$_component.EvidenceService.readEvidence") ++ Vector("--input",
         _take(input.toRecord().toJsonStringC, "Public Evidence read input")) ++ _output)
+    def readRetainedWork(reference: V.WorkflowRetainedWorkReference): Result =
+      _run(_operation_argv("command", s"$_component.WorkflowRetainedWorkService.readWorkflowRetainedWork") ++ Vector("--input",
+        _take(reference.toRecord().toJsonStringC, "Public retained work reference"), "--json"))
     def recordEvidenceJournal(input: V.EvidenceReadInput): Result =
       _run(_operation_argv("command", s"$_component.EvidenceService.recordEvidenceJournal") ++ Vector("--input",
         _take(input.toRecord().toJsonStringC, "Public Evidence Journal input")) ++ _output)
