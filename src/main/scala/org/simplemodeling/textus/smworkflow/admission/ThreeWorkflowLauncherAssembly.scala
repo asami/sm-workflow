@@ -64,6 +64,8 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     "ManagedDevelopmentService.compileDevelopmentConsumer", "ManagedDevelopmentService.readDevelopmentArtifactStatus",
     "LocalPublicationService.ensureLocalPublication", "LocalPublicationService.collectLocalPublication",
     "LocalPublicationService.collectLatestLocalPublication",
+    "LocalPublicationService.describeLocalPublicationRecovery", "LocalPublicationService.admitLocalPublicationRecovery",
+    "LocalPublicationService.advanceLocalPublicationRecovery",
     "DevelopmentObservationService.readDevelopmentState", "DevelopmentObservationService.readDevelopmentHistory",
     "EvidenceService.readEvidence", "EvidenceService.readEvidenceRange", "EvidenceService.recordEvidenceJournal",
     "EvidenceService.archiveEvidenceBatch", "EvidenceService.describeEvidence",
@@ -162,6 +164,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
         journalRepository = Some(repository.declaration.input.repositoryIdentity)), host.splitCatalog,
         host.splitStartHuman, host.splitAnswerHuman)
       goalCatalog <- GoalPhaseRuntimeCatalog.loadC()
+      publication <- LocalPublicationService.bindC(creation, host.goal, goalCatalog.definition)
       repositoryDefinition <- RepositorySyncDefinitionBinding.bindC
     } yield Vector(
       standalone, task, delegate, delivery, records, forceClosure,
@@ -175,7 +178,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
       DevelopmentJournalService.bind(host.goal.journalPolicy),
       CommonEvidenceService.bind(host.goal.evidencePolicy, host.goal.journalPolicy),
       DevelopmentObservationService.bind(host.goal, goalCatalog.definition),
-      LocalPublicationService.bind(host.goal, goalCatalog.definition),
+      publication,
       ManagedDevelopmentService.bind(host.managedDevelopment)).map(NativeWorkflowCompactResponse.bind) :+
       WorkflowRetainedWork.bind
 }
