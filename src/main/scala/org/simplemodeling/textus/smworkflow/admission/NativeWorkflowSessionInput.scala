@@ -107,6 +107,13 @@ private[smworkflow] object NativeWorkflowSessionInput {
           case Some(business) =>
             val participant = SecuritySubject.from(context.security).subjectId
             for {
+            intent <- if (kind == NativeWorkflowStartInput.Kind.GoalPhase && selectedStart.isEmpty)
+              NativeWorkflowOperationInput.optionalValueC[org.simplemodeling.textus.smworkflow.value.GoalPhaseStartIntent](BoundAction.this.request, "intent")
+              else Consequence.success(Option.empty[org.simplemodeling.textus.smworkflow.value.GoalPhaseStartIntent])
+            _ <- intent.fold(Consequence.unit)(value => for {
+              record <- NativeWorkflowOperationInput.recordC(BoundAction.this.request, "input")
+              _ <- GoalPhaseStartPreparation.prepareC(selectedcore, record, value)
+            } yield ())
             selected <- (if (runtimeRepositoryIntent)
               StandardRepositorySyncIntent.selectionC(business, session, definition, selectedcore).map(Some(_))
             else selectedStart.map(value => Consequence.success(Some(value))).getOrElse(

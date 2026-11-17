@@ -626,6 +626,15 @@ checkpoint does not establish divergence. Without such evidence, continue at
 2/10 and at 9/10; stop at 10/10 before an eleventh repair. Retain the count
 across reopen and continuation; do not renew it through a new plan or Session.
 
+A separately recorded Human exception was authorized on 2026-11-17 for the
+current SST-1 batch-admission correction and bounded isolated qualification.
+This does not change the ordinary ten-attempt ceiling or reset prior accounting.
+Its exact exhausted Task target requires independent admission through the
+existing continuation owner; one additional native completed repair is retained
+as cumulative attempt eleven. Original failures, successful results, source and
+Session history remain. This exceptional delivery is not Phase 8 acceptance or
+automatic permission to renew another repair window.
+
 Exercise the Wait expectation against its contract. A decision about changing
 that contract is separate from repair-loop accounting. Use the historical 2/2
 receipt as evidence of the current gap, not as a lower-limit exception.
@@ -1078,3 +1087,8 @@ the agreed rollout, not every imaginable future feature. Preserve Phase 5's
 removal of management hashes, tamper defenses, unchanged-content proofs and
 internal time-only expiry across every extension; do not reintroduce them as
 completion or evidence-reuse requirements.
+
+The [2026-11-17 Session-owned state journal](../journal/2026/11/2026-11-17-phase8-session-owned-state.md)
+records source and fixture work for the selected RepositorySync prerequisite.
+Validation, independent review and installed qualification remain pending;
+the full requirements and unchecked completion items above remain in force.

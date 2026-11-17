@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /**
  * @since   Oct.  2, 2026
  *  version Oct. 28, 2026
- * @version Nov.  6, 2026
+ * @version Nov. 17, 2026
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -21,6 +21,7 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
     .map(name => s"skills/$name/SKILL.md")
   private val _contract_paths = Vector(
     "docs/spec/native-host-execution.md",
+    "docs/spec/semantic-result-submission.md",
     "docs/spec/runtime-owned-local-publication.md",
     "docs/spec/caller-information.md",
     "docs/spec/task-fix-delivery.md",

@@ -328,10 +328,22 @@ private[smworkflow] object NativeWorkflowResultInput {
         case _ => _invalid("Task recovery history has no matching committed disposition")
       }
     } }
+    scopeAdapter <- storage.bindWorkOrderSupersessionC(GoalTaskNativeRun.completionOperation,
+      GoalTaskNativeRun.inputCodec, GoalTaskScopeCorrection.checkpointCodec)
+    corrections = current.history.filter(_.causation.value.startsWith(GoalTaskScopeCorrection.resumeCause))
+    _ <- corrections.foldLeft(Consequence.unit) { (prior, entry) => prior.flatMap { _ =>
+      val old = entry.causation.value.stripPrefix(GoalTaskScopeCorrection.resumeCause)
+      scopeAdapter.loadRetainedC(ContinuationIdentity(old), current.identity)(using context).flatMap {
+        case Some(saved) if saved.receipt.nextRevision == entry.revision &&
+            saved.receipt.payload.target.sessionId == current.identity.value &&
+            saved.receipt.payload.target.oldContinuationId == old => Consequence.unit
+        case _ => _invalid("Task scope-correction history has no matching committed disposition")
+      }
+    } }
     _ <- submission.issuedContext match {
       case Some(value) if assigned.issuedContext.contains(value) => Consequence.unit
       case Some(_) => _invalid("Task result issuedWorkContext differs from the actual current issued request")
-      case None if recovered.nonEmpty => _invalid("A recovered Task result requires its actual issuedWorkContext")
+      case None if recovered.nonEmpty || corrections.nonEmpty => _invalid("A recovered or scope-corrected Task result requires its actual issuedWorkContext")
       case None => Consequence.unit
     }
   } yield ()

@@ -20,7 +20,7 @@ import RepositorySyncPurpose as P
 /** Shared ordinary host configuration and real Git setup/observations only.
   * No Workflow record, process receipt or accepted result is seeded.
   * @since Nov. 3, 2026
-  * @version Nov.  3, 2026
+  * @version Nov. 17, 2026
   */
 private[admission] trait RepositorySyncMaintenanceFixture extends Phase69ConfiguredRepositoryFixture {
   protected val shared_path = "docs/shared.md"
@@ -46,7 +46,7 @@ private[admission] trait RepositorySyncMaintenanceFixture extends Phase69Configu
     }
   }
   override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
-    val base = super.process_plan(root, scenario, goal)
+    val base = Phase69ConfiguredRepositoryFixture.withoutManagedCandidates(super.process_plan(root, scenario, goal))
     val slot = "purpose-slot-1"
     Files.createDirectories(root.resolve(slot))
     val programs = TypedGitHostPlanFixture.plan(Target(root.resolve("repository"), "main", "origin", "main",
@@ -105,7 +105,7 @@ private[admission] trait RepositorySyncMaintenanceFixture extends Phase69Configu
 /** Public Operations against local repositories. Authored semantic responses and
   * independent reviewer evidence are specification data, never live acceptance.
   * @since Nov. 3, 2026
-  * @version Nov.  3, 2026
+  * @version Nov. 17, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])

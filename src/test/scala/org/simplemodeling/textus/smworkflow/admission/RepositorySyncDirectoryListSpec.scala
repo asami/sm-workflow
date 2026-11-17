@@ -16,7 +16,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Executable directory-list intake and clean native-batch contract. These
   * authored fixtures are not installed qualification or an execution receipt.
   * @since   Nov.  5, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 17, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -28,7 +28,7 @@ final class RepositorySyncDirectoryListSpec extends AnyWordSpec with Matchers wi
   private def _workspace(ordinal: Int): String = "batch-repository-" + ordinal
 
   override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
-    val template = super.process_plan(root, scenario, goal)
+    val template = Phase69ConfiguredRepositoryFixture.withoutManagedCandidates(super.process_plan(root, scenario, goal))
     val repository = template.hcursor.get[Vector[Json]]("gitRepositories").toOption.get.head
     val repositories = _scenarios.indices.map { ordinal => repository.mapObject(fields => fields
       .add("target", Json.fromString(_workspace(ordinal)))

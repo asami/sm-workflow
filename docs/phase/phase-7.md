@@ -922,11 +922,11 @@ supplement neither changes source metadata nor replaces required project FULL.
 
 ## Dependency property ownership clarification (2026-10-21)
 
-Phase 7's shared workspace/repository graph must represent each development dependency with independent `localRepository`, `localJar`, and `localProject` properties (P7-DEP01). The dependency repository owns building, validating and publishing `localJar`; the consumer only resolves the published artifact. Git repository-sync and catch-up must not trigger producer builds or republish JARs implicitly (P7-DEP02). Preserve explicit publish/select/status and per-consumer artifact selection already planned in A/B. Distinguish Git source revision from published artifact version; use development-scoped artifact repositories to avoid global Ivy pollution (P7-DEP03). Reuse this graph for Phase 13 catch-up rather than introducing another dependency configuration model. These are planned requirements, not completed work.
+Phase 7's shared workspace/repository graph must represent each development dependency with independent `localRepository`, `localJar`, and `localProject` properties (P7-DEP01). The dependency repository owns building, validating and publishing `localJar`; the consumer only resolves the published artifact. Git repository-sync and catch-up must not trigger producer builds or republish JARs implicitly (P7-DEP02). Preserve explicit publish/select/status and per-consumer artifact selection already planned in A/B. Distinguish Git source revision from published artifact version; use development-scoped artifact repositories to avoid global Ivy pollution (P7-DEP03). Reuse this graph for [Phase 21 catch-up](phase-21.md), restored from the former Phase 13 plan, rather than introducing another dependency configuration model. These are planned requirements, not completed work.
 
 ## Development Workspace dependency-edge clarification (2026-10-21)
 
-The discussion concerns the **development environment definition itself**, not a new Workspace Profile abstraction. The existing Phase 7 Project/Repository/Worktree graph and Development Artifact Overlay remain the single configuration model. Revise P7-DEP01 interpretation: `localRepository`, `localJar`, and `localProject` are independent properties of the **consumer-to-provider dependency edge in a Development Workspace**, not intrinsic/global properties of the provider repository. Different consumers/worktrees may select different arrangements. `localRepository` supplies a registered local development checkout for Git operations; `localProject` is an explicit source-project binding; `localJar` is a consumer reference to a provider-published local artifact. The provider alone owns artifact build/validation/publication/update; consumer selection is explicit and cannot trigger provider publication. Reuse existing Consumer Binding and immutable Artifact Selection rather than adding a parallel profile, selector or state store. Phase 13 traverses only registered `localRepository` dependency edges. These are requirements, not implemented features.
+The discussion concerns the **development environment definition itself**, not a new Workspace Profile abstraction. The existing Phase 7 Project/Repository/Worktree graph and Development Artifact Overlay remain the single configuration model. Revise P7-DEP01 interpretation: `localRepository`, `localJar`, and `localProject` are independent properties of the **consumer-to-provider dependency edge in a Development Workspace**, not intrinsic/global properties of the provider repository. Different consumers/worktrees may select different arrangements. `localRepository` supplies a registered local development checkout for Git operations; `localProject` is an explicit source-project binding; `localJar` is a consumer reference to a provider-published local artifact. The provider alone owns artifact build/validation/publication/update; consumer selection is explicit and cannot trigger provider publication. Reuse existing Consumer Binding and immutable Artifact Selection rather than adding a parallel profile, selector or state store. [Phase 21](phase-21.md) traverses only registered `localRepository` dependency edges. These are requirements, not implemented features.
 
 ## Optional operation candidates — reference only (2026-10-21)
 
@@ -969,3 +969,57 @@ starts/awaits the managed command and collects results by test/parameters/mode.
 Keep explicit requirements distinct from dev-first/nightly defaults. Mixed-mode
 suites and forked consumers must receive the actual mode without leakage or
 duplicate declaration lists. No new Phase closure or implementation is claimed.
+
+## P7-A implementation boundary — 2026-11-12
+
+Plan revision 2 adopts explicit one-time consumer opt-in for P7-DAO-02 and
+P7-DAO-A05, using the delivered sbt-cozy plugin/helper contract. Valid selections
+need no resolvable ordinary baseline. All other condition descriptions, the five
+ordered Steps and the 44 required Phase obligations remain unchanged and pending.
+The [overlay contract](../spec/development-artifact-overlay.md#10-minimal-p7-a-native-route-2026-11-12)
+describes the authored native publish/select/compile/status route and its exact
+limits. The current source implementation and executable specifications are not
+validation or independent review evidence. P7-C/P7-DD/P7-B/P7-D retain parallel
+continuation, delivery policy, remaining lifecycle and integrated closure work.
+
+P7-C's issued implementation context (continuation
+`14fad7b7a87c61d8d8f2eeb432a65fb4:ordered-implementation:253`, revision 254)
+adds an authored two-lane native build/isolation/reconnection scenario to the
+registered `Phase7ManagedDevelopmentSpec`. It does not establish automatic
+Goal continuation. The selected host configuration supplies no runtime worker
+dispatch/result-to-Goal-resume binding; the existing delegation observation and
+external continuation conversion APIs do not provide one. The required host
+registration/API, authority and failure/defer behavior must be resolved before
+P7-C can complete. Dependency-aware selected-worktree RepositorySync composition
+also remains unqualified. See the [current native route boundary](../spec/dependency-development-delivery.md#current-native-route-boundary--2026-11-12).
+No P7-C validation or review receipt is supplied by this source assignment, and
+all 44 required Phase conditions remain pending their actual acceptance gates.
+
+The resumed P7-C Request (continuation `ordered-implementation:257`, revision
+258 in the same Session) supersedes the earlier blanket host-startup diagnosis:
+the existing caller can dispatch a dedicated semantic worker and receive its
+result in a live parent. The source batch now connects the existing dependency
+edge to native selected-worktree RepositorySync, with explicit scoped direct
+remote-main routing and original-root preservation on reconnect. It adds authored
+resolver and native Start/Advance specifications in the same registered suite.
+The [connection design and capability table](../spec/dependency-development-delivery.md#existing-caller-continuation-design-and-actual-host-gaps--2026-11-12)
+separates unfinished project A/B composition from host event execution,
+ended-turn scheduling and blocked Codex Goal reactivation. None is established by
+a passive result or notification. The source assignment ran no validation or
+independent review and changes no acceptance condition, Session or repair count.
+
+The P7-C repair issued as `ordered-repair:494`, revision 495 addresses the four
+original-purpose findings in the retained independent review. Managed B checks
+now require actual ordinal validation aliases for that selected worktree; the
+retained A Start root must match the configured consumer workspace; and managed
+publication source must be B's clean accepted commit/tree. Adoption remains an
+attachment operation. Explicit `selectDevelopmentArtifact` and
+`compileDevelopmentConsumer` establish consumer integration; subsequent native
+Advance authenticates those results and returns A's original public Request,
+issued context and completion binding to the live caller. A's real semantic
+Submit remains with its original owner and changes no Start or prior result.
+Failed/deferred lanes and stale or crossed source/work references cannot return
+A as ready. Registered specifications now include the connected public route,
+canonical-check misbinding, selected-B failure and negative consumer/source
+cases. These additions are authored source, not executed verification or
+independent review evidence. The original 44 Phase conditions remain in force.

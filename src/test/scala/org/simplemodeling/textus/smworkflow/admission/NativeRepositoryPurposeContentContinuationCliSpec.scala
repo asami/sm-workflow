@@ -40,8 +40,19 @@ private[admission] trait NativeRepositoryContinuationCliFixture extends Reposito
   protected def fresh(name: String, checked: Boolean = false): F.Scenario = {
     val scenario = F.fresh(name, bootstrapSelectedInput = false,
       sbtRepair = Option.when(checked)(TypedSbtHostPlanFixture.normalExecutable))
+    val config = parse(Files.readString(scenario.root.resolve(".textus/config.json"))).toOption.get
+    val original = parse(config.hcursor.get[String]("textus.subsystem.process-execution.plan").toOption.get).toOption.get
+    val retentionWorkspace = "prepared-imports"
+    val process = process_plan(scenario.root, "Equal", scenario.host.goal).mapObject { fields =>
+      Vector("workspaces" -> "identity", "workspaceGrants" -> "workspaceId").foldLeft(fields) {
+        case (current, (key, identity)) =>
+          val retained = original.hcursor.get[Vector[Json]](key).toOption.get.filter(
+            _.hcursor.get[String](identity).toOption.contains(retentionWorkspace))
+          current.add(key, current(key).get.mapArray(_ ++ retained))
+      }
+    }
     configure(scenario, maintenance_parameters() ++ Map(
-      "textus.subsystem.process-execution.plan" -> process_plan(scenario.root, "Equal", scenario.host.goal).noSpaces,
+      "textus.subsystem.process-execution.plan" -> process.noSpaces,
       "textus.resource.url.file.roots" -> scenario.root.toString))
     scenario
   }

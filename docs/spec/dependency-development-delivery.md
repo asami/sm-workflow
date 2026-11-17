@@ -24,11 +24,178 @@ subsequent operational improvements; 8.1 contains the former 6.12 Scala-quality
 plan. Neither is a Phase 7 entry gate.
 
 FIFO serializes requests to the selected destination queue, not unrelated lanes.
+
+### Current native route boundary — 2026-11-12
+
+The scoped producer/consumer Operations support independent explicit source and
+artifact resources. `Phase7ManagedDevelopmentSpec` additionally specifies two
+physical producer/consumer pairs with separate private repositories, identical
+ordinary coordinates and request names, and different selected development
+versions. Its scenario retains A's failed compile, executes B's publication and
+compile, then reconnects A to its existing native records and exact selection.
+These are authored executable specifications; this source update supplies no
+execution or acceptance receipt.
+
+The resumed P7-C investigation distinguishes supported caller dispatch from an
+automatic managed dependency continuation. The native public Request already
+contains its unchanged issued context, result type, completion Operation,
+continuation and expected revision. The selected caller can dispatch that
+bounded semantic assignment to a dedicated worker and receive its completion in
+the live parent. Neither a direct runtime-to-Codex RPC nor another coordinator is
+needed for that supported handoff. `NativeWorkflowResultInput` and
+`GoalPhaseNativeWorkContinuation` own ordinary result admission and continuation
+completion. A worker's final answer is still only semantic input, not a B delivery
+accepted after validation, independent review, commit and publication.
+
+P7-C now composes the native selected-source RepositorySync and bounded
+DelegateTask owners. The optional `dependencyWorkEdge` in the same managed
+resource declaration selects B's source for a destination Task. Its public
+`sourceReferences` includes exactly one real pending GoalPhase A WorkOrder
+identity and expected revision. B's existing native checkpoint retains A's
+Component instance, participant, Session, Plan, Step, generation and complete
+edge. A remains suspended; its semantic result is never synthesized to Start B.
+
+The CNCF owners already provide `WorkflowProtocolV1.resumePersistedWorkOrderC`,
+`resumeIssuedWithInstanceGuardC`, `ContinuationRuntime.resumeWithProgramC` and
+managed atomic completion. These are real native Session continuation APIs;
+Codex Goal UI status is not their prerequisite. This composition preserves
+ordinary managed completion instead of invoking a loose resume with an invented
+A semantic result. `JobUnitOfWorkSubmission` is the Job owner's private staged
+post-commit activation mechanism. Its presence does not itself register an
+external semantic worker's terminal event with a native business Operation.
+
+The existing live parent can dispatch B's actual issued Request and submit the
+real result through native Submit/Advance. The source changes do not install an
+external worker-terminal-event subscriber or ended-turn chat scheduler. That
+remaining adapter question is separate from the native composition below and
+from the existing CNCF continuation APIs. No new upstream Git/SBT DSL is required
+by this composition. All executable specifications in this update are authored
+source; validation, independent review and integrated qualification are pending.
 Managed B source/artifact selection and matching A resumption remain runtime-owned.
 Synchronize only that selected B worktree with its configured GitHub branch;
 unrelated/canonical B source changes and cleanliness are not inputs. Ordinary
 main integration retains its separate local-first route. This schedule changes
 no current Session, mode, authority, accepted work, history or repair count.
+
+### Selected-source RepositorySync connection — 2026-11-12
+
+The optional `repositorySyncEdge` field in the existing
+`sm-workflow.managed-development` declaration selects one of that declaration's
+dependency edges. There is no separate workspace profile. A normal
+`RepositorySyncService.startRepositorySync` request uses the selected edge's
+`provider.repository` as `repositoryIdentity` and explicit `FULL_STATE` intent.
+`StandardWorkflowRuntime` resolves the edge's `provider.workspace` against the
+CNCF process plan, requires its exact configured Git repository identity and
+reuses the normal native single-repository assembly. `localJar` and `localProject`
+do not redirect source synchronization. Missing/ambiguous/crossed configuration
+fails before Git effects, without another checkout lookup or producer build.
+
+For a configured remote `main`, explicitly set
+`sm-workflow.repository-sync.main-integration=direct` in that development scope.
+An absent value or `local-first` conflicts with the selected managed route and
+fails before execution. A non-main destination retains its configured branch.
+Without `repositorySyncEdge`, the ordinary resolver keeps its existing behavior;
+this change does not implement Phase 8 local-first integration. Requests for
+unrelated repository identities retain their own ordinary resolution.
+
+Advance resolves the original native Session root and rejects a changed edge
+which would move that Session to another B checkout. Existing native Git grants,
+participant admission, merge validation/review, convergence and actual impact
+selection remain the owners. Clean equal/push/fast-forward handling does not
+introduce precautionary product checks. Source synchronization neither publishes
+B nor activates an artifact in A. The registered `Phase7ManagedDevelopmentSpec`
+authors resolver failure cases and a public native Start/Advance/reconnect case
+with an unrelated unusable canonical checkout and no SBT programs; no execution
+receipt is provided by this source assignment.
+
+### Native bounded delivery and matching A — 2026-11-12
+
+`dependencyWorkEdge` is independent of `repositorySyncEdge` and uses the same
+explicit resource graph. Only the matching destination repository resolves to
+its provider workspace; requester and unrelated bounded entries retain their
+ordinary owners. Native continuation resolves the original retained B root and
+branch before effects. Configuration cannot move a pending/completed bounded
+Session to a different checkout. Missing or crossed provider metadata fails.
+
+For managed destination work, `publicationTarget` explicitly names the selected
+edge and `artifactCoordinates` names its exact development version. The native
+B request identity is the immutable publication identity; it must satisfy the
+existing scoped operation identity constraints. The version is the existing
+`ManagedDevelopment.version(original, scope, requestIdentity)` mapping. This
+route calls the existing scoped producer operation after B validation, review
+and local commit; it never falls through to ordinary shared `publishLocal`.
+The returned scoped publication must identify B's accepted commit and committed
+tree, with empty native dirty-path and dirty-content observations. The runtime
+checks this before publishing and when admitting the retained publication;
+stable post-commit modified or untracked source is not accepted delivery source.
+The existing
+`DelegateTask.Delivery` retains the publication and original A capture. Ordinary
+non-managed delegated publication retains its prior behavior.
+
+The public B `sourceReferences` supplies A's actual continuation identity and
+expected revision. Native storage checks the real A WorkOrder, current active
+suspension, Component instance, participant, Plan, Step, generation and consumer
+repository and the actual retained Start root against the edge's explicitly
+configured consumer workspace root. Sharing a repository identity does not make
+two consumer worktrees interchangeable. The typed capture lives in B's existing native bounded checkpoint,
+not a new lifecycle ledger. Missing, stale or crossed A references fail before
+B's native Start record is created. Existing native A approval and effect gates
+remain in force; a reference is never effect authorization.
+
+Once the caller has recorded actual B dispatch, requester `advanceDelegateTask`
+loads B's same-store native checkpoint. A pending B WorkOrder, failure or
+Human/decision frontier remains a wait without invoking B, resetting either
+repair count or blocking a different Session. A native `ReturnReady`/`Returned`
+checkpoint is admitted through the existing `DelegateTask.returnedC` and
+`observeC` rules, using its exact immutable native locator. An explicit defer
+stops automatic collection; ordinary explicit delivery/adoption direction stays
+with its existing owner. Native force closure remains the stop boundary.
+
+Managed adoption retains the existing independently admitted host evidence
+requirement and remains `result-and-selection-attachment-only`. It performs no
+consumer selection, compilation or A completion. The caller explicitly invokes
+the existing scoped artifact Operations. A managed requester remains natively
+Active after this attachment because its integration observations and original A
+handoff remain pending. Advance retains changed observations through the existing
+native checkpoint owner before projecting their state; unchanged observations do
+not append history. Ordinary nonmanaged Adopted delivery remains terminal.
+Historical managed instances already marked Completed are preserved and refused
+by this integration route; Advance does not reopen or rewrite them.
+The caller explicitly invokes
+`selectDevelopmentArtifact` and `compileDevelopmentConsumer` through their
+existing scoped artifact owner. Use B's request identity for `publication` and
+the requester's request identity for `requestIdentity` and `selection`.
+
+After adoption, requester `advanceDelegateTask` rereads B's actual native
+checkpoint and the exact retained scoped consumer result. The publication,
+development coordinates and selection reference must match the original edge
+and native B output. The exact selection reference is
+`ManagedDevelopment.key(definition, edge, "selection", requesterRequestIdentity)`
+at revision `1`. Missing, failed, unverified or unknown consumer results return
+`Wait` without executing a build. Compilation records the consumer's actual
+native Git source and dirty-file content digests before/after execution; a
+changed source cannot produce verified evidence. Advance rejects verification
+that no longer matches that consumer source, as well as stale/crossed A work.
+
+Successful Advance returns `kind=Request`, the original A public work record,
+unchanged `issuedWorkContext` and expected revision, A's `submitSessionId`,
+`submitGoalPhaseWorkResult`, and `GoalPhaseWorkResult`. The existing live caller
+dispatches that exact Request and submits A's real semantic result/evidence to
+the normal managed completion owner. This is an executable typed caller handoff,
+not just a continuation locator or instruction message. The B requester state
+and consumer evidence remain separately attributable; rereading the handoff
+does not create another A Start or consume A's WorkOrder. Deferred requests and
+failed B work do not expose A as ready. The composition requires no autonomous
+ended-turn scheduler or Codex Goal UI reactivation.
+
+Before managed B Start or Advance, all actual ordinal SBT validation aliases
+must uniquely bind the selected B worktree root and required operation. Canonical
+or A aliases cannot certify B. Missing coverage fails before execution; native
+SBT admission continues to own executable, selectors, grants and termination.
+All 44 original Phase conditions, existing histories, accepted results and repair
+counts remain. Complete two-lane native delivery
+and nine-case impact-selected workspace acceptance still require execution and
+independent review; the authored source is not that evidence.
 
 ## Three configured modes
 

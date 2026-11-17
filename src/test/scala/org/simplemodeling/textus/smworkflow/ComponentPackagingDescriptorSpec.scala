@@ -13,7 +13,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /**
  * @since   Oct.  2, 2026
  *  version Oct. 28, 2026
- * @version Nov.  9, 2026
+ * @version Nov. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -228,6 +228,7 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
       val preparation = Map("prepareStandaloneFixStart" -> "WorkflowStandaloneFixStartPreparationInput", "prepareGoalStart" -> "WorkflowGoalStartPreparationInput",
         "prepareStandaloneReviewFixStart" -> "WorkflowStandaloneReviewFixStartPreparationInput", "prepareGoalTaskStart" -> "WorkflowGoalTaskStartPreparationInput",
         "prepareDelegateTaskStart" -> "WorkflowDelegateTaskStartPreparationInput",
+        "prepareGoalTaskScopeCorrection" -> "WorkflowGoalTaskScopeCorrectionPreparationInput",
         "prepareDelegateTaskScopeCorrection" -> "WorkflowDelegateTaskScopeCorrectionPreparationInput",
         "prepareDelegateTaskCandidateContinuation" -> "WorkflowDelegateTaskCandidateContinuationPreparationInput",
         "prepareRepositoryStart" -> "WorkflowRepositoryStartPreparationInput", "prepareSplitStart" -> "WorkflowSplitStartPreparationInput",
@@ -240,7 +241,8 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
         "prepareTaskFixAdoption" -> ("WorkflowTaskFixAdoptionPreparationInput", "WorkflowTaskFixAdoption"),
         "prepareCallerInformation" -> ("WorkflowCallerInformationPrepareInput", "WorkflowCallerInformationRequest"),
         "recordCallerInformation" -> ("WorkflowCallerInformationRecordInput", "WorkflowCallerInformationResult"),
-        "readPreparedImport" -> ("WorkflowPreparedImportReference", "WorkflowPreparedImport"))
+        "readPreparedImport" -> ("WorkflowPreparedImportReference", "WorkflowPreparedImport"),
+        "projectSemanticWorkResult" -> ("WorkflowSemanticResultProjectionInput", "WorkflowSemanticResultProjection"))
       names("NativeWorkflowPreparationService") should contain theSameElementsAs (preparation.keys ++ callerinformation.keys).toVector
       preparation.foreach { (name, input) =>
         text(operation("NativeWorkflowPreparationService", name), "kind") shouldBe "COMMAND"

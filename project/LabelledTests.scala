@@ -25,8 +25,9 @@ object LabelledTests {
   }
   final case class Request(purpose: String, patterns: Seq[String], exact: Seq[String], containing: Seq[String],
     properties: Seq[String] = Seq.empty)
-  final case class Selected(definition: TestDefinition, runtimeTests: Set[String]) {
+  final case class Selected(definition: TestDefinition, runtimeTests: Set[String], packagedTests: Set[String] = Set.empty) {
     def requiresRuntime: Boolean = runtimeTests.nonEmpty
+    def requiresPackagedCar: Boolean = packagedTests.nonEmpty
   }
 
   def request(arguments: Seq[String]): Request = {
@@ -155,7 +156,8 @@ object LabelledTests {
         Selected(new TestDefinition(definition.name, definition.fingerprint,
           definition.explicitlySpecified,
           operations.map(row => new TestSelector(row(1))).toArray),
-          operations.filter(_(2) == "true").map(_(1)).toSet)
+          operations.filter(_(2) == "true").map(_(1)).toSet,
+          operations.filter(row => row.length > 3 && row(3) == "true").map(_(1)).toSet)
       }}
     } finally loader.close()
   }

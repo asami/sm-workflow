@@ -14,8 +14,7 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
   * Parameter data selects storage/targets/policies, never independent authority ports.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  *  version Nov.  6, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 12, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowLauncherAssembly {
@@ -24,7 +23,8 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     split: SplitPhaseManagedStartAssembly.Declaration,
     splitCatalog: SplitPhaseRuntimeCatalog.Catalog,
     splitStartHuman: SplitPhaseTypedStartHumanVerification.EvidencePort,
-    splitAnswerHuman: SplitPhaseHumanAnswerVerification.EvidencePort
+    splitAnswerHuman: SplitPhaseHumanAnswerVerification.EvidencePort,
+    managedDevelopment: Option[ManagedDevelopmentRuntime.Policy] = None
   )
 
   trait RuntimeCompositionDecoder {
@@ -46,6 +46,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     "DelegateTaskDeliveryService.observeDelegateTaskDelivery", "DelegateTaskDeliveryService.describeDelegateTaskAdoption",
     "GoalTaskService.startGoalTask", "GoalTaskService.advanceGoalTask",
     "GoalTaskService.submitGoalTaskWorkResult", "GoalTaskService.resolveGoalTaskDiagnosticInformation",
+    "GoalTaskService.describeGoalTaskScopeCorrection", "GoalTaskService.correctGoalTaskScope",
     "GoalTaskService.describeGoalTaskValidationContinuation", "GoalTaskService.adoptGoalTaskValidationContinuation",
     "GoalTaskService.describeGoalTaskRepairContinuation", "GoalTaskService.resumeGoalTaskRepair",
     "GoalTaskService.describeGoalTaskMalformedIssuedWorkRecovery", "GoalTaskService.recoverGoalTaskMalformedIssuedWork",
@@ -53,6 +54,8 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     "StandaloneFixService.startStandaloneFix", "StandaloneFixService.advanceStandaloneFix",
     "StandaloneFixService.submitStandaloneFixWorkResult", "StandaloneFixService.resolveStandaloneFixDiagnosticInformation",
     "StandaloneFixService.describeStandaloneFixValidationRecovery", "StandaloneFixService.recoverStandaloneFixValidation",
+    "ManagedDevelopmentService.publishDevelopmentArtifact", "ManagedDevelopmentService.selectDevelopmentArtifact",
+    "ManagedDevelopmentService.compileDevelopmentConsumer", "ManagedDevelopmentService.readDevelopmentArtifactStatus",
     "LocalPublicationService.ensureLocalPublication", "LocalPublicationService.collectLocalPublication",
     "LocalPublicationService.collectLatestLocalPublication",
     "DevelopmentObservationService.readDevelopmentState", "DevelopmentObservationService.readDevelopmentHistory",
@@ -108,7 +111,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     SmWorkflowComponent.GoalPhaseServiceService, SmWorkflowComponent.SplitPhaseServiceService,
     SmWorkflowComponent.RepositorySyncServiceService, SmWorkflowComponent.JournalServiceService,
     SmWorkflowComponent.EvidenceServiceService, SmWorkflowComponent.DevelopmentObservationServiceService,
-    SmWorkflowComponent.LocalPublicationServiceService).map { service =>
+    SmWorkflowComponent.LocalPublicationServiceService, SmWorkflowComponent.ManagedDevelopmentServiceService).map { service =>
     NativeWorkflowDescriptionMetadata.service(service, spec.OperationDefinitionGroup(NonEmptyVector.fromVectorUnsafe(
       service.operations.operations.toVector.filter(operation => _standard_operations(service.name + "." + operation.name)))))
   }
@@ -164,6 +167,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
       DevelopmentJournalService.bind(host.goal.journalPolicy),
       CommonEvidenceService.bind(host.goal.evidencePolicy, host.goal.journalPolicy),
       DevelopmentObservationService.bind(host.goal, goalCatalog.definition),
-      LocalPublicationService.bind(host.goal, goalCatalog.definition)).map(NativeWorkflowCompactResponse.bind) :+
+      LocalPublicationService.bind(host.goal, goalCatalog.definition),
+      ManagedDevelopmentService.bind(host.managedDevelopment)).map(NativeWorkflowCompactResponse.bind) :+
       WorkflowRetainedWork.bind
 }

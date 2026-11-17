@@ -17,6 +17,7 @@ PHASE-6 / S6-01 / S6-01D3D and S6-01D3F, finite caller rules.
 
 from contextlib import contextmanager
 import json
+import importlib.util
 import os
 from pathlib import Path
 import re
@@ -131,6 +132,8 @@ def native_field(value, name):
         "submitOperation": "submit_operation",
         "submitSessionId": "submit_session_id",
         "resultType": "result_type",
+        "workResource": "work_resource",
+        "resultResource": "result_resource",
         "issuedWorkContext": "issued_work_context",
         "nextSelection": "next_selection",
         "completionEvidence": "completion_evidence",
@@ -508,7 +511,7 @@ def issued_repository_conflict_route(options, task_fd):
     return issued_repository_route(options, task_fd, "submit-repository-conflict")
 
 
-def submission_pairs(options, session_id, split=False, resource_result=False):
+def submission_pairs(options, session_id, split=False, resource_result=False, issued_request=None, work_resource=None):
     """Forward supplied opaque values under the existing metadata contract."""
     _text, submission = read_object(explicit_path(options["submission"]))
     required = {"resultReference"} if resource_result else {"result"} if split else {"result", "resultReference"}
@@ -528,6 +531,15 @@ def submission_pairs(options, session_id, split=False, resource_result=False):
             "completionFacts must be an array")
     require("executionEvidence" not in submission or isinstance(submission["executionEvidence"], dict),
             "executionEvidence must be an object")
+    if issued_request is not None and "result" in submission:
+        adapter_path = Path(__file__).resolve().with_name("goal-phase-dispatch.py")
+        spec = importlib.util.spec_from_file_location("sm_workflow_dispatch_projection", adapter_path)
+        adapter = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(adapter)
+        try:
+            submission["result"] = adapter.project_result(issued_request, submission["result"], work_resource)
+        except ValueError as error:
+            raise CallerError(str(error)) from error
     pairs = ["--sessionId", session_id]
     for name in ("result", "resultResource", "resultReference", "completionFacts", "executionEvidence"):
         if name in submission:
@@ -538,9 +550,10 @@ def submission_pairs(options, session_id, split=False, resource_result=False):
 
 def submit(options, task_fd):
     submit_operation, session_id = issued_goal_route(options, task_fd)
-    pairs = submission_pairs(options, session_id)
+    _text, request = read_issued_request(explicit_path(options["request"]))
+    pairs = submission_pairs(options, session_id, resource_result=True, issued_request=request,
+                             work_resource=issued_request_resource(explicit_path(options["request"])))
     if submit_operation == "submitGoalTaskWorkResult":
-        _text, request = read_issued_request(explicit_path(options["request"]))
         issued = native_field(request, "issuedWorkContext")
         require(isinstance(issued, dict) and bool(issued), "Task Submit requires the actual Request issuedWorkContext")
         pairs.extend(["--issuedWorkContext", json.dumps(issued, ensure_ascii=False, allow_nan=False)])
@@ -1143,6 +1156,57 @@ def ai_activity_main(argv):
     return 0
 
 
+def project_before_submit(command, options, executable, runtime_root, task_fd, output_fd, output, family, outer_id, request):
+    """Resolve every semantic transport using the retained owner and complete public reader."""
+    work_resource = issued_request_resource(explicit_path(options["request"]))
+    require(work_resource.startswith("sm-workflow-work:"), "projection requires retained issued work")
+    result_type = native_field(request, "resultType")
+    issued = native_field(request, "issuedWorkContext")
+    require(result_type == {"GoalPhase": "GoalPhaseWorkResult", "GoalTask": "GoalTaskWorkResult"}[family]
+            and isinstance(issued, dict) and bool(issued)
+            and native_field(issued, "resultType") == result_type,
+            "semantic Submit requires the actual issued result type and context")
+    require(("--result" in command) != ("--resultResource" in command), "exactly one semantic result is required")
+    os.mkdir("projection", mode=0o700, dir_fd=output_fd)
+    projection_fd = os.open("projection", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=output_fd)
+    try:
+        if "--result" in command:
+            index = command.index("--result")
+            value = json_object(command[index + 1])
+            if set(value) == {"outcome", "summary", "resultType", "resultResource"}:
+                require(value["resultType"] == result_type and all(nonblank(value[k]) for k in ("outcome", "summary", "resultResource")),
+                        "compact result differs from issued type")
+                source = value["resultResource"]
+            else:
+                with new_file(projection_fd, "input.json") as stream:
+                    stream.write(json.dumps(value, ensure_ascii=False, allow_nan=False).encode("utf-8"))
+                source = (output / "projection" / "input.json").as_uri()
+            command[index:index + 2] = ["--resultResource", source]
+        else:
+            index = command.index("--resultResource")
+            source = command[index + 1]
+        projection_command = command_prefix(executable, runtime_root) + [
+            "org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.projectSemanticWorkResult",
+            "--input", json.dumps({"workResource": work_resource, "resultResource": source,
+                                   "format": "public-result"}, ensure_ascii=False), "--json"]
+        context = exchange_context(projection_command, runtime_root, output / "projection", outer_id, request)
+        _text, projection = native_call(projection_command, runtime_root, projection_fd, context)
+        projected_json = projection.get("resultJson", projection.get("result_json"))
+        require(isinstance(projected_json, str) and isinstance(json_object(projected_json), dict)
+                and native_field(projection, "resultType") == result_type
+                and native_field(projection, "workResource") == work_resource
+                and native_field(projection, "resultResource") == source
+                and native_field(projection, "submitSessionId") == native_field(request, "submitSessionId")
+                and projection.get("nextOperation", projection.get("next_operation")) == native_field(request, "submitOperation"),
+                "projection does not match the issued work and source")
+        with new_file(projection_fd, "public-result.json") as stream:
+            stream.write(projected_json.encode("utf-8"))
+        command[index + 1] = (output / "projection" / "public-result.json").as_uri()
+        require(route_record(task_fd) == {"family": family, "sessionId": outer_id}, "task routing changed after projection")
+    finally:
+        os.close(projection_fd)
+
+
 def complete(options, executable, runtime_root, task_fd, output_fd):
     """Submit once, then explicitly Advance once only after actual acceptance."""
     command, submit_id, following, outer_id, advance_action, preparation, family = completion_commands(
@@ -1203,6 +1267,8 @@ def complete(options, executable, runtime_root, task_fd, output_fd):
                         "task routing changed after preparation; retain output and stop")
             finally:
                 os.close(preparation_fd)
+        if family in {"GoalPhase", "GoalTask"} and request.get("kind") == "Request":
+            project_before_submit(command, options, executable, runtime_root, task_fd, output_fd, output, family, outer_id, request)
         _text, response = native_call(command, runtime_root, output_fd, submit_context)
         require(native_field(response, "sessionId") == submit_id and nonblank(response.get("message")),
                 "Submit response ID or message mismatches the selected route")
@@ -1303,6 +1369,10 @@ def execute(options):
             context = exchange_context(command, runtime_root, output,
                                        route_record(task_fd)["sessionId"] if session_id is not None else None,
                                        request)
+            if options["action"] == "submit":
+                route = route_record(task_fd)
+                project_before_submit(command, options, executable, runtime_root, task_fd, output_fd, output,
+                                      route["family"], route["sessionId"], request)
             text, response = native_call(command, runtime_root, output_fd, context)
             acknowledge(options["action"], response, session_id, task_fd, output_fd)
             response_progress(response, context)

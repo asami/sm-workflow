@@ -25,9 +25,7 @@ import GoalPhaseAcceptanceBoundary as A
   * No Workflow state is read or seeded by this caller.
   * @since   Oct. 13, 2026
   *  version Oct. 28, 2026
-  *  version Nov.  8, 2026
-  *  version Nov. 11, 2026
-  * @version Nov. 16, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeWorkflowCliFixture {
@@ -76,6 +74,17 @@ private[admission] object NativeWorkflowCliFixture {
     require(completionTimeoutMillis <= Long.MaxValue / 1000000L && terminationGraceMillis <= Long.MaxValue / 1000000L,
       "Installed caller waits must fit finite nanosecond bounds")
   }
+
+  /** A normally installed CNCF entry running the freshly packaged candidate. */
+  final case class PackagedInstalled(executable: Path, car: Path, runtime: Option[String] = None) {
+    require(executable.isAbsolute && Files.isRegularFile(executable) && Files.isExecutable(executable),
+      "Select an actual absolute installed CNCF executable")
+    require(car.isAbsolute && Files.isRegularFile(car), "Select the actual packaged candidate CAR")
+    require(runtime.forall(_.matches("[A-Za-z0-9._-]+")), "Select a valid ordinary runtime version")
+  }
+
+  def runtimeArguments(runtime: Option[String]): Vector[String] =
+    runtime.toVector.flatMap(version => Vector("--runtime", version))
 
   enum MetadataDenial {
     case Allowed, MissingSbtCapability, MissingWorkspaceManage, WrongSuiteAllowlist
@@ -174,6 +183,12 @@ private[admission] object NativeWorkflowCliFixture {
     require(!documentRevision || (repairContinuation && _sbt_repair.contains(TypedSbtHostPlanFixture.normalExecutable)),
       "Document revision requires the existing normal SBT continuation variant")
     private val _assembly = root.resolve(".textus/assembly.yaml")
+    private var _packaged_installed: Option[PackagedInstalled] = None
+
+    def selectPackagedInstalled(selection: PackagedInstalled): Unit = {
+      require(_sequence.isEmpty && _packaged_installed.isEmpty, "Select packaged execution before the first invocation")
+      _packaged_installed = Some(selection)
+    }
     private var _sequence = Vector.empty[Invocation]
     private var _log_index = startingLogIndex
     private var _server_deadline = Option.empty[Long]
@@ -340,6 +355,14 @@ private[admission] object NativeWorkflowCliFixture {
       if (result.exitCode == 0 && operation != "prepareExecution" && operation != "recordExecution") resolvePreparedImport(result)
       else result
     }
+    def projectSemanticResult(input: org.goldenport.record.Record): Result =
+      _run(_operation_argv("command", s"$_component.NativeWorkflowPreparationService.projectSemanticWorkResult") ++
+        Vector("--input", _take(input.toJsonStringC, "Semantic projection input"), "--json"))
+
+    def readRetainedWork(input: org.goldenport.record.Record): Result =
+      _run(_operation_argv("command", s"$_component.WorkflowRetainedWorkService.readWorkflowRetainedWork") ++
+        Vector("--input", _take(input.toJsonStringC, "Retained work reference"), "--json"))
+
     def preparationHelp(): Result = _run(_operation_argv("command", s"$_component.meta.help") ++
       Vector(s"$_component.NativeWorkflowPreparationService"))
 
@@ -562,7 +585,7 @@ private[admission] object NativeWorkflowCliFixture {
     }
 
     def withServer[A](task: => A): A = {
-      require(!sys.props.contains("smworkflow.spec.installedCommand"),
+      require(_packaged_installed.isEmpty && !sys.props.contains("smworkflow.spec.installedCommand"),
         "The selected installed entry supports command mode only; server mode requires an explicit source scenario")
       val selected = port.getOrElse(throw new AssertionError("This scenario has no selected server port"))
       val (process, invocation) = _spawn(_launcher :+ "server")
@@ -593,12 +616,15 @@ private[admission] object NativeWorkflowCliFixture {
       Vector("--baseurl", s"http://127.0.0.1:$selected"))
     private def _operation_argv(mode: String, selector: String): Vector[String] = {
       val launcher = _launcher
-      if (sys.props.contains("smworkflow.spec.installedCommand")) {
+      if (_packaged_installed.nonEmpty || sys.props.contains("smworkflow.spec.installedCommand")) {
         require(mode == "command", "The selected installed entry supports command mode only: " + mode)
         launcher :+ selector
       } else launcher ++ Vector(mode, selector)
     }
-    private def _launcher = sys.props.get("smworkflow.spec.installedCommand") match {
+    private def _launcher = _packaged_installed match {
+      case Some(selected) => Vector(selected.executable.toString) ++ runtimeArguments(selected.runtime) ++
+        Vector(selected.car.toString, "command", "--force-exit", "--no-default-components", s"--textus.assembly.descriptor=$_assembly")
+      case None => sys.props.get("smworkflow.spec.installedCommand") match {
       case Some(command) =>
         val executable = Path.of(command)
         require(executable.isAbsolute && Files.isRegularFile(executable) && Files.isExecutable(executable),
@@ -608,6 +634,7 @@ private[admission] object NativeWorkflowCliFixture {
         _primary.resolve("target/cncf.d/runtime-classpath.txt").toString, "--main-class",
         "org.goldenport.cncf.CncfMain", "--", "--force-exit", "--component-dev-dir", _primary.toString,
         s"--textus.assembly.descriptor=$_assembly")
+      }
     }
     private def _spawn(argv: Vector[String], installations: Option[Path] = None,
       terminationgracemillis: Long = 5000L): (Process, Invocation) = {

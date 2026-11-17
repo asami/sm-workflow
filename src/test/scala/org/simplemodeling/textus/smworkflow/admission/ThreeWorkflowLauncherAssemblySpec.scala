@@ -94,7 +94,23 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
         domain.statemachine.providedapi.GoalTaskWorkflowStateMachineProvidedApi5.workflow,
         domain.statemachine.providedapi.DelegateTaskWorkflowStateMachineProvidedApi6.workflow)
       When("the native launcher publication set is compared with the generated operations")
-      val declared = SmWorkflowComponent.CompletionRecordClosureServiceService.operations.operations.toVector
+      val declared = SmWorkflowComponent.ManagedDevelopmentServiceService.operations.operations.toVector
+        .map(o => s"${SmWorkflowComponent.ManagedDevelopmentServiceService.name}.${o.name}").toSet ++
+        SmWorkflowComponent.DelegateTaskDeliveryServiceService.operations.operations.toVector
+        .map(o => s"${SmWorkflowComponent.DelegateTaskDeliveryServiceService.name}.${o.name}").toSet ++
+        SmWorkflowComponent.GoalPhaseServiceService.operations.operations.toVector
+        .map(o => s"${SmWorkflowComponent.GoalPhaseServiceService.name}.${o.name}").toSet ++
+        SmWorkflowComponent.SplitPhaseServiceService.operations.operations.toVector
+        .map(o => s"${SmWorkflowComponent.SplitPhaseServiceService.name}.${o.name}").toSet ++
+        SmWorkflowComponent.RepositorySyncServiceService.operations.operations.toVector
+        .map(o => s"${SmWorkflowComponent.RepositorySyncServiceService.name}.${o.name}").toSet ++
+        SmWorkflowComponent.DelegateTaskServiceService.operations.operations.toVector
+        .map(o => s"${SmWorkflowComponent.DelegateTaskServiceService.name}.${o.name}").toSet ++
+        SmWorkflowComponent.WorkflowRetainedWorkServiceService.operations.operations.toVector
+        .map(o => s"${SmWorkflowComponent.WorkflowRetainedWorkServiceService.name}.${o.name}").toSet ++
+        SmWorkflowComponent.GoalTaskServiceService.operations.operations.toVector
+        .map(o => s"${SmWorkflowComponent.GoalTaskServiceService.name}.${o.name}").toSet ++
+        SmWorkflowComponent.CompletionRecordClosureServiceService.operations.operations.toVector
         .map(o => s"${SmWorkflowComponent.CompletionRecordClosureServiceService.name}.${o.name}").toSet ++ generated.flatMap(_.providedOperations.map(o => s"${o.service}.${o.name}")).toSet ++
         SmWorkflowComponent.StandaloneFixServiceService.operations.operations.toVector.map(o =>
           s"${SmWorkflowComponent.StandaloneFixServiceService.name}.${o.name}") ++
@@ -104,7 +120,9 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
         SmWorkflowComponent.DevelopmentObservationServiceService.operations.operations.toVector.map(o =>
           s"${SmWorkflowComponent.DevelopmentObservationServiceService.name}.${o.name}") ++
         SmWorkflowComponent.LocalPublicationServiceService.operations.operations.toVector.map(o =>
-          s"${SmWorkflowComponent.LocalPublicationServiceService.name}.${o.name}")
+          s"${SmWorkflowComponent.LocalPublicationServiceService.name}.${o.name}") ++
+        SmWorkflowComponent.NativeWorkflowPreparationServiceService.operations.operations.toVector.map(o =>
+          s"${SmWorkflowComponent.NativeWorkflowPreparationServiceService.name}.${o.name}")
       val expected = Set(
         "DelegateTaskService.startDelegateTask", "DelegateTaskService.advanceDelegateTask",
         "DelegateTaskService.submitDelegateTaskWorkResult", "DelegateTaskService.resolveDelegateTaskDiagnosticInformation",
@@ -137,7 +155,9 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
       ThreeWorkflowLauncherAssembly.publishedMcpOperations should contain("GoalPhaseService.submitGoalPhaseOrderedDecision")
       ThreeWorkflowLauncherAssembly.publishedMcpOperations should contain("GoalPhaseService.describeGoalPhaseReleaseRepairContinuation")
       ThreeWorkflowLauncherAssembly.publishedMcpOperations should contain("GoalPhaseService.recoverGoalPhaseReleaseRepairContinuation")
-      ThreeWorkflowLauncherAssembly.publishedMcpOperations.subsetOf(declared) shouldBe true
+      withClue(s"Published operations missing generated declarations: ${(ThreeWorkflowLauncherAssembly.publishedMcpOperations -- declared).toVector.sorted.mkString(", " )}") {
+        ThreeWorkflowLauncherAssembly.publishedMcpOperations.subsetOf(declared) shouldBe true
+      }
       ThreeWorkflowLauncherAssembly.publishedMcpOperations should contain("RepositorySyncService.submitNativeMergeReview")
       ThreeWorkflowLauncherAssembly.publishedMcpOperations should not contain "RepositorySyncService.submitMergeReviewResult"
     }

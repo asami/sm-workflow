@@ -50,7 +50,7 @@ private[admission] final class BoundedTaskService(N: BoundedWorkNativeRun) {
       Vector(definition), h.instances, h.continuations)
     reader <- NativeExternalEvidence.bindBoundedC(creation.configuration, h)
     recovery = if (N.delegation) (DelegateTaskScopeCorrection.operations(h, definition, selections) ++ DelegateTaskCandidateContinuation.operations(h, definition, selections)) else GoalTaskMalformedIssuedWorkRecovery.operations(h, definition,
-      new ThreeWorkflowExternalEvidencePorts(reader).goalTaskMalformedIssuedWorkRecovery)
+      new ThreeWorkflowExternalEvidencePorts(reader).goalTaskMalformedIssuedWorkRecovery) ++ GoalTaskScopeCorrection.operations(h, definition, selections)
     continuation = (if (N.delegation) Vector.empty else GoalTaskRepairContinuation.operations(h, definition,
       new ThreeWorkflowExternalEvidencePorts(reader).goalTaskRepairContinuation) ++ GoalTaskValidationContinuation.operations(h, definition,
       new ThreeWorkflowExternalEvidencePorts(reader).goalTaskValidationContinuation)) ++
@@ -96,6 +96,12 @@ private[admission] final class BoundedTaskService(N: BoundedWorkNativeRun) {
             selection <- NativeWorkflowOperationInput.textC(incoming, "selectionId")
             participant <- NativeWorkflowOperationInput.textC(incoming, "participant")
             key <- NativeWorkflowOperationInput.textC(incoming, "idempotencyKey")
+            intent <- if (!N.delegation) NativeWorkflowOperationInput.optionalValueC[V.GoalTaskStartIntent](incoming, "intent")
+              else Consequence.success(Option.empty[V.GoalTaskStartIntent])
+            _ <- intent.fold(Consequence.unit)(value => for {
+              record <- NativeWorkflowOperationInput.recordC(incoming, "input")
+              _ <- GoalPhaseStartPreparation.prepareTaskC(selected, record, selection, participant, key, value)
+            } yield ())
             result <- N.startC(input, participant, key, selection, selections, h, definition, selected)
           } yield result else N.advanceC(session, h, definition, selected)
         } yield NativeWorkflowOperationOutput.response(result)

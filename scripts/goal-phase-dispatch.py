@@ -214,11 +214,62 @@ def rejected(state, arguments, rejection, capabilities):
     return resolve(state, capabilities)
 
 
+PUBLIC_RETURN_SCHEMA = 'sm-workflow.public-worker-return.v1'
+PUBLIC_RESULT_TYPES = {'GoalPhaseWorkResult', 'GoalTaskWorkResult'}
+
+
+def project_result(request, value, work_resource=None):
+    """Select one public worker return; the native public reader remains authoritative."""
+    if not isinstance(request, dict) or request.get('kind') != 'Request' or not isinstance(value, dict):
+        raise ValueError('An issued Request and public result object are required')
+    def projection_field(value, camel, snake):
+        if camel in value and snake in value:
+            raise ValueError('Ambiguous projection field aliases: ' + camel)
+        return value.get(camel, value.get(snake))
+
+    issued = projection_field(request, 'issuedWorkContext', 'issued_work_context')
+    result_type = projection_field(request, 'resultType', 'result_type')
+    if result_type is not None and result_type not in PUBLIC_RESULT_TYPES:
+        raise ValueError('Unsupported result type')
+    if isinstance(issued, dict):
+        context_type = projection_field(issued, 'resultType', 'result_type')
+        if context_type is not None and context_type != result_type:
+            raise ValueError('Issued context result type differs from Request')
+    if 'resultResource' in value:
+        if (set(value) != {'outcome', 'summary', 'resultType', 'resultResource'}
+                or result_type not in PUBLIC_RESULT_TYPES or value['resultType'] != result_type
+                or not all(isinstance(value.get(k), str) and value[k].strip() for k in ('outcome', 'summary', 'resultResource'))
+                or not value['resultResource'].startswith('file:')):
+            raise ValueError('Compact worker result requires its actual typed result Resource')
+        return copy.deepcopy(value)
+    envelope_keys = {'schemaVersion', 'schema_version', 'payload', 'resultType', 'result_type',
+                     'issuedWorkContext', 'issued_work_context', 'workResource', 'work_resource', 'result'}
+    if set(value) & envelope_keys:
+        if set(value) != {'schemaVersion', 'resultType', 'workResource', 'result'}:
+            raise ValueError('Unsupported or ambiguous worker return envelope')
+        retained = projection_field(request, 'retainedWork', 'retained_work')
+        request_resource = retained.get('resource') if isinstance(retained, dict) else None
+        if work_resource is not None and request_resource is not None and work_resource != request_resource:
+            raise ValueError('Selected work Resource differs from Request')
+        selected_resource = work_resource if work_resource is not None else request_resource
+        if (value['schemaVersion'] != PUBLIC_RETURN_SCHEMA or result_type not in PUBLIC_RESULT_TYPES
+                or not isinstance(issued, dict) or not issued or context_type != result_type
+                or value['resultType'] != result_type
+                or not isinstance(selected_resource, str) or not selected_resource.startswith('sm-workflow-work:')
+                or value['workResource'] != selected_resource):
+            raise ValueError('Worker return schema, type or issued context differs')
+        value = value['result']
+    if (not isinstance(value, dict) or not isinstance(value.get('outcome'), str)
+            or not value['outcome'].strip() or 'dependencyAdmission' in value
+            or 'dependency_admission' in value or set(value) & envelope_keys):
+        raise ValueError('The complete public semantic result is required')
+    return copy.deepcopy(value)
+
+
 def complete(state, agent_id, semantic_result, observed=None, resources=None):
     if state['status'] != 'STARTED' or launch_identity(state['launchReturn']) != agent_id:
         raise ValueError('Only the actual launched agent can supply its return')
-    if not isinstance(semantic_result, dict) or not semantic_result.get('outcome'):
-        raise ValueError('The actual typed semantic payload is required')
+    semantic_result = project_result(state['request'], semantic_result)
     state = copy.deepcopy(state)
     state.update(status='RETURNED', semanticResult=copy.deepcopy(semantic_result), observed=observed, resources=resources)
     selected = state['resolved']['concrete']
@@ -232,8 +283,9 @@ def inline_complete(state, origin_context, semantic_result, observed=None, resou
     issued = state['request'].get('issued_work_context', state['request'].get('issuedWorkContext'))
     requirement = alias(issued, 'executionRequirement', 'execution_requirement')
     origin = alias(requirement['disposition'], 'originContextIdentity', 'origin_context_identity')
-    if state['status'] != 'INLINE' or origin_context != origin or not semantic_result.get('outcome'):
+    if state['status'] != 'INLINE' or origin_context != origin:
         raise ValueError('INLINE return requires the actual issued parent context and semantic payload')
+    semantic_result = project_result(state['request'], semantic_result)
     state = copy.deepcopy(state)
     state.update(status='RETURNED', semanticResult=copy.deepcopy(semantic_result), observed=observed,
                  resources=resources, inlineContext=origin_context)

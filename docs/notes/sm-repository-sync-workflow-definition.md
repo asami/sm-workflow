@@ -510,6 +510,12 @@ skill. Both entry points remain independently installable and retain separate du
 
 ## Shared local development dependency policy (2026-10-21)
 
+Current planning owner (restored 2026-11-16):
+[Phase 20: Recursive Repository Catch-up](../phase/phase-20.md) restores this
+catch-up proposal and the former P13-01–06 requirements as P20-01–06. Current
+Phase 13 remains AI usage accounting. This allocation changes no existing
+RepositorySync execution contract or active Session.
+
 Repository catch-up and repository-sync share a runtime-owned dependency graph. A dependency
 repository may declare three independent properties, not mutually exclusive modes:
 

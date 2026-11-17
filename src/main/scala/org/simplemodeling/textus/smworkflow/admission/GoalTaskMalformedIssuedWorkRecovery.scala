@@ -1,6 +1,7 @@
 /**
  * @since   Oct. 26, 2026
- * @version Oct. 28, 2026
+ *  version Oct. 28, 2026
+ * @version Nov. 12, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -208,6 +209,14 @@ private[smworkflow] object GoalTaskMalformedIssuedWorkRecovery {
       current.identity)(using core.executionContext).flatMap(
       _.map(Consequence.success).getOrElse(N.invalid("Recovery checkpoint is absent")))
   } yield retained.receipt.payload.direction.target.business.state.input
+
+  private[admission] def retainedPayloadC(storage: WorkflowComponentStorage, current: InstanceRecord,
+    core: ActionCall.Core): Consequence[Payload] = for {
+    adapter <- storage.bindWorkOrderSupersessionC(N.completionOperation, N.inputCodec, checkpointCodec)
+    retained <- adapter.loadRetainedC(ContinuationIdentity(current.causation.value.stripPrefix(resumeCause)),
+      current.identity)(using core.executionContext).flatMap(
+      _.map(Consequence.success).getOrElse(N.invalid("Recovery checkpoint is absent")))
+  } yield retained.receipt.payload.direction.target.business
 
   /** The owning Advance retains all existing recovery authority checks. */
   def resumeC(h: Host, storage: WorkflowComponentStorage, current: InstanceRecord,

@@ -109,15 +109,20 @@ own contracts. Equal, local-ahead and fast-forward add no product checks or AI
 solely for synchronization. Merge validation uses ordinary configured applicable
 checks and retained evidence.
 
-Dirty entry needs the host's declared purpose policy and fixed candidate slots.
-Use the actual issued `RepositorySyncPurposeRequest` and return only its typed
+For dirty entry, use the actual issued `RepositorySyncPurposeRequest` and return only its typed
 `RepositorySyncPurposeResult` to `submitRepositoryPurposeResult`. Group actual
 content by purpose and prior dependencies; identify excluded ongoing work and
 inseparable meaning explicitly. A shared file can contain several purposes and
 an excluded remainder. Semantic grouping supplies no check, review or commit
 acceptance. Ordinary Advance owns each candidate's acceptance and installation.
-Missing configuration is a precise preparation gap, never permission to invent
-authority imports, stage everything or checkpoint unrelated work.
+The runtime resolves the Session candidate and validation connection from the
+ordinary project and admitted host configuration. Preserve the original Session
+and opaque continuation context when it reports a missing workspace, resource
+or execution authority. Supply only the actual external prerequisite through its
+existing host owner and continue that Session. Do not assemble per-Session
+`dirty-purposes` slot or check JSON. Previously configured fixed slots remain
+supported. A setup wait does not grant permissions, stage everything or
+checkpoint unrelated work.
 
 Repeated continuation collects saved effects/results in the same Session.
 A retained integration intent is observed without reissuing merge/fast-forward;

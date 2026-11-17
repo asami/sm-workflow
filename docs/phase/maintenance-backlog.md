@@ -68,3 +68,7 @@ Archive location on the owning machine:
 `archive-index.json` identifies the moved originals and the seven files already
 absent at the start, preserved separately from their last committed version.
 No execution payload or source-update history is copied into this register.
+
+## Catch-up reference restoration
+
+`HYG-ORDINARY-SYNC-P13-REFERENCES-001` is resolved for planning ownership: former Phase 13 catch-up is retained as Phase 21 (P21-01–06), while current Phase 13 AI accounting and Phase 20 Phase-total accounting remain unchanged. The user selected this collision resolution on 2026-11-17 during main integration. Original observations remain in the archived journal and Git history; this disposition supplies no implementation or acceptance and does not close the other Hygiene items.

@@ -84,8 +84,12 @@ object LabelledTestSelection {
           "Selected ConfigMap inputs differ from the exact source schema")
       }
     }
-    operations.map(operation => Array(operation.selector.suiteClassName,
-      operation.selector.testName, ValidationTestPolicy.requiresRuntime(operation).toString)).toArray
+    operations.map { operation =>
+      val row = Array(operation.selector.suiteClassName,
+        operation.selector.testName, ValidationTestPolicy.requiresRuntime(operation).toString)
+      if (operation.metadata.exists(_.executionRequirement.exists(_.capabilities.exists(
+        _.identity == "sm-workflow.packaged-car")))) row :+ "true" else row
+    }.toArray
   }
 
   def select(root: String, revision: String, purpose: String, suites: Array[String],

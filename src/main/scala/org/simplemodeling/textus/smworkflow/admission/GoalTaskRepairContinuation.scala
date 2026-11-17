@@ -25,6 +25,7 @@ private[smworkflow] object GoalTaskRepairContinuation {
   val purpose = "goal-task-repair-continuation"
   val resumeOperation = "resumeGoalTaskRepair"
   val choices = Vector("ContinueRepair", "Defer")
+  private val exhaustedMessage = "The existing automatic repair limit is exhausted"
   final case class Target(componentInstance: String, sessionId: String, participant: String,
     frontierRevision: Long, frontier: Json, business: Payload)
   // The opaque original target avoids recursive Payload encoders and preserves
@@ -52,17 +53,17 @@ private[smworkflow] object GoalTaskRepairContinuation {
   }
   private def _exact(value: String): Boolean = GoalPhaseRuntimeRepairControl.exact(value)
 
-  /** Only terminal failed selected qualification can enter this continuation.
-    * Other Human reasons, pending intents and exhausted budgets remain stopped.
+  /** Shared terminal selected-failure facts. Neither these facts nor a
+    * description grant repair authority; exact separate Human admission does.
     */
-  def eligible(payload: Payload): Boolean = {
+  private def _failed(payload: Payload): Boolean = {
     val state = payload.state
     val control = state.repairControl
     state.input.task.nonEmpty && state.input.delegation.isEmpty && state.input.kind != "validation" &&
       state.stage == "Human" && state.pendingCheck.isEmpty && state.commit.isEmpty && state.commitExecution.isEmpty &&
       state.commitReconciliation.isEmpty && payload.supersededWork.isEmpty && payload.hygiene.isEmpty && payload.records.isEmpty &&
       control.policy == GoalPhaseRuntimeRepairControl.version && control.selectedLimit == state.input.repairLimit &&
-      control.stop.contains(state.message) && state.candidate.nonEmpty && state.receipts.nonEmpty &&
+      state.candidate.nonEmpty && state.receipts.nonEmpty &&
       state.receipts.size <= state.selected.size && state.receipts.zip(state.selected).forall((receipt, check) => receipt.identity == check.identity) &&
       state.receipts.last.termination == "exited" && state.receipts.last.exitCode.exists(_ != 0) &&
       state.receipts.last.sbt.exists(facts => facts.outcome == WorkflowSbtValidation.Outcome.Failed &&
@@ -70,22 +71,57 @@ private[smworkflow] object GoalTaskRepairContinuation {
       control.observations.lastOption.exists(observation => observation.scope == state.input.requestIdentity &&
         observation.reference == state.input.requestIdentity + ":generation:" + state.generation + ":" + state.receipts.last.identity) &&
       state.automaticCount >= 0 && state.ordinaryCount >= 0 && state.ordinaryCount < Int.MaxValue &&
-      state.automaticCount < control.effectiveLimit && state.generation < Long.MaxValue
+      state.generation < Long.MaxValue
   }
+
+  /** Ordinary trend continuation retains its original native allowance. */
+  def eligible(payload: Payload): Boolean = _failed(payload) &&
+    payload.state.repairControl.stop.contains(payload.state.message) &&
+    payload.state.automaticCount < payload.state.repairControl.effectiveLimit
+
+  private def _scoped_stop(payload: Payload): Boolean = _failed(payload) && {
+    val state = payload.state
+    state.message == exhaustedMessage && state.repairControl.stop.isEmpty &&
+      state.candidate.exists(StandaloneFixExecution.validCandidate) &&
+      state.input.repairLimit == GoalPhaseRuntimeRepairControl.ceiling &&
+      state.repairControl.effectiveLimit == GoalPhaseRuntimeRepairControl.ceiling &&
+      state.automaticCount == GoalPhaseRuntimeRepairControl.ceiling
+  }
+
+  /** An exact exhausted target requires its own separately admitted Human
+    * direction. An earlier trend direction cannot authorize this exception.
+    */
+  def eligibleScoped(payload: Payload): Boolean = _scoped_stop(payload) &&
+    payload.repairContinuation.fold(true) { direction =>
+      _decode_target(direction.target).flatMap { previous =>
+        _ancestry(previous.copy(frontierRevision = Long.MaxValue, business = payload),
+          payload.state.repairControl.effectiveLimit)
+      }.exists(entries => !entries.exists(entry => _scoped_stop(entry._2.business)))
+    }
+
+  def choicesFor(target: Target): Vector[String] =
+    if (eligible(target.business) || eligibleScoped(target.business)) choices else Vector.empty
+
+  // Route selection only. Canonical source/current/direction validation below
+  // is still required before the native completion owner can obtain allowance.
+  def hasScopedDirection(payload: Payload): Boolean = payload.repairContinuation.exists(direction =>
+    direction.choice == choices.head && decodeTarget(direction.target).exists(target => eligibleScoped(target.business)))
 
   private def _decode_target(value: Json): Either[String, Target] = for {
     target <- value.as[Target].left.map(_.message)
     _ <- Either.cond(target.asJson == value &&
       Vector(target.componentInstance, target.sessionId, target.participant).forall(_exact) &&
       target.frontierRevision > 0 && target.frontier.isObject &&
-      target.participant == target.business.state.participant && eligible(target.business),
+      target.participant == target.business.state.participant &&
+      (eligible(target.business) || _scoped_stop(target.business)),
       (), "Task continuation target is incomplete, unsupported or not an eligible trend stop")
   } yield target
 
   // Each exact pre-resume business already contains the previous direction.
   // Decode this native ancestry once at the boundary, with the native allowance
   // as its finite bound; no second episode store or reconstructed target is used.
-  private def _ancestry(target: Target, limit: Int): Either[String, Vector[(Direction, Target)]] = {
+  private def _ancestry(target: Target, limit: Int,
+    scopedTarget: Boolean = true): Either[String, Vector[(Direction, Target)]] = {
     @scala.annotation.tailrec
     def _walk_(current: Target, remaining: Int, collected: Vector[(Direction, Target)]): Either[String, Vector[(Direction, Target)]] =
       current.business.repairContinuation match {
@@ -96,7 +132,10 @@ private[smworkflow] object GoalTaskRepairContinuation {
           case Right(previous) =>
             if (previous.componentInstance != target.componentInstance || previous.sessionId != target.sessionId ||
               previous.participant != target.participant || previous.business.state.input != target.business.state.input ||
-              previous.frontierRevision >= current.frontierRevision || direction.choice != choices.head ||
+              previous.frontierRevision >= current.frontierRevision ||
+              !(direction.choice == choices.head && (eligible(previous.business) || _scoped_stop(previous.business))) ||
+              (_scoped_stop(previous.business) && (collected.exists(entry => _scoped_stop(entry._2.business)) ||
+                (scopedTarget && _scoped_stop(target.business)))) ||
               direction.participant != target.participant || !_exact(direction.rationale) ||
               !_exact(direction.reference.identity) || !_exact(direction.reference.revision))
               Left("Task continuation ancestry crosses its owner, request, revision or admitted direction")
@@ -115,7 +154,7 @@ private[smworkflow] object GoalTaskRepairContinuation {
     // The current payload need not itself be Human. Its latest original target
     // and all older targets must still be canonical eligible stops.
     val current = Target(owner, session, payload.state.participant, revision, Json.obj(), payload)
-    _ancestry(current, payload.state.repairControl.effectiveLimit)
+    _ancestry(current, payload.state.repairControl.effectiveLimit, scopedTarget = false)
   }
   def targetC(text: String): Consequence[Target] =
     if (text == null) N.invalid("Task continuation target is absent")
@@ -123,7 +162,7 @@ private[smworkflow] object GoalTaskRepairContinuation {
 
   def bindingC(componentInstance: String, target: Target, choice: String, rationale: String,
     participant: String, reference: ContextReference): Consequence[Json] =
-    if (componentInstance != target.componentInstance || participant != target.participant || !choices.contains(choice) ||
+    if (componentInstance != target.componentInstance || participant != target.participant || !choicesFor(target).contains(choice) ||
       !_exact(rationale) || reference == null || !_exact(reference.identity) || !_exact(reference.revision))
       N.invalid("Task continuation requires exact owner, participant, direction, rationale and Human reference")
     else Consequence.success(Json.obj("componentInstance" -> componentInstance.asJson,
@@ -158,6 +197,57 @@ private[smworkflow] object GoalTaskRepairContinuation {
     source.map(N.loadPayloadC(storage, current.identity.value, _, core))
       .getOrElse(N.invalid("Task continuation has no canonical source checkpoint"))
   }
+
+  /** Not serializable or caller-constructible. Only the retained continuation
+    * owner can mint this capability, and only for one exact original Work.
+    */
+  final class ScopedRepairAllowance private[GoalTaskRepairContinuation] (
+    private val original: StandaloneFixExecution.Work) {
+    def limitForC(work: StandaloneFixExecution.Work): Consequence[Int] =
+      if (work == original && work.kind == "Repair")
+        Consequence.success(GoalPhaseRuntimeRepairControl.ceiling + 1)
+      else N.invalid("Scoped repair allowance crosses its original Task work state")
+  }
+
+  /** Called only during native collection of an actually submitted completion.
+    * Read canonical checkpoints again; neither a worker result nor a caller's
+    * supplied business/Direction can mint this capability.
+    */
+  def completionAllowanceC(storage: WorkflowComponentStorage, current: InstanceRecord,
+    core: ActionCall.Core, work: StandaloneFixExecution.Work): Consequence[Option[ScopedRepairAllowance]] = for {
+    revision <- work.sourceRevision.toLongOption.map(Consequence.success)
+      .getOrElse(N.invalid("Scoped repair completion has no canonical source revision"))
+    instances <- storage.bindInstancesC()(using core.executionContext)
+    canonical <- instances.loadC(current.identity)(using core.executionContext).flatMap(
+      _.map(Consequence.success).getOrElse(N.invalid("Scoped repair completion has no current canonical native frontier")))
+    // DefinitionBinding is an admitted runtime object, not a value. Rebinding
+    // the same persisted definition creates another object, so compare every
+    // validated persisted frontier/history field through the native wire owner.
+    expected <- WorkflowInstanceRecordJsonV1.encodeC(current)
+    observed <- WorkflowInstanceRecordJsonV1.encodeC(canonical)
+    _ <- if (observed == expected) Consequence.unit
+      else N.invalid("Scoped repair completion differs from its current canonical native frontier")
+    _ <- WorkflowForceClosure.requireOpenC(current)
+    _ <- if (current.identity.value == work.session && current.lifecycle == Lifecycle.Active &&
+      current.suspension.isEmpty && current.revision.value == revision + 2L &&
+      current.causation.value.startsWith("standalone-completed:" + revision + ":")) Consequence.unit
+      else N.invalid("Scoped repair allowance requires the exact native submitted completion")
+    payload <- N.loadPayloadC(storage, work.session, revision, core)
+    retained <- _retained(payload, _owner(core), work.session, revision).fold(N.invalid(_), Consequence.success)
+    allowance <- retained.headOption match {
+      case Some((direction, target)) if direction.choice == choices.head && _scoped_stop(target.business) && work.kind == "Repair" &&
+        payload.state.automaticCount == GoalPhaseRuntimeRepairControl.ceiling => for {
+        _ <- if (work.state == payload.state && revision == target.frontierRevision + 1L &&
+          payload == target.business.copy(state = target.business.state.copy(stage = "Repair"),
+            repairContinuation = Some(direction)) && eligibleScoped(target.business)) Consequence.unit
+          else N.invalid("Scoped repair completion crosses its admitted original source, candidate or generation")
+        original <- N.loadPayloadC(storage, work.session, target.frontierRevision, core)
+        _ <- if (original == target.business) Consequence.unit
+          else N.invalid("Scoped repair target differs from its canonical original checkpoint")
+      } yield Option(new ScopedRepairAllowance(work))
+      case _ => Consequence.success(Option.empty[ScopedRepairAllowance])
+    }
+  } yield allowance
 
   def operations(host: Host, definition: DefinitionBinding, evidence: EvidencePort): Vector[spec.OperationDefinition] =
     Vector(new Operation(false, host, definition, evidence), new Operation(true, host, definition, evidence))
@@ -206,13 +296,15 @@ private[smworkflow] object GoalTaskRepairContinuation {
             case None if input.isRight && payload.state.stage != "Human" && retained.nonEmpty =>
               Consequence.success(_output(retained.head._2, "already-resumed", "Latest admitted continuation retained; no work or checkpoint appended"))
             case None => for {
-              _ <- if (current.suspension.isEmpty && eligible(payload)) Consequence.unit
+              _ <- if (current.suspension.isEmpty && (eligible(payload) || eligibleScoped(payload))) Consequence.unit
                 else N.invalid("Task has pending work/effects, no retained repair-trend stop, or no remaining native allowance")
               frontier <- WorkflowInstanceRecordJsonV1.encodeC(current).flatMap(s =>
                 io.circe.parser.parse(s).fold(e => N.invalid(e.message), Consequence.success))
               target = Target(_owner(selected), session, payload.state.participant, current.revision.value, frontier, payload)
               result <- input match {
-                case Right(_) => Consequence.success(_output(target, "decision-required", "Separate exact Human admission is required"))
+                case Right(_) => Consequence.success(_output(target, "decision-required",
+                  if (eligibleScoped(payload)) "Separate exact Human admission is required for one scoped additional repair batch; original ten-batch policy and counts are retained"
+                  else "Separate exact Human admission is required"))
                 case Left(answer) => for {
                   _ <- if (requested.contains(target)) Consequence.unit else N.invalid("Task continuation target changed; describe and admit fresh Human direction")
                   reference = ContextReference(answer.reference.identity, answer.reference.revision)

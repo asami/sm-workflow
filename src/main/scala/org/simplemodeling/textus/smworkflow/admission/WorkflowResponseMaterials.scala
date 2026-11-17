@@ -39,7 +39,7 @@ private[smworkflow] object WorkflowResponseMaterials {
         overlay = field match {
           case "validation" => Set("evidenceRecording", "assessmentJournal")
           case "completion" => Set("synchronization", "repository")
-          case "selectedPlan" => Set("documentEffect")
+          case "selectedPlan" => Set("effectStatus")
           case _ => Set.empty[String]
         }
         _ <- if (actual.mapObject(_.filter { case (name, _) => !overlay(name) }) == supplied.mapObject(_.filter { case (name, _) => !overlay(name) }))

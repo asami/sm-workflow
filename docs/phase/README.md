@@ -26,6 +26,18 @@ active Phase completion gates. See the
 [note](../notes/ai-efficiency-evaluation-and-phase-total.md) and
 [decision record](../journal/2026/11/2026-11-13-ai-efficiency-planning-allocation.md).
 
+Recursive catch-up plan restored 2026-11-16:
+[Phase 21](phase-21.md) / [P21 checklist](phase-21-checklist.md) restores the
+former Phase 13 Recursive Repository Catch-up requirements, preserving the
+P13-01–06 to P21-01–06 correspondence. It updates a selected existing repository
+and registered local development dependencies from GitHub tracking refs or local
+main, without implicit push or artifact publication. Phase 7 supplies the shared
+dependency graph; Phase 15 consumes catch-up for related workspace operations.
+Current [Phase 13](phase-13.md) remains AI usage accounting, unchanged. Phase 21
+is planned with no selected delivery slot; the existing adopted execution
+priority and active Goals/Sessions are unchanged. See the
+[restoration record](../journal/2026/11/2026-11-16-catch-up-plan-restoration.md).
+
 Phase 6.11 closed with unverified items — 2026-11-11:
 [plan](phase-6.11.md) / [checklist](phase-6.11-checklist.md).
 The user ended this Phase without whole-Phase validation. Its existing Session
@@ -573,9 +585,12 @@ in Phase 6, using the corrected runtime contract.
 | [6.10: AI operating profiles and lightweight metrics](phase-6.10.md) | Standard/current, cost, quality selection; start/end source counts and observed tokens per net source step | No live config switch or extra AI calls; preserve issued work; comparison stays in 9 and usage acquisition in 13 |
 | [6.11: Directory-list RepositorySync](phase-6.11.md) | Runtime-owned batch synchronization and selected validation | Closed with unverified items (2026-11-11); ForcedClosed / NotAccepted; results/history retained |
 | [7: Multi-repository synchronization and artifact overlay](phase-7.md) | Minimum managed parallel A/B lanes first, then assigned-chat/FIFO and remaining workspace/artifact scenarios | Prioritize parallel development within Phase 7; retain all related-project, overlay and synchronization acceptance |
+| [15: Development Workspace Operations](phase-15.md) | Workspace status, early project initialization and selected upgrade routes | Reuse Phase 7 resources and Phase 21 catch-up where relevant; early INIT and Phase 8 startup integration keep their separate dependencies |
 | [17: Task and standalone FIX extensions](phase-17.md) | Wider inputs, dirty/focused/full options, multi-unit composition and authorized investigation/related-project integration | Reuse 6.7 without rebuilding it; [checklist](phase-17-checklist.md); Phase 7/14 dependencies are scenario-specific |
 | [18: Tool-neutral validation and Flutter](phase-18.md) | Common validation results, retained SBT semantics and Flutter integration | Scheduled after Phase 9, reusing the 6.7 baseline; Flutter W4–W5 consume CNCF Phase 117; [checklist](phase-18-checklist.md); no new earlier-Phase gate |
 | [19: Docker installation and customization qualification](phase-19.md) | Empty-environment install/use, configuration, preserved customization, update/failure and owned cleanup | Independent HEAVY track; consume INIT and profile producers per case; [checklist](phase-19-checklist.md); no active Phase gate |
+| [20: Phase Completion AI Consumption Summary](phase-20.md) | Aggregate attributable usage across one Phase execution, including repair and closure | Depends on accepted Phase 13 measurement; [checklist](phase-20-checklist.md); planned, not started |
+| [21: Recursive Repository Catch-up](phase-21.md) | Existing local repository/worktree and registered dependency catch-up from remote/local main; fast-forward, explicit rebase/merge and resumable Human decisions | Restores former P13-01–06 as P21-01–06; [checklist](phase-21-checklist.md); no implicit push/publication and no selected execution slot |
 | [8: Runtime extensions and practical closure](phase-8.md) | Resolve necessary Phase 2 carryover and observed operational problems, including [work classification](phase-8.md#work-classification-in-practice--selected-for-phase-8), [review handoffs](phase-8.md#review-handoff-between-assignments) and [completion reports](phase-8.md#completion-reports-for-consumers) | After Phase 7 and before 8.1; improve operation through the existing runtime owners |
 | [8.1: Shared Scala lint and Goldenport conventions](phase-8.1.md) | A shared strict lint, B strict Scala 3 generation/AI, C Core safe collection APIs and consumption | Former 6.12; after Phase 8 and before existing Phase 9; [checklist](phase-8.1-checklist.md); retain SLP IDs and accepted Q3 |
 | [11: Common Journal and trial skills](phase-11.md) | Actual common record/read/find, accepted Finding recording, packaged/deployed skills and Phase 6.4 trial-host connection | Short priority delivery before remaining 6.4 work; no 6.4 archive or 7–10 completion dependency |

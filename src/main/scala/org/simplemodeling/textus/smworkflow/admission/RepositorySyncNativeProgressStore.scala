@@ -17,8 +17,7 @@ import RepositorySyncManagedGitObservation as Git
   * storage; Git effects are not captured in the DB completion transaction.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  *  version Nov.  3, 2026
-  * @version Nov.  4, 2026
+  * @version Nov. 17, 2026
   */
 private[smworkflow] object RepositorySyncNativeProgressStore {
   val schema = "sm-workflow.repository-sync-native-progress.v3"

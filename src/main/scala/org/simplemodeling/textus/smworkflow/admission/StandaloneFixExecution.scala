@@ -304,10 +304,12 @@ private[smworkflow] object StandaloneFixExecution {
 
   /** Called only by the native completion owner after actual independent
     * provenance admission for Review. There is no caller repair loop/counter. */
-  def completedC(work: Work, result: Result, reference: ContextReference): Consequence[State] = for {
+  def completedC(work: Work, result: Result, reference: ContextReference,
+    scopedAllowance: Option[GoalTaskRepairContinuation.ScopedRepairAllowance] = None): Consequence[State] = for {
     _ <- admitResultC(work, result)
     _ <- if (reference != null && text(reference.identity) && text(reference.revision)) Consequence.unit
       else invalid("semantic completion lacks its actual result reference")
+    limit <- scopedAllowance.fold(Consequence.success(work.state.repairControl.effectiveLimit))(_.limitForC(work))
     s = work.state.copy(reviewDispositions = result.reviewDispositions.orElse(work.state.reviewDispositions))
     next <- if (result.outcome == "decision-needed") Consequence.success(s.copy(stage = "Human",
       findings = result.findings, message = result.summary,
@@ -331,7 +333,7 @@ private[smworkflow] object StandaloneFixExecution {
     } else {
       val exempt = result.fixAssessment.exists(GoalPhaseFixAssessment.ordinaryCountExempt)
       if (s.generation == Long.MaxValue) invalid("repair generation is exhausted")
-      else R.admitBatchC(s.automaticCount, s.ordinaryCount, s.repairControl.effectiveLimit, exempt).map(counts =>
+      else R.admitBatchC(s.automaticCount, s.ordinaryCount, limit, exempt).map(counts =>
         s.copy(stage = "Inspect", generation = s.generation + 1,
           automaticCount = counts.automatic, ordinaryCount = counts.ordinary,
           semanticReference = Some(reference), conditionReport = result.conditions,

@@ -191,6 +191,20 @@ org.simplemodeling.textus.smworkflow
 | phaseIdentity      | string | 1            |
 | repositoryIdentity | string | 1            |
 
+## GoalPhaseStartIntent
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| plan | string | 1 |
+| selectionId | string | 1 |
+| participant | string | 1 |
+| origin | string | 1 |
+| idempotencyKey | string | 1 |
+
 ## GoalPhaseStartResult
 
 ### EXTENDS
@@ -204,6 +218,68 @@ OperationResult
 | sessionId | string | 1 |
 | outcome | string | 1 |
 | message | string | 1 |
+
+## ManagedDevelopmentInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| edgeIdentity | string | 1 |
+| requestIdentity | string | 1 |
+| publication | string | 1 |
+| selection | string | 1 |
+
+## PublishDevelopmentArtifactInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | ManagedDevelopmentInput | 1 |
+
+## SelectDevelopmentArtifactInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | ManagedDevelopmentInput | 1 |
+
+## CompileDevelopmentConsumerInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | ManagedDevelopmentInput | 1 |
+
+## ReadDevelopmentArtifactStatusInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | ManagedDevelopmentInput | 1 |
+
+## ManagedDevelopmentResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| status | string | 1 |
+| detail | org.goldenport.record.Record | 1 |
 
 ## LocalPublicationInput
 
@@ -5741,6 +5817,10 @@ subject-type = RepositorySyncHumanConflictRequest
 
 ##### PurposePrepared
 
+##### PurposeAllocating
+
+##### PurposeAllocated
+
 ##### PurposeMaterializing
 
 ##### PurposeMaterialized
@@ -5891,6 +5971,16 @@ when = sync.PurposePreparing, conflict.Retained, nativeReview.Retained, nativeRe
 
 state = PurposePrepared
 when = sync.PurposePrepared, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### purpose-allocating
+
+state = PurposeAllocating
+when = sync.PurposeAllocating, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
+
+##### purpose-allocated
+
+state = PurposeAllocated
+when = sync.PurposeAllocated, conflict.Retained, nativeReview.Retained, nativeRepair.Retained, humanConflict.Retained, purpose.Retained
 
 ##### purpose-materializing
 
@@ -7234,6 +7324,30 @@ on = purpose-preparation-continuation
 
 ##### TRANSITION
 
+to = PurposeAllocating
+on = purpose-progress
+
+##### TRANSITION
+
+to = PurposeMaterializing
+on = purpose-progress
+
+#### PurposeAllocating
+
+##### TRANSITION
+
+to = PurposeAllocated
+on = purpose-progress
+
+##### TRANSITION
+
+to = PurposeUnfinished
+on = purpose-progress
+
+#### PurposeAllocated
+
+##### TRANSITION
+
 to = PurposeMaterializing
 on = purpose-progress
 
@@ -7255,6 +7369,11 @@ to = PurposeUnfinished
 on = purpose-progress
 
 #### PurposeMaterialized
+
+##### TRANSITION
+
+to = PurposeMaterialized
+on = purpose-progress
 
 ##### TRANSITION
 
@@ -8782,6 +8901,7 @@ GoalPhaseStartInput
 | input | GoalPhaseStartInput | 1 |
 | sessionId | string | ? |
 | profile | string | ? |
+| intent | GoalPhaseStartIntent | ? |
 
 ##### OUTPUT
 
@@ -9495,7 +9615,7 @@ For merge-check policy, genuine Human evidence must bind the complete described 
 
 For sm-workflow.repository-sync-purpose-materialization-continuation.v1, the actual active unsuspended PurposeMaterializing intent must have no provider result and an exact adjacent authenticated PurposePrepared receipt. AuthorizeNewMaterialization requires independent repository-sync-validation-continuation evidence binding the complete target, exact artifact reference membership, original participant and worker, rationale and both priorExecutionEnded=true and acceptOriginalUncertainty=true. The original intent remains UNKNOWN. Defer is passive. Adoption appends only native-purpose-materialization-continuation-admitted to PurposePrepared, retaining the literal complete Purpose progress and prepared candidate plus optional direction provenance. Identical adopted input remains idempotent after Terminal; stale, crossed or conflicting input refuses. Separate ordinary Advance reauthenticates the old intent, preparation, completed commit prefix, source text and current complete host plan, then materializes only that candidate under distinct materialization-continuation-FRONTIER intent/result keys. Later previously unexecuted checks, review and commit keep their normal attempt keys and authority. Cursor advance and new repair/preparation clear this direction. No grouping, preparation, accepted Submit, old check, commit or push is replayed.
 
-For the legacy explicit fixed-slot path, normal PurposePrepared materialization first reads the fixed current slot through the owning component configuration and typed File snapshot UoW. The target must be a single ordinary absolute destination disjoint from the actual source root. The empty-tree predicate refuses any child file or directory before reading content. A typed preflight refusal returns passive Wait with condition purpose-materialization-preflight and its actual diagnostic, leaving PurposePrepared without a new intent or fabricated process result. Correcting the registered empty destination allows separate normal Advance. The destination is checked again before adoption and the actual effect; a later race can still leave UNKNOWN and needs a new exact Human direction. No old workspace is deleted or overwritten. Without an explicit fixed slot, the runtime derives the check and assessment contract from ordinary validation and requests the host-admitted CNCF Session candidate workspace within the existing materialization intent. It retains the logical reference and actual result; later typed Git/SBT calls reacquire that same candidate context. Allocation or materialization uncertainty is preserved as an unresolved effect and never treated as pre-effect setup or automatic retry.
+For a configured fixed slot, PurposePrepared materialization first reads the current slot through the owning component configuration and typed File snapshot UoW. The target must be a single ordinary absolute destination disjoint from the actual source root. The empty-tree predicate refuses any child file or directory before reading content. A typed preflight refusal returns passive Wait with condition purpose-materialization-preflight and its actual diagnostic, leaving PurposePrepared without a new intent or fabricated process result. Correcting the registered empty destination allows separate normal Advance. The destination is checked again before adoption and the actual effect; a later race can still leave UNKNOWN and needs a new exact Human direction. No old workspace is deleted or overwritten. When no fixed slot is selected, the Session candidate route instead resolves the admitted reusable host policy and retains separate allocation and materialization intents and results. A missing policy remains a same-Session setup wait before allocation; a resultless effect is never replayed.
 
 The explicit v2 required-lint branch binds the same independent evidence purpose to the complete actual target, AuthorizeMissingRequiredLint choice, rationale, participant, existing reference and false/false not-applicable booleans. It authenticates original successful selection and receipt lineage through native readers and re-observes after evidence admission before managed CAS. Adoption appends only RequiredLintContinuationAdmitted via native-required-lint-continuation-admitted. Separate ordinary Advance creates PendingMergePrepared via native-required-lint-pending-prepared in the namespace required-lint- followed by the actual adoption target frontier revision, without Git source changes. Old successful receipts seed the verified ordered prefix without new execution rows; only appended FixCheck uses normal fixed CNCF SBT/UoW and current permission. Failure follows existing check-origin repair; a resultless or UNKNOWN new lint remains non-replayable. Later repaired candidates select their own checks without inheriting this seed. V1 codecs and historical rows remain unchanged; malformed or unknown v2 never falls back to v1. No whole-body seal, permission grant, successful-check replay or accepted-result resubmission is implied.
 
@@ -11439,6 +11559,16 @@ Explicit ad hoc Task request selection metadata and absolute local file: URI ref
 | idempotencyKey | string | 1 |
 | selectionCollection | string | 1 |
 
+## GoalTaskStartIntent
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| origin | string | 1 |
+
 ## WorkflowSplitStartPreparationInput
 
 - input-kind :: COMMAND
@@ -11534,6 +11664,33 @@ Explicit passive preparation metadata and absolute local file: URI references. S
 | threadId | string | 1 |
 | turnId | string | 1 |
 | itemId | string | 1 |
+
+## WorkflowSemanticResultProjectionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| workResource | string | 1 |
+| resultResource | string | 1 |
+| format | string | ? |
+
+## WorkflowSemanticResultProjection
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| status | string | 1 |
+| summary | string | 1 |
+| nextOperation | string | 1 |
+| submitSessionId | string | 1 |
+| resultType | string | 1 |
+| workResource | string | 1 |
+| resultResource | string | 1 |
+| resultJson | string | ? |
 
 ## WorkflowPreparedImportReference
 
@@ -12060,6 +12217,126 @@ DevelopmentHistoryReadInput
 
 DevelopmentObservationResult
 
+## ManagedDevelopmentService
+
+### DESCRIPTION
+
+Runtime-owned scope-private producer publication, immutable selection, actual consumer compilation and status through existing CNCF workspace, File, Component records and typed SBT UnitOfWork. Callers select declared dependency edges and exact identities; no process arguments or physical paths are accepted. Unresolved effects are retained without automatic replay. No shared publishLocal is performed.
+
+### OPERATION
+
+#### publishDevelopmentArtifact
+
+##### DESCRIPTION
+
+Publish one declared ordinary JVM or Scala-cross producer module into its admitted development repository. Retain source origin, completed adapter output and actual typed execution separately from consumer verification.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+PublishDevelopmentArtifactInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | ManagedDevelopmentInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+ManagedDevelopmentResult
+
+#### selectDevelopmentArtifact
+
+##### DESCRIPTION
+
+Create an immutable selection bound to one declared consumer edge and completed publication. Selection does not build or publish the provider and reports selected-unverified.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+SelectDevelopmentArtifactInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | ManagedDevelopmentInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+ManagedDevelopmentResult
+
+#### compileDevelopmentConsumer
+
+##### DESCRIPTION
+
+Compile the consumer with the exact immutable selection through native scoped SBT. Retain actual adapter resolution and classpath outcomes. Missing artifacts or incompatible APIs fail explicitly without ordinary fallback.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+CompileDevelopmentConsumerInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | ManagedDevelopmentInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+ManagedDevelopmentResult
+
+#### readDevelopmentArtifactStatus
+
+##### DESCRIPTION
+
+Read the exact retained publication, selection and consumer result without launching a process or changing source or shared artifact caches.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+ReadDevelopmentArtifactStatusInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | ManagedDevelopmentInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+ManagedDevelopmentResult
+
 ## LocalPublicationService
 
 ### DESCRIPTION
@@ -12226,6 +12503,34 @@ Default compact output reports storage availability and a confirmed exact refere
 
 ### OPERATION
 
+#### projectSemanticWorkResult
+
+##### DESCRIPTION
+
+Read the exact retained issued Request and a caller-owned detailed public worker result through the authorized Resource boundary. Default summary is compact; public-result explicitly returns the full validated public DTO. No Submit, acceptance or authority is granted.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+WorkflowSemanticResultProjectionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowSemanticResultProjectionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowSemanticResultProjection
+
 #### readPreparedImport
 
 ##### DESCRIPTION
@@ -12370,6 +12675,37 @@ WorkflowDelegateTaskStartPreparationInput
 | name | type | multiplicity |
 |------+------|--------------|
 | input | WorkflowDelegateTaskStartPreparationInput | 1 |
+| preparationFormat | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowPreparationResult
+
+#### prepareGoalTaskScopeCorrection
+
+##### DESCRIPTION
+
+Default compact format retains only the derived importer through configured CommonEvidence/File authority and returns its confirmed reference. Use readPreparedImport with retainedImport for complete importer data. Explicit --preparationFormat legacy-full preserves historical complete output without retention. Missing setup/storage never falls back to full bodies. Preparation is prepared, never check acceptance.
+
+Passively prepare the complete scope-correction input for exact attributable Human selection; the import alone grants no authority.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+WorkflowGoalTaskScopeCorrectionPreparationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowGoalTaskScopeCorrectionPreparationInput | 1 |
 | preparationFormat | string | ? |
 
 ##### OUTPUT
@@ -13634,6 +13970,14 @@ operation = GoalTaskService.submitGoalTaskWorkResult
 
 operation = GoalTaskService.resolveGoalTaskDiagnosticInformation
 
+#### describeGoalTaskScopeCorrection
+
+operation = GoalTaskService.describeGoalTaskScopeCorrection
+
+#### correctGoalTaskScope
+
+operation = GoalTaskService.correctGoalTaskScope
+
 #### describeGoalTaskRepairContinuation
 
 operation = GoalTaskService.describeGoalTaskRepairContinuation
@@ -13704,11 +14048,69 @@ Ad hoc single-repository development from journal or direct instructions. Native
 
 ### OPERATION
 
+#### describeGoalTaskScopeCorrection
+
+##### DESCRIPTION
+
+Describe additive owned paths for the same unclaimed implementation or Repair. Condition timing, existing authority and history remain unchanged. Passive description changes no Session or effect.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalTaskScopeCorrectionDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalTaskScopeCorrectionDescriptionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalTaskScopeCorrectionView
+
+#### correctGoalTaskScope
+
+##### DESCRIPTION
+
+Admit an exact independently selected same-purpose scope correction. Retain the immutable old issue and all results, base and repair counts; retire it through managed supersession. Only ordinary Advance issues the amended work. Unknown external effects remain unknown.
+Supply exactly one of input or inputResource; the Resource form reads the complete selected correction from an authorized local file when retained check captures exceed CLI argument limits.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalTaskScopeCorrectionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalTaskScopeCorrectionInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalTaskScopeCorrectionView
+
 #### describeGoalTaskRepairContinuation
 
 ##### DESCRIPTION
 
-Same active GoalTask repair-trend Human stop only. Complete opaque native target and independently admitted exact Human direction. Before appending one Repair checkpoint, ContinueRepair compares the current host source root/branch/repository and performs existing native read-only Git observation of root/HEAD/index/scoped working tree against the saved candidate; changed source or crossed host refuses without append or counter change. Zero Git/source mutation, staging, work, checks, commit or publication. Defer writes nothing; describe and repeated collection read storage. A separate ordinary Advance owns the next Repair and normal allowance. Repeated collection retains the original direction and target.
+Same active GoalTask repair-trend Human stop with remaining allowance, or one exact exhausted-ten target with its own independently admitted scoped Human exception. Complete opaque native target and independently admitted exact Human direction. The scoped exception preserves the original ten-batch policy, input and full history; only its one actual completed native Repair may increment cumulative counts from ten to eleven. It cannot renew itself or authorize another automatic repair. Before appending one Repair checkpoint, ContinueRepair compares the current host source root/branch/repository and performs existing native read-only Git observation of root/HEAD/index/scoped working tree against the saved candidate; changed source or crossed host refuses without append or counter change. Zero Git/source mutation, staging, work, checks, commit or publication. Defer writes nothing; describe and repeated collection read storage. A separate ordinary Advance owns the next Repair and normal allowance. Repeated collection retains the original direction and target.
 
 ##### TYPE
 
@@ -13736,7 +14138,7 @@ GoalTaskRepairContinuationDescriptionResult
 
 ##### DESCRIPTION
 
-Same active GoalTask repair-trend Human stop only. Complete opaque native target and independently admitted exact Human direction. Before appending one Repair checkpoint, ContinueRepair compares the current host source root/branch/repository and performs existing native read-only Git observation of root/HEAD/index/scoped working tree against the saved candidate; changed source or crossed host refuses without append or counter change. Zero Git/source mutation, staging, work, checks, commit or publication. Defer writes nothing; describe and repeated collection read storage. A separate ordinary Advance owns the next Repair and normal allowance. Repeated collection retains the original direction and target.
+Same active GoalTask repair-trend Human stop with remaining allowance, or one exact exhausted-ten target with its own independently admitted scoped Human exception. Complete opaque native target and independently admitted exact Human direction. The scoped exception preserves the original ten-batch policy, input and full history; only its one actual completed native Repair may increment cumulative counts from ten to eleven. It cannot renew itself or authorize another automatic repair. Before appending one Repair checkpoint, ContinueRepair compares the current host source root/branch/repository and performs existing native read-only Git observation of root/HEAD/index/scoped working tree against the saved candidate; changed source or crossed host refuses without append or counter change. Zero Git/source mutation, staging, work, checks, commit or publication. Defer writes nothing; describe and repeated collection read storage. A separate ordinary Advance owns the next Repair and normal allowance. Repeated collection retains the original direction and target.
 
 ##### TYPE
 
@@ -13926,6 +14328,7 @@ GoalTaskInput
 | participant | string | 1 |
 | idempotencyKey | string | 1 |
 | sessionId | string | ? |
+| intent | GoalTaskStartIntent | ? |
 
 ##### OUTPUT
 
@@ -15443,6 +15846,73 @@ ForceCloseWorkflowInput
 ###### TYPE
 
 WorkflowForceClosureView
+
+# VALUE
+
+## GoalTaskScopeCorrectionDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| oldContinuationId | string | 1 |
+| additionalOwnedPaths | string | * |
+
+# VALUE
+
+## GoalTaskScopeCorrectionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| oldContinuationId | string | 1 |
+| target | string | 1 |
+| selectionId | string | 1 |
+| participant | string | 1 |
+| idempotencyKey | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+
+# VALUE
+
+## GoalTaskScopeCorrectionView
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| target | string | 1 |
+| ownedPaths | string | * |
+
+# VALUE
+
+## WorkflowGoalTaskScopeCorrectionPreparationInput
+
+- input-kind :: COMMAND
+
+### DESCRIPTION
+
+Explicit ad hoc Task request selection metadata and absolute local file: URI reference. Supplied facts authenticate no origin and grant no effect.
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | string | 1 |
+| selectionId | string | 1 |
+| participant | string | 1 |
+| origin | string | 1 |
+| idempotencyKey | string | 1 |
+| selectionCollection | string | 1 |
 
 # VALUE
 

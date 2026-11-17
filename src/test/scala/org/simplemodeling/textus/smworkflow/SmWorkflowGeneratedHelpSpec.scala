@@ -18,9 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Oct.  5, 2026
  *  version Oct. 28, 2026
- *  version Nov.  6, 2026
- *  version Nov.  8, 2026
- * @version Nov.  9, 2026
+ * @version Nov. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -39,10 +37,10 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
     SmWorkflowComponent.WorkflowRetainedWorkServiceService -> Vector(
       "readWorkflowRetainedWork", "readWorkflowRetainedSnapshot"),
     SmWorkflowComponent.NativeWorkflowPreparationServiceService -> Vector(
-      "prepareGoalStart", "prepareRepositoryStart", "prepareSplitStart", "prepareRepositoryEffect", "prepareAuthority", "prepareEvidence", "readPreparedImport",
+      "prepareGoalStart", "prepareRepositoryStart", "prepareSplitStart", "prepareRepositoryEffect", "prepareAuthority", "prepareEvidence", "projectSemanticWorkResult", "readPreparedImport",
       "prepareExecution", "recordExecution", "prepareCallerInformation", "recordCallerInformation",
       "prepareStandaloneFixStart", "prepareStandaloneReviewFixStart", "prepareGoalTaskStart", "prepareTaskFixDelivery", "prepareTaskFixAdoption",
-      "prepareDelegateTaskStart", "prepareDelegateTaskScopeCorrection", "prepareDelegateTaskCandidateContinuation"
+      "prepareDelegateTaskStart", "prepareDelegateTaskScopeCorrection", "prepareGoalTaskScopeCorrection", "prepareDelegateTaskCandidateContinuation"
     ),
     SmWorkflowComponent.GoalPhaseServiceService -> Vector(
       "startGoalPhase", "advanceGoalPhase", "submitGoalPhaseWorkResult", "submitGoalPhaseOrderedDecision", "submitGoalPhaseFindingRecording",
@@ -88,7 +86,7 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
     SmWorkflowComponent.StandaloneFixSemanticAdmissionServiceService -> Vector("admitStandaloneFixReview"),
     SmWorkflowComponent.GoalTaskServiceService -> Vector("startGoalTask", "advanceGoalTask", "submitGoalTaskWorkResult", "resolveGoalTaskDiagnosticInformation",
       "describeGoalTaskMalformedIssuedWorkRecovery", "recoverGoalTaskMalformedIssuedWork",
-      "describeGoalTaskRepairContinuation", "resumeGoalTaskRepair",
+      "describeGoalTaskScopeCorrection", "correctGoalTaskScope", "describeGoalTaskRepairContinuation", "resumeGoalTaskRepair",
       "describeGoalTaskValidationContinuation", "adoptGoalTaskValidationContinuation",
       "describeGoalTaskUnverifiedValidationContinuation", "adoptGoalTaskUnverifiedValidationContinuation"),
     SmWorkflowComponent.DelegateTaskServiceService -> Vector("startDelegateTask", "advanceDelegateTask",
@@ -108,6 +106,8 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
     SmWorkflowComponent.GoalTaskReviewServiceService -> Vector("reviewGoalTask"),
     SmWorkflowComponent.GoalTaskSemanticAdmissionServiceService -> Vector("admitGoalTaskReview"),
     SmWorkflowComponent.DevelopmentObservationServiceService -> Vector("readDevelopmentState", "readDevelopmentHistory"),
+    SmWorkflowComponent.ManagedDevelopmentServiceService -> Vector("publishDevelopmentArtifact", "selectDevelopmentArtifact",
+      "compileDevelopmentConsumer", "readDevelopmentArtifactStatus"),
     SmWorkflowComponent.LocalPublicationServiceService -> Vector("ensureLocalPublication", "collectLocalPublication", "collectLatestLocalPublication"),
     SmWorkflowComponent.JournalServiceService -> Vector("readJournalEntry", "findJournalEntries"),
     SmWorkflowComponent.EvidenceServiceService -> Vector("readEvidence", "readEvidenceRange", "recordEvidenceJournal",

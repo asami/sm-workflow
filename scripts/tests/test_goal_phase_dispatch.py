@@ -77,6 +77,61 @@ class DispatchSpec(unittest.TestCase):
     def prepare(self, facts=None):
         return A.prepare(self.request, self.mapping, self.facts if facts is None else facts, ROOT, ROOT)
 
+    def test_public_worker_result_projection_binds_format_type_and_context(self):
+        request = copy.deepcopy(self.request)
+        request['result_type'] = 'GoalPhaseWorkResult'
+        request['retained_work'] = {'resource': 'sm-workflow-work:original'}
+        request['issued_work_context']['result_type'] = 'GoalPhaseWorkResult'
+        state = A.prepare(request, self.mapping, self.facts, ROOT, ROOT)
+        state = A.launched(state, state['launch'], {'task_name': 'fixture-worker'})
+        public = {'outcome': 'completed', 'summary': 'full result', 'findings': [],
+                  'dependencyValidation': {'binding': {'identity': 'source', 'revision': '1'},
+                                           'approvals': [{'decision': {'identity': 'approval', 'revision': '2'}}]}}
+        envelope = {'schemaVersion': A.PUBLIC_RETURN_SCHEMA, 'resultType': 'GoalPhaseWorkResult',
+                    'workResource': request['retained_work']['resource'], 'result': public}
+        compact = {'outcome': 'completed', 'summary': 'full result', 'resultType': 'GoalPhaseWorkResult',
+                   'resultResource': 'file:///fixture/result.json'}
+        self.assertEqual(A.complete(state, 'fixture-worker', compact)['semanticResult'], compact)
+        returned = A.complete(state, 'fixture-worker', envelope)
+        self.assertEqual(returned['semanticResult'], public)
+        self.assertEqual(A.complete(state, 'fixture-worker', public)['semanticResult'], public)
+        public['findings'].append('changed after return')
+        self.assertEqual(returned['semanticResult']['findings'], [])
+        invalid = []
+        for key, replacement in [('schemaVersion', 'sm-workflow.goal-phase-native-work-result.v1'),
+                                 ('resultType', 'GoalTaskWorkResult'), ('workResource', 'sm-workflow-work:other'), ('result', None)]:
+            bad = copy.deepcopy(envelope); bad[key] = replacement; invalid.append(bad)
+        invalid.extend([{**envelope, 'issuedWorkContext': request['issued_work_context']},
+                        {k: v for k, v in {**envelope, 'issuedWorkContext': request['issued_work_context']}.items() if k != 'workResource'},
+                        {**envelope, 'payload': public}, {**envelope, 'result_type': 'GoalPhaseWorkResult'},
+                        {'payload': public}, {'outcome': 'completed', 'dependencyAdmission': None}])
+        for bad in invalid:
+            with self.subTest(value=bad), self.assertRaises(ValueError):
+                A.complete(state, 'fixture-worker', bad)
+        other = copy.deepcopy(state); other['request']['issued_work_context']['result_type'] = 'GoalTaskWorkResult'
+        with self.assertRaises(ValueError):
+            A.complete(other, 'fixture-worker', envelope)
+        legacy = copy.deepcopy(self.request)
+        with self.assertRaises(ValueError):
+            A.project_result(legacy, envelope)
+        # Both equal and unequal alias pairs are ambiguous at this projection boundary.
+        for field in ('request_type', 'request_context', 'context_type'):
+            for equal in (True, False):
+                with self.subTest(field=field, equal=equal):
+                    crossed = copy.deepcopy(request)
+                    if field == 'request_type':
+                        crossed['resultType'] = 'GoalPhaseWorkResult' if equal else 'GoalTaskWorkResult'
+                    elif field == 'request_context':
+                        crossed['issuedWorkContext'] = copy.deepcopy(crossed['issued_work_context']) if equal else {}
+                    else:
+                        crossed['issued_work_context']['resultType'] = 'GoalPhaseWorkResult' if equal else 'GoalTaskWorkResult'
+                    with self.assertRaisesRegex(ValueError, 'Ambiguous projection field aliases'):
+                        A.project_result(crossed, public)
+                    with self.assertRaisesRegex(ValueError, 'Ambiguous projection field aliases'):
+                        A.project_result(crossed, envelope)
+        # Other pre-existing callers of alias retain their historical equal-alias behavior.
+        self.assertEqual(A.alias({'resultType': 'same', 'result_type': 'same'}, 'resultType', 'result_type'), 'same')
+
     def test_bounded_roles_preserve_the_actual_request_context_and_observation(self):
         # Given the three bounded semantic names and the existing versioned policy.
         for kind, role in (('Implement', 'implementation'), ('Repair', 'repair'), ('Review', 'review'),

@@ -1,8 +1,15 @@
 # Project initialization Operation
 
 Date: 2026-10-24 (Asia/Tokyo)
-Status: adopted design; implementation and installed acceptance pending
+Status: historical design; the 2026-11-16 Human direction supersedes the
+separate initialization entry with preparation inside ordinary Start. Source
+implementation and installed acceptance remain pending.
 Delivery: [INIT-1–4 plan](../notes/project-initialization-delivery-plan.md)
+
+The sections below preserve the original proposal. Current work uses ordinary
+typed Start with optional explicit intent and program-owned preparation. It
+must retain the actual participant and selected Plan, preserve shared storage
+and existing configuration, and must not implicitly Advance or grant effects.
 
 ## Purpose
 

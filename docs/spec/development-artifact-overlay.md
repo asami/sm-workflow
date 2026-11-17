@@ -182,36 +182,34 @@ publishing, selecting, rolling back or detaching. Do not persist invocation
 settings with `session save`. No selection argument means ordinary dependency
 resolution; an explicit invalid selection remains an error.
 
-The build definition keeps its ordinary build policy, dependencies and publication
-targets. With an overlay-capable sbt-cozy installed and enabled, the explicit
-selection argument is sufficient to activate overlay handling. Do not require
-`.settings(cozyDevelopmentArtifactOverlaySettings)`, another overlay-specific
-declaration, or per-project argument parsing in `build.sbt`. Implement input
-reading and dependency/publication application in reusable sbt-cozy support.
-No argument leaves ordinary behavior intact; an invalid explicit argument fails
-rather than silently selecting ordinary dependencies. This supersedes the earlier
-proposal to require explicit overlay settings in the build definition.
+The adopted 2026-11-12 method requires explicit one-time consumer opt-in in
+`build.sbt` and `project/plugins.sbt`, with supported sbt-cozy installed. Enable
+`org.goldenport.cozy.CozyDevelopmentArtifactsPlugin`, wrap selected direct
+coordinates with `cozyDevelopmentDependency`, and declare expected original
+coordinates through `cozyDevelopmentModules`, including transitive-only modules.
+The helper preserves ordinary coordinates when no explicit selection is supplied.
+A valid development selection does not require an ordinary baseline artifact to
+have existed or to resolve. Invalid explicit input fails without fallback.
 
-Existing projects may need an sbt-cozy version update in their plugin declaration;
-projects without sbt-cozy need its normal installation/enabling first. Those
-plugin prerequisites are separate from overlay opt-in. An existing build already
-using enabled sbt-cozy must not need a `build.sbt` edit to add overlay support.
-Use its existing build definition for ordinary, selected,
-updated, rolled-back and detached builds. Preserve ordinary dependency-coordinate
-declarations: no requirement to wrap each dependency in a new helper or write
-per-module development version branches. Actual resolved development coordinates
-and JAR paths differ from those normal declarations and are visible in status;
-do not replace different versions at one physical artifact path.
+```scala
+enablePlugins(org.goldenport.cozy.CozyDevelopmentArtifactsPlugin)
+libraryDependencies += cozyDevelopmentDependency("example" %% "library" % "1.0").value
+cozyDevelopmentModules += ("example" %% "library" % "1.0")
+```
 
-The plugin prerequisite does not imply every existing project already supports
-overlay arguments. The implementation must account for
-project-level setting precedence so common plugin defaults cannot silently lose
-the requested direct/transitive overrides. Acceptance uses realistic project
-dependency declarations rather than an empty demonstration build.
-Include a pre-overlay build definition with ordinary dependency declarations and
-no overlay-specific settings in acceptance. After supplying the supported plugin,
-both no-argument and explicit-selection builds must work without editing that
-definition; malformed or unavailable selections must fail explicitly.
+This replaces the earlier automatic-activation/no-helper premise. The same
+checked-in opted-in build definition is used for ordinary, selected, updated,
+rolled-back and detached invocations. Selection changes never rewrite that
+build definition or its original dependency declarations. Verify effective
+project/configuration precedence and actual direct/transitive coordinates.
+The implementation must reject authored settings that contradict a selection.
+
+The delivered initial adapter supports ordinary JVM libraries and Scala-cross
+modules. It rejects sbt-plugin/meta-build mappings, project references, selected
+classifiers and unmanaged JARs; builds replacing its validation or compile/test
+wrappers are unsupported. These limits do not waive the original SimpleModeler,
+Cozy generation, compatible/incompatible CNCF, lifecycle or integrated acceptance.
+Those obligations remain pending until implemented and observed.
 
 sm-workflow constructs the exact process arguments from the selected operation.
 Passing an argument alone is insufficient until the adapter is installed and
@@ -424,3 +422,59 @@ reports, generation records and consumer compilation/tests as evidence.
 This plan does not claim any of these tests have run. The six driver scenarios
 and supporting resolution/lifetime rules are Phase 7 acceptance; optional breadth
 can be recorded in Phase 8 without silently dropping the initial delivery.
+
+## 10. Minimal P7-A native route (2026-11-12)
+
+`ManagedDevelopmentService` adds `publishDevelopmentArtifact`,
+`selectDevelopmentArtifact`, `compileDevelopmentConsumer` and
+`readDevelopmentArtifactStatus` to the normal CLI/MCP composition. Their typed
+input is `edgeIdentity`, `requestIdentity`, `publication`, `selection`; callers
+supply identities rather than physical paths or SBT command strings. The optional
+`sm-workflow.managed-development` Component parameter declares `storeName`,
+`collection` and `definition`. The definition declares `scope`, `ownerWorkspace`,
+owner-relative `repository`/`staging`, and explicit consumer-to-provider `edges`.
+Each edge reuses `GoalPhaseDependencyScope.Component` identities for provider and
+consumer and independently names `localRepository`, `localJar`, `localProject`
+and the original `requested` coordinates (`organization`, exact cross-module
+`module`, `version`). The minimum JAR route requires a local JAR binding; a local
+project binding does not implicitly become an artifact build or dependency.
+
+CNCF's already-resolved process/workspace configuration maps logical workspaces
+to machine-local roots. There is no second physical workspace profile, search for
+a nearby checkout, or latest-artifact discovery. The host must grant the owner
+workspace and its Component-record collection, producer Git observation and the
+specific producer `scoped-publish` and consumer `compile` SBT programs. The
+producer and consumer build definitions explicitly opt in as described above.
+Shared project definitions belong under Component `resources/`; runtime roots
+and artifacts belong in ignored `work.d/`. The current minimum consumes explicit
+registered existing workspace bindings; managed checkout acquisition remains an
+obligation of the later workspace route.
+
+Publication invokes only CNCF's fixed `smDevelopmentArtifactPublish` transport,
+with a bounded `cncf.scoped-sbt-input.v1` envelope and nested
+`sbt-cozy.development-artifact.v1`. The version is
+`originalVersion-smdev-{scopeLength}-{scope}-{publicationLength}-{publication}`.
+The immutable publication records actual Git origin (including dirty paths),
+producer selection, exact module/JAR/Ivy paths, adapter report and completed
+publication marker. Process success alone is insufficient. Published adapter
+output is never shared-Ivy `publishLocal` evidence.
+
+Selection creates an immutable edge/consumer binding to a completed publication;
+it performs no provider build. Consumer compilation writes a fresh execution
+input for that request and uses typed CNCF Compile. A verified result requires
+both actual successful process termination and the adapter's matching selected
+coordinates and Compile classpath report. Status reads retained facts only and
+distinguishes published, selected-unverified, verified, failed, admission-rejected,
+unverified, unknown and not-found. Reusing an execution request identity with different input
+or participant rejects; redelivering the same completed input reuses its result.
+An intent without an observed result remains unknown and is never rerun implicitly.
+
+These are native Component records, not skill-maintained JSON lifecycle files.
+The JSON under the owner workspace is bounded execution input and actual adapter
+output. This minimum is a single-module route; selection sets, generation,
+verify/detach/prune, update/rollback, in-use retention, multi-module publication,
+transitive breadth, two-lane continuation and full Phase acceptance remain in
+the later ordered Steps. The executable specification is
+`org.simplemodeling.textus.smworkflow.admission.Phase7ManagedDevelopmentSpec`;
+its authored scenarios require runtime execution and independent review before
+acceptance. No result in this document claims those checks have run.

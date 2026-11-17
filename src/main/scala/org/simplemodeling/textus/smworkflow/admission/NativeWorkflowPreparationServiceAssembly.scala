@@ -18,8 +18,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Passive normal Operations borrow only the current executing call's resource context.
   * @since   Oct. 15, 2026
   *  version Oct. 27, 2026
-  *  version Nov.  5, 2026
-  * @version Nov.  9, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowPreparationServiceAssembly {
@@ -28,6 +27,7 @@ private[smworkflow] object NativeWorkflowPreparationServiceAssembly {
 
   def bind: spec.ServiceDefinition = NativeWorkflowDescriptionMetadata.service(_declared,
     spec.OperationDefinitionGroup(NonEmptyVector.of(
+      SemanticResultProjectionOperation,
       ReadPreparedOperation,
       new BoundOperation[V.WorkflowGoalStartPreparationInput](_declared.PrepareGoalStartOperation,
         (input, reader) => NativeGoalStartInput.prepareC(Map(
@@ -51,6 +51,11 @@ private[smworkflow] object NativeWorkflowPreparationServiceAssembly {
           "selection-collection" -> input.selectionCollection), reader)),
       new BoundOperation[V.WorkflowDelegateTaskStartPreparationInput](_declared.PrepareDelegateTaskStartOperation,
         (input, reader) => NativeDelegateTaskStartInput.prepareC(Map(
+          "input" -> input.input, "selection-id" -> input.selectionId, "participant" -> input.participant,
+          "origin" -> input.origin, "idempotency-key" -> input.idempotencyKey,
+          "selection-collection" -> input.selectionCollection), reader)),
+      new BoundOperation[V.WorkflowGoalTaskScopeCorrectionPreparationInput](_declared.PrepareGoalTaskScopeCorrectionOperation,
+        (input, reader) => NativeGoalTaskScopeCorrectionInput.prepareC(Map(
           "input" -> input.input, "selection-id" -> input.selectionId, "participant" -> input.participant,
           "origin" -> input.origin, "idempotency-key" -> input.idempotencyKey,
           "selection-collection" -> input.selectionCollection), reader)),
@@ -145,6 +150,31 @@ private[smworkflow] object NativeWorkflowPreparationServiceAssembly {
         _ <- if (format.forall(Set("compact", "legacy-full"))) Consequence.unit
           else Consequence.stateConflict("Preparation preparationFormat requires compact or explicit legacy-full")
       } yield BoundAction(request, input, record, original.name, format.contains("legacy-full"), prepare)
+  }
+
+  private object SemanticResultProjectionOperation extends spec.OperationDefinition {
+    val specification = NativeWorkflowDescriptionMetadata.operation(_declared.ProjectSemanticWorkResultOperation)
+    def createOperationRequest(request: Request): Consequence[OperationRequest] =
+      if (request == null || !request.service.contains(_declared.name) || request.operation != specification.name)
+        Consequence.stateConflict("Semantic projection requires its owning public Operation")
+      else NativeWorkflowOperationInput.valueC[V.WorkflowSemanticResultProjectionInput](request, "input").map { input =>
+        val incoming = request
+        new CommandAction {
+          val request = incoming
+          override def commandExecutionMode = CommandExecutionMode.Sync
+          def createCall(c: ActionCall.Core): ActionCall = new ProcedureActionCall {
+            val core = c
+            def execute(): Consequence[OperationResponse] = NativeSemanticResultProjection.projectC(
+              input.workResource, input.resultResource, input.format,
+              value => WorkflowRetainedWork.readResourceC(value, core),
+              value => NativeWorkflowResourceInput.referenceC(value).flatMap {
+                case reference: ResourceReference.Url if reference.scheme == "file" =>
+                  WorkflowArtifactBudget.readTextC(core, reference, Some(UTF_8))
+                case _ => Consequence.stateConflict("Semantic result requires a local file Resource")
+              }).map(OperationResponse.Json(_))
+          }
+        }
+      }
   }
 
   private object ReadPreparedOperation extends spec.OperationDefinition {

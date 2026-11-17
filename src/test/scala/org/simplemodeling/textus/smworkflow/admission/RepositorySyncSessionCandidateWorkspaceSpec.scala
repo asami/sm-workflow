@@ -7,7 +7,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.processexecution.{GitOperation, SbtOperation}
 import org.goldenport.cncf.validation.ValidationDiscoveryV1 as D
 import org.goldenport.cncf.workflow.*
-import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{InstanceIdentity, ProgressionReference}
+import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{InstanceIdentity, InstanceRecord, ProgressionReference}
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.goldenport.cncf.workspace.{SessionCandidateWorkspace, SessionCandidateWorkspaceReference, SessionCandidateWorkspaceState}
 import org.goldenport.protocol.{Property, Request}
@@ -28,8 +28,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Real local candidates use host V7 admission or V8 initialization and native UoW effects.
   * These isolated fixtures do not qualify an installed consumer configuration.
   * @since   Nov. 12, 2026
-  *  version Nov. 12, 2026
-  * @version Nov. 16, 2026
+  * @version Nov. 17, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
@@ -100,6 +99,25 @@ final class RepositorySyncSessionCandidateWorkspaceSpec extends AnyWordSpec with
         "parentPath" -> "managed-candidates".asJson, "aliasPath" -> "candidate-alias".asJson)))))
   }
 
+  // A historical-format fixture is materialized through the same native UoW,
+  // then round-tripped without rewriting any real consumer Session.
+  private def _legacy_progress_c(store: N.Store, progress: P.Progress): Consequence[P.Progress] = for {
+    binding <- W.preflightC(store, progress, store.declaration.purposeValidation)
+    scoped <- W.allocateC(store.core, binding)
+    candidate <- P.producerC(progress.candidate.get)
+    group = RepositorySyncPurposeOwnership.effectiveGroup(progress, progress.plan.get.groups(progress.cursor))
+    identity <- org.goldenport.cncf.processexecution.GitSelectionId.parseC(group.identity)
+    paths <- group.content.foldLeft(Consequence.success(Vector.empty[org.goldenport.cncf.processexecution.GitPath])) { (prior, content) => for {
+      values <- prior
+      path <- org.goldenport.cncf.processexecution.GitPath.parseC(content.path)
+    } yield values :+ path }
+    selection = org.goldenport.cncf.processexecution.GitSelectionParameters(identity, paths, Some(group.message))
+    alias <- org.goldenport.cncf.workspace.WorkspaceId.parseC(binding.slot.workspace)
+    actual <- WorkflowManagedProcessExecution.executePurposeC(scoped,
+      GitOperation.MaterializePurposeCandidate(identity, candidate, alias), selection)
+    observed <- W.materializedC(progress, binding, actual)
+  } yield progress.copy(sessionWorkspace = None, managedWorkspace = Some(observed))
+
   override protected def _prepare_sbt_build_(root: Path, scenario: String): Unit = {
     val repository = root.resolve("repository")
     Files.createDirectories(repository.resolve("project"))
@@ -156,6 +174,8 @@ final class RepositorySyncSessionCandidateWorkspaceSpec extends AnyWordSpec with
   private def _root(name: String): Path = Files.createTempDirectory(
     Files.createDirectories(Path.of("target/session-candidate-workspace").toAbsolutePath), name + "-")
 
+  private def _encoded_record(record: InstanceRecord): String = take(WorkflowInstanceRecordJsonV1.encodeC(record))
+
   // Unsupported selection inputs only; no discovery or execution result is asserted.
   private def _unsupported_checks(root: Path, candidate: P.Candidate): Vector[C.Check] = {
     val scope = D.DiscoveryScope("candidate-inputs", "1", Vector(D.ArtifactScope("candidatefixture", "candidatefixture-tests",
@@ -171,6 +191,128 @@ final class RepositorySyncSessionCandidateWorkspaceSpec extends AnyWordSpec with
   }
 
   "Session-owned Purpose candidate workspace" should {
+    for (requirement <- Vector("check", "review")) {
+      s"refuse installation when a checked frontier is reopened with a new required $requirement" in {
+        Given("a real Session candidate checked successfully but paused before installation admission")
+        val root = _root("checked-policy-" + requirement)
+        var child = Option.empty[InstanceIdentity]
+        var checked = Option.empty[N.Stage]
+        var sourcehead = ""
+        var sourceindex = ""
+        _with_runtime_(root, "MissingPolicy", hostParameters = _parameters(root)) { (owner, component, actor, prepare) =>
+          prepare(_.setupC(_setup_commands_(root, "Equal").size))
+          Files.writeString(root.resolve("repository/value.txt"), "pending incorrect\n")
+          def _invoke_[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A =
+            read_value[A](take(owner.executeOperationResponseInContext(Request.of(component = component.name,
+              service = "RepositorySyncService", operation = operation, properties = properties), actor)))
+          val issued = _invoke_[V.RepositoryDirectoryBatchResult](RepositorySyncDirectoryList.syncOperation,
+            List(Property("input", Record.data("syncMode" -> "FULL_STATE"), None)))
+          child = Some(InstanceIdentity(issued.repositories.head.sessionId))
+          var work = Option.empty[WorkflowInteraction[P.Request, Nothing]]
+          prepare(_.repositoryWorkC(child.get, RepositorySyncPurposeContinuation.completionOperation, P.inputCodec)
+            .map(value => { work = Some(value); () }))
+          val request = work.get.current.asInstanceOf[WorkflowContinuation.WorkOrder[P.Request]].request
+          val proposal = P.Result("resolved", "Checked candidate policy regression", Vector(P.Group("one-purpose", "One purpose",
+            "Apply checked candidate", Vector.empty, Vector(P.Content("value.txt", Some("expected\n"))), Vector.empty,
+            "One actual changed program input")), Vector.empty)
+          val reference = ContextReference("checked-candidate-purpose", "1")
+          val reply = ContinuationResult(work.get.handle, request.runId, request.continuationId, request.expectedRevision,
+            request.context.snapshot, TypedValue(request.resultType.get.value, proposal), reference, Vector.empty,
+            ExecutionEvidence(Vector(reference), Some("checked-candidate-specification")))
+          _invoke_[V.RepositorySyncConflictSubmissionResult]("submitRepositoryPurposeResult",
+            take(NativeWorkflowOperationInputFixture.submissionC(reply))).accepted shouldBe true
+          val waiting = _invoke_[V.RepositoryDirectoryBatchResult](RepositorySyncDirectoryList.syncOperation,
+            List(Property("sessionId", issued.sessionId, None), Property("input", Record.data("syncMode" -> "FULL_STATE"), None)))
+          waiting.outcome shouldBe "AttentionRequired"
+          prepare(_.nativeStageC(ThreeWorkflowNormalHostFixture.definition(root).repository.input, child.get, root,
+            "purpose-1-prepared").map { saved =>
+            saved.get.payload.stage shouldBe "PurposePrepared"
+            ()
+          })
+        }
+        _with_runtime_(root, "Equal", hostParameters = _parameters(root)) { (_, _, _, prepare) =>
+          prepare(call => _store_c(call, root, child.get).flatMap { store => for {
+            current <- call.currentC(child.get)
+            observed <- call.observeC()
+            head <- WorkflowManagedProcessExecution.executeGitC(call.core, GitOperation.Head).flatMap(_.valueC)
+            index <- WorkflowManagedProcessExecution.executeGitC(call.core, GitOperation.IndexTree).flatMap(_.valueC)
+            admissions = new RepositorySyncNativeConvergence.AuthorityPort {
+              def admitC(core: org.goldenport.cncf.action.ActionCall.Core, context: F.StartContext,
+                target: Target, effect: RepositorySyncNativeConvergence.Effect): Consequence[Unit] =
+                Consequence.stateConflict("Fixture pauses checked candidate before installation")
+            }
+            result = RepositorySyncPurposeRuntime.advanceC(store, current, observed, store.declaration.purposeValidation,
+              Some(admissions), None, (_, _) => Consequence.stateConflict("Fixture must not finish"))
+            _ = result match {
+              case Consequence.Failure(conclusion) => conclusion.show should include("Fixture pauses checked candidate")
+              case _ => fail("Expected real checks to reach the installation admission boundary")
+            }
+            saved <- store.loadC("purpose-1-assessment")
+          } yield {
+            checked = saved
+            checked.get.payload.stage shouldBe "PurposeChecked"
+            checked.get.payload.purposes.get.assessment.get.branch shouldBe "admit"
+            checked.get.payload.purposes.get.receipts should have size 3
+            sourcehead = head.value
+            sourceindex = index.value
+            ()
+          } })
+        }
+        When("a fresh runtime advances the same checked frontier under a stricter ordinary policy")
+        _with_runtime_(root, "Equal", hostParameters = _parameters(root)) { (_, _, _, prepare) =>
+          prepare(call => _store_c(call, root, child.get).flatMap { store =>
+            val ordinary = store.declaration.purposeValidation.get
+            val additional = C.Check("new-required-compile", 3, WorkflowSbtValidation.Kind.Compile)
+            val coverage = _coverage.copy(coverage = _coverage.coverage :+
+              RepositorySyncProgramImpact.Coverage(additional, Vector("value.txt"), _inputs,
+                "Current ordinary policy adds a required compile check"), fullChecks = _coverage.fullChecks :+ additional)
+            val policy = if (requirement == "review") ordinary.copy(
+              assessment = ordinary.assessment.map(_.copy(detailedReview = "required")))
+              else StandardWorkflowRuntime.normalRepositoryValidation(Some(coverage))
+            val selected = store.withDeclaration(store.declaration.copy(purposeValidation = Some(policy)))
+            var admissions = 0
+            val tripwire = new RepositorySyncNativeConvergence.AuthorityPort {
+              def admitC(core: org.goldenport.cncf.action.ActionCall.Core, context: F.StartContext,
+                target: Target, effect: RepositorySyncNativeConvergence.Effect): Consequence[Unit] = {
+                admissions += 1
+                Consequence.stateConflict("Installation admission must not be reached with stale policy")
+              }
+            }
+            for {
+              before <- call.currentC(child.get)
+              _ = _encoded_record(before) shouldBe _encoded_record(checked.get.record)
+              observed <- call.observeC()
+              result = RepositorySyncPurposeRuntime.advanceC(selected, before, observed, Some(policy), Some(tripwire), None,
+                (_, _) => Consequence.stateConflict("Stale policy must not finish"))
+              _ = Then("the stricter current policy refuses the checked candidate before any installation admission")
+              _ = result match {
+                case Consequence.Failure(conclusion) => conclusion.show should include("differs from current ordinary validation or host policy")
+                case _ => fail("A checked candidate cannot inherit an obsolete validation policy")
+              }
+              after <- call.currentC(child.get)
+              retained <- store.loadC("purpose-1-assessment")
+              intent <- store.loadC("purpose-1-commit-intent")
+              installed <- store.loadC("purpose-1-installed")
+              head <- WorkflowManagedProcessExecution.executeGitC(call.core, GitOperation.Head).flatMap(_.valueC)
+              index <- WorkflowManagedProcessExecution.executeGitC(call.core, GitOperation.IndexTree).flatMap(_.valueC)
+            } yield {
+              Then("installation is refused before admission or intent and the same evidence, history and source remain")
+              admissions shouldBe 0
+              _encoded_record(after) shouldBe _encoded_record(before)
+              retained.get.payload shouldBe checked.get.payload
+              _encoded_record(retained.get.record) shouldBe _encoded_record(checked.get.record)
+              intent shouldBe None
+              installed shouldBe None
+              head.value shouldBe sourcehead
+              index.value shouldBe sourceindex
+              Files.readString(root.resolve("repository/value.txt")) shouldBe "pending incorrect\n"
+              ()
+            }
+          })
+        }
+      }
+    }
+
     for ((document, initialized) <- Vector((true, false), (false, false), (false, true))) {
       s"materialize and reopen the actual candidate with ordinary validation, documentation=$document, initialized=$initialized" in {
         Given("ordinary candidate coverage and preserved source work, with existing V7 roots or absent V8 roots")
@@ -220,7 +362,7 @@ final class RepositorySyncSessionCandidateWorkspaceSpec extends AnyWordSpec with
             Property("sessionId", issued.sessionId, None), Property("input", Record.data("syncMode" -> "FULL_STATE"), None)))
           retainedresult = Some(result)
           prepare(_.nativeStageC(ThreeWorkflowNormalHostFixture.definition(root).repository.input, child, root,
-            "purpose-1-materialized").map(value => { retained = value; () }))
+            "purpose-1-workspace-observed").map(value => { retained = value; () }))
           Then("the same child installs the candidate in a real Git worktree while preserving its original source work")
           withClue(s"Actual managed batch: $result\n") {
             if (document) {
@@ -237,18 +379,17 @@ final class RepositorySyncSessionCandidateWorkspaceSpec extends AnyWordSpec with
           }
           retained should not be empty
           val progress = retained.get.payload.purposes.get
-          val binding = progress.managedWorkspace.get
-          binding.reference.session shouldBe child.value
-          binding.reference.source shouldBe "sm-workflow-repository"
-          binding.reference.alias shouldBe _alias
+          val binding = progress.sessionWorkspace.get
+          binding.session shouldBe child.value
+          binding.source shouldBe "sm-workflow-repository"
+          binding.alias shouldBe _alias
           binding.materialization should not be empty
           progress.asJson.as[P.Progress].toOption.get shouldBe progress
           N.codec.decode(N.codec.encode(retained.get.payload)).toOption.get shouldBe retained.get.payload
-          progress.asJson.hcursor.downField("managedWorkspace").downField("reference").keys.get.toSet shouldBe
-            Set("component", "source", "parent", "alias", "session", "candidate")
-          prepare(call => _store_c(call, root, child).flatMap(store => W.scopedStoreC(store, progress)).flatMap { selected => for {
-            actual <- WorkflowManagedProcessExecution.executeGitC(selected.core, GitOperation.Root, _alias).flatMap(_.valueC)
-            head <- WorkflowManagedProcessExecution.executeGitC(selected.core, GitOperation.Head, _alias).flatMap(_.valueC)
+          progress.managedWorkspace shouldBe None
+          prepare(call => _store_c(call, root, child).flatMap(store => RepositorySyncPurposeRuntime.candidateCoreC(store, progress)).flatMap { selected => for {
+            actual <- WorkflowManagedProcessExecution.executeGitC(selected, GitOperation.Root, _alias).flatMap(_.valueC)
+            head <- WorkflowManagedProcessExecution.executeGitC(selected, GitOperation.Head, _alias).flatMap(_.valueC)
           } yield {
             candidateroot = actual
             head.value shouldBe progress.candidate.get.commit
@@ -306,21 +447,21 @@ final class RepositorySyncSessionCandidateWorkspaceSpec extends AnyWordSpec with
         _with_runtime_(root, scenario, hostParameters = _parameters(root)) { (owner, component, actor, prepare) =>
           val stage = retained.get
           val progress = stage.payload.purposes.get
-          val binding = progress.managedWorkspace.get
           val child = InstanceIdentity(retainedresult.get.repositories.head.sessionId)
           var actualroot = ""
           var refusals = Vector.empty[Boolean]
           var policyrefusals = Vector.empty[Boolean]
           prepare(call => _store_c(call, root, child).flatMap { store => for {
-            selected <- W.scopedStoreC(store, progress.asJson.as[P.Progress].toOption.get)
-            actual <- WorkflowManagedProcessExecution.executeGitC(selected.core, GitOperation.Root, _alias).flatMap(_.valueC)
-            reference <- SessionCandidateWorkspaceReference.fromRecordC(binding.reference)
+            selected <- RepositorySyncPurposeRuntime.candidateCoreC(store, progress.asJson.as[P.Progress].toOption.get)
+            actual <- WorkflowManagedProcessExecution.executeGitC(selected, GitOperation.Root, _alias).flatMap(_.valueC)
+            binding = progress.sessionWorkspace.get
+            reference <- SessionCandidateWorkspaceReference.fromRecordC(RepositorySyncSessionWorkspace.record(binding))
           } yield {
             actualroot = actual
             val currentpolicy = StandardWorkflowRuntime.normalRepositoryValidation(Some(_coverage))
             val requiredreview = currentpolicy.copy(assessment = currentpolicy.assessment.map(_.copy(detailedReview = "required")))
             val reviewstore = store.withDeclaration(store.declaration.copy(purposeValidation = Some(requiredreview)))
-            policyrefusals = Vector(W.requireCurrentBindingC(reviewstore, progress).isFaillure)
+            policyrefusals = Vector(RepositorySyncSessionWorkspace.requireCurrentBindingC(reviewstore, progress).isFaillure)
             if (!document) {
               val additional = C.Check("additional-required-compile", 3, WorkflowSbtValidation.Kind.Compile)
               val coverage = _coverage.copy(coverage = _coverage.coverage :+
@@ -329,14 +470,14 @@ final class RepositorySyncSessionCandidateWorkspaceSpec extends AnyWordSpec with
                 fullChecks = _coverage.fullChecks :+ additional)
               val changedpolicy = StandardWorkflowRuntime.normalRepositoryValidation(Some(coverage))
               val changedstore = store.withDeclaration(store.declaration.copy(purposeValidation = Some(changedpolicy)))
-              policyrefusals = policyrefusals :+ W.requireCurrentBindingC(changedstore, progress).isFaillure
+              policyrefusals = policyrefusals :+ RepositorySyncSessionWorkspace.requireCurrentBindingC(changedstore, progress).isFaillure
             }
             refusals = Vector(
-              W.scopedStoreC(store, progress.copy(managedWorkspace = Some(binding.copy(reference = binding.reference.copy(session = "foreign:session"))))).isFaillure,
-              W.scopedStoreC(store, progress.copy(managedWorkspace = Some(binding.copy(reference = binding.reference.copy(candidate = "foreign-candidate"))))).isFaillure,
-              W.scopedStoreC(store, progress.copy(managedWorkspace = Some(binding.copy(materialization = None)))).isFaillure,
-              SessionCandidateWorkspace.reacquireC(store.core.executionContext, reference, binding.reference, SessionCandidateWorkspaceState.Unknown).isFaillure,
-              SessionCandidateWorkspace.reacquireC(store.core.executionContext, reference, binding.reference, SessionCandidateWorkspaceState.Empty).isFaillure)
+              RepositorySyncPurposeRuntime.candidateCoreC(store, progress.copy(sessionWorkspace = Some(binding.copy(session = "foreign:session")))).isFaillure,
+              RepositorySyncPurposeRuntime.candidateCoreC(store, progress.copy(sessionWorkspace = Some(binding.copy(candidate = "foreign-candidate")))).isFaillure,
+              RepositorySyncPurposeRuntime.candidateCoreC(store, progress.copy(sessionWorkspace = Some(binding.copy(materialization = None)))).isFaillure,
+              SessionCandidateWorkspace.reacquireC(store.core.executionContext, reference, reference.record, SessionCandidateWorkspaceState.Unknown).isFaillure,
+              SessionCandidateWorkspace.reacquireC(store.core.executionContext, reference, reference.record, SessionCandidateWorkspaceState.Empty).isFaillure)
             ()
           } })
           val result = read_value[V.RepositoryDirectoryBatchResult](take(owner.executeOperationResponseInContext(Request.of(
@@ -351,8 +492,7 @@ final class RepositorySyncSessionCandidateWorkspaceSpec extends AnyWordSpec with
           Files.readString(root.resolve("repository/.git/refs/heads/main")).trim shouldBe progress.candidate.get.commit
           Files.readString(Path.of(actualroot).resolve(path)) shouldBe content
           Files.readString(root.resolve("repository").resolve(path)) shouldBe sourcecontent
-          progress.asJson.mapObject(_.add("managedWorkspace", Json.Null)).as[P.Progress].isLeft shouldBe true
-          progress.copy(managedWorkspace = None).asJson.hcursor.downField("managedWorkspace").focus shouldBe None
+          progress.asJson.hcursor.downField("managedWorkspace").focus shouldBe None
         }
       }
     }
@@ -362,6 +502,7 @@ final class RepositorySyncSessionCandidateWorkspaceSpec extends AnyWordSpec with
         val root = _root(if (occupied) "occupied" else "setup")
         var waiting = Option.empty[V.RepositoryDirectoryBatchResult]
         var prepared = Option.empty[N.Stage]
+        var legacyprogress = Option.empty[P.Progress]
         var sourcehead = ""
         Given("the actual fixture lacks only the v7 logical candidate policy and retains one genuinely prepared program candidate")
         _with_runtime_(root, "MissingPolicy", hostParameters = _parameters(root)) { (owner, component, actor, prepare) =>
@@ -393,7 +534,7 @@ final class RepositorySyncSessionCandidateWorkspaceSpec extends AnyWordSpec with
           waiting = Some(result)
           Then("the concrete setup wait retains the one prepared candidate with no workspace intent or result")
           result.repositories.head.condition shouldBe Some("purpose-materialization-preflight")
-          result.repositories.head.diagnostic.get should include("v7 sessionCandidateWorkspaces")
+          result.repositories.head.diagnostic.get should include("Session candidate workspace policy")
           prepare(_.nativeStageC(ThreeWorkflowNormalHostFixture.definition(root).repository.input, child, root,
             "purpose-1-prepared").map { saved =>
             prepared = saved
@@ -429,9 +570,21 @@ final class RepositorySyncSessionCandidateWorkspaceSpec extends AnyWordSpec with
             "purpose-1-materialize-intent").map { saved => saved shouldBe None; () })
           prepare(_.nativeStageC(ThreeWorkflowNormalHostFixture.definition(root).repository.input, child, root,
             "purpose-1-materialize-result").map { saved => saved shouldBe None; () })
+          if (!occupied) {
+            Given("a genuine pre-install candidate with a separate historical managedWorkspace identity")
+            prepare(call => _store_c(call, root, child).flatMap(store => _legacy_progress_c(store, progress)).map { legacy =>
+              legacyprogress = Some(legacy)
+              legacy.receipts shouldBe progress.receipts
+              legacy.effects shouldBe progress.effects
+              ()
+            })
+          }
           if (occupied) prepare(call => _store_c(call, root, child).flatMap { store => for {
-            binding <- W.preflightC(store, progress, store.declaration.purposeValidation)
-            _ <- W.allocateC(store.core, binding)
+            binding <- RepositorySyncSessionWorkspace.resolveC(store, progress, store.declaration.purposeValidation)
+            source <- org.goldenport.cncf.workspace.WorkspaceId.parseC(binding.source)
+            parent <- org.goldenport.cncf.workspace.WorkspaceId.parseC(binding.parent)
+            alias <- org.goldenport.cncf.workspace.WorkspaceId.parseC(binding.alias)
+            _ <- WorkflowManagedProcessExecution.prepareSessionCandidateC(store.core, source, parent, alias, binding.session, binding.candidate)
           } yield () }) // CNCF fixture arrangement only; no native materialization claim or storage write.
           def _invoke_[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A =
             read_value[A](take(owner.executeOperationResponseInContext(Request.of(component = component.name,
@@ -461,30 +614,30 @@ final class RepositorySyncSessionCandidateWorkspaceSpec extends AnyWordSpec with
               ()
             })
           } else {
-            result.outcome shouldBe "AttentionRequired"
-            result.repositories.head.kind shouldBe "Wait"
-            result.repositories.head.condition shouldBe Some("purpose-effect-unfinished")
+            result.outcome shouldBe "Indeterminate"
+            result.repositories.head.kind shouldBe "Indeterminate"
+            result.repositories.head.condition.get should include("Native continuation returned no observed business result")
+            result.repositories.head.condition.get should include("retained intent is not replayed")
             var failed = Option.empty[N.Stage]
             prepare(_.nativeStageC(ThreeWorkflowNormalHostFixture.definition(root).repository.input, child, root,
-              "purpose-1-materialize-intent").map { saved =>
-              saved.get.payload.stage shouldBe "PurposeMaterializing"
+              "purpose-1-allocate-intent").map { saved =>
+              saved.get.payload.stage shouldBe "PurposeAllocating"
               val pending = saved.get.payload.purposes.get
               pending.candidate shouldBe progress.candidate
-              pending.managedWorkspace.get.materialization shouldBe None
+              pending.sessionWorkspace shouldBe None
               pending.effects shouldBe progress.effects
               ()
             })
             prepare(_.nativeStageC(ThreeWorkflowNormalHostFixture.definition(root).repository.input, child, root,
-              "purpose-1-materialize-result").map { saved =>
+              "purpose-1-allocate-result").map { saved =>
               failed = saved
               saved.get.payload.stage shouldBe "PurposeUnfinished"
               val unfinished = saved.get.payload.purposes.get
               unfinished.candidate shouldBe progress.candidate
-              unfinished.managedWorkspace.get.materialization shouldBe None
+              unfinished.sessionWorkspace shouldBe None
               val rejection = unfinished.effects.last
               unfinished.effects.dropRight(1) shouldBe progress.effects
-              rejection.hcursor.get[String]("kind").toOption shouldBe Some("managed-materialization-rejection")
-              rejection.hcursor.get[String]("diagnostic").toOption.get.toLowerCase should include("occupied")
+              rejection.hcursor.get[String]("allocationFailure").toOption.get.toLowerCase should include("occupied")
               rejection.hcursor.downField("process").focus shouldBe None
               rejection.hcursor.downField("outcome").focus shouldBe None
               ()
@@ -500,7 +653,7 @@ final class RepositorySyncSessionCandidateWorkspaceSpec extends AnyWordSpec with
               ()
             })
             prepare(_.nativeStageC(ThreeWorkflowNormalHostFixture.definition(root).repository.input, child, root,
-              "purpose-1-materialize-result").map { saved => saved.get.payload shouldBe failed.get.payload; () })
+              "purpose-1-allocate-result").map { saved => saved.get.payload shouldBe failed.get.payload; () })
             Vector("purpose-1-materialized", "purpose-1-check-0-intent", "purpose-1-installed").foreach { key =>
               prepare(_.nativeStageC(ThreeWorkflowNormalHostFixture.definition(root).repository.input, child, root,
                 key).map { saved => saved shouldBe None; () })
@@ -525,6 +678,41 @@ final class RepositorySyncSessionCandidateWorkspaceSpec extends AnyWordSpec with
           })
           _invoke_[V.RepositoryDirectoryBatchResult](RepositorySyncDirectoryList.readOperation,
             List(Property("sessionId", original.sessionId, None), Property("revision", original.resultReference.revision, None))) shouldBe original
+        }
+        if (!occupied) {
+          When("a fresh runtime reads the genuine historical binding after normal installation")
+          _with_runtime_(root, "Equal", hostParameters = _parameters(root)) { (_, _, _, prepare) =>
+            val legacy = legacyprogress.get.asJson.as[P.Progress].toOption.get
+            val child = InstanceIdentity(waiting.get.repositories.head.sessionId)
+            prepare(call => _store_c(call, root, child).flatMap { store => for {
+              selected <- RepositorySyncPurposeRuntime.candidateCoreC(store, legacy)
+              actual <- WorkflowManagedProcessExecution.executeGitC(selected, GitOperation.Root, _alias).flatMap(_.valueC)
+              binding = legacy.managedWorkspace.get
+              reference <- SessionCandidateWorkspaceReference.fromRecordC(binding.reference)
+            } yield {
+              Then("the old owner reopens actual content and refuses foreign, incomplete, unknown and changed-policy bindings")
+              Files.readString(Path.of(actual).resolve("value.txt")) shouldBe "expected\n"
+              val currentpolicy = StandardWorkflowRuntime.normalRepositoryValidation(Some(_coverage))
+              val requiredreview = currentpolicy.copy(assessment = currentpolicy.assessment.map(_.copy(detailedReview = "required")))
+              val reviewstore = store.withDeclaration(store.declaration.copy(purposeValidation = Some(requiredreview)))
+              W.requireCurrentBindingC(reviewstore, legacy).isFaillure shouldBe true
+              val additional = C.Check("additional-required-compile", 3, WorkflowSbtValidation.Kind.Compile)
+              val coverage = _coverage.copy(coverage = _coverage.coverage :+
+                RepositorySyncProgramImpact.Coverage(additional, Vector("value.txt"), _inputs,
+                  "Current ordinary policy adds an independent compile check"), fullChecks = _coverage.fullChecks :+ additional)
+              W.requireCurrentBindingC(store.withDeclaration(store.declaration.copy(purposeValidation =
+                Some(StandardWorkflowRuntime.normalRepositoryValidation(Some(coverage))))), legacy).isFaillure shouldBe true
+              Vector(
+                W.scopedStoreC(store, legacy.copy(managedWorkspace = Some(binding.copy(reference = binding.reference.copy(session = "foreign:session"))))).isFaillure,
+                W.scopedStoreC(store, legacy.copy(managedWorkspace = Some(binding.copy(reference = binding.reference.copy(candidate = "foreign-candidate"))))).isFaillure,
+                W.scopedStoreC(store, legacy.copy(managedWorkspace = Some(binding.copy(materialization = None)))).isFaillure,
+                SessionCandidateWorkspace.reacquireC(store.core.executionContext, reference, binding.reference, SessionCandidateWorkspaceState.Unknown).isFaillure,
+                SessionCandidateWorkspace.reacquireC(store.core.executionContext, reference, binding.reference, SessionCandidateWorkspaceState.Empty).isFaillure
+              ) shouldBe Vector.fill(5)(true)
+              legacy.asJson.mapObject(_.add("managedWorkspace", Json.Null)).as[P.Progress].isLeft shouldBe true
+              ()
+            } })
+          }
         }
       }
     }
