@@ -349,6 +349,17 @@ literal owned paths for the same purpose, subject to the retained host ownership
 and delegation exclusions. It replaces no original ownership, purpose, operation
 or authority.
 
+After that correction retires an Implement issue, ordinary Advance can rebind
+the still-unissued implementation to the observed current source. It requires
+the same root and branch, valid adopted ownership and a current HEAD descended
+from the retained execution base. It retains a mechanical checkpoint with the
+current base and unrelated dirty snapshot before issuing the successor. The
+earlier checkpoint remains immutable history, and the adopted input, condition
+timing, counters and partial or staged work are preserved. If the observation
+does not qualify, Advance refuses; an already issued worker, Review and candidate
+recovery are outside this continuation. Subsequent implementation freshness and
+candidate checks still use the newly retained source boundary.
+
 The same public route also accepts an unclaimed, unsubmitted Repair issue when
 necessary same-purpose literal inventory is missing. Supply additional owned
 paths and leave submission timing empty; Repair cannot select a new timing plan.

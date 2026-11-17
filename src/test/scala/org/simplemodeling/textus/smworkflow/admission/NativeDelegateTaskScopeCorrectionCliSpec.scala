@@ -4,6 +4,8 @@ import cats.data.NonEmptyVector
 import io.circe.{Json, parser}
 import io.circe.syntax.*
 import java.nio.file.{Files, Path}
+import java.nio.charset.StandardCharsets.UTF_8
+import java.util.zip.ZipFile
 import org.goldenport.cncf.workflow.WorkflowExecutionProfileParameters
 import org.goldenport.record.RecordPresentable
 import org.scalatest.{DoNotDiscover, GivenWhenThen}
@@ -23,16 +25,34 @@ import S.given
   */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
-  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.PackagedRuntimeTestDeclaration])
 final class NativeDelegateTaskScopeCorrectionCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  private lazy val _executable: Path = {
-    val path = Path.of(sys.props.get("smworkflow.spec.installedCommand")
-      .orElse(sys.env.get("SM_WORKFLOW_SPEC_INSTALLED_COMMAND"))
-      .getOrElse(fail("Select smworkflow.spec.installedCommand or SM_WORKFLOW_SPEC_INSTALLED_COMMAND")))
-    require(path.isAbsolute && path.normalize == path && Files.isRegularFile(path) && Files.isExecutable(path),
-      "Select the actual absolute installed executable")
-    path
+  private def _candidateFacade(scenario: F.Scenario): Path = {
+    val executable = sys.props.get("smworkflow.spec.cncfCommand").orElse(sys.env.get("SM_WORKFLOW_SPEC_CNCF_COMMAND"))
+      .map(Path.of(_)).getOrElse {
+        sys.env.getOrElse("PATH", "").split(java.io.File.pathSeparator).iterator.filter(_.nonEmpty)
+          .map(x => Path.of(x).toAbsolutePath.normalize.resolve("cncf"))
+          .find(x => Files.isRegularFile(x) && Files.isExecutable(x)).get
+      }
+    val car = Path.of(Files.readString(Path.of("target/sm-workflow/packaged-test-car.txt")).trim)
+    val archive = new ZipFile(car.toFile)
+    val minimum = try {
+      val stream = archive.getInputStream(archive.getEntry("car-runtime-manifest.json"))
+      val content = try new String(stream.readAllBytes(), UTF_8) finally stream.close()
+      parser.parse(content).toOption.get.hcursor.downField("runtime").downField("cncf").get[String]("minimum").toOption.get
+    } finally archive.close()
+    val runtime = sys.props.get("smworkflow.spec.cncfRuntime").orElse(sys.env.get("SM_WORKFLOW_SPEC_CNCF_RUNTIME"))
+      .orElse(Some(minimum))
+    F.PackagedInstalled(executable, car, runtime) // Validate the selected installed entry and candidate archive.
+    def shell(value: String) = "'" + value.replace("'", "'\\''") + "'"
+    val facade = scenario.root.resolve("candidate-cli")
+    val prefix = Vector(executable.toString) ++ F.runtimeArguments(runtime) ++ Vector(car.toString,
+      "command", "--force-exit", "--no-default-components")
+    Files.writeString(facade, "#!/bin/sh\nexec " + prefix.map(shell).mkString(" ") + " \"$@\"\n", UTF_8)
+    require(facade.toFile.setExecutable(true), "Cannot enable candidate CLI")
+    facade
   }
+  private var _executable: Path = _
   private def _json(value: RecordPresentable): String = take(value.toRecord().toJsonStringC)
   private def _state(view: V.DelegateTaskView): S.State =
     GoalPhaseNativeMetadata.normalizePublicJson(parser.parse(take(view.state.get.toJsonStringC)).toOption.get)
@@ -40,6 +60,23 @@ final class NativeDelegateTaskScopeCorrectionCliSpec extends AnyWordSpec with Ma
   private def _call(scenario: F.Scenario, service: String, operation: String, parameters: Vector[String]): F.Result =
     scenario.callInstalled(_executable, service, operation, parameters, installations = None,
       assemblyDescriptor = Some(scenario.root.resolve(".textus/assembly.yaml")))
+  private def _view(scenario: F.Scenario, result: F.Result): V.DelegateTaskView = {
+    val control = result.business[V.DelegateTaskView]
+    val work = control.retainedWork.map { reference =>
+      _call(scenario, WorkflowRetainedWork.serviceName, WorkflowRetainedWork.readOperation,
+        Vector("--input", _json(reference))).business[V.WorkflowRetainedWorkReadResult].response
+    }.getOrElse(control.toRecord())
+    val complete = control.retainedMaterials.foldLeft(work) { (prior, field) =>
+      val detail = _call(scenario, WorkflowRetainedWork.serviceName, WorkflowRetainedSnapshot.readOperation,
+        Vector("--input", _json(field.reference))).business[V.WorkflowRetainedSnapshotReadResult]
+      val overlay = control.controlSummary.flatMap(_.getRecord(field.fieldName)).getOrElse(org.goldenport.record.Record.empty)
+      val material = org.goldenport.record.Record.createFull(detail.material.fields.filterNot(value => overlay.getAny(value.key).nonEmpty)
+        .map(value => value.key -> value.value.single)) ++ overlay
+      org.goldenport.record.Record.createFull(prior.fields.filterNot(_.key == field.fieldName)
+        .map(value => value.key -> value.value.single)) ++ org.goldenport.record.Record.data(field.fieldName -> material)
+    }
+    take(V.DelegateTaskView.createC(complete))
+  }
 
   "Installed pending destination correction" should {
     "admit an independently selected timing subset on the same Session and reject the retired worker without executing checks or publication" in {
@@ -49,30 +86,36 @@ final class NativeDelegateTaskScopeCorrectionCliSpec extends AnyWordSpec with Ma
       val origin = parser.parse(parameters(GoalPhaseNativeExecution.declaration.name)).toOption.get
       val scenario = F.fresh("installed-delegate-scope-correction", bootstrapSelectedInput = false,
         mappedExecution = Some(mapping -> origin))
-      sys.props.get("smworkflow.spec.componentFile").foreach { supplied =>
-        val component = Path.of(supplied)
-        require(component.isAbsolute && component.normalize == component && Files.isRegularFile(component),
-          "Select an actual absolute published Component archive")
-        val configfile = scenario.root.resolve(".textus/config.json")
-        val config = parser.parse(Files.readString(configfile)).toOption.get
-        Files.writeString(configfile, config.mapObject(_.add("textus.component.file", supplied.asJson)).noSpaces)
-      }
+      val configfile = scenario.root.resolve(".textus/config.json")
+      val config = parser.parse(Files.readString(configfile)).toOption.get
+      val originalPlan = parser.parse(config.hcursor.get[String]("textus.subsystem.process-execution.plan").toOption.get).toOption.get
+      val standardPlan = NativeCommonDelegateTaskFixture.processPlan(scenario.root, focused = false)
+      def rows(plan: Json, key: String): Vector[Json] = plan.hcursor.get[Vector[Json]](key).toOption.get
+      // Keep the prepared-import workspace while using the ordinary standard
+      // repository family and its fixed capabilities for this host.
+      val preparedWorkspace = rows(originalPlan, "workspaces").filter(_.hcursor.get[String]("identity").contains("prepared-imports"))
+      val preparedGrant = rows(originalPlan, "workspaceGrants").filter(_.hcursor.get[String]("workspaceId").contains("prepared-imports"))
+      val preparedIds = preparedWorkspace.map(_.hcursor.get[Json]("identity").toOption.get)
+      val initializations = rows(standardPlan, "workspaceInitializations").map(_.mapObject(fields =>
+        fields.add("sources", Json.fromValues(fields("sources").get.asArray.get ++ preparedIds))))
+      val plan = standardPlan.mapObject(_.add("workspaces", Json.fromValues(rows(standardPlan, "workspaces") ++ preparedWorkspace))
+        .add("workspaceGrants", Json.fromValues(rows(standardPlan, "workspaceGrants") ++ preparedGrant))
+        .add("workspaceInitializations", Json.fromValues(initializations)))
+      Files.writeString(configfile, config.mapObject(_.remove("sm-workflow.runtime.definition")
+        .add("textus.subsystem.process-execution.plan", plan.noSpaces.asJson)).noSpaces)
+      _executable = _candidateFacade(scenario)
       val request = V.DelegateTaskInput(scenario.host.goal.input.repositoryIdentity, "installed-condition-cycle",
         "SPECIFICATION-OWNED retain the tiny selected document and qualify delivery later",
-        NonEmptyVector.one("docs/phase.md"), NonEmptyVector.one("test"), NonEmptyVector.of("behavior", "delivery"),
+        NonEmptyVector.one("docs/phase.md"), NonEmptyVector.one("test"), NonEmptyVector.of("behavior", "coverage", "preservation", "delivery"),
         NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-request", "1")), false,
         "documentation", "off", 10, "direct-instruction", Vector.empty,
         V.DelegateTaskContract("SPECIFICATION-OWNED-requester", "SPECIFICATION-OWNED-destination",
           "SPECIFICATION-OWNED-requester", "org.example.ScopeCorrectionFixture", "destination", "documentation",
           NonEmptyVector.of("dispatch", "implement", "validate", "review", "commit", "return", "adopt"),
           Vector("remote-push"), NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-Human", "1")),
-          None, Vector.empty, "SPECIFICATION-OWNED fixture; actual consumer remains untouched"), Vector("behavior", "delivery"))
+        None, Vector.empty, "SPECIFICATION-OWNED fixture; actual consumer remains untouched"), Vector("behavior", "coverage", "preservation"))
       val repository = Path.of(scenario.host.target.root)
       val document = Files.readString(repository.resolve("docs/phase.md"))
-      val head = scenario.candidateHead
-      val index = scenario.candidateIndexDiff
-      val status = scenario.candidateStatus
-      val indexbytes = Files.readAllBytes(repository.resolve(".git/index")).toVector
       val requestfile = scenario.root.resolve("delegate-request.json")
       Files.writeString(requestfile, _json(request))
       val startpreparation = V.WorkflowDelegateTaskStartPreparationInput(requestfile.toUri.toASCIIString,
@@ -85,20 +128,20 @@ final class NativeDelegateTaskScopeCorrectionCliSpec extends AnyWordSpec with Ma
       val startedresult = _call(scenario, "DelegateTaskService", "startDelegateTask", Vector("--input", _json(request),
         "--selectionId", "initial-selection", "--participant", "participant", "--idempotencyKey", "initial-key"))
       val started = startedresult.business[V.DelegateTaskView]
-      def _advance_() = _call(scenario, "DelegateTaskService", "advanceDelegateTask",
-        Vector("--sessionId", started.sessionId)).business[V.DelegateTaskView]
+      def _advance_() = _view(scenario, _call(scenario, "DelegateTaskService", "advanceDelegateTask",
+        Vector("--sessionId", started.sessionId)))
       val old = _advance_()
       val before = _state(old)
       val oldcontext = old.issuedWorkContext.get
       Then("normal Advance retains the exact initial Implement assignment")
       before.stage shouldBe "Implement"
       old.kind shouldBe "Request"
-      before.input.conditions shouldBe Vector("behavior", "delivery")
-      before.input.submissionConditions shouldBe Some(Vector("behavior", "delivery"))
+      before.input.conditions shouldBe Vector("behavior", "coverage", "preservation", "delivery")
+      before.input.submissionConditions shouldBe Some(Vector("behavior", "coverage", "preservation"))
 
       When("the public structured description names this still-unclaimed issue and the selected submission IDs")
       val descriptioninput = V.DelegateTaskScopeCorrectionDescriptionInput(started.sessionId, oldcontext.continuationId,
-        Vector.empty, Vector("behavior"))
+        Vector("value.txt"), Vector.empty)
       val describedresult = _call(scenario, "DelegateTaskService", "describeDelegateTaskScopeCorrection",
         Vector("--input", _json(descriptioninput)))
       val described = describedresult.business[V.DelegateTaskScopeCorrectionView]
@@ -130,6 +173,24 @@ final class NativeDelegateTaskScopeCorrectionCliSpec extends AnyWordSpec with Ma
       val corrected = correctedresult.business[V.DelegateTaskScopeCorrectionView]
       val repeated = _call(scenario, "DelegateTaskService", "correctDelegateTaskScope",
         Vector("--input", _json(correction))).business[V.DelegateTaskScopeCorrectionView]
+      def git(args: String*): Unit = {
+        val command = Vector("/usr/bin/git", "-C", repository.toString, "-c", "user.name=Fixture",
+          "-c", "user.email=fixture@example.invalid", "-c", "core.hooksPath=/dev/null") ++ args
+        scala.sys.process.Process(command).! shouldBe 0
+      }
+      git("checkout", "-b", "incompatible")
+      _call(scenario, "DelegateTaskService", "advanceDelegateTask", Vector("--sessionId", started.sessionId)).exitCode should not be 0
+      git("checkout", "main")
+      Files.writeString(repository.resolve("docs/user.md"), "Original user document\n")
+      git("add", "--", "docs/user.md")
+      git("commit", "--no-verify", "--no-gpg-sign", "-m", "Independent user document baseline")
+      Files.writeString(repository.resolve("docs/phase.md"), document + "partial implementation\n")
+      git("add", "--", "docs/phase.md")
+      Files.writeString(repository.resolve("docs/user.md"), "unrelated documentation\n")
+      val head = scenario.candidateHead
+      val index = scenario.candidateIndexDiff
+      val status = scenario.candidateStatus
+      val indexbytes = Files.readAllBytes(repository.resolve(".git/index")).toVector
       val next = _advance_()
       val after = _state(next)
       val successor = take(DelegateTaskScopeCorrection.targetC(corrected.target))
@@ -141,8 +202,9 @@ final class NativeDelegateTaskScopeCorrectionCliSpec extends AnyWordSpec with Ma
       next.resultType shouldBe old.resultType
       next.submitSessionId shouldBe old.submitSessionId
       after.input.conditions shouldBe before.input.conditions
-      after.input.submissionConditions shouldBe Some(Vector("behavior"))
-      after.input.copy(submissionConditions = before.input.submissionConditions) shouldBe before.input
+      after.input.submissionConditions shouldBe Some(Vector("behavior", "coverage", "preservation"))
+      after.input.ownedPaths shouldBe before.input.ownedPaths :+ "value.txt"
+      after.input.copy(ownedPaths = before.input.ownedPaths, sourceReferences = before.input.sourceReferences) shouldBe before.input
       after.copy(input = before.input, evidenceReferences = before.evidenceReferences) shouldBe before
       successor.business.baseHead shouldBe originaltarget.business.baseHead
       successor.business shouldBe originaltarget.business
@@ -155,6 +217,8 @@ final class NativeDelegateTaskScopeCorrectionCliSpec extends AnyWordSpec with Ma
       Given("a SPECIFICATION-OWNED submission with every original ID and delivery explicitly still false")
       val result = V.DelegateTaskWorkResult("completed", "SPECIFICATION-OWNED submission for later qualification", Vector.empty,
         NonEmptyVector.of(V.DelegateTaskCondition("behavior", true, "SPECIFICATION-OWNED submission"),
+          V.DelegateTaskCondition("coverage", true, "SPECIFICATION-OWNED submission"),
+          V.DelegateTaskCondition("preservation", true, "SPECIFICATION-OWNED submission"),
           V.DelegateTaskCondition("delivery", false, "Await actual runtime checks and delivery")), Vector.empty, None, None)
       val reference = V.WorkflowArtifactReference("SPECIFICATION-OWNED-submission", "1")
       val evidence = V.WorkflowExecutionEvidence(Vector(reference), Some("SPECIFICATION-OWNED-worker"), None,
@@ -180,7 +244,8 @@ final class NativeDelegateTaskScopeCorrectionCliSpec extends AnyWordSpec with Ma
       scenario.candidateIndexDiff shouldBe index
       scenario.candidateStatus shouldBe status
       Files.readAllBytes(repository.resolve(".git/index")).toVector shouldBe indexbytes
-      Files.readString(repository.resolve("docs/phase.md")) shouldBe document
+      Files.readString(repository.resolve("docs/phase.md")) shouldBe document + "partial implementation\n"
+      Files.readString(repository.resolve("docs/user.md")) shouldBe "unrelated documentation\n"
       Files.exists(scenario.root.resolve("sbt-executions.txt")) shouldBe false
       Files.exists(scenario.root.resolve("publication-count.txt")) shouldBe false
       val commands = scenario.invocations.filter(_.argv.head == _executable.toString)

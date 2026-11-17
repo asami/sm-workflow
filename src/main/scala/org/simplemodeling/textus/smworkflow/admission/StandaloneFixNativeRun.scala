@@ -461,12 +461,15 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
         else if (task && current.causation.value.startsWith(GoalTaskMalformedIssuedWorkRecovery.resumeCause))
           GoalTaskMalformedIssuedWorkRecovery.resumeC(h, storage, current, core)
         else Consequence.success(current)
-        payload <- loadPayloadC(storage, id, state.revision.value, core)
-        _ <- GoalPhaseParticipantAdmission.admitC(payload.state.participant, core.executionContext)
+        resumed <- loadPayloadC(storage, id, state.revision.value, core)
+        _ <- GoalPhaseParticipantAdmission.admitC(resumed.state.participant, core.executionContext)
+        source <- if (delegation) DelegateTaskImplementationContinuation.advanceC(this, h, storage, state, resumed, core)
+          else Consequence.success(state)
+        payload <- if (source == state) Consequence.success(resumed) else loadPayloadC(storage, id, source.revision.value, core)
         _ <- if (task && !delegation) GoalTaskValidationContinuation.retainedC(storage, state, core, payload)
-          else if (task) GoalTaskValidationContinuation.retainedC(payload, core.component.get.core.instanceId.canonicalKey, id, state.revision.value)
+          else if (task) GoalTaskValidationContinuation.retainedC(payload, core.component.get.core.instanceId.canonicalKey, id, source.revision.value)
           else Consequence.unit
-        response <- _progress_c(h, definition, storage, state, payload, core, 0)
+        response <- _progress_c(h, definition, storage, source, payload, core, 0)
       } yield response
     }
     }
