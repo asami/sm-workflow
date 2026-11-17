@@ -463,6 +463,7 @@ private[smworkflow] object StandardWorkflowRuntime {
     checkIds <- input.hcursor.get[Vector[String]]("checks").fold(e => invalid(e.message), Consequence.success)
     checks <- standardChecksC(checkIds)
     proposed <- if (request.service.contains("GoalTaskService")) _goal_scope_paths_c(request, core)
+      else if (request.service.contains("DelegateTaskService")) _delegate_scope_paths_c(request, core)
       else Consequence.success(Vector.empty[String])
     hostPaths = (paths ++ proposed).distinct
     _ <- if (proposed.isEmpty || GoalPhasePurposeRepair.paths(hostPaths)) Consequence.unit
@@ -518,6 +519,17 @@ private[smworkflow] object StandardWorkflowRuntime {
       input <- GoalTaskScopeCorrection.inputForCallC(request, core)
       _ <- GoalTaskScopeCorrection.selectionInputC(input)
       target <- GoalTaskScopeCorrection.targetC(input.target)
+    } yield target.additionalOwnedPaths
+    else Consequence.success(Vector.empty[String])
+
+  private def _delegate_scope_paths_c(request: Request, core: ActionCall.Core): Consequence[Vector[String]] =
+    if (request.operation == "describeDelegateTaskScopeCorrection")
+      NativeWorkflowOperationInput.valueC[org.simplemodeling.textus.smworkflow.value.DelegateTaskScopeCorrectionDescriptionInput](request, "input")
+        .map(_.additionalOwnedPaths.toVector)
+    else if (request.operation == "correctDelegateTaskScope") for {
+      input <- DelegateTaskScopeCorrection.inputForCallC(request, core)
+      _ <- DelegateTaskScopeCorrection.selectionInputC(input)
+      target <- DelegateTaskScopeCorrection.targetC(input.target)
     } yield target.additionalOwnedPaths
     else Consequence.success(Vector.empty[String])
 

@@ -162,6 +162,21 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
       ThreeWorkflowLauncherAssembly.publishedMcpOperations should not contain "RepositorySyncService.submitMergeReviewResult"
     }
 
+    "retain both DelegateTask scope corrections in the standard launcher with their generated contracts" in {
+      val names = Set("describeDelegateTaskScopeCorrection", "correctDelegateTaskScope")
+      val generated = SmWorkflowComponent.DelegateTaskServiceService.operations.operations.toVector
+        .filter(operation => names(operation.name)).map(operation => operation.name -> operation).toMap
+      val deferred = ThreeWorkflowLauncherAssembly.deferredDeclarations
+        .find(_.name == "DelegateTaskService").get.operations.operations.toVector.filter(operation => names(operation.name))
+      deferred.map(_.name).toSet shouldBe names
+      deferred.size shouldBe 2
+      deferred.foreach { operation =>
+        operation.specification.request shouldBe generated(operation.name).specification.request
+        operation.specification.response shouldBe generated(operation.name).specification.response
+        ThreeWorkflowLauncherAssembly.publishedMcpOperations should contain ("DelegateTaskService." + operation.name)
+      }
+    }
+
     "retain RepositorySync validation continuation in standard deferred declarations" in {
       Given("the generated RepositorySync validation continuation declarations")
       val generated = SmWorkflowComponent.RepositorySyncServiceService.operations.operations.toVector
