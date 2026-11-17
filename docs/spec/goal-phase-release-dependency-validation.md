@@ -1,5 +1,24 @@
 # Release dependency validation
 
+## Bounded checks and explicit source-owner qualification
+
+The bounded cases in `NativeGoalDependencyValidationCliSpec` do not prepare a
+copy of the product source or publish a replacement sm-workflow runtime. The
+three-repair failed-history source scenario is retained separately in
+`NativeGoalReleaseDependencyExplicitSpec`, with its original history, review
+and repair-count assertions.
+
+`NativeGoalReleaseDependencyExplicitSpec` and the installed setup/resume/verify
+suite `NativeGoalReleaseDependencyValidationCliSpec` are both `DoNotDiscover`
+and `Slow`. Default/FULL discovery does not enroll them; selecting Slow alone
+does not enroll them either. A selected source-owner qualification names its
+exact suite, supplies its existing source-template or OLD/NEW installation
+inputs, and owns the disposable fixture and any selected local publication.
+These occasional qualifications are not prerequisites of ordinary development
+validation. An annotation supplies neither missing resources nor publication
+authority. No custom ON_DEMAND purpose, scripted wrapper or suite registry is
+introduced.
+
 An optional `goal.phaseDependencyValidation` binding permits ordinary Advance to
 capture a different, genuinely phase-approved dependency purpose after every
 Step has closed and an actual Release repair Submit has been accepted. It also

@@ -22,9 +22,7 @@ import GoalPhaseDependencyValidation.given
   * SPECIFICATION-OWNED; no production adoption, installed qualification or acceptance is claimed.
   * @since   Oct. 24, 2026
   *  version Oct. 28, 2026
-  *  version Nov.  8, 2026
-  *  version Nov.  9, 2026
-  * @version Nov. 10, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.scalatest.DoNotDiscover
@@ -487,17 +485,6 @@ final class NativeGoalDependencyValidationCliSpec extends AnyWordSpec with Match
       .flatMap(_.hcursor.get[D.Capture]("capture").left.map(_.message)).fold(fail(_), identity)
 
   "Release dependency succession after actual Step closure" should {
-    "retain failed-history terminal facts through new phase dependency review after three genuine source repairs" in {
-      Given("a coherent disposable source with pre-adopted limit ten and a fixed Phase test requiring three actual documentation corrections")
-      val frontier = ReleaseDependencyCliSpecification.setup("p69-release-dependency-failed-history", None,
-        coherentSource = true, priorReleaseHistory = true, failedReleaseHistory = true)
-      When("ordinary continuation authenticates failed and repair-required history before the new dependency purpose")
-      ReleaseDependencyCliSpecification.resume(frontier, None, negativeChecks = true, stopAtDependencyReview = true)
-      Then("the actual dependency ReviewPhase retains all three failed facts and the later passed fact without source-coherence acceptance")
-      frontier.repair.repairProgress.get.limit shouldBe 10
-      frontier.repair.repairProgress.get.ordinaryCount shouldBe 4
-    }
-
     "reconstruct a passed pre-binding Release repair without replay before new phase dependency checks and closure" in {
       Given("a pre-adopted third repair allowance and a genuine earlier Release validation and independent repair review")
       val frontier = ReleaseDependencyCliSpecification.setup("p69-release-dependency-prior-history", None,
