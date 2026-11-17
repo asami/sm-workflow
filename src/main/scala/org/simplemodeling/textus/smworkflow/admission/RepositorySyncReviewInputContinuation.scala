@@ -20,8 +20,8 @@ import RepositorySyncNativeMergeReviewContinuation as R
 
 /** Append-only correction of input classification, followed by fresh independent
   * review. Native references retain the old checks and decision-needed result.
-  * @since Nov. 3, 2026
-  * @version Nov. 3, 2026
+  * @since   Nov.  3, 2026
+  * @version Nov. 17, 2026
   */
 private[smworkflow] object RepositorySyncReviewInputContinuation {
   val policy = "sm-workflow.repository-sync-review-input-continuation.v3"
@@ -62,7 +62,7 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
     candidate: Candidate, validated: NativeReference, review: Review, originalInputs: D.Assessment,
     proposedPolicy: Option[D.Policy], proposedInputs: D.Assessment, validationPolicy: C.Policy,
     selectedChecks: Vector[C.Check], actual: G.Observed, indexTree: String,
-    applicabilityIssues: Vector[String], continuationPolicy: String)
+    applicabilityIssues: Vector[String], continuationPolicy: String, phase: Option[String] = None)
   object Target {
     given Encoder[Target] = deriveEncoder[Target].mapJson(_canonical)
     private val _raw: Decoder[Target] = deriveDecoder
@@ -107,8 +107,10 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
       p.renamedFrom != null && p.renamedFrom.forall(RepositorySyncNativeConflictInput.relative) &&
       ((!p.unmerged && p.worktree == ' ' && " MADRCT".contains(p.index)) ||
         (historicalconflict && Set("DD", "AU", "UD", "UA", "DU", "AA", "UU").contains(s"${p.index}${p.worktree}"))))
-  private def _identity(identity: String, namespace: String, key: String): String =
-    identity + ":native-" + N.candidateKey(namespace, key)
+  private def _identity(identity: String, namespace: String, key: String, phase: Option[String] = None): String =
+    identity + ":native-" + N.phaseKey(phase, namespace, key)
+  private def _historyPrefix(store: N.Store): String =
+    "native-repository:" + store.identity + ":" + N.phaseKey(store.phase, "", "")
   def adoptionKey(target: Target): String = "review-inputs-" + target.frontierRevision + "-adopted"
   def validatedKey(target: Target): String = "review-inputs-" + target.frontierRevision + "-validated"
   def availableChoices(target: Target): Vector[String] = if (target.applicabilityIssues.isEmpty) choices else Vector("Defer")
@@ -143,7 +145,7 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
       (if (!selection.contains(selected)) Vector("Proposed impact selects different ordered checks from the original successful selection") else Vector.empty) ++
       (if (validation.checks.filter(selected.contains) != selected) Vector("Current fixed check identity, kind, ordinal or order differs from original selection") else Vector.empty)
   }
-  def validTarget(t: Target): Boolean = t != null && _text(t.sessionId) && t.context != null &&
+  def validTarget(t: Target): Boolean = t != null && N.validPhase(t.phase) && _text(t.sessionId) && t.context != null &&
     t.context.productIterator.forall(v => v.isInstanceOf[String] && _text(v.asInstanceOf[String])) &&
     _text(t.componentInstance) && _text(t.root) && scala.util.Try(java.nio.file.Path.of(t.root).isAbsolute).getOrElse(false) &&
     _text(t.endpoint) && _revision(t.frontierRevision) && _text(t.frontierCause) && t.namespace != null &&
@@ -151,8 +153,8 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
     t.candidate != null && _native(t.candidate.pending) && _observed(t.candidate.before, historicalconflict = true) && _observed(t.candidate.after) &&
     _oid(t.candidate.tree) && _oid(t.candidate.mergeHead) && _text(t.candidate.method) && t.candidate.checkpoint != null &&
     (t.candidate.checkpoint.isEmpty || _oid(t.candidate.checkpoint)) && _native(t.validated) &&
-    t.candidate.pending.reference.identity == _identity(t.sessionId, t.namespace, "pending-merge") &&
-    t.validated.reference.identity == _identity(t.sessionId, t.namespace, "merge-validated") &&
+    t.candidate.pending.reference.identity == _identity(t.sessionId, t.namespace, "pending-merge", t.phase) &&
+    t.validated.reference.identity == _identity(t.sessionId, t.namespace, "merge-validated", t.phase) &&
     BigInt(t.candidate.pending.nativeRevision) < BigInt(t.validated.nativeRevision) &&
     t.review != null && t.review.continuationId == t.sessionId + ":native-review:" + t.validated.nativeRevision &&
     _ref(t.review.result) && t.review.decision == "decision-needed" && _revision(t.review.completedRevision) &&
@@ -246,8 +248,8 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
           result.record.revision == intent.record.revision.next && result.record.history.dropRight(1) == intent.record.history &&
           intent.payload == candidate.pending.payload.copy(stage = "ValidationChecking", validation = Some(state.copy(receipts = state.receipts.take(index)))) &&
           result.payload == candidate.pending.payload.copy(stage = "ValidationChecking", validation = Some(state.copy(receipts = state.receipts.take(index + 1)))) &&
-          intent.record.causation.value == "native-repository:" + store.identity + ":" + N.candidateKey(candidate.namespace, "validation-intent-" + index) &&
-          result.record.causation.value == "native-repository:" + store.identity + ":" + N.candidateKey(candidate.namespace, "validation-result-" + index) &&
+          intent.record.causation.value == "native-repository:" + store.identity + ":" + N.phaseKey(store.phase, candidate.namespace, "validation-intent-" + index) &&
+          result.record.causation.value == "native-repository:" + store.identity + ":" + N.phaseKey(store.phase, candidate.namespace, "validation-result-" + index) &&
           intent.record.revision == previous.revision.next && intent.record.history.dropRight(1) == previous.history &&
           (index == state.receipts.size - 1 || result.record.revision.value < validated.record.revision.value)) Consequence.unit
         else N.invalid("review-input successful receipt crosses its native contiguous intent/result lineage")
@@ -282,24 +284,64 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
     _ <- validation.impact.fold(Consequence.unit)(RepositorySyncProgramImpact.validateC)
     state = validated.payload.validation.get
     original <- state.inputs.map(Consequence.success).getOrElse(N.invalid("review-input original input assessment is absent"))
-    proposed <- D.captureC(store, candidate.pending, declaration.documentInputs)
+    proposedPolicy = saved.result.result.value.inputClassification.orElse(declaration.documentInputs)
+    proposed <- D.captureC(store, candidate.pending, proposedPolicy)
     native <- G.inspectC(core)
     tree <- G.indexTreeC(core)
     _ <- C.preconditionsC(store, candidate.pending)
     issues = (eligibilityIssues(original, proposed, validation, state.selected) ++
       (if (C.applies(state, validation)) Vector.empty else Vector("Current validation mode or selected check effects differ")) ++
-      (if (declaration.documentInputs.nonEmpty) Vector.empty else Vector("Current proposed document-input mapping is absent"))).distinct
+      (if (proposedPolicy.nonEmpty) Vector.empty else Vector("Current proposed document-input mapping is absent"))).distinct
     target = Target(identity, session.context, core.component.get.core.instanceId.canonicalKey,
       candidate.pending.payload.root, declaration.target.endpoint, current.revision.value.toString, current.causation.value,
-      candidate.namespace, Candidate(NativeReference(ContextReference(_identity(identity, candidate.namespace, "pending-merge"), "1"),
+      candidate.namespace, Candidate(NativeReference(ContextReference(_identity(identity, candidate.namespace, "pending-merge", store.phase), "1"),
         candidate.pending.record.revision.value.toString), candidate.pending.payload.before, candidate.pending.payload.after.get,
         candidate.pending.payload.indexTree.get, candidate.pending.payload.mergeHead.get, candidate.pending.payload.method.getOrElse("merge"),
         candidate.pending.payload.checkpoint.getOrElse("")),
-      NativeReference(ContextReference(_identity(identity, candidate.namespace, "merge-validated"), "1"), validated.record.revision.value.toString),
+      NativeReference(ContextReference(_identity(identity, candidate.namespace, "merge-validated", store.phase), "1"), validated.record.revision.value.toString),
       Review(saved.result.continuationId.value, saved.result.resultReference, saved.next.revision.value.toString, saved.result.result.value.decision),
-      original, declaration.documentInputs, proposed, validation, state.selected, native.observed, tree, issues, policy)
+      original, proposedPolicy, proposed, validation, state.selected, native.observed, tree, issues, policy, store.phase)
     _ <- if (validTarget(target)) Consequence.unit else N.invalid("review-input native target is incomplete or crossed")
   } yield Source(session, store, candidate, saved, target)
+
+  /** Pure qualification of a proposal carried by the actual paired review.
+    * Native sourceC/authentication, not this value, establishes its admission.
+    */
+  private[admission] def semanticDirectionC(target: Target, result: RepositorySyncNativeMergeReview.Result,
+    reference: ContextReference): Consequence[Direction] =
+    if (validTarget(target) && result != null && result.decision == "decision-needed" && result.findings == Vector.empty &&
+        result.inputClassification != null && result.inputClassification.nonEmpty &&
+        result.inputClassification == target.proposedPolicy && reference == target.review.result &&
+        validTarget(target) && target.applicabilityIssues.isEmpty)
+      Consequence.success(Direction(target, choices.head,
+        "Runtime-qualified technical input assessment from the retained independent review",
+        target.context.participantIdentity, reference, false, false))
+    else N.invalid("Technical input continuation requires its actual eligible independent semantic assessment")
+
+  /** Ordinary Advance consumes the admitted semantic result without obtaining
+    * another Human answer for classification. The next Advance still issues
+    * fresh independent review; no old decision-needed result becomes PASS.
+    */
+  def continueSemanticC(identity: String, declaration: F.Declaration, definition: DefinitionBinding,
+    core: ActionCall.Core, validation: C.Policy, acknowledge: String => Consequence[Unit],
+    review: R.Port): Consequence[Option[V.RepositorySyncAdvanceResult]] = for {
+    saved <- review.savedReviewC(identity, core)
+    result <- saved match {
+      case Some(prior) if prior.result.result.value.inputClassification.nonEmpty => for {
+        source <- sourceC(identity, declaration, definition, core, validation, acknowledge, review)
+        host <- D.captureC(source.store, source.candidate.pending)
+        _ <- if (host.applicableTo(source.target.originalInputs)) Consequence.unit
+          else N.invalid("Technical assessment cannot hide changed host consumption")
+        direction <- semanticDirectionC(source.target, prior.result.result.value, prior.result.resultReference)
+        _ <- source.store.saveC(adoptionKey(source.target), "native-review-input-continuation-admitted",
+          source.session.started.current, source.saved.validated.payload.copy(
+            stage = "ReviewInputContinuationAdmitted", reviewInputs = Some(direction)))
+      } yield Some(NativeWorkflowOperationOutput.repositoryWait(identity,
+        "Technical input assessment retained with applicable successful checks; ordinary Advance requests fresh independent review.",
+        "ReviewInputContinuationAdmitted"))
+      case _ => Consequence.success(None)
+    }
+  } yield result
 
   def describeC(identity: String, declaration: F.Declaration, definition: DefinitionBinding, core: ActionCall.Core,
     validation: C.Policy, acknowledge: String => Consequence[Unit], review: R.Port): Consequence[V.RepositorySyncValidationContinuationDescriptionResult] =
@@ -339,7 +381,7 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
     _ <- direction.asJson.as[Direction].fold(e => N.invalid(e.message), _ => Consequence.unit)
     _ <- _scope_c(store)
     target = direction.target
-    _ <- if (target.sessionId == store.identity && target.context == store.context && target.root == store.original.repositoryRoot &&
+    _ <- if (target.phase == store.phase && target.sessionId == store.identity && target.context == store.context && target.root == store.original.repositoryRoot &&
         target.endpoint == store.declaration.target.endpoint && target.componentInstance == store.core.component.get.core.instanceId.canonicalKey)
       Consequence.unit else N.invalid("review-input adoption crosses actual Session, host or Component")
     before <- _prefix_c(current, target.frontierRevision)
@@ -360,7 +402,7 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
           s.selected == target.selectedChecks && s.inputs.contains(target.originalInputs) && C.applies(s, target.validationPolicy)) &&
         actual == adoption.record && adoption.record.revision == before.revision.next && adoption.record.history.dropRight(1) == before.history &&
         adoption.record.lifecycle == Lifecycle.Active && adoption.record.suspension.isEmpty &&
-        adoption.record.causation.value == "native-repository:" + store.identity + ":" + adoptionKey(target) &&
+        adoption.record.causation.value == _historyPrefix(store) + adoptionKey(target) &&
         adoption.payload == original.payload.copy(stage = "ReviewInputContinuationAdmitted", reviewInputs = Some(direction)))
       Consequence.unit else N.invalid("review-input adoption crosses its actual adjacent original lineage")
     oldreview <- R.savedOriginalC(store, before, original)
@@ -368,11 +410,16 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
         s.result.continuationId.value == target.review.continuationId && s.result.resultReference == target.review.result &&
         s.result.result.value.decision == "decision-needed")) Consequence.unit
       else N.invalid("review-input adoption has no actual paired original decision-needed result")
+    _ <- if (direction.reference != target.review.result) Consequence.unit else oldreview match {
+      case Some(prior) => semanticDirectionC(target, prior.result.result.value, prior.result.resultReference).flatMap(actual =>
+        if (actual == direction) Consequence.unit else N.invalid("Technical classification direction differs from the actual semantic result"))
+      case None => N.invalid("Technical classification has no admitted semantic source")
+    }
   } yield adoption
 
   def latestValidatedC(store: N.Store, current: InstanceRecord, candidate: N.Candidate): Consequence[Option[N.Stage]] = {
-    val prefix = "native-repository:" + store.identity + ":"
-    current.history.reverse.find(e => e.currentProgression.contains(ProgressionReference("sync.MergeValidated")) &&
+    val prefix = _historyPrefix(store)
+    store.phaseHistory(current).reverse.find(e => e.currentProgression.contains(ProgressionReference("sync.MergeValidated")) &&
       e.revision.value > candidate.pending.record.revision.value && e.causation.value.startsWith(prefix + "review-inputs-")) match {
       case None => Consequence.success(None)
       case Some(entry) => for {
@@ -429,11 +476,16 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
       case _ => N.invalid("review-input current source is not the actual latest revised candidate")
     }
     original <- _load_c(store, N.candidateKey(direction.target.namespace, "merge-validated"))
-    proposed <- D.captureC(store, candidate.pending)
+    host <- D.captureC(store, candidate.pending)
+    technical = direction.reference == direction.target.review.result
+    proposed <- if (technical) D.captureC(store, candidate.pending, direction.target.proposedPolicy)
+      else Consequence.success(host)
     native <- G.inspectC(store.core)
     tree <- G.indexTreeC(store.core)
-    _ <- if (store.declaration.documentInputs.map(p => (p.documentPaths, p.consumedPaths)) ==
-          direction.target.proposedPolicy.map(p => (p.documentPaths, p.consumedPaths)) &&
+    mappingCurrent = if (technical) host.applicableTo(direction.target.originalInputs)
+      else store.declaration.documentInputs.map(p => (p.documentPaths, p.consumedPaths)) ==
+        direction.target.proposedPolicy.map(p => (p.documentPaths, p.consumedPaths))
+    _ <- if (mappingCurrent &&
         proposed.applicableTo(direction.target.proposedInputs) &&
         currentApplicabilityIssues(original.payload.validation.get, direction.target, validation, proposed).isEmpty &&
         native.observed == direction.target.actual && tree == direction.target.indexTree)
@@ -446,7 +498,7 @@ private[smworkflow] object RepositorySyncReviewInputContinuation {
     _ <- if (current.lifecycle == Lifecycle.Active && current.suspension.isEmpty &&
         current.currentProgression.contains(ProgressionReference("sync.ReviewInputContinuationAdmitted"))) Consequence.unit
       else N.invalid("review-input Advance requires its active unsuspended admission frontier")
-    prefix = "native-repository:" + store.identity + ":"
+    prefix = _historyPrefix(store)
     _ <- if (current.causation.value.startsWith(prefix)) Consequence.unit else N.invalid("review-input admission causation is foreign")
     saved <- _load_c(store, current.causation.value.stripPrefix(prefix))
     direction <- saved.payload.reviewInputs.map(Consequence.success).getOrElse(N.invalid("review-input admitted direction is absent"))

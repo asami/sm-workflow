@@ -24,8 +24,8 @@ import SplitPhaseExplicitPartitionFixture.take
   * Proposals, prior-worker directions and independent reviews are authored
   * specification inputs, never evidence of live Human or provider acceptance.
   * Existing consumer Sessions and previously retained episodes are not used.
-  * @since Nov. 3, 2026
-  * @version Nov. 3, 2026
+  * @since   Nov.  3, 2026
+  * @version Nov. 17, 2026
   */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -245,7 +245,7 @@ final class NativeRepositoryCompletionQualificationCliSpec extends AnyWordSpec w
       _repair_count(current(scenario, session)) shouldBe repaircount
       When("the fixture supplies a separate specification-owned independent review through ordinary evidence preparation and Submit")
       val verdict = V.RepositorySyncNativeMergeReviewResult("accept",
-        "Specification-owned independent review of the actual focused product candidate; no live provider acceptance claimed", Vector.empty)
+        "Specification-owned independent review of the actual focused product candidate; no live provider acceptance claimed", Vector.empty, None)
       val reference = V.WorkflowArtifactReference("completion-focused-independent-review", "1")
       val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("specification-independent-reviewer"), None, None)
       val directory = Files.createTempDirectory(scenario.root, "completion-focused-review-")

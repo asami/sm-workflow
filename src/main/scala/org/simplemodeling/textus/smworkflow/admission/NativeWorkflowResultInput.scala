@@ -159,9 +159,8 @@ private[smworkflow] object NativeWorkflowResultInput {
             .map(source => SelectedValue(read => NativeWorkflowResourceInput.readC(source, read, "result").map[Value](value =>
               RepositorySyncConflictSemantic.Result(value.decision, value.resolutions.map(_resolution), value.rationale))))),
         _work(RepositorySyncNativeMergeReviewContinuation.completionOperation, RepositorySyncNativeMergeReview.inputCodec, request =>
-          NativeWorkflowOperationInput.valueC[V.RepositorySyncNativeMergeReviewResult](request, "result").map[Value](value =>
-            RepositorySyncNativeMergeReview.Result(value.decision, value.rationale, value.findings.map(f =>
-              RepositorySyncNativeMergeReview.Finding(f.identity, f.affectedPaths, f.rationale))))),
+          NativeWorkflowOperationInput.valueC[V.RepositorySyncNativeMergeReviewResult](request, "result")
+            .flatMap(value => RepositorySyncNativeMergeReview.fromPublicC(value).map[Value](identity))),
         _work(RepositorySyncNativeMergeRepairContinuation.completionOperation, RepositorySyncNativeMergeRepair.inputCodec, request =>
           NativeWorkflowOperationInput.valueC[V.RepositorySyncNativeMergeRepairResult](request, "result")
             .flatMap(value => RepositorySyncNativeMergeRepair.fromPublicC(value).map[Value](identity)))

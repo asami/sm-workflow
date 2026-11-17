@@ -12,6 +12,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 import GoalPhaseDependencyPublicationSourceAlignment as A
 import GoalPhasePrerequisitePublicationRecovery as B
 import GoalPhasePublishedDependencySourceAdoption as P
+import GoalPhaseOrderedProgression as O
 import CanonicalPublicationProgramCorrectionSpecificationFixture as F
 import CanonicalDependencySourceSpecificationFixture as C
 import SplitPhaseExplicitPartitionFixture.take
@@ -19,7 +20,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Values here are semantic fixtures, never native authority or live consent.
   * The installed two-root episode owns physical routing/lifecycle evidence.
   * @since   Nov.  9, 2026
-  * @version Nov.  9, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -36,6 +37,168 @@ final class GoalPhaseDependencyPublicationSourceAlignmentSpec extends AnyWordSpe
   private val _reference = ContextReference("specification-independent-artifact-human", "1")
   private def _root(workspace: String): Consequence[String] = Consequence.success(
     if (workspace == _dependency.workspace) C.original.target.binding.root else C.binding.root)
+
+  "P8-03 prior adoption and current consumer binding" should {
+    "reuse only the same publication/source/Usage/authority across a consumer-only repair" in {
+      Given("prospective target251 authority and a changed consumer tree/frontier/generation with the same dependency capture")
+      val originalWire = _target.asJson
+      val snapshot = F.snapshot.copy(tree = "e" * 40)
+      val repair = take(F.controller.acceptC(O.RepairableChecksObserved(F.snapshot,
+        F.controller.plan.steps(F.controller.cursor).checks, "SPECIFICATION-ONLY failed consumer checks",
+        O.RepairDirective("SPECIFICATION-ONLY consumer repair", Vector("Repair the consumer fixture")))))
+      val repairKey = repair.next match {
+        case value: O.Semantic => value.key
+        case value => fail(s"Expected specification repair work, got $value")
+      }
+      val inspected = take(repair.acceptC(O.SemanticCompleted(repairKey,
+        "SPECIFICATION-ONLY repaired consumer fixture")))
+      val controller = take(inspected.acceptC(O.CandidateObserved(snapshot)))
+      val capture = F.capture.copy(generation = controller.generation, sourceRevision = "60")
+      val candidate = F.candidate.copy(sourceRevision = "60", candidate = Some(snapshot),
+        diff = Some("SPECIFICATION-ONLY repaired consumer fixture"), dependencySourceCapture = Some(capture))
+      val controllerJson = B.controller(controller)
+      val repaired = _target.copy(frontierRevision = "60", candidateRecordRevision = "60",
+        candidate = _sorted(candidate.asJson), capture = _sorted(capture.asJson), controller = _sorted(B.controller(controller)))
+      When("the existing alignment owner compares original adoption scope with current applicability")
+      A.targetValid(repaired) shouldBe true
+      A.reusable(_target, repaired) shouldBe true
+      val previous = ContextReference(_target.sessionId, "41")
+      val receipt = A.Rebinding(previous, repaired)
+      A.applicabilityCodec.decode(A.applicabilityCodec.encode(receipt)) shouldBe Right(receipt)
+      val savedCandidate = GoalPhaseNativeCandidate.Saved(PrimaryPublicationRepairSpecificationFixture.nativeRecord(60), candidate)
+      A.candidateRebinding(_target, savedCandidate, controller, "60") shouldBe Some(repaired)
+      Then("the original Human binding remains literal while changed consumer checks are not inherited")
+      _target.asJson shouldBe originalWire
+      repaired.publication shouldBe _target.publication
+      repaired.candidate should not be _target.candidate
+      controller.checksReceipt shouldBe F.controller.checksReceipt
+      controller.stage shouldBe GoalPhaseOrderedProgression.Stage.Validation
+      repaired.publication.get.artifact shouldBe _target.publication.get.artifact
+      val publication = _target.publication.get
+      val changedPublications = Vector(publication.copy(artifact = ContextReference(publication.artifact.identity, "2")),
+        publication.copy(publicationOwner = "another-publisher"), publication.copy(destination = "file:///another-destination"),
+        publication.copy(recollectionReference = ContextReference("another-collection", "1")),
+        publication.copy(result = publication.result.copy(publication = publication.result.publication.copy(request =
+          publication.result.publication.request.copy(input = publication.result.publication.request.input.copy(requestIdentity = "replacement-at-same-SNAPSHOT"))))))
+      changedPublications.foreach(value => A.reusable(_target, repaired.copy(publication = Some(value))) shouldBe false)
+      val changedPurpose = controller.plan.copy(steps = controller.plan.steps.updated(controller.cursor,
+        controller.plan.steps(controller.cursor).copy(purpose = "A different consumer purpose")))
+      val changedChecks = controller.plan.copy(revision = "current-check-selection",
+        steps = controller.plan.steps.updated(controller.cursor,
+          controller.plan.steps(controller.cursor).copy(checks = controller.plan.steps(controller.cursor).checks :+ "repair-regression")))
+      Given("the consumer repair adds a regression fixture and the ordinary owner selects different current checks under the same admitted process authority")
+      val policy = io.circe.parser.parse(repaired.processPolicy).toOption.get
+      val selected = policy.hcursor.get[GoalPhaseNativeValidation.Policy]("validation").toOption.get
+      val currentChecks = selected.copy(revision = selected.revision + 1, checks = selected.checks :+
+        GoalPhaseNativeValidation.Check("repair-regression", selected.checks.map(_.ordinal).max + 1, WorkflowSbtValidation.Kind.Test))
+      val currentPolicy = _sorted(policy.mapObject(_.add("validation", currentChecks.asJson)))
+      val currentCapture = capture.copy(plan = ContextReference(changedChecks.identity, changedChecks.revision),
+        planSelection = Some(ContextReference(capture.sessionId + ":ordered-development-reconstruction:59", "1")))
+      val currentCandidate = candidate.copy(dependencySourceCapture = Some(currentCapture))
+      val currentSelection = repaired.copy(candidateRecordRevision = repaired.candidateRecordRevision,
+        processPolicy = currentPolicy, capture = _sorted(currentCapture.asJson),
+        candidate = _sorted(currentCandidate.asJson),
+        controller = _sorted(controllerJson.mapObject(_.add("plan", changedChecks.asJson))))
+      When("the artifact owner separates original approval meaning from current verification selection")
+      GoalPhaseDependencySourceRevision.captureValid(currentCapture) shouldBe true
+      A.targetValid(currentSelection) shouldBe true
+      A.sameProcessAuthority(repaired.processPolicy, currentPolicy) shouldBe true
+      A.reusable(_target, currentSelection) shouldBe true
+      Then("current check selection is retained for real new validation, without borrowing a prior check PASS or asking for another artifact answer")
+      currentChecks.checks.map(_.identity) should contain("repair-regression")
+      currentSelection.processPolicy should not be _target.processPolicy
+      currentSelection.publication shouldBe _target.publication
+      val newEffect = _sorted(policy.mapObject(_.add("processPlan", policy.hcursor.get[Json]("processPlan").toOption.get
+        .mapObject(_.add("newPublicationAuthority", true.asJson)))))
+      A.sameProcessAuthority(repaired.processPolicy, newEffect) shouldBe false
+      A.sameProcessAuthority(repaired.processPolicy, _sorted(policy.mapObject(_.add("unknownTopLevel", true.asJson)))) shouldBe false
+      Vector(repaired.copy(componentInstance = "other-component"), repaired.copy(participant = "another-participant"),
+        repaired.copy(sessionId = "another-session"), repaired.copy(processPolicy = "{}"), repaired.copy(publicationPolicy = "{}"),
+        repaired.copy(publication = None), repaired.copy(candidateRecordRevision = repaired.candidateRecordRevision,
+          controller = _sorted(controllerJson.mapObject(_.add("plan", changedPurpose.asJson)))),
+        repaired.copy(candidateRecordRevision = repaired.candidateRecordRevision,
+          controller = _sorted(controllerJson.mapObject(_.add("repairs", (-1).asJson).add("ordinaryRepairs", (-1).asJson)))),
+        repaired.copy(capture = _sorted(capture.copy(postStageGuard = capture.postStageGuard.copy(head = "f" * 40)).asJson)))
+        .foreach(value => A.reusable(_target, value) shouldBe false)
+      val wire = A.applicabilityCodec.encode(receipt)
+      A.applicabilityCodec.decode(wire.mapObject(_.add("inventedHuman", true.asJson))).isLeft shouldBe true
+      A.applicabilityCodec.decode(A.applicabilityCodec.encode(receipt.copy(previous = ContextReference("another-session", "41")))).isLeft shouldBe true
+    }
+
+    "keep consumer Usage and literal exclusions distinct from current check-program selection" in {
+      Given("the actual-shaped typed canonical consumption contract and an independently valid current verification mapping")
+      val previous = C.consumption
+      val selected = previous.copy(programs = previous.programs.map(p => p.copy(check = p.check + "-repair-selection")))
+      GoalPhaseDependencySourceRevision.consumptionValid(previous) shouldBe true
+      GoalPhaseDependencySourceRevision.consumptionValid(selected) shouldBe true
+      When("only verification selection changes under the normal source/check owner")
+      A.sameConsumptionUsage(previous, selected) shouldBe true
+      Then("a changed source workspace/root, excluded input or expected dependency mode still changes Usage")
+      val changed = Vector(selected.copy(primaryWorkspace = "another-consumer-workspace"),
+        selected.copy(sourceRoot = "/specification/another-selected-source"),
+        selected.copy(nonInputExclusions = selected.nonInputExclusions :+ "literal-new-exclusion"),
+        selected.copy(expectedModes = selected.expectedModes.map(_.copy(mode = "100755"))))
+      changed.foreach(value => A.sameConsumptionUsage(previous, value) shouldBe false)
+    }
+
+    "recollect actual normal record order without another publication or an artifact-byte comparison" in {
+      Given("a specification-owned in-memory normal publication algorithm, never a live publication or Human acceptance")
+      import org.goldenport.cncf.processexecution.*
+      import org.goldenport.cncf.workspace.WorkspaceId
+      final class Memory extends LocalPublication.Port {
+        val rows = scala.collection.mutable.Map.empty[String, Json]
+        var starts = 0
+        var nextTermination: ProcessExecutionTermination = ProcessExecutionTermination.Exited(0)
+        var unavailable = false
+        def loadC(key: String) = Consequence.success(if (unavailable && key.endsWith(":result")) None else rows.get(key))
+        def createC(key: String, value: Json): Consequence[Unit] =
+          if (rows.contains(key)) Consequence.stateConflict("Immutable specification duplicate")
+          else { rows(key) = value; Consequence.unit }
+        def sourceC(target: LocalPublication.Target) = Consequence.success(C.publication.result.publication.request.source)
+        def newIdentity() = "specification-normal-publication"
+        def executeC(target: LocalPublication.Target): Consequence[SbtExecutionAttempt] = {
+          starts += 1
+          val process = WorkflowSbtCapture.decode(PrimaryPublicationRepairSpecificationFixture.process(
+            "SPECIFICATION-ONLY publication outcome", nextTermination, identity = "specification-dependency-publication")).toOption.get
+          Consequence.success(SbtExecutionAttempt.Observed(SbtExecutionResult(SbtTarget(take(WorkspaceId.parseC(target.workspace))),
+            SbtOperation.PublishLocal, process)))
+        }
+      }
+      def initial(memory: Memory): P.PublicationObservation = {
+        val old = C.publication.result.publication.request
+        val input = old.input.copy(requestIdentity = "specification-first-normal-publication", explicit = true)
+        val published = take(LocalPublication.ensureC(input, old.target, old.participant, memory))
+        C.publication.copy(result = P.CollectionResult(published.status, published.reason, published))
+      }
+      val memory = new Memory
+      val observation = initial(memory)
+      val rows = memory.rows.toMap
+      val starts = memory.starts
+      When("the existing collectors recheck the same adopted normal publication twice")
+      take(P.currentPublicationC(observation, memory)) shouldBe ()
+      take(P.currentPublicationC(observation, memory)) shouldBe ()
+      Then("no ensure/publish or successful consumer-check receipt is created by applicability")
+      memory.rows.toMap shouldBe rows
+      memory.starts shouldBe starts
+      memory.unavailable = true
+      P.currentPublicationC(observation, memory).isSuccess shouldBe false
+      for (termination <- Vector(ProcessExecutionTermination.Exited(0), ProcessExecutionTermination.Exited(1), ProcessExecutionTermination.TimedOut)) {
+        val replaced = new Memory
+        val original = initial(replaced)
+        replaced.nextTermination = termination
+        val old = original.result.publication.request
+        take(LocalPublication.ensureC(old.input.copy(requestIdentity = "specification-new-normal-attempt", explicit = true),
+          old.target, old.participant, replaced))
+        P.currentPublicationC(original, replaced).isSuccess shouldBe false
+      }
+      val foreign = new Memory
+      val original = initial(foreign)
+      val old = original.result.publication.request
+      take(LocalPublication.ensureC(old.input.copy(requestIdentity = "specification-foreign-owner", ownerSessionId = Some("different-owner"),
+        explicit = true), old.target, old.participant, foreign))
+      P.currentPublicationC(original, foreign).isSuccess shouldBe false
+    }
+  }
 
   "Ordinary recovery entrypoint dispatch" should {
     "prepare and round-trip exact v2 artifact evidence through the normal passive preparation path" in {

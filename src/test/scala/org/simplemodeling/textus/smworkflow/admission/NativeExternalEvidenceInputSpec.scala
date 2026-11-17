@@ -20,7 +20,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Typed finite tool input fixture; files contain only specification facts.
   * @since   Oct. 14, 2026
   *  version Oct. 25, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeExternalEvidenceToolFixture {
@@ -84,7 +84,7 @@ final class NativeExternalEvidenceInputSpec extends AnyWordSpec with Matchers wi
   import NativePreparationFixture.*
   private val _tool = NativeExternalEvidenceToolFixture
   private val _goal_result = V.GoalPhaseWorkResult("accept", "Fixture review", Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
-  private val _repository_result = V.RepositorySyncNativeMergeReviewResult("accept", "Fixture merge review", Vector.empty)
+  private val _repository_result = V.RepositorySyncNativeMergeReviewResult("accept", "Fixture merge review", Vector.empty, None)
   private val _repair_budget_cause = "native-repository:session:purpose-1-check-1-result"
   private val _repair_budget_target = {
     val fixture = RepositorySyncPurposeRepairScopeFixture

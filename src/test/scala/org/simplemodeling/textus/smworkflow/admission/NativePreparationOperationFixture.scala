@@ -22,7 +22,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * The inherited normal fixture closes each actual runtime handle.
   * @since   Oct. 15, 2026
   *  version Oct. 25, 2026
-  * @version Nov.  9, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] trait NativePreparationOperationFixture extends ThreeWorkflowManagedRepositoryFixture {
@@ -147,7 +147,7 @@ private[admission] trait NativePreparationOperationFixture extends ThreeWorkflow
   private def _evidence_cases(episode: PreparationEpisode, core: ActionCall.Core): Vector[PreparedCase] = {
     import NativePreparationFixture.*
     val goalresult = V.GoalPhaseWorkResult("accept", "明示レビュー", Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
-    val repositoryresult = V.RepositorySyncNativeMergeReviewResult("accept", "明示レビュー", Vector.empty)
+    val repositoryresult = V.RepositorySyncNativeMergeReviewResult("accept", "明示レビュー", Vector.empty, None)
     def entry(label: String, family: String, kind: String, request: RecordPresentable, result: RecordPresentable,
       identity: String, payload: Record): PreparedCase = PreparedCase(label,
       V.WorkflowEvidencePreparationInput(family, kind,

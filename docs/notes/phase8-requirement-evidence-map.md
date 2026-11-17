@@ -8,6 +8,15 @@ residual connected acceptance and native review are recorded. A source contract,
 plan, prerequisite PASS or delivery record alone does not check a row.
 P8-01 owns this inventory; the owner column names subsequent acceptance work.
 
+Current P8-03 scope correction: required row 13 concerns approval reuse under
+trusted normal publication records and ordinary dependency resolution. The earlier
+CNCF digest/JAR-comparison prerequisite was an overextension and is superseded by
+actual Human clarification, retained in the Task observation. The native alignment
+re-binding and normal latest-publication checks are now authored; no current check,
+review, artifact-byte integrity or producer completion is asserted. Historical
+partial-return sections below retain their original chronology and are superseded
+at this specific scope point by the final P8-03 section.
+
 ## Evidence keys and actual scope
 
 The paths below are retained caller artifacts, not private Workflow storage or
@@ -178,3 +187,101 @@ states host bindings and finite proof limits. This is source/specification
 authorship only: required native Compile/Test, independent Step review and local
 closing remain workflow-owned. All 30 rows remain unchecked until their actual
 owning acceptance; bootstrap PASS is not whole-Step or Phase acceptance.
+
+## P8-02 actual closure and P8-03 authored scope, 2026-11-18
+
+P8-02 completed with local commit `62063e9a928d7d27b0afe4c6cdcf455c3e7989b9`.
+Actual native Compile and FULL 2914 tests / 274 suites passed; independent
+`p8-02-review-2-result.json` accepted the repaired scope. The retained caller
+artifact is under `target/sm-workflow/tasks/phase8-main-20261117-01a0f928/`.
+Its five historical repairs and resolved issues remain history. This supersedes
+prior pending statements in the source-candidate sections above, without claiming
+whole-Phase acceptance, installed adoption, live GitHub effects or ADMISSION.
+
+For rows 11–12, the existing current/dependency inventory and approved source
+succession owners and meaningful local specifications are reused. For row 14,
+optional independently admitted semantic input classification now connects through
+ordinary Advance to existing input/consumption/coverage checks, retained successful
+receipt objects and fresh independent detailed review. Legacy Human evidence gates
+remain; no historical answer is replayed. Row 15 adds ordinary/derived verification
+Plan fixtures at 2/10 and 9/10 through refresh, with ten-attempt refusal and no reset;
+existing early evidenced divergence examples remain applicable. See the
+[causal contract and specification inventory](../spec/phase8-ordinary-continuation.md).
+
+Row 13 remains REQUIRED/UNRESOLVED. Existing actual publication/source evidence
+does not bind admitted artifact coordinates to freshly observed bytes/generation
+digests and producer source provenance. CNCF has managed generation digests and
+optional FileStore digests, but no such connection in the current publication
+contract. The [minimal producer proposal](phase8-artifact-provenance-gap.md)
+identifies existing owners, actual API absence, freshness/consumer/authority
+requirements and bounded acquisition effects. Strict gates remain unchanged;
+no speculative producer implementation, republish or primary attempt is supplied.
+
+P8-03 returns decision-needed at that concrete dependency. New specifications are
+authored only; no compile/test execution, independent review, Submit acceptance or
+local commit is claimed. All 30 Phase requirements remain unchecked.
+
+### P8-03 unsubmitted phase follow-up
+
+The review-input target and native receipt/history authentication now carry the
+exact optional local-main phase through existing Store phase keys. Absent legacy
+wire fields remain absent; crossed phase, removed phase, unknown phase and
+explicit null are authored refusal cases. The original public Human branch and
+actual independent review evidence remain required. This corrects the previously
+reported source connection gap, without asserting validation or lifecycle PASS.
+
+The requested positive native remote-phase classification-to-fresh-review fixture
+is still not authored: existing managed runtime fixtures produce nonempty successful
+unknown-input selections only by executing typed SBT, and have no in-process
+product-validation observation port. Structural-only fixtures do not provide
+that actual prior evidence. No successful receipt or private history was invented.
+This concrete local fixture/evidence dependency and required row 13 remain unresolved;
+see the [ordinary continuation contract](../spec/phase8-ordinary-continuation.md).
+
+### P8-03 authored explicit heavy lifecycle continuation
+
+The previously unimplemented positive native lifecycle case is now authored in
+`NativeRepositoryReviewInputContinuationCliSpec`, retaining `DoNotDiscover` and
+`RuntimeTestDeclaration`. New `P8-03 REMOTE` cases use real isolated Git and
+normal product Compile/Test/scalafix, native remote-phase review/preparation/import/
+Submit, technical classification via ordinary Advance, and fresh independent
+review with retained actual checks/history. Missing independent evidence, mapping
+substitution, crossed phase and consumed-input demotion use the real public owners.
+Historical Human-adoption cases remain intact. These cases are UNEXECUTED and
+require explicit normal heavy selection with the updated runtime; default FULL
+cannot prove them. The Task's `p8-03-qualification-input.json` records the exact
+selection and process prerequisites as plan input only. This supersedes the earlier
+statement that lifecycle authorship was unavailable, while preserving its actual
+unexecuted status. Required row 13 remains unresolved; P8-03 still returns
+decision-needed, without synthetic dependency scope or additional effect authority.
+
+## P8-03 corrected approval-reuse scope and final authored candidate
+
+Actual Human messages retained in Task
+`cncf-artifact-observation-delegation/scope-clarification-observation.json`
+corrected the extra JAR-byte comparison/CNCF API interpretation. The normal
+requester defer is retained at `cncf-artifact-observation-delegation/defer/response.json`;
+it is not producer success/cancellation or an accepted prerequisite. The
+[corrected trust boundary](phase8-artifact-provenance-gap.md) preserves the
+superseded proposal as design history. No original completion requirement or
+historical Session/answer was narrowed, reopened or replayed.
+
+Required row 13 now has authored normal native mechanical applicability in the
+existing source-alignment owner: actual prior Human adoption and exact unchanged
+source/Usage/Plan/purpose/ownership/authority/publication bind a new consumer
+candidate. Existing normal publication collectors reject missing/superseded,
+failed/UNKNOWN/latest-owner changes; freshness also runs before review/closing.
+The new receipt references the unique actual prior native adoption, never a caller
+Human claim. It grants no publication attempt and inherits no consumer check PASS.
+Local alignment/normal-publication regressions are authored, not run. Manual
+unrecorded JAR tampering/digest pinning is no claim of this operational trust scope.
+
+The separate worker's existing DelegateTask public operation/inspection-host
+connection and `NormalDeferredScopeCorrectionSpec` fit rows 11–12 and are retained
+as ordinary Step source work; they are not a stopped-producer publication campaign.
+Rows 14–15 retain the authored semantic classification/phase connection, local
+boundary/count specimens and explicit heavy remote cases described above. Heavy
+cases remain UNEXECUTED/DoNotDiscover and need actual normal explicit selection;
+default FULL alone will not prove them. Normal Compile/FULL, required selected
+qualification, independent review and local closing remain parent-owned and
+pending. No full-Phase checkbox, native acceptance, new issue or saving is claimed.

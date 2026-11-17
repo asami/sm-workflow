@@ -25,8 +25,8 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Two separately selected publication stages share one genuine native Session.
   * Independent semantic answers are specification-owned evidence, never live
   * provider acceptance. SQLite is observed read-only, never seeded or repaired.
-  * @since Nov. 3, 2026
-  * @version Nov. 3, 2026
+  * @since   Nov.  3, 2026
+  * @version Nov. 17, 2026
   */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -130,7 +130,7 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
       _consumed, _consumed, "The real selected product checks consume declared source script and skill inputs")),
       checks, Vector("value.txt", "src"), "Actual source delta requires the existing full validation", Vector.empty)
   private def _configure(scenario: F.Scenario, corrected: Boolean, demote: Boolean = false,
-    checks: Vector[C.Check] = _checks, impact: Option[RepositorySyncProgramImpact.Policy] = None): Unit = {
+    checks: Vector[C.Check] = _checks, impact: Option[RepositorySyncProgramImpact.Policy] = None, remotePhase: Boolean = false): Unit = {
     val root = scenario.root
     val base = process_plan(root, "Equal", scenario.host.goal)
     def _array_(value: Json, key: String): Vector[Json] = value.hcursor.get[Vector[Json]](key).toOption.get
@@ -139,11 +139,36 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
         Vector(index + 1), operation = operation, executionTimeoutMillis = 180000L)
     }
     val programs = plans.flatMap(_array_(_, "sbtPrograms"))
-    val plan = base.mapObject(fields => fields.add("sbtPrograms", Json.fromValues(programs))
+    val productPlan = base.mapObject(fields => fields.add("sbtPrograms", Json.fromValues(programs))
       .add("workspaces", Json.fromValues((_array_(base, "workspaces") ++ plans.flatMap(_array_(_, "workspaces"))).distinct))
       .add("workspaceGrants", Json.fromValues((_array_(base, "workspaceGrants") ++ plans.flatMap(_array_(_, "workspaceGrants"))).distinct))
       .add("grants", fields("grants").get.mapArray(_.map(_.mapObject(grant => grant.add("capabilities",
         grant("capabilities").get.mapArray(existing => (existing ++ programs.map(_.hcursor.get[Json]("capability").toOption.get)).distinct)))))))
+    // The existing source workspace selects a linked contribution checkout.
+    // Product workspaces stay on canonical main, where the remote merge occurs.
+    val plan = if (!remotePhase) productPlan else {
+      def rows(key: String) = _array_(productPlan, key)
+      val sourceWorkspace = "sm-workflow-repository"
+      val mainWorkspace = "review-input-canonical-main"
+      val source = rows("gitRepositories").find(_.hcursor.get[String]("target").contains(sourceWorkspace)).get
+      val main = source.mapObject(_.add("target", mainWorkspace.asJson)
+        .add("identity", "review-input-main-family".asJson).add("capability", "review-input-main-git".asJson))
+      productPlan.mapObject(fields => fields
+        .add("gitRepositories", (rows("gitRepositories").map(row =>
+          if (row.hcursor.get[String]("target").contains(sourceWorkspace))
+            row.mapObject(_.add("localBranch", "contribution".asJson)) else row) :+ main).asJson)
+        .add("workspaces", (rows("workspaces").map(row =>
+          if (row.hcursor.get[String]("identity").contains(sourceWorkspace))
+            row.mapObject(_.add("root", root.resolve("contribution").toString.asJson)) else row) :+
+          Json.obj("identity" -> mainWorkspace.asJson, "root" -> root.resolve("repository").toString.asJson)).asJson)
+        .add("workspaceGrants", (rows("workspaceGrants") :+ Json.obj(
+          "componentId" -> org.simplemodeling.textus.smworkflow.SmWorkflowComponent.componentId.name.asJson,
+          "workspaceId" -> mainWorkspace.asJson, "access" -> "manage".asJson)).asJson)
+        .add("grants", rows("grants").map(grant =>
+          if (grant.hcursor.get[String]("componentId").contains(org.simplemodeling.textus.smworkflow.SmWorkflowComponent.componentId.name))
+            grant.mapObject(row => row.add("capabilities", row("capabilities").get.mapArray(_ :+ "review-input-main-git".asJson)))
+          else grant).asJson))
+    }
     val documents = Vector("docs") ++ Option.when(_known_catalog)(_catalog_path) ++ Option.when(corrected)("README.md") ++
       (if (demote) Vector("scripts", "skills") else Vector.empty)
     val documentscopes = if (_known_catalog) _consumed.filterNot(_ == "src") ++ Vector("src/main/scala", "src/test") else _consumed
@@ -160,7 +185,7 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
       case (prior, (key, value)) => prior.add(key, Json.fromString(value))
     }).noSpaces)
   }
-  private def _scenario(): F.Scenario = {
+  private def _scenario(remotePhase: Boolean = false): F.Scenario = {
     sys.props.get("smworkflow.spec.sbt") should not be empty
     val scenario = F.fresh("installed-review-input", sbtRepair = Some(TypedSbtHostPlanFixture.normalExecutable), bootstrapSelectedInput = false)
     val root = scenario.root
@@ -221,7 +246,9 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
     Files.writeString(repository.resolve("value.txt"), "local product input\n")
     git(root, "-C", repository.toString, "add", "--", "value.txt")
     git(root, "-C", repository.toString, "commit", "-m", "Local conflicting input")
-    _configure(scenario, corrected = false)
+    if (remotePhase) git(root, "-C", repository.toString, "worktree", "add", "-b", "contribution",
+      root.resolve("contribution").toString, "HEAD")
+    _configure(scenario, corrected = false, remotePhase = remotePhase)
     scenario
   }
   private def _prepare(live: Live, operation: String, issued: F.Result, result: String,
@@ -255,6 +282,165 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
     val currentrows = _stored(live.root)
     episode.nativeRows.filterNot(raw => WorkflowInstanceRecordJsonV1.decodeC(raw, _catalog).toOption.nonEmpty)
       .foreach(raw => currentrows should contain(raw))
+  }
+
+  "Installed P8-03 semantic remote-phase classification" should {
+    for (mode <- Vector("continue", "consumed-demotion")) {
+      s"P8-03 REMOTE technical classification $mode with actual retained product checks" in {
+        Given("an explicitly selected current installed runtime, real SBT, and a fresh linked contribution/canonical-main/bare fixture")
+        val selectedCar = Path.of(sys.props.getOrElse("smworkflow.spec.componentFile",
+          fail("Select the actual updated normal component CAR explicitly for P8-03 qualification")))
+        selectedCar.isAbsolute shouldBe true
+        selectedCar.normalize shouldBe selectedCar
+        Files.isRegularFile(selectedCar) shouldBe true
+        val scenario = _scenario(remotePhase = true)
+        val started = Live(scenario, "").repositoryCall("startRepositorySync", Vector("--input",
+          "{\"repositoryIdentity\":\"p8-03-review-input\",\"syncMode\":\"FULL_STATE\",\"mainIntegration\":\"local-first\"}"))
+          .business[V.RepositorySyncStartResult]
+        val live = Live(scenario, started.sessionId)
+        var boundary = live.advance()
+        val phases = scala.collection.mutable.ArrayBuffer.empty[String]
+        var attempts = 0
+        while (boundary.business[V.RepositorySyncAdvanceResult].condition != Some("MergeConflicted") && attempts < 8) {
+          val output = boundary.business[V.RepositorySyncAdvanceResult]
+          output.kind shouldBe "Progress"
+          phases ++= output.condition
+          boundary = live.advance()
+          attempts += 1
+        }
+        boundary.business[V.RepositorySyncAdvanceResult].condition shouldBe Some("MergeConflicted")
+        phases should contain("LocalMainSourcePrepared")
+        phases should contain("LocalMainIntegrated")
+        _current(live).history.exists(_.causation.value == "repository-local-main-phase:remote") shouldBe true
+        val conflict = live.advance().business[V.RepositorySyncAdvanceResult]
+        val resolution = V.RepositorySyncConflictResult("resolved", conflict.conflict.get.conflicts.map(value =>
+          V.RepositorySyncConflictResolution(value.identity, "resolved product input\n")), "Specification-owned actual remote conflict resolution")
+        val conflictRef = V.WorkflowArtifactReference("p8-03-remote-conflict-" + mode, "1")
+        val conflictExecution = V.WorkflowExecutionEvidence(Vector(conflictRef), Some("fixture-conflict-author"), None, None)
+        live.repositoryCall("submitRepositorySyncWorkResult", Vector("--sessionId", live.session,
+          "--result", _json(resolution), "--resultReference", _json(conflictRef), "--executionEvidence", _json(conflictExecution)))
+          .business[V.RepositorySyncConflictSubmissionResult].accepted shouldBe true
+
+        When("ordinary remote Advance executes actual Compile Test and scalafix before issuing native independent review")
+        val issued = live.advance()
+        val review = issued.business[V.RepositorySyncAdvanceResult].review.get
+        val originalRequest = _requests(live).head
+        originalRequest.indexTree shouldBe review.indexTree
+        originalRequest.selectedChecks shouldBe _checks.map(_.identity)
+        _unknown.foreach(path => originalRequest.uncertainties should contain("Unexamined unknown input: " + path))
+        val formal = _formal(live)
+        formal.size shouldBe 3
+        formal.foreach(value => value._1 should include("local-main-remote-validation-result-"))
+        formal.map(value => parse(value._3).toOption.get.as[C.Receipt].toOption.get).foreach(receipt =>
+          receipt.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Succeeded)
+        _lines(live.root, "sbt-invocations.txt").size shouldBe 3
+        _lines(live.root, "lint-entered.txt").size shouldBe 1
+        _lines(live.root, "sbt-command-lines.txt").mkString("\n") should include("fixCheck")
+        originalRequest.checks.find(_.identity == "test2").get.stdout should include("ACTUAL_REVIEW_INPUT_PRODUCT_TEST_PASSED")
+
+        val documents = Vector("docs", "README.md") ++ Option.when(_known_catalog)(_catalog_path) ++
+          (if (mode == "consumed-demotion") Vector("value.txt") else Vector.empty)
+        val consumed = (if (_known_catalog) _consumed.filterNot(_ == "src") ++ Vector("src/main/scala", "src/test") else _consumed)
+          .filterNot(path => mode == "consumed-demotion" && path == "value.txt")
+        val mapping = RepositorySyncDocumentInputs.Policy(documents, consumed,
+          "Independent fixture assessment of actual remote candidate input consumption")
+        val result = V.RepositorySyncNativeMergeReviewResult("decision-needed", _rationale, Vector.empty,
+          Some(GoalPhaseNativeMetadata.record(mapping.asJson)))
+        val reference = V.WorkflowArtifactReference("p8-03-remote-assessment-" + mode, "1")
+        val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("fixture-independent-input-assessor"), None, None)
+        def submit(value: V.RepositorySyncNativeMergeReviewResult, ref: V.WorkflowArtifactReference = reference): F.Result =
+          live.repositoryCall("submitNativeMergeReview", Vector("--sessionId", live.session, "--result", _json(value),
+            "--resultReference", _json(ref), "--executionEvidence", _json(execution)))
+        val pending = _snapshot(live)
+        When("a technical mapping is submitted without independently admitted review evidence")
+        submit(result).exitCode should not be 0
+        _snapshot(live) shouldBe pending
+        _prepare(live, "review", issued, _json(result), reference, execution)
+        When("the prepared mapping is replaced by a different caller mapping under the same evidence reference")
+        val substituted = result.copy(inputClassification = Some(GoalPhaseNativeMetadata.record(mapping.copy(
+          consumedPaths = mapping.consumedPaths :+ "foreign-input").asJson)))
+        submit(substituted).exitCode should not be 0
+        _snapshot(live) shouldBe pending
+        Then("only the exact independently evidenced semantic result is accepted at the original review boundary")
+        submit(result).business[V.RepositorySyncNativeMergeReviewSubmissionResult].accepted shouldBe true
+        val decision = _current(live)
+        decision.currentProgression shouldBe Some(ProgressionReference("sync.ReviewDecisionRequired"))
+        val saved = _snapshot(live)
+        val rows = _stored(live.root)
+        val described = live.repositoryCall(N.describeOperation, Vector("--sessionId", live.session))
+          .business[V.RepositorySyncValidationContinuationDescriptionResult]
+        val target = R.decodePublicTarget(parse(take(described.target.toJsonStringC)).toOption.get).toOption.get
+        target.phase shouldBe Some("local-main-remote")
+        target.candidate.pending.reference.identity should include("local-main-remote-pending-merge")
+        target.selectedChecks shouldBe _checks
+        target.review.result.identity shouldBe reference.identity
+        if (mode == "consumed-demotion") {
+          When("ordinary Advance encounters demotion of an actually consumed original value input")
+          target.applicabilityIssues.exists(_.startsWith("Previously consumed input was demoted: value.txt")) shouldBe true
+          live.advance().exitCode should not be 0
+          _snapshot(live) shouldBe saved
+          _stored(live.root).sorted shouldBe rows.sorted
+          _requests(live).size shouldBe 1
+        } else {
+          target.applicabilityIssues shouldBe empty
+          val crossedPhase = Some("local-main-local")
+          val crossed = target.copy(phase = crossedPhase,
+            candidate = target.candidate.copy(pending = target.candidate.pending.copy(reference =
+              org.goldenport.cncf.workflow.ContextReference(live.session + ":native-" + S.phaseKey(
+                crossedPhase, target.namespace, "pending-merge"), "1"))),
+            validated = target.validated.copy(reference = org.goldenport.cncf.workflow.ContextReference(
+              live.session + ":native-" + S.phaseKey(crossedPhase, target.namespace, "merge-validated"), "1")))
+          val crossInput = V.RepositorySyncValidationContinuationAdoptionInput(live.session, R.targetRecord(crossed),
+            R.choices.head, "Crossed fixture phase must refuse", reference, false, false,
+            execution.copy(workerIdentity = Some(target.context.participantIdentity)))
+          When("the public owning continuation receives a structurally valid target for the wrong local-main phase")
+          live.repositoryCall(N.adoptionOperation, Vector("--input", _json(crossInput))).exitCode should not be 0
+          _snapshot(live) shouldBe saved
+          _stored(live.root).sorted shouldBe rows.sorted
+          When("ordinary Advance consumes the actual technical assessment without any Human-only adoption operation")
+          live.advance().business[V.RepositorySyncAdvanceResult].condition shouldBe Some("ReviewInputContinuationAdmitted")
+          val admission = _receipts(live).find(_.payload.value.stage == "ReviewInputContinuationAdmitted").get
+          admission.reference.identity should include("local-main-remote-review-inputs-")
+          admission.payload.value.reviewInputs.get.reference.identity shouldBe reference.identity
+          admission.payload.value.reviewInputs.get.target.phase shouldBe Some("local-main-remote")
+          admission.payload.value.validation.get.receipts shouldBe originalRequest.checks
+          _current(live).history.take(decision.history.size) shouldBe decision.history
+          _formal(live) shouldBe formal
+          _requests(live).size shouldBe 1
+          val invocations = _lines(live.root, "sbt-invocations.txt")
+          val commands = _lines(live.root, "sbt-command-lines.txt")
+          val lint = _lines(live.root, "lint-entered.txt")
+          val followup = live.advance().business[V.RepositorySyncAdvanceResult]
+          followup.kind shouldBe "Request"
+          val revised = _requests(live).find(_.validatedRevision != originalRequest.validatedRevision).get
+          Then("fresh independent review retains the actual checks full candidate and original unanswered semantic history")
+          followup.issuedWorkContext.get.continuationId should not be issued.business[V.RepositorySyncAdvanceResult].issuedWorkContext.get.continuationId
+          revised.judgmentMode shouldBe "detailed-review"
+          revised.localTip shouldBe originalRequest.localTip
+          revised.remoteTip shouldBe originalRequest.remoteTip
+          revised.indexTree shouldBe originalRequest.indexTree
+          revised.localDiff shouldBe originalRequest.localDiff
+          revised.remoteDiff shouldBe originalRequest.remoteDiff
+          revised.checks shouldBe originalRequest.checks
+          revised.selectedChecks shouldBe originalRequest.selectedChecks
+          revised.uncertainties.mkString("\n") should include(reference.identity)
+          revised.uncertainties.mkString("\n") should include(_rationale)
+          revised.uncertainties.exists(_.startsWith("Unexamined")) shouldBe false
+          _formal(live) shouldBe formal
+          _lines(live.root, "sbt-invocations.txt") shouldBe invocations
+          _lines(live.root, "sbt-command-lines.txt") shouldBe commands
+          _lines(live.root, "lint-entered.txt") shouldBe lint
+          _current(live).history.take(decision.history.size) shouldBe decision.history
+          rows.filterNot(raw => WorkflowInstanceRecordJsonV1.decodeC(raw, _catalog).toOption.nonEmpty)
+            .foreach(raw => _stored(live.root) should contain(raw))
+          val fresh = _snapshot(live)
+          live.advance().business[V.RepositorySyncAdvanceResult].issuedWorkContext shouldBe followup.issuedWorkContext
+          _snapshot(live) shouldBe fresh
+          _current(live).lifecycle shouldBe Lifecycle.Active
+          _current(live).suspension should not be empty
+        }
+      }
+    }
   }
 
   "Installed retained review input continuation" should {
@@ -292,7 +478,7 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
         receipt.identity -> receipt.sbt.get.outcome).toSet shouldBe _checks.map(check => check.identity -> WorkflowSbtValidation.Outcome.Succeeded).toSet
       _lines(live.root, "sbt-invocations.txt").size shouldBe 3
       _lines(live.root, "lint-entered.txt").size shouldBe 1
-      val result = V.RepositorySyncNativeMergeReviewResult("decision-needed", _rationale, Vector.empty)
+      val result = V.RepositorySyncNativeMergeReviewResult("decision-needed", _rationale, Vector.empty, None)
       val reference = V.WorkflowArtifactReference("fixture-review-input-independent-original", "1")
       val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("fixture-independent-original-reviewer"), None, None)
       When("the independent fixture prepares imports and submits decision-needed once through normal public operations")
@@ -496,7 +682,7 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
       _snapshot(live) shouldBe issuedstate
       _retained(live, episode)
       val result = V.RepositorySyncNativeMergeReviewResult("accept",
-        "Specification-owned independent review examined both complete actual parent diffs: resolved value, Scala, script and skill all use 1; README is documentation only. No old partial prose is accepted coverage and no live provider acceptance is claimed.", Vector.empty)
+        "Specification-owned independent review examined both complete actual parent diffs: resolved value, Scala, script and skill all use 1; README is documentation only. No old partial prose is accepted coverage and no live provider acceptance is claimed.", Vector.empty, None)
       val reviewreference = V.WorkflowArtifactReference("fixture-review-input-independent-follow-up", "1")
       val reviewexecution = V.WorkflowExecutionEvidence(Vector(reviewreference), Some("fixture-independent-follow-up-reviewer"), None, None)
       When("a distinct independent fixture result is prepared imported and submitted after reviewing the real tiny full candidate")

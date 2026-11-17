@@ -4,11 +4,13 @@ import org.simplemodeling.textus.smworkflow.admission.StandaloneFixExecution.giv
 
 import io.circe.{Json, JsonObject}
 import io.circe.syntax.*
+import RepositorySyncDocumentInputs.given
 import NativeExternalEvidence.Purpose
 
 /** Selected independent review targets; native completion owns result validity.
   * @since   Oct.  8, 2026
-  * @version Oct. 26, 2026
+  *  version Oct. 26, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeReviewScope {
@@ -205,7 +207,15 @@ private[smworkflow] object NativeReviewScope {
       paths <- stringArray(finding, "affectedPaths")
       rationale <- if (decision == "repair") text(finding, "repairRationale").map(Json.fromString) else Right(Json.Null)
     } yield collected :+ Json.obj("identity" -> Json.fromString(identity), "affectedPaths" -> Json.fromValues(paths.map(Json.fromString)), "repairRationale" -> rationale))
-  } yield Json.obj("decision" -> Json.fromString(decision), "findings" -> Json.fromValues(findings))
+    classification <- input("inputClassification") match {
+      case None => Right(None)
+      case Some(value) => RepositorySyncDocumentInputs.decodeC(value).map[Either[String, Option[Json]]](p =>
+        Right(Some(io.circe.Encoder[RepositorySyncDocumentInputs.Policy].apply(p)))).fold(e => Left(e.toString), identity)
+    }
+    _ <- Either.cond(classification.isEmpty || (decision == "decision-needed" && findings.isEmpty), (),
+      "Technical input assessment cannot supply acceptance or repair findings")
+  } yield classification.fold(Json.obj("decision" -> Json.fromString(decision), "findings" -> Json.fromValues(findings)))(p =>
+    Json.obj("decision" -> Json.fromString(decision), "findings" -> Json.fromValues(findings), "inputClassification" -> p))
 
   private def snapshot(input: JsonObject): Either[String, Json] = strings(input, Vector("head", "tree")).map(Json.fromJsonObject)
   private def obj(value: Json): Either[String, JsonObject] = Option(value).flatMap(_.asObject).toRight("Review attestation must be an object")

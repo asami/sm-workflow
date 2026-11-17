@@ -28,8 +28,8 @@ import SplitPhaseExplicitPartitionFixture.take
   * phase reopens the same physical repository, host, SQLite and Session.
   * Human directions and reviews are explicitly authored fixture inputs; they
   * attest no real consumer approval or independent source review.
-  * @since   Nov. 4, 2026
-  * @version Nov. 4, 2026
+  * @since   Nov.  4, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 @DoNotDiscover
@@ -253,7 +253,7 @@ final class NativeRepositoryMergeCheckContinuationCliSpec extends AnyWordSpec wi
     val reference = V.WorkflowArtifactReference(directory.getFileName.toString, "1")
     val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("fixture-independent-reviewer"), None, None)
     val result = V.RepositorySyncNativeMergeReviewResult("accept",
-      "Fixture-authored independent review of this actual candidate and its selected product checks; no real consumer or source review approval", Vector.empty)
+      "Fixture-authored independent review of this actual candidate and its selected product checks; no real consumer or source review approval", Vector.empty, None)
     val input = V.WorkflowEvidencePreparationInput("RepositorySync", "review", issued.invocation.stdout.toUri.toASCIIString,
       _save_new(directory, "answer.json", json(result)), _save_new(directory, "reference.json", json(reference)),
       _save_new(directory, "execution.json", json(execution)), "normal-development-host", java.time.Instant.now().toString,

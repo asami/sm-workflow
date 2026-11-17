@@ -28,8 +28,8 @@ import SplitPhaseExplicitPartitionFixture.take
   * smworkflow.spec.pushEpisode. The after phase reopens the original physical
   * host, SQLite provider, repository and Session; it never seeds native state.
   * Fixture-authored independent Human/review inputs attest this fixture only.
-  * @since Nov. 4, 2026
-  * @version Nov. 4, 2026
+  * @since   Nov.  4, 2026
+  * @version Nov. 17, 2026
   */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -281,7 +281,7 @@ final class NativeRepositoryPushContinuationCliSpec extends AnyWordSpec with Mat
     val reference = V.WorkflowArtifactReference(directory.getFileName.toString, "1")
     val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("fixture-independent-reviewer"), None, None)
     val verdict = V.RepositorySyncNativeMergeReviewResult("accept",
-      "Independent fixture review of this actual candidate, selected formal checks and preserved intent; no consumer approval is asserted", Vector.empty)
+      "Independent fixture review of this actual candidate, selected formal checks and preserved intent; no consumer approval is asserted", Vector.empty, None)
     val input = V.WorkflowEvidencePreparationInput("RepositorySync", "review", issued.invocation.stdout.toUri.toASCIIString,
       _save_new(directory, "answer.json", json(verdict)), _save_new(directory, "reference.json", json(reference)),
       _save_new(directory, "execution.json", json(execution)), "normal-development-host", java.time.Instant.now().toString,

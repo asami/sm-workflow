@@ -62,13 +62,96 @@ private[admission] object RepositorySyncReviewInputContinuationFixture {
 
 /** Strict v3 classification continuation, preserved historical codecs and real
   * production eligibility predicates. Native process evidence is separate.
-  * @since Nov. 3, 2026
-  * @version Nov. 3, 2026
+  * @since   Nov.  3, 2026
+  * @version Nov. 17, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class RepositorySyncReviewInputContinuationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import RepositorySyncReviewInputContinuationFixture.*
+
+  "P8-03 phase-bound review-input targets" should {
+    "preserve absent legacy phase and bind candidate references to the exact current phase" in {
+      Given("a closed legacy target and the same prospective remote-phase candidate")
+      target.asJson.hcursor.downField("phase").focus shouldBe None
+      R.decodeTarget(target.asJson) shouldBe Right(target)
+      val phase = Some("local-main-remote")
+      val remote = target.copy(phase = phase,
+        candidate = target.candidate.copy(pending = target.candidate.pending.copy(reference = ContextReference(
+          "session:native-" + S.phaseKey(phase, target.namespace, "pending-merge"), "1"))),
+        validated = target.validated.copy(reference = ContextReference(
+          "session:native-" + S.phaseKey(phase, target.namespace, "merge-validated"), "1")))
+      When("the existing public target decoder checks its explicit phase coordinate")
+      R.decodeTarget(remote.asJson) shouldBe Right(remote)
+      val result = M.Result("decision-needed", "Technical mapping only", Vector.empty, Some(mapping))
+      take(R.semanticDirectionC(remote, result, remote.review.result)).target.phase shouldBe phase
+      Then("crossed, removed, unknown and explicitly null phase claims cannot borrow the remote candidate")
+      R.decodeTarget(remote.copy(phase = Some("local-main-local")).asJson).isLeft shouldBe true
+      R.decodeTarget(remote.copy(phase = None).asJson).isLeft shouldBe true
+      R.decodeTarget(target.copy(phase = phase).asJson).isLeft shouldBe true
+      R.decodeTarget(remote.copy(phase = Some("other-phase")).asJson).isLeft shouldBe true
+      R.decodeTarget(target.asJson.mapObject(_.add("phase", Json.Null))).isLeft shouldBe true
+    }
+  }
+
+  "P8-03 prospective technical classification" should {
+    "retain the actual semantic mapping through the public result and independent evidence binding" in {
+      Given("a specification-owned independent decision-needed review proposing only technical input classification")
+      val result = M.Result("decision-needed", "Only input classification remains unresolved", Vector.empty, Some(mapping))
+      val publicResult = org.simplemodeling.textus.smworkflow.value.RepositorySyncNativeMergeReviewResult(
+        result.decision, result.rationale, Vector.empty, Some(GoalPhaseNativeMetadata.record(mapping.asJson)))
+      When("the public result, retained codec and independent evidence selector consume the proposal")
+      take(M.fromPublicC(publicResult)) shouldBe result
+      M.resultCodec.decode(M.resultCodec.encode(result)) shouldBe Right(result)
+      take(M.admitC(request, result, M.Policy("technical-review", 1))) shouldBe ()
+      val verdict = ThreeWorkflowExternalEvidencePorts.repositoryReviewVerdict(result)
+      verdict.hcursor.get[Json]("inputClassification") shouldBe Right(mapping.asJson)
+      val purpose = NativeExternalEvidence.Purpose.RepositoryReview
+      val binding = NativeReviewEvidenceFixture.binding(purpose, verdict = Some(verdict))
+      val selected = NativeReviewScope.select(purpose, binding).toOption.get
+      selected.hcursor.downField("attestation").downField("result").downField("verdict")
+        .get[Json]("inputClassification") shouldBe Right(mapping.asJson)
+      val altered = NativeReviewEvidenceFixture.binding(purpose, verdict = Some(verdict.mapObject(_.add(
+        "inputClassification", mapping.copy(consumedPaths = Vector("value.txt")).asJson))))
+      NativeReviewScope.select(purpose, altered).toOption.get should not be selected
+      NativeReviewScope.select(purpose, NativeReviewEvidenceFixture.binding(purpose,
+        verdict = Some(verdict.mapObject(_.add("inputClassification", Json.Null))))).isLeft shouldBe true
+      val classified = take(R.semanticDirectionC(target, result, target.review.result))
+      Then("the existing direction points to the actual review result and keeps the original UNKNOWN inputs and successful check selection")
+      classified.reference shouldBe target.review.result
+      classified.target.originalInputs shouldBe original
+      classified.target.proposedInputs shouldBe proposed
+      classified.target.selectedChecks shouldBe checks
+      classified.priorExecutionEnded shouldBe false
+      classified.acceptOriginalUncertainty shouldBe false
+      classified.asJson.as[R.Direction] shouldBe Right(classified)
+      R.semanticDirectionC(target, result, reference).isSuccess shouldBe false
+      Vector(result.copy(decision = "accept"), result.copy(inputClassification = None),
+        result.copy(inputClassification = Some(mapping.copy(consumedPaths = Vector("value.txt")))),
+        result.copy(findings = Vector(M.Finding("ownership-risk", Vector("README.md"), "Human must resolve ownership"))))
+        .foreach(value => R.semanticDirectionC(target, value, target.review.result).isSuccess shouldBe false)
+    }
+
+    "reject reuse when actual consumption candidate selection or evidence ceases to match" in {
+      Given("an eligible prior semantic mapping and actual-shaped original successful selection")
+      val result = M.Result("decision-needed", "Technical mapping only", Vector.empty, Some(mapping))
+      val failures = Vector(
+        R.eligibilityIssues(original, proposed.copy(consumedPaths = proposed.consumedPaths.filterNot(_ == "src/Input.scala")), validation, checks),
+        R.eligibilityIssues(original, proposed.copy(changedPaths = proposed.changedPaths :+ "other.txt"), validation, checks),
+        R.eligibilityIssues(original, proposed.copy(unknownPaths = Vector("README.md")), validation, checks),
+        R.eligibilityIssues(original, proposed, validation.copy(checks = checks.dropRight(1)), checks))
+      When("the existing owning predicates compare each changed fact with the retained source")
+      failures.foreach(_.nonEmpty shouldBe true)
+      failures.foreach(issues => R.semanticDirectionC(target.copy(applicabilityIssues = issues), result,
+        target.review.result).isSuccess shouldBe false)
+      Then("classification never turns incomplete evidence into validation or review acceptance")
+      M.admitC(request, result.copy(decision = "accept"), M.Policy("technical-review", 1)).isSuccess shouldBe false
+      val legacy = M.Result("decision-needed", "Genuine unresolved choice", Vector.empty)
+      M.resultCodec.encode(legacy).hcursor.downField("payload").downField("inputClassification").focus shouldBe None
+      M.resultCodec.decode(M.resultCodec.encode(legacy)) shouldBe Right(legacy)
+      R.semanticDirectionC(target, legacy, target.review.result).isSuccess shouldBe false
+    }
+  }
 
   "RRI-02 explicit versioned continuation contracts" should {
     "select v3 explicitly while preserving the original v1 and required-lint v2 branches and their boolean meanings" in {

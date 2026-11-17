@@ -25,8 +25,7 @@ import GoalPhasePrerequisitePublicationUnknownRecovery as W
 /** Explicit adoption of repaired source and an independently recollected normal
   * publication. The historical successful consumer request is never replaced.
   * @since   Nov.  7, 2026
-  *  version Nov.  7, 2026
-  * @version Nov.  9, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhasePublishedDependencySourceAdoption {
@@ -134,6 +133,25 @@ private[smworkflow] object GoalPhasePublishedDependencySourceAdoption {
       value.result.publication.process.flatMap(WorkflowSbtCapture.decode(_).toOption)
         .exists(p => programs.head.hcursor.get[String]("identity").contains(p.safeProgramIdentity))
     }
+  /** Normal retained publication facts are the operational trust boundary.
+    * A candidate-only repair does not require artifact byte comparison. A newer
+    * writer (including failure/UNKNOWN), missing result or changed owner does
+    * invalidate reuse; never search past it for an older successful attempt.
+    */
+  private[admission] def currentPublicationC(observation: PublicationObservation,
+    port: LocalPublication.Port): Consequence[Unit] = for {
+    _ <- if (observationValid(observation) && port != null) Consequence.unit else F.invalid("Adopted publication observation is invalid")
+    previous = observation.result.publication
+    request = previous.request
+    owner <- Option(request.input.ownerSessionId).flatten.filter(_text).map(Consequence.success)
+      .getOrElse(F.invalid("Adopted publication omitted its actual normal owner"))
+    retained <- LocalPublication.collectC(request.input, request.target, request.participant, port)
+    latest <- LocalPublication.collectLatestC(LocalPublication.LatestCollectionInput(request.target.identity, owner),
+      request.target, request.participant, port)
+    _ <- if (retained.contains(previous) && latest.contains(previous)) Consequence.unit
+      else F.invalid("Adopted publication is missing, changed or superseded by the latest normal publication record")
+  } yield ()
+
   def proposalValid(value: SourceProposal): Boolean = value != null && value.schemaVersion == proposalSchema &&
     R.proposalValid(value.source) && value.source.schemaVersion == R.sourceSchema &&
     value.source.consumption.isInstanceOf[R.Consumption] && observationValid(value.publication) && value.publication.result.applicability.isEmpty

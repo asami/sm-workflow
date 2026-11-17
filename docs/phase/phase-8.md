@@ -27,15 +27,22 @@ whole-row acceptance. Phase 7 remains unfinished in its own development checkout
 | P8-04 | RSP-1 based compact public result/detail and terminal projection, coherent mechanical progression, wait/collection, scoped substantial worker context and portable compaction/handoff. Keep unknown/live outcomes and host limitations explicit. |
 | P8-05 | Connected supported-use qualification, proportionate checks and review classification, bounded rescue, comparable observations, usage instructions and independent integrated Phase review/normal local closure. |
 
-P8-02 now has an [authored policy/local-main source candidate](../spec/repository-sync-policy-selection.md)
-and isolated executable specifications for the complete selected route, as of
-2026-11-18. Canonical CNCF delivered the typed worktree observation prerequisite;
-its producer/bootstrap successes are not whole-Step consumer acceptance. The
-candidate retains both hops in the original native Session, dirty-policy and
-Human boundaries, phase receipts and shared-target coordination. Its complete
-native checks, independent Step review and normal local closing remain open in
-P8-02; requirements are neither deferred nor accepted by setup responses. Ordinary Step
-`compile`/`test` captures remain unchanged and are not ADMISSION evidence.
+P8-02 completed through normal native checks, independent re-review and local
+commit `62063e9a928d7d27b0afe4c6cdcf455c3e7989b9` on 2026-11-18. Compile and
+FULL 2914 tests / 274 suites passed at its actual scope. Its five historical
+repairs and accepted Sessions remain retained. These results do not check off
+whole-Phase requirements or establish ADMISSION mode evidence.
+
+P8-03 has an [authored ordinary-continuation contract](../spec/phase8-ordinary-continuation.md),
+prospective local inventory/classification/repair specifications, and explicitly
+selected heavy remote-phase lifecycle cases (unexecuted). Required artifact adoption
+reuse is authored through the existing native alignment and normal publication
+collectors: candidate-only changes retain the actual prior approval under unchanged
+source/Usage/publication/authority, with current checks/review still required.
+The actual Human clarification supersedes the earlier extra CNCF byte-comparison
+proposal; [corrected trust and retained design history](../notes/phase8-artifact-provenance-gap.md)
+record that disposition. Source authorship supplies no native validation or
+acceptance. Ordinary Step `compile`/`test` captures remain unchanged.
 
 Recent synchronization reached integrated main `54d44d5f9f0bdfff18210dac117578439b504812`
 through separate explicit Human Git permission, not normal RepositorySync success.

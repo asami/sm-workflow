@@ -23,8 +23,8 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Two explicitly selected publication stages retain actual old successful
   * checks in four tiny repositories. Proposals, lifecycle answers and independent
   * review are specification-owned data, never live provider acceptance.
-  * @since Nov. 3, 2026
-  * @version Nov. 3, 2026
+  * @since   Nov.  3, 2026
+  * @version Nov. 17, 2026
   */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -270,7 +270,7 @@ final class NativeRepositoryRequiredLintContinuationCliSpec extends AnyWordSpec 
   private def _review_and_converge(live: Live, output: F.Result, episode: Episode): Unit = {
     val issued = output.business[V.RepositorySyncAdvanceResult]
     issued.review should not be empty
-    val result = V.RepositorySyncNativeMergeReviewResult("accept", "Specification-owned independent review of both actual parent diffs", Vector.empty)
+    val result = V.RepositorySyncNativeMergeReviewResult("accept", "Specification-owned independent review of both actual parent diffs", Vector.empty, None)
     val reference = V.WorkflowArtifactReference("fixture-required-lint-independent-review", "1")
     val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("fixture-independent-reviewer"), None, None)
     val directory = Files.createTempDirectory(live.root, "fixture-required-lint-review-")

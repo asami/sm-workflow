@@ -424,6 +424,7 @@ private[smworkflow] object ThreeWorkflowExternalEvidencePorts {
     Json.obj("decision" -> Json.fromString(result.decision), "findings" -> Json.fromValues(result.findings.map(f => Json.obj(
       "identity" -> Json.fromString(f.identity), "affectedPaths" -> f.affectedPaths.asJson,
       "repairRationale" -> (if (result.decision == "repair") Json.fromString(f.rationale) else Json.Null)))))
+      .mapObject(fields => result.inputClassification.fold(fields)(p => fields.add("inputClassification", p.asJson)))
   private def _review_target[A](core: ActionCall.Core, kind: String, target: Json,
     value: ContinuationResult[A], verdict: Json): Json = reviewBinding(core.component.get.core.instanceId.canonicalKey,
       kind, target, Json.obj("handle" -> NativeHumanDecisionScope.handleJson(value.handle),

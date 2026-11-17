@@ -3,6 +3,7 @@ package org.simplemodeling.textus.smworkflow.admission
 import cats.data.NonEmptyVector
 import io.circe.Json
 import io.circe.syntax.*
+import RepositorySyncDocumentInputs.given
 import org.goldenport.Consequence
 import org.goldenport.protocol.Property
 import org.goldenport.record.RecordPresentable
@@ -99,7 +100,8 @@ private[smworkflow] object NativeWorkflowOperationInputFixture {
       V.RepositorySyncConflictResult(result.decision, result.resolutions.map(_resolution), result.rationale))
     case result: RepositorySyncNativeMergeReview.Result => Consequence.success("result" ->
       V.RepositorySyncNativeMergeReviewResult(result.decision, result.rationale, result.findings.map(f =>
-        V.RepositorySyncNativeMergeReviewFinding(f.identity, f.affectedPaths, f.rationale))))
+        V.RepositorySyncNativeMergeReviewFinding(f.identity, f.affectedPaths, f.rationale)),
+        result.inputClassification.map(value => GoalPhaseNativeMetadata.record(io.circe.Encoder[RepositorySyncDocumentInputs.Policy].apply(value)))))
     case result: RepositorySyncNativeMergeRepair.Result => Consequence.success("result" ->
       V.RepositorySyncNativeMergeRepairResult(result.decision, result.rationale,
         result.replacements.map(file => V.RepositorySyncNativeMergeRepairFile(file.path, file.text)),

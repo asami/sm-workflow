@@ -46,8 +46,7 @@ import GoalPhaseCanonicalDependencySourceSuccession as CanonicalSource
   *  version Oct. 28, 2026
   *  version Oct. 31, 2026
   *  version Oct. 29, 2026
-  *  version Nov. 11, 2026
-  * @version Nov. 16, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWorkContinuation {
@@ -1686,6 +1685,11 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       cursor.candidate.flatMap(candidate => cursor.dependencypublicationalignments.reverseIterator
         .flatMap(Alignment.permit(_, candidate)).nextOption())
 
+    private def _source_alignment_rebinding(cursor: Cursor): Option[Alignment.Saved] =
+      if (_source_alignment_permit(cursor).nonEmpty || cursor.controller.stage != O.Stage.Validation || cursor.validation.nonEmpty) None
+      else cursor.candidate.flatMap(candidate => cursor.dependencypublicationalignments.reverseIterator.find(saved =>
+        Alignment.candidateRebinding(saved.target, candidate, cursor.controller, cursor.from.revision.value.toString).nonEmpty))
+
     private def _unresolved_publication_mismatches_c(source: F.Session, cursor: Cursor,
       core: ActionCall.Core): Consequence[Vector[Alignment.TargetRoot]] = {
       val candidate = cursor.candidate.get
@@ -2310,6 +2314,13 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         result <- if (retained.unknown) _paused_c(source, next, "Published dependency source capture has an incomplete or UNKNOWN intent; no replay.")
           else if (!retained.complete) Consequence.success[Located](Frontier(next))
           else _walk_c(source, next, soughtwork, soughthuman, soughtrecording, core, historyonly)
+      } yield result
+      case O.Stage.Validation if entry.causation.value.startsWith(Alignment.applicabilityCausationPrefix) => for {
+        native <- _prerequisite_recovery_source(source, cursor)
+        saved <- Alignment.retainedRebindingC(native, cursor.dependencypublicationalignments, d, core)
+        result <- _walk_c(source, cursor.copy(from = saved.record,
+          dependencypublicationalignments = cursor.dependencypublicationalignments :+ saved),
+          soughtwork, soughthuman, soughtrecording, core, historyonly)
       } yield result
       case O.Stage.Validation if entry.causation.value.startsWith(Alignment.causationPrefix) => for {
         _ <- if (!cursor.dependencypublicationalignments.exists(saved => cursor.candidate.exists(Alignment.applicable(saved, _))))
@@ -3178,6 +3189,12 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       (if (cursor.dependencyChain.historicalPhase.nonEmpty ||
           Set(O.Stage.Review, O.Stage.PhaseReview, O.Stage.Closing, O.Stage.PhaseClosing)(cursor.controller.stage))
         _dependency_freshness_c(cursor, core) else Consequence.unit).flatMap { _ => cursor.controller.stage match {
+      case O.Stage.Validation if _source_alignment_rebinding(cursor).nonEmpty => for {
+        native <- _prerequisite_recovery_source(source, cursor)
+        saved <- Alignment.rebindC(native, _source_alignment_rebinding(cursor).get, d, core)
+        result <- F.waitC(saved.record, "Adopted dependency artifact applicability retained",
+          "The actual prior adoption covers this consumer candidate under unchanged normal publication/source/Usage/authority. Current affected checks and independent review remain required.")
+      } yield result
       case O.Stage.Validation if _host_publication_active(cursor) => for {
         selected <- _host_publication_source_c(source, cursor)
         saved = cursor.hostPublicationDirections.last
@@ -3486,6 +3503,9 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       _ <- GoalPhaseDependencySourceRevision.chainFreshnessC(core, Some(cursor.dependencyChain),
         cursor.completedDependencies.flatMap(_.dependency) ++ cursor.candidate.toVector.flatMap(_.payload.dependency),
         cursor.completedDependencies.flatMap(_.dependencySource) ++ cursor.candidate.toVector.flatMap(_.payload.dependencySourceCapture))
+      _ <- _source_alignment_permit(cursor).fold(Consequence.unit)(permit => Alignment.currentC(permit,
+        cursor.candidate.get, cursor.from.identity.value,
+        org.goldenport.cncf.security.SecuritySubject.from(core.executionContext.security).subjectId, d, core))
     } yield ()
 
     private def _review_completion_source_c(cursor: Cursor): Consequence[Option[Q.Source]] =

@@ -15,7 +15,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * The independent reviewer owns the review and provisioning of the returned row.
   * @since   Oct. 14, 2026
   *  version Oct. 27, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 object NativeReviewPreparation {
@@ -151,10 +151,9 @@ object NativeReviewPreparation {
         f == null || f.identity == null || f.affectedPaths == null || f.affectedPaths.exists(_ == null) ||
           (result.decision == "repair" && f.rationale == null)))
       Consequence.stateConflict("Repository review preparation has no selected semantic result")
-    else _prepare_c(context, NativeExternalEvidence.Purpose.RepositoryReview, RepositorySyncNativeMergeReview.resultCodec.typeIdentity,
-      resultReference, executionEvidence, issuer, occurredAt, ThreeWorkflowExternalEvidencePorts.repositoryReviewVerdict(
-        RepositorySyncNativeMergeReview.Result(result.decision, result.rationale, result.findings.map(f =>
-          RepositorySyncNativeMergeReview.Finding(f.identity, f.affectedPaths, f.rationale)))))
+    else RepositorySyncNativeMergeReview.fromPublicC(result).flatMap(selected =>
+      _prepare_c(context, NativeExternalEvidence.Purpose.RepositoryReview, RepositorySyncNativeMergeReview.resultCodec.typeIdentity,
+        resultReference, executionEvidence, issuer, occurredAt, ThreeWorkflowExternalEvidencePorts.repositoryReviewVerdict(selected)))
 
   private[smworkflow] def standaloneC(context: V.WorkflowReviewContext, result: V.StandaloneFixWorkResult,
     reference: V.WorkflowArtifactReference, execution: V.WorkflowExecutionEvidence,

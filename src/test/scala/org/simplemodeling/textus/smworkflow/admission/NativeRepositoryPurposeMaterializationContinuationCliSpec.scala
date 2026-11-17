@@ -21,8 +21,8 @@ import SplitPhaseExplicitPartitionFixture.take
   * Every repository, lifecycle direction and independent reviewer is owned by
   * this fixture. They make no assertion about a real consumer or Human consent.
   * Native datastore access is read only; all transitions use public Operations.
-  * @since Nov. 4, 2026
-  * @version Nov. 4, 2026
+  * @since   Nov.  4, 2026
+  * @version Nov. 17, 2026
   */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -222,7 +222,7 @@ final class NativeRepositoryPurposeMaterializationContinuationCliSpec extends An
     val reference = V.WorkflowArtifactReference("fixture-independent-materialization-review-" + ordinal, "1")
     val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("fixture-independent-document-reviewer"), None, None)
     val verdict = V.RepositorySyncNativeMergeReviewResult("accept",
-      "Fixture-owned independent review examined this actual document candidate, overlap and later untracked ownership", Vector.empty)
+      "Fixture-owned independent review examined this actual document candidate, overlap and later untracked ownership", Vector.empty, None)
     val directory = Files.createTempDirectory(scenario.root, "fixture-materialization-review-")
     val preparation = V.WorkflowEvidencePreparationInput("RepositorySync", "review", issued.invocation.stdout.toUri.toASCIIString,
       save(directory, "answer.json", json(verdict)), save(directory, "reference.json", json(reference)),

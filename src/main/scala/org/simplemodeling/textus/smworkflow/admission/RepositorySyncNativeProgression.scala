@@ -33,7 +33,15 @@ private[smworkflow] object RepositorySyncNativeProgression {
     continuationstore <- bindC(session, declaration, core, acknowledgement)
     pushcontinuation <- RepositorySyncPushContinuation.selectedC(continuationstore, session.started.current)
     continuation <- RepositorySyncValidationContinuation.selectedC(continuationstore, session.started.current)
-    output <- if (policyGate.nonEmpty) Consequence.success(policyGate.get)
+    technical <- if (policyGate.isEmpty && remoteGate.isEmpty && session.started.current.suspension.isEmpty &&
+        session.started.current.currentProgression.contains(WorkflowInstancePersistence.ProgressionReference("sync.ReviewDecisionRequired")) &&
+        !RepositorySyncPurposeRuntime.selected(session.started.current)) (validationPolicy, review) match {
+      case (Some(policy), Some(port)) => RepositorySyncReviewInputContinuation.continueSemanticC(
+        identity, declaration, definition, core, policy, acknowledgement, port)
+      case _ => Consequence.success(None)
+    } else Consequence.success(None)
+    output <- if (technical.nonEmpty) Consequence.success(technical.get)
+      else if (policyGate.nonEmpty) Consequence.success(policyGate.get)
       else if (remoteGate.nonEmpty) Consequence.success(remoteGate.get)
       else if (session.started.current.lifecycle == Lifecycle.Completed)
       _retained_terminal_c(session, declaration, core, acknowledgement)

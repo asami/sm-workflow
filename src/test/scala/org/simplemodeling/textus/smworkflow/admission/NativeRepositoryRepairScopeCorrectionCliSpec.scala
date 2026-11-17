@@ -25,8 +25,8 @@ import SplitPhaseExplicitPartitionFixture.take
   * issue and its upgrade in the same physical repository and native datastore.
   * All proposals and independent evidence are fixture-authored specification
   * inputs; no live Human or reviewer acceptance is claimed.
-  * @since Nov. 3, 2026
-  * @version Nov. 3, 2026
+  * @since   Nov.  3, 2026
+  * @version Nov. 17, 2026
   */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -376,7 +376,7 @@ final class NativeRepositoryRepairScopeCorrectionCliSpec extends AnyWordSpec wit
       _formal(live).filter(initial._7.contains) shouldBe initial._7
       Files.readString(live.repository.resolve(regression)) shouldBe _product(_resolved)
       git(live.root, "-C", live.repository.toString, "diff", "--", regression) shouldBe ""
-      val verdict = V.RepositorySyncNativeMergeReviewResult("accept", "Fixture independent reviewer accepts this actual new candidate", Vector.empty)
+      val verdict = V.RepositorySyncNativeMergeReviewResult("accept", "Fixture independent reviewer accepts this actual new candidate", Vector.empty, None)
       val reviewreference = V.WorkflowArtifactReference("fixture-automatic-independent-review", "1")
       val reviewexecution = V.WorkflowExecutionEvidence(Vector(reviewreference), Some("fixture-independent-reviewer"), None, None)
       val reviewpreparation = V.WorkflowEvidencePreparationInput("RepositorySync", "review", reviewoutput.invocation.stdout.toUri.toASCIIString,
@@ -616,7 +616,7 @@ final class NativeRepositoryRepairScopeCorrectionCliSpec extends AnyWordSpec wit
     Files.readString(live.repository.resolve(_chosen.head)) shouldBe result.replacements.head.text
     Files.readString(live.repository.resolve(_chosen(1))) shouldBe result.replacements(1).text
     When("a fixture-authored independent reviewer supplies normal prepared review evidence for that actual new candidate")
-    val verdict = V.RepositorySyncNativeMergeReviewResult("accept", "Independent fixture reviewer examined the actual complete changed candidate; no live acceptance claimed", Vector.empty)
+    val verdict = V.RepositorySyncNativeMergeReviewResult("accept", "Independent fixture reviewer examined the actual complete changed candidate; no live acceptance claimed", Vector.empty, None)
     val reviewreference = V.WorkflowArtifactReference("fixture-new-candidate-independent-review", "1")
     val reviewexecution = V.WorkflowExecutionEvidence(Vector(reviewreference), Some("fixture-independent-reviewer"), None, None)
     val preparation = V.WorkflowEvidencePreparationInput("RepositorySync", "review", reviewed.invocation.stdout.toUri.toASCIIString,

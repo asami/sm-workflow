@@ -696,7 +696,7 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
           When("normal public independent review preparation supplies only the exact specification-owned evidence row")
           prepare(call => for {
             prepared <- NativeReviewPreparation.repositoryC(response.review.get.reviewContext.get,
-              V.RepositorySyncNativeMergeReviewResult(result.result.value.decision, result.result.value.rationale, Vector.empty),
+              V.RepositorySyncNativeMergeReviewResult(result.result.value.decision, result.result.value.rationale, Vector.empty, None),
               V.WorkflowArtifactReference(reference.identity, reference.revision),
               V.WorkflowExecutionEvidence(Vector(V.WorkflowArtifactReference(reference.identity, reference.revision)), evidence.workerIdentity,
                 evidence.modelIdentity, evidence.execution.map(value => V.WorkflowExecutionObservation(value.placement.value,
@@ -1567,7 +1567,7 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
             prepare(call => for {
               prepared <- NativeReviewPreparation.repositoryC(reviewcontext.get,
                 V.RepositorySyncNativeMergeReviewResult(result.result.value.decision, result.result.value.rationale,
-                  result.result.value.findings.map(f => V.RepositorySyncNativeMergeReviewFinding(f.identity, f.affectedPaths, f.rationale))),
+                  result.result.value.findings.map(f => V.RepositorySyncNativeMergeReviewFinding(f.identity, f.affectedPaths, f.rationale)), None),
                 V.WorkflowArtifactReference(reference.identity, reference.revision),
                 V.WorkflowExecutionEvidence(Vector(V.WorkflowArtifactReference(reference.identity, reference.revision)),
                   result.evidence.workerIdentity, None, None), "normal-development-host",

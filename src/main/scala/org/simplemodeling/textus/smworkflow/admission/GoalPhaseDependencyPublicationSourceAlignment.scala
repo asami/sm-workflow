@@ -24,7 +24,7 @@ import GoalPhaseDependencyValidation.given
 /** A separate artifact choice for a canonical source whose literal dependency
   * publisher still selects another repository. No program or authority changes.
   * @since   Nov.  9, 2026
-  * @version Nov.  9, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseDependencyPublicationSourceAlignment {
@@ -74,9 +74,13 @@ private[smworkflow] object GoalPhaseDependencyPublicationSourceAlignment {
     given Encoder[Direction] = deriveEncoder[Direction].mapJson(P.publicJson)
     given Decoder[Direction] = _closed(deriveDecoder, directionValid)
   }
-  final class Saved private[GoalPhaseDependencyPublicationSourceAlignment](val record: InstanceRecord, val direction: Direction)
+  final class Saved private[GoalPhaseDependencyPublicationSourceAlignment](val record: InstanceRecord, val direction: Direction,
+    private val binding: Option[Target] = None) {
+    def target: Target = binding.getOrElse(direction.target)
+    def reference: ContextReference = ContextReference(record.identity.value, record.revision.value.toString)
+  }
   final class Permit private[GoalPhaseDependencyPublicationSourceAlignment](val saved: Saved) {
-    def skips(target: LocalPublication.Target): Boolean = saved.direction.target.targets.exists(_.target == target)
+    def skips(target: LocalPublication.Target): Boolean = saved.target.targets.exists(_.target == target)
   }
   private def _closed[A: Encoder](decoder: Decoder[A], valid: A => Boolean): Decoder[A] = Decoder.instance(c =>
     decoder(c).flatMap(v => if (valid(v) && v.asJson == c.value) Right(v)
@@ -272,15 +276,165 @@ private[smworkflow] object GoalPhaseDependencyPublicationSourceAlignment {
       Consequence.unit else F.invalid("Alignment Direction crosses its exact adjacent native predecessor")
   } yield saved
 
+  val applicabilityCausationPrefix = "ordered-dependency-publication-applicability:"
+  private val applicabilitySchema = "sm-workflow.dependency-publication-applicability.v1"
+  /** A mechanical binding references a real earlier native adoption; it does
+    * not supply a new Human Direction or a publication/check success. */
+  final case class Rebinding(previous: ContextReference, target: Target)
+  object Rebinding {
+    given Encoder[Rebinding] = deriveEncoder
+    given Decoder[Rebinding] = _closed(deriveDecoder, v => v != null && R.referenceValid(v.previous) &&
+      _revision(v.previous.revision) && targetValid(v.target) &&
+      v.previous.identity == v.target.sessionId && BigInt(v.previous.revision) < BigInt(v.target.frontierRevision))
+  }
+  val applicabilityCodec: WorkflowResultJsonV1.PayloadCodec[Rebinding] = new WorkflowResultJsonV1.PayloadCodec[Rebinding] {
+    val typeIdentity = "GoalPhaseDependencyPublicationApplicability"
+    def encode(value: Rebinding): Json = Json.obj("schemaVersion" -> applicabilitySchema.asJson, "payload" -> value.asJson)
+    def decode(value: Json): Either[String, Rebinding] = Option(value).toRight("Artifact applicability is absent")
+      .flatMap(_.hcursor.get[Rebinding]("payload").left.map(_.message)).flatMap(v =>
+        Either.cond(encode(v) == value, v, "Artifact applicability receipt is noncanonical"))
+  }
+  private def _applicability_reference(from: InstanceRecord) = WorkflowMechanicalTransition.Reference(
+    from.identity.value + ":" + applicabilityCausationPrefix + from.revision.value, "1")
+
+  /** The normal validation owner may select new affected checks. This closed
+    * projection retains the full execution plan (programs/grants/workspaces)
+    * and only separates its independently validated check-selection metadata.
+    */
+  private[admission] def sameProcessAuthority(previous: String, current: String): Boolean = {
+    def selected(raw: String): Option[Json] = _opaque(raw).filter(value =>
+      value.asObject.exists(_.keys.toSet.subsetOf(Set("processPlan", "validation", "maximumDiffBytes"))) &&
+      value.hcursor.downField("validation").focus.exists(raw => raw.as[GoalPhaseNativeValidation.Policy].toOption.exists(policy =>
+        policy.validateC.isSuccess && policy.asJson == raw)) &&
+      value.hcursor.downField("processPlan").focus.exists(_.asObject.exists(_.nonEmpty)))
+      .map(_.mapObject(_.remove("validation")))
+    selected(previous).nonEmpty && selected(previous) == selected(current)
+  }
+  private def _same_plan(previous: GoalPhaseOrderedProgression.Plan, current: GoalPhaseOrderedProgression.Plan): Boolean =
+    GoalPhaseOrderedProgression.validatePlanC(previous).isSuccess && GoalPhaseOrderedProgression.validatePlanC(current).isSuccess &&
+      previous.steps.map(_.identity) == current.steps.map(_.identity) &&
+      current.steps.zip(previous.steps).forall((next, old) => next.ownedPaths.take(old.ownedPaths.size) == old.ownedPaths) &&
+      current.copy(revision = previous.revision, phaseChecks = previous.phaseChecks,
+        steps = current.steps.zip(previous.steps).map((next, old) => next.copy(checks = old.checks, ownedPaths = old.ownedPaths))) == previous
+
+  private[admission] def sameConsumptionUsage(previous: R.ConsumptionRecord, current: R.ConsumptionRecord): Boolean = {
+    def usage(value: R.ConsumptionRecord): R.ConsumptionRecord = value match {
+      case selected: R.Consumption => selected.copy(programs = Vector.empty)
+      case selected: R.LegacyConsumption => selected.copy(programs = Vector.empty)
+    }
+    R.consumptionValid(previous) && R.consumptionValid(current) && usage(previous) == usage(current)
+  }
+  private[admission] def sameDependencyContract(previous: R.Capture, current: R.Capture): Boolean = {
+    if (!R.captureValid(previous) || !R.captureValid(current)) return false
+    val before = R.bindingOf(previous)
+    val after = R.bindingOf(current)
+    def coverage(value: R.Capture) = value.scope.map(_.coverage).getOrElse(value.direction.target.proposal.coverage)
+      .map(item => item.approval -> item.acceptance)
+    previous.schemaVersion == current.schemaVersion && previous.sessionId == current.sessionId && previous.step == current.step &&
+      previous.primaryBase == current.primaryBase && current.generation >= previous.generation &&
+      previous.postStageGuard == current.postStageGuard && previous.preStageGuard == current.preStageGuard &&
+      previous.stagedPaths == current.stagedPaths &&
+      after.copy(revision = before.revision, checks = before.checks) == before &&
+      R.modeOf(previous) == R.modeOf(current) && sameConsumptionUsage(R.consumptionOf(previous), R.consumptionOf(current)) &&
+      previous.direction.target.proposal.excludedPaths == current.direction.target.proposal.excludedPaths &&
+      previous.direction.participant == current.direction.participant && previous.direction.choice == current.direction.choice &&
+      previous.direction.target.predecessor.approvals == current.direction.target.predecessor.approvals &&
+      previous.direction.target.predecessor.acceptedPrefix == current.direction.target.predecessor.acceptedPrefix &&
+      previous.direction.target.ancestors == current.direction.target.ancestors &&
+      previous.scope.map(_.approvals) == current.scope.map(_.approvals) && coverage(previous) == coverage(current) &&
+      previous.direction.target.canonicalOrigin.map(_.selection.adoptedDelivery) ==
+        current.direction.target.canonicalOrigin.map(_.selection.adoptedDelivery)
+  }
+
+  /** Artifact approval concerns source/publication/Usage/authority, not a
+    * consumer candidate tree, generation or current verification selection.
+    * All current selections still pass their normal source/check owners and
+    * their new receipts/review are required; no old test PASS is inherited.
+    */
+  private[admission] def reusable(previous: Target, current: Target): Boolean =
+    targetValid(previous) && targetValid(current) && previous.applicabilityIssues.isEmpty && current.applicabilityIssues.isEmpty &&
+      previous.schemaVersion == current.schemaVersion && previous.componentInstance == current.componentInstance &&
+      previous.participant == current.participant && previous.sessionId == current.sessionId &&
+      previous.targets == current.targets && sameProcessAuthority(previous.processPolicy, current.processPolicy) &&
+      previous.publicationPolicy == current.publicationPolicy && previous.publication == current.publication &&
+      previous.publication.exists(P.observationValid) && BigInt(previous.frontierRevision) < BigInt(current.frontierRevision) &&
+      BigInt(previous.candidateRecordRevision) < BigInt(current.candidateRecordRevision) &&
+      (for {
+        old <- _capture(previous)
+        next <- _capture(current)
+        before <- _candidate(previous)
+        after <- _candidate(current)
+        controller <- _opaque(previous.controller)
+        successor <- _opaque(current.controller)
+        oldPlan <- controller.hcursor.get[GoalPhaseOrderedProgression.Plan]("plan").toOption
+        currentPlan <- successor.hcursor.get[GoalPhaseOrderedProgression.Plan]("plan").toOption
+      } yield sameDependencyContract(old, next) && _same_plan(oldPlan, currentPlan) &&
+        after.step == before.step && after.selectedPaths == before.selectedPaths &&
+        after.dependencyAdmission == before.dependencyAdmission && after.dependencyStaged == before.dependencyStaged &&
+        after.continuation == before.continuation && after.stepEvidence == before.stepEvidence && after.dependency == before.dependency &&
+        after.dependencyOrigin == before.dependencyOrigin && after.initialSourceEffects == before.initialSourceEffects &&
+        Vector("base", "completed", "cursor", "stepAdmission", "stepReviewRequired").forall(k =>
+          controller.hcursor.downField(k).focus == successor.hcursor.downField(k).focus) &&
+        controller.hcursor.downField("repairControl").focus.map(_.mapObject(_.remove("observations"))) ==
+          successor.hcursor.downField("repairControl").focus.map(_.mapObject(_.remove("observations"))) &&
+        Vector("repairs", "ordinaryRepairs").forall(k => controller.hcursor.get[Int](k).toOption.exists(n =>
+          successor.hcursor.get[Int](k).toOption.exists(_ >= n)))).contains(true)
+
+  private[admission] def candidateRebinding(previous: Target, candidate: C.Saved,
+    controller: GoalPhaseOrderedProgression.State, frontierRevision: String): Option[Target] =
+    canonicalCapture(candidate.payload).map(capture => previous.copy(frontierRevision = frontierRevision,
+      controller = _sorted(B.controller(controller)), candidateRecordRevision = candidate.record.revision.value.toString,
+      candidate = _sorted(candidate.payload.asJson), capture = _sorted(capture.asJson))).filter(reusable(previous, _))
+
+  def rebindC(native: B.Source, previous: Saved, d: F.Declaration, core: ActionCall.Core): Consequence[Saved] = for {
+    _ <- if (directionValid(previous.direction) && candidateRebinding(previous.target, native.candidate,
+        native.controller, native.from.revision.value.toString).nonEmpty) Consequence.unit
+      else F.invalid("Prior artifact adoption does not cover the current consumer contract")
+    prefix <- GoalPhaseNativeHistory.prefixC(native.from, previous.record.revision)
+    _ <- if (prefix == previous.record) Consequence.unit else F.invalid("Prior artifact adoption is not in this actual native history")
+    target <- targetForC(native, d, core, previous.target.publication)
+    _ <- if (reusable(previous.target, target)) Consequence.unit else F.invalid("Current artifact applicability changed its adopted contract")
+    policy <- d.localPublication.map(Consequence.success).getOrElse(F.invalid("Artifact applicability lost its publication policy"))
+    _ <- P.currentPublicationC(target.publication.get, LocalPublicationRuntime._port(core, policy))
+    adapter <- native.session.storage.bindMechanicalC(F.advanceOperation, applicabilityCodec)
+    payload = Rebinding(previous.reference, target)
+    saved <- adapter.executeC(WorkflowMechanicalTransition.Intent(d.configuration, _applicability_reference(native.from),
+      native.from, native.from.revision, F.history(native.from, "phase.Validation", applicabilityCausationPrefix + native.from.revision.value),
+      TypedValue(applicabilityCodec.typeIdentity, payload)),
+      ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](()))(using core.executionContext)
+  } yield new Saved(saved.receipt.next, previous.direction, Some(target))
+
+  def retainedRebindingC(native: B.Source, previous: Vector[Saved], d: F.Declaration,
+    core: ActionCall.Core): Consequence[Saved] = for {
+    adapter <- native.session.storage.bindMechanicalC(F.advanceOperation, applicabilityCodec)
+    retained <- adapter.loadRetainedC(_applicability_reference(native.from))(using core.executionContext)
+      .flatMap(_.map(Consequence.success).getOrElse(F.invalid("Artifact applicability history omitted its native receipt")))
+    payload = retained.receipt.payload.value
+    original <- previous.filter(_.reference == payload.previous) match {
+      case Vector(value) if directionValid(value.direction) => Consequence.success(value)
+      case _ => F.invalid("Artifact applicability has no unique actual prior adoption")
+    }
+    prefix <- GoalPhaseNativeHistory.prefixC(native.from, original.record.revision)
+    target <- targetForC(native, d, core, payload.target.publication, observe = false, retained = Some(payload.target))
+    saved = retained.receipt.next
+    actual <- GoalPhaseNativeHistory.prefixC(native.session.current, saved.revision)
+    _ <- if (prefix == original.record && target == payload.target && reusable(original.target, target) && actual == saved &&
+        saved.identity == native.from.identity && saved.definition == native.from.definition &&
+        saved.revision == native.from.revision.next && saved.history.dropRight(1) == native.from.history &&
+        saved.currentProgression == native.from.currentProgression && saved.lifecycle == Lifecycle.Active && saved.suspension.isEmpty &&
+        saved.causation.value == applicabilityCausationPrefix + native.from.revision.value) Consequence.unit
+      else F.invalid("Artifact applicability is not its exact adjacent native binding")
+  } yield new Saved(saved, original.direction, Some(target))
+
   def applicable(saved: Saved, candidate: C.Saved): Boolean = directionValid(saved.direction) &&
-    saved.direction.target.candidate == _sorted(candidate.payload.asJson) &&
-    saved.direction.target.candidateRecordRevision == candidate.record.revision.value.toString
+    targetValid(saved.target) && saved.target.candidate == _sorted(candidate.payload.asJson) &&
+    saved.target.candidateRecordRevision == candidate.record.revision.value.toString
   def permit(saved: Saved, candidate: C.Saved): Option[Permit] = Option.when(applicable(saved, candidate))(new Permit(saved))
   def currentC(permit: Permit, candidate: C.Saved, session: String, participant: String,
     d: F.Declaration, core: ActionCall.Core): Consequence[Unit] = for {
-    _ <- if (applicable(permit.saved, candidate) && permit.saved.direction.target.sessionId == session &&
-        permit.saved.direction.target.participant == participant) Consequence.unit else F.invalid("Alignment permit crosses its native candidate or owner")
-    target = permit.saved.direction.target
+    _ <- if (applicable(permit.saved, candidate) && permit.saved.target.sessionId == session &&
+        permit.saved.target.participant == participant) Consequence.unit else F.invalid("Alignment permit crosses its native candidate or owner")
+    target = permit.saved.target
     policy <- d.localPublication.map(Consequence.success).getOrElse(F.invalid("Alignment lost its publication policy"))
     process <- B.processPolicyC(d, core)
     roots <- mismatchesC(candidate.payload, policy.targets.filter(_.beforeChecks), rootC(core, _))
@@ -291,5 +445,6 @@ private[smworkflow] object GoalPhaseDependencyPublicationSourceAlignment {
     _ <- if (observationIssues(capture, target.publication).isEmpty) Consequence.unit
       else F.invalid("Alignment publication no longer qualifies for the canonical source")
     _ <- target.publication.fold(Consequence.unit)(LocalPublicationSourceApplicability.currentC(core, _, R.bindingOf(capture), Some(policy)))
+    _ <- target.publication.fold(Consequence.unit)(P.currentPublicationC(_, LocalPublicationRuntime._port(core, policy)))
   } yield ()
 }

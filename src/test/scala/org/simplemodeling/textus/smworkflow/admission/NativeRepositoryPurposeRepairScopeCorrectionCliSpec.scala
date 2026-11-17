@@ -1,3 +1,7 @@
+/**
+ * @since   Nov. 17, 2026
+ * @version Nov. 17, 2026
+ */
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.{Decoder, Encoder, Json}
@@ -191,7 +195,7 @@ final class NativeRepositoryPurposeRepairScopeCorrectionCliSpec extends AnyWordS
     val reference = V.WorkflowArtifactReference("fixture-independent-purpose-review-" + suffix, "1")
     val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("fixture-independent-reviewer"), None, None)
     val verdict = V.RepositorySyncNativeMergeReviewResult("accept",
-      "Independent fixture reviewer examined this actual fresh candidate and future ownership; no live reviewer acceptance is claimed", Vector.empty)
+      "Independent fixture reviewer examined this actual fresh candidate and future ownership; no live reviewer acceptance is claimed", Vector.empty, None)
     val preparation = V.WorkflowEvidencePreparationInput("RepositorySync", "review", described.invocation.stdout.toUri.toASCIIString,
       save(scenario.root, "review-" + suffix + ".json", json(verdict)), save(scenario.root, "review-reference-" + suffix + ".json", json(reference)),
       save(scenario.root, "review-execution-" + suffix + ".json", json(execution)), "normal-development-host", java.time.Instant.now().toString,

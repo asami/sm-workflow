@@ -17,8 +17,8 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Explicit post-publication qualification of one exact installed executable.
   * Every business call starts that command. Authored proposal/reviewer inputs
   * qualify the isolated fixture and never attest live Human/model acceptance.
-  * @since Nov. 3, 2026
-  * @version Nov.  3, 2026
+  * @since   Nov.  3, 2026
+  * @version Nov. 17, 2026
   */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -456,7 +456,7 @@ final class NativeRepositorySyncMaintenanceCliSpec extends AnyWordSpec with Matc
       }
       _advance_().business[V.RepositorySyncAdvanceResult].copy(journalRecording = None) shouldBe review.copy(journalRecording = None)
       val verdict = V.RepositorySyncNativeMergeReviewResult("accept",
-        "Specification-owned independent review of both complete actual parent diffs; no live acceptance claimed", Vector.empty)
+        "Specification-owned independent review of both complete actual parent diffs; no live acceptance claimed", Vector.empty, None)
       val reference = V.WorkflowArtifactReference("spec-installed-independent-review", "1")
       val evidence = V.WorkflowExecutionEvidence(Vector(reference), Some("specification-independent-reviewer"), None, None)
       val preparation = V.WorkflowEvidencePreparationInput("RepositorySync", "review", reviewed.invocation.stdout.toUri.toASCIIString,

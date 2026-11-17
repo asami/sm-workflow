@@ -28,7 +28,8 @@ import NativePreparationFixture.expectedRecordJson
 /** Specification-issued WorkOrders and rows exercise passive preparation.
   * They are not genuine independent review, Human consent or effect authority.
   * @since   Oct. 14, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 25, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -39,7 +40,7 @@ final class NativeReviewPreparationSpec extends AnyWordSpec with Matchers with G
   private val _reference = V.WorkflowArtifactReference("specification-review", "1")
   private val _execution = V.WorkflowExecutionEvidence(Vector(_reference), Some("specification-reviewer"), None, None)
   private val _goal_result = V.GoalPhaseWorkResult("accept", "Specification-owned review response", Vector.empty, None, None, None, None, None, None, None, None, dependencyValidation = None, diagnosticRepair = None)
-  private val _repository_result = V.RepositorySyncNativeMergeReviewResult("accept", "Specification-owned merge review", Vector.empty)
+  private val _repository_result = V.RepositorySyncNativeMergeReviewResult("accept", "Specification-owned merge review", Vector.empty, None)
   private val _receipt = RepositorySyncNativeMergeValidation.Receipt("focused", "exited", Some(0), "diagnostic output", "")
   private val _goal_input = NativeHumanEvidenceFixture.work.copy(sourceRevision = "7", kind = "ReviewStep",
     generation = 1, candidate = Some(NativeHumanEvidenceFixture.snapshot), checksReceipt = Some("selected-checks"),
@@ -657,16 +658,16 @@ final class NativeReviewPreparationSpec extends AnyWordSpec with Matchers with G
         When("public preparation encodes each selected repair result through the existing binding")
         val goalrepair = _evidence(take(Preparation.goalC(goal, repair, _reference, _execution, _declared.issuer, _now)))
         val repositoryrepair = _evidence(take(Preparation.repositoryC(repository,
-          V.RepositorySyncNativeMergeReviewResult("repair", "Unused overall rationale", Vector(finding)),
+          V.RepositorySyncNativeMergeReviewResult("repair", "Unused overall rationale", Vector(finding), None),
           _reference, _execution, _declared.issuer, _now)))
         val firstgoal = _evidence(take(Preparation.goalC(goal, _goal_result, _reference, _execution, _declared.issuer, _now)))
         val secondgoal = _evidence(take(Preparation.goalC(goal, _goal_result.copy(summary = "Other unused diagnostics"),
           _reference, _execution, _declared.issuer, _now)))
         val firstrepository = _evidence(take(Preparation.repositoryC(repository,
-          V.RepositorySyncNativeMergeReviewResult("decision-needed", "Explanation", Vector(finding)),
+          V.RepositorySyncNativeMergeReviewResult("decision-needed", "Explanation", Vector(finding), None),
           _reference, _execution, _declared.issuer, _now)))
         val secondrepository = _evidence(take(Preparation.repositoryC(repository,
-          V.RepositorySyncNativeMergeReviewResult("decision-needed", "Other explanation", Vector(finding.copy(rationale = "Other unused rationale"))),
+          V.RepositorySyncNativeMergeReviewResult("decision-needed", "Other explanation", Vector(finding.copy(rationale = "Other unused rationale")), None),
           _reference, _execution, _declared.issuer, _now)))
         Then("repair summary, findings, affected paths and rationale survive exactly, while nonrepair annotations retain Json.Null")
         _verdict(goalrepair) shouldBe Json.obj("outcome" -> Json.fromString("repair"),

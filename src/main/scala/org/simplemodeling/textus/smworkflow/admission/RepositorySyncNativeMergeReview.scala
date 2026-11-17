@@ -39,7 +39,20 @@ private[smworkflow] object RepositorySyncNativeMergeReview {
   given Encoder[PriorReview] = deriveEncoder
   given Decoder[PriorReview] = deriveDecoder
   final case class Finding(identity: String, affectedPaths: Vector[String], rationale: String)
-  final case class Result(decision: String, rationale: String, findings: Vector[Finding])
+  /** A technical mapping proposal from the actual independently admitted review.
+    * It is not acceptance; runtime recaptures inputs and checks coverage before
+    * retaining validation and issuing a fresh independent detailed review.
+    */
+  final case class Result(decision: String, rationale: String, findings: Vector[Finding],
+    inputClassification: Option[RepositorySyncDocumentInputs.Policy] = None)
+
+  def fromPublicC(value: org.simplemodeling.textus.smworkflow.value.RepositorySyncNativeMergeReviewResult): Consequence[Result] = for {
+    classification <- value.inputClassification match {
+      case None => Consequence.success(Option.empty[RepositorySyncDocumentInputs.Policy])
+      case Some(record) => record.toJsonStringC.flatMap(raw => io.circe.parser.parse(raw)
+        .left.map(_.message).flatMap(GoalPhaseNativeMetadata.normalizePublicJson).fold(invalid, RepositorySyncDocumentInputs.decodeC)).map(Some(_))
+    }
+  } yield Result(value.decision, value.rationale, value.findings.map(f => Finding(f.identity, f.affectedPaths, f.rationale)), classification)
   trait EvidencePort {
     /** Resolve independently admitted actual reviewer evidence at this call.
       * AI-provided workerIdentity/decision alone is not an admission source.
@@ -106,7 +119,9 @@ private[smworkflow] object RepositorySyncNativeMergeReview {
     selection.checks.map(_.identity), progress.receipts.drop(1), uncertainties = diff.uncertainties)
 
   def admitC(input: Request, result: Result, policy: Policy): Consequence[Unit] = for {
-    _ <- if (result != null && (!Set("accept", "clean")(result.decision) ||
+    _ <- if (result != null && result.inputClassification != null && result.inputClassification.forall(p =>
+        result.decision == "decision-needed" && input.judgmentMode == "detailed-review" && result.findings.isEmpty &&
+          RepositorySyncDocumentInputs.validateC(p).isSuccess) && (!Set("accept", "clean")(result.decision) ||
         !input.uncertainties.exists(_.startsWith("Unexamined"))) && _ordinary_text(result.rationale) && result.rationale.trim.nonEmpty && result.findings != null &&
         result.findings.size <= 128 && result.findings.forall(f => f != null && id(f.identity) &&
           f.affectedPaths != null && f.affectedPaths.nonEmpty && f.affectedPaths.distinct == f.affectedPaths &&
@@ -178,8 +193,13 @@ private[smworkflow] object RepositorySyncNativeMergeReview {
   })))
   private given Encoder[Finding] = deriveEncoder
   private given Decoder[Finding] = deriveDecoder
-  private given Encoder[Result] = deriveEncoder
-  private given Decoder[Result] = deriveDecoder
+  private given Encoder[Result] = deriveEncoder[Result].mapJson(_.mapObject(fields =>
+    if (fields("inputClassification").contains(Json.Null)) fields.remove("inputClassification") else fields))
+  private val _result_decoder: Decoder[Result] = deriveDecoder
+  private given Decoder[Result] = Decoder.instance(c =>
+    if (c.downField("inputClassification").focus.exists(_.isNull))
+      Left(io.circe.DecodingFailure("Present input classification cannot be null", c.history))
+    else _result_decoder(c))
   private final class Codec[A](val typeIdentity: String, schema: String)(using Encoder[A], Decoder[A])
       extends WorkflowResultJsonV1.PayloadCodec[A] {
     def encode(value: A): Json = Json.obj("schemaVersion" -> Json.fromString(schema), "payload" -> value.asJson)

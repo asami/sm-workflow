@@ -23,8 +23,8 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Explicit before/after installed qualification in one tiny physical fixture.
   * No native row is seeded or edited. All directions, process observations and
   * independent reviewers belong to this fixture, never a real consumer Session.
-  * @since Nov. 6, 2026
-  * @version Nov. 6, 2026
+  * @since   Nov.  6, 2026
+  * @version Nov. 17, 2026
   */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -165,7 +165,7 @@ final class NativeRepositoryPurposePreparationIntentContinuationCliSpec extends 
     val reference = V.WorkflowArtifactReference("fixture-independent-preparation-review-" + ordinal, "1")
     val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("fixture-independent-document-reviewer"), None, None)
     val verdict = V.RepositorySyncNativeMergeReviewResult("accept",
-      "Independent fixture reviewer examined this exact ordinary document candidate and its ordered purpose", Vector.empty)
+      "Independent fixture reviewer examined this exact ordinary document candidate and its ordered purpose", Vector.empty, None)
     val preparation = V.WorkflowEvidencePreparationInput("RepositorySync", "review", issued.invocation.stdout.toUri.toASCIIString,
       save(directory, "answer.json", json(verdict)), save(directory, "reference.json", json(reference)),
       save(directory, "execution.json", json(execution)), "normal-development-host", java.time.Instant.now().toString,

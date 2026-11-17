@@ -11,7 +11,8 @@ import GoalPhaseRuntimeRepairControl as R
 
 /** Pure runtime policy evidence; no command, provider or stored Session claims.
   * @since   Oct. 25, 2026
-  * @version Oct. 26, 2026
+  *  version Oct. 26, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -76,6 +77,34 @@ final class GoalPhaseRuntimeRepairControlSpec extends AnyWordSpec with Matchers 
       current.continueInitialPhaseCheckRepairC("another-failure", directive).isSuccess shouldBe false
       exhausted.continueInitialPhaseCheckRepairC("original-phase-failure", directive).isSuccess shouldBe false
       next.continueInitialPhaseCheckRepairC("original-phase-failure", directive).isSuccess shouldBe false
+    }
+
+    for (identity <- Vector("ordinary-implementation", "derived-verification")) {
+      s"retain $identity progress at two and nine across a Plan refresh without reserving or resetting a batch" in {
+        Given("a prospective finite ordinary or derived verification Plan under the same runtime repair policy")
+        val initial = _take(O.startC(_plan.copy(identity = identity, repairLimit = 10), _base, Some(R.version)))
+        val second = (1 to 2).foldLeft(initial)((state, index) => _failed(state, Vector("finding-" + index), index))
+        val ninth = (3 to 9).foldLeft(second)((state, index) => _failed(state, Vector("finding-" + index), index))
+        When("the existing Plan refresh resumes the same incomplete repair")
+        for (state <- Vector(second, ninth)) {
+          val resumed = _take(state.refreshedC(state.plan.copy(revision = "2"), issued = false)).toOption.get
+          Then("no divergence or extra attempt is invented and retained progress cannot be replaced by zero")
+          resumed.stage shouldBe O.Stage.Repair
+          resumed.repairs shouldBe state.repairs
+          resumed.ordinaryRepairs shouldBe state.ordinaryRepairs
+          resumed.completed shouldBe state.completed
+          resumed.repairControl.get.stop shouldBe None
+          GoalPhaseRepairProgress.retainedC(Some(GoalPhaseRepairProgress.snapshot(state)), resumed).isSuccess shouldBe true
+          GoalPhaseRepairProgress.retainedC(Some(GoalPhaseRepairProgress.Snapshot(0, 0, 10)), resumed).isSuccess shouldBe false
+        }
+        second.repairs shouldBe 2
+        ninth.repairs shouldBe 9
+        val tenth = _failed(ninth, Vector("finding-10"), 10)
+        val stopped = _failed(tenth, Vector("finding-11"), 11)
+        stopped.stage shouldBe O.Stage.Decision
+        stopped.repairs shouldBe 10
+        stopped.effectiveRepairLimit shouldBe 10
+      }
     }
 
     "continue improving decline and one temporary expansion without a divergence label" in {

@@ -27,8 +27,8 @@ import SplitPhaseExplicitPartitionFixture.take
   * The tiny build, semantic answers and independent reviews belong to this
   * fixture; they make no claim about real Human or consumer approval.
   * Native rows are observed read only. Runtime/UoW owns every workflow effect.
-  * @since Nov. 4, 2026
-  * @version Nov. 4, 2026
+  * @since   Nov.  4, 2026
+  * @version Nov. 17, 2026
   */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -165,7 +165,7 @@ final class NativeRepositoryRepairBudgetContinuationCliSpec extends AnyWordSpec 
     val reference = V.WorkflowArtifactReference("fixture-budget-independent-review-" + suffix, "1")
     val execution = V.WorkflowExecutionEvidence(Vector(reference), Some("fixture-independent-reviewer"), None, None)
     val verdict = V.RepositorySyncNativeMergeReviewResult("accept",
-      "Independent fixture-authored review of this actual candidate and original checks; no real Human acceptance is claimed", Vector.empty)
+      "Independent fixture-authored review of this actual candidate and original checks; no real Human acceptance is claimed", Vector.empty, None)
     val preparation = V.WorkflowEvidencePreparationInput("RepositorySync", "review", described.invocation.stdout.toUri.toASCIIString,
       save(scenario.root, "budget-review-" + suffix + ".json", json(verdict)),
       save(scenario.root, "budget-review-reference-" + suffix + ".json", json(reference)),
