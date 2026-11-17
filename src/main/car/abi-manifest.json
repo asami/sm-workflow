@@ -729,6 +729,27 @@
           "output": "LocalPublicationResult"
         },
         {
+          "service": "LocalPublicationService",
+          "name": "describeLocalPublicationRecovery",
+          "kind": "COMMAND",
+          "input": "LocalPublicationRecoveryInput",
+          "output": "LocalPublicationResult"
+        },
+        {
+          "service": "LocalPublicationService",
+          "name": "admitLocalPublicationRecovery",
+          "kind": "COMMAND",
+          "input": "LocalPublicationRecoveryInput",
+          "output": "LocalPublicationResult"
+        },
+        {
+          "service": "LocalPublicationService",
+          "name": "advanceLocalPublicationRecovery",
+          "kind": "COMMAND",
+          "input": "LocalPublicationRecoveryInput",
+          "output": "LocalPublicationResult"
+        },
+        {
           "service": "CompletionRecordClosureService",
           "name": "describeCompletionRecordClosure",
           "kind": "COMMAND",
@@ -1094,6 +1115,17 @@
         }
       ],
       "types": [
+        {
+          "name": "LocalPublicationRecoveryInput",
+          "kind": "value",
+          "fields": [
+            { "name": "requestIdentity", "type": "string", "multiplicity": "1", "required": true },
+            { "name": "targetIdentity", "type": "string", "multiplicity": "1", "required": true },
+            { "name": "successorIdentity", "type": "string", "multiplicity": "1", "required": true },
+            { "name": "explicit", "type": "boolean", "multiplicity": "1", "required": true },
+            { "name": "answer", "type": "Record", "multiplicity": "?", "required": false }
+          ]
+        },
         {
           "name": "GoalPhaseReleaseRepairContinuationDescriptionInput",
           "kind": "value",

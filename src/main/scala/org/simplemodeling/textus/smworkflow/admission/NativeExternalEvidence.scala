@@ -63,6 +63,7 @@ private[smworkflow] object NativeExternalEvidence {
     case DependencySourceRevision extends Purpose(GoalPhaseDependencySourceRevision.purpose)
     case PrerequisitePublicationRecovery extends Purpose(GoalPhasePrerequisitePublicationRecovery.purpose)
     case PrerequisitePublicationObservation extends Purpose(GoalPhasePrerequisitePublicationUnknownRecovery.observationPurpose)
+    case StandalonePublicationRecovery extends Purpose(LocalPublicationRecovery.purpose)
     case ReviewPurposeRepair extends Purpose(GoalPhaseLegacyPurposeRepairContinuation.purpose)
     case ReleaseRepairContinuation extends Purpose(GoalPhaseReleaseRepairContinuation.purpose)
     case FailedPhaseRepairAdoption extends Purpose(GoalPhaseFailedPhaseRepairAdoption.purpose)
@@ -263,6 +264,12 @@ private[smworkflow] object NativeExternalEvidence {
           selected.hcursor.downField("humanAttestation").downField("answer").downField("reference").get[String]("identity").contains(value.reference) &&
           selected.hcursor.downField("humanAttestation").downField("answer").downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
       else Consequence.securityPermissionDenied("Independent Human attestation belongs to another actual participant or answer reference")
+    } else if (purpose == Purpose.StandalonePublicationRecovery) {
+      val answer = selected.hcursor.downField("standaloneLocalPublicationRecovery").downField("answer")
+      if (answer.get[String]("participant").contains(value.participant) &&
+          answer.downField("reference").get[String]("identity").contains(value.reference) &&
+          answer.downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
+      else Consequence.securityPermissionDenied("Standalone publication direction crosses its Human reference or participant")
     } else if (purpose == Purpose.PrerequisitePublicationObservation) {
       val observation = selected.hcursor.downField("prerequisitePublicationObservation")
       if (observation.downField("scope").get[String]("participant").contains(value.participant) &&
@@ -377,6 +384,7 @@ private[smworkflow] object NativeExternalEvidence {
       case Purpose.DependencySourceRevision => GoalPhaseDependencySourceRevision.selectBinding(value)
       case Purpose.PrerequisitePublicationRecovery => GoalPhasePrerequisitePublicationRecovery.selectBinding(value)
       case Purpose.PrerequisitePublicationObservation => GoalPhasePrerequisitePublicationUnknownRecovery.selectObservation(value)
+      case Purpose.StandalonePublicationRecovery => LocalPublicationRecovery.selectBinding(value)
       case Purpose.ReviewPurposeRepair => GoalPhaseLegacyPurposeRepairContinuation.selectBinding(value)
       case Purpose.ReleaseRepairContinuation => GoalPhaseReleaseRepairContinuation.selectBinding(value)
       case Purpose.FailedPhaseRepairAdoption => GoalPhaseFailedPhaseRepairAdoption.selectBinding(value)

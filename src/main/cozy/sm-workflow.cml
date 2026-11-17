@@ -319,6 +319,50 @@ OperationResult
 | targetIdentity | string | 1 |
 | ownerSessionId | string | 1 |
 
+## LocalPublicationRecoveryInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| requestIdentity | string | 1 |
+| targetIdentity | string | 1 |
+| successorIdentity | string | 1 |
+| explicit | boolean | 1 |
+| answer | org.goldenport.record.Record | ? |
+
+## DescribeLocalPublicationRecoveryInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | LocalPublicationRecoveryInput | 1 |
+
+## AdmitLocalPublicationRecoveryInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | LocalPublicationRecoveryInput | 1 |
+
+## AdvanceLocalPublicationRecoveryInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | LocalPublicationRecoveryInput | 1 |
+
 ## LocalPublicationResult
 
 ### ATTRIBUTE
@@ -12422,6 +12466,90 @@ LocalPublicationLatestCollectionInput
 | name | type | multiplicity |
 |------+------|--------------|
 | input | LocalPublicationLatestCollectionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+LocalPublicationResult
+
+#### describeLocalPublicationRecovery
+
+##### DESCRIPTION
+
+Describe the exact latest standalone UNKNOWN and current clean source without executing publication. The earlier writer lifecycle remains unknown.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DescribeLocalPublicationRecoveryInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | LocalPublicationRecoveryInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+LocalPublicationResult
+
+#### admitLocalPublicationRecovery
+
+##### DESCRIPTION
+
+Admit one independently provisioned Human direction bound to the complete description. Admission does not execute publication.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+AdmitLocalPublicationRecoveryInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | LocalPublicationRecoveryInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+LocalPublicationResult
+
+#### advanceLocalPublicationRecovery
+
+##### DESCRIPTION
+
+Execute or recollect the single admitted successor using the runtime publication path. Original UNKNOWN remains unchanged.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+AdvanceLocalPublicationRecoveryInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | LocalPublicationRecoveryInput | 1 |
 
 ##### OUTPUT
 

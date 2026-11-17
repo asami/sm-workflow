@@ -24,7 +24,9 @@ private[smworkflow] object NativeExternalEvidenceInput {
   private val _required = Set("family", "kind", "request", "result", "reference", "execution-evidence", "issuer", "occurred-at", "collection")
 
   def prepareC(supplied: Map[String, String], readText: String => Consequence[String]): Consequence[Record] = try {
-    if (supplied.get("family").contains("RepositorySyncRepairScopeCorrection"))
+    if (supplied.get("family").contains("LocalPublication") && supplied.get("kind").contains("standalone-recovery"))
+      _standalone_publication_c(supplied, readText)
+    else if (supplied.get("family").contains("RepositorySyncRepairScopeCorrection"))
       _repair_scope_c(supplied, readText)
     else if (supplied.get("family").contains("RepositorySync") && supplied.get("kind").contains("purpose-preparation-continuation"))
       _purpose_preparation_c(supplied, readText)
@@ -111,6 +113,22 @@ private[smworkflow] object NativeExternalEvidenceInput {
     } yield bootstrap
     }
   } catch { case NonFatal(_) => _invalid("invalid explicit argument, file or typed input") }
+
+  private def _standalone_publication_c(supplied: Map[String, String], readtext: String => Consequence[String]): Consequence[Record] = for {
+    options <- NativePreparationInput.optionsC(supplied, _required, readtext, Set("participant"))
+    _ <- if (options.contains("participant")) Consequence.unit else _invalid("standalone recovery requires the Human participant")
+    occurred <- NativePreparationInput.instantC(options("occurred-at"))
+    _ <- NativePreparationInput.collectionC(options("collection"))
+    description <- readtext(options("request")).flatMap(s => io.circe.parser.parse(s).fold(e => _invalid(e.message), Consequence.success))
+    answer <- readtext(options("result")).flatMap(s => io.circe.parser.parse(s).fold(e => _invalid(e.message), Consequence.success))
+    reference <- NativePreparationInput.readC(options("reference"), readtext).flatMap(summon[ValueReader[V.WorkflowArtifactReference]].readC)
+    execution <- NativePreparationInput.readC(options("execution-evidence"), readtext).flatMap(summon[ValueReader[V.WorkflowExecutionEvidence]].readC)
+    prepared <- NativeLocalPublicationRecoveryPreparation.prepareC(description, answer, reference, execution,
+      options("participant"), options("issuer"), occurred)
+    payload <- prepared._2.getString(NativeExternalEvidence.storageField).map(Consequence.success)
+      .getOrElse(_invalid("standalone direction has no typed payload"))
+    row = Record.data("id" -> prepared._1, NativeExternalEvidence.storageField -> payload)
+  } yield Record.data("datastore" -> Vector(Record.data("collection" -> options("collection"), "records" -> Vector(row))))
 
   private def _repair_scope_c(supplied: Map[String, String], readtext: String => Consequence[String]): Consequence[Record] = for {
     options <- NativePreparationInput.optionsC(supplied, _required, readtext, Set("participant"))
