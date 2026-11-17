@@ -12,7 +12,8 @@ import org.simplemodeling.textus.smworkflow.value as V
 
 /** Finite public query over the fixed owning component Journal store.
   * @since   Oct. 20, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 25, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object DevelopmentJournalFind {
@@ -27,7 +28,7 @@ private[smworkflow] object DevelopmentJournalFind {
         Vector(input.phaseIdentity, input.sessionIdentity, input.kind, input.recordedFrom, input.recordedBefore)
           .forall(o => o != null && o.forall(_exact)) &&
         input.kind.forall(k => k == DevelopmentJournal.kind || k == DevelopmentJournalFinding.kind ||
-          k == DevelopmentJournalEvidence.kind || k == DevelopmentJournalAssessment.kind || k == DevelopmentJournalMergeAssessment.kind || k == DevelopmentJournalSplitRouting.kind) &&
+          k == DevelopmentJournalEvidence.kind || k == DevelopmentJournalAssessment.kind || k == DevelopmentJournalMergeAssessment.kind || k == DevelopmentJournalSplitRouting.kind || DevelopmentJournalSemantic.kinds(k)) &&
         input.sourceReference != null && input.sourceReference.forall(s => s != null && _exact(s.identity) && _exact(s.revision)) &&
         input.limit != null && input.limit.forall(n => n >= 1 && n <= 20) &&
         input.recordedFrom.forall(_second) && input.recordedBefore.forall(_second) &&
@@ -37,14 +38,25 @@ private[smworkflow] object DevelopmentJournalFind {
     if (valid) Consequence.unit else Consequence.stateConflict("Journal find input is invalid")
   }
 
-  def directiveC(input: V.JournalFindInput): Consequence[QueryDirective] = validateInputC(input).map { _ =>
+  def validateSemanticInputC(input: V.JournalFindInput, state: Option[String], related: Option[String]): Consequence[Unit] =
+    if (!validateInputC(input).isSuccess || state == null || related == null ||
+      state.exists(s => !DevelopmentJournalSemantic.states(s)) || related.exists(s => !DevelopmentJournalSemantic.exact(s)) ||
+      (state.nonEmpty && input.kind.exists(_ != "Issue"))) Consequence.stateConflict("Journal find input is invalid")
+    else Consequence.unit
+
+  def directiveC(input: V.JournalFindInput): Consequence[QueryDirective] = directiveC(input, None, None)
+
+  def directiveC(input: V.JournalFindInput, state: Option[String], related: Option[String]): Consequence[QueryDirective] = validateInputC(input).map { _ =>
     val clauses = Vector[Q.Expr](Q.Eq("repositoryIdentity", input.repositoryIdentity)) ++
       input.phaseIdentity.map(Q.Eq("phaseIdentity", _)) ++ input.sessionIdentity.map(Q.Eq("sessionIdentity", _)) ++
       input.kind.map(Q.Eq("kind", _)) ++ input.sourceReference.toVector.flatMap(s =>
         Vector(Q.Eq("sourceIdentity", s.identity), Q.Eq("sourceRevision", s.revision))) ++
       input.recordedFrom.map(s => Q.Gte("recordedAt", s.dropRight(1))) ++
-      input.recordedBefore.map(s => Q.Lt("recordedAt", s.dropRight(1)))
-    QueryDirective(Query.Expr(Q.And(clauses)), QueryProjection.Fields(projectionFields),
+      input.recordedBefore.map(s => Q.Lt("recordedAt", s.dropRight(1))) ++
+      state.map(Q.Eq("issueState", _)) ++ related.map(id => Q.Or(DevelopmentJournalSemantic.relatedFields.map(Q.Eq(_, id))))
+    // Shared collection rows require their complete kind-specific decoder input, including numeric CAS tokens.
+    // All also works before semantic-only columns exist in an immutable-only collection.
+    QueryDirective(Query.Expr(Q.And(clauses)), QueryProjection.All,
       QueryOrder.By("id", OrderDirection.Asc), QueryLimit.Limit(input.limit.getOrElse(20) + 1), 0)
   }
 
@@ -52,21 +64,29 @@ private[smworkflow] object DevelopmentJournalFind {
     * Production supplies protected component_datastore from FindCall.execute.
     */
   def searchC(policy: Option[DevelopmentJournal.Policy], input: V.JournalFindInput,
-    store: => DataStore): Consequence[V.JournalFindResult] = {
-    if (!validateInputC(input).isSuccess) Consequence.success(_result("invalid", "Journal find input is invalid"))
+    store: => DataStore): Consequence[V.JournalFindResult] = searchC(policy, input, store, None, None)
+
+  def searchC(policy: Option[DevelopmentJournal.Policy], input: V.JournalFindInput,
+    store: => DataStore, state: Option[String], related: Option[String]): Consequence[V.JournalFindResult] = {
+    if (!validateSemanticInputC(input, state, related).isSuccess)
+      Consequence.success(_result("invalid", "Journal find input is invalid"))
     else policy match {
       case None => Consequence.success(_result("disabled", "Journal is disabled by the host"))
       case Some(p) => try {
         val resolved = store
         val attempted = resolved match {
           case searchable: SearchableDataStore => for {
-            directive <- directiveC(input)
+            directive <- directiveC(input, state, related)
             found <- searchable.search(p.collection, directive)
-            entries <- found.records.foldLeft(Consequence.success(Vector.empty[V.JournalEntry])) { (acc, row) =>
-              acc.flatMap(entries => _entry_c(resolved, row).map(entries :+ _))
+            entries <- found.records.foldLeft(Consequence.success(Vector.empty[V.JournalEntrySummary])) { (acc, row) =>
+              acc.flatMap(entries => row.getString(resolved.recordKey("id")) match {
+                case Some(id) if DevelopmentJournalSemantic.validIdentity(id) =>
+                  DevelopmentJournalSemantic.storedC(row, id).map(e => entries :+ DevelopmentJournalSemantic.summary(e))
+                case _ => _entry_c(resolved, row).map(e => entries :+ _summary(e))
+              })
             }
           } yield V.JournalFindResult("found", "Journal entries found; refine filters when hasMore is true",
-            entries.take(input.limit.getOrElse(20)).map(_summary), entries.size > input.limit.getOrElse(20))
+            entries.take(input.limit.getOrElse(20)), entries.size > input.limit.getOrElse(20))
           case _ => Consequence.stateConflict("Journal store does not support search")
         }
         Consequence.success(attempted.fold(f => _result("unavailable", "Journal find unavailable" +

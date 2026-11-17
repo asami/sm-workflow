@@ -90,7 +90,7 @@ JSON array `[actual resultReference.identity, actual resultReference.revision]`.
 This reversible tuple framing is neither a content hash nor an acceptance or
 consent verifier. Input identities longer than 8192 characters, malformed data,
 noncanonical encodings or incomplete tuples are invalid. Explicit revisions
-other than `1` return `unsupportedRevision`. Corrections belong to Phase 11.1.
+other than `1` return `unsupportedRevision`. These original immutable payloads remain unchanged; Phase 11.1 corrections apply only to semantic entries below.
 
 J2 adds a distinct immutable `FindingEntry` payload with kind `Finding`, revision
 `1`, and storage prefix `sm-workflow.journal.finding.v1:` in the same declared
@@ -228,10 +228,12 @@ an `And` expression with required repository equality and all selected optional
 scope, kind, source and time clauses. SQL applies these clauses before the finite
 limit. There is no filtering of an already limited result.
 
-The fixed projection contains physical `id`, `developmentJournalPayload`, `kind`,
-`repositoryIdentity`, `phaseIdentity`, `sessionIdentity`, `sourceIdentity`,
-`sourceRevision`, `recordedAt` and `revision`. Order is actual physical `id`
-ascending, offset zero, and query limit is caller limit plus one. This is stable
+The fixed query uses `QueryProjection.All` to acquire complete rows for each
+kind-specific decoder, including the numeric `semanticRevision` guard on semantic
+rows. It does not name semantic-only columns in an immutable-only collection
+where those columns have not been created. Complete storage acquisition does not
+expand the bounded public summary. Order is actual physical `id` ascending,
+offset zero, and query limit is caller limit plus one. This is stable
 identity order, with no time-ranking claim. Every returned row, including the
 extra row used for `hasMore`, must have a canonical physical key obtained through
 the provider's `recordKey("id")` normalization. That key must match the identity
@@ -272,8 +274,7 @@ Callers narrow filters when `hasMore` is true and read a selected actual Entry
 reference only when the task needs detail. They reuse supplied bounded summaries,
 truncation metadata and read views. No extra query is required merely for display.
 There is no journaling-only AI work, clerical transcription, Markdown dual write,
-storage fallback, replay or automatic Submit/Advance. Decision, Issue, Handoff
-and Journal management remain Phase 11.1.
+storage fallback, replay or automatic Submit/Advance. Decision, Issue, Handoff and single-entry management use the additive Phase 11.1 Operations below.
 
 The existing P `skillBundle` contains these three skills and seven supporting
 docs/scripts. It contains no five-agent definition set. This delivery changes
@@ -362,8 +363,9 @@ without another append or review; removal of its frozen policy pauses as conflic
 
 `DevelopmentJournalFindSpec` authors explicitly synthetic searchable DataStore
 unit seams for missing/blank scope, kind/limit/time admission, disabled no-access,
-the exact fixed query directive, whole-second lower/upper behavior, stable ID
-ordering, finite `hasMore`, summary truncation, original J1 decoding, normalized
+the exact fixed query directive, projection-aware complete semantic guard acquisition
+and immutable-only columns, missing-guard refusal, whole-second lower/upper behavior,
+stable ID ordering, finite `hasMore`, summary truncation, original J1 decoding, normalized
 physical keys, corrupt physical/index/payload rows including the extra row,
 empty success and unsupported/failed/interrupted providers. These seams are not
 managed SQL or actual Workflow/reviewer acceptance evidence.
@@ -390,3 +392,120 @@ belong to the parent procedure above.
 
 The parent owns compilation, the selected focused accumulator runtime validation,
 independent review and transitions. Spec authoring alone is not a PASS claim.
+
+## Phase 11.1 semantic single-entry Operations
+
+Source implementation is present; parent-owned compilation, runtime checks,
+independent review and P111-05/06 consumer delivery remain required. This section
+claims no installed runtime adoption or successful check.
+
+The same `JournalService`, fixed `sm-workflow.journal` policy and collection own
+these additive generated COMMAND Operations. Existing `JournalEntry`,
+`JournalFindInput`, `JournalReadInput`, `JournalReadResult` and immutable stored
+payloads retain their constructors and decoding contracts. To keep that ABI,
+semantic selected detail uses `readJournalSemanticEntry` with the distinct
+`JournalSemanticReadInput` (required identity and optional revision), returning
+`JournalSemanticReadResult`. Distinct input names also keep the generated
+service-local Operation wrappers unique; the immutable `readJournalEntry` is unchanged.
+Common `findJournalEntries` also accepts `Decision`, `Issue` and `Handoff` and
+returns their current `JournalEntrySummary` references. A selected semantic
+summary must be passed to the semantic read Operation.
+
+- `recordJournalEntry(JournalSemanticRecordInput)` accepts exactly kind
+  `Decision`, `Issue` or `Handoff`, required exact repository/Phase/session,
+  optional exact Step, actual declared `sourceReference` identity/revision and
+  `JournalSemanticContent`. Content requires summary and rationale, at most 16
+  typed links, and an Issue state only for Issues. States are `open`,
+  `inProgress`, `resolved`, `closed`. Recording does not infer who authenticated
+  a source or turn a semantic decision into consent or native acceptance.
+- `correctJournalEntry(JournalSemanticChangeInput)` requires identity,
+  repositoryIdentity, expectedRevision, sourceReference, reason and complete
+  replacement content. It preserves kind, scope and original source. An Issue
+  correction must retain its current state; use the separate state Operation.
+- `updateJournalIssueState(JournalIssueStateInput)` requires the same identity,
+  repository, expected revision, actual source and reason plus the selected
+  state. Only Issue is admitted. Every declared Issue state may be selected;
+  this is attributed state management, not a Workflow lifecycle controller.
+- `readJournalSemanticEntry(JournalSemanticReadInput)` selects one actual revision, or
+  the current revision when omitted. It returns full typed selected content,
+  original source, change source, original/change times, reason and previous
+  revision. It never returns the entire accumulated history in an ordinary
+  response. Read an older revision explicitly when needed. The derived view
+  retains the common 4096-character bound; selected typed content is complete.
+- `findJournalSemanticEntries(JournalSemanticFindInput)` wraps the unchanged
+  required `JournalFindInput` as `scope`, plus optional `state` and
+  `relatedIdentity`. State requires an Issue kind or unspecified kind; a
+  contradictory kind or unknown state is invalid before storage resolution.
+  Related identity is an exact declared link target. Existing scope/source/time
+  admission, stable physical-ID ordering, limit 1–20, limit-plus-one and
+  bounded summaries are reused. Filters are pushed down before limiting.
+
+Each `JournalSemanticLink` has a kind and complete reference. `Finding`,
+`Decision`, `Issue` and `Handoff` require canonical Journal identities matching
+that kind; immutable Finding revision is 1. `Fix` and `Validation` refer to their
+existing owning result identity/revision. No duplicate fix/validation record or
+new authoritative copy is created. Link admission verifies shape and canonical
+kind, not the existence, accessibility, truth or acceptance of a remote result.
+Use its owner's ordinary read for a Fix/Validation, immutable read for a Finding
+and semantic read for a Decision/Issue/Handoff. Missing targets remain missing.
+
+A new semantic identity is `semantic:` plus URL-safe unpadded Base64 of compact
+UTF-8 JSON `[kind, original source identity, original source revision]`. The
+common 8192-character identity bound and canonical round-trip validation apply.
+The new payload prefix is `sm-workflow.journal.semantic.v1:`. One row retains
+all consecutive versions, including each full prior content, revision, actual
+source, change time and reason. The initial version has no correction reason.
+Queryable scope and original source remain fixed. Current state and 16 fixed
+related-identity slots are projections of the current content, checked against
+it on read, including every extra query row. These are fields in the existing
+row, not another index/table/store. A relation query uses equality across those
+finite slots; it never does substring matching or post-limit filtering.
+
+Initial recording uses the common initial source-key lookup and one
+`ComponentRecordStorage.createC` in the current call. Equivalent original
+content reuses the actual retained entry, including its current revision after
+correction. A conflicting original source is refused. The append result alone
+never certifies committed readback. Disabled/unavailable/conflict/indeterminate
+remain separate and carry no success Entry reference.
+
+Corrections resolve the same named managed purpose through the owning
+`ProcedureActionCall.component_datastore` and current managed lease. They use
+`DataStoreSpace.compareAndSetEntity` with the exact expected revision. The
+framework advances the numeric `semanticRevision` token; the changes exclude
+that token and atomically update the public text `revision`, payload and projections.
+The token is initialized as a `Long` so SQLite creates an INTEGER column. The
+common `revision` column remains text because existing immutable Journal rows
+share this collection; using that column for native CAS would violate SQLite's
+integer revision guard. Reads verify both revision fields against the decoded
+history. Missing or inconsistent tokens are refused, never guessed or backfilled;
+this change supplies no migration for previously written experimental semantic rows. The single conditional row replacement atomically preserves the complete
+history and updates searchable projections. There is no unconditional save,
+private SQL, replacement lease, process lock, backend fallback or retry.
+`ComponentRecordStorage`'s Create declaration is not reinterpreted as independent
+mutation authority; the existing managed-purpose host binding owns this route.
+An unavailable/refused binding remains unavailable. This API does not provision
+storage or grant access to a new purpose.
+
+Write results use the existing `JournalRecordingState`: `recorded`,
+`alreadyRecorded` or `updated` carry the actual Entry reference; `invalid`,
+`absent`, `conflict`, `disabled`, `unavailable`, `indeterminate` do not. A stale
+initial revision or actual provider compare-and-set race returns conflict without
+overwrite. An unsuccessful/unknown mutation acknowledgement is indeterminate;
+callers must inspect the retained selected revision before considering another
+action. No automatic replay is added. Semantic reads return `found`, `absent`,
+`invalid`, `disabled` or `unavailable`; a nonexistent selected revision is absent.
+Management/read/query do not recursively Journal themselves or submit/advance
+Work. Batch management and additional consumers remain Phase 11.2.
+
+`DevelopmentJournalSemanticSpec` authors source reuse, historical content,
+conditional-provider races, invalid scope/kind/state/link/revision, corruption,
+unknown acknowledgement and bounded-display/query examples using explicit
+specification-owned seams and the existing in-memory entity provider.
+`DevelopmentJournalSemanticOperationSpec` authors actual isolated managed public
+record/correction/state/find/read episodes through generated DTOs, plus an
+explicit dedicated SQLite binding failure (kind configured without its required path).
+An absent dedicated binding may legitimately resolve through the framework's
+configured basic store; that is ordinary managed resolution. Those inputs are specification-owned semantic data,
+not external review/consent evidence. Existing immutable and connected CLI suites
+remain applicable regression checks. Parent execution owns all pass/fail facts;
+authored tests are not executed evidence or P111-05/06 delivery.

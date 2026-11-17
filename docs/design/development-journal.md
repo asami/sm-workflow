@@ -1,7 +1,7 @@
 # 共通開発Journalの設計
 
 date=2026-10-20
-status=planned-not-implemented
+status=single-entry-source-implemented-validation-pending
 owner=sm-workflow
 
 ## 目的と実装境界
@@ -30,8 +30,10 @@ AIは意味判断を行い、Operationがその受理済み内容と実行事実
 指摘、指摘への対応判断、実際の修正結果は別の意味として参照で結ぶ。
 既存の実行結果・review・Workflow・Evidenceの正本をJournalへ移さず、必要な情報と
 参照を記録する。共通モデルはテーブル数や汎用イベント基盤の新設を要求しない。
-Phase 11ではExecutionObservationとFindingのみを実装する。他の型は11.1の設計対象であり、
-未実装Operationや受入不能な種類を公開済みと表示しない。
+Phase 11のExecutionObservationとFindingの不変payloadは維持する。
+11.1の単件source実装はDecision／Issue／Handoffを同じJournalへ追加する。
+実行検証・独立review・実利用一件と配備引渡しは親Workflowの後続境界であり、
+source実装だけを検証済み・配備済みと表示しない。
 
 ## 記録と結果の境界
 
@@ -96,3 +98,27 @@ Phase 12は引渡されたJournalを再利用してarchive結果を記録し、6
 関連: [契約案](../spec/development-journal-proposal.md)、
 [用途精査](../spec/development-journal-skill-usage-inventory.md)、
 [判断ノート](../notes/development-journal-delivery.md)。
+
+## Phase 11.1 単件source実装
+
+CML所有の追加DTOとJournalServiceのrecordJournalEntry、correctJournalEntry、
+updateJournalIssueState、readJournalSemanticEntry、findJournalSemanticEntriesを定義する。
+既存DTOのABIと不変Entry読取を維持するため、選択semantic詳細は追加の型付き読取を使う。
+共通findJournalEntriesもsemantic kindを受け、同じ有限summaryを返す。
+具体的なinput、状態、結果と制限は[実行契約](../spec/development-journal-runtime.md#phase-111-semantic-single-entry-operations)に記す。
+
+semantic Entryは元sourceとkindから可逆な業務IDを持つ。一行内に元内容から連続する
+全revision・出所・変更時刻・訂正理由を保持し、現在のmanaged purposeで既存DataStoreの
+compare-and-setを使って期待revision付きで置換する。共通collectionの既存不変Entryは
+文字列revision列を使うため、semantic行には別の整数semanticRevisionを保持する。
+providerはこの整数を条件付きで進め、同じ置換で公開revision・内容・履歴を更新する。
+読取は整数tokenと履歴の一致を確認し、欠落や不整合を推測補完しない。
+元scope／kind／出所は変更しない。
+訂正はIssue状態を変えず、状態変更は別Operationで行う。検索用の状態と有限16件の関連IDは
+同じ行の現在内容から導出し、検索時にも一致を検証する。別の台帳や独自lockは設けない。
+
+Finding／Decision／Issue／Handoffのlinkは対応kindのcanonical IDとrevisionを保持する。
+Fix／Validationは既存所有者の結果参照を保持し、Journalへ新たな正本を複製しない。
+linkの形の検証は参照先の実在・認証・受入れを証明しない。意味記録と検索はHuman回答、
+review acceptance、計画採用、Workflow進行を生成しない。通常読取は選択revision一件だけを
+返し、全履歴の反復転記を要求しない。batch管理・利用経路の追加は11.2に残す。

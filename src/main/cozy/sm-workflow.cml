@@ -2767,6 +2767,130 @@ OperationResult
 | truncated | boolean | ? |
 | ownerDetailsUrl | string | ? |
 
+## JournalSemanticLink
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| kind | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+
+## JournalSemanticContent
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| summary | string | 1 |
+| rationale | string | 1 |
+| state | string | ? |
+| links | JournalSemanticLink | * |
+
+## JournalSemanticRecordInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| kind | string | 1 |
+| repositoryIdentity | string | 1 |
+| phaseIdentity | string | 1 |
+| stepIdentity | string | ? |
+| sessionIdentity | string | 1 |
+| sourceReference | WorkflowArtifactReference | 1 |
+| content | JournalSemanticContent | 1 |
+
+## JournalSemanticChangeInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| repositoryIdentity | string | 1 |
+| expectedRevision | string | 1 |
+| sourceReference | WorkflowArtifactReference | 1 |
+| reason | string | 1 |
+| content | JournalSemanticContent | 1 |
+
+## JournalIssueStateInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| repositoryIdentity | string | 1 |
+| expectedRevision | string | 1 |
+| sourceReference | WorkflowArtifactReference | 1 |
+| reason | string | 1 |
+| state | string | 1 |
+
+## JournalSemanticEntry
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| entry | JournalEntryReference | 1 |
+| kind | string | 1 |
+| repositoryIdentity | string | 1 |
+| phaseIdentity | string | 1 |
+| stepIdentity | string | ? |
+| sessionIdentity | string | 1 |
+| originalSource | WorkflowArtifactReference | 1 |
+| sourceReference | WorkflowArtifactReference | 1 |
+| recordedAt | string | 1 |
+| changedAt | string | 1 |
+| previousRevision | string | ? |
+| reason | string | ? |
+| content | JournalSemanticContent | 1 |
+
+## JournalSemanticReadInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| identity | string | 1 |
+| revision | string | ? |
+
+## JournalSemanticReadResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| status | string | 1 |
+| message | string | 1 |
+| entry | JournalSemanticEntry | ? |
+| view | string | ? |
+
+## JournalSemanticFindInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| scope | JournalFindInput | 1 |
+| state | string | ? |
+| relatedIdentity | string | ? |
+
 ## JournalReadInput
 
 - input-kind :: COMMAND
@@ -12486,6 +12610,146 @@ JournalFindInput
 | name | type | multiplicity |
 |------+------|--------------|
 | input | JournalFindInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+JournalFindResult
+
+#### recordJournalEntry
+
+##### DESCRIPTION
+
+Record one attributed Decision, Issue or Handoff. Source reuse is idempotent; conflicting content is refused. No acceptance or Workflow authority is created.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+JournalSemanticRecordInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | JournalSemanticRecordInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+JournalRecordingState
+
+#### correctJournalEntry
+
+##### DESCRIPTION
+
+Correct one semantic entry with an expected revision, reason and source. Preserve every prior revision. Issue state changes use updateJournalIssueState.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+JournalSemanticChangeInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | JournalSemanticChangeInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+JournalRecordingState
+
+#### updateJournalIssueState
+
+##### DESCRIPTION
+
+Update one Issue state using an expected revision, retaining its prior content, reason and source.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+JournalIssueStateInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | JournalIssueStateInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+JournalRecordingState
+
+#### readJournalSemanticEntry
+
+##### DESCRIPTION
+
+Read one selected semantic entry revision, or the current revision when omitted. Existing immutable entry read ABI remains unchanged.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+JournalSemanticReadInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | JournalSemanticReadInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+JournalSemanticReadResult
+
+#### findJournalSemanticEntries
+
+##### DESCRIPTION
+
+Find finite summaries with required repository scope and optional Issue state and related identity. Filters apply before the limit; selected semantic detail is read separately.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+JournalSemanticFindInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | JournalSemanticFindInput | 1 |
 
 ##### OUTPUT
 

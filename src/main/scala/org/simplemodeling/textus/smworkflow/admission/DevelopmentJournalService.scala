@@ -12,13 +12,14 @@ import org.simplemodeling.textus.smworkflow.value as V
 
 /** Public read and finite find use their owning call and fixed host policy; no Journal write.
   * @since   Oct. 20, 2026
-  * @version Oct. 20, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object DevelopmentJournalService {
   private val _declared = SmWorkflowComponent.JournalServiceService
   def bind(policy: Option[DevelopmentJournal.Policy]): spec.ServiceDefinition = NativeWorkflowDescriptionMetadata.service(
-    _declared, spec.OperationDefinitionGroup(NonEmptyVector.of(new ReadOperation(policy), new FindOperation(policy))))
+    _declared, spec.OperationDefinitionGroup(NonEmptyVector.fromVectorUnsafe(
+      Vector(new ReadOperation(policy), new FindOperation(policy)) ++ DevelopmentJournalSemanticService.operations(policy))))
 
   private final class FindOperation(policy: Option[DevelopmentJournal.Policy]) extends spec.OperationDefinition {
     val specification = NativeWorkflowDescriptionMetadata.operation(_declared.FindJournalEntriesOperation)

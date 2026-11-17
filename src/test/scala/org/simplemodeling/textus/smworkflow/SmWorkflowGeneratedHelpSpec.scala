@@ -109,7 +109,9 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
     SmWorkflowComponent.ManagedDevelopmentServiceService -> Vector("publishDevelopmentArtifact", "selectDevelopmentArtifact",
       "compileDevelopmentConsumer", "readDevelopmentArtifactStatus"),
     SmWorkflowComponent.LocalPublicationServiceService -> Vector("ensureLocalPublication", "collectLocalPublication", "collectLatestLocalPublication"),
-    SmWorkflowComponent.JournalServiceService -> Vector("readJournalEntry", "findJournalEntries"),
+    SmWorkflowComponent.JournalServiceService -> Vector("readJournalEntry", "findJournalEntries",
+      "recordJournalEntry", "correctJournalEntry", "updateJournalIssueState",
+      "readJournalSemanticEntry", "findJournalSemanticEntries"),
     SmWorkflowComponent.EvidenceServiceService -> Vector("readEvidence", "readEvidenceRange", "recordEvidenceJournal",
       "archiveEvidenceBatch", "describeEvidence", "manageEvidenceRetention", "findDueEvidence"),
     SmWorkflowComponent.RepositoryHumanServiceService -> Vector("presentRepositoryConflictDecision"),
@@ -244,6 +246,37 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
           operation.specification.request.parameters.head.name shouldBe "input"
           operation.specification.request.parameters.head.datatype.name should include(inputtype)
           help.details("argumentDetails").mkString should include(inputtype)
+        }
+      }
+    }
+
+    "semantic Journal operation descriptions" which {
+      Vector(
+        ("recordJournalEntry", "journalsemanticrecordinput", "JournalRecordingState",
+          "No acceptance or Workflow authority is created"),
+        ("correctJournalEntry", "journalsemanticchangeinput", "JournalRecordingState",
+          "expected revision, reason and source"),
+        ("updateJournalIssueState", "journalissuestateinput", "JournalRecordingState",
+          "retaining its prior content, reason and source"),
+        ("readJournalSemanticEntry", "journalsemanticreadinput", "JournalSemanticReadResult",
+          "current revision when omitted"),
+        ("findJournalSemanticEntries", "journalsemanticfindinput", "JournalFindResult",
+          "Filters apply before the limit")
+      ).foreach { case (name, inputType, outputType, phrase) =>
+        s"retain $name's typed input, result and scoped semantics in Help" in {
+          Given(s"the CML-declared JournalService.$name semantic operation")
+          val operation = SmWorkflowComponent.JournalServiceService.operations.operations.find(_.name == name).get
+
+          When("canonical Help projects the generated operation declaration")
+          val help = HelpProjection.projectModel(_component(), Some(_selector("JournalService", name)))
+
+          Then("the explicit public input, result and semantic limit remain discoverable")
+          operation.specification.request.parameters.map(_.name).toVector shouldBe Vector("input")
+          operation.specification.request.parameters.head.datatype.name should include(inputType)
+          help.details("arguments") shouldBe Vector("input")
+          help.details("argumentDetails").mkString should include(inputType)
+          help.details("returns").mkString should include(outputType)
+          help.details("description").mkString should include(phrase)
         }
       }
     }
