@@ -36,7 +36,7 @@ dependency graph; Phase 15 consumes catch-up for related workspace operations.
 Current [Phase 13](phase-13.md) remains AI usage accounting, unchanged. Phase 21
 is planned with no selected delivery slot; the existing adopted execution
 priority and active Goals/Sessions are unchanged. See the
-[restoration record](../journal/2026/11/2026-11-16-catch-up-plan-restoration.md).
+[restoration and allocation](phase-21.md#restoration-and-allocation) in the plan.
 
 Phase 6.11 closed with unverified items — 2026-11-11:
 [plan](phase-6.11.md) / [checklist](phase-6.11-checklist.md).

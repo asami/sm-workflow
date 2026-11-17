@@ -37,6 +37,6 @@ INIT-1 and SST-1 prerequisite deliveries are separately recorded in the caller-r
 | 29. Before/after observations cover comparable scenario boundaries, round trips, exchange/context size and rework at their available evidence scope. No universal 67% savings, local-LLM adoption or completed Phase 9/13 is required or claimed by these operational improvements. | Pending; see the [Phase 8 completion requirement](../phase/phase-8.md#completion) and its linked evidence. |
 | 30. Normal closing work for the delivered scope is complete, with history retained and no claim that unimplemented optional features were delivered. | Pending; see the [Phase 8 completion requirement](../phase/phase-8.md#completion) and its linked evidence. |
 
-The [Session-owned state journal](../journal/2026/11/2026-11-17-phase8-session-owned-state.md)
-records source and fixture work for rows 1–2. It is not a validation or
+The [Session workspace contract](../spec/repository-sync-session-workspaces.md)
+defines the prerequisite for rows 1–2. A specification is not a validation or
 acceptance receipt; those rows and all other Phase 8 requirements remain pending.

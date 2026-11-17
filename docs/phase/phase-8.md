@@ -1088,7 +1088,7 @@ removal of management hashes, tamper defenses, unchanged-content proofs and
 internal time-only expiry across every extension; do not reintroduce them as
 completion or evidence-reuse requirements.
 
-The [2026-11-17 Session-owned state journal](../journal/2026/11/2026-11-17-phase8-session-owned-state.md)
-records source and fixture work for the selected RepositorySync prerequisite.
+The selected RepositorySync prerequisite is defined by the
+[Session workspace contract](../spec/repository-sync-session-workspaces.md).
 Validation, independent review and installed qualification remain pending;
 the full requirements and unchecked completion items above remain in force.

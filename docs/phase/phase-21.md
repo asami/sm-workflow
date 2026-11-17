@@ -21,7 +21,8 @@ respectively. This is restoration of planned work, not implementation,
 qualification or a change to an active Plan. Phase 21 has no selected delivery
 slot and does not change the roadmap's existing execution priority. Preserve
 existing Goals, Sessions, accepted work, histories, repair counts and successful
-checks. See the [restoration record](../journal/2026/11/2026-11-16-catch-up-plan-restoration.md).
+checks. [Phase 20](phase-20.md) retains the AI-consumption summary plan;
+recursive catch-up is allocated to Phase 21 so both plans remain available.
 
 ## Goal
 
