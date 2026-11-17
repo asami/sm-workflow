@@ -456,7 +456,11 @@ final class NativeDelegateTaskReviewContinuationCliSpec extends AnyWordSpec with
       val component = Path.of(sys.props.get("smworkflow.spec.componentFile")
         .orElse(sys.env.get("SM_WORKFLOW_SPEC_COMPONENT_FILE"))
         .getOrElse(fail("Select SM_WORKFLOW_SPEC_COMPONENT_FILE")))
-      new DelegateTaskReviewContinuationOperationSpec().qualify(Some(executable -> component))
+      val specimen = new DelegateTaskReviewContinuationOperationSpec()
+      val small = specimen.qualify(Some(executable -> component))
+      val large = specimen.qualify(Some(executable -> component), large = true)
+      small.keys shouldBe large.keys
+      small.foreach { case (key, size) => withClue(key) { math.abs(large(key) - size) should be <= 256 } }
     }
   }
 }

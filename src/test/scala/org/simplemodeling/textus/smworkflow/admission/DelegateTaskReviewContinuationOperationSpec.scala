@@ -26,10 +26,14 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
   import S.given
   private def take[A](value: Consequence[A]): A = value.toOption.getOrElse(fail(s"Operation refused: $value"))
   override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
-    val base = TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable, Vector(1), Some(
-      TypedGitHostPlanFixture.plan(Programs.Target(root.resolve("repository"), "main", "origin", "main",
+    val git = TypedGitHostPlanFixture.plan(Programs.Target(root.resolve("repository"), "main", "origin", "main",
         root.resolve("upstream.git").toString), kinds = TypedGitHostPlanFixture.observations ++ Vector(
-          GitOperationKind.IndexTree, GitOperationKind.PendingPaths, GitOperationKind.PendingDiff), goalPaths = Vector("docs/phase.md"))))
+          GitOperationKind.IndexTree, GitOperationKind.PendingPaths, GitOperationKind.PendingDiff), goalPaths = Vector("docs/phase.md"))
+    // The real Git observation must retain the complete larger candidate diff.
+    val largeGit = git.mapObject(fields => fields.add("gitPrograms", fields("gitPrograms").get.mapArray(_.map { program =>
+      program.mapObject(p => p.add("limits", p("limits").get.mapObject(_.add("stdoutBytes", 524288.asJson))))
+    })))
+    val base = TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable, Vector(1), Some(largeGit), stdoutBytes = 2097152)
     val workspace = Json.obj("identity" -> "sm-workflow-validation-artifacts".asJson,
       "root" -> root.resolve("capture-root").toString.asJson)
     val grant = Json.obj("componentId" -> org.simplemodeling.textus.smworkflow.SmWorkflowComponent.componentId.name.asJson,
@@ -38,23 +42,30 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
       .add("workspaceGrants", fields("workspaceGrants").get.mapArray(_ :+ grant)))
   }
   override protected def _prepare_sbt_build_(root: Path, scenario: String): Unit = {
-    super._prepare_sbt_build_(root, scenario)
+    if (!Files.exists(root.resolve("repository/build.sbt"))) {
+      TypedSbtHostPlanFixture.build(root, true)
+      val product = root.resolve("repository/src/test/scala/ProductCheck.scala")
+      val fixtureBytes = if (root.getFileName.toString.contains("large")) 600000 else 500000
+      val source = Files.readString(product).replace("    assert(java.nio.file.Files.readString",
+        "    print(\"D\" * " + fixtureBytes + "); System.out.flush()\n    assert(java.nio.file.Files.readString")
+      Files.writeString(product, source)
+    }
     val file = root.resolve("repository/docs/phase.md")
     Files.createDirectories(file.getParent)
-    Files.writeString(file, "Specification-owned original source\n")
+    if (!Files.exists(file)) Files.writeString(file, "Specification-owned original source\n")
   }
   override protected def _setup_commands_(root: Path, scenario: String): Vector[Vector[String]] =
     super._setup_commands_(root, scenario).patch(2, Vector(Vector("-C", root.resolve("repository").toString,
       "--literal-pathspecs", "add", "--", "docs/phase.md")), 0)
 
-  private[admission] def qualify(installed: Option[(Path, Path)]): Unit = {
+  private[admission] def qualify(installed: Option[(Path, Path)], large: Boolean = false): Map[String, Int] = {
     import scala.jdk.CollectionConverters.*
     import java.util.concurrent.TimeUnit
     installed.foreach { case (executable, archive) =>
       require(executable.isAbsolute && Files.isExecutable(executable), "Installed command must exist")
       require(archive.isAbsolute && Files.isRegularFile(archive), "Candidate CAR must exist")
     }
-    val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/sm-workflow/work/delegate-review-managed").toAbsolutePath), "SPEC-").toRealPath()
+    val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/sm-workflow/work/delegate-review-managed").toAbsolutePath), (if (large) "SPEC-large-" else "SPEC-small-")).toRealPath()
     Files.createDirectories(root.resolve("capture-root/validation"))
     val contract = V.DelegateTaskContract("SPEC-requester", "SPEC-destination", "SPEC-requester", "SPEC-component", "destination",
       "documentation", NonEmptyVector.of("dispatch", "implement", "validate", "review", "commit", "return", "adopt"), Vector.empty,
@@ -63,22 +74,28 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
       NonEmptyVector.one("docs/phase.md"), NonEmptyVector.one("test"), NonEmptyVector.of("objective", "delivery"),
       NonEmptyVector.one(V.WorkflowArtifactReference("SPEC-original", "1")), true, "documentation", "off", 10,
       "direct-instruction", Vector.empty, contract, Vector.empty)
+    val measurements = scala.collection.mutable.Map.empty[String, Int]
+    def measure(label: String, value: String): Unit = {
+      val size = value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
+      withClue(label) { size should be <= 65536 }
+      measurements(label) = size
+    }
+    val candidateText = "Specification-owned original source\n" + ("fixture candidate content 0123456789\n" * (if (large) 4300 else 2300))
     var session = ""
     var originalIssued = Option.empty[Json]
+    var originalPublic = Option.empty[V.DelegateTaskView]
     var description = Option.empty[V.DelegateTaskReviewContinuationDescriptionResult]
     var emittedWork = Option.empty[V.WorkflowRetainedWorkReference]
+    var successor = Option.empty[V.DelegateTaskView]
     val parameters = BoundedWorkExecutionAdmissionFixture.logicalParameters ++ Map(
       "textus.resource.url.file.roots" -> root.toString, "textus.resource.read.max-bytes" -> "16777216")
     def installedRecord(operation: String, argument: Vector[String],
       service: String = "DelegateTaskService"): Record = {
-      val (executable, archive) = installed.get
-      val config = root.resolve(".textus/config.json")
-      val json = io.circe.parser.parse(Files.readString(config)).toOption.get
-      Files.writeString(config, json.mapObject(_.add("textus.component.file", archive.toString.asJson)).noSpaces)
+      val (_, archive) = installed.get
       val logs = Files.createTempDirectory(root, "SPEC-installed-")
       val stdout = logs.resolve("stdout.json")
       val stderr = logs.resolve("stderr")
-      val argv = Vector(executable.toString, org.simplemodeling.textus.smworkflow.SmWorkflowComponent.componentId.name +
+      val argv = NativeWorkflowCliFixture.candidateCommand(archive) ++ Vector(org.simplemodeling.textus.smworkflow.SmWorkflowComponent.componentId.name +
         "." + service + "." + operation, "--textus.assembly.descriptor=" + root.resolve(".textus/assembly.yaml"),
         "--textus.test.descriptor=" + root.resolve(".textus/test.yaml")) ++ argument ++ Vector("--json")
       val process = new ProcessBuilder(argv.asJava).directory(root.toFile).redirectOutput(stdout.toFile).redirectError(stderr.toFile).start()
@@ -96,9 +113,9 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
       take(summon[org.goldenport.convert.ValueReader[A]].readC(installedRecord(operation, argument)))
     def encoded(value: org.goldenport.record.RecordPresentable): String = take(value.toRecord().toJsonStringC)
     def installedRefuses(value: V.DelegateTaskReviewContinuationInput): Unit = {
-      val (executable, _) = installed.get
+      val (_, archive) = installed.get
       val logs = Files.createTempDirectory(root, "SPEC-installed-refusal-")
-      val argv = Vector(executable.toString, org.simplemodeling.textus.smworkflow.SmWorkflowComponent.componentId.name +
+      val argv = NativeWorkflowCliFixture.candidateCommand(archive) ++ Vector(org.simplemodeling.textus.smworkflow.SmWorkflowComponent.componentId.name +
         ".DelegateTaskService.resumeDelegateTaskReviewContinuation",
         "--textus.assembly.descriptor=" + root.resolve(".textus/assembly.yaml"),
         "--textus.test.descriptor=" + root.resolve(".textus/test.yaml"), "--input", encoded(value), "--json")
@@ -136,6 +153,7 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
         component = component.name, service = WorkflowRetainedWork.serviceName, operation = WorkflowRetainedWork.readOperation,
         properties = List(Property("input", issued.retainedWork.get, None))), actor)))
       val implement = take(V.DelegateTaskView.createC(detail.response))
+      Files.writeString(root.resolve("repository/docs/phase.md"), candidateText)
       val ref = V.WorkflowArtifactReference("SPEC-original-implementation", "1")
       val execution = V.WorkflowExecutionEvidence(Vector(ref), Some("SPEC-implementer"), None,
         Some(V.WorkflowExecutionObservation("DELEGATED", "bounded-spec-caller", "SPEC-implementer", "ordinary")))
@@ -150,6 +168,7 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
         component = component.name, service = WorkflowRetainedWork.serviceName, operation = WorkflowRetainedWork.readOperation,
         properties = List(Property("input", reviewOrder.retainedWork.get, None))), actor)))
       val review = take(V.DelegateTaskView.createC(reviewDetail.response))
+      originalPublic = Some(review)
       prepare { setup => for {
         definition <- DelegateTaskRuntimeCatalog.loadC()
         host = BoundedWorkRuntime.Host(_configuration_, _collection_("instances"), _collection_("continuations"),
@@ -192,7 +211,47 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
       Vector("--input", encoded(V.DelegateTaskReviewContinuationDescriptionInput(session)))))
     val described = description.get
     described.outcome shouldBe "decision-required"
-    val target = take(R.targetC(described.target))
+    val compactTarget = take(R.wireC(described.target))._1
+    measure("description", encoded(described))
+    measure("target", described.target)
+    val targetJson = io.circe.parser.parse(described.target).toOption.get
+    targetJson.hcursor.downField("business").succeeded shouldBe false
+    targetJson.hcursor.downField("frontier").succeeded shouldBe false
+    Vector("work", "result", "issued").foreach(name => targetJson.hcursor.downField("original").downField(name).succeeded shouldBe false)
+    var retainedTarget: Option[R.Target] = None
+    _with_runtime_(root, "TaskReview", hostParameters = parameters, componentInstance = "default") { (_, _, _, prepare) =>
+      prepare { setup => for {
+        definition <- DelegateTaskRuntimeCatalog.loadC()
+        host = BoundedWorkRuntime.Host(_configuration_, _collection_("instances"), _collection_("continuations"),
+          "sm-workflow", root.resolve("repository").toString, "main", Vector("docs/phase.md"), Vector.empty,
+          None, None, None, None, None)
+        context <- NativeWorkflowSessionInput.contextC(setup.executionContext, Some(session))
+        selected = setup.core.copy(executionContext = context)
+        store <- DelegateTaskNativeRun.storageC(host, definition, selected)
+        instances <- store.bindInstancesC()(using context)
+        current <- instances.loadC(InstanceIdentity(session))(using context).flatMap(
+          _.map(Consequence.success).getOrElse(Consequence.stateConflict("SPEC reopened Session absent")))
+        payload <- DelegateTaskNativeRun.loadPayloadC(store, session, current.revision.value, selected)
+        reference <- payload.state.reviewReference.map(Consequence.success)
+          .getOrElse(Consequence.stateConflict("SPEC original Review reference absent"))
+        original <- R.originalC(store, current, selected, reference)
+        frontier <- WorkflowInstanceRecordJsonV1.encodeC(current).flatMap(s =>
+          io.circe.parser.parse(s).fold(e => Consequence.stateConflict(e.message), Consequence.success))
+        _ = { retainedTarget = Some(R.Target(compactTarget.componentInstance, session, compactTarget.participant,
+          current.revision.value, frontier, payload, original)) }
+      } yield () }
+    }
+    val target = retainedTarget.get
+    val retainedBytes = target.asJson.noSpaces.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
+    withClue("actual fixture-owned legacy target size") { retainedBytes should be >= 1708731 }
+    val actualDiff = target.business.state.candidate.get.diff
+    actualDiff.getBytes(java.nio.charset.StandardCharsets.UTF_8).length should be >= (if (large) 150000 else 80000)
+    val actualReceipt = target.business.state.receipts.head
+    actualReceipt.processObservation.nonEmpty shouldBe true
+    val receiptBytes = actualReceipt.asJson.noSpaces.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
+    withClue("real retained validation receipt") { receiptBytes should be >= (if (large) 750000 else 500000) }
+    compactTarget.original.resultReference shouldBe target.original.resultReference
+    compactTarget.original.continuationId shouldBe target.original.continuationId
     target.original.result.unresolvedQuestions shouldBe Vector("SPEC original contract question")
     target.original.work.kind shouldBe "Review"
     target.original.issued shouldBe originalIssued.get
@@ -220,6 +279,7 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
     }
     val reference = V.WorkflowArtifactReference("SPEC-human-direction", "1")
     val direction = V.DelegateTaskReviewContinuationInput(session, described.target, "ReevaluateReview", "SPEC-owned explicit direction", "participant", reference, Vector(V.WorkflowArtifactReference("SPEC-upstream", "1")))
+    measure("resumeDirection", encoded(direction))
     _with_runtime_(root, "TaskReview", hostParameters = parameters, componentInstance = "default") { (owner, component, actor, prepare) =>
       def call(name: String, properties: List[Property]) = owner.executeOperationResponseInContext(
         Request.of(component = component.name, service = "DelegateTaskService", operation = name, properties = properties), actor)
@@ -300,6 +360,15 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
         "choice" -> direction.copy(choice = "unrecognized"),
         "empty upstream" -> direction.copy(upstream = Vector.empty),
         "malformed upstream" -> direction.copy(upstream = Vector(V.WorkflowArtifactReference("", "1"))))
+      val compactNegative = Vector(
+        direction.copy(target = compactTarget.copy(frontierRevision = compactTarget.frontierRevision + 1).asJson.noSpaces),
+        direction.copy(target = compactTarget.copy(componentInstance = "foreign").asJson.noSpaces),
+        direction.copy(target = compactTarget.copy(sessionId = "foreign").asJson.noSpaces),
+        direction.copy(target = compactTarget.copy(original = compactTarget.original.copy(continuationId = "foreign")).asJson.noSpaces))
+      compactNegative.foreach { invalid =>
+        call("resumeDelegateTaskReviewContinuation", List(Property("input", invalid, None))).isSuccess shouldBe false
+        if (installed.nonEmpty) installedRefuses(invalid)
+      }
       mutated.foreach { case (label, invalid) =>
         withClue(label) { call("resumeDelegateTaskReviewContinuation", List(Property("input", invalid, None))).isSuccess shouldBe false }
         unchanged()
@@ -314,13 +383,14 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
           Files.writeString(path, encoded(data))
           path.toUri.toASCIIString
         }
-        val requestPath = save("request", described)
+        val requestPath = save("request", described.copy(target = selectedDirection.target))
         val resultPath = save("result", selectedDirection)
         val referencePath = save("reference", selectedReference)
         val executionPath = save("execution", execution)
         val preparation = V.WorkflowEvidencePreparationInput("DelegateTask", "review-continuation", requestPath, resultPath,
           referencePath, executionPath, "normal-development-host", actor.clock.instant().minusSeconds(1).toString,
           "entity:smworkflow.cli.host_evidence", Some("participant"))
+        if (selectedDirection.target == described.target) measure("evidencePreparation", encoded(preparation))
         val row = if (installed.nonEmpty) {
           val record = installedRecord("prepareEvidence", Vector("--input", encoded(preparation),
             "--preparationFormat", "legacy-full"), "NativeWorkflowPreparationService")
@@ -337,7 +407,16 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
           }
           record.getVector("datastore").get.head.asInstanceOf[Record].getVector("records").get.head.asInstanceOf[Record]
         }
+        if (selectedDirection.target == described.target) measure("evidenceImporter", take(row.toJsonStringC))
         prepare(setup => setup.createC("host_evidence", row.getString("id").get, row.removeKeys(Set("id"))))
+      }
+      if (installed.isEmpty) {
+        val legacyDeferred = deferred.copy(target = target.asJson.noSpaces,
+          reference = V.WorkflowArtifactReference("SPEC-human-legacy-defer", "1"))
+        provision(legacyDeferred)
+        read_value[V.DelegateTaskReviewContinuationDescriptionResult](take(call("resumeDelegateTaskReviewContinuation",
+          List(Property("input", legacyDeferred, None))))).outcome shouldBe "deferred"
+        unchanged()
       }
       provision(deferred)
       read_value[V.DelegateTaskReviewContinuationDescriptionResult](take(call("resumeDelegateTaskReviewContinuation", List(Property("input", deferred, None))))).outcome shouldBe "deferred"
@@ -354,14 +433,12 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
         fields("request").get.mapObject(_.add("expectedRevision", target.original.sourceRevision.toString.asJson))))
       val invalidRevision = direction.copy(target = target.copy(original = target.original.copy(issued = wrongRevision)).asJson.noSpaces)
       call("resumeDelegateTaskReviewContinuation", List(Property("input", invalidRevision, None))).isSuccess shouldBe false
-      if (installed.nonEmpty) installedRefuses(invalidRevision)
       unchanged()
       changedContexts.foreach { context =>
         val altered = target.original.issued.mapObject(fields => fields.add("request",
           fields("request").get.mapObject(_.add("context", context))))
         val invalid = direction.copy(target = target.copy(original = target.original.copy(issued = altered)).asJson.noSpaces)
         call("resumeDelegateTaskReviewContinuation", List(Property("input", invalid, None))).isSuccess shouldBe false
-        if (installed.nonEmpty) installedRefuses(invalid)
         unchanged()
       }
       val sourceBeforeResume = root.resolve("repository/docs/phase.md")
@@ -419,14 +496,15 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
             payload.state.repairControl shouldBe stopped.state.repairControl
             payload.state.reviewReference shouldBe Some(target.original.resultReference)
             val accepted = payload.delegateReviewContinuation.get
-            accepted.target shouldBe target.asJson
+            accepted.target shouldBe io.circe.parser.parse(described.target).toOption.get
             accepted.choice shouldBe direction.choice
             accepted.reference shouldBe ContextReference(reference.identity, reference.revision)
             accepted.upstream shouldBe Vector(ContextReference("SPEC-upstream", "1"))
           }
         } yield () }
       }
-    def verifySuccessor(complete: V.DelegateTaskView): Unit = {
+    def verifySuccessor(complete: V.DelegateTaskView,
+      readOriginal: V.WorkflowRetainedWorkReference => V.WorkflowRetainedWorkReadResult): Unit = {
       complete.issuedWorkContext.get.requiredOperation shouldBe "delegate-task-review-capability"
       val json = io.circe.parser.parse(take(complete.work.get.toJsonStringC)).toOption.get
       val work = GoalPhaseNativeMetadata.normalizePublicJson(json).toOption.get.as[S.Work].toOption.get
@@ -438,6 +516,48 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
       work.state.automaticCount shouldBe stopped.state.automaticCount
       work.state.ordinaryCount shouldBe stopped.state.ordinaryCount
       work.state.repairControl shouldBe stopped.state.repairControl
+      val reevaluation = work.reviewReevaluation.getOrElse(fail("Successor omitted original Review evidence"))
+      reevaluation.originalResult shouldBe target.original.result
+      reevaluation.originalResult.unresolvedQuestions shouldBe Vector("SPEC original contract question")
+      reevaluation.clarification.target shouldBe targetJson
+      reevaluation.clarification.reference shouldBe ContextReference(reference.identity, reference.revision)
+      reevaluation.clarification.choice shouldBe "ReevaluateReview"
+      val originalReference = reevaluation.originalWork
+      originalReference.readOperation shouldBe WorkflowRetainedWork.serviceName + "." + WorkflowRetainedWork.readOperation
+      originalReference.sessionId shouldBe session
+      originalReference.identity shouldBe target.original.continuationId
+      originalReference.revision shouldBe (target.original.sourceRevision + 1).toString
+      originalReference.resource.nonEmpty shouldBe true
+      val retained = readOriginal(originalReference)
+      val original = take(V.DelegateTaskView.createC(retained.response))
+      def canonicalContext(value: V.WorkflowIssuedWorkContext): Json = {
+        val json = io.circe.parser.parse(take(value.toRecord().toJsonStringC)).toOption.get
+        GoalPhaseNativeMetadata.normalizePublicJson(json).toOption.get
+      }
+      val retainedContext = canonicalContext(original.issuedWorkContext.get)
+      val expectedContext = canonicalContext(originalPublic.get.issuedWorkContext.get)
+      val contextFields = retainedContext.asObject.get.keys.toSet ++ expectedContext.asObject.get.keys.toSet
+      contextFields.foreach { field =>
+        withClue(s"original issued context field $field differs") {
+          retainedContext.hcursor.downField(field).focus shouldBe expectedContext.hcursor.downField(field).focus
+        }
+      }
+      val originalWorkJson = io.circe.parser.parse(take(original.work.get.toJsonStringC)).toOption.get
+      val originalWork = GoalPhaseNativeMetadata.normalizePublicJson(originalWorkJson).toOption.get.as[S.Work].toOption.get
+      originalWork.asJson shouldBe target.original.work.asJson
+      val issuedContextJson = originalIssued.get.hcursor.downField("request").downField("context").focus.get
+      issuedContextJson shouldBe target.original.issued.hcursor.downField("request").downField("context").focus.get
+      val publicContext = GoalPhaseNativeMetadata.normalizePublicJson(
+        io.circe.parser.parse(take(original.issuedWorkContext.get.context.toJsonStringC)).toOption.get).toOption.get
+      Vector("summary", "requiredFacts", "references").foreach { field =>
+        publicContext.hcursor.downField(field).focus shouldBe issuedContextJson.hcursor.downField(field).focus
+      }
+      val publicSnapshot = publicContext.hcursor.downField("snapshot").focus.get
+      val issuedSnapshot = issuedContextJson.hcursor.downField("snapshot").focus.get
+      Vector("workflowRevision", "modelRevision", "workspaceRevision", "evidenceRevision").foreach { field =>
+        publicSnapshot.hcursor.get[Option[String]](field).toOption.get shouldBe
+          issuedSnapshot.hcursor.get[Option[String]](field).toOption.get
+      }
     }
     verifyCheckpoint(false)
     _with_runtime_(root, "TaskReview", hostParameters = parameters, componentInstance = "default") { (owner, component, actor, prepare) =>
@@ -466,7 +586,11 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
           properties = List(Property("input", reference, None))), actor))
         val detail = read_value[V.WorkflowRetainedWorkReadResult](response)
         val complete = take(V.DelegateTaskView.createC(detail.response))
-        verifySuccessor(complete)
+        successor = Some(complete)
+        verifySuccessor(complete, originalRef => read_value[V.WorkflowRetainedWorkReadResult](take(
+          owner.executeOperationResponseInContext(Request.of(component = component.name,
+            service = WorkflowRetainedWork.serviceName, operation = WorkflowRetainedWork.readOperation,
+            properties = List(Property("input", originalRef, None))), actor))))
       }
     }
     if (installed.nonEmpty) {
@@ -477,7 +601,9 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
       val detail = take(summon[org.goldenport.convert.ValueReader[V.WorkflowRetainedWorkReadResult]].readC(
         installedRecord(WorkflowRetainedWork.readOperation, Vector("--input", encoded(reference)), WorkflowRetainedWork.serviceName)))
       val complete = take(V.DelegateTaskView.createC(detail.response))
-      verifySuccessor(complete)
+      successor = Some(complete)
+      verifySuccessor(complete, originalRef => take(summon[org.goldenport.convert.ValueReader[V.WorkflowRetainedWorkReadResult]].readC(
+        installedRecord(WorkflowRetainedWork.readOperation, Vector("--input", encoded(originalRef)), WorkflowRetainedWork.serviceName))))
       installedCall[V.DelegateTaskReviewContinuationDescriptionResult]("resumeDelegateTaskReviewContinuation",
         Vector("--input", encoded(direction))).outcome shouldBe "already-resumed"
       val duplicate = installedCall[V.DelegateTaskView]("advanceDelegateTask", Vector("--sessionId", session))
@@ -494,10 +620,163 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
       reopened.retainedWork shouldBe emittedWork
     }
     verifyCheckpoint(true)
+    val successorView = successor.get
+    val successorReference = V.WorkflowArtifactReference("SPEC-successor-review", "1")
+    val successorExecution = V.WorkflowExecutionEvidence(Vector(successorReference), Some("SPEC-successor-reviewer"), None,
+      Some(V.WorkflowExecutionObservation("DELEGATED", "bounded-spec-caller", "SPEC-successor-reviewer", "ordinary")))
+    val successorResult = V.DelegateTaskWorkResult("accept", "SPEC independent successor review accepted clarified original question",
+      Vector.empty, NonEmptyVector.of(V.DelegateTaskCondition("objective", false, "later delivery"),
+        V.DelegateTaskCondition("delivery", false, "later delivery")), Vector.empty, None, None)
+    def saveSuccessor(name: String, value: org.goldenport.record.RecordPresentable): String = {
+      val path = root.resolve("SPEC-successor-" + name + ".json")
+      Files.writeString(path, encoded(value))
+      path.toUri.toASCIIString
+    }
+    val requestPath = saveSuccessor("request", successorView)
+    val resultPath = saveSuccessor("result", successorResult)
+    val referencePath = saveSuccessor("reference", successorReference)
+    val executionPath = saveSuccessor("execution", successorExecution)
+    _with_runtime_(root, "TaskReview", hostParameters = parameters, componentInstance = "default") { (owner, component, actor, prepare) =>
+      val preparation = V.WorkflowEvidencePreparationInput("DelegateTask", "review", requestPath, resultPath,
+        referencePath, executionPath, "normal-development-host", actor.clock.instant().minusSeconds(1).toString,
+        "entity:smworkflow.cli.host_evidence", None)
+      val record = if (installed.nonEmpty) installedRecord("prepareEvidence", Vector("--input", encoded(preparation),
+        "--preparationFormat", "legacy-full"), "NativeWorkflowPreparationService")
+      else {
+        val response = take(owner.executeOperationResponseInContext(Request.of(component = component.name,
+          service = "NativeWorkflowPreparationService", operation = "prepareEvidence", properties = List(
+            Property("input", preparation, None), Property("preparationFormat", "legacy-full", None))), actor))
+        response match {
+          case org.goldenport.protocol.operation.OperationResponse.RecordResponse(value) => value
+          case org.goldenport.protocol.operation.OperationResponse.Json(value) =>
+            take(new org.goldenport.record.io.RecordDecoder().json(value.noSpaces))
+          case other => fail("Expected complete public preparation: " + other)
+        }
+      }
+      val row = record.getVector("datastore").get.head.asInstanceOf[Record].getVector("records").get.head.asInstanceOf[Record]
+      prepare(setup => setup.createC("host_evidence", row.getString("id").get, row.removeKeys(Set("id"))))
+      val submitted = if (installed.nonEmpty) installedCall[V.DelegateTaskView]("submitDelegateTaskWorkResult",
+        Vector("--sessionId", session, "--issuedWorkContext", encoded(successorView.issuedWorkContext.get),
+          "--result", encoded(successorResult), "--resultReference", encoded(successorReference),
+          "--executionEvidence", encoded(successorExecution)))
+      else read_value[V.DelegateTaskView](take(owner.executeOperationResponseInContext(Request.of(component = component.name,
+        service = "DelegateTaskService", operation = "submitDelegateTaskWorkResult", properties = List(
+          Property("sessionId", session, None), Property("issuedWorkContext", successorView.issuedWorkContext.get, None),
+          Property("result", successorResult, None), Property("resultReference", successorReference, None),
+          Property("executionEvidence", successorExecution, None))), actor)))
+      submitted.kind shouldBe "Submitted"
+    }
+    _with_runtime_(root, "TaskReview", hostParameters = parameters, componentInstance = "default") { (_, _, _, prepare) =>
+      prepare { setup => for {
+        definition <- DelegateTaskRuntimeCatalog.loadC()
+        host = BoundedWorkRuntime.Host(_configuration_, _collection_("instances"), _collection_("continuations"),
+          "sm-workflow", root.resolve("repository").toString, "main", Vector("docs/phase.md"), Vector.empty,
+          None, None, None, None, None)
+        context <- NativeWorkflowSessionInput.contextC(setup.executionContext, Some(session))
+        selected = setup.core.copy(executionContext = context)
+        store <- DelegateTaskNativeRun.storageC(host, definition, selected)
+        completions <- store.bindCompletionC(DelegateTaskNativeRun.completionOperation, DelegateTaskNativeRun.inputCodec,
+          DelegateTaskNativeRun.resultCodec, DelegateTaskNativeRun.closingType, (_, _) => Consequence.success(Vector.empty))
+        retained <- completions.loadRetainedC(ContinuationIdentity(successorView.issuedWorkContext.get.continuationId))(using context)
+          .flatMap(_.map(Consequence.success).getOrElse(Consequence.stateConflict("SPEC successor completion absent")))
+        _ = {
+          retained.completion.result.resultReference shouldBe ContextReference(successorReference.identity, successorReference.revision)
+          retained.completion.result.result.value shouldBe S.Result("accept", successorResult.summary, Vector.empty,
+            Vector(S.Condition("objective", false, "later delivery"), S.Condition("delivery", false, "later delivery")),
+            Vector.empty)
+        }
+      } yield () }
+    }
+    _with_runtime_(root, "TaskReview", hostParameters = parameters, componentInstance = "default") { (_, _, _, prepare) =>
+      prepare { setup => for {
+        definition <- DelegateTaskRuntimeCatalog.loadC()
+        host = BoundedWorkRuntime.Host(_configuration_, _collection_("instances"), _collection_("continuations"),
+          "sm-workflow", root.resolve("repository").toString, "main", Vector("docs/phase.md"), Vector.empty,
+          None, None, None, None, None)
+        context <- NativeWorkflowSessionInput.contextC(setup.executionContext, Some(session))
+        selected = setup.core.copy(executionContext = context)
+        store <- DelegateTaskNativeRun.storageC(host, definition, selected)
+        instances <- store.bindInstancesC()(using context)
+        current <- instances.loadC(InstanceIdentity(session))(using context).flatMap(
+          _.map(Consequence.success).getOrElse(Consequence.stateConflict("SPEC completed Session absent")))
+        checkpoint <- current.causation.value.stripPrefix("standalone-completed:").takeWhile(_ != ':').toLongOption
+          .map(Consequence.success).getOrElse(Consequence.stateConflict("SPEC completion source checkpoint absent"))
+        payload <- DelegateTaskNativeRun.loadPayloadC(store, session, checkpoint, selected)
+        currentJson <- WorkflowInstanceRecordJsonV1.encodeC(current).flatMap(s =>
+          io.circe.parser.parse(s).fold(e => Consequence.stateConflict(e.message), Consequence.success))
+        _ = {
+          val oldHistory = target.frontier.hcursor.get[Vector[Json]]("history").toOption.get
+          currentJson.hcursor.get[Vector[Json]]("history").toOption.get.take(oldHistory.size) shouldBe oldHistory
+          payload.root shouldBe stopped.root
+          payload.branch shouldBe stopped.branch
+          payload.baseHead shouldBe stopped.baseHead
+          payload.state.input shouldBe stopped.state.input
+          payload.state.candidate shouldBe stopped.state.candidate
+          payload.state.generation shouldBe stopped.state.generation
+          payload.state.automaticCount shouldBe stopped.state.automaticCount
+          payload.state.ordinaryCount shouldBe stopped.state.ordinaryCount
+          payload.state.repairControl shouldBe stopped.state.repairControl
+          payload.state.reviewReference shouldBe stopped.state.reviewReference
+        }
+      } yield () }
+    }
+    _with_runtime_(root, "TaskReview", hostParameters = parameters, componentInstance = "default") { (_, _, _, prepare) =>
+      prepare { setup => for {
+        definition <- DelegateTaskRuntimeCatalog.loadC()
+        host = BoundedWorkRuntime.Host(_configuration_, _collection_("instances"), _collection_("continuations"),
+          "sm-workflow", root.resolve("repository").toString, "main", Vector("docs/phase.md"), Vector.empty,
+          None, None, None, None, None)
+        context <- NativeWorkflowSessionInput.contextC(setup.executionContext, Some(session))
+        selected = setup.core.copy(executionContext = context)
+        store <- DelegateTaskNativeRun.storageC(host, definition, selected)
+        issued <- store.bindIssuedC(DelegateTaskNativeRun.completionOperation, DelegateTaskNativeRun.inputCodec)
+        interaction <- issued.loadC(ContinuationIdentity(successorView.issuedWorkContext.get.continuationId))(using context)
+          .flatMap(_.map(Consequence.success).getOrElse(Consequence.stateConflict("SPEC successor issue absent")))
+        actualContext <- NativeWorkflowIssuedWorkContext.fromIssuedC(interaction,
+          NativeWorkflowIssuedWorkContext.Mode.Review, DelegateTaskNativeRun.inputCodec)
+        _ = {
+          def normalized(value: V.WorkflowIssuedWorkContext): Json = GoalPhaseNativeMetadata.normalizePublicJson(
+            io.circe.parser.parse(encoded(value)).toOption.get).toOption.get
+          normalized(actualContext) shouldBe normalized(successorView.issuedWorkContext.get)
+        }
+      } yield () }
+    }
+    _with_runtime_(root, "TaskReview", hostParameters = parameters, componentInstance = "default") { (_, _, _, prepare) =>
+      prepare { setup => for {
+        definition <- DelegateTaskRuntimeCatalog.loadC()
+        host = BoundedWorkRuntime.Host(_configuration_, _collection_("instances"), _collection_("continuations"),
+          "sm-workflow", root.resolve("repository").toString, "main", Vector("docs/phase.md"), Vector.empty,
+          None, None, None, None, None)
+        context <- NativeWorkflowSessionInput.contextC(setup.executionContext, Some(session))
+        selected = setup.core.copy(executionContext = context)
+        store <- DelegateTaskNativeRun.storageC(host, definition, selected)
+        instances <- store.bindInstancesC()(using context)
+        current <- instances.loadC(InstanceIdentity(session))(using context).flatMap(
+          _.map(Consequence.success).getOrElse(Consequence.stateConflict("SPEC completed Session absent")))
+        original <- R.originalC(store, current, selected, target.original.resultReference)
+        _ = { original shouldBe target.original }
+      } yield () }
+    }
     Files.exists(root.resolve("sbt-executions.txt")) shouldBe true
-    Files.readString(root.resolve("repository/docs/phase.md")) shouldBe "Specification-owned original source\n"
+    Files.readString(root.resolve("repository/docs/phase.md")) shouldBe candidateText
+    val report = Json.obj("specimen" -> "fixture-owned-native-review-continuation".asJson,
+      "mode" -> (if (installed.nonEmpty) "installed" else "managed").asJson,
+      "growth" -> (if (large) "large" else "small").asJson,
+      "legacyTargetBytes" -> retainedBytes.asJson,
+      "candidateDiffBytes" -> actualDiff.getBytes(java.nio.charset.StandardCharsets.UTF_8).length.asJson,
+      "receiptBytes" -> receiptBytes.asJson,
+      "successorReviewSubmitted" -> true.asJson,
+      "successorReviewReference" -> successorReference.identity.asJson,
+      "controlBytes" -> Json.obj(measurements.toVector.sortBy(_._1).map { case (k, v) => k -> v.asJson }*))
+    Files.writeString(root.resolve("review-continuation-measurements.json"), report.spaces2)
+    measurements.toMap
   }
   "Managed DelegateTask Review continuation" should {
-    "preserve the original Review stop across admission, separate Advance and reopen" in { qualify(None) }
+    "preserve the original Review stop across admission, separate Advance and reopen at both retained sizes" in {
+      val small = qualify(None)
+      val large = qualify(None, large = true)
+      small.keys shouldBe large.keys
+      small.foreach { case (key, size) => withClue(key) { math.abs(large(key) - size) should be <= 256 } }
+    }
   }
 }

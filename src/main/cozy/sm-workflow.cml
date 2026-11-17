@@ -14715,7 +14715,7 @@ DelegateTaskSemanticContinuationDescriptionResult
 
 ##### DESCRIPTION
 
-Describe the exact materialized destination Review decision-needed Human stop without advancing it.
+Describe the exact materialized destination Review decision-needed Human stop without advancing it. Return a compact owner, Session, frontier revision and original native work/result reference, without duplicating retained validation output, candidate diff or issued context. The native owner resolves the complete original records at admission.
 
 ##### TYPE
 
@@ -14743,7 +14743,7 @@ DelegateTaskReviewContinuationDescriptionResult
 
 ##### DESCRIPTION
 
-Admit independently verified covering Human direction and actual upstream references for the exact target. A separate ordinary Advance issues the successor.
+Admit independently verified covering Human direction and actual upstream references for the exact compact target. A separate ordinary Advance issues a new independent Review with the retained original completion, clarification and an exact original-work reference readable through WorkflowRetainedWorkService. Preserve the original contract, history and repair allowance; changed source still requires its owning continuation. Existing full-target directions retain their legacy meaning.
 
 ##### TYPE
 

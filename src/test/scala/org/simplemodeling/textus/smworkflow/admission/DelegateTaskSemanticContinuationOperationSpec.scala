@@ -61,14 +61,11 @@ final class DelegateTaskSemanticContinuationOperationSpec extends AnyWordSpec wi
       "textus.resource.url.file.roots" -> root.toString, "textus.resource.read.max-bytes" -> "16777216")
     def installedRecord(operation: String, argument: Vector[String],
       service: String = "DelegateTaskService"): Record = {
-      val (executable, archive) = installed.get
-      val config = root.resolve(".textus/config.json")
-      val json = io.circe.parser.parse(Files.readString(config)).toOption.get
-      Files.writeString(config, json.mapObject(_.add("textus.component.file", archive.toString.asJson)).noSpaces)
+      val (_, archive) = installed.get
       val logs = Files.createTempDirectory(root, "SPEC-installed-")
       val stdout = logs.resolve("stdout.json")
       val stderr = logs.resolve("stderr")
-      val argv = Vector(executable.toString, org.simplemodeling.textus.smworkflow.SmWorkflowComponent.componentId.name +
+      val argv = NativeWorkflowCliFixture.candidateCommand(archive) ++ Vector(org.simplemodeling.textus.smworkflow.SmWorkflowComponent.componentId.name +
         "." + service + "." + operation, "--textus.assembly.descriptor=" + root.resolve(".textus/assembly.yaml"),
         "--textus.test.descriptor=" + root.resolve(".textus/test.yaml")) ++ argument ++ Vector("--json")
       val process = new ProcessBuilder(argv.asJava).directory(root.toFile).redirectOutput(stdout.toFile).redirectError(stderr.toFile).start()

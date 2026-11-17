@@ -34,6 +34,34 @@ private[smworkflow] object DelegateTaskReviewContinuation {
   given Encoder[Target] = deriveEncoder
   given Decoder[Target] = deriveDecoder
 
+  /** Stable identifiers for native records; the retained records remain the authority. */
+  final case class OriginalReference(continuationId: String, sourceRevision: Long, resultReference: ContextReference)
+  given Encoder[OriginalReference] = deriveEncoder
+  given Decoder[OriginalReference] = deriveDecoder
+  final case class CompactTarget(schema: String, componentInstance: String, sessionId: String,
+    participant: String, frontierRevision: Long, original: OriginalReference)
+  given Encoder[CompactTarget] = deriveEncoder
+  given Decoder[CompactTarget] = deriveDecoder
+  private val compactSchema = "delegate-task-review-continuation-target.v1"
+
+  private def compact(owner: String, session: String, participant: String, revision: Long,
+    original: Original): CompactTarget = CompactTarget(compactSchema, owner, session, participant, revision,
+      OriginalReference(original.continuationId, original.sourceRevision, original.resultReference))
+
+  /** Legacy descriptions are retained for existing prepared directions and checkpoints. */
+  def wireC(text: String): Consequence[(CompactTarget, Json)] = for {
+    json <- io.circe.parser.parse(Option(text).getOrElse("")).fold(e => N.invalid(e.message), Consequence.success)
+    result <- if (json.hcursor.get[String]("schema").toOption.contains(compactSchema))
+      json.as[CompactTarget].fold(e => N.invalid(e.message), value =>
+        if (value.asJson == json && Vector(value.componentInstance, value.sessionId, value.participant,
+          value.original.continuationId).forall(exact) && value.frontierRevision > 0 &&
+          value.original.sourceRevision > 0 && value.original.sourceRevision < value.frontierRevision &&
+          validReference(value.original.resultReference)) Consequence.success((value, json))
+        else N.invalid("Review continuation target is incomplete or unsupported"))
+      else targetC(text).map(value => (compact(value.componentInstance, value.sessionId, value.participant,
+        value.frontierRevision, value.original), json))
+  } yield result
+
   final case class Direction(target: Json, choice: String, rationale: String,
     participant: String, reference: ContextReference, upstream: Vector[ContextReference])
   given Encoder[Direction] = deriveEncoder
@@ -94,14 +122,14 @@ private[smworkflow] object DelegateTaskReviewContinuation {
     p.state.receipts.exists(r => r.identity == c.identity &&
       RepositorySyncNativeMergeValidation.productSuccessful(r, c.kind)))
 
-  def bindingC(owner: String, target: Target, direction: Direction): Consequence[Json] =
-    if (owner != target.componentInstance || direction.target != target.asJson ||
+  def bindingC(owner: String, target: CompactTarget, direction: Direction): Consequence[Json] =
+    if (owner != target.componentInstance || wireC(direction.target.noSpaces).toOption.forall(_._1 != target) ||
       direction.participant != target.participant || !choices.contains(direction.choice) || !exact(direction.rationale) ||
       !validReference(direction.reference) || direction.upstream == null || direction.upstream.isEmpty ||
       !direction.upstream.forall(validReference) || direction.upstream.distinct != direction.upstream)
       N.invalid("Review continuation requires the exact target, covering Human direction and upstream references")
     else Consequence.success(Json.obj("componentInstance" -> owner.asJson,
-      "delegateTaskReviewContinuation" -> Json.obj("target" -> target.asJson,
+      "delegateTaskReviewContinuation" -> Json.obj("target" -> direction.target,
         "answer" -> Json.obj("source" -> "Human".asJson, "choice" -> direction.choice.asJson,
           "rationale" -> direction.rationale.asJson, "participant" -> direction.participant.asJson,
           "reference" -> direction.reference.asJson, "upstream" -> direction.upstream.asJson))))
@@ -110,7 +138,7 @@ private[smworkflow] object DelegateTaskReviewContinuation {
     owner <- value.hcursor.get[String]("componentInstance").left.map(_.message)
     entry = value.hcursor.downField("delegateTaskReviewContinuation")
     raw <- entry.get[Json]("target").left.map(_.message)
-    target <- targetC(raw.noSpaces).toOption.toRight("Invalid Review continuation target")
+    target <- wireC(raw.noSpaces).toOption.map(_._1).toRight("Invalid Review continuation target")
     answer = entry.downField("answer")
     choice <- answer.get[String]("choice").left.map(_.message)
     rationale <- answer.get[String]("rationale").left.map(_.message)
@@ -199,12 +227,13 @@ private[smworkflow] object DelegateTaskReviewContinuation {
           payload <- N.loadPayloadC(storage, session, sourceRevision, selected)
           _ <- GoalPhaseParticipantAdmission.admitC(payload.state.participant, context)
           owner = selected.component.get.core.instanceId.canonicalKey
-          requested <- input.fold(i => targetC(i.target).map(Some(_)), _ => Consequence.success(None))
+          requested <- input.fold(i => wireC(i.target).map(Some(_)), _ => Consequence.success(None))
           result <- payload.delegateReviewContinuation match {
             case Some(direction) => input match {
               case Left(answer) => for {
-                target <- requested.map(Consequence.success).getOrElse(N.invalid("Original target is required"))
-                proposed = Direction(target.asJson, answer.choice, answer.rationale, answer.participant,
+                wire <- requested.map(Consequence.success).getOrElse(N.invalid("Original target is required"))
+                (target, raw) = wire
+                proposed = Direction(raw, answer.choice, answer.rationale, answer.participant,
                   ContextReference(answer.reference.identity, answer.reference.revision),
                   answer.upstream.map(r => ContextReference(r.identity, r.revision)))
                 _ <- if (direction == proposed && target.componentInstance == owner && target.sessionId == session) Consequence.unit
@@ -223,14 +252,21 @@ private[smworkflow] object DelegateTaskReviewContinuation {
               _ <- if (eligible(business) && business.state.reviewReference.contains(original.resultReference) &&
                 business.state.copy(evidenceReferences = stopped.evidenceReferences) == stopped) Consequence.unit
                 else N.invalid("Current Human does not match the original Review completion")
-              frontier <- WorkflowInstanceRecordJsonV1.encodeC(current).flatMap(s =>
-                io.circe.parser.parse(s).fold(e => N.invalid(e.message), Consequence.success))
-              target = Target(owner, session, business.state.participant, current.revision.value, frontier, business, original)
+              target = compact(owner, session, business.state.participant, current.revision.value, original)
               response <- input match {
                 case Right(_) => Consequence.success(output(target, "decision-required", "Independent Human admission is required"))
                 case Left(answer) => for {
-                  _ <- if (requested.exists(_.asJson == target.asJson)) Consequence.unit else N.invalid("Semantic target changed; describe it again")
-                  direction = Direction(target.asJson, answer.choice, answer.rationale, answer.participant,
+                  _ <- if (requested.exists(_._1 == target)) Consequence.unit else N.invalid("Semantic target changed; describe it again")
+                  raw = requested.get._2
+                  _ <- if (raw == target.asJson) Consequence.unit else for {
+                    old <- targetC(raw.noSpaces)
+                    frontier <- WorkflowInstanceRecordJsonV1.encodeC(current).flatMap(s =>
+                      io.circe.parser.parse(s).fold(e => N.invalid(e.message), Consequence.success))
+                    _ <- if (old == Target(owner, session, business.state.participant,
+                      current.revision.value, frontier, business, original)) Consequence.unit
+                      else N.invalid("Legacy semantic target changed")
+                  } yield ()
+                  direction = Direction(raw, answer.choice, answer.rationale, answer.participant,
                     ContextReference(answer.reference.identity, answer.reference.revision),
                     answer.upstream.map(r => ContextReference(r.identity, r.revision)))
                   binding <- bindingC(owner, target, direction)
@@ -252,7 +288,7 @@ private[smworkflow] object DelegateTaskReviewContinuation {
       }
     })
   }
-  private def output(target: Target, outcome: String, message: String): OperationResponse =
+  private def output(target: CompactTarget, outcome: String, message: String): OperationResponse =
     NativeWorkflowOperationOutput.response(V.DelegateTaskReviewContinuationDescriptionResult(target.sessionId,
       target.componentInstance, outcome, message, target.asJson.noSpaces, choices, resumeOperation))
 }

@@ -142,12 +142,14 @@ object NativeReviewPreparation {
         execution.workerIdentity.contains(participant) && participant == answer.participant &&
         org.simplemodeling.textus.smworkflow.admission.GoalPhaseRuntimeRepairControl.exact(issuer) && occurredAt != null)
         Consequence.unit else Consequence.stateConflict("Review continuation preparation requires its exact description and Human evidence")
-      target <- R.targetC(description.target)
-      supplied <- R.targetC(answer.target)
-      _ <- if (target == supplied && description.sessionId == target.sessionId && answer.sessionId == target.sessionId &&
+      targetWire <- R.wireC(description.target)
+      target = targetWire._1
+      suppliedWire <- R.wireC(answer.target)
+      supplied = suppliedWire._1
+      _ <- if (target == supplied && targetWire._2 == suppliedWire._2 && description.sessionId == target.sessionId && answer.sessionId == target.sessionId &&
         description.componentInstance == target.componentInstance) Consequence.unit
         else Consequence.stateConflict("Review continuation preparation crosses its target")
-      direction = R.Direction(target.asJson, answer.choice, answer.rationale, participant,
+      direction = R.Direction(targetWire._2, answer.choice, answer.rationale, participant,
         ContextReference(reference.identity, reference.revision), answer.upstream.map(r => ContextReference(r.identity, r.revision)))
       binding <- R.bindingC(target.componentInstance, target, direction)
       purpose = NativeExternalEvidence.Purpose.DelegateTaskReviewContinuation

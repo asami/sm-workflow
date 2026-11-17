@@ -266,16 +266,12 @@ final class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with
       val countBefore = Files.readString(root.resolve("sbt-executions.txt"))
       var sequence = 0
       def installedRecord(service: String, operation: String, arguments: Vector[String]): Record = {
-        val executable = installed.map(_._1).getOrElse(fail("No installed executable was selected"))
         val selectedComponent = installed.map(_._2).getOrElse(fail("No candidate Component CAR was selected"))
-        val config = root.resolve(".textus/config.json")
-        val configured = io.circe.parser.parse(Files.readString(config)).toOption.get
-        Files.writeString(config, configured.mapObject(_.add("textus.component.file", selectedComponent.toString.asJson)).noSpaces)
         val logs = Files.createDirectories(root.resolve("installed-recovery-logs"))
         sequence += 1
         val stdout = logs.resolve(sequence + ".stdout.json")
         val stderr = logs.resolve(sequence + ".stderr")
-        val argv = Vector(executable.toString, org.simplemodeling.textus.smworkflow.SmWorkflowComponent.componentId.name +
+        val argv = NativeWorkflowCliFixture.candidateCommand(selectedComponent) ++ Vector(org.simplemodeling.textus.smworkflow.SmWorkflowComponent.componentId.name +
           "." + service + "." + operation, "--textus.assembly.descriptor=" + root.resolve(".textus/assembly.yaml"),
           "--textus.test.descriptor=" + root.resolve(".textus/test.yaml")) ++
           arguments ++ Vector("--json")
