@@ -11,7 +11,10 @@ PHASE-6 / S6-01 / S6-01D3D and S6-01D3F, finite caller rules.
 @version Oct. 19, 2026
 @version Oct. 25, 2026
 @version Oct. 29, 2026
+@version Nov.  2, 2026
 @version Nov.  3, 2026
+@version Nov.  5, 2026
+@version Nov. 12, 2026
 @author  ASAMI, Tomoharu
 """
 
@@ -694,8 +697,9 @@ def action_command(options, executable, runtime_root, task_fd):
 
 def progress(event, context, **observed):
     """Display attributable caller observations, separate from business DTOs."""
-    display_observation(dict(recordType="native-command-progress", event=event,
-                             **context, **observed))
+    record = dict(recordType="native-command-progress", event=event, **context, **observed)
+    record["presentation"] = command_activity_record(event, context, observed)["presentation"]
+    display_observation(record)
 
 
 def display_value(value, depth=0):
@@ -880,6 +884,8 @@ def native_call(command, runtime_root, output_fd, context):
                     progress("process-terminated", context, pid=process.pid, exitCode=process.returncode,
                              elapsedSeconds=round(time.monotonic() - started, 1))
                 except BaseException as error:
+                    if process is None:
+                        progress("launch-failed", context)
                     if process is not None:
                         try:
                             request_termination()
@@ -905,10 +911,14 @@ def native_call(command, runtime_root, output_fd, context):
                 finally:
                     signal.signal(signal.SIGTERM, previous)
     require(process.returncode == 0, "native process exited unsuccessfully; retain output")
-    descriptor = os.open("response.json", os.O_RDONLY | os.O_NOFOLLOW, dir_fd=output_fd)
-    with os.fdopen(descriptor, "r", encoding="utf-8") as stream:
-        text = stream.read()
-    response = json_object(text)
+    try:
+        descriptor = os.open("response.json", os.O_RDONLY | os.O_NOFOLLOW, dir_fd=output_fd)
+        with os.fdopen(descriptor, "r", encoding="utf-8") as stream:
+            text = stream.read()
+        response = json_object(text)
+    except (OSError, ValueError, CallerError, RecursionError, TypeError):
+        progress("response-invalid", context, exitCode=process.returncode)
+        raise
     if cancellation["requested"]:
         display_observation(response)
         response_progress(response, context)
@@ -1012,8 +1022,85 @@ def ai_activity_commentary_text(value):
     return re.sub(r"([\\`*_{}\[\]()<>#!|~:.+\-/=])", r"\\\1", value)
 
 
+def command_activity_record(event, context=None, observation=None):
+    """Render owned command observations only; never execute, poll or store state.
+
+    Direct callers use the same events as progress(), after actual transport
+    observations. Empty commentary deliberately suppresses heartbeat narration.
+    """
+    context = context if isinstance(context, dict) else {}
+    observation = observation if isinstance(observation, dict) else {}
+    record = {"recordType": "native-command-progress", "event": event,
+              "presentation": {"commentary": ""}}
+    try:
+        position = context.get("intervalPosition", "single")
+        heading, control = None, "sm-workflow"
+        details = []
+        if event == "invocation" and position in {"single", "opening"}:
+            heading, control = "⚙️ sm-workflow 呼び出し準備", None
+        elif event in {"runtime-event", "sbt-event"}:
+            prefix = "[cncf-runtime-event] " if event == "runtime-event" else "[cncf-sbt-event] "
+            raw = observation.get("rawEvent", "")
+            value = json_object(raw[len(prefix):]) if isinstance(raw, str) and raw.startswith(prefix) else {}
+            state = value.get("state")
+            if event == "runtime-event" and state == "runtime-started":
+                if position in {"single", "opening"}:
+                    heading = "⚙️ 🔵 ▶ sm-workflow 実行開始 ━━━━━━━━━━━"
+            elif state == "uncertain" or not state:
+                heading, control = "⚙️ 🟡 │ sm-workflow 実行状態不明", None
+            elif state in {"started", "terminal", "cancellation-requested"}:
+                heading = "⚙️ 🔵 │ sm-workflow 実行中"
+                details = [(key, value[key]) for key in ("state", "programIdentity", "exitCode", "termination")
+                           if key in value]
+        elif event == "response":
+            if position in {"opening", "middle"}:
+                heading = "⚙️ 🔵 │ sm-workflow 実行中"
+            else:
+                heading, control = "⚙️ 🔵 ◀ sm-workflow 応答受信・制御返却 ━━━━━━━━━━━", "親チャット"
+            response = observation.get("observation", {})
+            response = response if isinstance(response, dict) else {}
+            details = [(key, response.get(key, "unknown")) for key in ("kind", "outcome", "accepted", "message")]
+        elif event == "process-terminated" and type(observation.get("exitCode")) is int and observation["exitCode"] != 0:
+            heading, control = "⚙️ 🔴 ◀ sm-workflow 呼び出し終了・エラー", "親チャット"
+            details = [("exitCode", observation["exitCode"])]
+        elif event == "response-invalid":
+            heading, control = "⚙️ 🔴 ◀ sm-workflow 呼び出し終了・エラー", "親チャット"
+            details = [("outcome", "unknown"), ("reason", "response unavailable or invalid")]
+        elif event == "launch-failed":
+            heading, control = "⚙️ 🔴 sm-workflow 起動前エラー", "親チャット"
+        elif event == "unknown":
+            heading, control = "⚙️ 🟡 │ sm-workflow 実行状態不明", None
+        if heading is None:
+            return record
+
+        def text(value):
+            if isinstance(value, bool):
+                value = str(value).lower()
+            elif isinstance(value, (int, float)):
+                value = str(value)
+            return ai_activity_commentary_text(ai_activity_text(value))
+
+        issued = context.get("issuedObservation", {})
+        work = issued.get("work", {}) if isinstance(issued, dict) else {}
+        work = work if isinstance(work, dict) else {}
+        step = context.get("stepIdentity", work.get("stepIdentity", work.get("step_identity", "unknown")))
+        fields = [("operation", context.get("operation")),
+                  ("Session", context.get("outerSessionId")), ("Step", step)]
+        fields += [(key, context[key]) for key in ("purpose", "targetSessionId", "responseReference", "stderrReference")
+                   if key in context and context[key] is not None]
+        fields += details
+        line = "; ".join(key + "=" + text(value) for key, value in fields)
+        if control is not None:
+            line = "制御：" + control + "; " + line
+        record["presentation"]["commentary"] = "**" + heading + "**\n" + line
+    except Exception:
+        # Presentation failure never changes a business result or execution.
+        record["presentation"]["commentary"] = "**⚙️ 🟡 │ sm-workflow 実行状態不明**\npresentation=unknown"
+    return record
+
+
 def ai_activity_commentary(record):
-    """Generate the sole canonical heading/detail presentation for an observation."""
+    """Generate the canonical AI actor heading, separate from command progress."""
     context = record["activityContext"]
     observation = record["observation"]
     actor, event = context["actor"], record["event"]
@@ -1057,8 +1144,9 @@ def ai_activity_commentary(record):
     if context["reference"] != "unknown":
         fields.append("reference=" + ai_activity_commentary_text(context["reference"]))
     if context["runtimeControl"] == "sm-workflow":
-        heading = "⚙️ 🔵 │ sm-workflow 実行中 · " + heading
-        fields.insert(0, "制御：sm-workflow")
+        # Workflow ownership is not evidence of a live runtime invocation.
+        # Command progress owns gear intervals; AI activity keeps its own actor.
+        fields.insert(0, "進行管理：sm-workflow")
     return "**" + heading + "**\n" + "; ".join(fields)
 
 
@@ -1156,7 +1244,7 @@ def ai_activity_main(argv):
     return 0
 
 
-def project_before_submit(command, options, executable, runtime_root, task_fd, output_fd, output, family, outer_id, request):
+def project_before_submit(command, options, executable, runtime_root, task_fd, output_fd, output, family, outer_id, request, interval_position="single"):
     """Resolve every semantic transport using the retained owner and complete public reader."""
     work_resource = issued_request_resource(explicit_path(options["request"]))
     require(work_resource.startswith("sm-workflow-work:"), "projection requires retained issued work")
@@ -1190,6 +1278,7 @@ def project_before_submit(command, options, executable, runtime_root, task_fd, o
             "--input", json.dumps({"workResource": work_resource, "resultResource": source,
                                    "format": "public-result"}, ensure_ascii=False), "--json"]
         context = exchange_context(projection_command, runtime_root, output / "projection", outer_id, request)
+        context["intervalPosition"] = interval_position
         _text, projection = native_call(projection_command, runtime_root, projection_fd, context)
         projected_json = projection.get("resultJson", projection.get("result_json"))
         require(isinstance(projected_json, str) and isinstance(json_object(projected_json), dict)
@@ -1207,6 +1296,7 @@ def project_before_submit(command, options, executable, runtime_root, task_fd, o
         os.close(projection_fd)
 
 
+
 def complete(options, executable, runtime_root, task_fd, output_fd):
     """Submit once, then explicitly Advance once only after actual acceptance."""
     command, submit_id, following, outer_id, advance_action, preparation, family = completion_commands(
@@ -1220,6 +1310,8 @@ def complete(options, executable, runtime_root, task_fd, output_fd):
     output = explicit_path(options["output"])
     submit_context = exchange_context(command, runtime_root, output, outer_id, request)
     advance_context = exchange_context(following, runtime_root, output / "advance", outer_id)
+    submit_context["intervalPosition"] = "opening" if preparation is None else "middle"
+    advance_context["intervalPosition"] = "closing"
     try:
         if preparation is not None:
             submission, provenance = preparation
@@ -1238,6 +1330,7 @@ def complete(options, executable, runtime_root, task_fd, output_fd):
                     "org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.prepareEvidence",
                     "--input", json.dumps(value, ensure_ascii=False, allow_nan=False), "--json"]
                 prepare_context = exchange_context(prepare_command, runtime_root, output / "preparation", outer_id, request)
+                prepare_context["intervalPosition"] = "opening"
                 _text, prepared = native_call(prepare_command, runtime_root, preparation_fd, prepare_context)
                 retained_import = native_field(prepared, "retainedImport")
                 if retained_import is not None:
@@ -1250,6 +1343,7 @@ def complete(options, executable, runtime_root, task_fd, output_fd):
                             "org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.readPreparedImport",
                             "--input", json.dumps(retained_import, ensure_ascii=False, allow_nan=False), "--json"]
                         detail_context = exchange_context(detail_command, runtime_root, output / "preparation" / "detail", outer_id, request)
+                        detail_context["intervalPosition"] = "middle"
                         _detail_text, importer = native_call(detail_command, runtime_root, detail_fd, detail_context)
                         require(isinstance(importer.get("datastore"), list) and importer["datastore"],
                                 "selected retained importer detail is unavailable")
@@ -1267,8 +1361,13 @@ def complete(options, executable, runtime_root, task_fd, output_fd):
                         "task routing changed after preparation; retain output and stop")
             finally:
                 os.close(preparation_fd)
-        if family in {"GoalPhase", "GoalTask"} and request.get("kind") == "Request":
-            project_before_submit(command, options, executable, runtime_root, task_fd, output_fd, output, family, outer_id, request)
+        goal_pair = {"GoalPhase": ("submitGoalPhaseWorkResult", "GoalPhaseWorkResult"),
+                     "GoalTask": ("submitGoalTaskWorkResult", "GoalTaskWorkResult")}.get(family)
+        if request.get("kind") == "Request" and goal_pair == (
+                native_field(request, "submitOperation"), native_field(request, "resultType")):
+            project_before_submit(command, options, executable, runtime_root, task_fd, output_fd, output,
+                                  family, outer_id, request, submit_context["intervalPosition"])
+            submit_context["intervalPosition"] = "middle"
         _text, response = native_call(command, runtime_root, output_fd, submit_context)
         require(native_field(response, "sessionId") == submit_id and nonblank(response.get("message")),
                 "Submit response ID or message mismatches the selected route")
@@ -1372,7 +1471,8 @@ def execute(options):
             if options["action"] == "submit":
                 route = route_record(task_fd)
                 project_before_submit(command, options, executable, runtime_root, task_fd, output_fd, output,
-                                      route["family"], route["sessionId"], request)
+                                      route["family"], route["sessionId"], request, "opening")
+                context["intervalPosition"] = "closing"
             text, response = native_call(command, runtime_root, output_fd, context)
             acknowledge(options["action"], response, session_id, task_fd, output_fd)
             response_progress(response, context)

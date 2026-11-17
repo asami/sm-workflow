@@ -266,10 +266,21 @@ def project_result(request, value, work_resource=None):
     return copy.deepcopy(value)
 
 
+
+def returned_result(request, value):
+    """Apply the declared Goal result projection without narrowing other workflows."""
+    result_type = alias(request, 'resultType', 'result_type')
+    if result_type is None or result_type in PUBLIC_RESULT_TYPES:
+        return project_result(request, value)
+    if not isinstance(value, dict):
+        raise ValueError('The actual typed semantic payload is required')
+    return copy.deepcopy(value)
+
+
 def complete(state, agent_id, semantic_result, observed=None, resources=None):
     if state['status'] != 'STARTED' or launch_identity(state['launchReturn']) != agent_id:
         raise ValueError('Only the actual launched agent can supply its return')
-    semantic_result = project_result(state['request'], semantic_result)
+    semantic_result = returned_result(state['request'], semantic_result)
     state = copy.deepcopy(state)
     state.update(status='RETURNED', semanticResult=copy.deepcopy(semantic_result), observed=observed, resources=resources)
     selected = state['resolved']['concrete']
@@ -285,7 +296,7 @@ def inline_complete(state, origin_context, semantic_result, observed=None, resou
     origin = alias(requirement['disposition'], 'originContextIdentity', 'origin_context_identity')
     if state['status'] != 'INLINE' or origin_context != origin:
         raise ValueError('INLINE return requires the actual issued parent context and semantic payload')
-    semantic_result = project_result(state['request'], semantic_result)
+    semantic_result = returned_result(state['request'], semantic_result)
     state = copy.deepcopy(state)
     state.update(status='RETURNED', semanticResult=copy.deepcopy(semantic_result), observed=observed,
                  resources=resources, inlineContext=origin_context)
