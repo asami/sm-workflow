@@ -877,7 +877,9 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
       case "DispatchReady" => Consequence.success(view(record, s, "Dispatch", s.message))
       case "ReturnReady" => Consequence.success(view(record, s, "Return", s.message))
       case "Returned" | "Adopted" if delegation => Consequence.success(view(record, s, "Terminal", s.message))
-      case "Completed" | "Accepted" | "NoChange" => Consequence.success(view(record, s, "Terminal", s.message))
+      case "Completed" | "Accepted" | "NoChange" =>
+        loadPayloadC(store, record.identity.value, record.revision.value, core)
+          .map(saved => view(record, saved.state, "Terminal", saved.state.message))
       case "Human" => Consequence.success(view(record, s, "Human", s.message))
       case _ => Consequence.success(view(record, s, "Wait", s.message + "; retained intent is not executable permission"))
     }
