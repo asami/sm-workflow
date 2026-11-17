@@ -14,7 +14,8 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Named value binding and generated result intake checks. Real operation execution is covered by
   * the normal three-workflow specs, not inferred from a codec round trip.
   * @since   Oct. 12, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 25, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -191,7 +192,7 @@ final class WorkflowOperationValueBindingSpec extends AnyWordSpec with Matchers 
     "map the Split and Repository Start choices directly from their business Records" in {
       Given("Split preview and Repository branch/remote choices, not internal allocation commands")
       val split = V.SplitPhaseStartInput("phase-5.3", "PREVIEW", Some("proposal-1"))
-      val repository = V.RepositorySyncStartInput("sm-workflow", "main", "origin", "main", "upstream", "FULL_STATE")
+      val repository = V.RepositorySyncStartInput("sm-workflow", "main", "origin", "main", "upstream", "FULL_STATE", None, None)
 
       When("the owning Start maps the declared Record to its native business input")
       val splitinput = _take(NativeWorkflowStartInput.fromRecordC(NativeWorkflowStartInput.Kind.SplitPhase, split.toRecord()))

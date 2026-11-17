@@ -76,7 +76,7 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
       "describeRepositorySyncPushContinuation", "adoptRepositorySyncPushContinuation",
       "describeRepositorySyncRepairScopeCorrection", "prepareRepositorySyncRepairScopeCorrection",
       "adoptRepositorySyncRepairScopeCorrection",
-      "submitNativeMergeReview", "submitNativeMergeRepair", "submitRepositoryConflictDecision"
+      "submitNativeMergeReview", "submitNativeMergeRepair", "submitRepositoryConflictDecision", "submitRepositorySyncPolicyDecision"
     ),
     SmWorkflowComponent.StandaloneFixServiceService -> Vector("startStandaloneFix", "startStandaloneReviewFix", "advanceStandaloneFix",
       "submitStandaloneFixWorkResult", "resolveStandaloneFixDiagnosticInformation",
@@ -114,7 +114,7 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
       "readJournalSemanticEntry", "findJournalSemanticEntries"),
     SmWorkflowComponent.EvidenceServiceService -> Vector("readEvidence", "readEvidenceRange", "recordEvidenceJournal",
       "archiveEvidenceBatch", "describeEvidence", "manageEvidenceRetention", "findDueEvidence"),
-    SmWorkflowComponent.RepositoryHumanServiceService -> Vector("presentRepositoryConflictDecision"),
+    SmWorkflowComponent.RepositoryHumanServiceService -> Vector("presentRepositoryConflictDecision", "presentRepositorySyncPolicyDecision"),
     SmWorkflowComponent.RepositoryConflictServiceService -> Vector("resolveRepositoryMergeConflicts", "groupRepositoryPurposes"),
     SmWorkflowComponent.GoalPhaseOrderedHumanServiceService -> Vector("presentOrderedGoalDecision"),
     SmWorkflowComponent.GoalPhaseImplementationServiceService -> Vector("implementGoalPhaseStep"),

@@ -10,7 +10,7 @@ import WorkflowManagedProcessExecution as E
   * progression re-observes preconditions and retains uncertain effect intent.
   * @since   Oct.  6, 2026
   *  version Oct. 25, 2026
-  * @version Nov.  6, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncManagedGitObservation {
@@ -48,13 +48,19 @@ private[smworkflow] object RepositorySyncManagedGitObservation {
     _ <- if (replacements.isEmpty) Consequence.unit else invalid("replacement history cannot establish convergence")
     merge <- _value_c(core, GitOperation.MergeHead)
     dirty <- _value_c(core, GitOperation.Status)
-    tracking <- _value_c(core, GitOperation.TrackingTip)
+    localSource = RepositorySyncLocalMain.hop(core).filter(_.cursor.phase == "local").flatMap(_.cursor.sourceTip)
+    tracking <- localSource.map(value => GitObjectId.parseC(value).map(Some(_)))
+      .getOrElse(_value_c(core, GitOperation.TrackingTip))
+    localRelation <- localSource.map(value => RepositorySyncLocalMain.localRelationC(core, head.value, value).map(Some(_)))
+      .getOrElse(Consequence.success(None))
     counts <- tracking match {
       case None => Consequence.success(Option.empty[Counts])
+      case Some(_) if localRelation.nonEmpty => Consequence.success(Some(localRelation.get._1))
       case Some(_) => _value_c(core, GitOperation.Relation).map(x => Some(Counts(x.localAhead, x.remoteAhead)))
     }
     mergebase <- tracking match {
       case None => Consequence.success(Option.empty[GitObjectId])
+      case Some(_) if localRelation.nonEmpty => GitObjectId.parseC(localRelation.get._2).map(Some(_))
       case Some(_) => _value_c(core, GitOperation.MergeBase)
     }
     _ <- if (tracking.isEmpty || mergebase.nonEmpty) Consequence.unit

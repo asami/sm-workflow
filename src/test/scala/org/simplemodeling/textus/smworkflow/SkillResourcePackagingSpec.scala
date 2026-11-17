@@ -22,6 +22,7 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
   private val _contract_paths = Vector(
     "docs/spec/native-host-execution.md",
     "docs/spec/semantic-result-submission.md",
+    "docs/spec/development-journal-semantic-entries.md",
     "docs/spec/runtime-owned-local-publication.md",
     "docs/spec/caller-information.md",
     "docs/spec/task-fix-delivery.md",
@@ -38,6 +39,7 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
     "docs/spec/goal-phase-dependency-source-revision.md",
     "docs/spec/repository-sync-validation-continuation.md",
     "docs/spec/repository-sync-runtime-orchestration.md",
+    "docs/spec/repository-sync-directory-list.md",
     "docs/spec/native-goal-command-task.md",
     "docs/spec/goal-phase-validation-metadata.md"
   )
@@ -47,8 +49,9 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
     "scripts/native-goal-authority.py",
     "scripts/migrate-runtime-caller-format.py"
   )
-  private val _supporting_paths = Vector("docs/spec/goal-phase-purpose-repair.md", "docs/spec/standalone-fix-acceptance.md")
-  private val _agent_paths = Vector("analysis", "design", "implementation", "repair", "review")
+  private val _supporting_paths = Vector("docs/spec/goal-phase-purpose-repair.md", "docs/spec/standalone-fix-acceptance.md",
+    "docs/spec/workflow-response-artifact-references.md")
+  private val _agent_paths = Vector("analysis", "design", "implementation", "repair", "review", "chat_waiter")
     .map(role => s"agents/sm_workflow_$role.toml")
   private val _dispatch_paths = Vector("scripts/goal-phase-dispatch.py", "skills/sm-goal-phase/dispatch-mappings.json",
     "skills/sm-goal-phase/cost-role-mapping.json")

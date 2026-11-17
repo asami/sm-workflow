@@ -22,7 +22,8 @@ import org.simplemodeling.textus.smworkflow.value as V
   * Consumer cases below connect those observations to actual typed File/UoW;
   * SQL and fresh-process public retrieval have separate connected coverage.
   * @since   Oct. 20, 2026
-  * @version Oct. 24, 2026
+  *  version Oct. 24, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -529,7 +530,9 @@ final class CommonEvidenceSpec extends AnyWordSpec with Matchers with GivenWhenT
       import CommonEvidenceLifecycleFixture.*
       val store = new CommonEvidenceLifecycleFixture.Memory
       val sources = Vector(source().copy(repository = "../repository"), source().copy(phase = ".."),
-        source().copy(session = "a/b"))
+        source().copy(repository = "repo:native"), source().copy(phase = "phase%31")) ++
+        Vector("", ".", "..", "a/b", "a\\b", "a b", "a\tb", "a\nb", "a\u0000b", "\ud800", "a" * 256)
+          .map(session => source().copy(session = session))
       When("managed archive admits each proposal")
       val invalid = sources.map(s => take(E.archiveManagedC(store, policy, s, "text", "identity", clock))) ++
         Vector("\ud800", "nul\u0000text").map(text => take(E.archiveManagedC(store, policy, source(), text, "identity", clock)))
@@ -544,6 +547,20 @@ final class CommonEvidenceSpec extends AnyWordSpec with Matchers with GivenWhenT
       store.rows shouldBe empty
       store.directories shouldBe empty
       store.writes shouldBe 0
+    }
+    "keep a 255-byte literal native Session and reject a longer segment before allocation" in {
+      import CommonEvidenceLifecycleFixture.*
+      val store = new CommonEvidenceLifecycleFixture.Memory
+      val session = "delegate:" + "a" * (255 - "delegate:".length)
+      val selected = source().copy(session = session)
+      val first = take(E.archiveManagedC(store, policy, selected, "bounded native evidence", "identity", clock))
+      first._1.status shouldBe "stored"
+      first._2.get._1.source.session shouldBe session
+      first._2.get._1.path should include("/" + session + "/")
+      val before = store.rows
+      take(E.archiveManagedC(store, policy, selected.copy(session = session + "a"), "text", "identity", clock))._1.status shouldBe "unavailable"
+      store.rows shouldBe before
+      store.writes shouldBe 1
     }
     "keep directory conflict and malformed current UTF-8 separate from original source and storage history" in {
       Given("a managed archive whose parent directory preparation conflicts")

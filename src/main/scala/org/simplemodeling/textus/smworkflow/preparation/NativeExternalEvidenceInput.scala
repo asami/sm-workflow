@@ -17,7 +17,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * standard StartupImport input. It neither writes storage nor calls Workflow.
   * @since   Oct. 14, 2026
   *  version Oct. 27, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeExternalEvidenceInput {
@@ -323,6 +323,10 @@ private[smworkflow] object NativeExternalEvidenceInput {
       answer <- summon[ValueReader[V.RepositorySyncHumanConflictAnswer]].readC(result)
       prepared <- NativeHumanDecisionPreparation.repositoryC(context, answer, reference, execution, participant, issuer, occurred)
     } yield (prepared.recordIdentity, prepared.record)
+    def repositoryPolicyHuman(context: V.WorkflowHumanDecisionContext): Consequence[(String, Record)] = for {
+      answer <- summon[ValueReader[V.RepositorySyncPolicyDecisionAnswer]].readC(result)
+      prepared <- NativeHumanDecisionPreparation.repositoryPolicyC(context, answer, reference, execution, participant, issuer, occurred)
+    } yield (prepared.recordIdentity, prepared.record)
     options("family") match {
       case "GoalPhase" | "GoalTask" | "DelegateTask" if options("kind") == "completion-record-closure" => for {
         description <- summon[ValueReader[V.CompletionRecordClosureView]].readC(request)
@@ -498,6 +502,7 @@ private[smworkflow] object NativeExternalEvidenceInput {
           _one_c(own ++ child).flatMap(context =>
             if (own.nonEmpty && output.resultType.contains("GoalPhaseOrderedDecisionAnswer")) goalHuman(context)
             else if (child.nonEmpty && output.resultType.contains("RepositorySyncHumanConflictAnswer")) repositoryHuman(context)
+            else if (child.nonEmpty && output.resultType.contains("RepositorySyncPolicyDecisionAnswer")) repositoryPolicyHuman(context)
             else _invalid("Goal Human result type differs from its assigned context"))
         } else {
           val own = output.work.toVector.flatMap(_.review).flatMap(_.reviewContext)
@@ -522,6 +527,8 @@ private[smworkflow] object NativeExternalEvidenceInput {
         _ <- _kind_c(output.kind, human)
         prepared <- if (human && output.resultType.contains("RepositorySyncHumanConflictAnswer"))
           _one_c(output.human.toVector.flatMap(_.humanDecisionContext)).flatMap(repositoryHuman)
+          else if (human && output.resultType.contains("RepositorySyncPolicyDecisionAnswer"))
+            _one_c(output.human.toVector.flatMap(_.humanDecisionContext)).flatMap(repositoryPolicyHuman)
           else if (!human && output.resultType.contains(RepositorySyncNativeMergeReview.resultCodec.typeIdentity))
             _one_c(output.review.toVector.flatMap(_.reviewContext)).flatMap(repositoryReview)
           else _invalid("Repository result type differs from its assigned context")

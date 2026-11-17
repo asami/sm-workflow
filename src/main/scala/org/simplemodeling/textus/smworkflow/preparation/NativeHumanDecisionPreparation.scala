@@ -5,7 +5,7 @@ import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.record.Record
 import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseOrderedHumanDecision, NativeExternalEvidence,
-  NativeHumanDecisionScope, NativeSplitAnswerScope, RepositorySyncHumanConflict, SplitPhaseNativeHumanDirection,
+  NativeHumanDecisionScope, NativeSplitAnswerScope, GoalPhaseNativeMetadata, RepositorySyncHumanConflict, RepositorySyncPolicyDecision, SplitPhaseNativeHumanDirection,
   SplitPhaseReasoningHumanDirection, SplitPhaseHumanDirectionAnswerContract, ThreeWorkflowExternalEvidencePorts}
 import org.simplemodeling.textus.smworkflow.admission.GoalPhaseDevelopmentReconstruction as X
 import org.simplemodeling.textus.smworkflow.value as V
@@ -14,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * Native completion owns admission; the independent issuer owns provenance and provisioning.
   * @since   Oct. 14, 2026
   *  version Oct. 23, 2026
-  * @version Nov.  6, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 object NativeHumanDecisionPreparation {
@@ -70,6 +70,24 @@ object NativeHumanDecisionPreparation {
         SplitPhaseHumanDirectionAnswerContract.resultType, direction, reference, execution, submittingParticipant, issuer, occurredAt)
     } yield prepared
   }
+
+  def repositoryPolicyC(context: V.WorkflowHumanDecisionContext, answer: V.RepositorySyncPolicyDecisionAnswer,
+    reference: V.WorkflowArtifactReference, execution: V.WorkflowExecutionEvidence,
+    submittingParticipant: String, issuer: String, occurredAt: Instant): Consequence[Prepared] = for {
+    raw <- Option(context).flatMap(c => Option(c.question)).map(Consequence.success)
+      .getOrElse(Consequence.stateConflict("Policy Human context is absent")).flatMap(_.toJsonStringC).flatMap(text => io.circe.parser.parse(text)
+      .fold(error => Consequence.stateConflict(error.message), Consequence.success))
+    normalized <- GoalPhaseNativeMetadata.normalizePublicJson(raw).fold(Consequence.stateConflict(_), Consequence.success)
+    source <- normalized.hcursor.downField("source").get[io.circe.Json]("policyDecision")
+      .fold(error => Consequence.stateConflict(error.message), Consequence.success)
+    input <- RepositorySyncPolicyDecision.inputCodec.decode(Json.obj("target" -> Json.fromString(source.noSpaces)))
+      .fold(Consequence.stateConflict(_), Consequence.success)
+    _ <- if (answer == null) Consequence.stateConflict("Policy Human answer is absent")
+      else RepositorySyncPolicyDecision.admitC(input, RepositorySyncPolicyDecision.Answer(answer.choice, answer.rationale))
+    prepared <- _prepare_c(context, NativeExternalEvidence.Purpose.RepositoryPolicyHuman,
+      Set(RepositorySyncPolicyDecision.inputCodec.typeIdentity), RepositorySyncPolicyDecision.answerCodec.typeIdentity,
+      Json.obj("choice" -> Json.fromString(answer.choice)), reference, execution, submittingParticipant, issuer, occurredAt)
+  } yield prepared
 
   private def _prepare_c(context: V.WorkflowHumanDecisionContext, purpose: NativeExternalEvidence.Purpose,
     inputs: Set[String], resultType: String, direction: Json, reference: V.WorkflowArtifactReference,

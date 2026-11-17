@@ -18,7 +18,8 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Explicit files, metadata and controlled host claims are specification-owned.
   * Preparation and fixture Start establish no genuine installed task acceptance.
   * @since   Oct. 14, 2026
-  * @version Oct. 24, 2026
+  *  version Oct. 24, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -26,9 +27,10 @@ import org.simplemodeling.textus.smworkflow.value as V
 final class NativeRepositoryStartInputSpec extends AnyWordSpec with Matchers with GivenWhenThen
     with ThreeWorkflowManagedRepositoryFixture {
   private def _json(value: Record): Json = io.circe.parser.parse(value.toJsonStringC.toOption.get).toOption.get
-  private val _input = V.RepositorySyncStartInput("sm-workflow", "main", "origin", "main", "owned-upstream", "FULL_STATE")
-  private val _fields = Vector("repositoryIdentity", "localBranch", "trackingRemote", "trackingBranch",
+  private val _input = V.RepositorySyncStartInput("sm-workflow", "main", "origin", "main", "owned-upstream", "FULL_STATE", None, None)
+  private val _required_fields = Vector("repositoryIdentity", "localBranch", "trackingRemote", "trackingBranch",
     "remoteEndpointIdentity", "syncMode")
+  private val _fields = _required_fields ++ Vector("mainIntegration", "uncommittedPolicy")
   private val _selection_collection = "entity:smworkflow.host.repository_selections"
   private val _args = Map("input" -> "input.json", "selection-id" -> "specification-repository-selection",
     "participant" -> "explicit-participant", "origin" -> "ExplicitHuman",
@@ -94,11 +96,12 @@ final class NativeRepositoryStartInputSpec extends AnyWordSpec with Matchers wit
   "E2 Canonical generated Repository reader" should afterWord(
     "in spec:native-host-repository-start-preparation, example:E2, rules:R1,R2,R3,R5, phase:6") {
     "normalize snake-case aliases and ignore unused authority-looking input claims" in {
-      Given("all six generated snake-case fields and unused selection, participant, origin, permission, authentication, consent and argv claims")
+      Given("six required and two optional generated snake-case fields and unused selection, participant, origin, permission, authentication, consent and argv claims")
       val input = Json.obj("repository_identity" -> Json.fromString(_input.repositoryIdentity),
         "local_branch" -> Json.fromString(_input.localBranch), "tracking_remote" -> Json.fromString(_input.trackingRemote),
         "tracking_branch" -> Json.fromString(_input.trackingBranch),
         "remote_endpoint_identity" -> Json.fromString(_input.remoteEndpointIdentity), "sync_mode" -> Json.fromString(_input.syncMode),
+        "main_integration" -> Json.fromString("direct"), "uncommitted_policy" -> Json.fromString("confirm"),
         "selectionId" -> Json.fromString("unselected"), "participantIdentity" -> Json.fromString("foreign"),
         "origin" -> Json.fromString("TerminalResult"), "idempotencyKey" -> Json.fromString("claimed"),
         "permission" -> Json.True, "authenticated" -> Json.True, "consent" -> Json.True,
@@ -109,7 +112,8 @@ final class NativeRepositoryStartInputSpec extends AnyWordSpec with Matchers wit
       val selection = _selection(entries)
 
       Then("only canonical business fields and explicit metadata reach the single selection row")
-      selection.selectedInput.get.value.as[V.RepositorySyncStartInput].toOption shouldBe Some(_input)
+      selection.selectedInput.get.value.as[V.RepositorySyncStartInput].toOption shouldBe
+        Some(_input.copy(mainIntegration = Some("direct"), uncommittedPolicy = Some("confirm")))
       selection.selectedInput.get.value.asObject.get.keys.toSet shouldBe _fields.toSet
       selection.selectionId shouldBe "specification-repository-selection"
       selection.participantIdentity shouldBe "explicit-participant"
@@ -121,9 +125,22 @@ final class NativeRepositoryStartInputSpec extends AnyWordSpec with Matchers wit
       _row(entries.head).asObject.get.keys.toSet shouldBe Set("id", ProfileSelectionJsonV1.storageField)
     }
 
+    "leave omitted and null optional policies unset for native default selection" in {
+      Given("the six required business fields with both optional policies omitted or explicitly null")
+      val omitted = _input.asJson.mapObject(_.remove("mainIntegration").remove("uncommittedPolicy"))
+      When("the generated reader prepares each selected file without adding a policy decision")
+      val selections = Vector(omitted, _input.asJson).map(input =>
+        _selection(_entries(_take(Main.prepareC(_args, _read(input.noSpaces))))))
+      Then("both rows retain absent policies and the exact canonical generated business fields")
+      selections.foreach { selection =>
+        selection.selectedInput.get.value.as[V.RepositorySyncStartInput].toOption shouldBe Some(_input)
+        selection.selectedInput.get.value.asObject.get.keys.toSet shouldBe _fields.toSet
+      }
+    }
+
     "return errors for every missing or null required field and malformed or nonobject JSON" in {
       Given("each of the six required fields omitted or null, plus malformed and nonobject selected JSON")
-      val inputs = _fields.flatMap(field => Vector(
+      val inputs = _required_fields.flatMap(field => Vector(
         _input.asJson.mapObject(_.remove(field)).noSpaces,
         _input.asJson.mapObject(_.add(field, Json.Null)).noSpaces)) ++
         Vector("{}", "null", "[]", "true", "17", "\"input\"", "{")
@@ -139,8 +156,11 @@ final class NativeRepositoryStartInputSpec extends AnyWordSpec with Matchers wit
       Given("canonical fields with a conflicting alias, empty branch and endpoint, and a nonnull Boolean syncMode")
       val input = _input.asJson.mapObject(_.add("repository_identity", Json.fromString("foreign-alias"))
         .add("localBranch", Json.fromString("")).add("remoteEndpointIdentity", Json.fromString(""))
-        .add("syncMode", Json.True))
-      val expected = _input.copy(localBranch = "", remoteEndpointIdentity = "", syncMode = "true")
+        .add("syncMode", Json.True).add("mainIntegration", Json.fromString("direct"))
+        .add("main_integration", Json.fromString("local-first")).add("uncommittedPolicy", Json.fromString("error"))
+        .add("uncommitted_policy", Json.fromString("confirm")))
+      val expected = _input.copy(localBranch = "", remoteEndpointIdentity = "", syncMode = "true",
+        mainIntegration = Some("direct"), uncommittedPolicy = Some("error"))
 
       When("the passive converter uses the ordinary generated reader without a second business policy")
       val entries = _entries(_take(Main.prepareC(_args, _read(input.noSpaces))))

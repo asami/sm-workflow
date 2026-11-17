@@ -37,7 +37,7 @@ private[admission] object RepositorySyncValidationContinuationFixture {
   * Native history/effect cases are qualified by the separate public CLI suite.
   * @since   Oct. 26, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  3, 2026
+  * @version Nov. 17, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -49,6 +49,25 @@ private[smworkflow] trait RepositorySyncValidationContinuationBehavior extends A
   import RepositorySyncValidationContinuationFixture.*
 
   "RS-VC1 strict persisted and public contracts" should {
+    "bind phase independently of the validation candidate namespace and preserve unphased bytes" in {
+      target.asJson.hcursor.downField("phase").focus shouldBe None
+      N.decodeTarget(target.asJson).map(_.asJson) shouldBe Right(target.asJson)
+      Vector("local-main-source", "local-main-local", "local-main-remote").foreach { phase =>
+        val ns = "validation-continuation-7"
+        def key(key: String) = RepositorySyncNativeProgressStore.phaseKey(Some(phase), ns, key)
+        val selected = target.copy(phase = Some(phase), namespace = ns,
+          candidateReference = ContextReference("session:native-" + key("integrated"), "1"),
+          intentReference = ContextReference("session:native-" + key("validation-intent-1"), "1"),
+          frontierCause = "native-repository:session:" + key("validation-intent-1"))
+        N.decodeTarget(selected.asJson) shouldBe Right(selected)
+        selected.copy(phase = None).asJson.as[N.Target].isLeft shouldBe true
+        selected.copy(phase = Some("local-main-crossed")).asJson.as[N.Target].isLeft shouldBe true
+        selected.copy(phase = Some(if (phase == "local-main-local") "local-main-remote" else "local-main-local"))
+          .asJson.as[N.Target].isLeft shouldBe true
+        selected.asJson.mapObject(_.add("phase", Json.Null)).as[N.Target].isLeft shouldBe true
+      }
+    }
+
     "retain historical missing formal and content directions and refuse explicit null provenance" in {
       Given("a historical native progress receipt without either new continuation field")
       val store = RepositorySyncNativeProgressStore

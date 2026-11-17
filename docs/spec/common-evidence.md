@@ -61,8 +61,12 @@ Logical paths must never be presented as observed physical absolute paths.
 
 New managed archives select the exact relative destination
 `<directory>/YYYY/MM/<repository>/<phase-or-task>/<session>/<opaque>.log[.gz]`.
-The owning core clock's zone selects year and month. Repository, phase/session
-and opaque names must be literal safe segments; traversal and missing or invented
+The owning core clock's zone selects year and month. Repository, phase
+and opaque names retain their strict literal segment rules. A native Session
+segment also permits literal `:` and `%`, with a 255-byte limit. It is never URL
+decoded or interpreted as a path; separators, traversal, whitespace, controls and
+invalid UTF-8 are rejected, and the complete workspace path is validated by CNCF.
+Traversal and missing or invented
 Phase values are rejected. CNCF prepares the admitted parent and installs exact
 CreateNew bytes. The application performs only UTF-8 encoding/decoding; CNCF owns
 gzip, input/stored/expanded bounds, workspace authority and physical path safety.

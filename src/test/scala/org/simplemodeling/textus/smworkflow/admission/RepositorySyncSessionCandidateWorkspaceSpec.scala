@@ -551,6 +551,42 @@ final class RepositorySyncSessionCandidateWorkspaceSpec extends AnyWordSpec with
           val originalstage = prepared.get
           val progress = originalstage.payload.purposes.get
           val child = InstanceIdentity(original.repositories.head.sessionId)
+          Given("the candidate host is available but an ordinary validation prerequisite is missing")
+          prepare(call => _store_c(call, root, child).flatMap { store =>
+            val ordinary = store.declaration.purposeValidation.get
+            val unavailable = _product.copy(setupRequired = Some("actual ordinary product binding is missing"))
+            val coverage = _coverage.copy(
+              coverage = _coverage.coverage.map(row => if (row.check.identity == _product.identity)
+                row.copy(check = unavailable) else row),
+              fullChecks = _coverage.fullChecks.map(check => if (check.identity == _product.identity) unavailable else check))
+            val policies = Vector(ordinary.copy(impact = None),
+              ordinary.copy(setupRequired = Some("ordinary validation resource is unavailable")),
+              StandardWorkflowRuntime.normalRepositoryValidation(Some(coverage)))
+            policies.foldLeft(Consequence.unit) { (prior, policy) => prior.flatMap { _ => for {
+              before <- call.currentC(child)
+              observed <- call.observeC()
+              selected = store.withDeclaration(store.declaration.copy(purposeValidation = Some(policy)))
+              waiting <- RepositorySyncPurposeRuntime.advanceC(selected, before, observed, Some(policy), None, None,
+                (_, _) => Consequence.stateConflict("Missing coverage cannot finish synchronization"))
+              after <- call.currentC(child)
+              retained <- store.loadC("purpose-1-prepared")
+              allocation <- store.loadC("purpose-1-allocate-intent")
+              materialization <- store.loadC("purpose-1-materialize-intent")
+            } yield {
+              Then("setup waits before allocation and retains the original candidate, checks, history and counters")
+              waiting.condition shouldBe Some("purpose-materialization-preflight")
+              _encoded_record(after) shouldBe _encoded_record(before)
+              retained.get.payload shouldBe originalstage.payload
+              retained.get.payload.purposes.get.plan shouldBe progress.plan
+              retained.get.payload.purposes.get.receipts shouldBe progress.receipts
+              retained.get.payload.purposes.get.attempt shouldBe progress.attempt
+              retained.get.payload.purposes.get.slotCursor shouldBe progress.slotCursor
+              allocation shouldBe None
+              materialization shouldBe None
+              Files.readString(root.resolve("repository/value.txt")) shouldBe "pending incorrect\n"
+              ()
+            } } }
+          })
           var selectiondiagnostics = Vector.empty[String]
           prepare(call => _store_c(call, root, child).map { store =>
             selectiondiagnostics = _unsupported_checks(root, progress.candidate.get).map { unsupported =>

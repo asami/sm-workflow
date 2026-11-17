@@ -42,6 +42,19 @@ private[smworkflow] object RepositorySyncSessionWorkspace {
       RepositorySyncProgramImpact.covers(p.documentPaths, row.path.value) &&
         !RepositorySyncProgramImpact.covers(p.consumedPaths, row.path.value)))
     selectedPolicy <- policy.map(Consequence.success).getOrElse(N.invalid("Ordinary repository validation is unavailable"))
+    _ <- selectedPolicy.validateC
+    paths = changed.map(_.path.value)
+    inputs = RepositorySyncDocumentInputs.Assessment(paths,
+      paths.filter(path => store.declaration.documentInputs.exists(p =>
+        RepositorySyncProgramImpact.covers(p.consumedPaths, path))),
+      paths.filterNot(path => store.declaration.documentInputs.exists(p =>
+        RepositorySyncProgramImpact.covers(p.documentPaths, path) ||
+          RepositorySyncProgramImpact.covers(p.consumedPaths, path))), Vector.empty,
+      "Actual prepared Purpose tree changes before Session candidate allocation")
+    // The merge owner already distinguishes declared document exemptions from
+    // missing program coverage. Use that same rule before allocating a slot:
+    // supplying the ordinary prerequisite can then resume PurposePrepared.
+    _ <- V.setupReason(selectedPolicy, inputs).fold(Consequence.unit)(N.invalid[Unit])
     assessment <- selectedPolicy.assessment.map(Consequence.success)
       .getOrElse(N.invalid("Ordinary repository assessment policy is unavailable"))
     action = GoalPhaseStepAssessment.Policy("repository-sync-purpose", if (document) "documentation" else "code",

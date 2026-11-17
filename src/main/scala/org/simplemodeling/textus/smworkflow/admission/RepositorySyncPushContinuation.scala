@@ -23,7 +23,7 @@ import RepositorySyncNativeProgressStore as N
 /** An independent Human direction for one new remote integration episode.
   * Historical intents and their UNKNOWN outcomes are never amended or replayed.
   * @since   Nov.  4, 2026
-  * @version Nov.  6, 2026
+  * @version Nov. 17, 2026
   */
 private[smworkflow] object RepositorySyncPushContinuation {
   val purpose = "repository-sync-push-continuation"
@@ -151,9 +151,10 @@ private[smworkflow] object RepositorySyncPushContinuation {
     sourceNamespace: String, retainedIntent: Option[Intent], committedReference: ContextReference,
     committedRevision: String, finalTip: String, tree: String, validationPolicy: C.Policy,
     selectedChecks: Vector[C.Check], actual: G.Native, advertisedRemoteTip: String,
-    nativeObservation: Option[GitObservation], continuationPolicy: String, finitePlan: Vector[String])
+    nativeObservation: Option[GitObservation], continuationPolicy: String, finitePlan: Vector[String], phase: Option[String] = None)
   object Target {
     private val _encoder: Encoder[Target] = Encoder.instance(value => Json.obj(
+      "phase" -> value.phase.asJson,
       "componentInstance" -> value.componentInstance.asJson,
       "sessionId" -> value.sessionId.asJson,
       "context" -> value.context.asJson,
@@ -176,6 +177,7 @@ private[smworkflow] object RepositorySyncPushContinuation {
       "continuationPolicy" -> value.continuationPolicy.asJson,
       "finitePlan" -> value.finitePlan.asJson))
     private val _decoder: Decoder[Target] = Decoder.instance(cursor => for {
+      phase <- cursor.get[Option[String]]("phase")
       componentinstance <- cursor.get[String]("componentInstance")
       sessionid <- cursor.get[String]("sessionId")
       context <- cursor.get[F.StartContext]("context")
@@ -200,7 +202,7 @@ private[smworkflow] object RepositorySyncPushContinuation {
     } yield Target(componentinstance, sessionid, context, root, endpoint, frontierrevision,
       frontiercause, frontierstage, sourcenamespace, retainedintent, committedreference,
       committedrevision, finaltip, tree, validationpolicy, selectedchecks, actual,
-      advertisedremotetip, nativeobservation, continuationpolicy, finiteplan))
+      advertisedremotetip, nativeobservation, continuationpolicy, finiteplan, phase))
     given Encoder[Target] = Encoder.instance(value => _canonical(_encoder(value)))
     given Decoder[Target] = Decoder.instance(cursor => _decoder(cursor).flatMap(value =>
       if (validTarget(value) && value.asJson == cursor.value) Right(value)
@@ -260,11 +262,11 @@ private[smworkflow] object RepositorySyncPushContinuation {
     value.dirty != null && value.dirty.isEmpty && value.trackingTip != null && value.trackingTip.exists(_oid) &&
     value.mergeBase != null && value.mergeBase.exists(_oid) && value.counts != null &&
     value.counts.exists(c => c != null && c.localAhead >= 0 && c.remoteAhead >= 0)
-  private def _identity(session: String, namespace: String, key: String): String =
-    session + ":native-" + N.candidateKey(namespace, key)
+  private def _identity(session: String, namespace: String, key: String, phase: Option[String] = None): String =
+    session + ":native-" + N.phaseKey(phase, namespace, key)
   def namespace(target: Target): String = "push-continuation-" + target.frontierRevision
   def adoptionKey(target: Target): String = namespace(target) + "-adopted"
-  def validTarget(t: Target): Boolean = t != null && _exact(t.componentInstance) && _exact(t.sessionId) &&
+  def validTarget(t: Target): Boolean = t != null && N.validPhase(t.phase) && _exact(t.componentInstance) && _exact(t.sessionId) &&
     t.context != null && t.context.productIterator.forall(v => v.isInstanceOf[String] && _exact(v.asInstanceOf[String])) &&
     _exact(t.root) && scala.util.Try(java.nio.file.Path.of(t.root).isAbsolute).getOrElse(false) && _exact(t.endpoint) &&
     _revision(t.frontierRevision) && _exact(t.frontierCause) && _frontiers(t.frontierStage) && _namespace(t.sourceNamespace) &&
@@ -272,8 +274,10 @@ private[smworkflow] object RepositorySyncPushContinuation {
     BigInt(t.committedRevision) <= BigInt(t.frontierRevision) &&
     t.frontierCause.startsWith("native-repository:" + t.sessionId + ":") &&
     _frontier_keys(t.frontierStage).exists(key => t.frontierCause ==
-      "native-repository:" + t.sessionId + ":" + N.candidateKey(t.sourceNamespace, key)) &&
-    t.committedReference.identity.startsWith(t.sessionId + ":native-") &&
+      "native-repository:" + t.sessionId + ":" + N.phaseKey(t.phase, t.sourceNamespace, key)) &&
+    t.committedReference.identity.startsWith(t.sessionId + ":native-" + t.phase.fold("")(_ + "-")) &&
+    (t.phase.nonEmpty || !Vector("local-main-source", "local-main-local", "local-main-remote").exists(phase =>
+      t.committedReference.identity.startsWith(t.sessionId + ":native-" + phase + "-"))) &&
     _oid(t.finalTip) && _oid(t.tree) && t.validationPolicy != null && t.validationPolicy.validateC.isSuccess &&
     t.selectedChecks != null && t.selectedChecks.forall(t.validationPolicy.checks.contains) &&
     t.selectedChecks.distinct == t.selectedChecks && t.actual != null && _observed(t.actual.observed) &&
@@ -282,7 +286,7 @@ private[smworkflow] object RepositorySyncPushContinuation {
     t.retainedIntent != null && t.retainedIntent.forall(i => i != null && _reference(i.reference) && i.reference.revision == "1" &&
       _revision(i.revision) && BigInt(i.revision) <= BigInt(t.frontierRevision) &&
       Set("push", "refresh-fetch", "final-fetch")(i.kind) &&
-      i.reference.identity == _identity(t.sessionId, t.sourceNamespace, i.kind + "-intent")) &&
+      i.reference.identity == _identity(t.sessionId, t.sourceNamespace, i.kind + "-intent", t.phase)) &&
     t.nativeObservation != null && t.nativeObservation.forall(validObservation) &&
     t.nativeObservation.forall(o => o.operation match {
       case GitOperation.Push(tip, branch) => tip.value == t.finalTip && branch.value == t.context.trackingBranch
@@ -352,16 +356,16 @@ private[smworkflow] object RepositorySyncPushContinuation {
     _ <- if (current.identity.value == base.identity && current.lifecycle == Lifecycle.Active && current.suspension.isEmpty &&
         current.currentProgression.exists(p => _frontiers(p.value.stripPrefix("sync.")))) Consequence.unit
       else N.invalid("push description requires an active unsuspended retained push/refresh frontier")
-    prefix = "native-repository:" + base.identity + ":"
+    prefix = "native-repository:" + base.identity + ":" + base.phase.fold("")(_ + "-")
     _ <- if (current.causation.value.startsWith(prefix)) Consequence.unit else N.invalid("push frontier crosses its Session")
     value <- _load_c(base, current.causation.value.stripPrefix(prefix))
     _ <- if (value.record == current && value.payload.finalTip.nonEmpty && value.payload.indexTree.nonEmpty)
       Consequence.unit else N.invalid("push frontier has no exact saved committed native source")
   } yield value
   private def _committed_c(base: N.Store, current: InstanceRecord, frontier: N.Stage): Consequence[N.Stage] = {
-    val prefix = "native-repository:" + base.identity + ":"
+    val prefix = "native-repository:" + base.identity + ":" + base.phase.fold("")(_ + "-")
     val stages = Set("IntegrationValidated", "NativeCommitObserved", "PublicationObserved", "PublicationCommitObserved")
-    current.history.reverse.filter(e => e.currentProgression.exists(p => stages(p.value.stripPrefix("sync."))) &&
+    base.phaseHistory(current).reverse.filter(e => e.currentProgression.exists(p => stages(p.value.stripPrefix("sync."))) &&
       e.causation.value.startsWith(prefix)).foldLeft(Consequence.success(Option.empty[N.Stage])) { (prior, entry) => for {
       selected <- prior
       result <- selected match {
@@ -398,7 +402,7 @@ private[smworkflow] object RepositorySyncPushContinuation {
         case Some(stage) if stage.record.revision.value <= current.revision.value => for {
           prefix <- prefixC(current, stage.record.revision.value.toString)
           _ <- if (prefix == stage.record) Consequence.unit else N.invalid("push intent crosses actual historical prefix")
-        } yield Some(Intent(ContextReference(_identity(base.identity, namespace, kind + "-intent"), "1"),
+        } yield Some(Intent(ContextReference(_identity(base.identity, namespace, kind + "-intent", base.phase), "1"),
           stage.record.revision.value.toString, kind))
         case _ => Consequence.success(None)
       }
@@ -433,18 +437,18 @@ private[smworkflow] object RepositorySyncPushContinuation {
       frontier.record.causation.value, frontier.payload.stage, sourcens, intent,
       _stage_reference(base, committed), committed.record.revision.value.toString, frontier.payload.finalTip.get, frontier.payload.indexTree.get,
       validation, frontier.payload.validation.map(_.selected).getOrElse(validation.checks), native, remote,
-      frontier.payload.pushObservation, policy, finitePlan)
+      frontier.payload.pushObservation, policy, finitePlan, base.phase)
     _ <- if (validTarget(target) && commit.identity == target.finalTip && commit.tree == target.tree) Consequence.unit
       else N.invalid("push target requires the actual clean committed source and fixed original check policy")
   } yield Source(base, frontier, target)
 
   /** Authenticate the adjacent saved adoption, old source and exact historical intent. */
   def selectedC(base: N.Store, current: InstanceRecord): Consequence[Option[Saved]] =
-    current.history.reverse.find(_.currentProgression.contains(ProgressionReference("sync.PushContinuationAdmitted"))) match {
+    base.phaseHistory(current).reverse.find(_.currentProgression.contains(ProgressionReference("sync.PushContinuationAdmitted"))) match {
       case None => Consequence.success(None)
       case Some(entry) => for {
         _ <- _scope_c(base)
-        prefix = "native-repository:" + base.identity + ":"
+        prefix = "native-repository:" + base.identity + ":" + base.phase.fold("")(_ + "-")
         _ <- if (entry.causation.value.startsWith(prefix)) Consequence.unit else N.invalid("push adoption crosses its Session")
         stage <- _load_c(base, entry.causation.value.stripPrefix(prefix))
         direction <- stage.payload.pushContinuation.map(Consequence.success).getOrElse(N.invalid("push adoption direction is absent"))
@@ -458,7 +462,7 @@ private[smworkflow] object RepositorySyncPushContinuation {
         originalnamespace <- _source_namespace_c(base, before, previous)
         originalintent <- _intent_c(base, before, target.sourceNamespace)
         _ <- if (target.componentInstance == base.core.component.get.core.instanceId.canonicalKey &&
-            target.sessionId == base.identity && target.context == base.context && target.root == base.original.repositoryRoot &&
+            target.phase == base.phase && target.sessionId == base.identity && target.context == base.context && target.root == base.original.repositoryRoot &&
             target.endpoint == base.declaration.target.endpoint && target.sourceNamespace == originalnamespace &&
             source.payload.pushContinuation == previous.map(_.direction) && source.record.causation.value == target.frontierCause &&
             source.payload.stage == target.frontierStage && source.payload.finalTip.contains(target.finalTip) &&
@@ -512,7 +516,7 @@ private[smworkflow] object RepositorySyncPushContinuation {
     _ <- if (pending.record == actual && pending.payload.pushContinuation.contains(selected.direction) &&
         pending.record.revision.value > selected.stage.record.revision.value &&
         (namespace == selected.namespace || namespace.matches("repair-[1-9][0-9]*")) &&
-        pending.record.causation.value == "native-repository:" + base.identity + ":" + N.candidateKey(namespace, "pending-merge") &&
+        pending.record.causation.value == "native-repository:" + base.identity + ":" + base.scoped(namespace).key("pending-merge") &&
         pending.payload.stage == "PendingMergePrepared" && pending.payload.purposes.isEmpty &&
         pending.payload.mergeHead == fetched.payload.after.get.trackingTip && pending.payload.validation.isEmpty &&
         pending.payload.after.exists(a => a.head == fetched.payload.after.get.head && a.trackingTip == fetched.payload.after.get.trackingTip) &&

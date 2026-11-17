@@ -1,6 +1,6 @@
 /**
  * @since   Oct. 27, 2026
- * @version Nov.  6, 2026
+ * @version Nov. 17, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -105,6 +105,35 @@ final class DelegateTaskWorkflowSpec extends AnyWordSpec with GivenWhenThen with
   }
 
   "Independent delegated delivery" should {
+    "select required lint without changing requester checks or duplicating explicit lint" in {
+      val input = take(DelegateTask.inputC(_input("destination", "required-lint"))).copy(scalaLint = "required")
+      val lint = GoalPhaseNativeValidation.Check("configured-lint", 3, T.Kind.FixCheck)
+      val available = _checks :+ lint
+      val selected = take(DelegateTask.selectChecksC(input, available))
+      selected shouldBe available
+      val state = take(S.startC(input, "participant", selected))
+      state.input shouldBe input
+      state.input.checks shouldBe Vector("compile", "focused")
+      state.input.conditions shouldBe input.conditions
+      state.receipts shouldBe empty
+      state.candidate shouldBe None
+      state.selected shouldBe available
+      val explicit = input.copy(checks = Vector("configured-lint", "compile", "focused"))
+      take(DelegateTask.selectChecksC(explicit, available)) shouldBe Vector(lint) ++ _checks
+      take(S.startC(explicit, "participant", Vector(lint) ++ _checks)).input shouldBe explicit
+      DelegateTask.selectChecksC(input, _checks).isSuccess shouldBe false
+      DelegateTask.selectChecksC(input, available :+ lint.copy(identity = "other-lint", ordinal = 4)).isSuccess shouldBe false
+      S.startC(input, "participant", _checks).isSuccess shouldBe false
+      S.startC(input, "participant", available :+ lint.copy(identity = "other-lint", ordinal = 4)).isSuccess shouldBe false
+      val off = input.copy(scalaLint = "off")
+      take(DelegateTask.selectChecksC(off, available)) shouldBe _checks
+      S.startC(off, "participant", available).isSuccess shouldBe false
+      val docs = off.copy(kind = "documentation", delegation = off.delegation.map(_.copy(validationScope = "documentation")))
+      take(DelegateTask.selectChecksC(docs, available)) shouldBe _checks
+      val requester = input.copy(delegation = input.delegation.map(_.copy(role = "requester")))
+      take(DelegateTask.startRequesterC(requester, "participant")).input shouldBe requester
+    }
+
     "retain explicit initial evaluation timing while preserving complete reports and historical absent timing" in {
       Given("one complete public request with behavior validation commit and publication obligations")
       val publicinput = _input("destination", "initial-timing").copy(
@@ -431,6 +460,11 @@ final class DelegateTaskWorkflowSpec extends AnyWordSpec with GivenWhenThen with
         val returned = implement(destination, changed = true)
         returned.kind shouldBe "Return"
         val state = _state(returned)
+        val originalRequest = take(DelegateTask.inputC(_input("requester", request)))
+        take(DelegateTask.returnedC(originalRequest, state.asJson)).input shouldBe state.input
+        DelegateTask.returnedC(originalRequest.copy(checks = originalRequest.checks :+ "fix-check"), state.asJson).isSuccess shouldBe false
+        DelegateTask.returnedC(originalRequest.copy(conditions = originalRequest.conditions :+ "new-condition"), state.asJson).isSuccess shouldBe false
+        DelegateTask.returnedC(originalRequest, state.copy(input = state.input.copy(scalaLint = "required")).asJson).isSuccess shouldBe false
         val redelivered = invoke("startDelegateTask", List(Property("input", _input("destination", request), None),
           Property("selectionId", "delegate-selection-destination", None), Property("participant", "participant", None),
           Property("idempotencyKey", "delegate-key-destination", None)))
@@ -557,10 +591,24 @@ final class DelegateTaskWorkflowSpec extends AnyWordSpec with GivenWhenThen with
         Files.readString(root.resolve("publication-count.txt")) shouldBe originalPublications
         Files.readString(root.resolve("repository/docs/delegate.md")) should include (
           "<!-- sm-workflow completion " + legacySession + " delegate-task no-change-request -->")
-        val ordinary = read_value[V.DelegateTaskView](take(owner.executeOperationResponseInContext(Request.of(component = component.name,
-          service = "DelegateTaskService", operation = "advanceDelegateTask", properties = List(Property("sessionId", legacySession, None))), actor)))
+        def recollect() = owner.executeOperationResponseInContext(Request.of(component = component.name,
+          service = "DelegateTaskService", operation = "advanceDelegateTask", properties = List(Property("sessionId", legacySession, None))), actor)
+        val ordinaryResponse = take(recollect())
+        val control = read_control_value[V.DelegateTaskView](ordinaryResponse)
+        val stateReference = control.retainedMaterials.find(_.fieldName == "state").get.reference
+        stateReference.materialKind shouldBe "bounded-local-closure-state"
+        val ordinary = read_value[V.DelegateTaskView](ordinaryResponse)
         ordinary.kind shouldBe "Terminal"
         ordinary.message should include ("Completion scope delegate-task no-change-request")
+        _state(ordinary) shouldBe acceptedSource.hcursor.downField("payload").get[S.State]("state").toOption.get
+        _json(ordinary.state.get.getRecord("localClosure").get) shouldBe _json(result.target)
+        val historical = take(WorkflowRetainedSnapshot.fromPublicC(stateReference))
+        val crossed = WorkflowRetainedSnapshot.publicReference(historical.copy(materialKind = "bounded-state"))
+        owner.executeOperationResponseInContext(Request.of(component = component.name, service = WorkflowRetainedWork.serviceName,
+          operation = WorkflowRetainedSnapshot.readOperation, properties = List(Property("input", crossed, None))), actor).isSuccess shouldBe false
+        read_value[V.DelegateTaskView](take(recollect())) shouldBe ordinary
+        Files.readString(root.resolve("sbt-executions.txt")) shouldBe originalChecks
+        Files.readString(root.resolve("publication-count.txt")) shouldBe originalPublications
       }
     }
     "keep explicit broad scope conditional review and missing-profile refusal separate from sibling contracts" in {

@@ -1,6 +1,6 @@
 /**
  * @since   Oct. 27, 2026
- * @version Nov. 12, 2026
+ * @version Nov. 17, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -141,17 +141,28 @@ private[smworkflow] object DelegateTask {
     */
   def selectChecksC(input: S.Input, available: Vector[GoalPhaseNativeValidation.Check]): Consequence[Vector[GoalPhaseNativeValidation.Check]] = {
     val explicit = input.checks.flatMap(id => available.find(_.identity == id))
-    if (explicit.map(_.identity) != input.checks) invalid("required check has no installed binding")
-    else if (input.delegation.exists(_.validationScope == "broad") && !explicit.exists(_.kind == WorkflowSbtValidation.Kind.Test)) {
+    val lint = available.filter(_.kind == WorkflowSbtValidation.Kind.FixCheck)
+    if (input.checks.exists(id => available.count(_.identity == id) != 1)) invalid("required check has no unambiguous installed binding")
+    else if (input.scalaLint == "required" && !explicit.exists(_.kind == WorkflowSbtValidation.Kind.FixCheck) && lint.size != 1)
+      invalid("required Scala lint needs one unambiguous installed fix-check binding")
+    else {
+      val required = if (input.scalaLint == "required" && !explicit.exists(_.kind == WorkflowSbtValidation.Kind.FixCheck)) explicit ++ lint else explicit
+      if (input.delegation.exists(_.validationScope == "broad") && !required.exists(_.kind == WorkflowSbtValidation.Kind.Test)) {
       val full = available.filter(_.kind == WorkflowSbtValidation.Kind.Test)
       if (full.size != 1) invalid("broad uncovered impact requires one unambiguous installed FULL binding")
-      else Consequence.success(explicit ++ full)
-    } else Consequence.success(explicit)
+      else Consequence.success(required ++ full)
+      } else Consequence.success(required)
+    }
   }
   def selectedChecksValid(input: S.Input, selected: Vector[GoalPhaseNativeValidation.Check]): Boolean =
     selected.filter(c => input.checks.contains(c.identity)).map(_.identity) == input.checks &&
-      selected.filterNot(c => input.checks.contains(c.identity)).forall(c => input.delegation.exists(_.validationScope == "broad") &&
-        c.kind == WorkflowSbtValidation.Kind.Test) && selected.map(_.identity).distinct.size == selected.size
+      selected.filterNot(c => input.checks.contains(c.identity)).forall(c =>
+        !selected.exists(e => input.checks.contains(e.identity) && e.kind == c.kind) &&
+          ((input.scalaLint == "required" && c.kind == WorkflowSbtValidation.Kind.FixCheck) ||
+          (input.delegation.exists(_.validationScope == "broad") && c.kind == WorkflowSbtValidation.Kind.Test))) &&
+      selected.filterNot(c => input.checks.contains(c.identity)).map(_.kind).distinct.size == selected.count(c => !input.checks.contains(c.identity)) &&
+      (input.scalaLint != "required" || selected.exists(_.kind == WorkflowSbtValidation.Kind.FixCheck)) &&
+      selected.map(_.identity).distinct.size == selected.size
   def checksC(input: S.Input, selected: Vector[GoalPhaseNativeValidation.Check]): Consequence[Unit] = {
     val contract = input.delegation.get
     val kinds = selected.map(_.kind).toSet

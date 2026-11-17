@@ -24,7 +24,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * Each fixture owns its normal handle and closes its runtime resources.
   * @since   Oct. 15, 2026
   *  version Oct. 20, 2026
-  * @version Nov.  6, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object WorkflowFileRuntimeFixture {
@@ -113,7 +113,7 @@ private[admission] object WorkflowFileRuntimeFixture {
             }
           })
       }
-      val factory = new SmWorkflowConfiguredComponentFactory(Vector.empty, Vector.empty,
+      val factory = new SmWorkflowConfiguredComponentFactory(Vector(WorkflowArtifactBudget.maxBytes), Vector.empty,
         (_, _, _) => Consequence.success(Vector(spec.ServiceDefinition("SpecificationFiles",
           spec.OperationDefinitionGroup(NonEmptyVector.of(probe)))))).primaryFactory
       val id = SmWorkflowComponent.componentId

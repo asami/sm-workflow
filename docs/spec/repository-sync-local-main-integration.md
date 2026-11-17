@@ -1,7 +1,8 @@
 # Main synchronization through the canonical local checkout
 
 Date: 2026-11-09
-Status: adopted target requirement; implementation and installed qualification pending
+Status: P8-02 source/specifications authored 2026-11-18; native candidate checks,
+independent Step review and installed qualification pending
 Delivery: Phase 8 RepositorySync extensions
 
 ## Selected behavior
@@ -195,6 +196,14 @@ new behavior; the default does not silently retarget active work.
 
 ## Acceptance scenarios
 
+The scenarios below remain acceptance obligations, not checked results. The
+authored connection and explicit finite history-proof limits are described in
+[policy selection](repository-sync-policy-selection.md#canonical-participant-and-retained-two-hop-route).
+Native Worktrees became available through canonical CNCF delivery
+`bf83f423a234bf28ab793d1d76b4150036f584c3`; its producer checks and requester
+attachment adoption are prerequisites, not evidence that this consumer candidate
+compiled, executed its specifications or completed P8-02.
+
 - [ ] A working branch with local contribution and a main-only local commit
       integrates both histories in local main before remote synchronization.
 - [ ] Remote-main-only commits are integrated after the local contribution;
@@ -233,3 +242,39 @@ new behavior; the default does not silently retarget active work.
 Related contracts: [single-repository orchestration](repository-sync-runtime-orchestration.md),
 [directory-list synchronization](repository-sync-directory-list.md), and
 [Phase 8 uncommitted policy](../phase/phase-8.md#repository-synchronization-uncommitted-change-policy-2026-11-08).
+
+## Phase identity in existing continuation targets
+
+The validation, missing-required-lint and push continuation targets carry an
+optional `phase` coordinate (`local-main-source`, `local-main-local` or
+`local-main-remote`). It is independent of the existing candidate namespace
+(`validation-continuation-N`, `repair-N`, `required-lint-N` or
+`push-continuation-N`). Native references and causes bind both coordinates in
+that order. Source/history authentication also compares the coordinate with the
+currently bound hop; changing only the target phase cannot adopt another hop's
+receipt. Absent phase retains the old unphased target representation exactly;
+explicit null, unknown phase and crossed references are refused.
+
+Adoption continues to append through the existing owner. It preserves the old
+resultless intent or actual failed process capture, exact successful prefix,
+expected revision, participant, stage and authority requirements. A completed
+local integration remains immutable when the remote suffix needs direction.
+The coordinate grants no new effects and adds no Session or approval ledger.
+
+Before starting any directory-list child, reconcile the canonical target with
+all explicitly listed main members on that endpoint. Root, main branch,
+endpoint and admitted workspace must agree. A separate listed main produces
+`SharedTargetSetupRequired` in the existing aggregate configuration outcome;
+configuration refresh remains the existing recovery path. The coherent main
+member still shares the one route decision and one remote push. Unlisted
+worktrees do not become participants.
+
+Prospective source qualification is in `RepositorySyncPhaseContinuationSpec`
+(actual native validation intents and remote push/final-fetch failures followed
+by existing owner description/adoption), the three continuation codec specs
+(phase/candidate crossings and legacy absence), and `RepositorySyncLocalMainSpec`
+(conflicting explicitly listed main plus the existing coherent batch). These
+are authored obligations, not executed results. The existing installed
+`NativeRepositoryRequiredLintContinuationCliSpec` remains the native successful
+prefix/missing-lint fixture; its phase-specific installed suffix still needs
+qualification. No old refused or successful Session is replayed as evidence.

@@ -17,7 +17,7 @@ import org.goldenport.protocol.operation.OperationResponse
   * uncertain effects before considering a later invocation.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowManagedProcessExecution {
@@ -253,6 +253,7 @@ private[smworkflow] object WorkflowManagedProcessExecution {
     def prepareGit[A](target: GitTarget, operation: GitOperation[A]): ExecUowM[GitExecutionResult[A]] = operation match {
       case GitOperation.Branch => git_branch(target)
       case GitOperation.Root => git_root(target)
+      case GitOperation.Worktrees => git_worktrees(target)
       case GitOperation.RemoteTip => git_remote_tip(target)
       case GitOperation.Head => git_head(target)
       case GitOperation.Tree => git_tree(target)

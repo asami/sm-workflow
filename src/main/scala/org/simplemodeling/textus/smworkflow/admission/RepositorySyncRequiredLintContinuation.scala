@@ -19,8 +19,8 @@ import RepositorySyncNativeProgressStore as N
 /** Append one missing fixed lint check to actual successful native validation.
   * Original receipts keep their own native provenance; they are never rerun or
   * written as executions in the fresh candidate namespace.
-  * @since Nov. 3, 2026
-  * @version Nov. 3, 2026
+  * @since   Nov.  3, 2026
+  * @version Nov. 17, 2026
   * @author ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncRequiredLintContinuation {
@@ -52,9 +52,10 @@ private[smworkflow] object RepositorySyncRequiredLintContinuation {
     checkpoint: String, retainedReference: ContextReference, retainedRevision: String,
     retainedSelection: Selection, receiptOrigins: Vector[Origin], validationPolicy: C.Policy,
     expandedChecks: Vector[C.Check], expandedImpact: Option[RepositorySyncProgramImpact.Selection],
-    actual: G.Observed, indexTree: String, continuationPolicy: String)
+    actual: G.Observed, indexTree: String, continuationPolicy: String, phase: Option[String] = None)
   object Target {
     private val _encoder: Encoder[Target] = Encoder.instance(t => Json.obj(
+      "phase" -> t.phase.asJson,
       "sessionId" -> t.sessionId.asJson,
       "context" -> t.context.asJson,
       "componentInstance" -> t.componentInstance.asJson,
@@ -82,6 +83,7 @@ private[smworkflow] object RepositorySyncRequiredLintContinuation {
       "indexTree" -> t.indexTree.asJson,
       "continuationPolicy" -> t.continuationPolicy.asJson))
     private val _decoder: Decoder[Target] = Decoder.instance(c => for {
+      phase <- c.get[Option[String]]("phase")
       sessionid <- c.get[String]("sessionId")
       context <- c.get[F.StartContext]("context")
       componentinstance <- c.get[String]("componentInstance")
@@ -111,7 +113,7 @@ private[smworkflow] object RepositorySyncRequiredLintContinuation {
     } yield Target(sessionid, context, componentinstance, root, endpoint, frontierrevision, frontiercause,
       namespace, candidatereference, candidaterevision, candidatebefore, candidateafter, candidatetree,
       mergehead, candidatemethod, checkpoint, retainedreference, retainedrevision, retainedselection,
-      receiptorigins, validationpolicy, expandedchecks, expandedimpact, actual, indextree, continuationpolicy))
+      receiptorigins, validationpolicy, expandedchecks, expandedimpact, actual, indextree, continuationpolicy, phase))
     given Encoder[Target] = Encoder.instance(t => _canonical(_encoder(t)))
     given Decoder[Target] = Decoder.instance(c => _decoder(c).flatMap(t =>
       if (validTarget(t) && t.asJson == c.value) Right(t)
@@ -148,8 +150,8 @@ private[smworkflow] object RepositorySyncRequiredLintContinuation {
       p.renamedFrom.forall(path => _exact(path) && GitPath.parseC(path).isSuccess) &&
       ((!p.unmerged && p.worktree == ' ' && " MADRCT".contains(p.index)) ||
         (historicalconflict && Set("DD", "AU", "UD", "UA", "DU", "AA", "UU").contains(s"${p.index}${p.worktree}"))))
-  private def _identity(session: String, namespace: String, key: String): String =
-    session + ":native-" + N.candidateKey(namespace, key)
+  private def _identity(session: String, namespace: String, key: String, phase: Option[String] = None): String =
+    session + ":native-" + N.phaseKey(phase, namespace, key)
   private def _selection(state: C.State): Selection = Selection(state.mode, state.reason, state.selected,
     state.sourceRevision, state.inputs, state.impact)
   def namespace(target: Target): String = "required-lint-" + target.frontierRevision
@@ -159,7 +161,7 @@ private[smworkflow] object RepositorySyncRequiredLintContinuation {
       receipts.forall(_ != null) && receipts.map(_.identity) == Vector("index-local", "index-remote") ++ checks.map(_.identity) &&
       C.successful(receipts, merge = true, selected = checks)
 
-  def validTarget(t: Target): Boolean = t != null && _exact(t.sessionId) && t.context != null &&
+  def validTarget(t: Target): Boolean = t != null && N.validPhase(t.phase) && _exact(t.sessionId) && t.context != null &&
     t.context.productIterator.forall(v => v.isInstanceOf[String] && _exact(v.asInstanceOf[String])) &&
     _exact(t.componentInstance) && _exact(t.root) && scala.util.Try(java.nio.file.Path.of(t.root).isAbsolute).getOrElse(false) &&
     _exact(t.endpoint) && _revision(t.frontierRevision) && _exact(t.frontierCause) &&
@@ -169,9 +171,9 @@ private[smworkflow] object RepositorySyncRequiredLintContinuation {
     t.candidateBefore.head == t.candidateAfter.head && t.candidateAfter.trackingTip.contains(t.mergeHead) &&
     _exact(t.candidateMethod) && t.checkpoint != null && (t.checkpoint.isEmpty || _oid(t.checkpoint)) &&
     _reference(t.retainedReference) && t.retainedRevision == t.frontierRevision &&
-    t.candidateReference.identity == _identity(t.sessionId, t.namespace, "pending-merge") &&
-    t.retainedReference.identity == _identity(t.sessionId, t.namespace, "merge-validated") &&
-    t.frontierCause == "native-repository:" + t.sessionId + ":" + N.candidateKey(t.namespace, "merge-validated") &&
+    t.candidateReference.identity == _identity(t.sessionId, t.namespace, "pending-merge", t.phase) &&
+    t.retainedReference.identity == _identity(t.sessionId, t.namespace, "merge-validated", t.phase) &&
+    t.frontierCause == "native-repository:" + t.sessionId + ":" + N.phaseKey(t.phase, t.namespace, "merge-validated") &&
     t.retainedSelection != null && t.retainedSelection.sourceRevision == t.candidateRevision && t.retainedSelection.mode == "required" &&
     _exact(t.retainedSelection.reason) && t.retainedSelection.inputs != null && t.retainedSelection.impact != null &&
     t.retainedSelection.selected != null && t.retainedSelection.selected.nonEmpty &&
@@ -180,8 +182,8 @@ private[smworkflow] object RepositorySyncRequiredLintContinuation {
     t.receiptOrigins.zipWithIndex.forall { (o, i) => o != null && _reference(o.intentReference) &&
       _reference(o.resultReference) && _revision(o.intentRevision) && _revision(o.resultRevision) &&
       BigInt(o.resultRevision) == BigInt(o.intentRevision) + 1 &&
-      o.intentReference.identity == _identity(t.sessionId, t.namespace, "validation-intent-" + i) &&
-      o.resultReference.identity == _identity(t.sessionId, t.namespace, "validation-result-" + i) &&
+      o.intentReference.identity == _identity(t.sessionId, t.namespace, "validation-intent-" + i, t.phase) &&
+      o.resultReference.identity == _identity(t.sessionId, t.namespace, "validation-result-" + i, t.phase) &&
       (Vector("index-local", "index-remote") ++ t.retainedSelection.selected.map(_.identity)).lift(i).contains(o.identity) &&
       o.termination == "exited" && o.exitCode != null && o.exitCode.nonEmpty && o.sbt != null &&
       (i < 2 || (o.exitCode.contains(0) && o.sbt.fold(t.retainedSelection.selected(i - 2).kind == WorkflowSbtValidation.Kind.Test)(
@@ -257,13 +259,13 @@ private[smworkflow] object RepositorySyncRequiredLintContinuation {
           intent.payload.validation.contains(state.copy(receipts = state.receipts.take(index))) &&
           result.payload.validation.contains(state.copy(receipts = state.receipts.take(index + 1))) &&
           intent.payload.stage == "ValidationChecking" && result.payload.stage == "ValidationChecking" &&
-          intent.record.causation.value == "native-repository:" + store.identity + ":" + N.candidateKey(candidate.namespace, "validation-intent-" + index) &&
-          result.record.causation.value == "native-repository:" + store.identity + ":" + N.candidateKey(candidate.namespace, "validation-result-" + index) &&
+          intent.record.causation.value == "native-repository:" + store.identity + ":" + store.scoped(candidate.namespace).key("validation-intent-" + index) &&
+          result.record.causation.value == "native-repository:" + store.identity + ":" + store.scoped(candidate.namespace).key("validation-result-" + index) &&
           (index == 0 && intent.record.history.dropRight(1) == candidate.pending.record.history || index > 0 &&
             values.last.resultRevision == intent.record.history.dropRight(1).last.revision.value.toString)) Consequence.unit
         else N.invalid("original successful prefix lacks its actual ordered native intent/result provenance")
-    } yield values :+ Origin(ContextReference(_identity(store.identity, candidate.namespace, "validation-intent-" + index), "1"),
-      intent.record.revision.value.toString, ContextReference(_identity(store.identity, candidate.namespace, "validation-result-" + index), "1"),
+    } yield values :+ Origin(ContextReference(_identity(store.identity, candidate.namespace, "validation-intent-" + index, store.phase), "1"),
+      intent.record.revision.value.toString, ContextReference(_identity(store.identity, candidate.namespace, "validation-result-" + index, store.phase), "1"),
       result.record.revision.value.toString, state.receipts(index).identity, state.receipts(index).termination,
       state.receipts(index).exitCode, state.receipts(index).sbt) }
     _ <- if (origins.nonEmpty && validated.record.history.dropRight(1).last.revision.value.toString == origins.last.resultRevision)
@@ -303,12 +305,12 @@ private[smworkflow] object RepositorySyncRequiredLintContinuation {
     tree <- G.indexTreeC(core)
     target = Target(identity, session.context, core.component.get.core.instanceId.canonicalKey,
       candidate.pending.payload.root, declaration.target.endpoint, current.revision.value.toString, current.causation.value,
-      candidate.namespace, ContextReference(_identity(identity, candidate.namespace, "pending-merge"), "1"),
+      candidate.namespace, ContextReference(_identity(identity, candidate.namespace, "pending-merge", store.phase), "1"),
       candidate.pending.record.revision.value.toString, candidate.pending.payload.before, candidate.pending.payload.after.get,
       candidate.pending.payload.indexTree.get, candidate.pending.payload.mergeHead.get, candidate.pending.payload.method.getOrElse("merge"),
-      candidate.pending.payload.checkpoint.getOrElse(""), ContextReference(_identity(identity, candidate.namespace, "merge-validated"), "1"),
+      candidate.pending.payload.checkpoint.getOrElse(""), ContextReference(_identity(identity, candidate.namespace, "merge-validated", store.phase), "1"),
       current.revision.value.toString, _selection(validated.payload.validation.get), origins, validation, selected, impact,
-      native.observed, tree, policy)
+      native.observed, tree, policy, store.phase)
     _ <- if (validTarget(target)) Consequence.unit
       else N.invalid("required-lint target must append exactly one fixed FixCheck to the unchanged original ordered selection")
   } yield Source(session, store, candidate, validated, target)
@@ -362,7 +364,7 @@ private[smworkflow] object RepositorySyncRequiredLintContinuation {
     _ <- direction.asJson.as[Direction].fold(e => N.invalid(e.message), _ => Consequence.unit)
     target = direction.target
     _ <- _scope_c(store)
-    _ <- if (target.sessionId == store.identity && target.context == store.context && target.root == store.original.repositoryRoot &&
+    _ <- if (target.phase == store.phase && target.sessionId == store.identity && target.context == store.context && target.root == store.original.repositoryRoot &&
         target.endpoint == store.declaration.target.endpoint && target.componentInstance == store.core.component.get.core.instanceId.canonicalKey)
       Consequence.unit else N.invalid("required-lint direction crosses actual Session, host or Component")
     before <- _prefix_c(current, target.frontierRevision)
@@ -381,7 +383,7 @@ private[smworkflow] object RepositorySyncRequiredLintContinuation {
         validated.payload.validation.exists(s => _selection(s) == target.retainedSelection) && origins == target.receiptOrigins &&
         adoption.record == actualadoption && adoption.record.revision == before.revision.next &&
         adoption.record.history.dropRight(1) == before.history && adoption.record.lifecycle == Lifecycle.Active &&
-        adoption.record.suspension.isEmpty && adoption.record.causation.value == "native-repository:" + store.identity + ":" + adoptionKey(target) &&
+        adoption.record.suspension.isEmpty && adoption.record.causation.value == "native-repository:" + store.identity + ":" + store.scoped("").key(adoptionKey(target)) &&
         adoption.payload == validated.payload.copy(stage = "RequiredLintContinuationAdmitted", requiredLint = Some(direction)))
       Consequence.unit else N.invalid("required-lint adoption crosses its exact original successful native lineage")
   } yield adoption
@@ -393,7 +395,7 @@ private[smworkflow] object RepositorySyncRequiredLintContinuation {
     actual <- _prefix_c(current, pending.record.revision.value.toString)
     _ <- if (namespace == RepositorySyncRequiredLintContinuation.namespace(direction.target) && pending.record == actual &&
         pending.record.revision == adoption.record.revision.next && pending.record.history.dropRight(1) == adoption.record.history &&
-        pending.record.causation.value == "native-repository:" + store.identity + ":" + N.candidateKey(namespace, "pending-merge") &&
+        pending.record.causation.value == "native-repository:" + store.identity + ":" + store.scoped(namespace).key("pending-merge") &&
         pending.payload == original.payload.copy(requiredLint = Some(direction))) Consequence.unit
       else N.invalid("required-lint pending source crosses its real adjacent direction or original candidate metadata")
   } yield ()
@@ -421,7 +423,7 @@ private[smworkflow] object RepositorySyncRequiredLintContinuation {
     review: Option[RepositorySyncNativeMergeReviewContinuation.Port],
     convergence: Option[RepositorySyncNativeConvergence.AuthorityPort],
     repair: Option[RepositorySyncNativeMergeRepairContinuation.Port]): Consequence[V.RepositorySyncAdvanceResult] = for {
-    entry <- current.history.reverse.find(_.currentProgression.contains(ProgressionReference("sync.RequiredLintContinuationAdmitted")))
+    entry <- store.phaseHistory(current).reverse.find(_.currentProgression.contains(ProgressionReference("sync.RequiredLintContinuationAdmitted")))
       .map(Consequence.success).getOrElse(N.invalid("required-lint admission has no actual native history"))
     keyprefix = "native-repository:" + store.identity + ":"
     _ <- if (entry.causation.value.startsWith(keyprefix)) Consequence.unit else N.invalid("required-lint admission is foreign")

@@ -24,7 +24,7 @@ import org.simplemodeling.textus.smworkflow.{SmWorkflowComponent, value as V}
   * Historical reads deliberately do not require the current suspension to match;
   * Submit continues to enforce that separate live-frontier boundary.
   * @since   Nov.  8, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 17, 2026
   */
 private[smworkflow] object WorkflowRetainedWork {
   val schema = "sm-workflow.retained-work-reference.v1"
@@ -90,6 +90,7 @@ private[smworkflow] object WorkflowRetainedWork {
     selection <- operation match {
       case "submitGoalPhaseOrderedDecision" => Consequence.success("GoalPhaseWorkflow" -> GoalPhaseOrderedHumanDecision.inputCodec.typeIdentity)
       case "submitRepositoryConflictDecision" => Consequence.success("RepositorySyncWorkflow" -> RepositorySyncHumanConflict.inputCodec.typeIdentity)
+      case "submitRepositorySyncPolicyDecision" => Consequence.success("RepositorySyncWorkflow" -> RepositorySyncPolicyDecision.inputCodec.typeIdentity)
       case "submitSplitHumanDirection" => Consequence.success("SplitPhaseWorkflow" ->
         (if (response.getAny("reasoningHuman").nonEmpty) SplitPhaseReasoningHumanDirection.inputCodec.typeIdentity else SplitPhaseNativeHumanDirection.inputCodec.typeIdentity))
       case _ => invalid("Human response has no supported native decision owner")
@@ -213,6 +214,7 @@ private[smworkflow] object WorkflowRetainedWork {
         load(GoalPhaseNativeFindingRecording.completionOperation, GoalPhaseFindingRecording.inputCodec)(work =>
           NativeWorkflowOperationOutput.goalRecordingRequestC(work, GoalPhaseNativeFindingRecording.State()))
       case "RepositorySyncWorkflow" => r.completionOperation match {
+        case "submitRepositorySyncPolicyDecision" => decision(RepositorySyncPolicyDecision.completionOperation, RepositorySyncPolicyDecision.inputCodec)(RepositorySyncPolicyDecision.renderC(_, core))
         case "submitRepositoryConflictDecision" => decision(RepositorySyncHumanConflict.completionOperation, RepositorySyncHumanConflict.inputCodec)(NativeWorkflowOperationOutput.repositoryHumanC(_, core))
         case "submitRepositoryPurposeResult" => load(RepositorySyncPurposeContinuation.completionOperation, RepositorySyncPurpose.inputCodec)(NativeWorkflowOperationOutput.repositoryPurposeRequestC)
         case "submitRepositorySyncWorkResult" => load(RepositorySyncNativeConflictContinuation.completionOperation, RepositorySyncConflictSemantic.inputCodec)(NativeWorkflowOperationOutput.repositoryConflictRequestC)

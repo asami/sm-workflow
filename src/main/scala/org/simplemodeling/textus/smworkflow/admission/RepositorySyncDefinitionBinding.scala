@@ -15,7 +15,8 @@ import org.goldenport.cncf.workflow.WorkflowInstancePersistence.DefinitionBindin
 /** Binds actual generated Workflow/Provided API and Candidate-Admission
   * descriptors. Required review declarations are never added to entry metadata.
   * @since   Oct.  6, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov. 17, 2026
   */
 private[smworkflow] object RepositorySyncDefinitionBinding {
   // Bound each generated producer descriptor explicitly: one deeply nested
@@ -123,6 +124,17 @@ private[smworkflow] object RepositorySyncDefinitionBinding {
           CompletionContract("repository-native-repair-completion-v1", Vector.empty),
           EvidenceContract("repository-native-repair-evidence-v1", Vector.empty), Vector.empty)) }
       .map(Consequence.success).getOrElse(Consequence.stateConflict("RepositorySync native repair SPI is absent"))
+  }
+
+  def policyDecisionOperationC: Consequence[StateMachineRequiredOperation] = candidateC.flatMap { candidate =>
+    candidate.workflow.requiredSpi.find(_.capability == "repository-policy-human-capability")
+      .map { spi => StateMachineRequiredOperation(StateMachineRequiredOperationIdentity(spi.capability), spi.actionIdentity,
+        StateMachineOperationIdentity(spi.operation.service, spi.operation.name),
+        spi.operation.inputType.map(StateMachineInputTypeReference(_)), spi.operation.resultType.map(StateMachineResultTypeReference(_)),
+        StateMachineRequiredOperationMetadata(ContextContract("repository-policy-decision-context-v1", Vector.empty, Vector.empty),
+          CompletionContract(RepositorySyncPolicyDecision.completion, Vector.empty),
+          EvidenceContract("repository-policy-decision-evidence-v1", Vector.empty), Vector.empty)) }
+      .map(Consequence.success).getOrElse(Consequence.stateConflict("RepositorySync policy Human SPI is absent"))
   }
 
   def humanConflictOperationC: Consequence[StateMachineRequiredOperation] = candidateC.flatMap { candidate =>

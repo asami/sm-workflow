@@ -3,6 +3,7 @@ package org.simplemodeling.textus.smworkflow.admission
 import io.circe.Json
 import java.time.{Clock, Instant, ZoneId}
 import org.goldenport.Consequence
+import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.workflow.ContextReference
 import org.goldenport.cncf.workspace.*
@@ -18,7 +19,7 @@ import CommonEvidence as E
   * admission below executes in the actual controlled call; installed process,
   * import consumption and byte measurements belong to the CLI qualification.
   * @since   Nov.  9, 2026
-  * @version Nov.  9, 2026
+  * @version Nov. 17, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -38,6 +39,12 @@ final class WorkflowPreparedImportSpec extends AnyWordSpec with Matchers with Gi
     "result" -> Json.fromString("file:///answer-" + suffix), "reference" -> Json.fromString("file:///reference-" + suffix))
   private def source(component: String = "spec-component") = take(WorkflowPreparedImport.associationC(
     component, "participant", "prepareEvidence", input(), request, businessReference))
+  private val nativeSession = "delegate:goldenport-cncf:org.goldenport.cncf:P8-02-CNCF-GIT-WORKTREE-METADATA-20261117:destination:codex%3Alocal%3A01a10b3f-adfb-7083-8f38-02b79aee5ddb"
+  private def nativeSource(session: String, component: String = "spec-component") = take(WorkflowPreparedImport.associationC(
+    component, "participant", "prepareEvidence", input(), Some(Json.obj("sessionId" -> Json.fromString(session),
+      "issuedWorkContext" -> Json.obj("runId" -> Json.fromString(session), "expectedRevision" -> Json.fromString("18"),
+        "continuationId" -> Json.fromString("work-17"), "handle" -> Json.obj("workflowIdentity" -> Json.fromString("DelegateTaskWorkflow"))))),
+    businessReference))
 
   private final class Memory(unknown: Boolean = false) extends E.Storage {
     var rows = Map.empty[String, String]
@@ -62,7 +69,64 @@ final class WorkflowPreparedImportSpec extends AnyWordSpec with Matchers with Gi
     override def createLifecycleC(key: String, row: Record) = Consequence.unit
   }
 
+  // Same metadata seam as the storage-failure cases; directory preparation and
+  // represented-byte installation/read run through the real managed File/UoW.
+  private def managed(core: ActionCall.Core, metadata: Memory, selectedPolicy: E.Policy): E.Storage = new E.Storage {
+    private val files = E.storage(core, selectedPolicy)
+    override def admitSourceC(source: E.Source) = WorkflowPreparedImport.admitSourceC(source, core)
+    def allocateNameC() = metadata.allocateNameC()
+    def loadC(key: String) = metadata.loadC(key)
+    def createC(key: String, value: String) = metadata.createC(key, value)
+    def writeC(workspace: String, path: String, text: String) = files.writeC(workspace, path, text)
+    def readC(workspace: String, path: String) = files.readC(workspace, path)
+    override def prepareDirectoryC(workspace: String, path: String) = files.prepareDirectoryC(workspace, path)
+    override def writeBytesC(workspace: String, path: String, bytes: Vector[Byte], representation: FileRepresentation) = {
+      metadata.writes += 1
+      files.writeBytesC(workspace, path, bytes, representation)
+    }
+    override def readBytesC(workspace: String, path: String, representation: FileRepresentation) = files.readBytesC(workspace, path, representation)
+    override def createLifecycleC(key: String, row: Record) = metadata.createLifecycleC(key, row)
+  }
+
   "Prepared import business association" should {
+    "retain literal native Session identifiers through managed File UoW without decoding or collisions" in {
+      val root = WorkflowFileRuntimeFixture.fresh()
+      val metadata = new Memory
+      val text = "{\"datastore\":[{\"collection\":\"entity:spec.host.evidence\",\"records\":[{\"id\":\"native-derived\"}]}]}"
+      WorkflowFileRuntimeFixture.withCore(root) { core =>
+        val selectedPolicy = policy.copy(workspaceIdentity = WorkflowFileRuntimeFixture.documentsWorkspace)
+        val store = managed(core, metadata, selectedPolicy)
+        // Distinguish literal encodings without assuming a case-sensitive host filesystem.
+        val sessions = Vector(nativeSession, nativeSession.replace("%3A", ":"), nativeSession.replace("%3A", "%253A"))
+        val allocations = sessions.map { session =>
+          val selected = nativeSource(session, core.component.get.core.instanceId.canonicalKey)
+          val first = take(WorkflowPreparedImport.retainWithStorageC(store, selectedPolicy, selected, text, clock))
+          first.getString("status") shouldBe Some("prepared")
+          first.getAny("retainedImport") should not be empty
+          val allocation = take(E.loadedC(store, E.identity(selected))).get._1
+          allocation.source.session shouldBe session
+          allocation.path shouldBe "templates/2026/11/preparation/preparation/" + session + "/spec-file.log"
+          take(E.payloadC(store, allocation)) shouldBe Some(text)
+          java.nio.file.Files.readString(root.resolve(allocation.path)) shouldBe text
+          val before = metadata.writes
+          take(WorkflowPreparedImport.retainWithStorageC(store, selectedPolicy, selected, text, clock)) shouldBe first
+          metadata.writes shouldBe before
+          allocation
+        }
+        allocations.map(_.identity).distinct.size shouldBe sessions.size
+        allocations.map(_.path).distinct.size shouldBe sessions.size
+        allocations.head.path should include("codex%3Alocal%3A")
+        metadata.writes shouldBe sessions.size
+      }
+      val uncertain = new Memory(unknown = true)
+      val selected = nativeSource(nativeSession)
+      val first = take(WorkflowPreparedImport.retainWithStorageC(uncertain, policy, selected, text, clock))
+      first.getString("status") shouldBe Some("indeterminate")
+      first.getAny("retainedImport") shouldBe empty
+      take(WorkflowPreparedImport.retainWithStorageC(uncertain, policy, selected, text, clock)) shouldBe first
+      uncertain.writes shouldBe 1
+    }
+
     "preserve exact native public aliases and ignore observation time and generated filenames" in {
       Given("the same actual source reference/revision and native work in both supported public representations")
       val first = source()

@@ -82,7 +82,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     "SplitPhaseService.submitHandoffScopeResult", "SplitPhaseService.submitSplitHumanDirection", "SplitPhaseService.submitReasoningResult",
     "RepositorySyncService.startRepositorySync", "RepositorySyncService.advanceRepositorySync",
     "RepositorySyncService.submitRepositorySyncWorkResult", "RepositorySyncService.submitRepositoryPurposeResult", "RepositorySyncService.submitNativeMergeReview",
-    "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitNativeMergeRepair")
+    "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitRepositorySyncPolicyDecision", "RepositorySyncService.submitNativeMergeRepair")
 
   private val _standard_operations = publishedMcpOperations ++ Set(
     "GoalPhaseService." + GoalPhaseSourceHistoryNormalization.describeOperation,

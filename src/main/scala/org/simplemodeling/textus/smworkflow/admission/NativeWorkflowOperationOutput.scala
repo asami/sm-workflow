@@ -15,8 +15,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * outcome. No extra store read, result verifier or transport envelope.
   * @since   Oct. 12, 2026
   *  version Oct. 29, 2026
-  *  version Nov.  8, 2026
-  * @version Nov.  9, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationOutput {
@@ -258,8 +257,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
   } yield V.RepositorySyncAdvanceResult(question.handle.instanceIdentity.value, "Human", value.rationale,
       Some(RepositorySyncHumanConflict.completionOperation.operation), Some(question.handle.instanceIdentity.value),
       Some("RepositorySyncHumanConflictAnswer"), None, None, None, None,
-      Some(V.RepositorySyncHumanQuestion(repositoryConflict(value.conflict), value.rationale,
-        RepositorySyncHumanConflict.choices, Some(context))), None, None, None, None, None, None, None, Vector.empty)
+      Some(V.RepositorySyncHumanQuestion(Some(repositoryConflict(value.conflict)), value.rationale,
+        RepositorySyncHumanConflict.choices, Some(context), None)), None, None, None, None, None, None, None, Vector.empty)
 
   def repositoryWait(session: String, message: String, condition: String): V.RepositorySyncAdvanceResult =
     V.RepositorySyncAdvanceResult(session, "Wait", message, None, None, None, Some(condition), None, None, None, None, None, None, None, None, None, None, None, Vector.empty)
@@ -344,6 +343,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
         V.RepositorySyncNativeMergeRepairSubmissionResult(session, true, "accepted", "Accepted merge repair " + value.decision + ": " + value.rationale)
       case value: RepositorySyncHumanConflict.Answer =>
         V.RepositorySyncHumanConflictSubmissionResult(session, true, "accepted", "Accepted Human " + value.choice + ": " + value.rationale)
+      case value: RepositorySyncPolicyDecision.Answer =>
+        V.RepositorySyncHumanConflictSubmissionResult(session, true, "accepted", "Accepted Human policy " + value.choice + ": " + value.rationale)
     }
   }
 

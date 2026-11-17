@@ -24,7 +24,8 @@ import WorkflowManagedProcessExecution as Process
   * client stage command, SQL provider or component-owned process is used.
   * Fetch and DB commits are separate effects: an uncertain call never retries.
   * @since   Oct.  6, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncManagedFetch {
@@ -47,13 +48,24 @@ private[smworkflow] object RepositorySyncManagedFetch {
     programEvidence: Option[RepositorySyncProgramImpact.EvidencePort] = None,
     purposePolicy: Option[RepositorySyncPurpose.Policy] = None,
     localPublication: Option[LocalPublicationRuntime.Policy] = None,
-    purposeValidation: Option[RepositorySyncNativeMergeValidation.Policy] = None)
+    purposeValidation: Option[RepositorySyncNativeMergeValidation.Policy] = None,
+    policies: Option[RepositorySyncPolicies.Selection] = None,
+    policyHuman: Option[RepositorySyncHumanConflict.EvidencePort] = None,
+    localMain: Option[RepositorySyncLocalMain.Plan] = None,
+    localMainSetup: Option[String] = None,
+    hop: Option[RepositorySyncLocalMain.Hop] = None)
   final case class StartContext(selectionIdentity: String, invocationIdentity: String,
     participantIdentity: String, repositoryIdentity: String, localBranch: String,
     trackingRemote: String, trackingBranch: String, remoteEndpointIdentity: String, syncMode: String)
   final case class Payload(stage: String, context: Option[StartContext], repositoryRoot: String,
-    before: Option[Git.Observed], expectedTip: Option[String], after: Option[Git.Observed], effect: Option[String])
-  private given Encoder[Payload] = deriveEncoder
+    before: Option[Git.Observed], expectedTip: Option[String], after: Option[Git.Observed], effect: Option[String],
+    policies: Option[RepositorySyncPolicies.Selection] = None,
+    localMain: Option[RepositorySyncLocalMain.Plan] = None,
+    localMainSetup: Option[String] = None)
+  private given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
+    case ("policies" | "localMain" | "localMainSetup", value) => !value.isNull
+    case _ => true
+  }))
   private given Decoder[Payload] = deriveDecoder
   final case class Session(storage: WorkflowComponentStorage,
     started: WorkflowManagedMechanicalTransition.Retained[Payload], context: StartContext)
@@ -67,7 +79,11 @@ private[smworkflow] object RepositorySyncManagedFetch {
       case _ => invalid("advance has no original managed native Start")
     }
     original = started.receipt.payload.value
-    context <- original.context.map(Consequence.success).getOrElse(invalid("native Start context is missing"))
+    originalContext <- original.context.map(Consequence.success).getOrElse(invalid("native Start context is missing"))
+    context = declaration.hop.filter(h => Set("local", "remote")(h.cursor.phase)).fold(originalContext) { h =>
+      originalContext.copy(localBranch = h.plan.main.branch, trackingRemote = h.plan.main.remote,
+        trackingBranch = h.plan.main.remoteBranch, remoteEndpointIdentity = h.plan.main.endpoint)
+    }
     _ <- GoalPhaseParticipantAdmission.admitC(context.participantIdentity, core.executionContext)
   } yield Session(storage, started, context)
 
@@ -98,6 +114,8 @@ private[smworkflow] object RepositorySyncManagedFetch {
         else invalid("Commit hygiene staging declaration is missing or duplicated")
       _ <- d.documentInputs.fold(Consequence.unit)(RepositorySyncDocumentInputs.validateC)
       _ <- d.purposePolicy.fold(Consequence.unit)(RepositorySyncPurpose.validatePolicyC)
+      _ <- if (d.policies != null && d.policies.forall(RepositorySyncPolicies.valid) && d.policyHuman != null &&
+          d.policyHuman.forall(_ != null)) Consequence.unit else invalid("synchronization policy selection or Human owner is invalid")
       _ <- if (d.purposeValidation != null) d.purposeValidation.fold(Consequence.unit)(_.validateC)
         else invalid("Purpose validation declaration is missing")
       _ <- d.localPublication.fold(Consequence.unit)(LocalPublicationRuntime.validateC)
@@ -127,7 +145,8 @@ private[smworkflow] object RepositorySyncManagedFetch {
     context = StartContext(selected.selectionId, selected.idempotencyKey, selected.participantIdentity,
       input.repositoryIdentity, input.localBranch, input.trackingRemote, input.trackingBranch,
       input.remoteEndpointIdentity, input.syncMode)
-    payload = Payload("Started", Some(context), declaration.target.root.toString, None, None, None, None)
+    payload = Payload("Started", Some(context), declaration.target.root.toString, None, None, None, None,
+      declaration.policies, declaration.localMain, declaration.localMainSetup)
     initial <- InstanceRecord(identity, definition, initialRevision, Lifecycle.NotStarted, None,
       CorrelationReference(selected.idempotencyKey), CausationReference("managed-start:" + identity.value),
       None, None, None, Vector.empty).validateC
@@ -154,31 +173,36 @@ private[smworkflow] object RepositorySyncManagedFetch {
   } yield wire
 
   private[admission] def fetchC(session: Session, declaration: Declaration, core: ActionCall.Core,
-    acknowledgement: () => Consequence[Unit]): Consequence[(InstanceRecord, Payload)] = for {
+    acknowledgement: () => Consequence[Unit]): Consequence[(InstanceRecord, Payload)] = {
+    def selectedReference(identity: String, purpose: String) = reference(identity,
+      declaration.hop.filter(_.namespace.nonEmpty).fold(purpose)(h => h.namespace + "-" + purpose))
+    val local = declaration.hop.filter(_.cursor.phase == "local")
+    for {
     advances <- session.storage.bindMechanicalC(advanceOperation, codec(false))
     started = session.started
     identity = started.receipt.next.identity.value
     original = started.receipt.payload.value
     context = session.context
-    completed <- advances.loadRetainedC(reference(identity, "fetch-observed"))(using core.executionContext)
+    completed <- advances.loadRetainedC(selectedReference(identity, "fetch-observed"))(using core.executionContext)
     fetched <- completed match {
       case Some(value) =>
         value.receipt.payload.value.after.flatMap(_.counts)
           .map(_ => Consequence.success(value.receipt.next -> value.receipt.payload.value))
           .getOrElse(invalid("fetched observation has no actual relation"))
       case None => for {
-        prior <- advances.loadRetainedC(reference(identity, "fetch-started"))(using core.executionContext)
+        prior <- advances.loadRetainedC(selectedReference(identity, "fetch-started"))(using core.executionContext)
         prepared <- prior match {
           case Some(value) =>
             Consequence.success((value.receipt.next, value.receipt.payload.value, false))
           case None => for {
-            before <- Git.observeC(core)
-            expected <- Git.remoteTipC(core, context.trackingBranch)
+            before <- Git.observeC(if (local.nonEmpty) RepositorySyncLocalMain.withoutHop(core) else core)
+            expected <- local.flatMap(_.cursor.sourceTip).map(Consequence.success)
+              .getOrElse(Git.remoteTipC(core, context.trackingBranch))
             _ <- if (domain.statemachine.RepositorySyncBoundaryLifecycle.permits("BoundaryAssessment", "fetch-started", "Fetching"))
               Consequence.unit else invalid("fetch intent is not declared by CML")
-            payload = Payload("Fetching", None, original.repositoryRoot, Some(before), Some(expected), None, None)
+            payload = Payload("Fetching", None, declaration.target.root.toString, Some(before), Some(expected), None, None)
             next <- advances.executeC(WorkflowMechanicalTransition.Intent(declaration.configuration,
-              reference(identity, "fetch-started"), started.current, started.current.revision,
+              selectedReference(identity, "fetch-started"), started.current, started.current.revision,
               history(started.current, "sync.Fetching", "managed-fetch-intent:" + identity),
               TypedValue(codec(false).typeIdentity, payload)), empty)(using core.executionContext)
           } yield (next.receipt.next, payload, true)
@@ -186,10 +210,15 @@ private[smworkflow] object RepositorySyncManagedFetch {
         (intent, payload, fresh) = prepared
         expected <- payload.expectedTip.map(Consequence.success)
           .getOrElse(invalid("fetch intent has no advertised native tip"))
+        _ <- local.flatMap(_.plan.transfer) match {
+          case Some(transfer) if fresh => Process.executeGitC(core, GitOperation.Fetch, transfer.workspace).flatMap(_.valueC)
+          case _ => Consequence.unit
+        }
         observed <- Git.observeC(core)
         _ <- scopeC(observed, original, context, declaration, core)
         present = observed.trackingTip.contains(expected)
-        effect <- if (present) Consequence.success(if (fresh) "already-present" else "observed-present")
+        effect <- if (local.nonEmpty && present) Consequence.success(if (local.get.plan.linked) "linked-source-observed" else "source-transfer-observed")
+          else if (present) Consequence.success(if (fresh) "already-present" else "observed-present")
           else if (!fresh) uncertain("prior fetch outcome is not established; no automatic replay is authorized")
           else Process.executeGitC(core, GitOperation.Fetch).flatMap(_.valueC).map(_ => "executed")
         after <- if (present) Consequence.success(observed) else Git.observeC(core)
@@ -203,12 +232,13 @@ private[smworkflow] object RepositorySyncManagedFetch {
           Consequence.unit else invalid("fetch observation is not declared by CML")
         result = payload.copy(stage = "Fetched", after = Some(after), effect = Some(effect))
         saved <- advances.executeC(WorkflowMechanicalTransition.Intent(declaration.configuration,
-          reference(identity, "fetch-observed"), intent, intent.revision,
+          selectedReference(identity, "fetch-observed"), intent, intent.revision,
           history(intent, "sync.FetchAdmitted", "managed-fetch-observed:" + identity),
           TypedValue(codec(false).typeIdentity, result)), empty)(using core.executionContext)
       } yield saved.receipt.next -> saved.receipt.payload.value
     }
   } yield fetched
+  }
 
   private[admission] def bindC(d: Declaration, definition: DefinitionBinding, core: ActionCall.Core): Consequence[WorkflowComponentStorage] =
     validateDeclarationC(d).flatMap(_ => if (core == null || core.executionContext == null ||
@@ -219,7 +249,7 @@ private[smworkflow] object RepositorySyncManagedFetch {
 
   private def scopeC(actual: Git.Observed, original: Payload, context: StartContext,
     d: Declaration, core: ActionCall.Core): Consequence[Unit] =
-    Git.rootC(core).flatMap(root => if (root == original.repositoryRoot && actual.branch == context.localBranch &&
+    Git.rootC(core).flatMap(root => if (root == (if (d.hop.nonEmpty) d.target.root.toString else original.repositoryRoot) && actual.branch == context.localBranch &&
         context.repositoryIdentity == d.input.repositoryIdentity && context.trackingRemote == d.target.remote &&
         context.trackingBranch == d.target.remoteBranch && context.remoteEndpointIdentity == d.input.remoteEndpointIdentity &&
         context.syncMode == d.input.syncMode)

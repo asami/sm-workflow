@@ -9,7 +9,7 @@ import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseFindingRecording
 /** Finite wire names for supplied Human questions; native scopes own projection.
   * @since   Oct. 15, 2026
   *  version Oct. 26, 2026
-  * @version Nov.  6, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeHumanDecisionQuestionWire {
@@ -17,7 +17,9 @@ private[smworkflow] object NativeHumanDecisionQuestionWire {
     case Question, Handle, GoalSource, GoalAssignment, GoalResult, Progress, RepositorySource, RepositoryConflict, SplitSource, SplitWork
   }
 
-  def normalize(question: Json, purpose: Purpose): Json = _node(question, Node.Question, purpose)
+  def normalize(question: Json, purpose: Purpose): Json =
+    if (purpose == Purpose.RepositoryPolicyHuman) GoalPhaseNativeMetadata.normalizePublicJson(question).getOrElse(Json.Null)
+    else _node(question, Node.Question, purpose)
 
   def inputType(question: Record): Option[String] = Option(question).flatMap { record =>
     PropertyNameContext.default.aliases("inputType").find(record.keySet.contains)

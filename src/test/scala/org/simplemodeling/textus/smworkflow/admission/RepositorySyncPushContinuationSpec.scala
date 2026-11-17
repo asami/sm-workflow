@@ -1,3 +1,7 @@
+/**
+ * @since   Nov. 17, 2026
+ * @version Nov. 17, 2026
+ */
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
@@ -48,6 +52,25 @@ final class RepositorySyncPushContinuationSpec extends AnyWordSpec with Matchers
   import RepositorySyncPushContinuationFixture.*
 
   "SYNC-20261104-11 exact public push continuation" should {
+    "retain remote phase through push and final-fetch intent identities independently of candidate namespace" in {
+      target.asJson.hcursor.downField("phase").focus shouldBe None
+      P.decodeTarget(target.asJson).map(_.asJson) shouldBe Right(target.asJson)
+      Vector(("NativePushPreparing", "push"), ("NativeFinalFetching", "final-fetch")).foreach { (stage, kind) =>
+        val phase = "local-main-remote"
+        val ns = "push-continuation-7"
+        def ref(key: String) = ContextReference("session:native-" + N.phaseKey(Some(phase), ns, key), "1")
+        val selected = target.copy(phase = Some(phase), sourceNamespace = ns, frontierStage = stage,
+          frontierCause = "native-repository:session:" + N.phaseKey(Some(phase), ns, kind + "-intent"),
+          retainedIntent = Some(P.Intent(ref(kind + "-intent"), "9", kind)), committedReference = ref("integration-validated"))
+        P.decodeTarget(selected.asJson) shouldBe Right(selected)
+        Vector(None, Some("local-main-local"), Some("unknown")).foreach { crossed =>
+          P.decodeTarget(selected.copy(phase = crossed).asJson).isLeft shouldBe true
+        }
+        P.decodeTarget(selected.copy(retainedIntent = target.retainedIntent).asJson).isLeft shouldBe true
+        P.decodeTarget(selected.asJson.mapObject(_.add("phase", Json.Null))).isLeft shouldBe true
+      }
+    }
+
     "roundtrip the complete target answer direction and independent binding without a rationale size cap" in {
       Given("an authored original resultless push source and a complete explicit Human answer")
       val rationale = "継続を判断した理由\n次の段落もそのまま残す。\n" * 10000

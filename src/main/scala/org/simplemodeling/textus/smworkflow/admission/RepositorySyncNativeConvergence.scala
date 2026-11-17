@@ -19,7 +19,7 @@ import WorkflowManagedProcessExecution as E
   * actual repository facts. Push remains non-forcing; convergence is observed.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  4, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeConvergence {
@@ -67,9 +67,11 @@ private[smworkflow] object RepositorySyncNativeConvergence {
         CompletionRecords.selected(store.declaration.completionRecords, "repository-sync", store.context.repositoryIdentity).isEmpty)
       Consequence.success(accepted.copy(payload = accepted.payload.copy(finalTip = Some(accepted.payload.after.get.head))))
       else commitC(store, accepted, authority)
-    publication <- RepositorySyncPublication.advanceC(store, committed, authority)
+    publication <- if (store.declaration.hop.exists(_.cursor.phase == "local")) Consequence.success(Right(committed))
+      else RepositorySyncPublication.advanceC(store, committed, authority)
     result <- publication match {
       case Left(waiting) => Consequence.success(waiting)
+      case Right(value) if store.declaration.hop.exists(_.cursor.phase == "local") => RepositorySyncLocalMain.locallyIntegratedC(store, value)
       case Right(value) => finishC(store, accepted, value, authority)
     }
   } yield result

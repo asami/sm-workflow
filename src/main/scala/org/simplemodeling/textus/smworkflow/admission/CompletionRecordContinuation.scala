@@ -1,6 +1,6 @@
 /**
  * @since   Oct. 27, 2026
- * @version Oct. 27, 2026
+ * @version Nov. 17, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -19,6 +19,7 @@ import org.goldenport.cncf.workflow.WorkflowProtocolV1.TypedValue
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
+import org.goldenport.record.Record
 import org.simplemodeling.textus.smworkflow.{SmWorkflowComponent, value as V}
 import RepositorySyncManagedGitObservation as G
 import WorkflowManagedProcessExecution as E
@@ -69,6 +70,15 @@ private[smworkflow] object CompletionRecordContinuation {
     parsed <- io.circe.parser.parse(text).fold(e => invalid(e.message), Consequence.success)
     canonical <- GoalPhaseNativeMetadata.normalizePublicJson(parsed).fold(invalid(_), Consequence.success)
   } yield canonical
+
+  /** Ordinary bounded recollection and retained detail share the complete
+    * projection of this checkpoint, including its separately accepted closure.
+    */
+  def boundedStateC(facts: Json): Consequence[Record] = for {
+    source <- facts.hcursor.downField("source").downField("accepted").downField("payload").get[Json]("state")
+      .fold(e => invalid(e.message), Consequence.success)
+    state <- StandaloneFixNativeRun.recordC(source.deepMerge(Json.obj("localClosure" -> facts)))
+  } yield state
 
   def bindC(creation: ComponentCreate, d: GoalPhaseNativeRun.Declaration): Consequence[spec.ServiceDefinition] = for {
     evidence <- NativeExternalEvidence.bindBoundedC(creation.configuration, BoundedWorkRuntime.host(d))

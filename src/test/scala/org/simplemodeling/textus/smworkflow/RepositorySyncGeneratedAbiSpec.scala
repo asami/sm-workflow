@@ -15,8 +15,7 @@ import org.simplemodeling.textus.smworkflow.admission.{GoalPhaseNativeMetadata, 
 /**
  * @since   Oct.  6, 2026
  *  version Oct. 28, 2026
- *  version Nov.  4, 2026
- * @version Nov.  6, 2026
+ * @version Nov. 17, 2026
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -29,6 +28,7 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
     SmWorkflowComponent.RepositorySyncServiceService.SubmitNativeMergeReviewOperation,
     SmWorkflowComponent.RepositorySyncServiceService.SubmitNativeMergeRepairOperation,
     SmWorkflowComponent.RepositorySyncServiceService.SubmitRepositoryConflictDecisionOperation,
+    SmWorkflowComponent.RepositorySyncServiceService.SubmitRepositorySyncPolicyDecisionOperation,
     SmWorkflowComponent.RepositorySyncServiceService.DescribeRepositorySyncValidationContinuationOperation,
     SmWorkflowComponent.RepositorySyncServiceService.AdoptRepositorySyncValidationContinuationOperation,
     SmWorkflowComponent.RepositorySyncServiceService.DescribeRepositorySyncRepairScopeCorrectionOperation,
@@ -71,7 +71,7 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
     "bind named repository Start and explicit Advance session to generated actions" in {
       Given("a repository/branch/remote selection and an independent execution session")
       val start = admission.NativeWorkflowOperationInputFixture.repository(
-        RepositorySyncStartInput("repository-1", "main", "origin", "main", "remote-1", "FULL_STATE"))
+        RepositorySyncStartInput("repository-1", "main", "origin", "main", "remote-1", "FULL_STATE", None, None))
       val advance = admission.NativeWorkflowOperationInputFixture.advance("repository-execution-1")
       When("the generated readers construct actions from their named parameters")
       val started = _operations(0).createOperationRequest(_request(_operations(0), start))
@@ -103,6 +103,7 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
         "submitNativeMergeReview" -> Some("RepositorySyncNativeMergeReviewResult"),
         "submitNativeMergeRepair" -> Some("RepositorySyncNativeMergeRepairResult"),
         "submitRepositoryConflictDecision" -> Some("RepositorySyncHumanConflictAnswer"),
+        "submitRepositorySyncPolicyDecision" -> Some("RepositorySyncPolicyDecisionAnswer"),
         "describeRepositorySyncValidationContinuation" -> Some("RepositorySyncValidationContinuationDescriptionInput"),
         "adoptRepositorySyncValidationContinuation" -> Some("RepositorySyncValidationContinuationAdoptionInput"),
         "describeRepositorySyncRepairScopeCorrection" -> Some("RepositorySyncRepairScopeCorrectionDescriptionInput"),
@@ -221,7 +222,7 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
 
     "consume the repository business selection without an unused policy version" in {
       Given("repository, branch, remote and synchronization-mode business data")
-      val input = RepositorySyncStartInput("repository-1", "main", "origin", "main", "remote-1", "FULL_STATE")
+      val input = RepositorySyncStartInput("repository-1", "main", "origin", "main", "remote-1", "FULL_STATE", None, None)
       When("the actual Start fixture produces the public business input")
       val properties = admission.NativeWorkflowOperationInputFixture.repository(input)
       val consumed = admission.NativeWorkflowOperationInput.valueC[RepositorySyncStartInput](
@@ -241,7 +242,7 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
       workflow.requiredOperations.map(_.identity.capability).toSet shouldBe Set(
         "group-repository-purpose-capability",
         "resolve-repository-conflict-capability", "native-merge-review-capability", "repair-native-merge-capability",
-        "repository-conflict-human-capability")
+        "repository-conflict-human-capability", "repository-policy-human-capability")
       workflow.actions.find(_.operation.name == "groupRepositoryPurposes").flatMap(_.operation.inputType) shouldBe
         Some("RepositorySyncPurposeRequest")
       workflow.actions.find(_.operation.name == "groupRepositoryPurposes").flatMap(_.operation.resultType) shouldBe
@@ -252,6 +253,10 @@ final class RepositorySyncGeneratedAbiSpec extends AnyWordSpec with Matchers wit
         Some("RepositorySyncNativeMergeRepairRequest")
       workflow.actions.find(_.operation.name == "repairNativePendingMerge").flatMap(_.operation.resultType) shouldBe
         Some("RepositorySyncNativeMergeRepairResult")
+      workflow.actions.find(_.operation.name == "presentRepositorySyncPolicyDecision").flatMap(_.operation.inputType) shouldBe
+        Some("RepositorySyncPolicyDecisionRequest")
+      workflow.actions.find(_.operation.name == "presentRepositorySyncPolicyDecision").flatMap(_.operation.resultType) shouldBe
+        Some("RepositorySyncPolicyDecisionAnswer")
       RepositorySyncWorkflowStateMachineProvidedApi3.workflow.providedOperations.find(_.name == "submitNativeMergeRepair")
         .flatMap(_.resultType) shouldBe Some("RepositorySyncNativeMergeRepairSubmissionResult")
       workflow.actions.filter(_.kind == "ADMISSION").map(_.operation.service).toSet shouldBe

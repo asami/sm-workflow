@@ -24,7 +24,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * Native completion consumes the typed result and owns its state, scope,
   * participant and update boundary. Public callers supply no control envelope.
   * @since   Oct.  9, 2026
-  * @version Nov. 11, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowResultInput {
@@ -32,7 +32,7 @@ private[smworkflow] object NativeWorkflowResultInput {
     SplitPhaseExplicitPartitionSemantic.Judgment | SplitPhaseScopeSemantic.Judgment |
     SplitPhaseExplicitReasoningSemantic.Judgment | SplitPhaseHumanDirectionAnswerContract.Answer |
     RepositorySyncConflictSemantic.Result | RepositorySyncNativeMergeReview.Result |
-    RepositorySyncHumanConflict.Answer | RepositorySyncNativeMergeRepair.Result | RepositorySyncPurpose.Result
+    RepositorySyncHumanConflict.Answer | RepositorySyncPolicyDecision.Answer | RepositorySyncNativeMergeRepair.Result | RepositorySyncPurpose.Result
 
 
   trait Receiver extends spec.OperationDefinition {
@@ -168,6 +168,9 @@ private[smworkflow] object NativeWorkflowResultInput {
           .copy(readC = request => NativeWorkflowResourceInput.selectC[V.RepositorySyncNativeMergeRepairResult](request, "result", "resultResource")
             .map(source => SelectedValue(reader => NativeWorkflowResourceInput.readC(source, reader, "result")
               .flatMap(value => RepositorySyncNativeMergeRepair.fromPublicC(value).map[Value](identity))))),
+        _decision(RepositorySyncPolicyDecision.completionOperation, RepositorySyncPolicyDecision.inputCodec, request =>
+          NativeWorkflowOperationInput.valueC[V.RepositorySyncPolicyDecisionAnswer](request, "answer").map[Value](value =>
+            RepositorySyncPolicyDecision.Answer(value.choice, value.rationale))),
         _decision(RepositorySyncHumanConflict.completionOperation, RepositorySyncHumanConflict.inputCodec, request =>
           NativeWorkflowOperationInput.valueC[V.RepositorySyncHumanConflictAnswer](request, "answer").map[Value](value =>
             RepositorySyncHumanConflict.Answer(value.choice, value.resolutions.map(_resolution), value.rationale)))))

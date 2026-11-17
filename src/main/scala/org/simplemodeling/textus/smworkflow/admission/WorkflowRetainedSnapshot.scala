@@ -25,7 +25,7 @@ import RepositorySyncNativeProgressStore as N
   * target codecs/admission. It neither authenticates Human consent nor changes
   * any historical target, accepted result, uncertainty or execution counter.
   * @since   Nov.  8, 2026
-  * @version Nov. 11, 2026
+  * @version Nov. 17, 2026
   */
 private[smworkflow] object WorkflowRetainedSnapshot {
   val schema = "sm-workflow.retained-snapshot-reference.v1"
@@ -41,7 +41,7 @@ private[smworkflow] object WorkflowRetainedSnapshot {
     Set("RepositorySyncWorkflow", "GoalPhaseWorkflow", "GoalTaskWorkflow", "DelegateTaskWorkflow", "StandaloneFixWorkflow", "SplitPhaseWorkflow")(r.owner) &&
     Vector(r.componentInstance, r.workflowRevision, r.sessionId, r.identity, r.revision).forall(exact) &&
     r.instanceRevision != null && r.instanceRevision.matches("[1-9][0-9]*") && Try(r.instanceRevision.toLong).isSuccess &&
-    Set("native-payload", "purpose-progress", "purpose-repair-progress", "bounded-state", "goal-validation",
+    Set("native-payload", "purpose-progress", "purpose-repair-progress", "bounded-state", "bounded-local-closure-state", "goal-validation",
       "goal-local-completion", "goal-repository-completion", "split-selected-preview", "split-selected-apply")(r.materialKind) &&
     Set("json", "serialized-json")(r.representation)
   def resource(r: Reference): String = resourcePrefix + Base64.getUrlEncoder.withoutPadding.encodeToString(r.asJson.noSpaces.getBytes(UTF_8))
@@ -132,6 +132,13 @@ private[smworkflow] object WorkflowRetainedSnapshot {
         result <- project(saved.receipt.payload.value)
       } yield result
       r.materialKind match {
+        case "bounded-local-closure-state" if Set("GoalTaskWorkflow", "DelegateTaskWorkflow")(r.owner) =>
+          load(CompletionRecordContinuation.operation, CompletionRecordContinuation.codec) { payload => for {
+            _ <- if (payload.source.family == (if (r.owner == "GoalTaskWorkflow") "goal-task" else "delegate-task"))
+              Consequence.unit else invalid("bounded closure state crosses its owning family")
+            _ <- GoalPhaseParticipantAdmission.admitC(payload.source.participant, core.executionContext)
+            publicState <- CompletionRecordContinuation.boundedStateC(CompletionRecordContinuation.codec.encode(payload))
+          } yield DevelopmentOperationalView.json(publicState) }
         case "bounded-state" if Set("GoalTaskWorkflow", "DelegateTaskWorkflow", "StandaloneFixWorkflow")(r.owner) =>
           val engine = if (r.owner == "GoalTaskWorkflow") GoalTaskNativeRun else if (r.owner == "DelegateTaskWorkflow") DelegateTaskNativeRun else StandaloneFixNativeRun
           load(engine.advanceOperation, engine.stateCodec) { payload =>

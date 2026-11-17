@@ -27,6 +27,16 @@ whole-row acceptance. Phase 7 remains unfinished in its own development checkout
 | P8-04 | RSP-1 based compact public result/detail and terminal projection, coherent mechanical progression, wait/collection, scoped substantial worker context and portable compaction/handoff. Keep unknown/live outcomes and host limitations explicit. |
 | P8-05 | Connected supported-use qualification, proportionate checks and review classification, bounded rescue, comparable observations, usage instructions and independent integrated Phase review/normal local closure. |
 
+P8-02 now has an [authored policy/local-main source candidate](../spec/repository-sync-policy-selection.md)
+and isolated executable specifications for the complete selected route, as of
+2026-11-18. Canonical CNCF delivered the typed worktree observation prerequisite;
+its producer/bootstrap successes are not whole-Step consumer acceptance. The
+candidate retains both hops in the original native Session, dirty-policy and
+Human boundaries, phase receipts and shared-target coordination. Its complete
+native checks, independent Step review and normal local closing remain open in
+P8-02; requirements are neither deferred nor accepted by setup responses. Ordinary Step
+`compile`/`test` captures remain unchanged and are not ADMISSION evidence.
+
 Recent synchronization reached integrated main `54d44d5f9f0bdfff18210dac117578439b504812`
 through separate explicit Human Git permission, not normal RepositorySync success.
 Original Sessions `3b98bf93b68e818f2aba862acc5f3b70` and

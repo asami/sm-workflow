@@ -2,22 +2,16 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
 import org.goldenport.Consequence
-import org.goldenport.cncf.config.{ComponentParameterDecoder, ComponentParameterKey}
-import org.goldenport.configuration.ConfigurationValue
 
 /** Narrow the existing native RepositorySync to the admitted dependency source.
   * This is a selection of existing CNCF resources, not another workspace profile,
   * synchronization workflow, source acquisition or producer build/publication.
   * @since   Nov. 12, 2026
-  * @version Nov. 12, 2026
+  * @version Nov. 17, 2026
   * @author ASAMI, Tomoharu
   */
 private[smworkflow] object ManagedDevelopmentRepositorySync {
-  val mainIntegration = ComponentParameterKey.optional("sm-workflow.repository-sync.main-integration",
-    ComponentParameterDecoder[String] {
-      case ConfigurationValue.StringValue(value) if Set("direct", "local-first")(value) => Consequence.success(value)
-      case _ => invalid("main-integration must be direct or local-first")
-    })
+  val mainIntegration = RepositorySyncPolicies.mainIntegration
 
   /** No edge means the ordinary resolver still owns the request. A selected edge
     * binds only its provider repository, independently of localJar/localProject.

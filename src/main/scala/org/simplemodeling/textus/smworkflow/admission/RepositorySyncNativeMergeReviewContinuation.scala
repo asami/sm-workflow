@@ -20,7 +20,8 @@ import RepositorySyncNativeProgressStore as N
   * file writes, validation acceptance or commit/push authority. No pool,
   * provider, execution-context lease or semantic routing is retained by host.
   * @since   Oct.  6, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
@@ -101,7 +102,8 @@ private[smworkflow] object RepositorySyncNativeMergeReviewContinuation {
       purpose <- store.currentPurposeC(session.started.current)
       validated <- purpose match {
         case Some(value) => Consequence.success(Some(value))
-        case None => if (session.started.current.history.exists(_.currentProgression.contains(ProgressionReference("sync.PendingMergePrepared"))))
+        case None => if (RepositorySyncLocalMain.phaseHistory(session.started.current).exists(
+            _.currentProgression.contains(ProgressionReference("sync.PendingMergePrepared"))))
           store.currentMergeCandidateC(session.started.current).flatMap(candidate =>
             RepositorySyncReviewInputContinuation.latestValidatedC(store, session.started.current, candidate).flatMap {
               case Some(value) => Consequence.success(Some(value))

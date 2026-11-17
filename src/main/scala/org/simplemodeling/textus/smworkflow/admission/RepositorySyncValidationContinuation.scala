@@ -23,7 +23,7 @@ import RepositorySyncNativeMergeValidation as C
 /** Explicit append-only direction for an ended invocation with no check result.
   * Description observes Git; adoption only appends a native mechanical record.
   * @since   Oct. 26, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 17, 2026
   */
 private[smworkflow] object RepositorySyncValidationContinuation {
   val purpose = "repository-sync-validation-continuation"
@@ -46,11 +46,12 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     candidateAfter: G.Observed, candidateTree: String, candidateMethod: String, checkpoint: String,
     validationPolicy: C.Policy, intentReference: ContextReference, intentRevision: String,
     checkIndex: Int, check: C.Check, successfulPrefix: Vector[C.Receipt], actual: G.Observed,
-    indexTree: String, continuationPolicy: String)
+    indexTree: String, continuationPolicy: String, phase: Option[String] = None)
   object Target {
     private def _canonical(value: Json): Json = value.mapObject(_.filter { case (_, field) => !field.isNull }
       .mapValues(_canonical)).mapArray(_.map(_canonical))
     given Encoder[Target] = Encoder.instance[Target](value => _canonical(Json.obj(
+      "phase" -> value.phase.asJson,
       "sessionId" -> value.sessionId.asJson,
       "context" -> value.context.asJson,
       "root" -> value.root.asJson,
@@ -75,6 +76,7 @@ private[smworkflow] object RepositorySyncValidationContinuation {
       "indexTree" -> value.indexTree.asJson,
       "continuationPolicy" -> value.continuationPolicy.asJson)))
     private val _raw: Decoder[Target] = Decoder.instance(cursor => for {
+      phase <- cursor.get[Option[String]]("phase")
       sessionid <- cursor.get[String]("sessionId")
       context <- cursor.get[F.StartContext]("context")
       root <- cursor.get[String]("root")
@@ -101,7 +103,7 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     } yield Target(sessionid, context, root, endpoint, frontierrevision, frontiercause, namespace,
       candidatereference, candidaterevision, candidatebefore, candidateafter, candidatetree,
       candidatemethod, checkpoint, validationpolicy, intentreference, intentrevision, checkindex,
-      check, successfulprefix, actual, indextree, continuationpolicy))
+      check, successfulprefix, actual, indextree, continuationpolicy, phase))
     given Decoder[Target] = Decoder.instance(cursor => _raw(cursor).flatMap(value =>
       if (validTarget(value) && value.asJson == cursor.value) Right(value)
       else Left(io.circe.DecodingFailure("Continuation target requires the exact complete canonical contract", cursor.history))))
@@ -154,7 +156,7 @@ private[smworkflow] object RepositorySyncValidationContinuation {
       " MADRCU?!T".contains(p.index) && " MADRCU?!T".contains(p.worktree))
   def namespace(target: Target): String = "validation-continuation-" + target.frontierRevision
   def adoptionKey(target: Target): String = namespace(target) + "-adopted"
-  def validTarget(t: Target): Boolean = t != null && _exact(t.sessionId) && t.context != null &&
+  def validTarget(t: Target): Boolean = t != null && N.validPhase(t.phase) && _exact(t.sessionId) && t.context != null &&
     t.context.productIterator.forall(v => v.isInstanceOf[String] && _exact(v.asInstanceOf[String])) &&
     _exact(t.root) && _exact(t.endpoint) && scala.util.Try(java.nio.file.Path.of(t.root).isAbsolute).getOrElse(false) && _revision(t.frontierRevision) &&
     _exact(t.frontierCause) && t.namespace != null && (t.namespace.isEmpty || t.namespace.matches("validation-continuation-[1-9][0-9]*")) &&
@@ -170,9 +172,9 @@ private[smworkflow] object RepositorySyncValidationContinuation {
     t.actual.head == t.candidateAfter.head && t.actual.tree == t.candidateAfter.tree &&
     t.actual.branch == t.candidateAfter.branch && t.actual.trackingTip == t.candidateAfter.trackingTip &&
     t.continuationPolicy == policy &&
-    t.candidateReference.identity == t.sessionId + ":native-" + N.candidateKey(t.namespace, "integrated") &&
-    t.intentReference.identity == t.sessionId + ":native-" + N.candidateKey(t.namespace, "validation-intent-" + t.checkIndex) &&
-    t.frontierCause == "native-repository:" + t.sessionId + ":" + N.candidateKey(t.namespace, "validation-intent-" + t.checkIndex)
+    t.candidateReference.identity == t.sessionId + ":native-" + N.phaseKey(t.phase, t.namespace, "integrated") &&
+    t.intentReference.identity == t.sessionId + ":native-" + N.phaseKey(t.phase, t.namespace, "validation-intent-" + t.checkIndex) &&
+    t.frontierCause == "native-repository:" + t.sessionId + ":" + N.phaseKey(t.phase, t.namespace, "validation-intent-" + t.checkIndex)
   private[admission] def validPrefix(receipts: Vector[C.Receipt], policy: C.Policy): Boolean =
     receipts != null && policy != null && receipts.size <= policy.checks.size + 1 &&
       receipts.zipWithIndex.forall { (r, i) => r != null &&
@@ -308,10 +310,10 @@ private[smworkflow] object RepositorySyncValidationContinuation {
       history = current.history.takeWhile(_.revision.value <= revision.value)) }.map(Consequence.success)
       .getOrElse(N.invalid("continuation references an absent native history frontier"))
   def selectedC(store: N.Store, current: InstanceRecord): Consequence[Option[Saved]] =
-    current.history.reverse.find(_.currentProgression.contains(ProgressionReference("sync.ValidationContinuationAdmitted"))) match {
+    store.phaseHistory(current).reverse.find(_.currentProgression.contains(ProgressionReference("sync.ValidationContinuationAdmitted"))) match {
       case None => Consequence.success(None)
       case Some(entry) =>
-        val pattern = (java.util.regex.Pattern.quote("native-repository:" + store.identity + ":validation-continuation-") +
+        val pattern = (java.util.regex.Pattern.quote("native-repository:" + store.identity + ":" + store.scoped("").key("validation-continuation-")) +
           "([1-9][0-9]*)-adopted").r
         entry.causation.value match {
           case pattern(source) => for {
@@ -345,7 +347,7 @@ private[smworkflow] object RepositorySyncValidationContinuation {
               Consequence.unit else N.invalid("adopted direction crosses its exact original candidate, intent or receipt selection")
             _ <- _validate_receipts_c(originalstore, original, state, direction.target.validationPolicy, before)
             _ <- if (saved.record == next && direction.target.frontierRevision == source &&
-                direction.target.sessionId == store.identity && direction.target.context == store.context &&
+                direction.target.phase == store.phase && direction.target.sessionId == store.identity && direction.target.context == store.context &&
                 direction.target.root == store.original.repositoryRoot &&
                 direction.target.endpoint == store.declaration.target.endpoint &&
                 store.declaration.target.root.toString == direction.target.root &&
@@ -413,7 +415,7 @@ private[smworkflow] object RepositorySyncValidationContinuation {
       source.payload.method.get, source.payload.checkpoint.getOrElse(""), policy,
       ContextReference(store.reference("validation-intent-" + index).identity, "1"), current.revision.value.toString,
       index, (Vector(C.Check("index-local", 0)) ++ policy.checks)(index), state.receipts, native.observed, tree,
-      RepositorySyncValidationContinuation.policy)
+      RepositorySyncValidationContinuation.policy, store.phase)
     _ <- if (validTarget(target)) Consequence.unit else N.invalid("continuation target is incomplete")
   } yield Source(session, store, source, intent, target)
 

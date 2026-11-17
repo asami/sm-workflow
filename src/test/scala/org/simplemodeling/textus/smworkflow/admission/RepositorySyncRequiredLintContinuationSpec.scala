@@ -51,8 +51,8 @@ private[admission] object RepositorySyncRequiredLintContinuationFixture {
 
 /** Strict v2 append-only selection and independent evidence ingress, with v1
   * decoding preserved. Fixture facts never authenticate real native provenance.
-  * @since Nov. 3, 2026
-  * @version Nov. 3, 2026
+  * @since   Nov.  3, 2026
+  * @version Nov. 17, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -60,6 +60,24 @@ final class RepositorySyncRequiredLintContinuationSpec extends AnyWordSpec with 
   import RepositorySyncRequiredLintContinuationFixture.*
 
   "DEV-RS-RETAINED-REQUIRED-LINT explicit versioned contracts" should {
+    "bind every original lint receipt to its exact phase while retaining legacy absence" in {
+      target.asJson.hcursor.downField("phase").focus shouldBe None
+      L.decodeTarget(target.asJson).map(_.asJson) shouldBe Right(target.asJson)
+      Vector("local-main-local", "local-main-remote").foreach { phase =>
+        def ref(value: ContextReference) = value.copy(identity = value.identity.replace(":native-", ":native-" + phase + "-"))
+        val selected = target.copy(phase = Some(phase),
+          frontierCause = target.frontierCause.replace(":repair-", ":" + phase + "-repair-"),
+          candidateReference = ref(target.candidateReference), retainedReference = ref(target.retainedReference),
+          receiptOrigins = target.receiptOrigins.map(o => o.copy(intentReference = ref(o.intentReference), resultReference = ref(o.resultReference))))
+        L.decodeTarget(selected.asJson) shouldBe Right(selected)
+        L.decodeTarget(selected.copy(phase = None).asJson).isLeft shouldBe true
+        L.decodeTarget(selected.copy(phase = Some(if (phase == "local-main-local") "local-main-remote" else "local-main-local")).asJson).isLeft shouldBe true
+        val crossed = selected.receiptOrigins.updated(0, selected.receiptOrigins.head.copy(intentReference = origins.head.intentReference))
+        L.decodeTarget(selected.copy(receiptOrigins = crossed).asJson).isLeft shouldBe true
+        L.decodeTarget(selected.asJson.mapObject(_.add("phase", Json.Null))).isLeft shouldBe true
+      }
+    }
+
     "dispatch recognized targets explicitly while preserving the historical v1 decoder and boolean meaning" in {
       Given("a pure v2 retained successful selection and a distinct historical resultless v1 target")
       val old = RepositorySyncValidationContinuationFixture.target

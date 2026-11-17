@@ -9,7 +9,8 @@ import org.simplemodeling.textus.smworkflow.value as V
 
 /** Selected Human context from the actual owning Decision.
   * @since   Oct. 14, 2026
-  * @version Oct. 23, 2026
+  *  version Oct. 23, 2026
+  * @version Nov. 17, 2026
   */
 private[smworkflow] object NativeHumanDecisionContext {
   def goalC(core: ActionCall.Core, question: WorkflowInteraction[GoalPhaseOrderedHumanDecision.Input, Nothing]):
@@ -33,6 +34,18 @@ private[smworkflow] object NativeHumanDecisionContext {
     context <- _context_c(core, selected, NativeExternalEvidence.Purpose.SplitAnswer,
       Set(SplitPhaseNativeHumanDirection.inputCodec.typeIdentity, SplitPhaseReasoningHumanDirection.inputCodec.typeIdentity),
       SplitPhaseHumanDirectionAnswerContract.resultType)
+  } yield context
+
+  def repositoryPolicyC(core: ActionCall.Core, question: WorkflowInteraction[RepositorySyncPolicyDecision.Input, Nothing]):
+      Consequence[V.WorkflowHumanDecisionContext] = for {
+    input <- question.current match {
+      case decision: WorkflowContinuation.Decision[RepositorySyncPolicyDecision.Input] =>
+        decision.request.input.map(v => Consequence.success(v.value)).getOrElse(Consequence.stateConflict("Policy question has no input"))
+      case _ => Consequence.stateConflict("Policy question is not a Decision")
+    }
+    selected <- NativeHumanDecisionScope.questionBindingC(question, RepositorySyncPolicyDecision.source(input))
+    context <- _context_c(core, selected, NativeExternalEvidence.Purpose.RepositoryPolicyHuman,
+      Set(RepositorySyncPolicyDecision.inputCodec.typeIdentity), RepositorySyncPolicyDecision.answerCodec.typeIdentity)
   } yield context
 
   private def _context_c(core: ActionCall.Core, question: Json, purpose: NativeExternalEvidence.Purpose,

@@ -9,7 +9,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Exact field projections of native retained state, selected without executing
   * any Workflow continuation. Small current business observations remain inline.
   * @since   Nov.  8, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 17, 2026
   */
 private[smworkflow] object WorkflowResponseMaterials {
   def referencesC(record: Record, call: ActionCall.Core): Consequence[Vector[V.WorkflowRetainedFieldReference]] = {
@@ -58,6 +58,15 @@ private[smworkflow] object WorkflowResponseMaterials {
       WorkflowRetainedSnapshot.Reference(WorkflowRetainedSnapshot.schema, core.component.get.core.instanceId.canonicalKey,
         owner, current.definition.workflowRevision.value, identity, key, "1", saved.revision.value.toString, kind, "json")
     (owner, field) match {
+      case ("GoalTaskWorkflow" | "DelegateTaskWorkflow", "state") if value.getRecord("localClosure").nonEmpty => for {
+        revision <- value.getRecord("localClosure").flatMap(_.getRecord("target")).flatMap(_.getString("terminalRevision"))
+          .filter(_.matches("[1-9][0-9]*")).map(Consequence.success)
+          .getOrElse(invalid("bounded closure state has no original terminal revision"))
+        saved <- entry(e => e.causation.value.startsWith("completion-records:") ||
+          e.causation.value == "completion-records-continuation:" + revision)
+        role = if (saved.causation.value.startsWith("completion-records-continuation:")) "admitted"
+          else saved.causation.value.stripPrefix("completion-records:")
+      } yield reference(saved, identity + ":completion-records:" + revision + ":" + role, "bounded-local-closure-state")
       case ("GoalTaskWorkflow" | "DelegateTaskWorkflow" | "StandaloneFixWorkflow", "state") =>
         entry(_.causation.value.startsWith("standalone-state:")).map(saved =>
           reference(saved, identity + ":standalone-state:" + saved.revision.value, "bounded-state"))

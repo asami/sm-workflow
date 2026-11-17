@@ -13,7 +13,8 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Named public business parameters, never a native continuation envelope.
   * The one TypedValue[Json] helper below is host selection data only.
   * @since   Oct. 11, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationInputFixture {
@@ -28,7 +29,7 @@ private[smworkflow] object NativeWorkflowOperationInputFixture {
     case NativeWorkflowStartInput.Goal(value) => goal(value, session)
     case NativeWorkflowStartInput.Split(phase, mode, proposal) => split(V.SplitPhaseStartInput(phase, mode, proposal), session)
     case value: NativeWorkflowStartInput.Repository => repository(V.RepositorySyncStartInput(value.repositoryIdentity,
-      value.localBranch, value.trackingRemote, value.trackingBranch, value.remoteEndpointIdentity, value.syncMode), session)
+      value.localBranch, value.trackingRemote, value.trackingBranch, value.remoteEndpointIdentity, value.syncMode, None, None), session)
   }
 
   private def _start(input: RecordPresentable, session: Option[String]): List[Property] =
@@ -57,6 +58,8 @@ private[smworkflow] object NativeWorkflowOperationInputFixture {
       dependencyValidation = GoalPhaseDependencyValidation.publicSelection(result.dependencyValidation), diagnosticRepair = None)
 
   private def _business_c(value: NativeWorkflowResultInput.Value): Consequence[(String, RecordPresentable)] = value match {
+    case answer: RepositorySyncPolicyDecision.Answer => Consequence.success("answer" ->
+      V.RepositorySyncPolicyDecisionAnswer(answer.choice, answer.rationale))
     case result: GoalPhaseFindingRecording.Result => Consequence.success("result" -> NativeWorkflowOperationOutput.goalRecordingResult(result))
     case result: GoalPhaseNativeWork.Result => Consequence.success("result" -> goalWorkResult(result))
     case answer: GoalPhaseOrderedHumanDecision.Answer => Consequence.success("answer" ->

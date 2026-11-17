@@ -31,7 +31,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * Only small business relations are retained here; sources and execution
   * captures remain with their existing owners.
   * @since   Nov.  5, 2026
-  * @version Nov. 12, 2026
+  * @version Nov. 17, 2026
   */
 private[smworkflow] object RepositorySyncDirectoryList {
   val syncOperation = "syncRepositoryDirectories"
@@ -52,7 +52,9 @@ private[smworkflow] object RepositorySyncDirectoryList {
     })
 
   final case class Member(repositoryIdentity: String, workspace: String, root: String,
-    localBranch: String, remote: String, remoteBranch: String, endpoint: String, sessionId: String) {
+    localBranch: String, remote: String, remoteBranch: String, endpoint: String, sessionId: String,
+    policies: Option[RepositorySyncPolicies.Selection] = None,
+    localMain: Option[RepositorySyncLocalMain.Plan] = None) {
     def target: Target = Target(Path.of(root), localBranch, remote, remoteBranch, endpoint)
   }
   final case class Work(operation: String, continuationId: String, expectedRevision: String)
@@ -65,8 +67,12 @@ private[smworkflow] object RepositorySyncDirectoryList {
   private given Encoder[Setup] = deriveEncoder
   private given Decoder[Setup] = deriveDecoder
   final case class Payload(participant: String, members: Vector[Member], results: Vector[Result],
-    stage: String, attempting: Option[String], setup: Option[Setup] = None)
-  private given Encoder[Member] = deriveEncoder
+    stage: String, attempting: Option[String], setup: Option[Setup] = None,
+    policies: Option[RepositorySyncPolicies.Selection] = None)
+  private given Encoder[Member] = deriveEncoder[Member].mapJson(_.mapObject(_.filter {
+    case ("policies" | "localMain", value) => !value.isNull
+    case _ => true
+  }))
   private given Decoder[Member] = deriveDecoder
   private given Encoder[Result] = deriveEncoder[Result].mapJson(_.mapObject(_.filter {
     case ("diagnostic" | "work", value) => !value.isNull
@@ -74,7 +80,7 @@ private[smworkflow] object RepositorySyncDirectoryList {
   }))
   private given Decoder[Result] = deriveDecoder
   private given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
-    case ("setup", value) => !value.isNull
+    case ("setup" | "policies", value) => !value.isNull
     case _ => true
   }))
   private given Decoder[Payload] = deriveDecoder
@@ -116,17 +122,20 @@ private[smworkflow] object RepositorySyncDirectoryList {
     * The source work branch and remote destination stay separate, even when
     * the source has no Git upstream. No origin/main or branch-name guess.
     */
-  def resolveC(directories: Vector[String], plan: Json, sessionId: String): Consequence[Vector[Member]] = for {
+  def resolveC(directories: Vector[String], plan: Json, sessionId: String,
+    preferredWorkspaces: Set[String] = Set.empty): Consequence[Vector[Member]] = for {
     paths <- decodeDirectoriesC(directories.asJson)
     workspaces <- plan.hcursor.get[Vector[Json]]("workspaces").fold(e => _invalid(e.message), Consequence.success)
     repositories <- plan.hcursor.get[Vector[Json]]("gitRepositories").fold(e => _invalid(e.message), Consequence.success)
     members <- paths.zipWithIndex.foldLeft(Consequence.success(Vector.empty[Member])) { case (prior, (root, ordinal)) => for {
       values <- prior
-      configured <- _one_c(workspaces.filter(workspace =>
+      candidates = workspaces.filter(workspace =>
         workspace.hcursor.get[String]("root").toOption.exists(value =>
           Try(Path.of(value)).toOption.exists(path => path.isAbsolute && path.normalize.toString == root)) &&
         repositories.exists(repository => repository.hcursor.get[String]("target").toOption ==
-          workspace.hcursor.get[String]("identity").toOption)),
+          workspace.hcursor.get[String]("identity").toOption))
+      preferred = candidates.filter(_.hcursor.get[String]("identity").toOption.exists(preferredWorkspaces))
+      configured <- _one_c(if (preferred.nonEmpty) preferred else candidates,
         "checkout has no unique configured workspace: " + root)
       workspace <- _text_c(configured, "identity")
       repository <- _one_c(repositories.filter(_.hcursor.get[String]("target").contains(workspace)),
@@ -197,9 +206,9 @@ private[smworkflow] object RepositorySyncDirectoryList {
         else for {
           input <- if (refresh) Consequence.success(Record.data("syncMode" -> "FULL_STATE"))
             else NativeWorkflowOperationInput.recordC(Action.this.request, "input")
-          _ <- if (DevelopmentOperationalView.json(input).asObject.exists(_.keys.toSet == Set("syncMode")) &&
+          _ <- if (DevelopmentOperationalView.json(input).asObject.exists(_.keys.toSet.subsetOf(Set("syncMode", "mainIntegration", "uncommittedPolicy"))) &&
               input.getString("syncMode").contains("FULL_STATE")) Consequence.unit
-            else _invalid("directory-list input requires only explicit syncMode FULL_STATE")
+            else _invalid("directory-list input requires explicit syncMode FULL_STATE and optional synchronization policies")
           loaded <- existing match {
             case Some(current) => for {
               retained <- adapter.loadRetainedC(_reference(identity, current.revision.value.toString))(using context)
@@ -214,16 +223,19 @@ private[smworkflow] object RepositorySyncDirectoryList {
             } yield current -> retained.receipt.payload.value
             case None if refresh => _invalid("configuration refresh requires the existing aggregate Session")
             case None => for {
+              policies <- RepositorySyncPolicies.resolveC(parameters, input)
               directories <- parameters.resolve(declaration).map(_.value.getOrElse(Vector.empty))
-              resolved <- _configured_c(creation, directories, identity)
+              resolved <- _configured_c(creation, directories, identity, call, parameters, Some(policies))
               initial <- InstanceRecord(InstanceIdentity(identity), definition, initialRevision, Lifecycle.NotStarted,
                 None, CorrelationReference("directory-list:" + identity), CausationReference("directory-list-start:" + identity),
                 None, None, None, Vector.empty).validateC
               _ <- instances.createC(initial)(using context)
               active <- instances.appendC(initial.identity, initial.revision,
                 _entry(initial, "DirectoryListStarted", "directory-list-start:" + identity))(using context)
-              initialpayload = resolved.fold(reason => Payload(participant, Vector.empty, Vector.empty, "ConfigurationRequired", None,
-                Some(Setup(directories, reason))), members => Payload(participant, members, Vector.empty, "Ready", None))
+              safe = resolved
+              initialpayload = safe.fold(reason => Payload(participant, Vector.empty, Vector.empty, "ConfigurationRequired", None,
+                Some(Setup(directories, reason)), Some(policies)), members => Payload(participant,
+                  members.map(_.copy(policies = Some(policies))), Vector.empty, "Ready", None, policies = Some(policies)))
               saved <- _save_c(adapter, persistence, call, active, initialpayload)
             } yield saved
           }
@@ -234,15 +246,17 @@ private[smworkflow] object RepositorySyncDirectoryList {
             directories <- parameters.resolve(declaration).map(_.value.getOrElse(Vector.empty))
             _ <- if (setup.directories.isEmpty || directories == setup.directories) Consequence.unit
               else _invalid("configuration refresh cannot replace the captured directory selection")
-            resolved <- _configured_c(creation, directories, identity)
-            payload = resolved.fold(reason => loaded._2.copy(setup = Some(Setup(directories, reason))), members =>
-              loaded._2.copy(members = members, stage = "Ready", setup = None))
+            resolved <- _configured_c(creation, directories, identity, call, parameters, loaded._2.policies)
+            safe = resolved
+            payload = safe.fold(reason => loaded._2.copy(setup = Some(Setup(directories, reason))), members =>
+              loaded._2.copy(members = members.map(_.copy(policies = loaded._2.policies)), stage = "Ready", setup = None))
             saved <- _save_c(adapter, persistence, call, loaded._1, payload)
           } yield saved else Consequence.success(loaded)
-          result <- if (configured._2.stage == "AttentionRequired")
+          resumed <- if (configured._2.stage == "AttentionRequired")
               _resume_c(configured._1, configured._2, adapter, persistence, storage, call, repository, refresh)
-            else if (configured._2.stage != "Ready") Consequence.success(configured)
-            else _run_c(configured._1, configured._2, adapter, persistence, storage, call, repository)
+            else Consequence.success(configured)
+          result <- if (resumed._2.stage == "Ready") _run_c(resumed._1, resumed._2, adapter, persistence, storage, call, repository)
+            else Consequence.success(resumed)
           response <- _response_c(identity, result._1.revision.value.toString, result._2, storage, call)
         } yield response
       } yield response
@@ -253,7 +267,18 @@ private[smworkflow] object RepositorySyncDirectoryList {
     * or remote effect. Refresh consumes normal current host bindings; it neither
     * guesses a destination nor changes a previously captured child target.
     */
-  private def _configured_c(creation: ComponentCreate, directories: Vector[String], identity: String):
+  private[admission] def sharedTargetSetup(members: Vector[Member], policies: RepositorySyncPolicies.Selection): Option[String] =
+    Option.when(policies.mainIntegration != "direct" && members.filter(_.remoteBranch == "main")
+      .groupBy(member => member.endpoint -> member.remoteBranch).values.exists { group =>
+        group.size > 1 && (group.exists(m => m.localBranch != "main" && m.localMain.isEmpty) ||
+          group.flatMap { member =>
+            member.localMain.map(_.main).map(p => (p.root, p.branch, p.endpoint, p.workspace)).orElse(
+              Option.when(member.localBranch == "main")((member.root, member.localBranch, member.endpoint, member.workspace)))
+          }.distinct.size > 1)
+      })("SharedTargetSetupRequired: the declared sources do not resolve to one admitted canonical target; no child or route fallback is started")
+
+  private def _configured_c(creation: ComponentCreate, directories: Vector[String], identity: String,
+    core: ActionCall.Core, parameters: ComponentInitializationParameters, policies: Option[RepositorySyncPolicies.Selection]):
       Consequence[Either[String, Vector[Member]]] = {
     val resolved = for {
       _ <- if (directories.nonEmpty) Consequence.unit else _invalid("sm-workflow.repository-sync.directories is not configured")
@@ -263,8 +288,32 @@ private[smworkflow] object RepositorySyncDirectoryList {
           .fold(e => _invalid(e.message), Consequence.success)
         case _ => _invalid("no managed repository execution profile is configured")
       }
-      members <- resolveC(directories, raw, identity)
-    } yield members
+      mappings <- parameters.resolve(RepositorySyncLocalMain.mappings).map(_.value.getOrElse(Map.empty))
+      development <- parameters.resolve(ManagedDevelopmentRuntime.declaration).map(_.value)
+      configuredMain <- parameters.resolve(RepositorySyncPolicies.mainIntegration).map(_.value)
+      members <- resolveC(directories, raw, identity, mappings.values.toSet)
+      captured <- members.foldLeft(Consequence.success(Vector.empty[Member])) { (prior, member) => for {
+        values <- prior
+        managed <- ManagedDevelopmentRepositorySync.selectC(development, member.repositoryIdentity, raw,
+          Some(member.root), policies.map(_.mainIntegration))
+        _ <- if (managed.exists(_.remoteBranch == "main") && configuredMain.exists(_ != "direct"))
+          _invalid("Managed dependency remote main conflicts with explicit main-integration before target effects") else Consequence.unit
+        plan <- if (policies.exists(p => RepositorySyncPolicies.route(p, member.localBranch, member.remoteBranch) != "direct")) for {
+          source <- RepositorySyncLocalMain.participantC(raw, member.workspace)
+          mapped <- mappings.get(member.workspace).map(value => RepositorySyncLocalMain.participantC(raw, value).map(Some(_)))
+            .getOrElse(Consequence.success(Option.empty[RepositorySyncLocalMain.Participant]))
+          selected <- RepositorySyncLocalMain.captureC(scopedCore(core, member.workspace), raw, source, mapped)
+        } yield Some(selected) else Consequence.success(Option.empty[RepositorySyncLocalMain.Plan])
+      } yield values :+ member.copy(localMain = plan) }
+      _ <- policies.flatMap(sharedTargetSetup(captured, _)).map(_invalid[Unit]).getOrElse(Consequence.unit)
+      coordinated = captured.map { member => member.localMain.fold(member) { plan =>
+        val group = captured.filter(m => m.endpoint == member.endpoint && m.remoteBranch == member.remoteBranch && m.localMain.nonEmpty)
+        val participants = captured.filter(m => m.endpoint == member.endpoint && m.remoteBranch == member.remoteBranch)
+        val cohort = RepositorySyncLocalMain.Cohort(group.head.sessionId, group.flatMap(_.localMain.map(_.source)), group.map(_.sessionId),
+          participants.map(_.sessionId))
+        member.copy(localMain = Some(plan.copy(cohort = Some(cohort))))
+      }}
+    } yield coordinated.filter(_.localMain.nonEmpty) ++ coordinated.filter(_.localMain.isEmpty)
     resolved.map[Either[String, Vector[Member]]](Right(_))
       .recoverWith(conclusion => Consequence.success(Left(conclusion.show)))
   }
@@ -292,14 +341,16 @@ private[smworkflow] object RepositorySyncDirectoryList {
               child.map(_.revision.value.toString), None, None)
           }
           next = state.copy(results = state.results :+ result,
-            stage = if (observed.isLeft) "Indeterminate" else "Ready", attempting = None)
+            stage = if (observed.isLeft) "Indeterminate"
+              else if (member.localMain.nonEmpty && result.kind != "Terminal" && !contributionWait(member, result)) "AttentionRequired"
+              else "Ready", attempting = None)
           saved <- _save_c(adapter, persistence, core, intent._1, next)
         } yield saved
       }
     }.flatMap { (frontier, state) =>
       if (state.stage != "Ready") Consequence.success(frontier -> state)
       else _save_c(adapter, persistence, core, frontier, state.copy(stage =
-        if (state.results.forall(_.kind == "Terminal")) "Completed" else "AttentionRequired"))
+        if (state.results.size == state.members.size && state.results.forall(_.kind == "Terminal")) "Completed" else "AttentionRequired"))
     }
 
   /** Explicit setup refresh may also revisit an unchanged pre-effect wait.
@@ -308,23 +359,33 @@ private[smworkflow] object RepositorySyncDirectoryList {
     */
   private[admission] def setupRefreshEligible(refreshsetup: Boolean, kind: String,
     condition: Option[String], progression: Option[ProgressionReference]): Boolean =
-    refreshsetup && kind == "Wait" && (condition.contains("ValidationSetupRequired") ||
+    refreshsetup && ((kind == "Error" && condition.contains("UncommittedChanges") &&
+      progression.contains(ProgressionReference("sync.BoundaryAssessment"))) || kind == "Wait" && (condition.contains("ValidationSetupRequired") ||
       (condition.contains("purpose-materialization-preflight") &&
-        progression.contains(ProgressionReference("sync.PurposePrepared"))))
+        progression.contains(ProgressionReference("sync.PurposePrepared")))))
+
+  /** A retained local contribution must let the remaining declared cohort
+    * members start; their completion is what releases this native barrier.
+    * Human/work/setup and unknown waits do not authorize that progression.
+    */
+  private[admission] def contributionWait(member: Member, result: Result): Boolean =
+    member.sessionId == result.sessionId && result.kind == "Wait" &&
+      result.condition.contains("SharedTargetAwaitingContributions") &&
+      member.localMain.flatMap(_.cohort).exists(_.sessions.contains(member.sessionId))
 
   private def _resume_c(current: InstanceRecord, payload: Payload, adapter: WorkflowManagedMechanicalTransition[Payload],
     persistence: GoalPhaseRuntimeParameters.Persistence, storage: WorkflowComponentStorage,
     core: ActionCall.Core, repository: BindRepository, refreshsetup: Boolean = false): Consequence[(InstanceRecord, Payload)] =
     payload.results.zipWithIndex.foldLeft(Consequence.success(current -> payload)) { case (prior, (result, ordinal)) =>
       prior.flatMap { (frontier, state) =>
-        if (state.stage == "Indeterminate" || !Set("Request", "Wait", "Human")(result.kind)) Consequence.success(frontier -> state)
+        if (state.stage == "Indeterminate" || !Set("Request", "Wait", "Human", "Progress", "Error")(result.kind)) Consequence.success(frontier -> state)
         else for {
           member <- state.members.find(_.sessionId == result.sessionId).map(Consequence.success)
             .getOrElse(_invalid("outstanding result has no captured member"))
           instances <- storage.bindInstancesC()(using core.executionContext)
           child <- instances.loadC(InstanceIdentity(member.sessionId))(using core.executionContext)
             .flatMap(_.map(Consequence.success).getOrElse(_invalid("outstanding child Session is unavailable")))
-          next <- if (result.revision.contains(child.revision.value.toString) &&
+          next <- if (result.revision.contains(child.revision.value.toString) && result.kind != "Progress" && !result.condition.contains("SharedTargetAwaitingContributions") &&
               !setupRefreshEligible(refreshsetup, result.kind, result.condition, child.currentProgression))
             Consequence.success(frontier -> state)
             else for {
@@ -348,8 +409,11 @@ private[smworkflow] object RepositorySyncDirectoryList {
         } yield next
       }
     }.flatMap { (frontier, state) =>
-      if (state.stage != "Indeterminate" && state.results.forall(_.kind == "Terminal"))
-        _save_c(adapter, persistence, core, frontier, state.copy(stage = "Completed"))
+      if (state.stage != "Indeterminate" && state.results.forall(result => result.kind == "Terminal" ||
+          state.members.find(_.sessionId == result.sessionId).exists(member => contributionWait(member, result))))
+        _save_c(adapter, persistence, core, frontier, state.copy(stage =
+          if (state.results.size < state.members.size) "Ready"
+          else if (state.results.forall(_.kind == "Terminal")) "Completed" else "AttentionRequired"))
       else Consequence.success(frontier -> state)
     }
 
@@ -366,7 +430,8 @@ private[smworkflow] object RepositorySyncDirectoryList {
     def _invoke_[A](operation: String, properties: List[Property])(using reader: ValueReader[A]): Consequence[A] = for {
       context <- NativeWorkflowSessionInput.contextC(core.executionContext, Some(member.sessionId))
       request = Request.of(component = SmWorkflowComponent.name, service = "RepositorySyncService", operation = operation,
-        properties = properties :+ Property(_workspace_key, Workspace(member.workspace), None))
+        properties = properties ++ member.localMain.toVector.map(RepositorySyncLocalMain.planProperty) :+
+          Property(_workspace_key, Workspace(member.workspace), None))
       selectedcore = core.copy(action = ScopeAction(request), executionContext = context)
       service <- repository(request, selectedcore, member.target)
       selected <- service.operations.operations.toVector.find(_.name == operation).map(Consequence.success)
@@ -383,9 +448,17 @@ private[smworkflow] object RepositorySyncDirectoryList {
     } yield value
     for {
       _ <- if (!start) Consequence.unit else _invoke_[V.RepositorySyncStartResult]("startRepositorySync", List(
-        Property("sessionId", member.sessionId, None), Property("input", Record.data(
-          "repositoryIdentity" -> member.repositoryIdentity, "syncMode" -> "FULL_STATE"), None))).map(_ => ())
-      result <- _invoke_[V.RepositorySyncAdvanceResult]("advanceRepositorySync", List(Property("sessionId", member.sessionId, None)))
+        Property("sessionId", member.sessionId, None), Property("input", Record.data((
+          Vector("repositoryIdentity" -> member.repositoryIdentity, "syncMode" -> "FULL_STATE") ++
+            member.policies.toVector.flatMap(selected => Vector("mainIntegration" -> selected.mainIntegration,
+              "uncommittedPolicy" -> selected.uncommittedPolicy)))*), None))).map(_ => ())
+      result <- {
+        def advance(remaining: Int): Consequence[V.RepositorySyncAdvanceResult] =
+          _invoke_[V.RepositorySyncAdvanceResult]("advanceRepositorySync", List(Property("sessionId", member.sessionId, None))).flatMap { value =>
+            if (value.kind == "Progress" && remaining > 0) advance(remaining - 1) else Consequence.success(value)
+          }
+        advance(16)
+      }
     } yield result
   }
 
@@ -450,6 +523,18 @@ private[smworkflow] object RepositorySyncDirectoryList {
         value <- render(work)
       } yield value
       reference.operation match {
+        case "submitRepositorySyncPolicyDecision" => for {
+          questions <- storage.bindDecisionC(RepositorySyncPolicyDecision.completionOperation, RepositorySyncPolicyDecision.inputCodec)
+          question <- questions.loadC(org.goldenport.cncf.workflow.ContinuationIdentity(reference.continuationId))(using context)
+            .flatMap(_.map(Consequence.success).getOrElse(_invalid("selected native policy question is unavailable")))
+          _ <- question.current match {
+            case decision: WorkflowProtocolV1.WorkflowContinuation.Decision[?] if
+                question.handle.instanceIdentity.value == member.sessionId &&
+                decision.request.expectedRevision.value == reference.expectedRevision => Consequence.unit
+            case _ => _invalid("selected policy question crosses its native child Session or revision")
+          }
+          value <- RepositorySyncPolicyDecision.renderC(question, call)
+        } yield value
         case "submitRepositoryPurposeResult" => load(RepositorySyncPurposeContinuation.completionOperation,
           RepositorySyncPurpose.inputCodec, NativeWorkflowOperationOutput.repositoryPurposeRequestC)
         case "submitRepositorySyncWorkResult" => load(RepositorySyncNativeConflictContinuation.completionOperation,
@@ -458,6 +543,18 @@ private[smworkflow] object RepositorySyncDirectoryList {
           RepositorySyncNativeMergeReview.inputCodec, work => NativeWorkflowOperationOutput.repositoryReviewRequestC(work, call))
         case "submitNativeMergeRepair" => load(RepositorySyncNativeMergeRepairContinuation.completionOperation,
           RepositorySyncNativeMergeRepair.inputCodec, NativeWorkflowOperationOutput.repositoryRepairRequestC)
+        case "submitRepositorySyncPolicyDecision" => for {
+          questions <- storage.bindDecisionC(RepositorySyncPolicyDecision.completionOperation, RepositorySyncPolicyDecision.inputCodec)
+          question <- questions.loadC(org.goldenport.cncf.workflow.ContinuationIdentity(reference.continuationId))(using context)
+            .flatMap(_.map(Consequence.success).getOrElse(_invalid("selected native policy question is unavailable")))
+          _ <- question.current match {
+            case decision: WorkflowProtocolV1.WorkflowContinuation.Decision[?] if
+                question.handle.instanceIdentity.value == member.sessionId && decision.request.expectedRevision.value == reference.expectedRevision &&
+                decision.request.continuationId.value == reference.continuationId => Consequence.unit
+            case _ => _invalid("selected policy question crosses its native child Session, identity or revision")
+          }
+          value <- RepositorySyncPolicyDecision.renderC(question, call)
+        } yield value
         case "submitRepositoryConflictDecision" => for {
           questions <- storage.bindDecisionC(RepositorySyncHumanConflict.completionOperation, RepositorySyncHumanConflict.inputCodec)
           question <- questions.loadC(org.goldenport.cncf.workflow.ContinuationIdentity(reference.continuationId))(using context)

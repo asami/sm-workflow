@@ -48,6 +48,12 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
   final case class Candidate(namespace: String, pending: Stage)
   def candidateKey(namespace: String, key: String): String =
     if (namespace.isEmpty) key else namespace + "-" + key
+  // Phase and candidate namespace are independent identity coordinates. Absence
+  // preserves the original unphased continuation wire contract.
+  def validPhase(phase: Option[String]): Boolean = phase != null && phase.forall(
+    Set("local-main-source", "local-main-local", "local-main-remote"))
+  def phaseKey(phase: Option[String], namespace: String, key: String): String =
+    phase.fold("")(_ + "-") + candidateKey(namespace, key)
   private given Encoder[RepositorySyncNativeMergeValidation.State] = Encoder.instance(RepositorySyncNativeMergeValidation.stateCodec.encode)
   private given Decoder[RepositorySyncNativeMergeValidation.State] = Decoder.instance(cursor =>
     RepositorySyncNativeMergeValidation.stateCodec.decode(cursor.value).left.map(reason => DecodingFailure(reason, cursor.history)))
@@ -161,13 +167,19 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     def scoped(namespace: String, direction: Option[RepositorySyncValidationContinuation.Direction] = None,
       pushDirection: Option[RepositorySyncPushContinuation.Direction] = None): Store =
       new Store(declaration, core, original, context, identity, adapter, storage, acknowledgement, namespace, direction, pushDirection)
-    def key(key: String): String = candidateKey(namespace, key)
+    def phase: Option[String] = declaration.hop.map(_.namespace).filter(_.nonEmpty)
+    private def phasePrefix: String = phase.fold("")(_ + "-")
+    def phaseHistory(current: InstanceRecord): Vector[HistoryEntry] =
+      RepositorySyncLocalMain.phaseHistory(current).filter(_.causation.value.startsWith(historyPrefix))
+    private def historyPrefix: String = "native-repository:" + identity + ":" + phasePrefix
+    def key(key: String): String = if (phasePrefix.nonEmpty && key.startsWith(phasePrefix)) key
+      else phasePrefix + candidateKey(namespace, key)
     def reference(key: String): WorkflowMechanicalTransition.Reference =
       WorkflowMechanicalTransition.Reference(identity + ":native-" + this.key(key), "1")
     /** Select the latest actual immutable inventory, including an explicitly
       * superseded inventory. Issuance history alone cannot create a snapshot. */
     def currentPurposeInventoryC(current: InstanceRecord): Consequence[Option[Stage]] = {
-      val prefix = "native-repository:" + identity + ":"
+      val prefix = historyPrefix
       if (current.identity.value != identity) return invalid("purpose inventory history crosses its instance")
       current.history.reverse.find(entry => entry.currentProgression.contains(ProgressionReference("sync.PurposeInventory")) &&
           entry.causation.value.startsWith(prefix)) match {
@@ -197,13 +209,13 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
       */
     def currentPurposeC(current: InstanceRecord): Consequence[Option[Stage]] = {
       if (current.identity.value != identity) return invalid("current purpose history crosses its instance")
-      if (current.history.exists(_.currentProgression.contains(ProgressionReference("sync.PushContinuationAdmitted"))))
+      if (phaseHistory(current).exists(_.currentProgression.contains(ProgressionReference("sync.PushContinuationAdmitted"))))
         return RepositorySyncPushContinuation.selectedC(scoped(""), current).flatMap {
           case Some(_) => Consequence.success(None)
           case None => invalid("push continuation history has no authenticated native direction")
         }
       if (!RepositorySyncPurposeRuntime.selected(current)) return Consequence.success(None)
-      val prefix = "native-repository:" + identity + ":"
+      val prefix = historyPrefix
       current.history.reverse.find(entry => entry.currentProgression.exists(p => Set("sync.PurposeChecked", "sync.PurposeRepairRequired", "sync.PendingMergePrepared")(p.value)) &&
         entry.causation.value.startsWith(prefix)) match {
         case None => Consequence.success(None)
@@ -213,15 +225,17 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
     }
     def currentMergeCandidateC(current: InstanceRecord): Consequence[Candidate] = {
       if (current.identity.value != identity) return invalid("current candidate history crosses its instance")
-      val selected = current.history.reverse.find(entry =>
-        entry.currentProgression.contains(ProgressionReference("sync.PendingMergePrepared")))
+      // A completed local hop remains in this Session's immutable history,
+      // but cannot supply the next hop's candidate, even for an empty namespace.
+      val selected = RepositorySyncLocalMain.phaseHistory(current).reverse.find(entry =>
+        entry.currentProgression.contains(ProgressionReference("sync.PendingMergePrepared")) && entry.causation.value.startsWith(historyPrefix))
       selected match {
         case None => invalid("actual pending merge history source is absent")
         case Some(entry) =>
-          val pattern = (java.util.regex.Pattern.quote("native-repository:" + identity + ":") +
+          val pattern = (java.util.regex.Pattern.quote(historyPrefix) +
             "((?:repair-|required-lint-|formal-failure-|push-continuation-|merge-check-continuation-)[1-9][0-9]*)-pending-merge").r
           entry.causation.value match {
-            case cause if cause == "native-repository:" + identity + ":pending-merge" => scoped("").loadC("pending-merge").flatMap {
+            case cause if cause == historyPrefix + "pending-merge" => scoped("").loadC("pending-merge").flatMap {
               case Some(value) if value.payload.stage == "PendingMergePrepared" && value.record.revision == entry.revision &&
                   value.payload.requiredLint.isEmpty => Consequence.success(Candidate("", value))
               case _ => invalid("original pending merge receipt is absent or crossed")
@@ -272,7 +286,7 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
         from.derivedCompositeOccurrence, from.committedPredecessor, None)
       // A real repair materializes new inputs. Supplement provenance remains
       // in its original rows and is never a seed for that changed candidate.
-      selectedpayload = if (this.key(key).startsWith("repair-") &&
+      selectedpayload = if (candidateKey(namespace, key.stripPrefix(phasePrefix)).startsWith("repair-") &&
           Set("MaterializingRepair", "PendingMergePrepared")(payload.stage))
           payload.copy(requiredLint = None, reviewInputs = None, formalFailure = None,
             mergeCheckContinuation = None, validationPreparation = None) else payload
@@ -311,7 +325,8 @@ private[smworkflow] object RepositorySyncNativeProgressStore {
   def bindC(session: RepositorySyncManagedFetch.Session, declaration: RepositorySyncManagedFetch.Declaration,
     core: ActionCall.Core, acknowledgement: String => Consequence[Unit]): Consequence[Store] =
     session.storage.bindMechanicalC(RepositorySyncManagedFetch.advanceOperation, codec).map(adapter =>
-      new Store(declaration, core, session.started.receipt.payload.value, session.context,
+      new Store(declaration, core, session.started.receipt.payload.value.copy(repositoryRoot =
+        declaration.hop.fold(session.started.receipt.payload.value.repositoryRoot)(_ => declaration.target.root.toString)), session.context,
         session.started.receipt.next.identity.value, adapter, session.storage, acknowledgement))
   /** Consume the actual paired committed revision in the current native record;
     * never regenerate or append a historical completion.

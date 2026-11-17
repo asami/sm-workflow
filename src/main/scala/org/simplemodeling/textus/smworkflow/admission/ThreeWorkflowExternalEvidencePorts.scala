@@ -17,7 +17,7 @@ import NativeExternalEvidence.Purpose
   * actor, dummy verifier, success default or reply-decoded authority is used.
   * @since   Oct.  7, 2026
   *  version Oct. 27, 2026
-  * @version Nov.  6, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: NativeExternalEvidence.Reader) {
@@ -64,6 +64,11 @@ private[smworkflow] final class ThreeWorkflowExternalEvidencePorts(reader: Nativ
   val repositoryHuman: RepositorySyncHumanConflict.EvidencePort = new RepositorySyncHumanConflict.EvidencePort {
     def admitC(core: ActionCall.Core, reference: ContextReference, target: Json) =
       _admit_evidence_c(core, Purpose.RepositoryHuman, key(reference.identity, reference.revision), target)
+  }
+
+  val repositoryPolicyHuman: RepositorySyncHumanConflict.EvidencePort = new RepositorySyncHumanConflict.EvidencePort {
+    def admitC(core: ActionCall.Core, reference: ContextReference, target: Json) =
+      _admit_evidence_c(core, Purpose.RepositoryPolicyHuman, key(reference.identity, reference.revision), target)
   }
 
   // Reader owns the external evidence/permission boundary. Consumers receive

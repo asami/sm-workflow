@@ -18,7 +18,7 @@ import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms
   * and per-effect evidence rows. This projection grants no CNCF capability:
   * every Git operation still passes the configured managed execution boundary.
   * @since   Oct. 28, 2026
-  * @version Oct. 28, 2026
+  * @version Nov. 17, 2026
   */
 private[smworkflow] object StandardRepositorySyncIntent {
   private val prefix = "runtime-repository-sync:"
@@ -42,7 +42,7 @@ private[smworkflow] object StandardRepositorySyncIntent {
       case Some(value: String) if value == target.endpoint => Consequence.success(value)
       case _ => Consequence.stateConflict("RepositorySync endpoint identity differs from the configured endpoint")
     }
-  } yield RepositorySyncStartInput(repository, target.localBranch, target.remote, target.remoteBranch, endpoint, mode)
+  } yield RepositorySyncStartInput(repository, target.localBranch, target.remote, target.remoteBranch, endpoint, mode, None, None)
 
   /** Supply the resolved business record to the existing owning receiver. */
   def bindInput(service: spec.ServiceDefinition, input: RepositorySyncStartInput): spec.ServiceDefinition =

@@ -10,11 +10,11 @@ import NativeExternalEvidence.Purpose
   * Native completion owns live state, result type and CAS.
   * @since   Oct.  8, 2026
   *  version Oct. 23, 2026
-  * @version Nov.  6, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeHumanDecisionScope {
-  def supports(purpose: Purpose): Boolean = Set(Purpose.GoalHuman, Purpose.RepositoryHuman)(purpose)
+  def supports(purpose: Purpose): Boolean = Set(Purpose.GoalHuman, Purpose.RepositoryHuman, Purpose.RepositoryPolicyHuman)(purpose)
   def select(purpose: Purpose, binding: Json): Either[String, Json] =
     if (!supports(purpose)) Right(binding)
     else for {
@@ -25,7 +25,7 @@ private[smworkflow] object NativeHumanDecisionScope {
       question <- at(body, "question").flatMap(questionTarget(_, purpose))
       answer <- at(body, "answer").flatMap(answerTarget(_, purpose))
     } yield Json.obj("componentInstance" -> Json.fromString(owner), "humanAttestation" -> Json.obj(
-      "kind" -> Json.fromString(if (purpose == Purpose.GoalHuman) "ordered-goal-direction" else "repository-conflict-direction"),
+      "kind" -> Json.fromString(kind(purpose)),
       "submittingParticipant" -> Json.fromString(participant), "question" -> question, "answer" -> answer))
 
   private[smworkflow] def selectQuestion(question: Json, purpose: Purpose): Either[String, Json] =
@@ -37,7 +37,9 @@ private[smworkflow] object NativeHumanDecisionScope {
     operation <- at(input, "operation").flatMap(operationTarget)
     completion <- at(input, "completionOperation").flatMap(operationTarget)
     source <- at(input, "source")
-    target <- if (purpose == Purpose.GoalHuman) goalSource(source) else repositorySource(source)
+    target <- if (purpose == Purpose.GoalHuman) goalSource(source)
+      else if (purpose == Purpose.RepositoryPolicyHuman) RepositorySyncPolicyDecision.inputSource(Json.fromJsonObject(source))
+      else repositorySource(source)
   } yield Json.fromJsonObject(fields.add("handle", handle).add("operation", operation).add("completionOperation", completion).add("source", target))
 
   private def goalSource(input: JsonObject): Either[String, Json] = for {
@@ -170,8 +172,7 @@ private[smworkflow] object NativeHumanDecisionScope {
 
   private[smworkflow] def humanBinding(owner: String, purpose: Purpose, participant: String,
     questionJson: Json, answerJson: Json): Json = Json.obj("componentInstance" -> Json.fromString(owner),
-    "humanAttestation" -> Json.obj("kind" -> Json.fromString(if (purpose == Purpose.GoalHuman)
-      "ordered-goal-direction" else "repository-conflict-direction"), "submittingParticipant" -> Json.fromString(participant),
+    "humanAttestation" -> Json.obj("kind" -> Json.fromString(kind(purpose)), "submittingParticipant" -> Json.fromString(participant),
       "question" -> questionJson, "answer" -> answerJson))
 
   private[admission] def bindingC[W, A](owner: String, purpose: Purpose, question: WorkflowInteraction[W, Nothing],
@@ -184,6 +185,8 @@ private[smworkflow] object NativeHumanDecisionScope {
         "revision" -> Json.fromString(answer.resultReference.revision))).add("worker", Json.fromString(answer.evidence.workerIdentity.get)))))
   }
 
+  private def kind(purpose: Purpose): String = if (purpose == Purpose.GoalHuman) "ordered-goal-direction"
+    else if (purpose == Purpose.RepositoryPolicyHuman) "repository-policy-direction" else "repository-conflict-direction"
   private def _exact(value: String): Boolean = value != null && value.nonEmpty && value.trim == value && !value.exists(_.isControl)
 
   private[admission] def handleJson(value: WorkflowHandle): Json = Json.obj("componentIdentity" -> Json.fromString(value.componentIdentity.name),

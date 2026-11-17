@@ -14,7 +14,7 @@ import RepositorySyncNativeProgressStore.*
   * caller, selects this installed route. A nonterminal result is not convergence.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object RepositorySyncNativeProgression {
@@ -27,10 +27,15 @@ private[smworkflow] object RepositorySyncNativeProgression {
     convergence: Option[RepositorySyncNativeConvergence.AuthorityPort] = None,
     repair: Option[RepositorySyncNativeMergeRepairContinuation.Port] = None): Consequence[org.simplemodeling.textus.smworkflow.value.RepositorySyncAdvanceResult] = for {
     session <- Fetch.sessionC(identity, declaration, definition, core)
+    remoteGate <- RepositorySyncLocalMain.remoteReadyC(session, declaration, core)
+    policyGate <- if (remoteGate.isEmpty) RepositorySyncPolicyDecision.gateC(session, declaration, core)
+      else Consequence.success(None)
     continuationstore <- bindC(session, declaration, core, acknowledgement)
     pushcontinuation <- RepositorySyncPushContinuation.selectedC(continuationstore, session.started.current)
     continuation <- RepositorySyncValidationContinuation.selectedC(continuationstore, session.started.current)
-    output <- if (session.started.current.lifecycle == Lifecycle.Completed)
+    output <- if (policyGate.nonEmpty) Consequence.success(policyGate.get)
+      else if (remoteGate.nonEmpty) Consequence.success(remoteGate.get)
+      else if (session.started.current.lifecycle == Lifecycle.Completed)
       _retained_terminal_c(session, declaration, core, acknowledgement)
       else session.started.current.suspension match {
       case None if session.started.current.currentProgression.contains(
@@ -89,7 +94,7 @@ private[smworkflow] object RepositorySyncNativeProgression {
           session.started.current.currentProgression.get.value.stripPrefix("sync."))))
       case None if session.started.current.currentProgression.exists(p =>
           Set("sync.PurposeRepairRequired", "sync.ReviewRepairRequired", "sync.RepairProposalAdmitted", "sync.RepairDecisionRequired")(p.value)) &&
-          session.started.current.history.exists(_.currentProgression.exists(_.value.startsWith("sync.Purpose"))) =>
+          RepositorySyncLocalMain.phaseHistory(session.started.current).exists(_.currentProgression.exists(_.value.startsWith("sync.Purpose"))) =>
         repair.map(_.advanceC(identity, core)).getOrElse(Consequence.success(NativeWorkflowOperationOutput.repositoryWait(identity,
           "Actual purpose repair requires its installed native FIX policy/owner; failed checks and findings remain unresolved", "purpose-repair-unavailable")))
       case None if RepositorySyncPurposeRuntime.selected(session.started.current) =>
@@ -122,7 +127,7 @@ private[smworkflow] object RepositorySyncNativeProgression {
           Set("sync.ReviewRepairRequired", "sync.ValidationRepairRequired", "sync.RepairProposalAdmitted", "sync.MaterializingRepair")(p.value)) =>
         repair.map(_.advanceC(identity, core)).getOrElse(Consequence.success(NativeWorkflowOperationOutput.repositoryWait(identity,
           "The current native repair requires its installed fixed policy and paired continuation.", "native-repair-unavailable")))
-      case None if session.started.current.history.exists(_.currentProgression.contains(
+      case None if RepositorySyncLocalMain.phaseHistory(session.started.current).exists(_.currentProgression.contains(
           WorkflowInstancePersistence.ProgressionReference("sync.PendingMergePrepared"))) => for {
         store <- bindC(session, declaration, core, acknowledgement)
         candidate <- store.currentMergeCandidateC(session.started.current)
@@ -147,7 +152,7 @@ private[smworkflow] object RepositorySyncNativeProgression {
       case None => _advance_session_c(session, declaration, definition, core, fetchAcknowledgement, acknowledgement,
         conflicts, validationPolicy, review, convergence, repair)
     }
-  } yield output
+  } yield RepositorySyncLocalMain.report(output, declaration)
 
   /** Project only the saved convergence immediately preceding native closure.
     * Reading a completed result admits no new effects or transitions. */
@@ -267,6 +272,7 @@ private[smworkflow] object RepositorySyncNativeProgression {
     if (store.declaration.runtimeCleanSync && observed.dirty.nonEmpty)
       RepositorySyncPurposeRuntime.advanceC(store, fetched, observed, validationPolicy, convergence, review,
         (stage, clean) => progressC(store, stage.record, clean, conflicts, validationPolicy, review, convergence, repair))
+    else if (store.declaration.hop.exists(_.cursor.phase == "source")) RepositorySyncLocalMain.sourceReadyC(store, fetched, observed)
     else for {
     preserved <- RepositorySyncNativePreservation.preserveC(store, fetched, observed)
     integrated <- RepositorySyncNativeIntegration.integrateC(store, preserved)

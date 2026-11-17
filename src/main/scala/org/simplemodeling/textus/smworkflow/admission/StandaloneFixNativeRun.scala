@@ -62,7 +62,7 @@ private[smworkflow] object BoundedWorkRuntime {
   * No Phase Start, Plan, Step acceptance, commit or private command driver.
   * @since   Oct. 26, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 12, 2026
+  * @version Nov. 17, 2026
   */
 private[smworkflow] object StandaloneFixNativeRun extends BoundedWorkNativeRun(false) {
   type Host = BoundedWorkRuntime.Host
@@ -415,8 +415,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     result <- closure match {
       case Some(value) => for {
         raw <- value.target.toJsonStringC.flatMap(s => io.circe.parser.parse(s).fold(e => invalid(e.message), Consequence.success))
-        source <- raw.hcursor.downField("source").downField("accepted").downField("payload").get[Json]("state").fold(e => invalid(e.message), Consequence.success)
-        state <- recordC(source.deepMerge(Json.obj("localClosure" -> raw)))
+        state <- CompletionRecordContinuation.boundedStateC(raw)
       } yield V.StandaloneFixView(id, value.kind, "Completion scope " + value.scope + " " + value.identity + "; " + value.message,
         Some(state), None, None, None, None, None, Vector.empty, None, None, None, Vector.empty)
       case None => current.suspension match {

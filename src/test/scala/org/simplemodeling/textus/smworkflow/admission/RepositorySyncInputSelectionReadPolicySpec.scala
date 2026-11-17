@@ -14,7 +14,8 @@ import org.simplemodeling.textus.smworkflow.value.RepositorySyncStartInput
 
 /**
  * @since   Oct.  6, 2026
- * @version Oct. 24, 2026
+ *  version Oct. 24, 2026
+ * @version Nov. 17, 2026
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.AdmissionTestDeclaration])
@@ -30,7 +31,7 @@ final class RepositorySyncInputSelectionReadPolicySpec extends AnyWordSpec with 
     MigrationPolicy("v1"), RetentionPolicy("v1"), LeasePolicy("v1"),
     DeliveryConfiguration.SameStore(WorkflowStoreIdentity("repository-records")))
   private val workflow = RepositorySyncManagedFetch.Declaration(runtime, collection("instances"), collection("continuations"),
-    RepositorySyncStartInput("repository", "main", "origin", "main", "remote", "FULL_STATE"),
+    RepositorySyncStartInput("repository", "main", "origin", "main", "remote", "FULL_STATE", None, None),
     RepositoryGitRuntimePrograms.Target(Path.of("/owned/repository"), "main", "origin", "main", "/owned/remote.git"))
 
   "RepositorySync host selection composition" should {

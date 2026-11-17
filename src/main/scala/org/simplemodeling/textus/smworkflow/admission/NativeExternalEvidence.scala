@@ -20,7 +20,7 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
   * trusted issuer/read destination; it is not evidence, consent or a grant.
   * @since   Oct.  7, 2026
   *  version Oct. 27, 2026
-  * @version Nov.  2, 2026
+  * @version Nov. 17, 2026
   */
 private[smworkflow] object NativeExternalEvidence {
   val prefix = "sm-workflow.external-evidence."
@@ -46,6 +46,7 @@ private[smworkflow] object NativeExternalEvidence {
     case PhaseClosure extends Purpose("goal-phase-repository-closure")
     case RepositoryEffect extends Purpose("repository-sync-effect")
     case RepositoryHuman extends Purpose(RepositorySyncHumanConflict.purpose)
+    case RepositoryPolicyHuman extends Purpose(RepositorySyncPolicyDecision.purpose)
     case GoalHuman extends Purpose(GoalPhaseOrderedHumanDecision.purpose)
     case SourceHistoryRecovery extends Purpose(GoalPhaseSourceHistoryRecovery.purpose)
     case SourceHistoryNormalization extends Purpose(GoalPhaseSourceHistoryNormalization.purpose)
@@ -358,7 +359,7 @@ private[smworkflow] object NativeExternalEvidence {
       case Purpose.WorkflowForceClosure => WorkflowForceClosure.selectBinding(value)
       case Purpose.DelegateAdoption => DelegateTask.selectAdoptionBinding(value)
       case Purpose.StandaloneReview | Purpose.GoalReview | Purpose.RepositoryReview => NativeReviewScope.select(purpose, value)
-      case Purpose.GoalHuman | Purpose.RepositoryHuman => NativeHumanDecisionScope.select(purpose, value)
+      case Purpose.GoalHuman | Purpose.RepositoryHuman | Purpose.RepositoryPolicyHuman => NativeHumanDecisionScope.select(purpose, value)
       case Purpose.SplitStart => NativeSplitStartScope.select(purpose, value)
       case Purpose.SplitAnswer => NativeSplitAnswerScope.select(purpose, value)
       case Purpose.SourceHistoryRecovery => GoalPhaseSourceHistoryRecovery.selectBinding(value)

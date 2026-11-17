@@ -25,7 +25,7 @@ import RepositorySyncPurposeContentContinuation.{canonical, exact, ordinary, rev
   * missing results remain UNKNOWN; typed preparation refusals remain refusals.
   * No adoption or source preparation performs a Git mutation or executes SBT.
   * @since   Nov.  4, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 17, 2026
   */
 private[smworkflow] object RepositorySyncMergeCheckContinuation {
   val policy = "sm-workflow.repository-sync-merge-check-continuation.v1"
@@ -427,7 +427,7 @@ private[smworkflow] object RepositorySyncMergeCheckContinuation {
     source <- _authenticate_c(store, historical, saved.direction.target)
     _ <- if (selected == namespace(saved.direction.target) && candidate.record == historical &&
         candidate.record.revision == saved.stage.record.revision.next && candidate.record.history.dropRight(1) == saved.stage.record.history &&
-        candidate.record.causation.value == "native-repository:" + store.identity + ":" + N.candidateKey(selected, "pending-merge") &&
+        candidate.record.causation.value == "native-repository:" + store.identity + ":" + store.scoped(selected).key("pending-merge") &&
         candidate.payload == source._1.payload.copy(validation = None, mergeCheckContinuation = Some(saved.direction)))
       Consequence.unit else N.invalid("merge check candidate crosses its exact original payload, direction or push allowance")
   } yield ()

@@ -296,6 +296,15 @@ it cannot substitute empty receipts for the genuine returned destination checks.
 Existing check ordering retains compile
 failure short-circuiting; FULL and HEAVY remain distinct bindings.
 
+For destination `scalaLint=required`, normal selection includes one installed
+FixCheck when explicit checks do not already select it. Explicit check order and
+the original requester input stay unchanged. Standard deferred assembly resolves
+that binding from the selected repository's configured typed SBT programs and
+workspace, retaining its actual validation ordinal. Missing or ambiguous relevant
+bindings refuse before Start; lint-off selection adds no lint check. The returned
+result still requires actual successful lint evidence under the original policy,
+and its original explicit checks and condition identities remain binding.
+
 Delivery publication uses the existing LocalPublication decision/execution/result
 contract. A retained successful result is collected, a confirmed nonzero terminal
 failure may receive a retained successor for the same delivery source, and a live

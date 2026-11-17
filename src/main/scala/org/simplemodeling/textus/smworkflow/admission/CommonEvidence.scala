@@ -24,7 +24,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * Physical I/O belongs to File intents in the current call's UoW.
   * @since   Oct. 20, 2026
   *  version Oct. 27, 2026
-  * @version Nov.  9, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object CommonEvidence {
@@ -276,7 +276,7 @@ private[smworkflow] object CommonEvidence {
     compression: Option[String], zone: ZoneId): Consequence[(V.EvidenceRecordingState, Option[(Allocation, Observation)])] = {
     if (!validPolicy(p) || !validSource(source) || !validText(text) || now == null ||
         compression.exists(c => !Set("identity", "gzip")(c)) ||
-        compression.nonEmpty && !Vector(source.repository, source.phase, source.session).forall(_segment))
+        compression.nonEmpty && (!Vector(source.repository, source.phase).forall(_segment) || !_sessionSegment(source.session)))
       Consequence.success((_state("unavailable", "Evidence source or text is invalid"), None))
     else {
       val id = identity(source)
@@ -357,6 +357,8 @@ private[smworkflow] object CommonEvidence {
   def validText(text: String): Boolean = text != null && UTF_8.newEncoder().canEncode(text) && !text.contains('\u0000')
   private def _segment(value: String): Boolean = _exact(value) && value != "." && value != ".." &&
     value.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,255}")
+  private def _sessionSegment(value: String): Boolean = _exact(value) && validText(value) &&
+    value.matches("[A-Za-z0-9][A-Za-z0-9._:%-]*") && value.getBytes(UTF_8).length <= 255
   def fileRepresentation(compression: String): FileRepresentation =
     if (compression == "gzip") FileRepresentation.Gzip else FileRepresentation.Identity
   def representationC(store: Storage, id: String): Consequence[Option[String]] = store.loadC(id + ":representation").flatMap {

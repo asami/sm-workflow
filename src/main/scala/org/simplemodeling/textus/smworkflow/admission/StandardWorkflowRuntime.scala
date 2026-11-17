@@ -205,15 +205,64 @@ private[smworkflow] object StandardWorkflowRuntime {
       case Some(target) => Consequence.success(target -> RepositorySyncDirectoryList.workspace(core, "sm-workflow-repository"))
       case None => _repository_target_c(creation, parameters, request, retained)
     }
-    target = binding._1
-    call = RepositorySyncDirectoryList.scopedCore(core, binding._2)
-    selectedInput <- if (request.operation == "startRepositorySync") StandardRepositorySyncIntent.inputC(request, target).map(_ -> true)
+    sourceTarget = binding._1
+    sourceCall = RepositorySyncDirectoryList.scopedCore(core, binding._2)
+    selectedInput <- if (request.operation == "startRepositorySync") StandardRepositorySyncIntent.inputC(request, sourceTarget).map(_ -> true)
       else retained.flatMap(_.context).map { selected => Consequence.success((RepositorySyncStartInput(selected.repositoryIdentity,
-        selected.localBranch, selected.trackingRemote, selected.trackingBranch, selected.remoteEndpointIdentity, selected.syncMode),
+        selected.localBranch, selected.trackingRemote, selected.trackingBranch, selected.remoteEndpointIdentity, selected.syncMode, None, None),
         StandardRepositorySyncIntent.owns(selected))) }.getOrElse(invalid("Session has no native RepositorySync Start context"))
-    input = selectedInput._1
+    policies <- if (request.operation == "startRepositorySync") for {
+      record <- NativeWorkflowOperationInput.recordC(request, "input")
+      selected <- RepositorySyncPolicies.resolveC(parameters, record)
+    } yield Some(selected) else Consequence.success(retained.flatMap(_.policies))
+    participantSelection <- if (request.operation == "startRepositorySync" && policies.exists(selected =>
+        RepositorySyncPolicies.route(selected, sourceTarget.localBranch, sourceTarget.remoteBranch) != "direct")) for {
+      host <- RepositorySyncPurposeMaterializationContinuation.hostPlanC(sourceCall)
+      source <- RepositorySyncLocalMain.participantC(host, binding._2)
+      mappings <- parameters.resolve(RepositorySyncLocalMain.mappings).map(_.value.getOrElse(Map.empty))
+      mapped <- mappings.get(source.workspace).map(workspace => RepositorySyncLocalMain.participantC(host, workspace).map(Some(_)))
+        .getOrElse(Consequence.success(Option.empty[RepositorySyncLocalMain.Participant]))
+      result <- RepositorySyncLocalMain.captureC(sourceCall, host, source, mapped)
+        .flatMap { plan => RepositorySyncLocalMain.batchPlan(sourceCall) match {
+          case Some(batch) if batch.source == plan.source && batch.main == plan.main && batch.transfer == plan.transfer =>
+            Consequence.success(plan.copy(cohort = batch.cohort))
+          case Some(_) => invalid("Shared canonical participant differs from the retained batch inventory")
+          case None => Consequence.success(plan)
+        }}.map(plan => (Some(plan), Option.empty[String])).recover(conclusion => (None, Some("CanonicalMainSetupRequired: " + conclusion.show)))
+    } yield result else Consequence.success(retained.flatMap(_.localMain) -> retained.flatMap(_.localMainSetup))
+    hop <- participantSelection._1 match {
+      case None => Consequence.success(Option.empty[RepositorySyncLocalMain.Hop])
+      case Some(plan) if request.operation == "startRepositorySync" =>
+        Consequence.success(Some(RepositorySyncLocalMain.Hop(plan, RepositorySyncLocalMain.Cursor("source", None, None))))
+      case Some(plan) => for {
+        session <- _repository_session_c(request, core)
+        storage <- WorkflowComponentStorage.bindC(creation, SmWorkflowComponent.componentId, p.configuration,
+          Vector(definition), p.instances, p.continuations)
+        instances <- storage.bindInstancesC()(using core.executionContext)
+        current <- instances.loadC(InstanceIdentity(session))(using core.executionContext)
+          .flatMap(_.map(Consequence.success).getOrElse(invalid("Local-main Session is unavailable")))
+        cursor <- RepositorySyncLocalMain.cursorC(storage, current, core)
+      } yield Some(RepositorySyncLocalMain.Hop(plan, cursor))
+    }
+    target = hop.fold(sourceTarget)(_.participant.target)
+    workspace = hop.fold(binding._2)(_.participant.workspace)
+    call = RepositorySyncLocalMain.scopedCore(RepositorySyncDirectoryList.scopedCore(core, workspace), hop)
+    input = if (request.operation == "startRepositorySync") selectedInput._1 else selectedInput._1.copy(
+      localBranch = target.localBranch, trackingRemote = target.remote, trackingBranch = target.remoteBranch,
+      remoteEndpointIdentity = target.endpoint)
+    _ <- if (selectedtarget.nonEmpty || request.operation == "startRepositorySync") for {
+      development <- parameters.resolve(ManagedDevelopmentRuntime.declaration).map(_.value)
+      plan <- RepositorySyncPurposeMaterializationContinuation.hostPlanC(call)
+      managed <- ManagedDevelopmentRepositorySync.selectC(development, input.repositoryIdentity, plan,
+        Some(target.root.toString), policies.map(_.mainIntegration))
+      configured <- if (request.operation == "startRepositorySync")
+        parameters.resolve(RepositorySyncPolicies.mainIntegration).map(_.value) else Consequence.success(None)
+      _ <- if (managed.exists(_.remoteBranch == "main") && configured.exists(_ != "direct"))
+        invalid("Managed dependency remote main conflicts with explicit main-integration; select scoped direct before effects")
+        else Consequence.unit
+    } yield () else Consequence.unit
     classifications <- RepositorySyncNativeExecution.resolveC(parameters)
-    initialized <- shared.validation.repositoryC(target.root, core)
+    initialized <- shared.validation.repositoryC(target.root, call)
     documentInputs = initialized.documents
     programInputs = initialized.program
     purposePolicy <- RepositorySyncPurpose.resolveC(parameters)
@@ -225,7 +274,8 @@ private[smworkflow] object StandardWorkflowRuntime {
     declaration = RepositorySyncManagedFetch.Declaration(p.configuration, p.instances, p.continuations, input,
       target, shared.profiles, shared.origin, classifications, shared.journal, runtimeCleanSync = selectedInput._2, documentInputs = documentInputs, evidencePolicy = shared.evidence,
       programEvidence = Some(RepositorySyncProgramImpact.evidencePort(evidenceStorage)), purposePolicy = purposePolicy,
-      localPublication = publication)
+      localPublication = publication, policies = policies, policyHuman = Some(shared.ports.repositoryPolicyHuman),
+      localMain = participantSelection._1, localMainSetup = participantSelection._2, hop = hop)
     // Before review use actual conflicts; afterwards use that issued review's
     // retained candidate paths so staging does not erase the repair scope.
     paths <- if (request.operation == "startRepositorySync") Consequence.success(Set.empty[String])
@@ -242,7 +292,8 @@ private[smworkflow] object StandardWorkflowRuntime {
       pushContinuation = Some(RepositorySyncPushContinuation.Installation(shared.ports.repositoryPushContinuation)))
     selected <- RuntimeGitSelections.repositoryC(NativeWorkflowSessionInput.repository(
       NativeWorkflowResultInput.repository(service, creation, declaration, definition), creation, declaration, definition, runtimeIntent = true), paths)
-  } yield RepositorySyncDirectoryList.bindWorkspace(StandardRepositorySyncIntent.bindInput(selected, input), binding._2)
+  } yield RepositorySyncLocalMain.bindHop(RepositorySyncDirectoryList.bindWorkspace(
+    StandardRepositorySyncIntent.bindInput(selected, input), workspace), hop)
 
   /** The same admitted host plan resolves both a directory member and the
     * ordinary lower-level repository entry. Recollection uses its original
@@ -260,7 +311,16 @@ private[smworkflow] object StandardWorkflowRuntime {
         record.getString("repositoryIdentity").map(Consequence.success)
           .getOrElse(invalid("RepositorySync requires an explicit repositoryIdentity"))))
     development <- parameters.resolve(ManagedDevelopmentRuntime.declaration).map(_.value)
-    mainRoute <- parameters.resolve(ManagedDevelopmentRepositorySync.mainIntegration).map(_.value)
+    mainRoute <- retained match {
+      case Some(value) => Consequence.success(value.policies.map(_.mainIntegration))
+      case None => for {
+        configured <- parameters.resolve(ManagedDevelopmentRepositorySync.mainIntegration).map(_.value)
+        record <- NativeWorkflowOperationInput.recordC(request, "input")
+        selected <- record.getAny("mainIntegration").map(value =>
+          RepositorySyncPolicies.decodeC("mainIntegration", value, RepositorySyncPolicies.mainValues).map(Some(_)))
+          .getOrElse(Consequence.success(configured))
+      } yield selected
+    }
     managed <- ManagedDevelopmentRepositorySync.selectC(development, repository, plan, retained.map(_.repositoryRoot), mainRoute)
     root <- managed match {
       case Some(member) => Consequence.success(member.root)
@@ -298,7 +358,10 @@ private[smworkflow] object StandardWorkflowRuntime {
       } yield path
       }
     }
-    members <- RepositorySyncDirectoryList.resolveC(Vector(root), plan, "target-resolution")
+    families <- plan.hcursor.get[Vector[Json]]("gitRepositories").fold(e => invalid(e.message), Consequence.success)
+    preferred = families.filter(f => f.hcursor.get[String]("identity").contains(repository) ||
+      f.hcursor.get[String]("target").contains(repository)).flatMap(_.hcursor.get[String]("target").toOption).toSet
+    members <- RepositorySyncDirectoryList.resolveC(Vector(root), plan, "target-resolution", preferred)
   } yield members.head.target -> members.head.workspace
 
   private def repositoryPathsC(declaration: RepositorySyncManagedFetch.Declaration,
@@ -461,7 +524,6 @@ private[smworkflow] object StandardWorkflowRuntime {
     objective <- input.hcursor.get[String]("objective").fold(e => invalid(e.message), Consequence.success)
     paths <- input.hcursor.get[Vector[String]]("ownedPaths").fold(e => invalid(e.message), Consequence.success)
     checkIds <- input.hcursor.get[Vector[String]]("checks").fold(e => invalid(e.message), Consequence.success)
-    checks <- standardChecksC(checkIds)
     proposed <- if (request.service.contains("GoalTaskService")) _goal_scope_paths_c(request, core)
       else Consequence.success(Vector.empty[String])
     hostPaths = (paths ++ proposed).distinct
@@ -476,9 +538,12 @@ private[smworkflow] object StandardWorkflowRuntime {
     }
     managed <- if (destination) ManagedDevelopmentBoundedWork.selectC(development, repository, plan, retained.map(p => p.root -> p.branch))
       else Consequence.success(Option.empty[RepositorySyncDirectoryList.Member])
-    _ <- managed.fold(Consequence.unit)(m => ManagedDevelopmentBoundedWork.validationBindingsC(plan, m, checks))
     target <- managed.map(m => Consequence.success(RepositoryGitRuntimePrograms.Target(Paths.get(m.root), m.localBranch,
       m.remote, m.remoteBranch, m.endpoint))).getOrElse(targetC(creation))
+    lintRequired = destination && retained.map(_.state.input.scalaLint == "required")
+      .getOrElse(input.hcursor.get[String]("scalaLint").contains("required"))
+    checks <- boundedChecksC(checkIds, lintRequired, plan, target.root.toString)
+    _ <- managed.fold(Consequence.unit)(m => ManagedDevelopmentBoundedWork.validationBindingsC(plan, m, checks))
     _ <- if (retained.forall(p => p.root == target.root.toString && p.branch == target.localBranch)) Consequence.unit
       else invalid("Bounded host differs from the original native Session source")
     p = shared.persistence
@@ -543,6 +608,35 @@ private[smworkflow] object StandardWorkflowRuntime {
     endpoint <- repository.hcursor.get[String]("endpoint").fold(e => invalid(e.message), Consequence.success)
   } yield RepositoryGitRuntimePrograms.Target(Paths.get(root), branch, remote, remoteBranch, endpoint)
 
+  /** Deferred destination assembly must expose the configured mandatory lint
+    * binding even when it was not an explicit requester check. It retains the
+    * actual host ordinal and never widens the original input/check inventory.
+    */
+  private[admission] def boundedChecksC(ids: Vector[String], lintRequired: Boolean, plan: Json,
+    root: String): Consequence[Vector[GoalPhaseNativeValidation.Check]] = for {
+    explicit <- standardChecksC(ids)
+    checks <- if (!lintRequired) Consequence.success(explicit) else for {
+      programs <- plan.hcursor.get[Vector[Json]]("sbtPrograms").fold(e => invalid(e.message), Consequence.success)
+      workspaces <- plan.hcursor.get[Vector[Json]]("workspaces").fold(e => invalid(e.message), Consequence.success)
+      relevant = programs.filter { program =>
+        val target = program.hcursor.get[String]("target").toOption
+        program.hcursor.get[String]("operation").contains("fix-check") && target.exists { alias =>
+          alias.matches("sm-workflow-repository-validation-[1-9][0-9]*") &&
+            workspaces.exists(w => w.hcursor.get[String]("identity").contains(alias) && w.hcursor.get[String]("root").contains(root))
+        }
+      }
+      binding <- uniqueC(relevant, "Required Scala lint needs one unambiguous configured repository fix-check binding")
+      alias <- binding.hcursor.get[String]("target").fold(e => invalid(e.message), Consequence.success)
+      _ <- if (workspaces.count(_.hcursor.get[String]("identity").contains(alias)) == 1) Consequence.unit
+        else invalid("Required Scala lint workspace is ambiguous")
+      ordinal <- alias.stripPrefix("sm-workflow-repository-validation-").toIntOption.filter(_ > 0)
+        .map(Consequence.success).getOrElse(invalid("Required Scala lint has no bounded validation ordinal"))
+      lint = GoalPhaseNativeValidation.Check("fix-check", ordinal, WorkflowSbtValidation.Kind.FixCheck)
+    } yield if (explicit.exists(_.kind == WorkflowSbtValidation.Kind.FixCheck))
+      explicit.map(c => if (c.kind == WorkflowSbtValidation.Kind.FixCheck) lint else c)
+      else explicit :+ lint
+  } yield checks
+
   private[admission] def standardChecksC(ids: Vector[String]): Consequence[Vector[GoalPhaseNativeValidation.Check]] =
     ids.distinct.zipWithIndex.foldLeft(Consequence.success(Vector.empty[GoalPhaseNativeValidation.Check])) {
       case (prior, (id, index)) => for {
@@ -571,7 +665,7 @@ private[smworkflow] object StandardWorkflowRuntime {
         GoalPhaseNativeClosure.StepProgram(step.identity, index + 1)) :+
         GoalPhaseNativeClosure.StepProgram(GoalPhaseNativeReleaseClosure.programIdentity, plan.steps.size + 1)))
     val repository = ThreeWorkflowRuntimeParameters.Repository(RepositorySyncStartInput(plan.repository,
-      target.localBranch, target.remote, target.remoteBranch, target.endpoint, "FULL_STATE"), repositoryValidation,
+      target.localBranch, target.remote, target.remoteBranch, target.endpoint, "FULL_STATE", None, None), repositoryValidation,
       RepositorySyncNativeConflictInput.Policy(goal.candidatePaths.toSet), repositoryReview)
     ThreeWorkflowRuntimeParameters.Definition(ThreeWorkflowRuntimeParameters.schema,
       ThreeWorkflowRuntimeParameters.Target(target.root.toString, target.localBranch, target.remote, target.remoteBranch, target.endpoint), goal, repository)

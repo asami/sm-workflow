@@ -43,7 +43,7 @@ import SplitPhaseTypedStartFixture as StorageFixture
   * Optional completion timing observations delegate the actual product action.
   * @since   Oct.  7, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers {
@@ -237,6 +237,17 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
       question <- reader.loadC(continuation)(using executionContext).flatMap(_.map(Consequence.success)
         .getOrElse(Consequence.stateConflict("Specification Repository question is absent")))
     } yield question
+    def repositoryPolicyQuestionC(identity: InstanceIdentity): Consequence[WorkflowInteraction[RepositorySyncPolicyDecision.Input, Nothing]] = for {
+      current <- currentC(identity)
+      continuation <- current.suspension.map(value => Consequence.success(ContinuationIdentity(value.continuationIdentity.value)))
+        .getOrElse(Consequence.stateConflict("Specification Repository has no pending policy question"))
+      definition <- RepositorySyncDefinitionBinding.bindC
+      storage <- WorkflowComponentStorage.bindC(ComponentCreate(core.component.get.subsystem.get, ComponentOrigin.Builtin),
+        SmWorkflowComponent.componentId, _configuration_, Vector(definition), _collection_("instances"), _collection_("continuations"))
+      reader <- storage.bindDecisionC(RepositorySyncPolicyDecision.completionOperation, RepositorySyncPolicyDecision.inputCodec)
+      question <- reader.loadC(continuation)(using executionContext).flatMap(_.map(Consequence.success)
+        .getOrElse(Consequence.stateConflict("Specification policy question is absent")))
+    } yield question
     def goalCurrentC(identity: InstanceIdentity): Consequence[InstanceRecord] =
       GoalPhaseRuntimeCatalog.loadC().flatMap(catalog => CallScopedWorkflowInstances.managed(_configuration_, catalog.definition,
         _collection_("instances"), _collection_("continuations"))
@@ -342,6 +353,15 @@ private[admission] trait ThreeWorkflowManagedRepositoryFixture extends Matchers 
       prepared <- NativeHumanDecisionPreparation.repositoryC(context,
         V.RepositorySyncHumanConflictAnswer(result.result.value.choice, result.result.value.resolutions.map(r =>
           V.RepositorySyncConflictResolution(r.conflictIdentity, r.text)), result.result.value.rationale),
+        V.WorkflowArtifactReference(result.resultReference.identity, result.resultReference.revision),
+        V.WorkflowExecutionEvidence(Vector.empty, result.evidence.workerIdentity, None, None),
+        "participant", "normal-development-host", executionContext.clock.instant().minusSeconds(60))
+      _ <- createC("host_evidence", prepared.recordIdentity, prepared.record)
+    } yield ()
+    def policyHumanEvidenceC(context: V.WorkflowHumanDecisionContext,
+      result: ContinuationResult[RepositorySyncPolicyDecision.Answer]): Consequence[Unit] = for {
+      prepared <- NativeHumanDecisionPreparation.repositoryPolicyC(context,
+        V.RepositorySyncPolicyDecisionAnswer(result.result.value.choice, result.result.value.rationale),
         V.WorkflowArtifactReference(result.resultReference.identity, result.resultReference.revision),
         V.WorkflowExecutionEvidence(Vector.empty, result.evidence.workerIdentity, None, None),
         "participant", "normal-development-host", executionContext.clock.instant().minusSeconds(60))
@@ -1349,7 +1369,7 @@ final class ThreeWorkflowRepositoryOperationSpec extends AnyWordSpec with GivenW
               next.issuedWorkContext shouldBe None
               humancontext = next.human.get.humanDecisionContext
               humancontext should not be empty
-              next.human.get.conflict.conflicts.map(_.path) shouldBe Vector(path)
+              next.human.get.conflict.get.conflicts.map(_.path) shouldBe Vector(path)
               question = Some(_load_question_())
               val request = question.get.current.asInstanceOf[WorkflowContinuation.Decision[RepositorySyncHumanConflict.Input]].request
               request.completionOperation shouldBe RepositorySyncHumanConflict.completionOperation

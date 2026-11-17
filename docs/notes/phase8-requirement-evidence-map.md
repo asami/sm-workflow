@@ -1,6 +1,6 @@
 # Phase 8 completion evidence map
 
-Updated 2026-11-17 for selected Plan `phase-8-runtime-practical-closure-20261117`
+Updated 2026-11-18 for selected Plan `phase-8-runtime-practical-closure-20261117`
 revision 1, native Session `a38c308c60a36de8c7b33336ca8641c7`.
 This inventory preserves all 30 [completion requirements](../phase/phase-8.md#completion)
 verbatim. Every row remains unverified as a complete Phase 8 requirement until its
@@ -130,3 +130,51 @@ manual per-Session dirty-purpose configuration or weakened coverage bridges this
 Use `~/backup/work.d/YYYY/MM/DD/<project>/<target>` for operational logs and retain
 actual owner artifacts. `docs/journal` is DESIGN ONLY. These links and concise
 acceptance statements confer no effect, Submit, review or closure authority.
+
+## P8-02 partial source return, 2026-11-17
+
+Rows 1–2/4 and 17–23 now have additional
+[authored source and specification detail](../spec/repository-sync-policy-selection.md),
+not native execution or acceptance. Session candidate setup checks actual impact
+coverage before allocation and preserves the prepared frontier on missing
+prerequisites. Normal policy parsing, retained single/list selection, pre-fetch
+dirty error and independently evidenced Human confirm use existing owners.
+The prospective isolated Git/DataStore examples preserve source work and native
+history and do not reexecute either original failed consumer Session.
+
+The inspected CNCF typed API lacks canonical linked-worktree metadata resolution.
+Local-first work-branch integration, actual two-hop failure continuation and
+shared-target coordinated choice/effects remain unfinished P8-02 requirements.
+Explicit setup results prevent a silent direct fallback; they do not satisfy
+rows 17–20. The new code/specifications are unexecuted, and the public generated
+ABI, ordinary native checks and independent review remain parent-owned.
+Rows and all 30 requirement dispositions retain their original ownership.
+
+## P8-02 resumed source candidate, 2026-11-18
+
+The prior metadata prerequisite was delivered on canonical CNCF main at
+`bf83f423a234bf28ab793d1d76b4150036f584c3`. Its normal producer checks, review,
+publication and requester attachment adoption remain their actual scoped results;
+consumer activation and this complete candidate's checks/review are separate.
+No historical failed synchronization Session is replayed.
+
+Rows 1–2/4 and 17–23 now have an authored same-Session local-main connection in
+the existing RepositorySync owners, with native linked metadata, mapped-clone
+identity/history proof and admitted source fetch, phase-scoped receipts, one-way
+local integration, remote-only closing, dirty-policy boundaries and declared
+shared-target cohorts. The original Start, native history and repair accounting
+are retained. Source, accepted local integration and remote outcomes are distinct;
+failed or uncertain remote work does not repeat the local hop or fall back direct.
+
+`RepositorySyncLocalMainSpec` authors isolated native cases for source-only,
+main-only and remote-only history, default/explicit local-first, explicit direct
+with dirty unrelated main, mapped clones and unrelated-history refusal, route
+and dirty Human direction, accepted purpose/excluded work and later same-Session
+continuation, shared source/main batching with one route answer and one push,
+and remote unavailability after retained local success. Existing policy,
+candidate-workspace, covered-input and managed dependency specifications remain
+applicable. The [policy contract](../spec/repository-sync-policy-selection.md)
+states host bindings and finite proof limits. This is source/specification
+authorship only: required native Compile/Test, independent Step review and local
+closing remain workflow-owned. All 30 rows remain unchecked until their actual
+owning acceptance; bootstrap PASS is not whole-Step or Phase acceptance.

@@ -44,7 +44,7 @@ import SplitPhaseTypedStartFixture as F
   * No launcher, CLI command, fabricated history or direct SQLite write is used.
   * @since   Oct.  7, 2026
   *  version Oct. 28, 2026
-  * @version Nov.  7, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -707,7 +707,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
           prepare(call => call.currentC(identity).map(value => { state = Some(value); () }))
           state.get
         }
-        Then("exactly the fifty-six installed Operations expose named business input and explicit execution parameters")
+        Then("exactly the fifty-seven installed Operations expose named business input and explicit execution parameters")
         val expected = Set(
           "GoalPhaseService.startGoalPhase", "GoalPhaseService.advanceGoalPhase", "GoalPhaseService.submitGoalPhaseWorkResult",
           "GoalPhaseService.reconstructGoalPhaseDevelopment",
@@ -741,9 +741,10 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
           "RepositorySyncService.startRepositorySync", "RepositorySyncService.advanceRepositorySync",
           "RepositorySyncService.describeRepositorySyncValidationContinuation", "RepositorySyncService.adoptRepositorySyncValidationContinuation",
           "RepositorySyncService.submitRepositorySyncWorkResult", "RepositorySyncService.submitRepositoryPurposeResult", "RepositorySyncService.submitNativeMergeReview",
-          "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitNativeMergeRepair")
-        published should have size 56
-        published.map(_._1).distinct should have size 56
+          "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitRepositorySyncPolicyDecision",
+          "RepositorySyncService.submitNativeMergeRepair")
+        published should have size 57
+        published.map(_._1).distinct should have size 57
         published.map(_._1).toSet shouldBe expected
         val sessiondescriptions = Set("describeGoalPhaseValidationRecovery", "describeGoalPhaseClosureRecovery",
           "describeGoalPhaseSourceHistoryRecovery", "describeGoalPhaseCandidateRecovery",
@@ -771,6 +772,12 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
             } else operation.specification.request.parameters.head.domain.multiplicity shouldBe Multiplicity.One
           }
         }
+        val policySubmission = published.find(_._1 == "RepositorySyncService.submitRepositorySyncPolicyDecision").get._2
+        val policyParameters = policySubmission.specification.request.parameters
+        policyParameters.map(_.name) shouldBe Vector("sessionId", "answer", "resultReference", "completionFacts", "executionEvidence")
+        policyParameters.map(_.domain.multiplicity) shouldBe Vector(
+          Multiplicity.One, Multiplicity.One, Multiplicity.One, Multiplicity.ZeroMore, Multiplicity.ZeroOne)
+        policyParameters.find(_.name == "answer").get.datatype.name.toLowerCase should include("repositorysyncpolicydecisionanswer")
         val beforeinvalid = current()
         When("Advance receives a malformed consumed sessionId rather than a valid execution ID")
         Vector(42, null).foreach { value =>

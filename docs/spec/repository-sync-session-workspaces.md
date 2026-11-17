@@ -16,6 +16,16 @@ allocation intent, with the prepared candidate and Session preserved; changing
 that external prerequisite permits normal continuation in the same Session.
 No configuration property supplies a filesystem or process grant.
 
+P8-02 source additionally applies the existing merge-validation setup rule to
+the actual prepared Purpose tree before allocating a Session candidate. Missing
+ordinary impact coverage, a policy setup requirement or a selected check's
+missing binding now leaves `PurposePrepared` at the pre-effect setup wait.
+Supplying that actual prerequisite can use ordinary retained continuation. The
+isolated candidate specification authors unchanged grouping/candidate/check/
+history/counter and absent allocation/materialization-intent assertions for all
+three cases before the existing supplied-resource continuation. These additions
+have not been executed or accepted by native validation.
+
 Ordinary discovery builds and selected test batches retain separate intents and
 observations. Earlier accepted grouping, candidates, results, failure history
 and repair accounting are not replaced by a setup wait. A failed or unknown
