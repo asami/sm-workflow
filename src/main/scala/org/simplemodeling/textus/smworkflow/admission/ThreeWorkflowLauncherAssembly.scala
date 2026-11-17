@@ -14,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
   * Parameter data selects storage/targets/policies, never independent authority ports.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 12, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowLauncherAssembly {
@@ -62,7 +62,9 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     "EvidenceService.readEvidence", "EvidenceService.readEvidenceRange", "EvidenceService.recordEvidenceJournal",
     "EvidenceService.archiveEvidenceBatch", "EvidenceService.describeEvidence",
     "EvidenceService.manageEvidenceRetention", "EvidenceService.findDueEvidence",
-    "JournalService.readJournalEntry",
+    "JournalService.readJournalEntry", "JournalService.findJournalEntries",
+    "JournalService.recordJournalEntry", "JournalService.correctJournalEntry", "JournalService.updateJournalIssueState",
+    "JournalService.readJournalSemanticEntry", "JournalService.findJournalSemanticEntries",
     "GoalPhaseService.startGoalPhase", "GoalPhaseService.advanceGoalPhase", "GoalPhaseService.submitGoalPhaseWorkResult",
     "GoalPhaseService.reconstructGoalPhaseDevelopment",
     "GoalPhaseService.submitGoalPhaseOrderedDecision",

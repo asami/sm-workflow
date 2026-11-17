@@ -24,7 +24,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Synthetic searchable DataStore unit seams, never SQL or workflow acceptance
   * evidence. The connected actual managed SQL route belongs to the CLI spec.
   * @since   Oct. 20, 2026
-  * @version Oct. 24, 2026
+  * @version Nov. 17, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -64,7 +64,16 @@ final class DevelopmentJournalFindSpec extends AnyWordSpec with Matchers with Gi
           case QueryLimit.Limit(n) => ordered.drop(directive.offset).take(n)
           case _ => throw new AssertionError("Finite find must be bounded")
         }
-        Consequence.success(SearchResult(limited, ResultRange.Limited(limited.size)))
+        val projected = directive.projection match {
+          case QueryProjection.All => limited
+          case QueryProjection.Fields(fields) => limited.map { row =>
+            val available = row.fields.map(_.key.toString).toSet
+            // A fixed SELECT of semantic-only columns cannot run against an older immutable-only schema.
+            if (!fields.forall(available)) throw new IllegalArgumentException("Projection names an absent column")
+            row.filterKeys(fields.toSet)
+          }
+        }
+        Consequence.success(SearchResult(projected, ResultRange.Limited(projected.size)))
       }
     }
   }
@@ -128,7 +137,7 @@ final class DevelopmentJournalFindSpec extends AnyWordSpec with Matchers with Gi
       val store = new Seam(rows)
       When("find delegates one collection query with all filtering before the finite limit")
       val result = take(F.searchC(Some(_policy), input, store))
-      Then("the provider receives the exact fixed projection ordering zero offset and limit plus one")
+      Then("the provider receives complete rows with exact ordering zero offset and limit plus one")
       result.status shouldBe "found"
       result.entries.map(_.entry.identity) shouldBe Vector(_entry.identity)
       store.calls should have size 1
@@ -138,8 +147,50 @@ final class DevelopmentJournalFindSpec extends AnyWordSpec with Matchers with Gi
         Q.Eq("phaseIdentity", "11"), Q.Eq("sessionIdentity", "spec-session"), Q.Eq("kind", "Finding"),
         Q.Eq("sourceIdentity", "spec-review"), Q.Eq("sourceRevision", "17"),
         Q.Gte("recordedAt", "2026-10-20T00:00:00"), Q.Lt("recordedAt", "2026-10-20T00:00:01")))),
-        QueryProjection.Fields(F.projectionFields), QueryOrder.By("id", OrderDirection.Asc), QueryLimit.Limit(2), 0)
+        QueryProjection.All, QueryOrder.By("id", OrderDirection.Asc), QueryLimit.Limit(2), 0)
       take(F.directiveC(_input)).limit shouldBe QueryLimit.Limit(21)
+    }
+    "acquire complete semantic guard data while querying immutable-only rows without semantic columns" in {
+      Given("a projection-aware synthetic provider and a semantic Issue with its numeric revision guard")
+      val semantic = DevelopmentJournalSemantic
+      val source = semantic.Source("specification:projection", "1")
+      val entry = semantic.Entry(semantic.identity("Issue", source), "Issue", "repository", "11", Some("J2"),
+        "spec-session", Vector(semantic.Version("1", source, "2026-11-17T00:00:00Z", None,
+          semantic.Content("x" * 400, "Specification-owned projection regression", Some("open"), Vector.empty))))
+      val row = Record.data("id" -> entry.identity) ++ take(semantic.rowC(entry))
+      row.getAny(semantic.mutationRevisionField) shouldBe Some(1L)
+      val input = _input.copy(kind = Some("Issue"), limit = Some(1))
+      val store = new Seam(Vector(row))
+      When("the finite semantic query acquires a row for strict decoding")
+      val found = take(F.searchC(Some(_policy), input, store, Some("open"), None))
+      Then("the guard survives acquisition and only a bounded public summary leaves the query")
+      found.status shouldBe "found"
+      found.entries.map(_.entry) shouldBe Vector(V.JournalEntryReference(entry.identity, "1"))
+      found.entries.head.summary.length shouldBe F.summaryLimit
+      found.entries.head.summaryTruncated shouldBe true
+      found.hasMore shouldBe false
+      store.calls.head._2.projection shouldBe QueryProjection.All
+      store.calls.head._2.limit shouldBe QueryLimit.Limit(2)
+      When("the provider instead supplies a semantic row without its numeric guard")
+      val missingGuard = row.filterKeys(row.fields.map(_.key.toString).toSet - semantic.mutationRevisionField)
+      val refused = take(F.searchC(Some(_policy), input, new Seam(Vector(missingGuard)), Some("open"), None))
+      Then("complete-row acquisition never substitutes for strict corrupt-row refusal")
+      refused.status shouldBe "unavailable"
+      refused.entries shouldBe empty
+      refused.hasMore shouldBe false
+      Given("the original immutable Finding row with no semantic state related-ID or guard columns")
+      val immutable = _row(_entry)
+      (semantic.indexFields :+ semantic.mutationRevisionField).foreach { field =>
+        immutable.getAny(field) shouldBe None
+      }
+      When("the common query uses the provider with only those original columns available")
+      val legacyStore = new Seam(Vector(immutable))
+      val legacy = take(F.searchC(Some(_policy), _input.copy(kind = Some("Finding"), limit = Some(1)), legacyStore))
+      Then("it returns the original immutable reference without requesting newly-created columns")
+      legacy.status shouldBe "found"
+      legacy.entries.map(_.entry) shouldBe Vector(V.JournalEntryReference(_entry.identity, _entry.revision))
+      legacy.hasMore shouldBe false
+      legacyStore.calls.head._2.projection shouldBe QueryProjection.All
     }
     "include zero and fractional lower seconds and exclude the exact upper second" in {
       Given("synthetic canonical stored times below at within and at the upper whole-second boundary")
@@ -200,7 +251,7 @@ final class DevelopmentJournalFindSpec extends AnyWordSpec with Matchers with Gi
     "reject missing unknown crossed physical keys and corrupt indexed or versioned payload fields including the extra row" in {
       Given("synthetic corrupt provider rows returned after one valid row at a requested limit of one")
       val row = _row(_entry)
-      val bad = Vector(row.filterKeys(F.projectionFields.toSet - "id"), _replace(row, "id", "unknown-key"),
+      val bad = Vector(row.filterKeys(row.fields.map(_.key.toString).toSet - "id"), _replace(row, "id", "unknown-key"),
         _replace(row, "id", K.identity(_source, "another")), _replace(row, "kind", "ExecutionObservation"),
         _replace(row, "repositoryIdentity", "crossed"), _replace(row, "revision", "2"),
         _replace(row, J.storageField, "invalid-version:payload"))
