@@ -159,6 +159,7 @@ lazy val root = project
       val contracts = Seq(
         "docs/spec/native-host-execution.md",
         "docs/spec/semantic-result-submission.md",
+        "docs/spec/development-journal-semantic-entries.md",
         "docs/spec/runtime-owned-local-publication.md",
         "docs/spec/caller-information.md",
         "docs/spec/task-fix-delivery.md",

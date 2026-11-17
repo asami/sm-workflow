@@ -20,7 +20,7 @@ SKILLS = ('sm-goal-phase', 'sm-repository-sync', 'sm-split-phase',
           'sm-goal-task', 'sm-test-fix', 'sm-review-fix', 'sm-delegate-task')
 ROLES = ('analysis', 'design', 'implementation', 'repair', 'review')
 AGENTS = tuple('sm_workflow_' + role for role in ROLES) + ('sm_workflow_chat_waiter',)
-DOCS = ('native-host-execution', 'semantic-result-submission', 'runtime-owned-local-publication', 'goal-phase-acceptance-boundary',
+DOCS = ('native-host-execution', 'semantic-result-submission', 'development-journal-semantic-entries', 'runtime-owned-local-publication', 'goal-phase-acceptance-boundary',
         'goal-phase-purpose-repair', 'goal-phase-precommit-step-review', 'goal-phase-release-repair-continuation',
         'goal-phase-dependency-scope', 'goal-phase-validation-metadata', 'native-goal-command-task',
         'caller-information', 'runtime-caller-format-migration',

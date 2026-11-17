@@ -3,6 +3,13 @@ name: sm-test-fix
 description: Repair one authorized single-repository test or compiler failure through the native standalone FIX runtime.
 ---
 
+## Shared Journal operations
+
+For a concrete Journal recording or lookup purpose, use the
+[semantic-entry contract](../../docs/spec/development-journal-semantic-entries.md).
+Decision, Issue and Handoff use the delivered public operations; keep immutable
+Entry reads, actual references and Workflow acceptance separate.
+
 ## Compact runtime responses
 
 When an issued response contains retained references, follow the shared

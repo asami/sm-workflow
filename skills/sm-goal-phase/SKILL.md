@@ -3,6 +3,13 @@ name: sm-goal-phase
 description: Route explicit Phase start/resume requests through the caller and perform semantic work issued by GoalPhaseWorkflow in sm-workflow. The caller registers the Codex Goal; semantic work returns its typed result, and the runtime owns execution and closure.
 ---
 
+## Shared Journal operations
+
+For a concrete Journal recording or lookup purpose, use the
+[semantic-entry contract](../../docs/spec/development-journal-semantic-entries.md).
+Decision, Issue and Handoff use the delivered public operations; keep immutable
+Entry reads, actual references and Workflow acceptance separate.
+
 ## Semantic result detail
 
 For a retained worker artifact, use the versioned format in [semantic result submission](../../docs/spec/semantic-result-submission.md). A worker may report concise outcome, summary, declared result type and its result Resource. Direct complete public results remain supported. The normal caller uses `projectSemanticWorkResult` and forwards the lossless public JSON through `resultResource` with the original issued context, result reference and execution evidence. Do not manually unwrap transport envelopes, invent fields or resubmit an accepted result. Projection is a read/format operation, not Submit or acceptance.
@@ -744,8 +751,7 @@ Use ordinary provided `JournalService.findJournalEntries` or
 `JournalService.readJournalEntry` only for a concrete lookup purpose. Pass their
 generated input as `--input` JSON through the existing installed command.
 Find requires `repositoryIdentity`; optional exact filters are `phaseIdentity`,
-`sessionIdentity`, `kind` (`ExecutionObservation`, `Finding`, `EvidenceStorageObservation`
-or `StepAssessment`, as supported by the selected runtime) and
+`sessionIdentity`, a declared Journal `kind`, and
 `sourceReference` with its actual complete identity/revision tuple. Never
 fabricate a partial source. Optional `recordedFrom` is from-inclusive and
 `recordedBefore` is to-exclusive; both require whole-second UTC
@@ -758,8 +764,8 @@ completeness claim. A selected actual Entry reference supplies read input
 `summaryTruncated` metadata and bounded read `view` with its truncation marker;
 fetch detail only when the task needs it, never just for display. Preserve actual
 `found`, `absent`, `unavailable`, `invalid`, `unsupportedRevision` and `disabled`
-read/find outcomes. Decision, Issue, Handoff and Journal management remain
-Phase 11.1 scope.
+read/find outcomes. For Decision, Issue and Handoff detail, corrections or
+state/link filtering, use the shared semantic-entry contract above.
 
 ## Caller execution handoff
 

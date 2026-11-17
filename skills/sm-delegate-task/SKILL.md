@@ -3,6 +3,13 @@ name: sm-delegate-task
 description: Deliver one authorized development request to an available existing chat with native validation, local commit, selected publication and attributable result adoption.
 ---
 
+## Shared Journal operations
+
+For a concrete Journal recording or lookup purpose, use the
+[semantic-entry contract](../../docs/spec/development-journal-semantic-entries.md).
+Decision, Issue and Handoff use the delivered public operations; keep immutable
+Entry reads, actual references and Workflow acceptance separate.
+
 ## Compact runtime responses
 
 When an issued response contains retained references, follow the shared

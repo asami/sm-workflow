@@ -3,6 +3,13 @@ name: sm-review-fix
 description: Repair identified original review findings with exact disposition attribution through the shared native standalone FIX runtime.
 ---
 
+## Shared Journal operations
+
+For a concrete Journal recording or lookup purpose, use the
+[semantic-entry contract](../../docs/spec/development-journal-semantic-entries.md).
+Decision, Issue and Handoff use the delivered public operations; keep immutable
+Entry reads, actual references and Workflow acceptance separate.
+
 ## Compact runtime responses
 
 When an issued response contains retained references, follow the shared

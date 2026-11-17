@@ -3,6 +3,13 @@ name: sm-goal-task
 description: Develop one authorized journal or direct-instruction Task through native validation, independent integrated review and selected local commit.
 ---
 
+## Shared Journal operations
+
+For a concrete Journal recording or lookup purpose, use the
+[semantic-entry contract](../../docs/spec/development-journal-semantic-entries.md).
+Decision, Issue and Handoff use the delivered public operations; keep immutable
+Entry reads, actual references and Workflow acceptance separate.
+
 ## Semantic result detail
 
 For a retained worker artifact, use the versioned format in [semantic result submission](../../docs/spec/semantic-result-submission.md). A worker may report concise outcome, summary, declared result type and its result Resource. Direct complete public results remain supported. The normal caller uses `projectSemanticWorkResult` and forwards the lossless public JSON through `resultResource` with the original issued context, result reference and execution evidence. Do not manually unwrap transport envelopes, invent fields or resubmit an accepted result. Projection is a read/format operation, not Submit or acceptance.
