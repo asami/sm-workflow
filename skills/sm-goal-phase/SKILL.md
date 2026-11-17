@@ -10,6 +10,10 @@ For newly assigned implementation or repair, follow the shared
 without parent history and state the purpose, approach, scope, acceptance criteria
 and expected return. Preserve the issued disposition and any retained continuation.
 
+## Semantic result detail
+
+A worker may return concise outcome, summary, declared result type and its caller-owned result Resource. Retain the complete public DTO and unchanged issued context in the versioned artifact described in [semantic result submission](../../docs/spec/semantic-result-submission.md). The normal caller can request the public projection on demand and submit its lossless JSON Resource; a source reference or projection is not acceptance. Short decision-relevant status and next-operation information stays visible without an extra detail read.
+
 ## Test classification and selection
 
 Follow the [standard-annotation policy](../../docs/spec/native-host-execution.md#validation-cadence-with-standard-annotations).

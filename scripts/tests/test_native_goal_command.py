@@ -1939,6 +1939,21 @@ class NativeGoalCommandSpecification(unittest.TestCase):
                 native.assert_not_called()
                 self.assertEqual(list(output.iterdir()), [])
 
+    def test_goal_submission_projects_bound_public_worker_result(self):
+        issued = {'kind': 'Request', 'resultType': 'GoalTaskWorkResult',
+                  'issuedWorkContext': {'resultType': 'GoalTaskWorkResult', 'continuationId': 'fixture', 'expectedRevision': '1'}}
+        result = {'outcome': 'completed', 'summary': 'fixture', 'findings': [], 'conditions': [], 'unresolvedQuestions': []}
+        envelope = {'schemaVersion': 'sm-workflow.public-worker-return.v1', 'resultType': 'GoalTaskWorkResult',
+                    'workResource': 'sm-workflow-work:actual', 'result': result}
+        reference = {'identity': 'fixture-result', 'revision': '1'}
+        self.submission.write_text(json.dumps({'result': envelope, 'resultReference': reference}))
+        pairs = CALLER.submission_pairs({'submission': str(self.submission)}, 'fixture', issued_request=issued, work_resource='sm-workflow-work:actual')
+        self.assertEqual(json.loads(pairs[pairs.index('--result') + 1]), result)
+        envelope['resultType'] = 'GoalPhaseWorkResult'
+        self.submission.write_text(json.dumps({'result': envelope, 'resultReference': reference}))
+        with self.assertRaises(CALLER.CallerError):
+            CALLER.submission_pairs({'submission': str(self.submission)}, 'fixture', issued_request=issued, work_resource='sm-workflow-work:actual')
+
     def test_resource_result_transport_does_not_extend_other_semantic_actions(self):
         """RS-COMPLETE-RESULT-TRANSPORT: only conflict and repair Submit select optional Resource mode."""
         for split in (False, True):
@@ -3296,6 +3311,101 @@ class CallerInformationSpecification(unittest.TestCase):
             self.assertEqual(status, 2)
             native.assert_not_called()
             self.assertEqual(list(output.iterdir()), [])
+
+
+class SemanticProjectionCallerSpecification(NativeGoalCommandSpecification):
+    """Specification-owned native-call doubles exercise the actual finite caller actions."""
+
+    def test_task_submit_forwards_original_context_without_projection_echo(self):
+        issued = {"result_type": "GoalTaskWorkResult", "continuation_id": "fixture-work",
+                  "expected_revision": "1", "opaque_extension": {"original_key": "value"}}
+        request = {"kind": "Request", "submitSessionId": "actual-goal", "resultType": "GoalTaskWorkResult",
+                   "issuedWorkContext": issued}
+        detail = {"availability": "available", "reference": {"sessionId": "actual-goal",
+                  "identity": "fixture-work", "revision": "1", "resource": "sm-workflow-work:fixture"},
+                  "response": request}
+        self.request.write_text(json.dumps(detail))
+        self.submission.write_text(json.dumps({"resultResource": "file:///fixture/result.json",
+                                               "resultReference": {"identity": "fixture", "revision": "1"}}))
+        with patch.object(CALLER, "issued_goal_route", return_value=("submitGoalTaskWorkResult", "actual-goal")):
+            _, pairs, _ = CALLER.submit({"request": str(self.request), "submission": str(self.submission)}, None)
+        self.assertEqual(json.loads(pairs[pairs.index("--issuedWorkContext") + 1]), issued)
+
+    def test_semantic_projection_precedes_both_submits_and_refuses_bad_inputs(self):
+        issued_context = {"result_type": "GoalPhaseWorkResult", "continuation_id": "fixture-work", "expected_revision": "1", "opaque_extension": {"original_key": "value"}}
+        request = dict(self.issued_request(), issuedWorkContext=issued_context)
+        detail = {"availability": "available", "reference": {"sessionId": "actual-goal", "identity": "fixture-work",
+                  "revision": "1", "resource": "sm-workflow-work:fixture"}, "response": request}
+        self.request.write_text(json.dumps(detail))
+        self.retain()
+        result = {"outcome": "completed", "summary": "fixture", "findings": []}
+        compact = {"outcome": "completed", "summary": "fixture", "resultType": "GoalPhaseWorkResult",
+                   "resultResource": "file:///fixture/detail.json"}
+        reference = {"identity": "fixture", "revision": "1"}
+        for action in ("submit", "complete"):
+            for case in ("compact", "inline", "envelope", "resource", "missing-context", "malformed", "crossed-resource", "crossed-type", "crossed-session", "crossed-operation", "crossed-continuation", "missing-metadata"):
+                with self.subTest(action=action, case=case):
+                    current = json.loads(json.dumps(detail))
+                    if case == "missing-context":
+                        current["response"].pop("issuedWorkContext")
+                    if case == "crossed-continuation":
+                        current["response"]["issuedWorkContext"]["continuation_id"] = "other"
+                    self.request.write_text(json.dumps(current))
+                    value = compact if case == "compact" else result
+                    if case == "envelope":
+                        value = {"schemaVersion": "sm-workflow.public-worker-return.v1", "resultType": "GoalPhaseWorkResult",
+                                 "workResource": "sm-workflow-work:fixture", "result": result}
+                    submission = {"result": value, "resultReference": reference}
+                    if case == "resource":
+                        submission = {"resultResource": "file:///fixture/direct.json", "resultReference": reference}
+                    self.submission.write_text(json.dumps(submission))
+                    output = self.output()
+                    calls = []
+                    def native(command, runtime_root, output_fd, context):
+                        operation = next((x for x in command if ".SmWorkflow." in x), "")
+                        calls.append(operation)
+                        if operation.endswith("projectSemanticWorkResult"):
+                            if case == "malformed":
+                                raise CALLER.CallerError("specification public reader refusal")
+                            projection = {"resultJson": json.dumps(result),
+                                "resultType": "GoalPhaseWorkResult", "workResource": "sm-workflow-work:fixture",
+                                "resultResource": json.loads(command[command.index("--input") + 1])["resultResource"],
+                                "nextOperation": "submitGoalPhaseWorkResult", "submitSessionId": "actual-goal"}
+                            if case == "crossed-resource":
+                                projection["workResource"] = "sm-workflow-work:other"
+                            if case == "crossed-type":
+                                projection["resultType"] = "GoalTaskWorkResult"
+                            if case == "crossed-session":
+                                projection["submitSessionId"] = "other"
+                            if case == "crossed-operation":
+                                projection["nextOperation"] = "other"
+                            if case == "missing-metadata":
+                                projection.pop("resultResource")
+                            return json.dumps(projection), projection
+                        if operation.endswith("submitGoalPhaseWorkResult"):
+                            self.assertNotIn("--result", command)
+                            projected = Path(command[command.index("--resultResource") + 1].removeprefix("file://"))
+                            self.assertEqual(json.loads(projected.read_text()), result)
+                            response = {"sessionId": "actual-goal", "message": "accepted", "accepted": True, "outcome": "accepted"}
+                        else:
+                            response = {"sessionId": "actual-goal", "kind": "Wait", "message": "fixture"}
+                        return json.dumps(response), response
+                    options = {"executable": str(self.executable), "runtime-root": str(self.runtime_root),
+                               "task": str(self.task), "action": action, "output": str(output),
+                               "request": str(self.request), "submission": str(self.submission)}
+                    with patch.object(CALLER, "native_call", side_effect=native), redirect_stdout(io.StringIO()):
+                        if case in ("missing-context", "malformed", "crossed-resource", "crossed-type", "crossed-session", "crossed-operation", "crossed-continuation", "missing-metadata"):
+                            with self.assertRaises(CALLER.CallerError):
+                                CALLER.execute(options)
+                        else:
+                            CALLER.execute(options)
+                    submits = [x for x in calls if x.endswith("submitGoalPhaseWorkResult")]
+                    if case in ("missing-context", "malformed", "crossed-resource", "crossed-type", "crossed-session", "crossed-operation", "crossed-continuation", "missing-metadata"):
+                        self.assertEqual(submits, [])
+                    else:
+                        self.assertTrue(calls[0].endswith("projectSemanticWorkResult"))
+                        self.assertEqual(len(submits), 1)
+                        self.assertEqual(len(calls), 3 if action == "complete" else 2)
 
 
 if __name__ == "__main__":

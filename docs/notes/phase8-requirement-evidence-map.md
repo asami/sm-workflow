@@ -2,6 +2,8 @@
 
 This is an inventory, not acceptance. Each row remains pending until its actual evidence is evaluated against the complete requirement in the adopted Phase 8 plan. INIT-1 completion is a prerequisite only; it does not prove any complete row below.
 
+INIT-1 and SST-1 prerequisite deliveries are separately recorded in the caller-retained `phase8-session-state-01a0f928/adopted-phase8-plan-source.md` and `phase8-session-state-01a0f928/sst1-scoped-completion-20261117.md`. These records do not establish a complete Phase 8 row. RSP-1 source work is described in [semantic result submission](../spec/semantic-result-submission.md); validation, review and installation remain pending. The terminal response projection mismatch remains a separate supported-use pending issue.
+
 | Requirement | Disposition and evidence |
 | --- | --- |
 | 1. Runtime owns Session-bound candidate slots, validation connections and progress; reusable host policy and real operator choices remain external. Caller adapters forward opaque typed continuation context, while semantic skills receive only needed work inputs and result contracts, without hand-assembling internal `dirty-purposes` configuration. | Pending; see the [Phase 8 completion requirement](../phase/phase-8.md#completion) and its linked evidence. |

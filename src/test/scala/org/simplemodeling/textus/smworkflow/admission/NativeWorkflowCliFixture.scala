@@ -350,6 +350,14 @@ private[admission] object NativeWorkflowCliFixture {
       if (result.exitCode == 0 && operation != "prepareExecution" && operation != "recordExecution") resolvePreparedImport(result)
       else result
     }
+    def projectSemanticResult(input: org.goldenport.record.Record): Result =
+      _run(_operation_argv("command", s"$_component.NativeWorkflowPreparationService.projectSemanticWorkResult") ++
+        Vector("--input", _take(input.toJsonStringC, "Semantic projection input"), "--json"))
+
+    def readRetainedWork(input: org.goldenport.record.Record): Result =
+      _run(_operation_argv("command", s"$_component.WorkflowRetainedWorkService.readWorkflowRetainedWork") ++
+        Vector("--input", _take(input.toJsonStringC, "Retained work reference"), "--json"))
+
     def preparationHelp(): Result = _run(_operation_argv("command", s"$_component.meta.help") ++
       Vector(s"$_component.NativeWorkflowPreparationService"))
 

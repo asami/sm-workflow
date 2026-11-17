@@ -1052,6 +1052,13 @@
         },
         {
           "service": "NativeWorkflowPreparationService",
+          "name": "projectSemanticWorkResult",
+          "kind": "COMMAND",
+          "input": "WorkflowSemanticResultProjectionInput",
+          "output": "WorkflowSemanticResultProjection"
+        },
+        {
+          "service": "NativeWorkflowPreparationService",
           "name": "readPreparedImport",
           "kind": "COMMAND",
           "input": "WorkflowPreparedImportReference",

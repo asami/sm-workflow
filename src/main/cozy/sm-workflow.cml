@@ -11665,6 +11665,33 @@ Explicit passive preparation metadata and absolute local file: URI references. S
 | turnId | string | 1 |
 | itemId | string | 1 |
 
+## WorkflowSemanticResultProjectionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| workResource | string | 1 |
+| resultResource | string | 1 |
+| format | string | ? |
+
+## WorkflowSemanticResultProjection
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| status | string | 1 |
+| summary | string | 1 |
+| nextOperation | string | 1 |
+| submitSessionId | string | 1 |
+| resultType | string | 1 |
+| workResource | string | 1 |
+| resultResource | string | 1 |
+| resultJson | string | ? |
+
 ## WorkflowPreparedImportReference
 
 - input-kind :: COMMAND
@@ -12475,6 +12502,34 @@ Pure preparation helpers remain passive. Executing importer Operations normally 
 Default compact output reports storage availability and a confirmed exact reference. Explicit preparationFormat legacy-full preserves the complete former importer output with no retention. readPreparedImport retrieves the unchanged importer through the existing owner under workflow.artifact.max-bytes. Separately selected workflow.preparation.max-write-bytes defaults to 67108864; it grants no FileWrite permission and is independent of the read policy. Host execution conversions keep their original typed output.
 
 ### OPERATION
+
+#### projectSemanticWorkResult
+
+##### DESCRIPTION
+
+Read the exact retained issued Request and a caller-owned detailed public worker result through the authorized Resource boundary. Default summary is compact; public-result explicitly returns the full validated public DTO. No Submit, acceptance or authority is granted.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+WorkflowSemanticResultProjectionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | WorkflowSemanticResultProjectionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+WorkflowSemanticResultProjection
 
 #### readPreparedImport
 
