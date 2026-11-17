@@ -511,3 +511,16 @@ configured basic store; that is ordinary managed resolution. Those inputs are sp
 not external review/consent evidence. Existing immutable and connected CLI suites
 remain applicable regression checks. Parent execution owns all pass/fail facts;
 authored tests are not executed evidence or P111-05/06 delivery.
+
+<!-- sm-workflow completion 2deceffcc2da838d4c2fb4245e6f85d5 phase phase-11.1 -->
+Accepted phase phase-11.1.
+Evidence: 2deceffcc2da838d4c2fb4245e6f85d5:ordered-validation:227:validation
+Evidence: file:///Users/asami/src/dev2026/sm-workflow-dev/target/worktrees/phase8-initialization/target/sm-workflow/tasks/phase11-1-20261117-01a0f928/phase-review-result.json
+Phase source accepted; normal local record/commit closure follows. No later synchronization outcome is inferred.
+Source revision: ee0d19406e4f19fc94aae26ac7c02b9c071b3363/ba1cfe38346691c480350d46661585b0beedcc8a. Source physical lines: start=266610; end=267677; net=1067. Cohort phase-11.1-journal-single-entry-20261117:Classification(CODING,COMPLEX,PROGRAMMING,MEDIUM,None) (Step, class=Classification(CODING,COMPLEX,PROGRAMMING,MEDIUM,None), source=ba1cfe38346691c480350d46661585b0beedcc8a, window=2026-11-17T05:15:20.258214Z..2026-11-17T07:53:58.873102Z): eventual=2/2 (1); first-pass=0/2 (unavailable); unknown first-pass=1; pending=0; outcomes=(accepted,2); profiles=standard@1; mixed=. P111-01-04 completion-ms=unavailable elapsed-ms=unavailable; P111-05-06 completion-ms=unavailable elapsed-ms=unavailable. codex tokens=unavailable unavailable; local tokens=unavailable unavailable. Ordinary-work observations do not establish model causality; missing resources are unavailable; First-pass history is incomplete; rate unavailable Issued profiles=standard@1. codex tokens=N/A (unavailable); tokens/net source line=N/A; N/A: attributable input/output usage is unavailable. local tokens=N/A (unavailable); tokens/net source line=N/A; N/A: attributable input/output usage is unavailable
+Profile standard@1; mapping=unknown@unknown; logical dispatch=legacy; configured=unknown; selected=caller-retained or unknown; provider observations are retained separately per execution
+Profile standard@1; mapping=unknown@unknown; logical dispatch=legacy; configured=unknown; selected=caller-retained or unknown; provider observations are retained separately per execution
+
+No benchmark or model-causality claim. Missing original endpoints, usage, timestamps and launch observations remain unavailable.
+
+Local record/commit closure is runtime-owned; later publication, return and synchronization outcomes are recorded separately.
