@@ -21,7 +21,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /**
  * @since   Oct.  6, 2026
  *  version Oct. 28, 2026
- * @version Nov.  6, 2026
+ * @version Nov. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -162,14 +162,18 @@ final class ThreeWorkflowLauncherAssemblySpec extends AnyWordSpec with Matchers 
       ThreeWorkflowLauncherAssembly.publishedMcpOperations should not contain "RepositorySyncService.submitMergeReviewResult"
     }
 
-    "retain DelegateTask scope correction contracts in the standard launcher" in {
-      val names = Set("describeDelegateTaskScopeCorrection", "correctDelegateTaskScope")
+    "retain DelegateTask scope correction and selected-validation continuation contracts in the standard launcher" in {
+      Given("the existing generated scope and selected-validation continuation contracts")
+      val names = Set("describeDelegateTaskScopeCorrection", "correctDelegateTaskScope",
+        "describeDelegateTaskValidationContinuation", "adoptDelegateTaskValidationContinuation")
       val generated = SmWorkflowComponent.DelegateTaskServiceService.operations.operations.toVector
         .filter(operation => names(operation.name)).map(operation => operation.name -> operation).toMap
+      When("the normal launcher composes its standard deferred DelegateTask service")
       val deferred = ThreeWorkflowLauncherAssembly.deferredDeclarations
         .find(_.name == "DelegateTaskService").get.operations.operations.toVector.filter(operation => names(operation.name))
+      Then("all four operations remain callable with their exact generated requests and responses")
       deferred.map(_.name).toSet shouldBe names
-      deferred.size shouldBe 2
+      deferred.size shouldBe 4
       deferred.foreach { operation =>
         operation.specification.request shouldBe generated(operation.name).specification.request
         operation.specification.response shouldBe generated(operation.name).specification.response

@@ -25,7 +25,7 @@ import GoalPhaseAcceptanceBoundary as A
   * No Workflow state is read or seeded by this caller.
   * @since   Oct. 13, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeWorkflowCliFixture {
@@ -35,6 +35,27 @@ private[admission] object NativeWorkflowCliFixture {
   private val _service = GoalPhaseNativeRun.startOperation.service
   private val _environment = Map("PATH" -> "/usr/bin:/bin", "GIT_TERMINAL_PROMPT" -> "0",
     "GIT_CONFIG_NOSYSTEM" -> "1", "GIT_CONFIG_GLOBAL" -> "/dev/null", "LC_ALL" -> "C")
+
+  /** Invoke the selected candidate archive through the installed CNCF runtime. */
+  def candidateCommand(car: Path): Vector[String] = {
+    val executable = sys.props.get("smworkflow.spec.cncfCommand").orElse(sys.env.get("SM_WORKFLOW_SPEC_CNCF_COMMAND"))
+      .map(Path.of(_)).getOrElse {
+        sys.env.getOrElse("PATH", "").split(java.io.File.pathSeparator).iterator.filter(_.nonEmpty)
+          .map(x => Path.of(x).toAbsolutePath.normalize.resolve("cncf"))
+          .find(x => Files.isRegularFile(x) && Files.isExecutable(x)).get
+      }
+    require(executable.isAbsolute && Files.isRegularFile(executable) && Files.isExecutable(executable))
+    require(car.isAbsolute && Files.isRegularFile(car))
+    val archive = new java.util.zip.ZipFile(car.toFile)
+    val minimum = try {
+      val stream = archive.getInputStream(archive.getEntry("car-runtime-manifest.json"))
+      val content = try new String(stream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8) finally stream.close()
+      parse(content).toOption.get.hcursor.downField("runtime").downField("cncf").get[String]("minimum").toOption.get
+    } finally archive.close()
+    val runtime = sys.props.get("smworkflow.spec.cncfRuntime").orElse(sys.env.get("SM_WORKFLOW_SPEC_CNCF_RUNTIME"))
+      .getOrElse(minimum)
+    Vector(executable.toString, "--runtime", runtime, car.toString, "command", "--force-exit", "--no-default-components")
+  }
 
   def publicPlan(value: GoalPhaseOrderedProgression.Plan): V.GoalPhaseOrderedPlan =
     V.GoalPhaseOrderedPlan(value.identity, value.revision, value.phase, value.repository,

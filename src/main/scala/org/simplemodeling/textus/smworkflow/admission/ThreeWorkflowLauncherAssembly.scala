@@ -14,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
   * Parameter data selects storage/targets/policies, never independent authority ports.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowLauncherAssembly {
@@ -42,6 +42,11 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
     "DelegateTaskService.startDelegateTask", "DelegateTaskService.advanceDelegateTask",
     "DelegateTaskService.submitDelegateTaskWorkResult", "DelegateTaskService.resolveDelegateTaskDiagnosticInformation",
     "DelegateTaskService.describeDelegateTaskScopeCorrection", "DelegateTaskService.correctDelegateTaskScope",
+    "DelegateTaskService.describeDelegateTaskValidationContinuation", "DelegateTaskService.adoptDelegateTaskValidationContinuation",
+    "DelegateTaskService.describeDelegateTaskReviewContinuation", "DelegateTaskService.resumeDelegateTaskReviewContinuation",
+    "DelegateTaskService.describeDelegateTaskSemanticContinuation", "DelegateTaskService.resumeDelegateTaskSemanticContinuation",
+    "DelegateTaskService.describeDelegateTaskRepairContinuation", "DelegateTaskService.resumeDelegateTaskRepair",
+    "DelegateTaskService.describeDelegateTaskValidationRecovery", "DelegateTaskService.recoverDelegateTaskValidation",
     "CompletionRecordClosureService.describeCompletionRecordClosure", "CompletionRecordClosureService.advanceCompletionRecordClosure",
     "WorkflowForceClosureService.describeWorkflowForceClosure", "WorkflowForceClosureService.forceCloseWorkflow",
     "DelegateTaskDeliveryService.observeDelegateTaskDelivery", "DelegateTaskDeliveryService.describeDelegateTaskAdoption",
@@ -122,7 +127,7 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
   def factory(declarations: Vector[ComponentParameterKey[?]], routes: Vector[ComponentParameterPathRoute],
     host: RuntimeCompositionDecoder): Component.BundleFactory = {
     require(host != null, "Three-workflow factory requires a trusted host decoder")
-    new SmWorkflowConfiguredComponentFactory(declarations, routes, (creation, parameters, context) => for {
+    new SmWorkflowConfiguredComponentFactory(declarations :+ DelegateTaskDeliveryService.captureReadDeclaration, routes, (creation, parameters, context) => for {
       selected <- host.decodeC(creation, parameters, context)
       services <- bindC(creation, selected)(using context)
     } yield services, publishedMcpOperations)

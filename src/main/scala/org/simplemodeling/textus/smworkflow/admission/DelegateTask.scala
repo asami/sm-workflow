@@ -1,6 +1,6 @@
 /**
  * @since   Oct. 27, 2026
- * @version Nov. 12, 2026
+ * @version Nov. 18, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -181,9 +181,11 @@ private[smworkflow] object DelegateTask {
   /** Validate producer facts at their demonstrated scope. The source locator is
     * retained by receipt; this does not authenticate another runtime's storage.
     */
-  def returnedC(expected: S.Input, json: Json): Consequence[S.State] = for {
+  def returnedC(expected: S.Input, json: Json,
+    hydrate: S.State => Consequence[S.State] = (s: S.State) => Consequence.success(s)): Consequence[S.State] = for {
     normalized <- GoalPhaseNativeMetadata.normalizePublicJson(json).fold(invalid(_), Consequence.success)
-    state <- normalized.as[S.State].fold(e => invalid(e.message), Consequence.success)
+    decoded <- normalized.as[S.State].fold(e => invalid(e.message), Consequence.success)
+    state <- hydrate(decoded)
     _ <- S.inputC(state.input)
     contract <- state.input.delegation.map(Consequence.success).getOrElse(invalid("returned result is not delegation"))
     _ <- if (state.stage == "ReturnReady" || state.stage == "Returned") Consequence.unit else invalid("producer delivery is unfinished")
@@ -220,7 +222,8 @@ private[smworkflow] object DelegateTask {
       added.forall(path => S.permitted(path, actual)) && (added.isEmpty || addedRefs.nonEmpty)
   }
 
-  def observeC(state: S.State, observation: Observation): Consequence[S.State] = for {
+  def observeC(state: S.State, observation: Observation,
+    hydrate: S.State => Consequence[S.State] = (s: S.State) => Consequence.success(s)): Consequence[S.State] = for {
     c <- state.input.delegation.filter(valid).map(Consequence.success).getOrElse(invalid("observation has no admitted delegation"))
     _ <- if (observation != null && reference(observation.sourceReference) && exact(observation.rationale) &&
       observation.destinationSessionId != null && observation.destinationSessionId.forall(exact) && observation.result != null &&
@@ -238,7 +241,7 @@ private[smworkflow] object DelegateTask {
             observations = d.observations :+ observation)), message = "Dispatch observed; no destination acceptance or work result is implied"))
         case "result-received" if c.role == "requester" && state.stage == "AwaitResult" &&
             observation.destinationSessionId == d.destinationSessionId && observation.result.nonEmpty && observation.artifactSelection.isEmpty => for {
-          producer <- returnedC(state.input, observation.result.get)
+          producer <- returnedC(state.input, observation.result.get, hydrate)
           _ <- if (producer.delivery.flatMap(_.destinationSessionId) == d.destinationSessionId) Consequence.unit
             else invalid("returned producer Session differs from the observed dispatch")
         } yield state.copy(stage = "ResultReceived", delivery = Some(d.copy(returned = observation.result,
@@ -249,7 +252,7 @@ private[smworkflow] object DelegateTask {
             message = "Destination result return observed; consumer adoption and activation are separate"))
         case "adopt" if c.role == "requester" && state.stage == "ResultReceived" && observation.result.isEmpty &&
             observation.destinationSessionId == d.destinationSessionId && observation.artifactSelection.nonEmpty => for {
-          producer <- d.returned.map(value => returnedC(state.input, value)).getOrElse(invalid("Adoption has no actual received producer result"))
+          producer <- d.returned.map(value => returnedC(state.input, value, hydrate)).getOrElse(invalid("Adoption has no actual received producer result"))
           selected <- observation.artifactSelection.get.as[ArtifactSelection].fold(e => invalid(e.message), Consequence.success)
           _ <- if (selected.sourceCommit == producer.commit.get.identity && selected.coordinates == c.artifactCoordinates &&
             reference(selected.selectionReference) && selected.activationReference != null && selected.activationReference.forall(reference) &&
