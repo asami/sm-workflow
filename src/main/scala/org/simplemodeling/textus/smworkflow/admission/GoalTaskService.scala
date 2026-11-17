@@ -1,6 +1,7 @@
 package org.simplemodeling.textus.smworkflow.admission
 
 import cats.data.NonEmptyVector
+import io.circe.syntax.*
 import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.{ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall}
 import org.goldenport.cncf.component.ComponentCreate
@@ -14,11 +15,12 @@ import org.goldenport.protocol.spec as spec
 import org.simplemodeling.textus.smworkflow.{SmWorkflowComponent, value as V}
 import BoundedWorkRuntime.Host
 import StandaloneFixExecution as S
+import StandaloneFixExecution.given
 
 /** Ordinary public operations around the canonical CNCF continuation engine.
   * @since   Oct. 26, 2026
   *  version Oct. 27, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 18, 2026
   */
 private[smworkflow] object GoalTaskService {
   def bindC(creation: ComponentCreate, declaration: GoalPhaseNativeRun.Declaration): Consequence[spec.ServiceDefinition] =
@@ -49,9 +51,12 @@ private[admission] final class BoundedTaskService(N: BoundedWorkNativeRun) {
     storage <- WorkflowComponentStorage.bindC(creation, SmWorkflowComponent.componentId, h.configuration,
       Vector(definition), h.instances, h.continuations)
     reader <- NativeExternalEvidence.bindBoundedC(creation.configuration, h)
-    recovery = if (N.delegation) (DelegateTaskScopeCorrection.operations(h, definition, selections) ++ DelegateTaskCandidateContinuation.operations(h, definition, selections)) else GoalTaskMalformedIssuedWorkRecovery.operations(h, definition,
+    recovery = if (N.delegation) (DelegateTaskScopeCorrection.operations(h, definition, selections) ++ DelegateTaskCandidateContinuation.operations(h, definition, selections) ++ DelegateTaskValidationRecovery.operations(h, definition, new ThreeWorkflowExternalEvidencePorts(reader).delegateTaskValidationRecovery)) else GoalTaskMalformedIssuedWorkRecovery.operations(h, definition,
       new ThreeWorkflowExternalEvidencePorts(reader).goalTaskMalformedIssuedWorkRecovery) ++ GoalTaskScopeCorrection.operations(h, definition, selections)
-    continuation = (if (N.delegation) Vector.empty else GoalTaskRepairContinuation.operations(h, definition,
+    continuation = (if (N.delegation) DelegateTaskSemanticContinuation.operations(h, definition,
+      new ThreeWorkflowExternalEvidencePorts(reader).delegateTaskSemanticContinuation) ++ DelegateTaskReviewContinuation.operations(h, definition,
+      new ThreeWorkflowExternalEvidencePorts(reader).delegateTaskReviewContinuation) ++ DelegateTaskRepairContinuation.operations(h, definition,
+      new ThreeWorkflowExternalEvidencePorts(reader).delegateTaskRepairContinuation) else GoalTaskRepairContinuation.operations(h, definition,
       new ThreeWorkflowExternalEvidencePorts(reader).goalTaskRepairContinuation) ++ GoalTaskValidationContinuation.operations(h, definition,
       new ThreeWorkflowExternalEvidencePorts(reader).goalTaskValidationContinuation)) ++
       BoundedSelectedValidationContinuation.operations(h, definition,
@@ -176,7 +181,9 @@ private[admission] final class BoundedTaskService(N: BoundedWorkNativeRun) {
           completed: Option[InstanceRecord]): Consequence[OperationResponse] = for {
           record <- completed.map(Consequence.success).getOrElse(N.invalid("Managed completion has no committed instance"))
           work <- decodedWork.map(Consequence.success).getOrElse(N.invalid("Completion has no actual decoded work"))
-        } yield NativeWorkflowOperationOutput.response(N.view(record, work.state, "Submitted",
+          state <- core.map(call => N.hydrateStateC(work.state, work.session, call))
+            .getOrElse(N.invalid("Completion response requires its actual call"))
+        } yield NativeWorkflowOperationOutput.response(N.view(record, state, "Submitted",
           "Native semantic result retained. A separate normal Advance owns fresh validation and acceptance."))
       }
       val closing = new WorkflowCompletionServiceOperation.ClosingProgram[S.Result] {
@@ -192,9 +199,10 @@ private[admission] final class BoundedTaskService(N: BoundedWorkNativeRun) {
             .getOrElse(N.invalid("Assigned source revision is malformed"))
           payload <- N.loadPayloadC(storage, current.identity.value, revision, call)
           _ <- GoalPhaseParticipantAdmission.admitC(payload.state.participant, call.executionContext)
-          _ <- if (payload.state == work.state && work.session == current.identity.value && work.kind == payload.state.stage && payload.state.input.task.nonEmpty)
+          _ <- if (payload.state.asJson == work.state.asJson && work.session == current.identity.value && work.kind == payload.state.stage && payload.state.input.task.nonEmpty)
             Consequence.unit else N.invalid("Result crosses the retained Task request")
-          _ <- S.admitResultC(work, submitted.result.value)
+          hydratedWork = work.copy(state = payload.state)
+          _ <- S.admitResultC(hydratedWork, submitted.result.value)
           _ <- if (submitted.evidence.workerIdentity.exists(_.nonEmpty)) Consequence.unit
             else N.invalid("Actual semantic completion requires its worker identity, without inventing execution placement")
           _ <- if (work.kind == "DeliveryAcceptance") N._delivery_fresh_c(payload, call) else for {
@@ -208,7 +216,7 @@ private[admission] final class BoundedTaskService(N: BoundedWorkNativeRun) {
           } yield ()
           _ <- if (work.kind == "Review") for {
             _ <- N.freshC(payload, call)
-            _ <- h.review.map(_.admitStandaloneC(call, work, submitted)).getOrElse(N.invalid("Independent review evidence installation is absent"))
+            _ <- h.review.map(_.admitStandaloneC(call, hydratedWork, submitted)).getOrElse(N.invalid("Independent review evidence installation is absent"))
             _ <- if (submitted.evidence.workerIdentity.exists(w => w.nonEmpty && !payload.implementationWorker.contains(w) && !payload.implementationWorkers.getOrElse(Vector.empty).contains(w)))
               Consequence.unit else N.invalid("Review requires an actual different worker identity")
           } yield () else Consequence.unit

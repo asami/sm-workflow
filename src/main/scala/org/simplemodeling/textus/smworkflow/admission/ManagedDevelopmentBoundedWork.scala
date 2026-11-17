@@ -18,7 +18,7 @@ import StandaloneFixExecution as S
 /** Composition over existing native WorkOrders, bounded checkpoints and scoped
   * artifact operations. This owns no queue, semantic executor or repair loop.
   * @since   Nov. 12, 2026
-  * @version Nov. 12, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ManagedDevelopmentBoundedWork {
@@ -200,19 +200,20 @@ private[smworkflow] object ManagedDevelopmentBoundedWork {
           _ <- GoalPhaseParticipantAdmission.admitC(payload.state.participant, core.executionContext)
           next <- if (!Set("ReturnReady", "Returned")(payload.state.stage)) Consequence.success(state)
             else for {
-              _ <- DelegateTask.returnedC(state.input, payload.state.asJson)
+              _ <- DelegateTask.returnedC(state.input, payload.state.asJson, _ => Consequence.success(payload.state))
               _ <- if (payload.managedDependency.nonEmpty) Consequence.unit
                 else invalid("managed B has no retained A WorkOrder capture")
               next <- DelegateTask.observeC(state, DelegateTask.Observation("result-received",
                 ContextReference(session + ":standalone-state:" + current.revision.value, "1"), Some(session),
-                Some(payload.state.asJson), None, "Collected the exact same-store native destination checkpoint"))
+                Some(payload.state.asJson), None, "Collected the exact same-store native destination checkpoint"),
+                _ => Consequence.success(payload.state))
             } yield next
         } yield next
       }
     } yield result
   /** Authenticate the already received immutable native result before a
     * requester operation can activate its artifact. Public JSON is no witness. */
-  private def receivedC(storage: WorkflowComponentStorage, definition: DefinitionBinding,
+  private[admission] def receivedC(storage: WorkflowComponentStorage, definition: DefinitionBinding,
     state: S.State, core: ActionCall.Core):
     Consequence[BoundedWorkRuntime.Payload] = for {
     delivery <- state.delivery.map(Consequence.success).getOrElse(invalid("No requester delivery is retained"))
@@ -230,10 +231,10 @@ private[smworkflow] object ManagedDevelopmentBoundedWork {
       else invalid("Result receipt crosses its native destination history")
     payload <- DelegateTaskNativeRun.loadPayloadC(storage, session, revision, core)
     _ <- GoalPhaseParticipantAdmission.admitC(payload.state.participant, core.executionContext)
-    _ <- if (delivery.returned.contains(payload.state.asJson) && receipt.result == delivery.returned &&
+    _ <- if (delivery.returned.nonEmpty && receipt.result.nonEmpty &&
       receipt.destinationSessionId.contains(session)) Consequence.unit
-      else invalid("Received JSON differs from the actual native destination checkpoint")
-    _ <- DelegateTask.returnedC(state.input, payload.state.asJson)
+      else invalid("Result receipt has no producer result or crosses its destination Session")
+    _ <- DelegateTask.returnedC(state.input, payload.state.asJson, _ => Consequence.success(payload.state))
   } yield payload
 
   /** Adoption attaches results only. Consumer selection/compilation must already

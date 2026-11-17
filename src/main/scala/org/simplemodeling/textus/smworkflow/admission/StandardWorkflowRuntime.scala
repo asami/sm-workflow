@@ -23,7 +23,7 @@ import org.simplemodeling.textus.smworkflow.value.{GoalPhaseDevelopmentReconstru
   * only when its Operation executes, within that call's ordinary storage/UoW.
   * @since   Oct. 27, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 18, 2026
   */
 private[smworkflow] object StandardWorkflowRuntime {
   private final case class Shared(persistence: GoalPhaseRuntimeParameters.Persistence,
@@ -525,6 +525,7 @@ private[smworkflow] object StandardWorkflowRuntime {
     paths <- input.hcursor.get[Vector[String]]("ownedPaths").fold(e => invalid(e.message), Consequence.success)
     checkIds <- input.hcursor.get[Vector[String]]("checks").fold(e => invalid(e.message), Consequence.success)
     proposed <- if (request.service.contains("GoalTaskService")) _goal_scope_paths_c(request, core)
+      else if (request.service.contains("DelegateTaskService")) _delegate_scope_paths_c(request, core)
       else Consequence.success(Vector.empty[String])
     hostPaths = (paths ++ proposed).distinct
     _ <- if (proposed.isEmpty || GoalPhasePurposeRepair.paths(hostPaths)) Consequence.unit
@@ -562,7 +563,9 @@ private[smworkflow] object StandardWorkflowRuntime {
   } yield managed.fold(selected)(m => RepositorySyncDirectoryList.bindWorkspace(selected, m.workspace))
 
   private def _bounded_session_c(request: Request, core: ActionCall.Core): Consequence[String] =
-    if (request.operation == "adoptGoalTaskValidationContinuation") GoalTaskValidationContinuation.inputForCallC(request, core).map(_.sessionId)
+    if (request.operation == "recoverDelegateTaskValidation") DelegateTaskValidationRecovery.inputForCallC(request, core).map(_.sessionId)
+    else if (request.operation == "describeDelegateTaskValidationRecovery") DelegateTaskValidationRecovery.descriptionForCallC(request, core).map(_.sessionId)
+    else if (request.operation == "adoptGoalTaskValidationContinuation") GoalTaskValidationContinuation.inputForCallC(request, core).map(_.sessionId)
     else if (request.operation == "correctDelegateTaskScope") DelegateTaskScopeCorrection.inputForCallC(request, core).map(_.sessionId)
     else if (request.operation == "correctGoalTaskScope") GoalTaskScopeCorrection.inputForCallC(request, core).map(_.sessionId)
     else NativeWorkflowOperationInput.optionalTextC(request, "sessionId").flatMap {
@@ -583,6 +586,17 @@ private[smworkflow] object StandardWorkflowRuntime {
       input <- GoalTaskScopeCorrection.inputForCallC(request, core)
       _ <- GoalTaskScopeCorrection.selectionInputC(input)
       target <- GoalTaskScopeCorrection.targetC(input.target)
+    } yield target.additionalOwnedPaths
+    else Consequence.success(Vector.empty[String])
+
+  private def _delegate_scope_paths_c(request: Request, core: ActionCall.Core): Consequence[Vector[String]] =
+    if (request.operation == "describeDelegateTaskScopeCorrection")
+      NativeWorkflowOperationInput.valueC[org.simplemodeling.textus.smworkflow.value.DelegateTaskScopeCorrectionDescriptionInput](request, "input")
+        .map(_.additionalOwnedPaths.toVector)
+    else if (request.operation == "correctDelegateTaskScope") for {
+      input <- DelegateTaskScopeCorrection.inputForCallC(request, core)
+      _ <- DelegateTaskScopeCorrection.selectionInputC(input)
+      target <- DelegateTaskScopeCorrection.targetC(input.target)
     } yield target.additionalOwnedPaths
     else Consequence.success(Vector.empty[String])
 

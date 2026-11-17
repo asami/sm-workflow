@@ -35,10 +35,14 @@ private[smworkflow] object NativeExternalEvidence {
     case DelegateAdoption extends Purpose("delegate-task-requester-artifact-adoption")
     case StandaloneReview extends Purpose("standalone-fix-independent-review")
     case StandaloneValidationRecovery extends Purpose("standalone-fix-validation-recovery")
+    case DelegateTaskValidationRecovery extends Purpose("delegate-task-validation-recovery")
     case GoalTaskMalformedIssuedWorkRecovery extends Purpose("goal-task-malformed-issued-work-recovery")
     case GoalTaskMalformedIssuedWorkNonexecution extends Purpose("goal-task-malformed-issued-work-nonexecution")
     case GoalTaskValidationContinuation extends Purpose("goal-task-validation-continuation")
     case GoalTaskRepairContinuation extends Purpose("goal-task-repair-continuation")
+    case DelegateTaskRepairContinuation extends Purpose("delegate-task-repair-continuation")
+    case DelegateTaskSemanticContinuation extends Purpose("delegate-task-semantic-continuation")
+    case DelegateTaskReviewContinuation extends Purpose("delegate-task-review-continuation")
     case InventoryAuthority extends Purpose(GoalPhaseInventoryAuthority.purpose)
     case GoalReview extends Purpose("goal-phase-independent-review")
     case RepositoryReview extends Purpose("repository-sync-independent-review")
@@ -273,6 +277,12 @@ private[smworkflow] object NativeExternalEvidence {
     } else if (purpose == Purpose.InventoryAuthority) {
       if (selected.hcursor.downField("scope").get[String]("participant").contains(value.participant)) Consequence.unit
       else Consequence.securityPermissionDenied("Inventory authority crosses its actual original participant")
+    } else if (purpose == Purpose.DelegateTaskValidationRecovery) {
+      val selectedRecovery = selected.hcursor.downField("delegateTaskValidationRecovery")
+      if (selectedRecovery.get[String]("participant").contains(value.participant) &&
+          selectedRecovery.downField("reference").get[String]("identity").contains(value.reference) &&
+          selectedRecovery.downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
+      else Consequence.securityPermissionDenied("DelegateTask recovery evidence crosses its participant or reference")
     } else if (purpose == Purpose.StandaloneValidationRecovery) {
       val answer = selected.hcursor.downField("standaloneValidationRecovery").downField("answer")
       if (answer.get[String]("participant").contains(value.participant) &&
@@ -285,6 +295,24 @@ private[smworkflow] object NativeExternalEvidence {
           answer.downField("reference").get[String]("identity").contains(value.reference) &&
           answer.downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
       else Consequence.securityPermissionDenied("Task validation continuation Human evidence crosses its participant or reference")
+    } else if (purpose == Purpose.DelegateTaskSemanticContinuation) {
+      val answer = selected.hcursor.downField("delegateTaskSemanticContinuation").downField("answer")
+      if (answer.get[String]("participant").contains(value.participant) &&
+          answer.downField("reference").get[String]("identity").contains(value.reference) &&
+          answer.downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
+      else Consequence.securityPermissionDenied("DelegateTask semantic Human evidence crosses its participant or reference")
+    } else if (purpose == Purpose.DelegateTaskReviewContinuation) {
+      val answer = selected.hcursor.downField("delegateTaskReviewContinuation").downField("answer")
+      if (answer.get[String]("participant").contains(value.participant) &&
+          answer.downField("reference").get[String]("identity").contains(value.reference) &&
+          answer.downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
+      else Consequence.securityPermissionDenied("DelegateTask Review Human evidence crosses its participant or reference")
+    } else if (purpose == Purpose.DelegateTaskRepairContinuation) {
+      val answer = selected.hcursor.downField("delegateTaskRepairContinuation").downField("answer")
+      if (answer.get[String]("participant").contains(value.participant) &&
+          answer.downField("reference").get[String]("identity").contains(value.reference) &&
+          answer.downField("reference").get[String]("revision").contains(value.revision)) Consequence.unit
+      else Consequence.securityPermissionDenied("DelegateTask continuation Human evidence crosses its participant or reference")
     } else if (purpose == Purpose.GoalTaskRepairContinuation) {
       val answer = selected.hcursor.downField("goalTaskRepairContinuation").downField("answer")
       if (answer.get[String]("participant").contains(value.participant) &&
@@ -350,8 +378,12 @@ private[smworkflow] object NativeExternalEvidence {
     val selected = purpose match {
       case Purpose.GoalTaskValidationContinuation => GoalTaskValidationContinuation.selectBinding(value)
       case Purpose.GoalTaskRepairContinuation => GoalTaskRepairContinuation.selectBinding(value)
+      case Purpose.DelegateTaskRepairContinuation => DelegateTaskRepairContinuation.selectBinding(value)
+      case Purpose.DelegateTaskSemanticContinuation => DelegateTaskSemanticContinuation.selectBinding(value)
+      case Purpose.DelegateTaskReviewContinuation => DelegateTaskReviewContinuation.selectBinding(value)
       case Purpose.GoalTaskMalformedIssuedWorkRecovery => GoalTaskMalformedIssuedWorkRecovery.selectBinding(value)
       case Purpose.StandaloneValidationRecovery => StandaloneFixValidationRecovery.selectBinding(value)
+      case Purpose.DelegateTaskValidationRecovery => DelegateTaskValidationRecovery.selectBinding(value)
       case Purpose.GoalTaskMalformedIssuedWorkNonexecution => GoalTaskMalformedIssuedWorkRecovery.selectNonexecutionBinding(value)
       case Purpose.InventoryAuthority => GoalPhaseInventoryAuthority.select(value)
       case Purpose.RepositoryEffect | Purpose.StepClosure | Purpose.PhaseClosure => NativeAuthorityScope.select(purpose, value)
