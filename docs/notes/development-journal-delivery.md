@@ -1,7 +1,7 @@
 # 共通Journal先行開発の判断ノート
 
 date=2026-10-20
-status=planned
+status=historical-plan; phase-11.1=completed (2026-11-17)
 
 ## 決定
 
@@ -55,8 +55,9 @@ AIからの通知・転記は既知のAction生成物には不要。明示登録
 
 上記のPhase 11／12の判断・引渡し履歴を保持した追加手引きである。
 P111-01-04のsource実装はcommit `3d1db94917c880c9805fe84dd4e1403bca9b2124` に
-受入れ済み。ここに示す入力例は説明用であり、P111-05-06の実利用・別プロセス読取・
-独立review・Phase closureの成功記録ではない。その実結果は所有callerが別途保持する。
+受入れ済み。ここに示す入力例は説明用である。P111-05-06の実利用・別プロセス読取・
+独立review・Phase closureはその後完了し、[完了記録の照合](../phase/phase-11.1.md#完了記録の照合--2026-11-17)に
+実Taskとnative受入れ、統合mainへの別配送、検証範囲と制限を示す。例そのものは実行証拠ではない。
 
 ### 呼出しとhostの前提
 
@@ -197,3 +198,9 @@ Findingを起点とする利用では実Finding参照を使う。今回Humanが�
 原保存先の整合・移行の恒久対応は既存の担当へ引き継ぎ、この単件APIの受入れと分ける。
 検証・review・closureの状態は[Phase 11.1](../phase/phase-11.1.md)で管理し、
 このガイドの例やJournalの状態だけから正式完了を推定しない。
+
+2026-11-17追記：Phase 11.1の正式review／closureは完了済みであり、上記の
+「所有callerが残す」は必要な証拠の契約を示す。実記録は同Phaseの完了節を参照する。
+当時の自動Evidence File-save warningを消さず、恒久store resolver修正・移行と
+別のhost修復記録をこの単件APIの成功に混同しない。Phase 8の未検証条件は
+[要件evidence map](phase8-requirement-evidence-map.md)に保持する。

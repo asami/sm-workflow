@@ -1,6 +1,6 @@
 # Phase 11.1: 共通Journalの判断・課題・引継ぎの単件主経路
 
-status=in_progress
+status=completed
 planned_at=2026-10-20
 owner=sm-workflow
 depends_on=phase-11.md
@@ -40,7 +40,7 @@ Phase 8の不要確認削減やPhase 9のTakeoverをここで実装せず、そ�
 - [x] P111-03: 単件の訂正／課題状態更新で期待revision、訂正理由・前revisionを保持し、同時更新の衝突を黙って上書きしない。
 - [x] P111-04: 単件主経路に必要な状態・関連ID検索と選択詳細を実際に扱える。有限batchはP112-01〜03へ移管し、ここでは完了を要求しない。
 - [x] P111-05: 一つの実利用経路が共通Operationを使い、管理だけのAI反復や別index管理を要求しない。追加経路はP112-04へ移管する。
-- [ ] P111-06: 実作業一件の記録・関連参照・訂正／状態更新・別プロセス読取を検証し、必要なreview／closureと利用可能な成果の引渡しを完了する。
+- [x] P111-06: 実作業一件の記録・関連参照・訂正／状態更新・別プロセス読取を検証し、必要なreview／closureと利用可能な成果の引渡しを完了する。
 
 検索や記録はHuman consent、review acceptance、Workflow進行、計画採用を代行しない。
 一般的なHuman判断を記録することと、進行中の特定質問へ回答することを混同しない。
@@ -50,7 +50,7 @@ Phase 8の不要確認削減やPhase 9のTakeoverをここで実装せず、そ�
 2026-11-11の分割時点では計画変更のみであり、既存Goal／SessionのStart・改訂・採用・完了操作や
 Phase 6.11の追加修復は行わなかった。現在の単件主経路の実装・利用範囲は以下で区別する。
 
-## 単件主経路の実利用と残る受入れ境界
+## 単件主経路の実利用と受入れ範囲
 
 Decision／Issue／Handoff、型付き関係、期待revision付き訂正・状態更新、限定検索と
 選択詳細は共通Journalへ接続した。[利用手引き](../notes/development-journal-delivery.md#phase-111-単件apiの利用手引き2026-11-17)で
@@ -70,4 +70,34 @@ JournalのIssue状態は正式な検証・review／closureの代わりに完了�
 保存先解決の共通化と既存データの移行は、別途依頼済みのsm-workflow開発が所有する。
 今回のhost設定整合を恒久的なruntime修正とは扱わず、別保存機構や移行を追加しない。
 運用結果・raw logは `~/backup/work.d/YYYY/MM/DD/sm-workflow/phase-11.1/` に保持し、
-`docs/journal/` は設計記録だけに使う。P111-06の正式review／closureは未完了である。
+`docs/journal/` は設計記録だけに使う。P111-06の正式review／closureは下記の実記録で完了した。
+
+## 完了記録の照合 — 2026-11-17
+
+元Task `target/sm-workflow/tasks/phase11-1-20261117-01a0f928/` の
+`close-phase/response.json` はSession `2deceffcc2da838d4c2fb4245e6f85d5` の実際の
+Terminal/completedである。`phase-review-result.json` と
+`phase-review-submit/response.json` は独立Phase reviewのacceptと実受入れ、
+`final-local-completion-audit.json` は閉じた範囲と制限を保持する。
+[正式なsource完了projection](../spec/development-journal-runtime.md)も保持した。
+`phase-review-work/response.json` のnative Compile／FULL 2874 tests・270 suites／
+FixCheckはすべてexited 0、対象treeは `ba1cfe38346691c480350d46661585b0beedcc8a`。
+後の統合mainに対する新規FULL成功とは扱わない。
+
+source commits `3d1db94917c880c9805fe84dd4e1403bca9b2124`、
+`ee0d19406e4f19fc94aae26ac7c02b9c071b3363` とrelease
+`75475d945cfba63b6a3198189be5a7f5a112f97a` は統合main
+`54d44d5f9f0bdfff18210dac117578439b504812` の祖先として保持された。
+別の同期・publication担当の
+`/Users/asami/src/dev2026/sm-workflow/target/sm-workflow/main-simplemodeling-sync-20261117/final-result.json`
+はclean main=origin/main、通常source publication `0.1.1-SNAPSHOT` exited 0を記録する。
+その範囲はreference/distribution 35 tests、skill format 7、独立3 scenarios、
+packaged 46 members一致、fresh installer 58 changes／repeat 0、installed
+`JournalService.recordJournalEntry` help確認であり、2874件FULLの再実行ではない。
+元Phaseの同期deferredを上書きせず、後続の別許可による配送として区別する。
+
+完了した実利用はhost整合判断からのDecision／Issue／Handoff、訂正・状態変更と
+別プロセス公開読取である。過去の不変Finding→Decision実利用連鎖は未検証のまま、
+型付きFindingの仕様検証と分ける。自動CommonEvidence File-saveのindeterminate warningは
+履歴に残る。恒久store resolver修正・データ移行の完了は主張しない。
+Phase 11.2、Phase 8の受入れ、過去記録の再実行もこの完了からは導かない。

@@ -1,9 +1,59 @@
 # Phase 8: Runtime Extensions and Practical Closure
 
-Status: planned
+Status: in_progress
 Decision: 2026-10-05; documented 2026-10-06 (Asia/Tokyo)
 Planned after: Phase 7 and the bounded Phase 11.1 Journal route; before Phase 8.1
 Depends on: practical Phase 2, Phase 5 and the selected Phase 6.3/7 delivery
+
+## Current execution boundary — 2026-11-17
+
+The Phase 8 body starts in native Session `a38c308c60a36de8c7b33336ca8641c7`,
+selected Plan `phase-8-runtime-practical-closure-20261117` revision 1
+(`target/sm-workflow/tasks/phase8-main-20261117-01a0f928/plan.json`). This is a new
+body execution, not a resume of INIT-1, SST-1 or RSP-1. Those separately completed
+prerequisites and the completed [Phase 11.1](phase-11.1.md) remain closed.
+The original narrative and all 30 unchecked completion requirements below remain;
+the [requirement evidence map](../notes/phase8-requirement-evidence-map.md) gives
+each one's prior evidence scope, finite residual scenario, owning Step and
+unverified conditions. Earlier “planned/pending” descriptions record their authored
+state; the map reconciles them with later prerequisite delivery without declaring
+whole-row acceptance. Phase 7 remains unfinished in its own development checkout.
+
+| Ordered Step | Finite current-use scenario and acceptance ownership |
+| --- | --- |
+| P8-01 | Reconcile documentation and all requirements; correct Phase 11.1 status from actual completion records. No runtime acceptance follows from this inventory. |
+| P8-02 | Normal RepositorySync initialization/setup wait and same-Session continuation, dirty program-impact coverage and work-branch setup; local-first/direct/confirm main routes, isolated dependency route, auto-commit/confirm/error policies. Use isolated fixtures, preserve excluded dirty work and actual Human boundaries. |
+| P8-03 | Same-purpose inventory/source continuation, current input classification, adopted artifact applicability after candidate change, successful-evidence reuse, genuine changed authority and divergence/ten-attempt bounds. Use prospective equivalents of historical cases. |
+| P8-04 | RSP-1 based compact public result/detail and terminal projection, coherent mechanical progression, wait/collection, scoped substantial worker context and portable compaction/handoff. Keep unknown/live outcomes and host limitations explicit. |
+| P8-05 | Connected supported-use qualification, proportionate checks and review classification, bounded rescue, comparable observations, usage instructions and independent integrated Phase review/normal local closure. |
+
+Recent synchronization reached integrated main `54d44d5f9f0bdfff18210dac117578439b504812`
+through separate explicit Human Git permission, not normal RepositorySync success.
+Original Sessions `3b98bf93b68e818f2aba862acc5f3b70` and
+`783a9126fefeb56a8c38c9810f1cb2c7` retain their actual failures/refusals: work-branch
+setup and dirty program-impact coverage were incomplete. They motivate P8-02;
+do not replay them or old accepted classifications/consumer work to demonstrate a fix.
+No live GitHub push or collection of other worktrees is selected here.
+
+The current standard check binding maps literal `compile`, `test`, `test-only`
+and `fix-check` to their check kinds without selection metadata
+([source](../../src/main/scala/org/simplemodeling/textus/smworkflow/admission/StandardWorkflowRuntime.scala)).
+Consequently captured `test` is not evidence of ADMISSION selection. P8-01 captures
+only `fix-check`; later code Steps capture `compile`/`test`, integrated Phase
+captures `compile`/`test`/`fix-check`. P8-02–05 must resolve normal cadence/mode
+selection through the existing runtime selection owners, preserving required
+coverage and captured checks. ADMISSION is the custom label; focused and FULL
+are run scopes. No standalone SBT fallback, fabricated receipt or manually authored
+per-Session dirty-purpose configuration supplies missing capability.
+
+Optional broad server/MCP/provider breadth is excluded absent concrete selected
+need; existing required public routes remain required. Desktop automatic compaction
+and host auto-wakeup are unsupported/best effort, separately reported from portable
+coordination, never falsely delivered or new gates. Local LLM trials remain optional;
+Phase 9 convergence/rerouting, Phase 13 systematic accounting, Phase 11.2 batch and
+storage migration remain with their owners. No new worktree or replacement executor
+is selected. Raw logs belong under `~/backup/work.d/YYYY/MM/DD/<project>/<target>`;
+`docs/journal` is DESIGN ONLY. This document carries plan/acceptance links, not logs.
 
 ## Sequence and ownership — 2026-11-11
 

@@ -414,8 +414,12 @@ record/read/find, accepted-finding recording and installed trial-skill connectio
 It does not depend on 6.4 archival or on Phases 7–10. Phase numbering does not
 set execution order. Phase 6.4 consumes this shared Journal through its normal
 adoption boundary while retaining ongoing work, issued requests and evidence.
-[Phase 11.1](phase-11.1.md) is in progress with the additive single-entry API and
-one actual caller record verified; independent consumer/Phase closure remains pending.
+[Phase 11.1](phase-11.1.md#完了記録の照合--2026-11-17) is completed: native Terminal,
+independent Phase acceptance and later separately authorized integrated-main delivery
+are recorded at their actual scopes. Its real host-correction consumer passed; a
+historical immutable Finding-to-Decision consumer chain remains unverified.
+[Phase 8](phase-8.md#current-execution-boundary--2026-11-17) is in progress under
+its five-Step plan; INIT-1/SST-1/RSP-1 are completed prerequisites, not whole-Phase acceptance.
 It adds decisions/issues/handoffs and single-entry
 revision management; [Phase 11.2](phase-11.2.md) owns later batch/consumer
 expansion. Neither retroactively delays the 6.4 trial. The main rollout below
