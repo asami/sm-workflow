@@ -414,7 +414,9 @@ record/read/find, accepted-finding recording and installed trial-skill connectio
 It does not depend on 6.4 archival or on Phases 7–10. Phase numbering does not
 set execution order. Phase 6.4 consumes this shared Journal through its normal
 adoption boundary while retaining ongoing work, issued requests and evidence.
-[Phase 11.1](phase-11.1.md) adds decisions/issues/handoffs and single-entry
+[Phase 11.1](phase-11.1.md) is in progress with the additive single-entry API and
+one actual caller record verified; independent consumer/Phase closure remains pending.
+It adds decisions/issues/handoffs and single-entry
 revision management; [Phase 11.2](phase-11.2.md) owns later batch/consumer
 expansion. Neither retroactively delays the 6.4 trial. The main rollout below
 remains, with this selected prerequisite delivery inserted before 6.4's remaining

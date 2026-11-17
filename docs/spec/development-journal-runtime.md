@@ -395,6 +395,8 @@ independent review and transitions. Spec authoring alone is not a PASS claim.
 
 ## Phase 11.1 semantic single-entry Operations
 
+The [single-entry caller guide](../notes/development-journal-delivery.md#phase-111-単件apiの利用手引き2026-11-17) lists all seven public Operation input shapes and the result-derived reference handoff. Its illustrative values are not consumer execution evidence.
+
 Source implementation is present; parent-owned compilation, runtime checks,
 independent review and P111-05/06 consumer delivery remain required. This section
 claims no installed runtime adoption or successful check.
