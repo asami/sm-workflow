@@ -246,6 +246,30 @@ private[smworkflow] object LocalPublication {
       }
     }}
 
+  /** Describe only the latest actual ownerless intent without a terminal row.
+    * This read does not qualify a writer or grant a subsequent publication. */
+  def describeStandaloneUnknownC(input: Input, target: Target, participant: String,
+    port: Port): Consequence[(Result, Source)] = for {
+    _ <- if (target != null && port != null && input != null && input.ownerSessionId != null && input.ownerSessionId.isEmpty &&
+        input.answer != null && input.answer.isEmpty && input.targetIdentity == target.identity &&
+        _canonical_identity(input.requestIdentity) && _canonical_identity(participant)) Consequence.unit
+      else _invalid("standalone description requires the exact ownerless request")
+    latest <- _latest_attempt_c(target, port)
+    attempt <- latest._2.filter(a => a.request.input == input && a.request.participant == participant)
+      .map(Consequence.success).getOrElse(_invalid("standalone request is not the latest actual target attempt"))
+    intent <- port.loadC(attempt.key + ":intent")
+    _ <- intent.map(value => _decode_c[Request](value).flatMap(r =>
+      if (r == attempt.request) Consequence.unit else _invalid("standalone intent differs from the actual request")))
+      .getOrElse(_invalid("standalone request has no publication intent"))
+    terminal <- port.loadC(attempt.key + ":result")
+    _ <- if (terminal.isEmpty) Consequence.unit else _invalid("standalone request has a retained terminal result")
+    result <- collectC(input, target, participant, port).flatMap(_.filter(_.status == "uncertain")
+      .map(Consequence.success).getOrElse(_invalid("standalone request is not uncertain")))
+    source <- port.sourceC(target)
+    _ <- if (_selected_source(source) && source.clean) Consequence.unit
+      else _invalid("standalone recovery requires a current clean source")
+  } yield result -> source
+
   /** Only the current latest actual successful attempt can supply provenance.
     * Reading an older immutable result never scans past a newer writer. */
   def sourceApplicabilityC(previous: Result, current: Source, port: Port):
@@ -326,14 +350,16 @@ private[smworkflow] object LocalPublication {
       _canonical_identity(target.workspace) && target.dependency != null && target.dependency.forall(_canonical_identity) &&
       _canonical_identity(input.requestIdentity) &&
       input.targetIdentity == target.identity && !input.explicit && input.answer != null && input.answer.isEmpty &&
-      input.ownerSessionId != null && input.ownerSessionId.exists(_canonical_identity) &&
+      input.ownerSessionId != null && input.ownerSessionId.forall(_canonical_identity) &&
       successor != null && successor.direction != null &&
       _canonical_identity(successor.direction.identity) && _canonical_identity(successor.direction.revision) &&
       _selected_source(successor.source) && previous.exists(p => p.input != null && p.target == target &&
-        p.participant == participant && !p.input.explicit && p.input.answer != null && p.input.answer.isEmpty &&
+        p.participant == participant && p.input.answer != null && p.input.answer.isEmpty &&
         p.input.targetIdentity == target.identity && p.input.ownerSessionId == input.ownerSessionId &&
         _canonical_identity(p.input.requestIdentity) && p.input.requestIdentity != input.requestIdentity &&
-        (!priorprerequisite || p.input.requestIdentity.matches("(?s).+:prerequisite:(0|[1-9][0-9]*)")))
+        (if (input.ownerSessionId.nonEmpty)
+          !p.input.explicit && (!priorprerequisite || p.input.requestIdentity.matches("(?s).+:prerequisite:(0|[1-9][0-9]*)"))
+        else priorprerequisite && successor.source.clean))
   }
 
   private def _collect_qualified_c(key: String, request: Request, qualification: PublicationQualification,

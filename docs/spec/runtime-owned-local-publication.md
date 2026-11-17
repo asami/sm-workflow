@@ -229,3 +229,34 @@ process cwd. The finite skill caller's `--runtime-root` sets that cwd; it is not
 forwarded as an executable argument and no extra `command` token is added.
 Existing running invocations, accepted results, Sessions and uncertain intents
 are not replayed when installation or publication changes.
+
+### Standalone UNKNOWN recovery
+
+For an ownerless standalone publication whose latest actual attempt has an intent
+and no terminal result, `LocalPublicationService.describeLocalPublicationRecovery`
+reads the exact request and current clean source. Supply `requestIdentity`,
+`targetIdentity`, the original `explicit` value, and a distinct
+`successorIdentity`. The returned `publication` is the target for an independent
+Human decision. It reports UNKNOWN; absence of a terminal result does not establish
+that the original writer stopped or never ran.
+
+The Human answer is `{ "target": <returned publication>, "choice":
+"AuthorizeSuccessorWithUnknownEffects", "rationale": <nonempty text>,
+"participant": <actual participant>, "reference": { "identity": <Human
+answer identity>, "revision": <revision> } }`. Prepare independently provisioned
+host evidence with `NativeWorkflowPreparationService.prepareEvidence`, family
+`LocalPublication`, kind `standalone-recovery`, using the actual description,
+answer, Human reference and execution evidence. This passive preparation is not
+itself evidence of Human consent: the configured host must independently provision
+the evidence through its normal input path.
+
+Pass the answer as `answer` with the same request fields to
+`admitLocalPublicationRecovery`. It checks the host evidence and current target,
+then retains one direction without executing. Call
+`advanceLocalPublicationRecovery` with the same request fields and no answer to
+execute or recollect that successor via typed SBT. A changed source, another
+latest attempt, crossed target or participant is refused; repeating a retained
+successor collects its result without replay. `collectLocalPublication` with the
+original identity continues to return UNKNOWN. Collect the successor separately
+by its own identity. The Human decision accepts unknown prior effects; it does
+not assert lifecycle completion, and it authorizes no future publication.

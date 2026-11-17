@@ -27,7 +27,7 @@ import org.simplemodeling.textus.smworkflow.value.{GoalPhaseDevelopmentReconstru
   */
 private[smworkflow] object StandardWorkflowRuntime {
   private final case class Shared(persistence: GoalPhaseRuntimeParameters.Persistence,
-    ports: ThreeWorkflowExternalEvidencePorts, profiles: Option[WorkflowExecutionProfileMapping],
+    reader: NativeExternalEvidence.Reader, ports: ThreeWorkflowExternalEvidencePorts, profiles: Option[WorkflowExecutionProfileMapping],
     origin: Option[GoalPhaseNativeExecution.Origin], journal: Option[DevelopmentJournal.Policy],
     evidence: Option[CommonEvidence.Policy], operatingcontext: GoalPhaseOperatingProfiles.Context,
     publication: Option[LocalPublicationRuntime.Policy], hygienemode: String,
@@ -55,7 +55,7 @@ private[smworkflow] object StandardWorkflowRuntime {
         definition <- GoalPhaseRuntimeCatalog.loadC().map(_.definition)
       } yield Vector(LocalPublicationService.bind(policy, (id, call) =>
         retainedGoalC(creation, shared.persistence, definition, id, call).flatMap(payload =>
-          GoalPhaseParticipantAdmission.admitC(payload.participantIdentity, call.executionContext))))
+          GoalPhaseParticipantAdmission.admitC(payload.participantIdentity, call.executionContext)), Some(shared.reader)))
       case Some("DevelopmentObservationService") => parameters.resolve(ThreeWorkflowRuntimeParameters.developmentObservation).flatMap {
         case value if value.value.isEmpty => Consequence.success(Vector(DevelopmentObservationService.bindNotConfigured))
         case value =>
@@ -84,7 +84,7 @@ private[smworkflow] object StandardWorkflowRuntime {
     records <- parameters.resolve(CompletionRecords.declaration).map(_.value)
     journal <- DevelopmentJournal.resolvePolicyC(parameters, persistence.instances, persistence.continuations)
     evidence <- CommonEvidence.resolveForCallC(parameters, Vector(persistence.instances, persistence.continuations) ++ journal.map(_.collection), context, creation.configuration.configuration.values)
-  } yield Shared(persistence, new ThreeWorkflowExternalEvidencePorts(reader), profiles, origin, journal, evidence,
+  } yield Shared(persistence, reader, new ThreeWorkflowExternalEvidencePorts(reader), profiles, origin, journal, evidence,
     operatingcontext, publication, hygiene, records, WorkflowValidationInitialization.Context(creation.configuration, parameters))
 
   private def splitC(creation: ComponentCreate, parameters: ComponentInitializationParameters,
