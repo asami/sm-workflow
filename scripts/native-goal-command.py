@@ -1247,6 +1247,10 @@ def ai_activity_main(argv):
 def project_before_submit(command, options, executable, runtime_root, task_fd, output_fd, output, family, outer_id, request, interval_position="single"):
     """Resolve every semantic transport using the retained owner and complete public reader."""
     work_resource = issued_request_resource(explicit_path(options["request"]))
+    if work_resource.startswith("file:"):
+        # Legacy full-body Request artifacts already carry the public work; keep
+        # their established direct Submit route without retained-work projection.
+        return False
     require(work_resource.startswith("sm-workflow-work:"), "projection requires retained issued work")
     result_type = native_field(request, "resultType")
     issued = native_field(request, "issuedWorkContext")
@@ -1294,6 +1298,7 @@ def project_before_submit(command, options, executable, runtime_root, task_fd, o
         require(route_record(task_fd) == {"family": family, "sessionId": outer_id}, "task routing changed after projection")
     finally:
         os.close(projection_fd)
+    return True
 
 
 
@@ -1365,9 +1370,10 @@ def complete(options, executable, runtime_root, task_fd, output_fd):
                      "GoalTask": ("submitGoalTaskWorkResult", "GoalTaskWorkResult")}.get(family)
         if request.get("kind") == "Request" and goal_pair == (
                 native_field(request, "submitOperation"), native_field(request, "resultType")):
-            project_before_submit(command, options, executable, runtime_root, task_fd, output_fd, output,
-                                  family, outer_id, request, submit_context["intervalPosition"])
-            submit_context["intervalPosition"] = "middle"
+            projected = project_before_submit(command, options, executable, runtime_root, task_fd, output_fd, output,
+                                              family, outer_id, request, submit_context["intervalPosition"])
+            if projected:
+                submit_context["intervalPosition"] = "middle"
         _text, response = native_call(command, runtime_root, output_fd, submit_context)
         require(native_field(response, "sessionId") == submit_id and nonblank(response.get("message")),
                 "Submit response ID or message mismatches the selected route")
@@ -1470,9 +1476,10 @@ def execute(options):
                                        request)
             if options["action"] == "submit":
                 route = route_record(task_fd)
-                project_before_submit(command, options, executable, runtime_root, task_fd, output_fd, output,
-                                      route["family"], route["sessionId"], request, "opening")
-                context["intervalPosition"] = "closing"
+                projected = project_before_submit(command, options, executable, runtime_root, task_fd, output_fd, output,
+                                                  route["family"], route["sessionId"], request, "opening")
+                if projected:
+                    context["intervalPosition"] = "closing"
             text, response = native_call(command, runtime_root, output_fd, context)
             acknowledge(options["action"], response, session_id, task_fd, output_fd)
             response_progress(response, context)
