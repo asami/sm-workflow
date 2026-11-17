@@ -1,19 +1,57 @@
 ---
 name: sm-repository-sync
-description: Perform semantic merge assessment or conflict work issued by RepositorySyncWorkflow in sm-workflow and return its typed result. The runtime owns Git execution, synchronization and effect recovery.
+description: Synchronize selected repositories through the installed sm-workflow RepositorySync entry, and return typed semantic results only for its issued work. The runtime owns Git preparation, history classification, validation, commits, synchronization and effect recovery.
 ---
 
-# RepositorySync semantic work
+## Ordinary entry: runtime owns synchronization
 
-## Test classification and selection
+For a user synchronization request, pass the selected repositories, destination
+and actual intended scope to the existing installed runtime entry described
+[below](#directory-list-entry-and-explicit-lower-level-entry). Reuse an existing
+Session's public continuation when one is already active. The parent invokes
+that entry directly with scoped escalation; it does not implement the sync.
 
-Follow the [standard-annotation policy](../../docs/spec/native-host-execution.md#validation-cadence-with-standard-annotations).
-ADMISSION is the sole custom label; FULL/focused are run scopes. Use standard
-Slow for heavy selection and DoNotDiscover for explicit-only suites. Preserve
-captured checks/results and use the runtime's supported selection route.
+Runtime owns local/remote observations, fetch, ancestry classification, automatic
+integration, applicable check/review selection, commit, non-force push and final
+confirmation. Do not run preliminary Git status/log/ancestry scans to decide
+which of these operations to call. A configured ordinary request needs no
+per-repository AI plan, direct Git effect or independently assembled validation
+Task. Read semantic detail only for an actual issued purpose/conflict/review/
+repair question; forward retained outcomes without interpreting a mechanical
+relationship as new AI work. Wait on the actual command/result, not a caller
+polling loop. Returned setup/failure/unknown conditions keep their public
+continuation and original Session rather than starting another workflow.
+
+The user's intended scope takes precedence over a convenient entry mode.
+"Committed changes only; preserve unrelated uncommitted work" is not permission
+to commit that work or silently select broader FULL_STATE behavior. Use only an
+actually supported runtime contract for that intent. If the installed public
+route cannot represent it, report that precise product/setup gap once and retain
+existing state; do not create a COMMITTED_ONLY flag, switch to direct Git or
+`cncf-repository-sync`, or copy a prior host's authority/workspace/process plan
+to construct a replacement standalone validation Task. A clean/dirty distinction,
+simple push, missing binding or failed setup does not transfer ownership to AI.
+Routine runtime resolution is not a reason to load CNCF executor/commit/review
+skills, prepare runner requests or dispatch agents. Use the later semantic and
+recovery sections only for the actual returned assignment or condition.
+
+## Compact runtime responses
+
+When an issued response contains retained references, follow the shared
+[retained response contract](../../docs/spec/native-host-execution.md#retained-responses-and-prepared-imports).
+Read only needed exact owner revisions; keep the original issued context and
+return contract. A reference or successful detail read is not workflow acceptance.
 
 
 ## Show who is working
+
+Use the shared [AI activity quick start](../../docs/spec/native-host-execution.md#ai-activity-quick-start)
+for the renderer location and actual chat forwarding.
+
+Before each authorized subagent spawn/resume, announce `subagent依頼：` with
+the request name, task/role, scope and expected result. Follow the shared
+[request and result pairing](../../docs/spec/native-host-execution.md#subagent-call-display);
+the later generated dispatch/receipt markers do not replace this pre-call notice.
 
 Apply the [activity transitions](../../docs/spec/native-host-execution.md#caller-activity-transitions)
 from the first actual work segment, including a resumed turn. Parent-only
@@ -30,6 +68,75 @@ chat: tool stdout alone is not a user-facing commentary message. End the active
 indication at actual waiting/result/control-transfer boundaries in the ordinary
 update; waiting alone is not parent work. Do not repeat unchanged status or
 create extra AI calls, monitoring or business Operations for these indications.
+
+Periodic separate-chat progress reporting OFF does not disable these actor
+transitions. `Agent Use` and tool stdout alone do not deliver the icon message.
+
+## Native semantic execution owner
+
+Resolve ordinary runtime-issued `sm_workflow_*` work through the
+[sm caller contract](../../docs/spec/native-host-execution.md#ordinary-sm-semantic-role-resolution),
+preserving its issued context and captured role/profile/effort/disposition and
+alternate policy. Do not use `cncf-agent-execution`, its model selector/fallback,
+or CNCF Manifest/verifier rules for this resolution, even if retaining an sm
+role name. An explicitly authorized independent cncf-* maintenance producer is
+separate; its consumer still uses native sm admission. Preserve current workers,
+reviews, Session/history/counters and successful evidence; an unnecessary CNCF
+reference alone does not require restart, re-review or another approval.
+
+
+# RepositorySync semantic work
+
+## Test classification and selection
+
+Follow the [standard-annotation policy](../../docs/spec/native-host-execution.md#validation-cadence-with-standard-annotations).
+ADMISSION is the sole custom label; FULL/focused are run scopes. Use standard
+Slow for heavy selection and DoNotDiscover for explicit-only suites. Preserve
+captured checks/results and use the runtime's supported selection route.
+
+## Waiting for another chat
+
+Default to [active-Goal Luna waiting](../../docs/spec/native-host-execution.md#active-goal-luna-wait)
+after authorized cross-chat dispatch. Keep the existing Goal active and wait with
+collaboration.wait_agent(timeout_ms=3600000), or the longest duration permitted
+by the execution rules. Luna low checks the destination every 120 seconds, using
+wait_threads within its 120-second API limit and any shorter execution limit.
+Do not duplicate polling, start unrelated work, or use that polling interval as
+the parent's timeout. Preserve request, Session, history, repair counts and results.
+
+Parent progress reporting defaults to **OFF**. **動作状況を報告して** /
+**動作状況の報告をON** enables reports at 2 -> 4 -> 8 -> 10 minute intervals;
+**動作状況の報告をOFF** disables them. Pass progress_reporting and destination title
+to the waiter. The report concerns the destination chat's work, not Luna's work.
+On a matching PROGRESS while ON, display its supplied commentary once and resume
+the same wait; do not query status, acknowledge, run workflow operations or spawn
+another waiter. OFF ignores queued progress. Terminal completion/attention is
+always returned immediately. Reporting ON consumes parent tokens.
+
+The user may switch ON/OFF during waiting. Send one REPORTING_MODE message with
+request_id and progress_reporting to the same child via collaboration.send_message.
+Do not interrupt/restart it or change the destination request. Apply OFF at the
+parent display boundary immediately; the child applies the message at its next
+message boundary. OFF -> ON starts a new two-minute reporting interval; repeated
+ON leaves the schedule intact. Follow the shared
+[mode selection](../../docs/spec/native-host-execution.md#cross-chat-waiting-mode-selection).
+
+The explicit option **Luna待機なし** / **notification-only** uses the
+[notification-only return contract](../../docs/spec/native-host-execution.md#cross-chat-notification-only-return):
+end the requester turn after dispatch, with no Luna or parent polling, and resume
+on the authorized result reply or human instruction. This is a skill option, not
+a new CLI flag. Retain an explicitly selected mode within its stated scope; see
+[mode selection](../../docs/spec/native-host-execution.md#cross-chat-waiting-mode-selection).
+Do not silently opt out on model unavailability or duplicate an existing waiter.
+Neither mode creates/resumes a Goal or overrides an explicit human stop. This
+contract does not guarantee zero cost or control client UI/wakeup behavior.
+
+At each send/receive, follow the [separate-chat display contract](../../docs/spec/native-host-execution.md#separate-chat-delegation-display):
+show **💬 📨 別チャットへ依頼中** at the actual send outcome, separately from
+parent-wait indicators. Name the destination/sender and request, then show this caller's outstanding
+requests from retained context. Distinguish result receipt from runtime adoption;
+include the waiting list in the dispatch turn's final handoff. No status queries
+or new display storage are needed.
 
 ## Runtime-owned local publication
 
@@ -69,7 +176,10 @@ Publication updates artifacts and publication metadata; it does not commit.
 RepositorySync owns committing publication outputs and GitHub synchronization.
 When the selected host target requires final publication (`beforeSync: true`),
 use the native order: final publish, commit its remaining metadata, non-force
-push, final convergence observation. A dirty tree is unfinished synchronization.
+push, final convergence observation. FULL_STATE retains its clean-tree completion
+condition; do not infer a supported committed-only dirty-tree mode from this text.
+An intent that excludes unrelated changes retains those exclusions even when
+the current runtime cannot complete it; return the actual gap without a fallback.
 Do not repair the order with caller-owned Git/SBT, repeat a retained publication,
 or treat generated publication metadata as exempt from the final clean check.
 
@@ -84,12 +194,35 @@ resolves, deduplicates and executes the list in one call. Keep the returned
 aggregate Session and `resultReference`. No per-directory caller loop, periodic
 monitoring or added semantic call is needed for normal clean synchronization.
 
-`ConfigurationRequired` is setup in that same Session. Correct the normal host
-configuration and use `refreshRepositoryDirectoryConfiguration` with the exact
-returned Session and revision. Other actual failures and uncertain effects keep
-their existing explicit recovery. Recollect with `syncRepositoryDirectories`
-and the same Session; inspect an exact historical aggregate using
-`readRepositoryDirectoryResult`. Neither read nor recollection grants a replay.
+Resolve the directory property through normal definition-file or invocation-time
+configuration. For an explicitly requested list, pass exactly those authorized
+checkout paths; `FULL_STATE` alone does not select them. A permanent host setting
+is not required just to select directories for one invocation. On the current
+installed CLI, a direct `--sm-workflow.repository-sync.directories=...` flag is
+not collected as runtime configuration. Use the existing
+`--textus.config.file=/absolute/invocation-override.json` route with a property-only
+override such as:
+
+```json
+{"sm-workflow.repository-sync.directories":["/absolute/selected-checkout"]}
+```
+
+Keep other selected configuration inputs and the original runtime cwd. This
+property selects existing admitted workspace/Git bindings; it supplies no new
+destination, validation workspace or execution grant.
+
+`ConfigurationRequired` is setup in that same Session. Supplement the missing
+normal configuration, including an invocation-time directory override when
+appropriate, and use `refreshRepositoryDirectoryConfiguration` with the exact
+returned Session and outstanding revision. Preserve the original participant,
+selection, history, candidates and successful results; do not Start again to
+apply setup. For a later validation-workspace or other setup gap, reuse existing
+admitted bindings and the returned public continuation; directory refresh is
+not a general failure-retry operation. Other actual failures and uncertain
+effects keep their existing explicit recovery. Recollect with
+`syncRepositoryDirectories` and the same Session; inspect an exact historical
+aggregate using `readRepositoryDirectoryResult`. Neither read nor recollection
+grants a replay.
 
 Ordinary text and JSON controls return outcomes and retained owner/revision
 references. Fetch needed assigned content once through the returned
@@ -109,20 +242,38 @@ own contracts. Equal, local-ahead and fast-forward add no product checks or AI
 solely for synchronization. Merge validation uses ordinary configured applicable
 checks and retained evidence.
 
-For dirty entry, use the actual issued `RepositorySyncPurposeRequest` and return only its typed
+Dirty entry uses the runtime-owned purpose and Session candidate workspace
+policy. Explicit fixed slots remain a supported legacy host configuration;
+they are not a prerequisite for the ordinary managed route.
+Use the actual issued `RepositorySyncPurposeRequest` and return only its typed
 `RepositorySyncPurposeResult` to `submitRepositoryPurposeResult`. Group actual
 content by purpose and prior dependencies; identify excluded ongoing work and
 inseparable meaning explicitly. A shared file can contain several purposes and
 an excluded remainder. Semantic grouping supplies no check, review or commit
 acceptance. Ordinary Advance owns each candidate's acceptance and installation.
-The runtime resolves the Session candidate and validation connection from the
-ordinary project and admitted host configuration. Preserve the original Session
-and opaque continuation context when it reports a missing workspace, resource
-or execution authority. Supply only the actual external prerequisite through its
-existing host owner and continue that Session. Do not assemble per-Session
-`dirty-purposes` slot or check JSON. Previously configured fixed slots remain
-supported. A setup wait does not grant permissions, stage everything or
-checkpoint unrelated work.
+Missing configuration is a precise preparation gap, never permission to invent
+authority imports, stage everything or checkpoint unrelated work.
+
+### Session-owned candidate setup
+
+The runtime resolves candidate allocation and applicable checks from ordinary
+project validation, the admitted CNCF workspace policy and retained Session
+state. Provide the selected repositories, business scope and genuine operator
+choices; do not assemble per-Session `dirty-purposes`, `slots`, `checks` or
+`actionPolicy` objects. See the [Session candidate resource contract](../../docs/spec/repository-sync-directory-list.md#session-candidate-resource-admission).
+Existing explicit fixed-slot bindings keep their configured meaning and cannot
+be silently replaced by a caller-authored setup recipe.
+
+A returned `ValidationSetupRequired` or pre-effect
+`purpose-materialization-preflight` wait is a setup condition, not an executed
+test failure. Present the actual missing resource or permission and use only
+the public continuation applicable to that exact retained condition. Supported
+configuration refresh keeps the same accepted grouping and prepared candidate;
+it does not replay materialization, checks or accepted Submit. Actual intent,
+live execution and UNKNOWN retain their distinct recovery requirements.
+Preserve all sources, Sessions, history, results and repair counts. Missing
+capability is a concrete host gap, not permission to invent grants or fixed
+slots, reset the Session or switch execution owners.
 
 Repeated continuation collects saved effects/results in the same Session.
 A retained integration intent is observed without reissuing merge/fast-forward;
@@ -157,6 +308,26 @@ recovery support from this bounded route.
 
 ## AI activity forwarding
 
+Follow [receipt ordering](../../docs/spec/native-host-execution.md#result-receipt-inspection-and-runtime-acceptance):
+at the first opportunity after actual result delivery, forward the generated
+receipt marker **before** reading result files, inspecting diffs or submitting
+to the runtime. Include it in the first update saying the worker has returned.
+Then distinguish `内容確認済み` after inspection from `runtime受理済み` after
+actual native acceptance. Worker `completed` means only its assigned work is
+finished; it does not establish verification success or native acceptance.
+Keep `accepted=unknown` until native acceptance is observed. Render receipt
+from the delivered message/envelope first; never bundle it after result-file
+reads, diff assertions or submission-file preparation in the same script.
+
+Workflow ownership is not active execution. `runtimeControl=sm-workflow` adds
+only `進行管理：sm-workflow`; AI dispatch/work/result uses its own marker without
+a gear/running prefix. End an actual runtime invocation's interval when its
+response returns work to the caller, then show parent/subagent work separately.
+Only a separately observed live invocation may retain a runtime progress marker;
+a local display-helper command is not such an invocation. No extra polling,
+AI call or repeated receipt display.
+
+
 At each existing authorized subagent dispatch/resume return and actual result
 handler, pass only actual known metadata through the bundled
 `native-goal-command.py` `observe_ai_activity` API (or its finite local
@@ -169,7 +340,8 @@ display metadata a work gate. Empty resume acknowledgements retain identity but
 prove no start. Feed already available progress, actual parent work/wait and
 authorized existing-chat dispatch/results (with the actual chat title) through
 the same API when applicable. Keep ongoing runtime control and existing gear
-before/after intervals intact; child results never imply parent handback.
+before/after intervals tied to actual calls; child results imply neither native
+acceptance nor cancellation of another live call.
 Report buffered or failed delivery honestly in the normal update. Add no AI
 call, agent, polling, dedicated wait, display ledger or sm-workflow command for
 presentation.

@@ -1,5 +1,22 @@
 # Native caller execution handoff
 
+## Session state and semantic returns
+
+The runtime owns candidate allocation, check bindings, accepted results,
+history and repair accounting. Skills supply business intent, semantic work and
+actual operator decisions; they do not construct per-Session slot/check-policy
+objects. The finite caller keeps only the opaque routing and issued references
+needed for supported continuation. See the [Session candidate resource contract](repository-sync-directory-list.md#session-candidate-resource-admission).
+
+For GoalPhase/GoalTask semantic results, the normal caller projects supported
+worker artifacts through `projectSemanticWorkResult` and forwards its complete
+public JSON Resource with the original issued context. Direct public results
+remain supported. Other workflow result types retain their existing public
+contracts; this projection introduces no generic envelope or fallback for them.
+Keep one visible command interval across projection, Submit and paired Advance.
+Projection does not supply execution attribution, Human consent or acceptance,
+and never authorizes replay of an accepted result. See [semantic result submission](semantic-result-submission.md).
+
 ## Authorization in delegated delivery — 2026-10-25
 
 Delegate Component, purpose, acceptance conditions and permitted operations with
@@ -136,17 +153,18 @@ requirement/contract decision retains its actual escalation route.
 This delegation boundary does not expand permissions, collapse generated native
 work types, or let workers for the parent Session execute its Phase SBT.
 Separately commissioned dependency delivery follows the boundary below.
-The owning workflow still issues work, runs normal validation and admits results. For the already-authorized
-broken-runtime restoration exception, the producer delivery owner coordinates the
-existing standalone execution facilities. Missing future RRC support does not
-suspend that existing applicable route. Keep RRC implementation in parallel;
-never represent standalone evidence as proof that RRC is installed.
+The owning workflow still issues work, runs normal validation and admits results.
+This includes validation, build and local publication of sm-workflow itself.
+A missing or failing runtime route grants no standalone fallback. Use only an
+applicable explicitly authorized bootstrap/recovery contract and retain its exact
+scope; never represent standalone evidence as proof of installed runtime support.
 
 Execution/result collection has one owner. That owner collects the running
 invocation and returns the actual terminal result; consumer chats must not
-independently poll its logs or request progress-only AI turns. Prefer existing
-completion notifications; when a wait is necessary, use the existing cursor and
-bounded wait without repeated unchanged-state polling. User-facing updates use
+independently poll its logs or request progress-only AI turns. Cross-chat callers use [active-Goal Luna waiting](#active-goal-luna-wait) by
+default. Only an explicit Luna-wait opt-out uses notification-only turn ending.
+The parent does not duplicate the waiter's destination-log checks. For an owned runtime
+invocation, retain its existing completion/collection mechanism. User-facing updates use
 already-available observations, not extra execution, probes or status agents.
 Cross-chat messages carry a completed/usable result, material scope/contract change,
 or a decision that the delivery owner cannot resolve. Avoid duplicate progress
@@ -196,6 +214,207 @@ Carry these items in the issued assignment or its referenced handoff. Preserve
 the exact native Request and adapter-generated launch arguments. Reference
 specific decisions, files and evidence rather than copying a transcript. A
 worker's report is input to the owner's verification, not runtime acceptance.
+
+## Cross-chat waiting mode selection
+
+All sm-* skills default to [active-Goal Luna waiting](#active-goal-luna-wait)
+after an authorized cross-chat dispatch. Preserve an existing active Goal and
+Session; keep the parent waiting for correlated completion or actionable attention.
+The waiter alone owns destination polling. Parent progress reporting defaults to
+OFF. An explicit **動作状況の報告をON** / **動作状況を報告して** enables it;
+**動作状況の報告をOFF** disables it. This is independent of Luna waiting itself.
+Pass progress_reporting=off/on and the known destination title to the waiter;
+these are skill assignment fields, not CLI flags or runtime configuration keys.
+An applicable explicit reporting preference is retained with the request; otherwise
+use OFF. Reported activity always describes the destination, not the waiter.
+
+While waiting, a user may change reporting with the same phrases. The parent
+updates its retained preference and sends one collaboration.send_message to the
+existing waiter: REPORTING_MODE with request_id and progress_reporting=on/off.
+Do not use followup_task, interrupt/restart the waiter, redispatch the destination,
+or change Goal/Session/history/counters. The waiter applies the change at the next
+message boundary; a pending tool wait may delay application. No acknowledgment
+loop is needed. OFF takes effect at the parent's display boundary immediately:
+ignore queued PROGRESS reports but still receive terminal results. OFF -> ON starts
+a fresh 120-second reporting interval; repeated ON does not reset the interval.
+The parent can briefly confirm the user-requested switch and re-enter waiting.
+If several requests are outstanding and the target is ambiguous, clarify which
+request the user means. In notification-only mode report that no Luna waiter is
+running; a reporting toggle alone does not start one.
+
+The user may explicitly select **Luna待機なし** / **notification-only** for a
+request or an expressly stated broader scope. This is a caller/skill option, not
+a new sm-workflow CLI flag or runtime configuration key. Retain the selected mode
+with existing request context across turns. A specific current instruction wins
+within its scope; otherwise preserve an explicit still-applicable user preference,
+then use the Luna default. An incidental old default is not an explicit opt-out.
+Do not start a second waiter for the same outstanding request or silently switch
+an already-running wait. Apply the default at the next dispatch/wait boundary.
+
+This selection never creates or resumes a Goal by itself. If no Goal exists,
+retain ordinary caller context; if the user has paused/stopped work, honor that
+instruction rather than resuming through this default. No Session restart,
+accepted-result resubmission, repair-counter reset or repeated verification.
+
+## Cross-chat notification-only return
+
+Use this section only for the explicit **Luna待機なし** / **notification-only**
+option. Do not start a Luna waiter or substitute parent polling. After authorized
+dispatch and recording its actual transport outcome, end the requester turn with
+a brief pending-result report. Preserve request ID, requester/destination chat
+identities, existing Sessions, issued context and result locators. Ending a turn
+does not itself complete or pause a Goal, cancel the destination or discard an
+owned runtime invocation. If automatic Goal continuation occurs without a result
+or human instruction, make no tool call and end that turn; do not query status or
+start monitoring. Notification-only does not guarantee that the client never
+starts an extra continuation turn, and a paused Goal requires its normal resume
+route. Do not advertise it as equivalent to retaining an active waiting turn.
+
+Do not use read_thread/wait_threads loops, dedicated waits, log inspection,
+heartbeat/cron jobs, liveness probes, timeout wakeups, monitoring agents or automatic
+retry/redelivery to await another chat. Do not send progress requests or ask for
+receipt acknowledgments. A later explicit human request for status permits a
+bounded inspection, not an ongoing monitor. This rule concerns cross-chat waiting;
+it does not replace runtime-owned process waiting, termination or result retention.
+
+The authorized request carries its return destination and attributable human
+authorization for the result reply and requester continuation. A message from
+another AI or this contract alone is not messaging authority. Reuse existing
+covering human authorization; do not ask again when it is already established.
+If reply authority or a usable return transport is absent, retain the result for
+human retrieval and disclose that limitation rather than promising automatic wakeup.
+
+On actual completion, the destination sends one consolidated result message using
+the available authorized existing-chat transport. Include the original request ID,
+actual outcome, Session/result/evidence references, unresolved limits and the next
+supported requester action. This follow-up resumes the requester when the transport
+supports it; merely finishing the destination turn is not a completion subscription.
+Do not create a fresh chat, Goal, Session or Codex API conversation for the reply.
+
+On the received result, correlate it with the retained request and use normal
+runtime receipt/adoption and continuation. Transport delivery alone is not native
+acceptance. Reuse retained receipt/adoption on duplicate notifications; do not replay
+completed work or send an acknowledgment that starts a reply loop. No exactly-once
+transport guarantee or new delivery ledger is implied.
+
+If the destination encounters an actionable blocker during its own work, it may
+send one authorized consolidated blocker report instead of a completion result.
+Do not automatically redispatch or restart it. If either chat, execution or return
+transport stops abnormally, human recovery is the default: retain all existing
+work, history, counters and evidence, and leave it stopped. Missing notifications
+are not detected by AI polling, automatic retries or additional monitoring. A failed
+or uncertain send is not automatically resent. Resume only on a delivered result
+or a human instruction; an explicit human pause remains in force.
+
+<a id="active-goal-luna-wait-trial"></a>
+
+## Active-Goal Luna wait
+
+Status: default cross-chat waiting mode for sm-* skills, adopted 2026-11-01.
+Unless the user explicitly opts out under the mode-selection contract, use bounded
+reply checks by one dedicated `sm_workflow_chat_waiter` (gpt-6-luna, low). Do not end
+the parent turn merely because the destination is working. Do not use an unrelated runner role or
+silently replace an unavailable Luna with a more costly model.
+
+The deployed waiter enables apps and plugins: its chat read/wait tools are
+provided by the Codex app plugin, not by CNCF. Disabling plugins while enabling
+apps can leave this role without its required transport. Missing tools are a
+waiter configuration/availability defect (`WAIT_FAILED`), not successful waiting
+or merely suppressed progress display. Qualify configuration repairs with a fresh
+role and actual bounded read/wait calls; preserve the outstanding request and
+its history without redispatching the development work.
+
+The caller keeps its existing Goal active and retains the actual dispatch/request
+identity and Session. Spawn the waiter with minimal context and the destination,
+request ID, return marker and known cursor. The parent remains in its current turn
+using collaboration.wait_agent(timeout_ms=3600000) where the caller's applicable
+execution rules permit that duration. This tool supports up to one hour and
+returns early on mailbox updates or user input; the timeout is not a minimum sleep.
+If the current environment imposes a shorter waiting limit, use the longest
+permitted duration and disclose that parent timeout overhead remains. Do not copy
+the Luna 120-second polling interval into the parent's
+wait. Until a matching waiter result or human instruction arrives, do not call
+Advance, inspect logs, edit, investigate or start other work. Only explicitly
+enabled PROGRESS reports may cause the display-only parent handling below. On a wait timeout or unrelated
+agent notification, re-enter the same long wait without a status query. The tool
+can wake for other agents as well; correlate the sender/request before treating
+it as the awaited result. A one-hour expiry does not mean the destination failed
+and does not change Goal status. Do not call get_goal on every timeout. This is an
+instruction-level restriction, not a runtime execution lock.
+
+The waiter checks the destination every 120 seconds regardless of reporting mode.
+Use wait_threads with the latest opaque cursor copied verbatim and
+timeoutMs=min(120000, remaining milliseconds until next_poll_at, remaining
+milliseconds until next_report_at when ON), subject to any
+shorter applicable execution limit. The API rejects values above 120000. Keep the
+same deadline across shorter transport waits; intermediate timeouts do not trigger
+extra reads; a due enabled report may use the returned snapshot. At the due time reuse the compact snapshot; read at most
+one bounded new log section only if needed. Schedule the next check from observation
+completion, without catch-up bursts. Correlate completion/needs-attention events
+immediately, even before the next deadline.
+
+Silence, counters, log growth and a chat turn ending do not prove request completion
+or a stall. Unknown evidence retains the last known state with its observation time,
+without claiming it remains current. A transport failure or repeated stale immediate
+event returns WAIT_FAILED once, without retries or a busy loop.
+
+### Optional parent progress reports
+
+Reporting is OFF unless explicitly selected. OFF sends no nonterminal parent
+messages; child commentary on an actual state change is allowed but does not
+promise visibility in the parent's view. With reporting ON, the waiter sends one
+PROGRESS via collaboration.send_message to its parent at intervals of 120, 240,
+480, 600, then 600 seconds. Start at activation time; after sending, schedule the
+next interval from the send time. Poll and report deadlines are separate.
+For ON at t0 and instantaneous sends, reports occur at t120, t360, t840, t1440,
+t2040, ... seconds, not at every two-minute poll. The next intervals after those
+reports are 240, 480, 600, 600 seconds. Meaningful changes do not reset reporting
+backoff or trigger extra parent wakeups. At a reporting deadline use the returned
+compact snapshot, processing a due poll first. If no poll is due, report the
+available observation with its actual time without adding a log read.
+No catch-up bursts. Completion or actionable attention always takes priority over
+a due progress report. Never end the waiter turn for progress alone.
+
+Each PROGRESS contains request_id, destination_thread_id, destination title,
+observed_at, actual observed activity (or unknown/last-known), whether it changed
+since the last report, next report interval and ready-to-display commentary.
+Use `💬 ✨ 別チャット作業中 — <title>：<observed activity>` or
+`💬 ⏳ 別チャット待機中 — <title>：<observed waiting reason>` only for evidenced
+states; otherwise `💬 別チャット状況未確認 — <title>`. Unchanged observations may say
+`変化なし` without implying a fresh observation when none was available.
+
+The parent correlates sender and request, checks its current reporting preference,
+and forwards the supplied commentary once. It does not query status, investigate,
+call Advance, edit, acknowledge the report, spawn a new waiter or change Goal status.
+Then it resumes the same long wait with the same child. Reports are observations,
+not native result acceptance or authority. Unrelated messages and duplicate reports
+are not redisplayed; use existing request context, not a new display ledger.
+This optional reporting wakes the parent and consumes parent tokens. Do not claim
+zero-cost display or guaranteed delivery into the app UI.
+
+Return MATCHED_RESULT, NEEDS_ATTENTION or WAIT_FAILED only for correlated terminal
+results/actionable stops. The parent collects them and uses normal runtime
+receipt/adoption in the same Goal/Session. Preserve history, repair counts and
+successful results. Human stop instructions and actual Goal limits take precedence.
+Before waiting show the actual send outcome using `💬 📨 別チャットへ依頼中`,
+destination title, request and retained pending list, separately from parent-wait
+indicators. Show the terminal result on return even when progress reporting is OFF.
+
+The parent's long wait reduces periodic parent re-entry but cannot guarantee
+completion-only wakeups or an infinite suspension. Parent timeout boundaries,
+other-agent notifications and user input can still cause re-entry. Luna also
+consumes tokens when deciding to re-wait. Do not claim zero cost or a
+reduction without measurement. Record actual wait/timeout/wakeup counts and any
+already-available usage, without extra AI measurement calls. Try the dedicated role first. If it is explicitly unknown/unregistered before
+child creation, one equivalent default-agent start is allowed: read the deployed
+TOML, pass its full developer instructions and the same minimal assignment, with
+explicit gpt-6-luna / low and fork_turns=none. Disclose this equivalent route.
+An accepted start with a child identity is required; installed TOML alone is not
+proof. Do not substitute another model or role. Other rejection/failure types do
+not authorize this fallback, and failure of the equivalent start returns actionable WAIT_FAILED. Do not silently
+select notification-only or parent polling because Luna is unavailable.
+An isolated mailbox smoke test proves only child result return, not cross-chat
+transport or active-Goal scheduling. Record those qualification gaps explicitly.
 
 ## New cross-chat development requests and existing continuations
 
@@ -322,6 +541,18 @@ command tool. Do not route that invocation through `cncf_runtime_runner`,
 `cncf-runtime-execution` or another command-execution subagent. This specific
 route takes precedence over generic runtime-runner routing for this command.
 Semantic work and independent review retain their existing executor selection.
+
+Parent-owned command transport does not transfer the Operation's business work
+to the parent AI. For RepositorySync, the runtime owns Git observation, fetch,
+relationship classification, integration, validation/review selection, commit,
+non-force push and final confirmation. The caller passes authorized intent and
+renders the returned outcome; it does not preflight repositories, choose Git
+commands or assemble a separate validation Task for ordinary synchronization.
+Generic "ordinary Git/external mutations run in the parent" rules apply outside
+this runtime-owned scope, not as a fallback for dirty inputs, missing setup or
+an unsupported intent. Preserve the actual requested scope and existing Session;
+report a precise unavailable contract instead of silently changing workflows.
+The normal path needs no additional AI decisions for deterministic progress.
 
 Install this command with CNCF's `install-cli --published-target
 org.simplemodeling.textus.SmWorkflow`, leaving the component version unspecified.
@@ -812,11 +1043,70 @@ descendant cleanup, durable interruption state nor validation success. Preserve
 the actual response/uncertainty and existing normal continuation authority;
 invent no extra approval or AI wait loop and no automatic replay.
 
+### Command stream retention and forwarding
+
+Choose an event-preserving transport before launching the already-authorized
+Operation. For actions supported by the deployed finite caller, including
+ordinary `advance` and paired `complete`, use that existing caller with the
+selected installed executable, runtime root, owned task and output directory.
+Its `native_call` already saves the complete native response/stderr and emits
+flushed progress records while the CLI runs. Leave the helper's stdout/stderr
+connected to the command tool. An outer `> file 2> file`, end-only subprocess
+capture or parsing stdout only after exit discards that live display path;
+the caller's retained files make such outer capture unnecessary. The helper's
+stdout is a stream of progress and business JSON objects, not one JSON document.
+
+For Operations without a supported helper action, preserve the normal direct
+installed-CLI route and use the command transport's existing event-streaming
+and retention facilities. Do not invent an action or execution wrapper for
+presentation. At existing command-tool returns and required same-handle result
+collection, forward new nonempty `presentation.commentary` before the next wait
+or result inspection. A tool transcript alone is not chat commentary. An
+available start or material-progress observation must not be replaced by plain
+"Advance is running" prose.
+
+If the transport itself buffers output or supplies no live events, disclose
+that visibility limit and retain start-unconfirmed until actual evidence arrives;
+use the existing buffered-result presentation then. This limitation authorizes
+no live-log reader, extra poll, display-only AI turn or runtime probe. Apply a
+corrected stream path to subsequent invocations only; do not replay, restart,
+signal or add a second collector to an already-running call for display repair.
+
 ### Chat progress indicators
 
+Direct installed-CLI calls, including calls whose streams are redirected to
+retained files, must forward the same invocation indicators as helper calls.
+The AI activity renderer deliberately does not supply them. Before launch and
+at actual start/return/error boundaries, use the bundled
+`command_activity_record(event, context, observation)` and forward its nonempty
+`presentation.commentary` verbatim in the existing commentary update. Plain
+"waiting for Advance" prose, raw tool output or an AI actor marker is insufficient.
+Use only observations already delivered by the owned command; add no probes,
+runtime calls, execution wrapper or display ledger. Do not read live logs solely
+to recover a marker. Buffered start/end observations are displayed together as
+`出力一括受信`, without claiming live delivery.
+
+This stateless renderer consumes the existing command progress event names:
+`invocation`, `runtime-event`, `sbt-event`, `process-terminated`, `response`,
+plus observed `launch-failed`, `response-invalid` or `unknown`. The finite helper attaches its
+presentation to those same progress records. Direct callers supply the same
+observed facts; a `response` is eligible only after actual process termination
+and response receipt. A zero exit without a decoded response has no successful
+handback presentation. `running` heartbeats and unchanged SBT `waiting` events
+have empty commentary. Do not forward them or create a new AI turn for display.
+Only real start/end and substantive check/cancellation/error changes are shown.
+
+The optional display-only `intervalPosition=opening|middle|closing` describes
+an already selected paired `complete` transport. Intermediate preparation,
+Submit and process events do not close that outer interval; its final Advance
+response does. This field authorizes no operation and stores no control state.
+Absent position means a single call. AI dispatch/work/result rendering remains
+separate, with no automatic gear prefix.
+
 Use a bold standalone heading for preparation, start and return, with a compact
-detail line underneath. Prefix every intervening progress commentary with the
-running marker. Text labels carry the meaning alongside icons; these are chat
+detail line underneath. Prefix runtime invocation progress with the running
+marker. AI work and result commentary retain their own actor markers, even
+when sm-workflow owns the overall Workflow. Text labels carry the meaning alongside icons; these are chat
 presentation, not ANSI/background styling, runtime states or a new control ledger.
 Keep the gear `⚙️` as the sm-workflow actor marker in every phase, including
 running, return, error and unknown; status colors and interval arrows supplement it.
@@ -870,8 +1160,9 @@ AI actor commentary is generated by the existing bundled Python helper's
 and parent waiting. The caller forwards its generated commentary verbatim in
 existing dispatch, progress and result handling. A handback, dispatch or result
 collection does not establish active parent work. If parent and child both work,
-feed their separate actual observations. Keep existing gear intervals, messages,
-acceptance values, counts and retained links unchanged.
+feed their separate actual observations. Keep actual command start/end intervals
+separate from those AI observations. Workflow ownership alone never opens or
+extends a running interval. Preserve acceptance values, counts and retained links.
 
 Add no AI invocation, agent, continuation prompt, polling/status query, dedicated
 wait loop, persisted display state or periodic update for presentation. The
@@ -885,6 +1176,54 @@ At an already authorized send and actual result, pass `actor=chat`, the actual
 destination `chatTitle`, purpose and existing reference through the
 [AI activity API](#program-generated-ai-activity). Forward
 `presentation.commentary` verbatim. An opaque chat ID is not a title.
+For an outgoing request this is the destination; for an incoming result it is
+the sender, paired with the original request context. For a result reply sent
+by the delivery owner, name the original requester as destination. Do not reuse
+an unrelated chat's activity context to manufacture a matched result.
+
+In the same ordinary commentary, add an explicit direction line using known
+chat titles: `送信：このチャット → <destination>｜<request/result>｜依頼ID=<id>｜<purpose>`
+or `受信：<sender> → このチャット｜<request/result/blocker>｜依頼ID=<id>｜<summary>`.
+Before sending say `送信予定`; after the actual tool result distinguish `送信済み`,
+`送信失敗` and `送信結果不明`. A send acknowledgment confirms transport only, not
+destination work or acceptance. For incoming work requests, label them as requests,
+not completed results. Missing titles/IDs are explicitly unknown; retain an
+available chat ID as a secondary locator. Do not query chat status merely to fill
+display fields. Include available titles and return identity in the outgoing
+handoff so the receiver can display the actual source without another lookup.
+
+After each actual send outcome and each received request/result/blocker, display
+`依頼完了待ち（このチャットからの依頼）` followed by a compact list derived from existing
+request/continuation records. Each row contains destination title, request ID or
+existing reference, short purpose and last known result state. This is the list
+of this caller's outgoing requests, not all machine-wide work or a list of chats
+currently executing. Multiple requests to one chat remain distinguishable.
+
+- A confirmed request send adds that request as `結果待ち（実行状況は未確認）`.
+  A failed send is not a delivered request; show the failure separately. An
+  uncertain send is shown separately as `送信結果不明`, with no automatic resend.
+- A final result removes only its matching request from completion-waiting and
+  shows `結果受信・採用未確認` separately until normal runtime adoption decides it.
+  A progress message or blocker is not completion: retain the request, with the
+  observed blocker/human-recovery status where applicable. Duplicate results do
+  not remove other requests or trigger another acknowledgment/reply.
+- Receiving a new incoming request does not add it to this caller's outgoing
+  waiting list. Sending a result reply likewise creates no new waiting entry.
+- If there are no pending requests in the retained context, show `なし（把握範囲）`.
+  If context is incomplete, say `一覧は把握範囲のみ／他は未確認`; never infer an empty
+  global list or destination completion from silence or elapsed time.
+
+The direction and list are companion text to the existing generated activity
+marker, not a change to its output or the sm-workflow gear interval. Include the
+pending list in the dispatch turn's final handoff as well, so ending the turn does
+not hide it inside collapsed commentary. Use existing context only: no new display
+ledger, AI call, runtime Operation, thread scan, status query, timer or monitoring.
+An event-driven list is a retained observation, not a live dashboard. Follow the
+[waiting mode selection](#cross-chat-waiting-mode-selection). Default Luna progress
+checks serve the authorized wait, not additional scans to populate this list.
+Explicitly enabled parent reporting is the bounded exception for forwarding
+already observed destination status; it does consume parent tokens.
+
 Actual working/waiting observations already available may be passed too; silence,
 elapsed time or the parent's wait do not establish destination activity.
 Keep delayed/buffered observation timing honest in the surrounding existing
@@ -893,27 +1232,85 @@ ends the ongoing runtime interval.
 
 ### Subagent call display
 
+Before each authorized spawn/resume tool call, the caller must display an
+ordinary user-facing commentary starting with `subagent依頼：`. Give the short
+request name, selected task name or existing agent ID, role, purpose, owned scope
+and expected result. This announces intent, not confirmed execution: a new ID
+is unknown until returned. For a parallel batch, show each assignment before
+dispatch. Tool payloads, terminal output and a later result marker do not
+substitute for this announcement. This ordinary pre-call prose is separate from
+the program-generated observed activity markers and requires no new API event.
+
 All six native skills use the [AI activity API](#program-generated-ai-activity)
 at actual authorized dispatch/resume and result handling, including reuse and an
 already authorized alternate. Keep purpose, role, Session/Step and the real
 returned agent ID together. A role is not an agent ID. Retain the returned
 `activityContext` in the caller's ordinary continuation context for the paired
 result; this is neither a display ledger nor an admission receipt.
+Repeat the announced request name and actual agent identity in the surrounding
+dispatch/result update. At receipt, summarize the actual outcome and any known
+remaining issue without implying inspection or native acceptance. A failed or
+unconfirmed spawn/resume gets an explicit failure/unknown update for that same
+request, rather than disappearing from the visible sequence. Preserve existing
+context only; add no display ledger, status query or agent invocation for this.
 Unknown metadata never blocks work or grants a new call, retry or acceptance.
+
+### AI activity quick start
+
+Use this display contract in both sm-* callers and cncf-* development callers,
+including parent-only investigation, editing and repair. Forward the generated
+`presentation.commentary` in the ordinary chat update at the actual work,
+wait and result boundaries. An `Agent Use` block or a tool's JSON/stdout output
+alone does not deliver the icon message to the user. The separate-chat
+`progress_reporting=OFF` setting disables periodic destination reports only;
+it does not disable these actor transitions or result receipt messages.
+
+Resolve the selected skill directory before locating the existing shared
+renderer: installed skills may be symlinks. In this workstation layout,
+`Path.home() / ".agents/skills/cncf-command-execution"` resolves to the directory
+under `common/codex/skills`. Its `parents[1] / "scripts/native-goal-command.py"`
+is the renderer; there is no per-skill `scripts/native-goal-command.py`.
+Use the already available caller module where possible. For a local Python
+invocation, use the configured uv-managed Python and import the module without
+running its business-command entry point. Replace the example purpose with the
+current actual work:
+
+```python
+from pathlib import Path
+import runpy
+
+skill = (Path.home() / ".agents/skills/cncf-command-execution").resolve()
+caller = runpy.run_path(str(skill.parents[1] / "scripts/native-goal-command.py"))
+record = caller["ai_activity_record"](
+    "working", {"actor": "parent", "purpose": "スキルのAI作業表示を確認"},
+    {"started": True})
+print(record["presentation"]["commentary"])
+```
+
+The caller then copies that returned commentary verbatim into its user-facing
+commentary message, together with its normal progress explanation. This example
+reports only the parent's observed work; it creates no Session, agent, file,
+monitor or workflow Operation. Supply other known context through the same API;
+unknown model, Session or Step values do not prevent display. Use actual child
+identities and observations for subagent dispatch/work/receipt; do not create a
+child or poll one just to exercise its icon. Rendering failure is reported in
+the ordinary update and does not block the authorized work.
 
 ### Caller activity transitions
 
 The caller supplies activity facts at its existing work boundaries; the renderer
-cannot observe the parent's work by itself. This applies to all six sm-* skills,
-including a resumed turn and work performed without any subagent dispatch.
+cannot observe the parent's work by itself. This applies to sm-* and cncf-*
+callers, including a resumed turn and work without any subagent dispatch.
 
 | Existing boundary | Observation and presentation |
 | --- | --- |
 | Parent begins a real investigation, planning, edit or repair segment | Send `actor=parent, event=working` and its purpose; forward generated commentary in the first normal progress update, before continuing that segment's tools/work. |
+| Before an authorized subagent spawn/resume call | Display `subagent依頼：` with the planned assignment and expected result; do not claim a returned ID or actual start yet. |
 | Subagent dispatch/resume returns | Forward the dispatch indication with actual identity and available model/effort provenance. A generic `Agent Use` block does not replace it. |
 | Existing dispatch output or worker message confirms active execution | Also forward `actor=subagent, event=working` with that identity in the same ordinary update, producing **🤖 ✨ AI作業中**. No extra status query; an acknowledgement without a start observation stays dispatch-only. |
 | Parent waits while a child works | Preserve the child's observed activity and distinguish the parent's wait; do not label the parent working merely because it is collecting/waiting. |
-| Actual result, wait or runtime control transfer | Reflect that transition in the ordinary update; preserve existing gear intervals and the actual actor. A received child result is not native acceptance. |
+| Actual result arrives | Forward the receipt marker at the first caller opportunity, before file/diff inspection or Submit; follow [receipt ordering](#result-receipt-inspection-and-runtime-acceptance). |
+| Actual wait or runtime control transfer | Reflect that transition in the ordinary update; preserve existing gear intervals and the actual actor. |
 
 The parent can directly report its own current task activity without claiming
 access to hidden reasoning, model identity or runtime status. Missing Session,
@@ -943,6 +1340,46 @@ No extra AI invocation, status poll, recurring monitor or assertion of unobserve
 activity is permitted. Existing generic agent-disclosure fields may accompany
 this generated presentation but cannot replace the actor marker in sm-* work.
 
+### Result receipt, inspection and runtime acceptance
+
+These are three different observations. Apply this order to subagent results
+and, when applicable, separate-chat results:
+
+1. **Result received**: at the first caller opportunity after an actual result
+   is delivered, render `event=result` with the retained actor/request identity
+   and forward `presentation.commentary` immediately. Do this before reading
+   result files, inspecting diffs, deciding acceptance or sending a runtime
+   Submit. Any first prose statement that the worker returned must include the
+   receipt indication in that same update. Do not defer it until inspection.
+2. **Content inspected**: after the actual artifact/diff checks, report
+   `内容確認済み` and the relevant conclusion in the normal progress update.
+   An inspection finding is reported as such; it does not undo receipt or prove
+   validation success or native acceptance. Do not emit another receipt marker.
+3. **Runtime accepted**: report `runtime受理済み` only after the runtime's actual
+   attributable acceptance response. Submit dispatch or transport completion is
+   not acceptance. Rejected, failed or unknown acceptance stays explicit.
+
+A worker's `completed` means that worker finished its assigned work. It does
+not mean tests passed, review passed, the Step/Phase closed, or the runtime
+accepted the submission. At receipt, keep native `accepted=unknown` unless
+actual native acceptance is already known; never map a worker's generic
+acceptance flag into native acceptance. A known negative native response can
+be reported as false, but pending submission alone is not rejection.
+
+A result queued during a tool call is displayed when the parent next receives
+control; do not poll or interrupt an existing operation for display. Preserve
+any independently observed live sm-workflow invocation; AI receipt never
+starts or extends its gear interval. If displaying an already-handled result
+late, say `受領済み結果の表示（遅延）` in the surrounding update instead of claiming
+it just arrived. Repeated views of the same result do not create a new receipt.
+A completion-only status without a returned result is not result receipt.
+
+The existing renderer already supplies the receipt marker. This is caller
+ordering, not a new business Operation, workflow state or display event type.
+Use existing updates for inspection and acceptance; add no AI call, monitoring,
+extra validation, wait or persistent display ledger. Preserve Sessions, history,
+repair counters, existing results and the native submission/acceptance contract.
+
 ### Program-generated AI activity
 
 The bundled `scripts/native-goal-command.py` owns deterministic AI presentation.
@@ -963,7 +1400,7 @@ Input schema:
 | `context.actor` | `parent\|subagent\|chat`. |
 | `context.action` | `start\|resume`, when applicable. |
 | Context scope | `purpose`, `role`, `sessionId`, `stepId`, `agentId`, `chatTitle`, `reference` (an existing locator only). |
-| `context.runtimeControl` | `sm-workflow\|parent\|unknown`; this describes existing control, never transitions it. |
+| `context.runtimeControl` | `sm-workflow\|parent\|unknown`; retained workflow-management context, not proof of a live invocation or current executing actor. |
 | `context.model`, `context.reasoningEffort` | `{value: nonempty-string, provenance: configured\|requested\|observed}`. Unobservable inherited settings remain unknown. |
 | `observation` | Only `agentId`, `chatTitle`, `model`, `reasoningEffort` (the latter two require `provenance=observed`), `outcome`, `summary`, `reason`, boolean `accepted` and boolean `started`. |
 
@@ -997,16 +1434,23 @@ working requires an actual work observation. Result, failure and unknown remain
 distinct. Chat records use the actual chat title and their own dispatch, work,
 wait, result, failure and unknown markers. Purpose, role, identity, Session/Step
 and model/effort provenance are explicit even when unknown. Results show explicit
-or unknown outcome/accepted; available reason/summary is bounded. An ongoing
-`runtimeControl=sm-workflow` prefixes the existing gear interval and
-`制御：sm-workflow`; a child result never implies parent handback. Other control
-values assert no transition. Existing gear before/after rules remain unchanged.
+or unknown outcome/accepted; available reason/summary is bounded.
+`runtimeControl=sm-workflow` adds only `進行管理：sm-workflow` to the detail
+line. AI commentary never adds a gear/running prefix or asserts control transfer.
+Only actual command lifecycle observations create the separate gear start/end
+interval. When an invocation returns an AI request, end that invocation interval
+and display the requested AI work under its own actor; a still-open Workflow or
+Session does not mean the runtime process is running. Concurrent live runtime
+work may retain its own separately evidenced progress indication. Local display
+helper execution is not a sm-workflow invocation. No extra status probes are needed.
 
 Actual caller integration (shown inside the caller that already owns its normal
 authorized dispatch and result handling; `forward_commentary` is its existing
 chat commentary output, not a new tool/service):
 
 ```python
+# The existing caller first announces the planned request in ordinary chat.
+forward_commentary(request_announcement)  # request name, task/role, scope, expected result
 # Existing authorized dispatch/resume returns its actual response.
 spawn_response = authorized_dispatch(existing_request)
 display = native_caller.observe_ai_activity(
@@ -1016,6 +1460,7 @@ forward_commentary(display["presentation"]["commentary"])  # VERBATIM
 activity_context = display["activityContext"]  # normal continuation context
 
 # Later, the same existing result handler receives the actual result.
+# Render/forward receipt BEFORE artifact reads, diff inspection or runtime Submit.
 display = native_caller.observe_ai_activity(
     "result", activity_context,
     {"agentId": actual_result.agent_id, "summary": actual_result.summary})
@@ -1112,6 +1557,55 @@ Product installation follows
 a development-workstation checkout. File installation and actual newly loaded
 agent behavior remain separate verification boundaries.
 Installed `sm-workflow` command calls remain parent-owned with scoped escalation.
+
+### Ordinary sm semantic role resolution
+
+This is the owning contract for sm-goal-phase and other sm-* callers resolving
+runtime-issued semantic work. The route is:
+
+`issued context + retained selection -> sm caller adapter -> selected sm role -> actual result -> native admission`
+
+1. Consume the actual issued work, required result type and retained selection.
+   Preserve profile/mapping revision, disposition, selected role/model/effort,
+   independent context and the captured alternate policy. A pending assignment
+   is not reclassified from today's configuration, role naming or a future plan.
+2. For admitted INLINE, keep the issued inline route. For DELEGATED, use the
+   corresponding installed `sm_workflow_*` role through the existing sm caller
+   tools. If an adopted version supports a selected-profile launch adapter, use
+   only that sm-owned adapter and captured contract. Newly issued GoalPhase work
+   explicitly capturing `standard-2026-11-01` uses the product-owned
+   `goal-phase-dispatch.py` and its captured mapping as described by sm-goal-phase.
+   Legacy work retains its registered role and original alternate policy. Never
+   override a fixed role or reinterpret pending work through a new mapping.
+3. Do not use `cncf-agent-execution` as the normal role resolver, including when
+   intending to keep an sm role name. Its model-selection tables, Terra/Sol
+   fallback, custom-first/equivalent-profile rules, CNCF Manifest preparation,
+   verifiers and runners are not this caller's contract. Shared TOML storage and
+   generic collaboration tools do not imply shared workflow policy.
+4. Apply availability/alternate handling only from the retained sm execution
+   contract. Preserve historical policy versions; do not import CNCF rules or
+   infer permission to replay an executed/uncertain attempt. Keep genuine gaps
+   attributable without fabricating new Human gates or a replacement Session.
+5. Observe actual launch/result identity and independent-review scope, return
+   the declared typed result, and let normal native admission decide acceptance.
+   Receipt, inspection and native acceptance remain separate observations.
+
+If a caller unnecessarily read a CNCF skill but launched the correct sm role
+under its issued contract, correct subsequent routing guidance and continue.
+Do not discard an otherwise valid review, re-Start/re-Submit, reset counters or
+repeat successful checks merely because of that reference. Investigate an actual
+profile/context mismatch through the existing sm result path; this rule does not
+bless mismatched execution as valid.
+
+An expressly authorized independent cncf-* maintenance producer may use
+`cncf-delegate-task` and CNCF agents for its own delivered repair. Its requester
+continues the original sm Session and normal acceptance. Producer authorization
+is not authority to move the consumer's ReviewStep/RepairStep to CNCF. A repository
+named sm-workflow or a dependency defect alone does not select the special route.
+
+This clarification introduces no new resolver, wrapper, dispatch ledger, model
+probe, poll, AI call or permission step. Preserve active reviewers, ongoing work,
+Session/Plan, complete history, repair counts and valid verification evidence.
 
 ## R1 — First issued input and retained scope
 
@@ -1276,7 +1770,7 @@ certifies no reviewer, operator consent, authenticated provider, effect authorit
 or semantic success. Newly issued Repository native conflict, independent native
 merge review and affected-file native merge repair use explicit classifications
 and canonical mapping/origin described in
-[Repository native execution](repository-sync-native-execution.md). The existing
+[Repository native execution](https://github.com/asami/sm-workflow/blob/fa18abd2c53c1b525d355d240f0c7520c68034d8/docs/spec/repository-sync-native-execution.md). The existing
 review/repair pair remains required when the key is present; additive optional
 conflict must be explicit CODING for a fresh mapped conflict. Omission preserves
 unmapped conflict behavior, while explicit null or malformed input rejects.
@@ -1285,7 +1779,7 @@ issues and completions retain their original requirement and host Session;
 new configuration binds only a genuinely new issue. Missing mapped classes or
 dispositions still reject. Fresh Split partition/scope DESIGN and reasoning
 ANALYSIS now consume the explicit finite input in
-[Split native execution](split-phase-native-execution.md). Their inherited
+[Split native execution](https://github.com/asami/sm-workflow/blob/fa18abd2c53c1b525d355d240f0c7520c68034d8/docs/spec/split-phase-native-execution.md). Their inherited
 independent-review obligation stays intact; saved issues and retained Sessions
 are reused through normal completion even after mapping replacement. Human
 and other unbound Repository operations retain their original obligations. A
@@ -1343,14 +1837,14 @@ Record selects the original retained Session even after mapping changes.
 The [finite caller contract](native-goal-command-task.md) covers separate
 `prepare-split-input`, `start-split`, `advance-split` and the three semantic
 actions. Passive Split Start preparation follows
-[native Start preparation](native-host-start-preparation.md) and the
-[normal preparation contract](normal-host-preparation-operations.md), including
+[native Start preparation](https://github.com/asami/sm-workflow/blob/fa18abd2c53c1b525d355d240f0c7520c68034d8/docs/spec/native-host-start-preparation.md) and the
+[normal preparation contract](https://github.com/asami/sm-workflow/blob/fa18abd2c53c1b525d355d240f0c7520c68034d8/docs/spec/normal-host-preparation-operations.md), including
 the current generated input's required participant among its nine fields.
 It grants no storage, Start or consent. Split semantic metadata requires object
 result with only optional completionFacts/executionEvidence and rejects
 resultReference because native owns its assigned destination. Native Human,
 effects, independent review and Preview/Apply remain separate under the
-[common loop](common-workflow-operation-loop.md); no helper performs them.
+[common loop](https://github.com/asami/sm-workflow/blob/fa18abd2c53c1b525d355d240f0c7520c68034d8/docs/spec/common-workflow-operation-loop.md); no helper performs them.
 
 Each action makes one ordinary call in a fresh selected output directory. Along
 with `response.json` and `stderr.log`, it retains the actual Session string as
@@ -1746,5 +2240,42 @@ acquisition and UTF-8 decoding before unchanged semantic/current-assignment
 admission. The `submit-repository-repair` caller forwards the URI unread with
 unchanged result reference, facts and execution evidence, as conflict Submit
 already does. No other helper action gains Resource result transport.
+
+## Retained responses and prepared imports
+
+The current public caller returns compact control summaries and exact owner
+references. Follow [Workflow response references](workflow-response-artifact-references.md)
+for availability, provenance and acquisition; display control output without
+expanding full historical bodies. This extends transport while preserving local
+waiting-mode, reporting, activity-display and actual-call interval rules.
+
+When an assigned semantic body is represented by `retainedWork`, perform one
+explicit `native-goal-command.py --action read-work --request <control-artifact>`
+with the ordinary executable/runtime-root/task/output arguments, or use its
+actual `WorkflowRetainedWorkService.readWorkflowRetainedWork` reference. Preserve
+the detail wrapper (`availability`, exact `reference`, original `response`);
+the dispatch and submission adapters consume it directly. Shared evidence
+preparation can receive the exact owner `resource` instead of a copied full
+envelope. Do not choose a newer revision, inspect private stores or replay
+Start/Advance/accepted Submit to reconstruct content. Legacy complete Requests
+remain usable; unavailable, foreign or mismatched detail remains a real failure.
+
+Normal importer preparation may return `retainedImport` after confirmed storage.
+Read it through `NativeWorkflowPreparationService.readPreparedImport` and pass
+that unchanged complete importer to the existing trusted import route. The
+bundled ordinary Goal Human completion caller performs this read before Submit,
+retaining its normal visible call interval. Explicit `--preparationFormat
+legacy-full` is a selected lower-level compatibility format, not an automatic
+fallback after failed/unknown retention. Prepared output grants no execution,
+review, Human or acceptance authority.
+
+For an authorized configured checkout list, use
+`RepositorySyncService.syncRepositoryDirectories` and retain its aggregate
+Session/result reference; see [directory-list synchronization](repository-sync-directory-list.md).
+Use the actual `ConfigurationRequired` Session/revision with
+`refreshRepositoryDirectoryConfiguration` after correcting normal host settings.
+The runtime owns traversal, partial results and effect recovery. Explicit
+single-repository/lower-level operations remain available without an AI-owned
+per-directory execution loop or automatic discovery of additional repositories.
 
 A GoalTask supplemental validation direction does not grant or preflight SBT execution. Configure the derived additional ordinal workspaces and fixed typed programs; normal CNCF admission occurs at the separate Advance. See [GoalTask supplemental validation continuation](goal-task-validation-continuation.md).

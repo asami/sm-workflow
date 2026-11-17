@@ -177,6 +177,8 @@ lazy val root = project
         "docs/spec/goal-phase-dependency-source-revision.md",
         "docs/spec/repository-sync-validation-continuation.md",
         "docs/spec/repository-sync-runtime-orchestration.md",
+        "docs/spec/repository-sync-directory-list.md",
+        "docs/spec/workflow-response-artifact-references.md",
         "docs/spec/goal-phase-validation-metadata.md",
         "docs/spec/native-goal-command-task.md",
         "docs/spec/runtime-caller-format-migration.md",
@@ -191,7 +193,7 @@ lazy val root = project
         if (!source.isFile) sys.error("Missing component-owned skill contract source: " + source)
         source -> relativepath
       }
-      val agents = Seq("analysis", "design", "implementation", "repair", "review").map { role =>
+      val agents = Seq("analysis", "design", "implementation", "repair", "review", "chat_waiter").map { role =>
         val relativePath = "agents/sm_workflow_" + role + ".toml"
         val source = baseDirectory.value / relativePath
         if (!source.isFile) sys.error("Missing component-owned agent source: " + source)

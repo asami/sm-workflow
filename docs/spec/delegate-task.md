@@ -7,6 +7,11 @@ Public skill: [sm-delegate-task](../../skills/sm-delegate-task/SKILL.md), packag
 Finite caller: [public operations and host bindings](native-delegate-task-caller.md).
 Source packaging does not establish actual installation.
 
+Ordinary issued semantic work follows the shared
+[sm caller role-resolution contract](native-host-execution.md#ordinary-sm-semantic-role-resolution).
+An independent cncf-* maintenance producer is a separately authorized route;
+its model/fallback/Manifest rules never replace the consumer's retained sm work.
+
 ## Independent entry, shared execution
 
 `sm-delegate-task` supplies an authorized request to an existing destination chat
@@ -79,6 +84,16 @@ periodic polling or progress-only chat messages manage waiting or icons. Initial
 6.8 scope is one admitted request to an available selected existing chat. Durable
 multi-request FIFO and busy-destination scheduling remain in Phase 7; do not
 interrupt a different task or claim FIFO support from this minimum route.
+
+Cross-chat waiting defaults to [active-Goal Luna waiting](native-host-execution.md#active-goal-luna-wait).
+The requester retains its active Goal and Session, waits without unrelated work,
+and receives correlated completion or actionable attention. Luna checks every two
+minutes. Parent progress reporting defaults OFF; explicit ON enables reports at
+2/4/8/10-minute intervals and consumes parent tokens. The user can switch reporting
+ON/OFF during waiting without restarting the waiter or destination request.
+Explicit **Luna待機なし** / **notification-only** selects turn ending and authorized
+reply-based continuation instead. Follow [mode selection](native-host-execution.md#cross-chat-waiting-mode-selection),
+retain the admitted request and Sessions, and do not automatically retry delivery.
 
 ## Runtime-owned validation scope
 

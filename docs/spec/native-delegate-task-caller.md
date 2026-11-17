@@ -4,6 +4,11 @@ Date: 2026-11-05
 Owner: Phase 6.8 C5/D4. This contract describes the existing public operations;
 it adds no scheduler, command pipeline or caller-owned Workflow.
 
+Ordinary issued semantic work follows the shared
+[sm caller role-resolution contract](native-host-execution.md#ordinary-sm-semantic-role-resolution).
+An independent cncf-* maintenance producer is a separately authorized route;
+its model/fallback/Manifest rules never replace the consumer's retained sm work.
+
 ## Start and issued work
 
 Write the adopted `DelegateTaskInput` to an absolute local `file:` URI. Its fields
@@ -156,6 +161,15 @@ effects. All its Human and worker facts are SPECIFICATION-OWNED; it establishes
 no actual consumer choice, full delivery or application result.
 
 ## Transport and adoption
+
+Apply [waiting mode selection](native-host-execution.md#cross-chat-waiting-mode-selection).
+Default to Luna waiting with the existing parent Goal active; the parent performs
+no destination polling. Progress reporting defaults OFF; when explicitly ON,
+forward Luna reports at 2/4/8/10-minute intervals and re-enter the same wait.
+Support live reporting ON/OFF through the same waiter. Adopt only the actual correlated result,
+not a progress snapshot. Explicit Luna待機なし / notification-only ends the requester
+turn and relies on the authorized result reply. Neither choice changes public
+DTOs, native authority, acceptance, existing Sessions or execution history.
 
 `DelegateTaskDeliveryService.observeDelegateTaskDelivery --input <json>` takes
 `sessionId`, `event`, `sourceReference`, optional `destinationSessionId`, optional
