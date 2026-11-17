@@ -1,6 +1,6 @@
 /**
  * @since   Oct. 27, 2026
- * @version Nov.  6, 2026
+ * @version Nov. 17, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -409,6 +409,56 @@ final class BoundedWorkNativeOutcomeSpec extends AnyWordSpec with Matchers with 
             _ = unresolved shouldBe empty
           } yield ()
         }})
+      }
+    }
+
+    "return the saved terminal projection on the first mechanical Advance and recollect it without replay" in {
+      for (projection <- Vector("available", "missing-evidence", "missing-journal")) {
+        Given("a nonterminal Assess checkpoint whose selected validation receipts are already retained")
+        val directory = root(); prepare(directory)
+        _with_runtime_(directory, "Outcome", hostParameters = parameters(directory)) { (_, _, _, project) =>
+          project(call => for {
+            observed <- G.observeC(call.core)
+            candidate <- candidateC(call.core, observed.head)
+            h = host(directory).copy(
+              evidence = if (projection == "missing-evidence") None else Some(evidence),
+              journal = if (projection == "missing-journal") None else Some(journal))
+            pending = state(false, "Assess").copy(candidate = Some(candidate),
+              semanticReference = None, automaticCount = 3, ordinaryCount = 2)
+            session = "fixture-first-terminal-" + projection
+            seeded <- seedC(StandaloneFixNativeRun, h, session,
+              Payload(pending, h.root, "main", observed.head), call.core)
+            _ = When("one ordinary Advance performs assessment and reaches its actual terminal boundary")
+            first <- StandaloneFixNativeRun.advanceC(session, h, seeded._1, call.core)
+            current <- currentC(seeded._2, session, call.core)
+            retained <- StandaloneFixNativeRun.loadPayloadC(seeded._2, session, current.revision.value, call.core)
+            inline <- first.state.get.toJsonStringC
+            _ = Then("the first response contains the exact saved references/warning and unchanged prior receipts/counts")
+            _ = first.kind shouldBe "Terminal"
+            _ = io.circe.parser.decode[S.State](inline).toOption shouldBe Some(retained.state)
+            _ = retained.state.stage shouldBe "NoChange"
+            _ = retained.state.receipts shouldBe pending.receipts
+            _ = retained.state.automaticCount shouldBe 3
+            _ = retained.state.ordinaryCount shouldBe 2
+            _ = retained.state.repairControl shouldBe pending.repairControl
+            _ = retained.state.evidenceReferences.size shouldBe (if (projection == "missing-evidence") 0 else 1)
+            _ = retained.state.projectionWarning shouldBe (projection match {
+              case "missing-evidence" => Some("Common Evidence projection is not installed")
+              case "missing-journal" => Some("Common Journal projection is not installed")
+              case _ => None
+            })
+            second <- StandaloneFixNativeRun.advanceC(session, h, seeded._1, call.core)
+            after <- currentC(seeded._2, session, call.core)
+            original <- StandaloneFixNativeRun.loadPayloadC(seeded._2, session, seeded._3.revision.value, call.core)
+            _ = take(first.toRecord().toJsonStringC) shouldBe take(second.toRecord().toJsonStringC)
+            _ = after shouldBe current
+            _ = after.history.take(seeded._3.history.size) shouldBe seeded._3.history
+            _ = original.state shouldBe pending
+            _ = Files.exists(directory.resolve("check-calls")) shouldBe false
+            _ = Files.exists(directory.resolve("stage-calls")) shouldBe false
+            _ = commitCalls(directory) shouldBe 0L
+          } yield ())
+        }
       }
     }
 

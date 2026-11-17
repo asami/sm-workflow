@@ -285,3 +285,43 @@ cases remain UNEXECUTED/DoNotDiscover and need actual normal explicit selection;
 default FULL alone will not prove them. Normal Compile/FULL, required selected
 qualification, independent review and local closing remain parent-owned and
 pending. No full-Phase checkbox, native acceptance, new issue or saving is claimed.
+
+
+## P8-04 authored boundary — 2026-11-18
+
+Issued work `ordered-implementation:989` revision `990` retains the selected
+legacy `standard@1` / `CodingProgrammingDeep` context and the fresh Step repair
+count 0/10. P8-03 remains normally completed at `947bb910`; its actual 1/10
+history and both explicit-only REMOTE cases remain retained for P8-05.
+
+Rows **3, 24–28** now have the authored [compact continuation contract](../spec/phase8-compact-continuation.md).
+The existing public worker projection, retained detail and strict pre-Submit
+refusals from RSP-1 are reused. `native-goal-command.py --presentation summary`
+adds a compact display with exact existing raw-response and Session-route links;
+it leaves complete detail in ordinary artifacts and forwards only actual issued
+next operations. Omitted presentation retains compatibility detail output.
+No new semantic DTO, executor, control loop, private store or transport verdict
+is introduced. The same finite completion owner returns at actual Wait/Request,
+and the enclosing host retains the actual active Goal/wait owner in its handoff.
+Desktop automatic compaction/wakeup remains best effort and unqualified.
+
+The existing bounded native owner now reloads its saved payload before
+terminal-producing candidate/assessment recursion. The authored
+`BoundedWorkNativeOutcomeSpec` regression starts before terminal assessment,
+compares first inline state to persisted state and passive collection, exercises
+Evidence/Journal absence, and retains original history, receipts and counters
+without check/staging/commit replay. Python caller specifications pair compact
+Wait/Request cases and invalid-presentation pre-execution refusal. The public
+source-launcher delivery Resource specification pairs valid dispatch/large result
+intake with ambiguous and crossed-target refusal plus unchanged recollection.
+The reported installed delivery `namedinputrequired` observation remains a
+precise unqualified route limitation: current handler already selects/reads
+`inputResource`, so no source regression or global unsupported route is inferred.
+
+This substantial implementation was assigned through the actual issued fresh
+subagent context and returns a bounded public worker artifact for the original
+Session, not a reconstructed transcript. No implementation-worker validation,
+review, Submit acceptance or commit was performed. Parent-owned normal validation
+and independent review, installed negative/terminal observations, active-Goal
+portable wait/handoff qualification and final P8-05 acceptance remain due.
+All 30 original completion requirements remain unchecked.

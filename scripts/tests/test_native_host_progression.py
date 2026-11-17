@@ -190,6 +190,59 @@ class NativeHostProgressionSpecification(unittest.TestCase):
             native.telemetry = telemetry.call_args_list
         return status, observations, diagnostic.getvalue(), calls, native
 
+    def test_compact_complete_retains_wait_boundary_and_lossless_detail_without_another_advance(self):
+        # Given an accepted result followed by a real-shaped UNKNOWN boundary,
+        # including a large retained detail that must not become inline control.
+        output = self.output()
+        waiting = self.advance_response("Wait")
+        waiting.update(state={"stage": "ValidationIntent", "automaticCount": 3, "ordinaryCount": 2},
+                       retainedDetail={"opaqueSemanticField": "x" * 50000},
+                       repairProgress={"automatic_count": 3, "limit": 10})
+        route = self.route.read_bytes()
+        # When the existing finite owner is asked for compact presentation,
+        status, observed, diagnostic, calls, native = self.call(output, [self.submit_response(), waiting],
+            argv=self.args(output) + ["--presentation", "summary"])
+        # Then it returns at Wait after one Submit and one Advance, retaining
+        # the actual Session and all detail for portable handoff/collection.
+        self.assertEqual(status, 0, diagnostic)
+        self.assertEqual(native.call_count, 2)
+        summaries = [json.loads(line) for line in observed.getvalue().splitlines()]
+        self.assertTrue(all(value["recordType"] == "native-command-summary" for value in summaries))
+        boundary = summaries[-1]
+        self.assertEqual(boundary["kind"], "Wait")
+        self.assertEqual(boundary["state"]["stage"], "ValidationIntent")
+        self.assertEqual(boundary["outerSessionId"], self.outer_id)
+        self.assertEqual(boundary["sessionResource"], self.route.as_uri())
+        self.assertEqual(boundary["detailResource"], (output / "advance/response.json").as_uri())
+        self.assertNotIn("nextOperation", boundary)
+        self.assertNotIn("retainedDetail", boundary)
+        self.assertLess(len(observed.getvalue()), 2500)
+        self.assertEqual(json.loads((output / "advance/response.json").read_text()), waiting)
+        self.assertEqual(self.route.read_bytes(), route)
+
+    def test_compact_request_exposes_only_the_actual_issued_next_operation(self):
+        output = self.output()
+        requested = self.advance_response()
+        requested.update(submit_operation=GOAL_PAIR[0], submit_session_id=self.outer_id,
+                         result_type=GOAL_PAIR[1], work={"full": "x" * 50000})
+        status, observed, diagnostic, calls, native = self.call(output, [self.submit_response(), requested],
+            argv=self.args(output) + ["--presentation", "summary"])
+        self.assertEqual(status, 0, diagnostic)
+        boundary = json.loads(observed.getvalue().splitlines()[-1])
+        self.assertEqual(boundary["nextOperation"], GOAL_PAIR[0])
+        self.assertEqual(boundary["resultType"], GOAL_PAIR[1])
+        self.assertEqual(boundary["submitSessionId"], self.outer_id)
+        self.assertEqual(json.loads((output / "advance/response.json").read_text()), requested)
+        self.assertEqual(native.call_count, 2)
+
+    def test_invalid_presentation_refuses_before_native_execution(self):
+        output = self.output()
+        status, observed, diagnostic, calls, native = self.call(output, [],
+            argv=self.args(output) + ["--presentation", "opaque-private-protocol"])
+        self.assertEqual(status, 2)
+        self.assertEqual(native.call_count, 0)
+        self.assertFalse((output / "response.json").exists())
+
     def expected_command(self, service, operation, pairs):
         return [str(self.executable), "--runtime-root", str(self.runtime_root),
                 "command", SERVICES[service] + operation, *pairs, "--json"]

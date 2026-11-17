@@ -769,6 +769,17 @@ state/link filtering, use the shared semantic-entry contract above.
 
 ## Caller execution handoff
 
+For compact normal caller control, select `--presentation summary` on the existing
+`native-goal-command.py` action. Carry its actual `sessionResource`,
+`detailResource`, issued next operation and the enclosing host's active Goal and
+wait owner through meaningful-boundary handoff. Fetch the exact existing detail
+before semantic work; never submit the display summary. Omitted presentation
+keeps compatibility detail output. A Wait/UNKNOWN response is not retry authority
+or automatic Goal continuation. Follow the
+[portable continuation contract](../../docs/spec/phase8-compact-continuation.md);
+desktop automatic compaction/wakeup remains best effort and unqualified.
+
+
 The [native host execution contract](../../docs/spec/native-host-execution.md)
 belongs to the existing caller. It consumes the actual public issued scope and
 original canonical configuration, retains the execution Session for pending/restart

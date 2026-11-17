@@ -532,7 +532,8 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
           case Left(reason) => Consequence.success(s.copy(stage = "Human", message = reason))
         }
         saved <- saveC(h, store, intent, payload.copy(state = next), core)
-        result <- _progress_c(h, definition, store, saved, payload.copy(state = next), core, depth + 1)
+        retained <- loadPayloadC(store, saved.identity.value, saved.revision.value, core)
+        result <- _progress_c(h, definition, store, saved, retained, core, depth + 1)
       } yield result
       case "SelectedValidationCandidateReady" => for {
         intent <- saveC(h, store, record, payload.copy(state = s.copy(stage = "SelectedValidationCandidateIntent")), core)
@@ -545,7 +546,8 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
         }
         retained = payload.copy(state = next)
         saved <- saveC(h, store, intent, retained, core)
-        response <- _progress_c(h, definition, store, saved, retained, core, depth + 1)
+        persisted <- loadPayloadC(store, saved.identity.value, saved.revision.value, core)
+        response <- _progress_c(h, definition, store, saved, persisted, core, depth + 1)
       } yield response
       case "CandidateContinuationReady" if delegation => for {
         _ <- DelegateTaskCandidateContinuation.currentC(h, record, payload, core)
@@ -557,7 +559,8 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
         }
         retained = payload.copy(state = next)
         saved <- saveC(h, store, intent, retained, core)
-        result <- _progress_c(h, definition, store, saved, retained, core, depth + 1)
+        persisted <- loadPayloadC(store, saved.identity.value, saved.revision.value, core)
+        result <- _progress_c(h, definition, store, saved, persisted, core, depth + 1)
       } yield result
       case "Validate" => for {
         _ <- freshC(payload, core)
@@ -622,7 +625,8 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
         _ <- if (s.recoveredValidation.isEmpty) freshC(payload, core) else Consequence.unit
         next <- S.assessC(s)
         saved <- saveC(h, store, record, payload.copy(state = next), core)
-        result <- _progress_c(h, definition, store, saved, payload.copy(state = next), core, depth + 1)
+        retained <- loadPayloadC(store, saved.identity.value, saved.revision.value, core)
+        result <- _progress_c(h, definition, store, saved, retained, core, depth + 1)
       } yield result
       case "Repair" | "Review" | "Implement" | "DeliveryAcceptance" => _issue_c(h, store, record, payload, core)
       case "RecordsReady" if task => recordsC(h, store, record, payload, core)

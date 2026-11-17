@@ -22,6 +22,7 @@ final class SkillResourcePackagingSpec extends AnyWordSpec with Matchers with Gi
   private val _contract_paths = Vector(
     "docs/spec/native-host-execution.md",
     "docs/spec/semantic-result-submission.md",
+    "docs/spec/phase8-compact-continuation.md",
     "docs/spec/development-journal-semantic-entries.md",
     "docs/spec/runtime-owned-local-publication.md",
     "docs/spec/caller-information.md",

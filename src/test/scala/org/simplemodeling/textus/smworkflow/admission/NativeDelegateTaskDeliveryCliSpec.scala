@@ -19,8 +19,8 @@ import RepositorySyncNativeMergeValidation as R
 import scala.jdk.CollectionConverters.*
 
 /** Public source-launcher transport with specification-owned return data.
-  * @since Nov. 7, 2026
-  * @version Nov. 7, 2026
+  * @since   Nov.  7, 2026
+  * @version Nov. 17, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
@@ -81,8 +81,22 @@ final class NativeDelegateTaskDeliveryCliSpec extends AnyWordSpec with Matchers 
       def observation(event: String, result: Option[org.goldenport.record.Record]) = V.DelegateTaskObservationInput(
         started.sessionId, event, V.WorkflowArtifactReference("SPECIFICATION-OWNED-" + event, "1"), Some(destination),
         result, None, "SPECIFICATION-OWNED transport observation")
-      call("DelegateTaskDeliveryService", "observeDelegateTaskDelivery", Vector("--input", json(observation("dispatch-observed", None))))
-        .business[V.DelegateTaskView]
+      val dispatch = observation("dispatch-observed", None)
+      val dispatchFile = root.resolve("dispatch-observation.json")
+      Files.writeString(dispatchFile, json(dispatch))
+      val dispatched = call("DelegateTaskDeliveryService", "observeDelegateTaskDelivery",
+        Vector("--inputResource", dispatchFile.toUri.toASCIIString)).business[V.DelegateTaskView]
+      // Transport ambiguity and a crossed destination refuse before observation
+      // effects. Exact recollection keeps the original Session and counters.
+      call("DelegateTaskDeliveryService", "observeDelegateTaskDelivery",
+        Vector("--input", json(dispatch), "--inputResource", dispatchFile.toUri.toASCIIString)).exitCode should not be 0
+      val crossedFile = root.resolve("crossed-dispatch.json")
+      Files.writeString(crossedFile, json(dispatch.copy(destinationSessionId = Some("crossed-destination"))))
+      call("DelegateTaskDeliveryService", "observeDelegateTaskDelivery",
+        Vector("--inputResource", crossedFile.toUri.toASCIIString)).exitCode should not be 0
+      val recollected = call("DelegateTaskDeliveryService", "observeDelegateTaskDelivery",
+        Vector("--inputResource", dispatchFile.toUri.toASCIIString)).business[V.DelegateTaskView]
+      DelegateTaskRequesterRoutingFixture.state(recollected) shouldBe DelegateTaskRequesterRoutingFixture.state(dispatched)
       val requester = take(DelegateTask.inputC(request))
       val producerInput = requester.copy(delegation = requester.delegation.map(_.copy(role = "destination")),
         ownedPaths = requester.ownedPaths :+ "src/extra.scala", sourceReferences = requester.sourceReferences :+ ContextReference("specification-correction", "1"))

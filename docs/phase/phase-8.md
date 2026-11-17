@@ -1159,3 +1159,17 @@ The selected RepositorySync prerequisite is defined by the
 [Session workspace contract](../spec/repository-sync-session-workspaces.md).
 Validation, independent review and installed qualification remain pending;
 the full requirements and unchecked completion items above remain in force.
+
+
+## P8-04 authored compact continuation boundary — 2026-11-18
+
+The issued P8-04 implementation (`ordered-implementation:989`, revision `990`,
+Session `a38c308c60a36de8c7b33336ca8641c7`) authors compact caller presentation,
+existing retained detail links, and first-inline/saved terminal consistency
+through the existing bounded runtime owner. See the
+[portable boundary contract](../spec/phase8-compact-continuation.md) and
+[requirement evidence map](../notes/phase8-requirement-evidence-map.md#p8-04-authored-boundary--2026-11-18)
+for rows 3 and 24–28, paired executable specifications and actual limitations.
+No worker-run validation, independent acceptance, installed adoption or Phase
+completion is claimed. The original completion requirements remain unchanged
+and unchecked; parent-owned validation/review and P8-05 qualification remain due.

@@ -152,7 +152,7 @@ def parse_options(argv):
     """Accept literal named pairs only, including no duplicate options."""
     require(len(argv) % 2 == 0, "arguments must be named value pairs")
     options = {}
-    known = BASE_OPTIONS | set().union(*ACTION_OPTIONS.values())
+    known = BASE_OPTIONS | {"presentation"} | set().union(*ACTION_OPTIONS.values())
     for key, value in zip(argv[::2], argv[1::2]):
         require(isinstance(key, str) and key.startswith("--"), "expected named argument")
         name = key[2:]
@@ -164,12 +164,14 @@ def parse_options(argv):
     require(BASE_OPTIONS <= options.keys(), "missing common argument")
     action = options["action"]
     require(action in ACTION_OPTIONS, "unsupported action")
-    permitted = BASE_OPTIONS | ACTION_OPTIONS[action]
+    permitted = BASE_OPTIONS | ACTION_OPTIONS[action] | {"presentation"}
     optional = {"proposal"} if action in {"start", "start-split", "start-repository"} else {"reference"} if action == "record-execution" else set()
     if action in {"start", "advance"}:
         optional.add("profile")
     if action == "complete":
         optional = {"human-provenance"}
+    optional.add("presentation")
+    require(options.get("presentation", "detail") in {"summary", "detail"}, "unsupported presentation")
     required = permitted - optional
     require(options.keys() <= permitted, "action-inapplicable argument")
     require(required <= options.keys(), "missing action argument")
@@ -740,6 +742,47 @@ def exchange_context(command, runtime_root, output, outer_id, request=None):
     if request is not None:
         context["issuedObservation"] = observation_projection(request)
     return context
+
+
+def display_response(response, context, presentation="summary"):
+    """Display control information; the existing raw response remains lossless.
+
+    This projection is presentation only, never worker input or a Submit DTO.
+    It neither advances a waiting Session nor interprets transport as acceptance.
+    """
+    if presentation == "detail":
+        display_observation(response)
+        return
+    summary = {"recordType": "native-command-summary",
+               "detailResource": Path(context["responseReference"]).as_uri(),
+               "outerSessionId": context.get("outerSessionId")}
+    if "sessionReference" in context:
+        summary["sessionResource"] = Path(context["sessionReference"]).as_uri()
+    for field in ("sessionId", "kind", "outcome", "accepted", "message", "summary", "status", "repairProgress"):
+        value = native_field(response, field) if field == "sessionId" else response.get(field, response.get("repair_progress") if field == "repairProgress" else None)
+        if value is not None:
+            summary[field] = display_value(value)
+    for field in ("retainedWork", "retainedImport"):
+        reference = native_field(response, field)
+        if reference is not None:
+            summary[field] = reference
+    state = response.get("state")
+    if isinstance(state, dict):
+        summary["state"] = {name: display_value(state[name]) for name in
+                            ("stage", "automaticCount", "ordinaryCount", "projectionWarning") if name in state}
+    # Only expose operations actually issued by the runtime. Wait/UNKNOWN has no
+    # invented retry or automatic wakeup operation; its raw boundary is retained.
+    operation = native_field(response, "submitOperation")
+    if operation is not None:
+        summary["nextOperation"] = operation
+        summary["submitSessionId"] = native_field(response, "submitSessionId")
+        summary["resultType"] = native_field(response, "resultType")
+    elif isinstance(summary.get("retainedWork"), dict):
+        reference = summary["retainedWork"]
+        operation = reference.get("readOperation", reference.get("read_operation"))
+        if operation is not None:
+            summary["nextOperation"] = operation
+    display_observation(summary)
 
 
 def response_progress(response, context):
@@ -1315,6 +1358,8 @@ def complete(options, executable, runtime_root, task_fd, output_fd):
     output = explicit_path(options["output"])
     submit_context = exchange_context(command, runtime_root, output, outer_id, request)
     advance_context = exchange_context(following, runtime_root, output / "advance", outer_id)
+    for context in (submit_context, advance_context):
+        context["sessionReference"] = str(explicit_path(options["task"]) / SESSION_FILE)
     submit_context["intervalPosition"] = "opening" if preparation is None else "middle"
     advance_context["intervalPosition"] = "closing"
     try:
@@ -1360,7 +1405,7 @@ def complete(options, executable, runtime_root, task_fd, output_fd):
                 else:
                     require("status" not in prepared and isinstance(prepared.get("datastore"), list),
                             "preparation requires confirmed detail or historical complete importer output")
-                display_observation(prepared)
+                display_response(prepared, prepare_context, options.get("presentation", "detail"))
                 response_progress(prepared, prepare_context)
                 require(route_record(task_fd) == {"family": "GoalPhase", "sessionId": outer_id},
                         "task routing changed after preparation; retain output and stop")
@@ -1382,7 +1427,7 @@ def complete(options, executable, runtime_root, task_fd, output_fd):
         else:
             require(isinstance(response.get("accepted"), bool) and nonblank(response.get("outcome")),
                     "Submit response lacks boolean accepted or outcome")
-        display_observation(response)
+        display_response(response, submit_context, options.get("presentation", "detail"))
         response_progress(response, submit_context)
         require(task_completion or (response["accepted"] is True and response["outcome"] == "accepted"),
                 "Submit was not acknowledged as accepted")
@@ -1391,7 +1436,7 @@ def complete(options, executable, runtime_root, task_fd, output_fd):
                 "sessionId": outer_id}, "task routing changed after accepted Submit; retain output and stop")
         _text, response = native_call(following, runtime_root, advance_fd, advance_context)
         acknowledge(advance_action, response, outer_id, task_fd, advance_fd)
-        display_observation(response)
+        display_response(response, advance_context, options.get("presentation", "detail"))
         response_progress(response, advance_context)
     finally:
         os.close(advance_fd)
@@ -1474,6 +1519,8 @@ def execute(options):
             context = exchange_context(command, runtime_root, output,
                                        route_record(task_fd)["sessionId"] if session_id is not None else None,
                                        request)
+            if session_id is not None:
+                context["sessionReference"] = str(task / SESSION_FILE)
             if options["action"] == "submit":
                 route = route_record(task_fd)
                 projected = project_before_submit(command, options, executable, runtime_root, task_fd, output_fd, output,
@@ -1483,8 +1530,11 @@ def execute(options):
             text, response = native_call(command, runtime_root, output_fd, context)
             acknowledge(options["action"], response, session_id, task_fd, output_fd)
             response_progress(response, context)
-            sys.stdout.write(text)
-            sys.stdout.flush()
+            if options.get("presentation", "detail") == "detail":
+                sys.stdout.write(text)
+                sys.stdout.flush()
+            else:
+                display_response(response, context)
 
 
 def main(argv=None):
