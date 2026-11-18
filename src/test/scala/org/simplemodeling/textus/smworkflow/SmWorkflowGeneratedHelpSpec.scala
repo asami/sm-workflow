@@ -58,6 +58,7 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
       "describeGoalPhaseReleaseRepairContinuation", "recoverGoalPhaseReleaseRepairContinuation",
       "describeGoalPhaseReviewPurposeRepair", "admitGoalPhaseReviewPurposeRepair",
       "describeGoalPhaseCompletionPolicy", "adoptGoalPhaseCompletionPolicy",
+      "describeGoalPhaseQualification", "selectGoalPhaseQualification",
       "describeGoalPhaseStepReview", "requestGoalPhaseStepReview",
       "describeGoalPhaseRepairPolicy", "adoptGoalPhaseRepairPolicy",
       "describeGoalPhaseFailedPhaseRepair", "adoptGoalPhaseFailedPhaseRepair",

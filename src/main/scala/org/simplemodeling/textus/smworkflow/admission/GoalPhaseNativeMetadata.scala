@@ -12,6 +12,7 @@ import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.RuntimeContext
 import org.goldenport.cncf.processexecution.SbtScenarioParameters.Value
+import org.goldenport.cncf.processexecution.SbtValidationDiscovery as SD
 import org.goldenport.cncf.validation.{ValidationDiscoveryV1 as D, ValidationMetadataV1 as M,
   ValidationOperationBindingV1 as B, ValidationInputsV1 as I}
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
@@ -25,13 +26,13 @@ import GoalPhaseSliceValidationPlan as L
   * metadata interpretation, query semantics and exact operation binding.
   * @since   Oct. 18, 2026
   *  version Oct. 20, 2026
-  *  version Nov.  5, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeMetadata {
   final case class Profile(scope: D.DiscoveryScope, query: D.SelectionQuery,
-    supplemental: Vector[D.OperationReference], source: Option[L.Source] = None)
+    supplemental: Vector[D.OperationReference], source: Option[L.Source] = None,
+    buildCheckIdentity: Option[String] = None)
   final case class Batch(checkIdentity: String, ordinal: Int, profile: Profile,
     inventory: D.Inventory, references: Vector[D.OperationReference], plan: Option[L.Plan] = None)
 
@@ -191,12 +192,14 @@ private[smworkflow] object GoalPhaseNativeMetadata {
     Set("standardFramework", "includeSlow", "explicitSuites"))(queryValid)
 
   object Profile {
-    given Encoder[Profile] = deriveEncoder[Profile].mapJson(_omit(_, "source"))
+    given Encoder[Profile] = deriveEncoder[Profile].mapJson(_omit(_, "source", "buildCheckIdentity"))
     private val _decoder: Decoder[Profile] = deriveDecoder
     given Decoder[Profile] = _strict(Decoder.instance(cursor => for {
       value <- _decoder.tryDecode(cursor)
       source <- optional[L.Source](cursor, "source")
-    } yield value.copy(source = source)), Set("scope", "query", "supplemental", "source"), Set("source"))(profileValid)
+      build <- optional[String](cursor, "buildCheckIdentity")
+    } yield value.copy(source = source, buildCheckIdentity = build)),
+      Set("scope", "query", "supplemental", "source", "buildCheckIdentity"), Set("source", "buildCheckIdentity"))(profileValid)
   }
   object Batch {
     given Encoder[Batch] = deriveEncoder[Batch].mapJson(_omit(_, "plan"))
@@ -233,7 +236,61 @@ private[smworkflow] object GoalPhaseNativeMetadata {
   def profileValid(value: Profile): Boolean = value != null && _scope_valid(value.scope) && queryValid(value.query) &&
     value.supplemental != null && value.supplemental.size <= 16 && value.supplemental.forall(referenceValid) &&
     value.source != null && value.source.forall(source => L.sourceValid(source) &&
-      value.query == D.SelectionQuery() && value.supplemental.isEmpty)
+      value.query == D.SelectionQuery() && value.supplemental.isEmpty) &&
+    value.buildCheckIdentity != null && value.buildCheckIdentity.forall(hostIdentityValid) &&
+    !(value.source.nonEmpty && value.buildCheckIdentity.nonEmpty)
+
+  /** The captured check list, rather than a semantic result, owns build routing. */
+  def buildReferencesValid(requested: Vector[Check]): Boolean = requested != null && requested.forall { check =>
+    check != null && check.metadata != null && check.metadata.forall { profile =>
+      profileValid(profile) && profile.buildCheckIdentity.forall { identity =>
+        val matches = requested.filter(c => c != null && c.identity == identity)
+        matches.size == 1 && matches.head.kind == WorkflowSbtValidation.Kind.TestCompile &&
+          matches.head.metadata.isEmpty && matches.head.dependency.isEmpty &&
+          matches.head.ordinal < check.ordinal && requested.indexOf(matches.head) < requested.indexOf(check) &&
+          requested.takeWhile(_.metadata.isEmpty).contains(matches.head)
+      }
+    }
+  }
+
+  private def _binding(profile: Profile): SD.Binding = {
+    val artifact = profile.scope.artifacts.head
+    SD.Binding(artifact.componentIdentity, artifact.artifactIdentity, artifact.artifactRevision, artifact.packagePrefix)
+  }
+  def buildBindingMatches(profile: Profile, build: SD.Build, ordinal: Int): Boolean =
+    profileValid(profile) && build != null && build.workspaceId != null.asInstanceOf[WorkspaceId] &&
+      build.workspaceId.value == "sm-workflow-repository-validation-" + ordinal &&
+      build.binding == _binding(profile) && profile.scope.artifacts.forall(a =>
+        SD.Binding(a.componentIdentity, a.artifactIdentity, a.artifactRevision, a.packagePrefix) == build.binding)
+  def buildMatches(profile: Profile, build: SD.Build, ordinal: Int): Boolean =
+    buildBindingMatches(profile, build, ordinal) && build.products != null && build.products.nonEmpty &&
+      build.fullClasspath != null && build.products.forall(build.fullClasspath.contains) &&
+      profile.scope.artifacts.forall(a =>
+        SD.Binding(a.componentIdentity, a.artifactIdentity, a.artifactRevision, a.packagePrefix) == build.binding &&
+          build.products.contains(a.root) && build.fullClasspath.contains(a.root))
+
+  /** Only actual native receipts can supply this call-local discovery input. */
+  def buildsC(requested: Vector[Check], receipts: Vector[RepositorySyncNativeMergeValidation.Receipt]):
+      Consequence[Map[String, SD.Build]] =
+    if (!buildReferencesValid(requested) || receipts == null) _invalid("Managed discovery build references are crossed")
+    else requested.filter(_.metadata.exists(_.buildCheckIdentity.nonEmpty)).foldLeft(
+      Consequence.success(Map.empty[String, SD.Build])) { (prior, check) => for {
+      values <- prior
+      profile = check.metadata.get
+      buildcheck = requested.find(_.identity == profile.buildCheckIdentity.get).get
+      receipt <- receipts.filter(r => r != null && r.identity == buildcheck.identity) match {
+        case Vector(value) if RepositorySyncNativeMergeValidation.productSuccessful(value, WorkflowSbtValidation.Kind.TestCompile) &&
+            value.sbt.exists(f => f.kind == WorkflowSbtValidation.Kind.TestCompile &&
+              f.outcome == WorkflowSbtValidation.Outcome.Succeeded) && value.processObservation.nonEmpty => Consequence.success(value)
+        case _ => _invalid("Managed discovery requires its actual preceding successful TestCompile receipt: " + buildcheck.identity)
+      }
+      workspace <- _workspace_c(buildcheck.ordinal)
+      build <- SD.decode(workspace, _binding(profile), receipt.processObservation.get) match {
+        case SD.Result.Available(value) if buildMatches(profile, value, buildcheck.ordinal) => Consequence.success(value)
+        case SD.Result.Unavailable(reason) => _invalid("Managed discovery build unavailable: " + reason)
+        case _ => _invalid("Managed discovery build differs from the selected artifact root or identity")
+      }
+    } yield values.updated(check.identity, build) }
   def logicalIdentity(host: String, reference: D.OperationReference): String = "metadata:" +
     Vector(host, reference.component, reference.specification, reference.operation).map(value => value.length + ":" + value).mkString
   def declaredIdentities(checks: Vector[Check]): Vector[String] = checks.map(c => c.hostIdentity.getOrElse(c.identity)).distinct
@@ -272,11 +329,18 @@ private[smworkflow] object GoalPhaseNativeMetadata {
 
   /** Only the fresh Validation boundary calls this loader-owning entry point. */
   def prepareC(requested: Vector[Check], parent: ClassLoader,
-    captured: Map[String, L.Plan] = Map.empty): Consequence[(Vector[Check], Vector[Batch])] =
+    captured: Map[String, L.Plan] = Map.empty,
+    builds: Map[String, SD.Build] = Map.empty): Consequence[(Vector[Check], Vector[Batch])] =
     if (parent == null || !GoalPhaseNativeValidation.Policy("metadata-selection", 1, requested).validateC.isSuccess)
       _invalid("Native metadata requires literal host bindings and the actual component ClassLoader")
     else if (captured == null || captured.keySet != requested.filter(_.metadata.exists(_.source.nonEmpty)).map(_.identity).toSet)
       _invalid("Captured Slice plans must exactly match the selected source-bound host checks")
+    else if (builds == null || !buildReferencesValid(requested) ||
+        builds.keySet != requested.filter(_.metadata.exists(_.buildCheckIdentity.nonEmpty)).map(_.identity).toSet ||
+        requested.filter(_.metadata.exists(_.buildCheckIdentity.nonEmpty)).exists(check =>
+          !buildMatches(check.metadata.get, builds(check.identity),
+            requested.find(_.identity == check.metadata.get.buildCheckIdentity.get).get.ordinal)))
+      _invalid("Managed profiles require their exact authenticated build inputs")
     else requested.foldLeft(Consequence.success((Vector.empty[Check], Vector.empty[Batch]))) { (prior, check) => prior.flatMap {
       case (checks, batches) => check.metadata match {
         case None => Consequence.success((checks :+ check, batches))
@@ -284,7 +348,8 @@ private[smworkflow] object GoalPhaseNativeMetadata {
           request <- _request_c(profile, check.ordinal, captured.get(check.identity))
           selection <- {
             try {
-              val loader = new URLClassLoader(profile.scope.artifacts.map(_.root.toUri.toURL).toArray, parent)
+              val roots = builds.get(check.identity).map(_.fullClasspath).getOrElse(profile.scope.artifacts.map(_.root))
+              val loader = new URLClassLoader(roots.map(_.toUri.toURL).toArray, parent)
               try F.discoverC(request, loader).flatMap(_.requireRunnableC)
               finally loader.close()
             } catch { case NonFatal(error) => _invalid("Native metadata discovery loader failed: " + error.getClass.getSimpleName) }
@@ -303,7 +368,7 @@ private[smworkflow] object GoalPhaseNativeMetadata {
         !hostIdentityValid(c.identity) || c.kind == null || c.ordinal < 1 ||
         c.metadata == null || c.hostIdentity == null || c.operation == null || c.hostIdentity.nonEmpty || c.operation.nonEmpty ||
         c.metadata.exists(p => c.kind != WorkflowSbtValidation.Kind.TestOnly || !profileValid(p))) ||
-        !GoalPhaseValidationSubjects.structurallyValid(requested) ||
+        !GoalPhaseValidationSubjects.structurallyValid(requested) || !buildReferencesValid(requested) ||
         requested.exists(c => c.dependency.nonEmpty && c.metadata.nonEmpty) ||
         selected == null || selected.isEmpty || batches == null ||
         selected.exists(c => c == null || !runtimeIdentityValid(c.identity)) ||
@@ -343,7 +408,9 @@ private[smworkflow] object GoalPhaseNativeMetadata {
     }
 
   def operationC(check: Check, batches: Vector[Batch]): Consequence[B.BoundOperation] = for {
-    _ <- validateRuntimeC(batches.flatMap(_expanded), batches)
+    _ <- if (batches != null && !batches.contains(null) && batches.map(_.checkIdentity).distinct.size == batches.size)
+      batches.foldLeft(Consequence.unit)((prior, batch) => prior.flatMap(_ => bindC(batch).map(_ => ())))
+      else _invalid("Selected metadata operation has crossed retained batches")
     batch <- batches.find(b => check.hostIdentity.contains(b.checkIdentity)).map(Consequence.success)
       .getOrElse(_invalid("Selected metadata operation has no exact retained batch"))
     operations <- bindC(batch)
@@ -352,6 +419,14 @@ private[smworkflow] object GoalPhaseNativeMetadata {
     }.map(pair => Consequence.success(pair._1))
       .getOrElse(_invalid("Selected metadata operation differs from its retained exact identity"))
   } yield operation
+
+  def validateBuildReceiptsC(selected: Vector[Check], batches: Vector[Batch],
+    receipts: Vector[RepositorySyncNativeMergeValidation.Receipt]): Consequence[Unit] = {
+    val requested = selected.map(check => check.hostIdentity.flatMap(host => batches.find(_.checkIdentity == host))
+      .map(batch => Check(batch.checkIdentity, batch.ordinal, WorkflowSbtValidation.Kind.TestOnly, Some(batch.profile)))
+      .getOrElse(check)).distinct
+    buildsC(requested, receipts).map(_ => ())
+  }
 
   /** Structured projection only; callers supply already validated internal JSON. */
   def record(value: Json): Record = {

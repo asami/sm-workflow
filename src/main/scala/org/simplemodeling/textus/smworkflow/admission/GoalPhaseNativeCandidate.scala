@@ -25,8 +25,7 @@ import GoalPhaseDependencyValidation.given
   * An intent without its actual recorded result is retained, never replayed.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  *  version Nov.  9, 2026
-  * @version Nov. 10, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeCandidate {
@@ -502,11 +501,12 @@ private[smworkflow] object GoalPhaseNativeCandidate {
     }
     _ <- if (historical) store.primaryRepair.get.fact.failure.candidate.dependencySourceCapture
       .fold(Consequence.unit)(GoalPhaseDependencySourceRevision.freshnessC(store.core, _))
-      else store.dependencySourceScope.fold(Consequence.unit) { scope =>
-      store.dependencySourceDirection.filter(GoalPhaseDependencySourceRevision.scopeValid(_, scope))
-        .map(direction => GoalPhaseDependencySourceRevision.preflightC(store.core, direction, Some(scope)))
-        .getOrElse(F.invalid("source scope has no exact adopted direction"))
-    }
+      else store.dependencySourceDirection match {
+        case Some(direction) => GoalPhaseDependencySourceRevision.beforeInspectionC(store.core, direction,
+          store.controller.generation, store.dependencySourceScope)
+        case None if store.dependencySourceScope.nonEmpty => F.invalid("source scope has no exact adopted direction")
+        case None => Consequence.unit
+      }
     actual <- store.inspectC
     paths <- if (store.primaryRepair.nonEmpty) GoalPhasePrerequisitePrimaryRepair.repairSelectionC(store.d.candidatePaths,
       store.ownedPaths, actual.dirty, store.primaryRepair.get.fact.failure.excludedDirty)

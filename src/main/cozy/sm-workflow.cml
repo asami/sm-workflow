@@ -1606,6 +1606,59 @@ OperationResult
 | outcome | string | 1 |
 | message | string | 1 |
 
+## GoalPhaseQualificationDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+## GoalPhaseQualificationDescriptionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| target | record | 1 |
+| selectOperation | string | 1 |
+
+## GoalPhaseQualificationSelectionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | record | 1 |
+| checkIdentities | string | * |
+
+## GoalPhaseQualificationSelectionResult
+
+### EXTENDS
+
+OperationResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| accepted | boolean | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+
 ## GoalPhaseStepReviewDescriptionInput
 
 - input-kind :: COMMAND
@@ -2089,6 +2142,8 @@ OperationResult
 | assessment | org.goldenport.record.Record | ? |
 | assessmentJournal | JournalRecordingState | ? |
 | diagnostics | org.goldenport.record.Record | * |
+| qualification | org.goldenport.record.Record | ? |
+
 
 ## EvidenceReference
 
@@ -2357,6 +2412,8 @@ OperationResult
 | priorReviews | org.goldenport.record.Record | * |
 | dependencyValidations | org.goldenport.record.Record | * |
 | triageJudgment | org.goldenport.record.Record | ? |
+| qualification | org.goldenport.record.Record | ? |
+
 
 ## GoalPhaseCheckFailureContext
 
@@ -3907,6 +3964,14 @@ operation = GoalPhaseService.describeGoalPhaseCompletionPolicy
 
 operation = GoalPhaseService.adoptGoalPhaseCompletionPolicy
 
+#### describeGoalPhaseQualification
+
+operation = GoalPhaseService.describeGoalPhaseQualification
+
+#### selectGoalPhaseQualification
+
+operation = GoalPhaseService.selectGoalPhaseQualification
+
 #### describeGoalPhaseStepReview
 
 operation = GoalPhaseService.describeGoalPhaseStepReview
@@ -4084,6 +4149,11 @@ to = Validation
 on = candidate-observed
 
 #### Validation
+
+##### TRANSITION
+
+to = Validation
+on = qualification-selected
 
 ##### TRANSITION
 
@@ -4406,6 +4476,11 @@ to = PhaseValidation
 on = phase-candidate-observed
 
 #### PhaseValidation
+
+##### TRANSITION
+
+to = PhaseValidation
+on = qualification-selected
 
 ##### TRANSITION
 
@@ -8887,6 +8962,68 @@ GoalPhaseRepairPolicyAdoptionInput
 ###### TYPE
 
 GoalPhaseRepairPolicyAdoptionResult
+
+#### describeGoalPhaseQualification
+
+##### DESCRIPTION
+
+Passively describe the exact active unstarted Validation or PhaseValidation candidate and finite independently configured TestOnly metadata inventory. Refuse dependency source consumption, existing check intents/results, issued review, stale and crossed native frontiers. No execution or authority follows.
+
+Supply exactly one of input or inputResource through the existing authorized Workflow business Resource reader. A Resource carries the unchanged complete DTO and grants no effect authority.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseQualificationDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseQualificationDescriptionInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseQualificationDescriptionResult
+
+#### selectGoalPhaseQualification
+
+##### DESCRIPTION
+
+Retain the exact complete configured supplemental inventory in the same Session at unstarted native Validation. Preserve captured required checks and original accounting. Selection grants no program, source or process authority. Separate ordinary Advance executes original checks and the actual suffix, whose receipts participate in independent review and closing. Unknown, live, duplicate, stale, crossed and undeclared selections refuse. Dependency consumption remains separately source-owned and is unsupported by this bounded version.
+
+Supply exactly one of input or inputResource through the existing authorized Workflow business Resource reader. A Resource carries the unchanged complete DTO and grants no effect authority.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalPhaseQualificationSelectionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalPhaseQualificationSelectionInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalPhaseQualificationSelectionResult
 
 #### describeGoalPhaseStepReview
 

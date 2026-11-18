@@ -28,8 +28,7 @@ import GoalPhaseDevelopmentReconstruction as X
   * Native traversal, not these records, supplies historical authority. External
   * publication is provenance; no artifact adoption or publication happens here.
   * @since   Nov.  8, 2026
-  *  version Nov. 10, 2026
-  * @version Nov. 11, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
@@ -173,11 +172,60 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
     given Encoder[Origin] = deriveEncoder[Origin].mapJson(P.publicJson)
     given Decoder[Origin] = _closed(deriveDecoder, originValid)
   }
-  final case class Checkpoint(direction: R.Direction)
+  /** Runtime-derived continuation provenance, never another Human answer. */
+  final case class AuthorityReuse(previous: ContextReference, frontier: ContextReference,
+    publication: ContextReference)
+  object AuthorityReuse {
+    given Encoder[AuthorityReuse] = deriveEncoder
+    given Decoder[AuthorityReuse] = _closed(deriveDecoder, v => v != null &&
+      R.referenceValid(v.previous) && R.referenceValid(v.frontier) && R.referenceValid(v.publication))
+  }
+  private def _successor_reference(target: R.Target): ContextReference =
+    ContextReference(target.sessionId + ":same-purpose-canonical-source:" + target.sourceRevision, "1")
+
+  /** Snapshot changes are implementation conditions within this exact retained
+    * boundary. Current target construction still checks declarations, ancestry,
+    * actual publication, source inventory and configured process capabilities. */
+  private[admission] def authorityReuse(target: R.Target): Option[AuthorityReuse] = for {
+    origin <- target.canonicalOrigin
+    if origin.pending.isEmpty && origin.inspectionFrontier.isEmpty && targetValid(target)
+    prior <- origin.previousDirection.orElse(origin.originalDirection)
+    previous <- prior.target.canonicalOrigin
+    if R.directionValid(prior) && prior.participant == origin.participant &&
+      previous.componentInstance == origin.componentInstance && previous.participant == origin.participant &&
+      prior.target.sessionId == target.sessionId && prior.target.plan == target.plan &&
+      prior.target.step == target.step && prior.target.primaryBase == target.primaryBase &&
+      prior.target.completed == target.completed && previous.approvals == origin.approvals &&
+      prior.target.binding.identity == target.binding.identity &&
+      prior.target.binding.requester == target.binding.requester &&
+      prior.target.binding.dependency.identity == target.binding.dependency.identity &&
+      prior.target.binding.paths == target.binding.paths && prior.target.binding.checks == target.binding.checks &&
+      prior.target.proposal.mode == target.proposal.mode &&
+      prior.target.proposal.excludedPaths == target.proposal.excludedPaths &&
+      prior.target.proposal.coverage == target.proposal.coverage &&
+      previous.selection.publication.result.publication.request.target.identity ==
+        origin.selection.publication.result.publication.request.target.identity &&
+      previous.selection.publication.result.publication.request.target.component ==
+        origin.selection.publication.result.publication.request.target.component &&
+      BigInt(prior.target.sourceRevision) < BigInt(target.sourceRevision)
+  } yield AuthorityReuse(prior.directive, ContextReference(target.sessionId, target.sourceRevision),
+    origin.selection.publication.recollectionReference)
+
+  private[admission] def isAuthorityContinuation(direction: R.Direction): Boolean =
+    direction != null && authorityReuse(direction.target).nonEmpty &&
+      direction.directive == _successor_reference(direction.target) && direction.choice.contains(choice)
+
+  final case class Checkpoint(direction: R.Direction, authorityReuse: Option[AuthorityReuse] = None)
   object Checkpoint {
-    given Encoder[Checkpoint] = deriveEncoder
-    given Decoder[Checkpoint] = _closed(deriveDecoder,
-      v => v != null && R.directionValid(v.direction) && v.direction.target.canonicalOrigin.nonEmpty)
+    given Encoder[Checkpoint] = deriveEncoder[Checkpoint].mapJson(_.mapObject(fields =>
+      if (fields("authorityReuse").exists(_.isNull)) fields.remove("authorityReuse") else fields))
+    given Decoder[Checkpoint] = _closed(deriveDecoder, v => v != null && R.directionValid(v.direction) &&
+      v.direction.target.canonicalOrigin.nonEmpty && v.authorityReuse != null &&
+      (v.authorityReuse match {
+        case Some(receipt) => GoalPhaseCanonicalDependencySourceSuccession.authorityReuse(v.direction.target).contains(receipt) &&
+          v.direction.directive == _successor_reference(v.direction.target) && v.direction.choice.contains(choice)
+        case None => !v.direction.directive.identity.contains(":same-purpose-canonical-source:")
+      }))
   }
   val codec: WorkflowResultJsonV1.PayloadCodec[Checkpoint] = new WorkflowResultJsonV1.PayloadCodec[Checkpoint] {
     val typeIdentity = "GoalPhaseCanonicalDependencySourceSuccession"
@@ -678,21 +726,27 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
       input.sessionId, false, "deferred", "No canonical source direction was stored")) else for {
       actual <- _target_for_c(source, d, core, supplied.canonicalOrigin.get.selection)
       _ <- _check(actual == supplied, "canonical source target is stale or changed")
-      installation <- d.dependencySourceRevision.map(Consequence.success).getOrElse(
-        Consequence.securityPermissionDenied("canonical source requires independent Human evidence"))
-      _ <- installation.validateC
-      human = ContextReference(input.reference.identity, input.reference.revision)
-      binding <- R.bindingC(actual.canonicalOrigin.get.componentInstance, actual, input.choice, input.rationale,
-        source.session.participantIdentity, human)
-      _ <- installation.evidence.admitC(core, human, binding)
-      state <- source.controller.adoptCanonicalDependencySourceC(human)
-      direction = R.Direction(actual, human, source.session.participantIdentity, input.rationale, Some(input.choice))
+      reused = if (input.choice == choice && source.pending.isEmpty) authorityReuse(actual) else None
+      directive <- reused match {
+        case Some(_) => Consequence.success(_successor_reference(actual))
+        case None => for {
+          installation <- d.dependencySourceRevision.map(Consequence.success).getOrElse(
+            Consequence.securityPermissionDenied("canonical source requires independent Human evidence"))
+          _ <- installation.validateC
+          human = ContextReference(input.reference.identity, input.reference.revision)
+          binding <- R.bindingC(actual.canonicalOrigin.get.componentInstance, actual, input.choice, input.rationale,
+            source.session.participantIdentity, human)
+          _ <- installation.evidence.admitC(core, human, binding)
+        } yield human
+      }
+      state <- source.controller.adoptCanonicalDependencySourceC(directive)
+      direction = R.Direction(actual, directive, source.session.participantIdentity, input.rationale, Some(input.choice))
       entry = F.history(source.from, "phase." + state.stage.toString, _cause(source))
       _ <- source.pending match {
         case None => for {
           adapter <- source.session.storage.bindMechanicalC(F.advanceOperation, codec)
           _ <- adapter.executeC(WorkflowMechanicalTransition.Intent(d.configuration, _reference(source.from), source.from,
-            source.from.revision, entry, TypedValue(codec.typeIdentity, Checkpoint(direction))),
+            source.from.revision, entry, TypedValue(codec.typeIdentity, Checkpoint(direction, reused))),
             ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](()))(using core.executionContext)
         } yield ()
         case Some(pending) => for {
@@ -703,7 +757,7 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
             observed.continuation.status == ContinuationRuntimePersistence.Status.Available && observed.continuation.claimId.isEmpty &&
             observed.issued.current.isInstanceOf[WorkflowContinuation.WorkOrder[?]], "canonical pending work is live, claimed or changed")
           _ <- adapter.executeC(ContinuationIdentity(pending.continuation.identity), source.from.revision,
-            observed.entityRevision, source.from, entry, TypedValue(codec.typeIdentity, Checkpoint(direction)))(using core.executionContext)
+            observed.entityRevision, source.from, entry, TypedValue(codec.typeIdentity, Checkpoint(direction, reused)))(using core.executionContext)
         } yield ()
       }
     } yield V.GoalPhaseDependencySourceRevisionAdoptionResult(input.sessionId, true, "dependency-source-revision-adopted", R.message)
@@ -715,20 +769,22 @@ private[smworkflow] object GoalPhaseCanonicalDependencySourceSuccession {
       case None => for {
         adapter <- source.session.storage.bindMechanicalC(F.advanceOperation, codec)
         retained <- adapter.loadRetainedC(_reference(source.from))(using core.executionContext)
-      } yield retained.map(v => (v.receipt.payload.value.direction, v.receipt.next))
+      } yield retained.map(v => (v.receipt.payload.value, v.receipt.next))
       case Some(pending) => for {
         adapter <- source.session.storage.bindWorkOrderSupersessionC(F.completionOperation, S.inputCodec, codec)
         retained <- adapter.loadRetainedC(ContinuationIdentity(pending.continuation.identity), source.from.identity)(using core.executionContext)
         selected <- retained match {
-          case None => Consequence.success(Option.empty[(R.Direction, InstanceRecord)])
+          case None => Consequence.success(Option.empty[(Checkpoint, InstanceRecord)])
           case Some(v) => GoalPhaseNativeHistory.prefixC(source.session.current, v.receipt.nextRevision)
-            .map(record => Some((v.receipt.payload.direction, record)))
+            .map(record => Some((v.receipt.payload, record)))
         }
       } yield selected
     }
     result <- found match {
       case None => Consequence.success(Option.empty[Saved])
-      case Some((direction, record)) => for {
+      case Some((checkpoint, record)) => for {
+        _ <- _check(codec.decode(codec.encode(checkpoint)).contains(checkpoint), "retained canonical authority relation is invalid")
+        direction = checkpoint.direction
         _ <- _check(R.directionValid(direction), "retained canonical direction is invalid")
         t = direction.target
         o = t.canonicalOrigin.get

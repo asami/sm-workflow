@@ -1,5 +1,42 @@
 # Phase 8 completion evidence map
 
+## Formal release disposition — 2026-11-19
+
+The Human explicitly accepted a FORMAL Phase 8 local release without additional
+validation or review. The remaining unverified parts of **every original row
+1–30** below transfer to [P22-05](../phase/phase-22.md), with the original
+requirement text, partial evidence, finite residual scenario and exclusions
+retained. This is an exhaustive carryover, not a claim that all thirty rows pass.
+Their already assigned Phase 9, 13 and 11.2 responsibilities remain unchanged.
+Phase 22 qualification is not a retrospective condition of this accepted release.
+
+The retained bounded native validation has fourteen successful checks, including
+FULL 2,980 tests / 284 suites. It does not prove the excluded extended artifact
+replacement case or all conditions in these rows. The independent Step review
+returned `decision-needed`, not integrated Phase acceptance. Additional release
+validation and review are **NOT RUN — USER-APPROVED**. Existing PASS, failure and
+UNKNOWN observations retain their original scope and outcome.
+
+The actual native Session remains `Human`, with issue 8 unresolved and repair
+count 10/10. [P22-06](../phase/phase-22.md) owns formal-release/native-management
+reconciliation and an explicit unresolved-issue carryover route. No private
+terminal-state edit, counter reset, accepted-result resubmission or successful
+operation replay is part of this release. Earlier statements below describe
+their authored state; this section governs release disposition.
+
+## Human-directed allocation update — 2026-11-18
+
+Phase 8's performance/cost improvements remain required. The Human selected
+bounded current-Step completion and progression to the next Step, with difficult
+generalization/robustness/extended qualification transferred to
+[Phase 22](../phase/phase-22.md) and its [checklist](../phase/phase-22-checklist.md).
+Necessary current-use behavior and representative verification in the rows below
+remain Phase 8 obligations. A transferred extension is not PASS; this allocation
+neither force-closes Phase 8 nor declares a Step/native Plan complete. Existing
+P8-01–04 acceptance and earlier evidence retain their actual scope and are not
+replayed. Preserve Phase 8 -> 8.1 -> 9 -> 18, prioritizing quick progress to API
+delivery before Phase 22. No Session, failure/UNKNOWN or repair count is reset.
+
 Updated 2026-11-18 for selected Plan `phase-8-runtime-practical-closure-20261117`
 revision 1, native Session `a38c308c60a36de8c7b33336ca8641c7`.
 This inventory preserves all 30 [completion requirements](../phase/phase-8.md#completion)
@@ -7,6 +44,20 @@ verbatim. Every row remains unverified as a complete Phase 8 requirement until i
 residual connected acceptance and native review are recorded. A source contract,
 plan, prerequisite PASS or delivery record alone does not check a row.
 P8-01 owns this inventory; the owner column names subsequent acceptance work.
+
+Planning refinement, 2026-11-18: row 5's P8-05 residual now includes
+[failure-first repair validation](../phase/phase-8.md#p8-05-failure-first-repair-validation--selected-2026-11-18).
+Steps run focused tests only; Phase closing runs FULL. For failures in either
+scope, the runtime reruns failed tests with their prerequisites during repair.
+Repeat a broader focused set or FULL only for sufficiently broad repair impact;
+localized repairs reuse unaffected successes without a mandatory closing rerun.
+sm-workflow owns impact-based selection, execution and result reuse; the AI owns
+diagnosis and source repair. Verify both initial cadence and localized/broad
+repair cases, without a mandatory related-test stage.
+Retain attempt selections and applicable evidence. Include prerequisite correctness,
+resume/UNKNOWN and changed-candidate negative coverage. This is future P8-05
+work, not a change to in-flight P8-03 or its captured checks. All 30 completion
+requirements and their current acceptance status remain unchanged.
 
 Current P8-03 scope correction: required row 13 concerns approval reuse under
 trusted normal publication records and ordinary dependency resolution. The earlier
@@ -325,3 +376,52 @@ review, Submit acceptance or commit was performed. Parent-owned normal validatio
 and independent review, installed negative/terminal observations, active-Goal
 portable wait/handoff qualification and final P8-05 acceptance remain due.
 All 30 original completion requirements remain unchecked.
+
+## P8-05 authored finite qualification connection (unexecuted)
+
+`docs/design/phase8-qualification-connection.md` records the new same-Session
+optional host inventory, pre-check Wait, exact public description/selection and
+ordinary Advance execution. Captured required checks remain unchanged. Native
+validation and independent review retain the exact supplemental proof and
+combined actual receipts; this is not copied PASS or Phase acceptance. The v1
+source-consumption and original-metadata boundaries are explicit refusals, not
+optional dispositions of a required case.
+
+The two P8-03 REMOTE registrations have a finite feature selector that excludes
+the preserved historical Human episode registrations. The caller Python suite
+has an ordinary local Scala specification bridge using managed uv >=3.12. The
+new native qualification success/failure/reopen/refusal specifications still
+require actual parent-owned normal selection and execution. Current delegate
+Resource intake has RuntimeTestDeclaration and no DoNotDiscover annotation;
+retain its true previous nonexecution without inventing that cause.
+
+Rows 5–10, 13–14, 16, 24–30 still require the actual selected connected evidence,
+installed/current artifact adoption where required, portable active Goal/Session
+outcomes and final independent Phase review/closing. The qualification input
+artifact is a plan, not execution evidence. Prior P8-02/03/04 checks, reviews,
+closed commits and repair counts are preserved. No original requirement is
+checked off by this authorship, and no optional provider/server/Phase 9/13 or
+local-LLM result is asserted.
+
+P8-05 row 13 now has an authored prospective installed paired fixture under
+feature `component:sm-workflow / phase8-artifact-adoption-reuse` in
+`NativeGoalLaterSourcePublicationRepairCliSpec`. It uses real normal owner-bound
+publication/collect/latest and specification-owned normal adoption evidence,
+then changes only the consumer candidate and ordinary ScalaTest selection under
+unchanged original source/program authority. Source/Usage refusal and actual new
+normal publication supersession are required negatives. These fresh leaves
+exclude historical locators/modes and remain unexecuted. The previous local and
+in-memory PASS remains scoped evidence; it is not promoted to installed reuse
+acceptance. See `docs/design/phase8-qualification-connection.md` for exact names,
+inputs and boundaries. Original completion requirements remain unchecked.
+
+The P8-05 bounded outcome audit additionally corrects original-prefix comparison
+in native observed outcomes and initial Phase failed-context admission, retaining
+exact combined metadata/check evidence and actual native selection history.
+Authored local guard cases distinguish codec validity from authority; an authored
+native Phase suffix-failure case requires genuine repair issuance with its closed
+Step/history/allowance preserved. Q v1 explicitly refuses a Step policy permitting
+semantic triage before checks and rejects an actual qualified triage assessment;
+ordinary triage and the source-consumption-only StepTestReportRepair route remain
+unchanged. See the qualification contract for these precise limits. No new check
+PASS or Phase requirement completion is asserted.

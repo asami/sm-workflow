@@ -11,8 +11,7 @@ import org.goldenport.cncf.processexecution.*
 /** Actual typed SBT facts, without command or host-selection authority.
   * @since   Oct. 15, 2026
   *  version Oct. 25, 2026
-  *  version Nov.  6, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowSbtValidation {
@@ -128,8 +127,9 @@ private[smworkflow] object WorkflowSbtValidation {
           ((selection.exists(x => x != null && x.valid) && batch.isEmpty) || (selection.isEmpty && batch.nonEmpty)) && reason.isEmpty
         case Outcome.Failed => selection.isEmpty &&
           (reason.isEmpty || (kind == Kind.TestOnly && formalTestFailure(reason)))
-        case Outcome.Unverified => kind == Kind.TestOnly && selection.isEmpty &&
-          reason.exists(x => SbtTestSelectionFailure.values.exists(_.toString == x))
+        case Outcome.Unverified => selection.isEmpty &&
+          ((kind == Kind.TestOnly && reason.exists(x => SbtTestSelectionFailure.values.exists(_.toString == x))) ||
+            (kind == Kind.TestCompile && reason.contains("DiscoveryUnavailable") && mode.isEmpty && batch.isEmpty))
         case _ => selection.isEmpty && reason.isEmpty
       })
     def validateC: Consequence[Unit] = if (valid) Consequence.unit

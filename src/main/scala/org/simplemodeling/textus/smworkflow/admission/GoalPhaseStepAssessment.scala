@@ -10,7 +10,8 @@ import GoalPhaseNativeValidation as N
 /** Small PLAN-owned Step policy over actual native validation facts.
   * No provider selection, effect authority or replacement validation engine.
   * @since   Oct. 23, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseStepAssessment {
@@ -90,7 +91,7 @@ private[smworkflow] object GoalPhaseStepAssessment {
     _ <- if (payload.outcome.contains("passed") && payload.selected != null && payload.receipts != null &&
         payload.receipts.size == payload.selected.size && N.successful(payload.receipts, payload.selected)) Consequence.unit
       else invalid("assessment requires the complete actual successful selected checks")
-    selected = payload.selected.filter(_.dependency.isEmpty)
+    selected = GoalPhaseQualification.originalPrimary(payload)
     receipts = payload.receipts.filter(r => selected.exists(_.identity == r.identity))
     _ <- if (GoalPhaseNativeMetadata.declaredIdentities(selected) == step.checks &&
         receipts.map(_.identity) == selected.map(_.identity)) Consequence.unit

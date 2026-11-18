@@ -20,7 +20,7 @@ import GoalPhaseRuntimeRepairControl as R
   * an adopted runtime policy. Historical failed validation remains Decision.
   * This pure native transition grants no command or independent-review authority.
   * @since   Oct. 26, 2026
-  * @version Oct. 26, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseInitialPhaseCheckRepair {
@@ -94,6 +94,18 @@ private[smworkflow] object GoalPhaseInitialPhaseCheckRepair {
           actualcandidate.payload.candidate.contains(actualvalidation.payload.candidate) &&
           controller.decision.contains("Selected native checks failed: " + _checks_reference(actualvalidation)),
           "failed Decision changes its original candidate, Phase scope or failed receipt identity")
+        _ <- actualvalidation.payload.qualification.fold(Consequence.unit) { qualified => for {
+          predecessor <- GoalPhaseNativeHistory.prefixC(from, InstanceRevision(qualified.target.frontierRevision))
+          _ <- _check(qualified.target.sessionId == from.identity.value &&
+            qualified.target.workflowIdentity == from.definition.workflowIdentity.value &&
+            qualified.target.workflowRevision == from.definition.workflowRevision.value &&
+            qualified.target.planIdentity == controller.plan.identity && qualified.target.planRevision == controller.plan.revision &&
+            qualified.target.generation == controller.generation &&
+            qualified.target.candidateRevision == actualcandidate.record.revision.value &&
+            validationsource.revision == predecessor.revision.next &&
+            validationsource.causation.value == GoalPhaseQualification.cause(predecessor),
+            "qualified failure has no matching original native selection prefix")
+        } yield () }
         _ <- _coverage_c(controller.plan, requiredchecks, actualvalidation.payload)
         directive = _directive(actualvalidation.payload)
         _ <- controller.continueInitialPhaseCheckRepairC(_checks_reference(actualvalidation), directive)
@@ -219,6 +231,26 @@ private[smworkflow] object GoalPhaseInitialPhaseCheckRepair {
         WorkflowSbtCapture.text(process.stderr).textStatus == "complete"))
 
   private def _coverage_c(plan: O.Plan, required: Vector[V.Check], value: V.Payload): Consequence[Unit] = {
+    // Source is constructed only from the continuation owner's authenticated
+    // native Cursor above. This projection does not install or authorize Q;
+    // it keeps that saved proof separate from the unchanged original policy.
+    if (value.qualification.nonEmpty) return for {
+      _ <- _check(_roundtrip_validation(value) && GoalPhaseQualification.payloadValid(value) &&
+        value.qualification.exists(_.target.required == required) && required.map(_.identity) == plan.phaseChecks,
+        "qualified failure crosses the actual original required Check vector")
+      selected <- GoalPhaseQualification.combinedC(required, value.qualification.get.target.supplemental)
+      original = GoalPhaseQualification.originalPrimary(value)
+      declared = GoalPhaseNativeMetadata.declaredIdentities(original)
+      full = declared == plan.phaseChecks
+      ordinary = selected.takeWhile(_.metadata.isEmpty)
+      beforeDiscovery = selected.exists(_.metadata.nonEmpty) && value.metadata.isEmpty &&
+        value.selected == ordinary && terminalFailureValid(value)
+      _ <- if (beforeDiscovery) GoalPhaseNativeMetadata.validateRetainedC(ordinary, value.selected, value.metadata)
+        else GoalPhaseNativeMetadata.validateRetainedC(selected, value.selected, value.metadata)
+      _ <- _check(full || (declared.nonEmpty && declared == plan.phaseChecks.take(declared.size) &&
+        original == required.take(original.size)),
+        "qualified failure changes the original Phase prefix")
+    } yield ()
     val declared = GoalPhaseNativeMetadata.declaredIdentities(value.selected)
     val full = declared == plan.phaseChecks
     val prefix = declared.nonEmpty && declared == plan.phaseChecks.take(declared.size) &&

@@ -15,8 +15,7 @@ import GoalPhaseOrderedProgression as O
 import SplitPhaseExplicitPartitionFixture.take
 
 /** All observations and Human references here are specification-only data.
-  * @since   Nov.  8, 2026
-  * @version Nov.  9, 2026
+  * Fixture origin: Nov. 8, 2026; fixture update: Nov. 9, 2026.
   */
 private[admission] object CanonicalDependencySourceSpecificationFixture {
   import DependencyValidationSpecificationFixture as D
@@ -285,8 +284,7 @@ private[admission] object PriorCoveredSourceSpecificationFixture {
 }
 
 /** Mixed Component approvals are structural data, never authenticated history.
-  * @since   Nov. 10, 2026
-  * @version Nov. 10, 2026
+  * Fixture origin and update: Nov. 10, 2026.
   */
 private[admission] object MixedDependencySourceSpecificationFixture {
   import CanonicalDependencySourceSpecificationFixture as F
@@ -348,8 +346,7 @@ private[admission] object MixedDependencySourceSpecificationFixture {
 
 /** Canonical source contracts use specification-only observations and authority.
   * @since   Nov.  8, 2026
-  *  version Nov. 10, 2026
-  * @version Nov. 11, 2026
+  * @version Nov. 18, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -376,6 +373,52 @@ final class GoalPhaseCanonicalDependencySourceSuccessionSpec extends AnyWordSpec
       (selected, history :+ prior.copy(target = target,
         directive = ContextReference("specification-repeated-source-" + index, "1")))
     }._2
+
+  "Same-purpose current-runtime continuation" should {
+    "derive a distinct receipt while retaining original authority and reject forged or crossed receipts" in {
+      Given("an existing canonical owner history with unchanged Plan, coverage and admitted source ownership")
+      val history = _shared_source_history(1)
+      val prior = history.head
+      val target = history.last.target
+      C.targetValid(target) shouldBe true
+      val receipt = C.authorityReuse(target).getOrElse(fail("Expected the exact same-purpose successor relation"))
+      receipt.previous shouldBe prior.directive
+      receipt.frontier shouldBe ContextReference(target.sessionId, target.sourceRevision)
+      val direction = history.last.copy(directive = ContextReference(
+        target.sessionId + ":same-purpose-canonical-source:" + target.sourceRevision, "1"))
+      val checkpoint = C.Checkpoint(direction, Some(receipt))
+      C.codec.decode(C.codec.encode(checkpoint)) shouldBe Right(checkpoint)
+      direction.directive should not be prior.directive
+      direction.target.canonicalOrigin.get.originalDirection shouldBe Some(prior)
+      Vector(receipt.copy(previous = ContextReference("forged-authority", "1")),
+        receipt.copy(frontier = ContextReference("crossed-session", target.sourceRevision)),
+        receipt.copy(publication = ContextReference("unobserved-publication", "1"))).foreach { crossed =>
+        C.codec.decode(C.codec.encode(checkpoint.copy(authorityReuse = Some(crossed)))).isLeft shouldBe true
+      }
+      C.codec.decode(C.codec.encode(checkpoint.copy(authorityReuse = None))).isLeft shouldBe true
+      C.codec.decode(C.codec.encode(checkpoint.copy(direction = direction.copy(directive = prior.directive)))).isLeft shouldBe true
+      val origin = target.canonicalOrigin.get
+      C.authorityReuse(target.copy(step = "another-work")) shouldBe None
+      C.authorityReuse(target.copy(binding = target.binding.copy(
+        dependency = target.binding.dependency.copy(identity = "another-owner")))) shouldBe None
+      C.authorityReuse(target.copy(proposal = target.proposal.copy(coverage = target.proposal.coverage.tail))) shouldBe None
+      C.authorityReuse(target.copy(canonicalOrigin = Some(origin.copy(approvals = Vector.empty)))) shouldBe None
+    }
+
+    "leave pending or unknown worker effects with their existing explicit lifecycle owner" in {
+      val history = _shared_source_history(1)
+      val target = history.last.target
+      val origin = target.canonicalOrigin.get
+      val request = DependencyValidationSpecificationFixture.request.copy(kind = "RepairStep", selectedPlan = target.plan,
+        generation = target.generation, completed = target.completed, repairDirective = F.controller.repairDirective,
+        repairProgress = Some(target.repairProgress))
+      val pending = C.Pending(ContextReference("specification-uncertain-worker", target.sourceRevision), "1", request)
+      val uncertain = target.copy(canonicalOrigin = Some(origin.copy(pending = Some(pending),
+        selection = origin.selection.copy(workerLifecycle = Some(C.WorkerLifecycle(true, true))))))
+      C.authorityReuse(uncertain) shouldBe None
+      C.choicesFor(uncertain) shouldBe Vector(C.pendingChoice, "Defer")
+    }
+  }
 
   "P611-HISTORY-EVALUATION-01 Immutable canonical source histories" should {
     "retain all source relations across repeated multi-generation shared ancestry" in {

@@ -44,7 +44,7 @@ import SplitPhaseTypedStartFixture as F
   * No launcher, CLI command, fabricated history or direct SQLite write is used.
   * @since   Oct.  7, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -733,6 +733,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
           "GoalPhaseService.describeGoalPhaseWholePhaseCandidateRecovery", "GoalPhaseService.recoverGoalPhaseWholePhaseCandidate",
           "GoalPhaseService.describeGoalPhaseCandidateObservationContinuation", "GoalPhaseService.continueGoalPhaseCandidateObservation",
           "GoalPhaseService.describeGoalPhaseCompletionPolicy", "GoalPhaseService.adoptGoalPhaseCompletionPolicy",
+          "GoalPhaseService.describeGoalPhaseQualification", "GoalPhaseService.selectGoalPhaseQualification",
           "GoalPhaseService.describeGoalPhaseRepairPolicy", "GoalPhaseService.adoptGoalPhaseRepairPolicy",
           "GoalPhaseService.describeGoalPhaseFailedPhaseRepair", "GoalPhaseService.adoptGoalPhaseFailedPhaseRepair",
           "GoalPhaseService.describeGoalPhaseValidationRepair", "GoalPhaseService.adoptGoalPhaseValidationRepair",
@@ -743,8 +744,8 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
           "RepositorySyncService.submitRepositorySyncWorkResult", "RepositorySyncService.submitRepositoryPurposeResult", "RepositorySyncService.submitNativeMergeReview",
           "RepositorySyncService.submitRepositoryConflictDecision", "RepositorySyncService.submitRepositorySyncPolicyDecision",
           "RepositorySyncService.submitNativeMergeRepair")
-        published should have size 57
-        published.map(_._1).distinct should have size 57
+        published should have size 59
+        published.map(_._1).distinct should have size 59
         published.map(_._1).toSet shouldBe expected
         val sessiondescriptions = Set("describeGoalPhaseValidationRecovery", "describeGoalPhaseClosureRecovery",
           "describeGoalPhaseSourceHistoryRecovery", "describeGoalPhaseCandidateRecovery",
@@ -755,7 +756,7 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
           withClue(identity) {
             operation.specification.request.parameters.head.name shouldBe
               (if (sessiondescriptions(operation.name)) "sessionId"
-                else if (operation.name == "requestGoalPhaseStepReview" ||
+                else if (operation.name == "requestGoalPhaseStepReview" || operation.name == "selectGoalPhaseQualification" ||
                   Vector("start", "describe", "recover", "adopt", "admit", "continue", "resolve", "reconstruct").exists(operation.name.startsWith)) "input"
                 else "sessionId")
             if (Set("describeGoalPhaseValidationRepair", "adoptGoalPhaseValidationRepair",
@@ -763,7 +764,8 @@ final class ThreeWorkflowDirectOperationSpec extends AnyWordSpec with ThreeWorkf
                 "recoverGoalPhaseReleaseRepairContinuation", "describeGoalPhaseDependencySourceRevision",
                 "adoptGoalPhaseDependencySourceRevision", "recoverGoalPhasePrerequisitePublication",
                 "adoptRepositorySyncValidationContinuation", "adoptGoalPhaseSourceHistoryNormalization",
-                "reconstructGoalPhaseDevelopment", "describeGoalPhasePrerequisitePublicationRecovery").contains(operation.name)) {
+                "reconstructGoalPhaseDevelopment", "describeGoalPhasePrerequisitePublicationRecovery",
+                "describeGoalPhaseQualification", "selectGoalPhaseQualification").contains(operation.name)) {
               val names = if (operation.name == "describeGoalPhasePrerequisitePublicationRecovery")
                 Vector("sessionId", "input", "inputResource") else Vector("input", "inputResource")
               operation.specification.request.parameters.map(_.name) shouldBe names

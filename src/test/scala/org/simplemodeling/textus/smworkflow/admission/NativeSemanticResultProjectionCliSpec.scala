@@ -1,3 +1,7 @@
+/**
+ * @since   Nov. 18, 2026
+ * @version Nov. 18, 2026
+ */
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
@@ -19,7 +23,8 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Source-distributed caller projection connected to the authoritative public reader. */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.PackagedRuntimeTestDeclaration])
-final class NativeSemanticResultProjectionCliSpec extends AnyWordSpec with Matchers {
+final class NativeSemanticResultProjectionCliSpec extends AnyWordSpec with Matchers
+    with org.simplemodeling.textus.smworkflow.testing.DevelopFixtureValidation {
   private def candidateRuntime(car: Path): String = {
     val archive = new ZipFile(car.toFile)
     try {

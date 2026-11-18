@@ -15,7 +15,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * outcome. No extra store read, result verifier or transport envelope.
   * @since   Oct. 12, 2026
   *  version Oct. 29, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationOutput {
@@ -44,7 +44,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
         r.metadata.map(batch => GoalPhaseNativeMetadata.record(batch.asJson)),
         r.priorReviews.map(prior => GoalPhaseNativeMetadata.record(prior.asJson)),
         dependencyValidations = r.dependencyValidations.flatMap(GoalPhaseNativeDependencyValidation.publicView),
-        triageJudgment = r.triageJudgment.map(j => GoalPhaseNativeMetadata.record(j.asJson)))),
+        triageJudgment = r.triageJudgment.map(j => GoalPhaseNativeMetadata.record(j.asJson)),
+        qualification = r.qualification.map(q => GoalPhaseNativeMetadata.record(GoalPhaseQualification.codec.encode(q))))),
       value.decisionContext.map(d => V.GoalPhaseOrderedDecisionContext(_goal_result(d.requestingResult), d.choice, d.rationale,
         d.decisionReference.map(reference => V.WorkflowArtifactReference(reference.identity, reference.revision)),
         d.inventoryContinuation.map(context => GoalPhaseNativeMetadata.record(context.asJson)))),
@@ -70,7 +71,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
       payload.metadata.map(batch => GoalPhaseNativeMetadata.record(batch.asJson)), Vector.empty,
       dependencyValidation = GoalPhaseNativeDependencyValidation.publicView(payload),
       assessment = payload.assessment.map(a => GoalPhaseNativeMetadata.record(a.asJson)), assessmentJournal = None,
-      diagnostics = IncrementalSbtFailureDiagnosis.selected(payload).map(d => GoalPhaseNativeMetadata.record(d.asJson)))
+      diagnostics = IncrementalSbtFailureDiagnosis.selected(payload).map(d => GoalPhaseNativeMetadata.record(d.asJson)),
+      qualification = payload.qualification.map(q => GoalPhaseNativeMetadata.record(GoalPhaseQualification.codec.encode(q))))
   }
 
   def goalWorkRequestC(work: WorkflowInteraction[GoalPhaseNativeWork.Request, Nothing], core: ActionCall.Core): Consequence[V.GoalPhaseAdvanceResult] = for {

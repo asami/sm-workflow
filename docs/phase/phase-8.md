@@ -1,9 +1,92 @@
 # Phase 8: Runtime Extensions and Practical Closure
 
-Status: in_progress
+Status: closed
 Decision: 2026-10-05; documented 2026-10-06 (Asia/Tokyo)
 Planned after: Phase 7 and the bounded Phase 11.1 Journal route; before Phase 8.1
 Depends on: practical Phase 2, Phase 5 and the selected Phase 6.3/7 delivery
+
+## Human-approved formal release — 2026-11-19
+
+Phase 8 is closed as a FORMAL local release under the Human's explicit decision
+to transfer the remaining unverified work and Workflow management problems to
+[Phase 22](phase-22.md) and its [checklist](phase-22-checklist.md), without
+additional validation or review. This decision supersedes the earlier closing
+requirements for this release. It is an accepted release, with additional
+validation and review **NOT RUN — USER-APPROVED**; it is not a checkpoint or a
+native force-closure operation. No publication or GitHub push is selected.
+
+The existing P8-01–04 accepted commits remain unchanged. P8-05's implemented
+boundary is accepted locally in this release. Native validation retained Compile,
+TestCompile, eleven selected connected batches and FULL with exit code zero;
+FULL completed 2,980 tests in 284 suites. These results apply at their recorded
+scope. The subsequent independent Step review returned `decision-needed`, with
+no additional production defect established; it was not an accepted integrated
+Phase review. No new test or review is performed for this release.
+
+All 30 original completion requirements and their checklist entries below are
+preserved. Their remaining unverified parts are explicitly deferred to P22-05,
+with the per-row inventory in the
+[requirement evidence map](../notes/phase8-requirement-evidence-map.md).
+Unchecked entries retain their meaning; release approval does not turn them into
+PASS. General reconstruction, ordering/history robustness and extended connected
+qualification remain P22-01–04. Native disposition and completion reconciliation
+are P22-06. Already assigned Phase 9, 13 and 11.2 responsibilities stay with their
+owners and are not duplicated as new Phase 8 gates.
+
+Native Session `a38c308c60a36de8c7b33336ca8641c7`, Plan
+`phase-8-runtime-practical-closure-20261117@1`, retains its actual `Human` state,
+issue 8 `OPEN/UNRESOLVED`, original failed extended qualification
+`ordered-validation:1918`, and repair count **10/10**. The successful bounded
+validation does not establish that excluded extended scenario. No accepted
+result, successful operation or review submission is replayed; no private state,
+counter or old failure is rewritten. P8-05 local release acceptance does not
+claim a native Step acceptance record or a native Phase terminal transition.
+Phase 22 owns that management reconciliation without reopening this FORMAL
+release solely because its additional checks were approved NOT RUN.
+
+The next planned sequence remains Phase 8.1 -> Phase 9 -> Phase 18. Phase 22
+follows API-use delivery without interrupting that priority. Phase 11.1 remains
+completed; this release starts no successor work.
+
+## Historical delivery direction — 2026-11-18
+
+The following direction records the earlier scope and repair boundary. The
+2026-11-19 release decision above governs the final disposition; the historical
+9/10 count and then-unqualified source description are not the final result.
+
+Phase 8's performance and AI-cost reductions are required delivery. Continue the
+Phase through its normal Steps and required validation/review; do not force-close
+the whole Phase or turn required improvements into optional stabilization work.
+The Human's direction is to finish the useful current Step boundary (described
+as 8-3), move to the next work (8-4), and defer difficult residuals rather than
+repair the same connected scenario indefinitely.
+
+The new [Phase 22](phase-22.md) and [checklist](phase-22-checklist.md) own difficult
+generalized runtime reconstruction, generalized qualification-order/historical
+compatibility, source-history robustness and extended connected qualification.
+Necessary in-scope performance improvements, reduced AI round trips, applicable
+evidence reuse, efficient failure-first checks and their bounded representative
+acceptance remain here. A transferred extension is not a passing check, and an
+unverified supported-use requirement cannot disappear merely by renaming it.
+
+Preserve accepted P8-01–04 results, current source/draft changes, publications,
+failures/UNKNOWNs and the existing native Session's 9/10 repair history. Its
+already accepted P8-03/P8-04 work is not rerun to imitate a new Step transition.
+The execution-order supplement has source edits only and is not qualified; its
+remaining generalization is retained with Phase 22. No native force closure,
+Step completion or revised native Plan is claimed by this planning update.
+
+Retain Phase 8 -> Phase 8.1 -> Phase 9 -> Phase 18. Complete the useful required
+scope of each preceding Phase quickly to reach API-use delivery in Phase 9.
+Phase 22 execution follows API delivery and does not interrupt that priority.
+
+At the selected Step boundary described by the Human as 8-3 -> 8-4, incorporate
+the current GitHub `main` defect fixes before dispatching the following work.
+Preserve dirty work, existing Session and actual accepted Steps; inspect the
+native accepted prefix rather than replaying an already completed Step to imitate
+that boundary. Remote intake/merge is authorized; push is explicitly excluded.
+Record actual selected refs, integration and affected verification through the
+existing owners. This instruction is not a claim that integration has happened.
 
 ## Current execution boundary — 2026-11-17
 
@@ -19,13 +102,18 @@ unverified conditions. Earlier “planned/pending” descriptions record their a
 state; the map reconciles them with later prerequisite delivery without declaring
 whole-row acceptance. Phase 7 remains unfinished in its own development checkout.
 
-| Ordered Step | Finite current-use scenario and acceptance ownership |
-| --- | --- |
-| P8-01 | Reconcile documentation and all requirements; correct Phase 11.1 status from actual completion records. No runtime acceptance follows from this inventory. |
-| P8-02 | Normal RepositorySync initialization/setup wait and same-Session continuation, dirty program-impact coverage and work-branch setup; local-first/direct/confirm main routes, isolated dependency route, auto-commit/confirm/error policies. Use isolated fixtures, preserve excluded dirty work and actual Human boundaries. |
-| P8-03 | Same-purpose inventory/source continuation, current input classification, adopted artifact applicability after candidate change, successful-evidence reuse, genuine changed authority and divergence/ten-attempt bounds. Use prospective equivalents of historical cases. |
-| P8-04 | RSP-1 based compact public result/detail and terminal projection, coherent mechanical progression, wait/collection, scoped substantial worker context and portable compaction/handoff. Keep unknown/live outcomes and host limitations explicit. |
-| P8-05 | Connected supported-use qualification, proportionate checks and review classification, bounded rescue, comparable observations, usage instructions and independent integrated Phase review/normal local closure. |
+| Ordered Step | Current native status | Finite current-use scenario and acceptance ownership |
+| --- | --- | --- |
+| P8-01 | Completed, `0d05b6fa` | Reconcile documentation and all requirements; correct Phase 11.1 status from actual completion records. No runtime acceptance follows from this inventory. |
+| P8-02 | Completed, `62063e9a` | Normal RepositorySync initialization/setup wait and same-Session continuation, dirty program-impact coverage and work-branch setup; local-first/direct/confirm main routes, isolated dependency route, auto-commit/confirm/error policies. Use isolated fixtures, preserve excluded dirty work and actual Human boundaries. |
+| P8-03 | Completed, `947bb910` | Same-purpose inventory/source continuation, current input classification, adopted artifact applicability after candidate change, successful-evidence reuse, genuine changed authority and divergence/ten-attempt bounds. Use prospective equivalents of historical cases. |
+| P8-04 | Completed, `d17b8b6d` | RSP-1 based compact public result/detail and terminal projection, coherent mechanical progression, wait/collection, scoped substantial worker context and portable compaction/handoff. Keep unknown/live outcomes and host limitations explicit. |
+| P8-05 | Human-approved bounded local completion in the 2026-11-19 FORMAL release; native management reconciliation deferred to P22-06 | Implemented scope and actual bounded validation retained. Remaining qualification, comparative observations and integrated review assurance are deferred to P22-01–05; no native Step acceptance is fabricated. |
+
+These completed entries come from the retained native accepted prefix. Older
+authorship/pending sections below retain their historical evidence scope and do
+not reopen those Steps. Current P8-05 integration work is not an unfinished
+P8-03 or P8-04, and completing it does not require replaying their accepted work.
 
 P8-02 completed through normal native checks, independent re-review and local
 commit `62063e9a928d7d27b0afe4c6cdcf455c3e7989b9` on 2026-11-18. Compile and
@@ -855,6 +943,86 @@ is retained while duplicate stages and coordination are reduced. No fixed saving
 new measurement subsystem, fresh whole-repository campaign or separate review
 ceremony is added merely to prove this optimization.
 
+### P8-05: failure-first repair validation — selected 2026-11-18
+
+Schedule this refinement under P8-05's existing proportionate-check requirement,
+after the currently in-flight P8-03. Do not change P8-03's captured checks or
+reopen completed prerequisite Tasks. Before P8-05 execution, adopt the changed
+validation sequence through the existing public plan/selection owner; this
+document does not mutate the active Session's encoded Plan or receipts.
+
+The SST-1 incident selected compile, FULL test, then the installed connection
+test. FULL passed 2,842 tests while that connection still failed. Repair should
+first answer whether the actual failure was corrected, rather than repeat FULL
+before reaching the same failing boundary.
+
+The agreed cadence is:
+
+- Steps run focused tests only, with necessary build prerequisites.
+- Phase closing runs FULL integrated tests.
+- A failure in either scope triggers cause repair and rerunning the failed tests.
+- Rerun a broader focused set or FULL only when the repair has sufficiently
+  broad impact to require that scope. Reuse unaffected successful results.
+
+For either FULL or focused validation, repair the cause of the observed failed
+tests and rerun only those tests during the repair loop, with their necessary
+build/packaging prerequisites. This means fixing the responsible production,
+fixture or test code; it does not mean editing assertions merely to make them pass.
+Do not rerun the original suite set or add a mandatory related-test stage on
+every repair. Expand the immediate check only when concrete repair impact
+requires it, recording the reason. After a localized repair passes its failed
+tests, combine those results with applicable prior successes; do not repeat the
+original focused set or FULL merely for closing. Broader repair impact selects
+only the affected scope; whole-project impact requires FULL at the Phase boundary.
+The initial Phase-closing FULL requirement remains distinct from repeating it
+after a repair. A narrow rerun alone cannot cover tests that never ran or whose
+results the repair invalidates. sm-workflow owns impact-based selection,
+execution, retained results and reuse; the AI diagnoses and repairs source.
+The failed check can be an installed connection scenario, not just a unit-test
+name. Retain its actual test identity, configuration, mode, provider and host
+prerequisites. Run prerequisites needed to test the new candidate; never use an
+old installed artifact just to reach the failed check sooner.
+
+On another failure, retain the result and return ordinary repair before starting
+later checks. Preserve required Phase integrated validation and explicitly
+selected HEAVY checks; never infer success for unexecuted checks. A failure
+with no usable identity requires runtime evidence collection or a bounded
+semantic question, not an invented test selector or an automatic blanket FULL
+fallback. The AI diagnoses and edits; it need not reconstruct this order on
+each repair. Collect live/unknown executions before selecting a new attempt.
+
+Keep canonical check identities separate from execution order. Current consumers
+that pair a receipt prefix with a selected list must receive a versioned, retained
+attempt selection through normal owners; do not reorder an already-issued list
+in place. Reuse successes only when their candidate/input and environment
+applicability remains valid. Retain earlier failures and successes in history;
+running prerequisite or related checks does not itself consume another repair.
+The divergence/ten-repair boundary remains unchanged.
+
+Acceptance under the existing small-repair completion row:
+
+- Verify focused-only Step execution and the initial Phase-closing FULL run.
+- Exercise failures in both FULL and focused runs: successive repairs rerun only
+  failed tests and necessary prerequisites, not all previously successful tests.
+  Include the SST connection failure as one example, not a special test category.
+  Verify localized repair closes using failed-test reruns plus unaffected prior
+  successes, with no repeat focused set or FULL. Contrast a broader-impact repair
+  that reruns the affected focused set and a Phase repair requiring FULL because
+  its impact spans the project. No automatic FULL follows a focused run or Step.
+- Exercise compile failure, multiple failed checks and a connection requiring
+  freshly packaged code. Respect prerequisites, remove duplicate execution and
+  preserve the actual failing test/mode identity.
+- Reopen after a recorded success and after an unknown outcome: preserve the
+  attempt sequence and receipt associations, reuse applicable success, and never
+  repeat a live/unknown effect or mistake unfinished checks for PASS.
+- Contrast a candidate change that invalidates earlier success with unchanged
+  applicable evidence. Record actual order, check starts and available timings;
+  require no parent-AI sequencing instructions and claim no unmeasured savings.
+
+This is planned runtime work, not a new standalone test runner or an instruction
+to resume SST-1. Implementation includes the selected-check/receipt consumers,
+not just sorting check names in the skill or changing one fixture input.
+
 This is planned Phase 8 work, not an implementation or PASS. It supplies no new
 Phase 6.11 closure prerequisite, changes no active Session or historical result,
 and does not retroactively waive its unexecuted validation. Apply the existing
@@ -1173,3 +1341,20 @@ for rows 3 and 24–28, paired executable specifications and actual limitations.
 No worker-run validation, independent acceptance, installed adoption or Phase
 completion is claimed. The original completion requirements remain unchanged
 and unchecked; parent-owned validation/review and P8-05 qualification remain due.
+
+### P8-05 authored qualification boundary
+
+The finite same-Session qualification connection is authored in
+`docs/design/phase8-qualification-connection.md`: independently configured exact
+TestOnly suffix, candidate-bound pre-check Wait, passive description/selection,
+and existing native Advance/check/review/closure owners. Original captured
+required checks and every completion requirement above remain unchanged.
+Source-consumption and original metadata limitations are precise v1 refusals;
+an actual required scenario that encounters one remains unfinished. The two
+P8-03 REMOTE cases gain a finite feature selector, and the existing Python caller
+regressions gain a managed-uv ordinary local specification bridge. Native
+success/failure/reopen and refusal specifications are authored but unexecuted.
+Actual qualification, current installed/publication adoption where required,
+portable Goal/Session outcomes, comparable observations and independent whole
+Phase acceptance/normal local closing remain required. This entry is design and
+source authorship, not a runtime receipt or Phase completion.

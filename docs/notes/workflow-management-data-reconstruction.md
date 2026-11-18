@@ -1,9 +1,16 @@
 # Reconstruct execution management data from current source
 
 Date: 2026-11-18 (Asia/Tokyo)
-Status: User-directed design guidance; recording this note does not establish implementation or verification.
+Status: User-directed normal runtime contract; implementation and verification are established separately by actual results.
 
 ## Purpose and rationale
+
+The Human reaffirmed on 2026-11-18 that this is normal sm-workflow behavior,
+not an incident-specific restoration exception. Existing execution owners must
+reconstruct derived management data when the current source and retained facts
+make continuation possible, then use the ordinary remaining execution stages.
+Recording this requirement does not assert that every case is implemented or
+verified, and does not authorize caller-side private-state editing.
 
 When continuation cannot proceed, sm-workflow should reconstruct the execution
 management data from the current source and retained business facts, then resume

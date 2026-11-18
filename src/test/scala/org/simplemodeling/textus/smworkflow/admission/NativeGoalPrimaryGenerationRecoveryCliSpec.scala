@@ -27,6 +27,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Immutable external settings and read-only native codec views for the tiny
   * paired history subject. Introduced Nov. 6, 2026 by ASAMI, Tomoharu. */
+@org.scalatest.DoNotDiscover
 private[admission] object PrimaryGenerationHistorySpecificationFixture extends NativeGoalSourceHistoryRecoveryCliSupport {
   val rule: Json = enabledSettings(ruleKey).mapObject(_.add("sourceRoots", Vector("src/main/scala").asJson))
   def native(fixture: Implemented): Vector[String] = _stored_json(fixture).sorted
@@ -46,8 +47,7 @@ private[admission] object PrimaryGenerationHistorySpecificationFixture extends N
   * The locator is caller-owned routing, never native state or consumer authority.
   * All publication/check effects use the normal installed CLI and typed UoW.
   * @since   Nov.  6, 2026
-  *  version Nov.  6, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.scalatest.DoNotDiscover

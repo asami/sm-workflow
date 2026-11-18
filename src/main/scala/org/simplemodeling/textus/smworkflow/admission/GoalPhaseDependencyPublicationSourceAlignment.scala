@@ -24,7 +24,7 @@ import GoalPhaseDependencyValidation.given
 /** A separate artifact choice for a canonical source whose literal dependency
   * publisher still selects another repository. No program or authority changes.
   * @since   Nov.  9, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseDependencyPublicationSourceAlignment {
@@ -380,20 +380,45 @@ private[smworkflow] object GoalPhaseDependencyPublicationSourceAlignment {
         Vector("repairs", "ordinaryRepairs").forall(k => controller.hcursor.get[Int](k).toOption.exists(n =>
           successor.hcursor.get[Int](k).toOption.exists(_ >= n)))).contains(true)
 
+  /** A new actual runtime is bound through its authenticated canonical source
+    * continuation. The old artifact answer remains the earlier Direction; this
+    * relation neither reuses its stale publication nor supplies Human evidence. */
+  private[admission] def reconstructed(previous: Target, current: Target): Boolean =
+    targetValid(previous) && targetValid(current) && previous.sessionId == current.sessionId &&
+      previous.componentInstance == current.componentInstance && previous.participant == current.participant &&
+      previous.publicationPolicy == current.publicationPolicy &&
+      previous.targets.map(_.target) == current.targets.map(_.target) &&
+      BigInt(previous.candidateRecordRevision) < BigInt(current.candidateRecordRevision) && (for {
+        before <- _capture(previous)
+        after <- _capture(current)
+        origin <- after.direction.target.canonicalOrigin
+        prior <- origin.previousDirection.orElse(origin.originalDirection)
+      } yield GoalPhaseCanonicalDependencySourceSuccession.isAuthorityContinuation(after.direction) &&
+        prior == before.direction && after.sessionId == before.sessionId && after.plan == before.plan &&
+        after.primaryBase == before.primaryBase && after.generation > before.generation &&
+        current.publication.contains(origin.selection.publication) &&
+        observationIssues(after, current.publication).isEmpty).contains(true)
+
   private[admission] def candidateRebinding(previous: Target, candidate: C.Saved,
     controller: GoalPhaseOrderedProgression.State, frontierRevision: String): Option[Target] =
-    canonicalCapture(candidate.payload).map(capture => previous.copy(frontierRevision = frontierRevision,
-      controller = _sorted(B.controller(controller)), candidateRecordRevision = candidate.record.revision.value.toString,
-      candidate = _sorted(candidate.payload.asJson), capture = _sorted(capture.asJson))).filter(reusable(previous, _))
+    canonicalCapture(candidate.payload).map { capture =>
+      val publication = if (GoalPhaseCanonicalDependencySourceSuccession.isAuthorityContinuation(capture.direction))
+        capture.direction.target.canonicalOrigin.map(_.selection.publication) else previous.publication
+      previous.copy(frontierRevision = frontierRevision,
+        schemaVersion = if (publication.exists(_.result.applicability.nonEmpty)) applicabilityTargetSchema else targetSchema,
+        controller = _sorted(B.controller(controller)), candidateRecordRevision = candidate.record.revision.value.toString,
+        candidate = _sorted(candidate.payload.asJson), capture = _sorted(capture.asJson), publication = publication)
+    }.filter(target => reusable(previous, target) || reconstructed(previous, target))
 
   def rebindC(native: B.Source, previous: Saved, d: F.Declaration, core: ActionCall.Core): Consequence[Saved] = for {
-    _ <- if (directionValid(previous.direction) && candidateRebinding(previous.target, native.candidate,
-        native.controller, native.from.revision.value.toString).nonEmpty) Consequence.unit
-      else F.invalid("Prior artifact adoption does not cover the current consumer contract")
+    selected <- candidateRebinding(previous.target, native.candidate, native.controller, native.from.revision.value.toString)
+      .filter(_ => directionValid(previous.direction)).map(Consequence.success)
+      .getOrElse(F.invalid("Prior artifact adoption or current runtime authority does not cover the consumer contract"))
     prefix <- GoalPhaseNativeHistory.prefixC(native.from, previous.record.revision)
     _ <- if (prefix == previous.record) Consequence.unit else F.invalid("Prior artifact adoption is not in this actual native history")
-    target <- targetForC(native, d, core, previous.target.publication)
-    _ <- if (reusable(previous.target, target)) Consequence.unit else F.invalid("Current artifact applicability changed its adopted contract")
+    target <- targetForC(native, d, core, selected.publication)
+    _ <- if (reusable(previous.target, target) || reconstructed(previous.target, target)) Consequence.unit
+      else F.invalid("Current artifact applicability changed its admitted contract")
     policy <- d.localPublication.map(Consequence.success).getOrElse(F.invalid("Artifact applicability lost its publication policy"))
     _ <- P.currentPublicationC(target.publication.get, LocalPublicationRuntime._port(core, policy))
     adapter <- native.session.storage.bindMechanicalC(F.advanceOperation, applicabilityCodec)
@@ -418,7 +443,8 @@ private[smworkflow] object GoalPhaseDependencyPublicationSourceAlignment {
     target <- targetForC(native, d, core, payload.target.publication, observe = false, retained = Some(payload.target))
     saved = retained.receipt.next
     actual <- GoalPhaseNativeHistory.prefixC(native.session.current, saved.revision)
-    _ <- if (prefix == original.record && target == payload.target && reusable(original.target, target) && actual == saved &&
+    _ <- if (prefix == original.record && target == payload.target &&
+        (reusable(original.target, target) || reconstructed(original.target, target)) && actual == saved &&
         saved.identity == native.from.identity && saved.definition == native.from.definition &&
         saved.revision == native.from.revision.next && saved.history.dropRight(1) == native.from.history &&
         saved.currentProgression == native.from.currentProgression && saved.lifecycle == Lifecycle.Active && saved.suspension.isEmpty &&

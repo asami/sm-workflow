@@ -1,5 +1,14 @@
 # Phase 9: Acceptance-Bounded Convergence and Provider Routing
 
+Current priority — 2026-11-18: reach API-use delivery quickly while retaining
+the selected Phase 8 -> Phase 8.1 -> Phase 9 order and Phase 9 -> Phase 18
+priority. API priority does not skip preceding Phases. Complete their bounded
+practical scope and explicitly transfer expensive residuals to the newly planned
+[Phase 22](phase-22.md), including ownership and affected acceptance conditions.
+Deliver R1's actual API/agent connection first within this Phase, retaining the
+R1 -> R2 -> R3 scope below. Phase 22 execution follows API delivery and is not
+a new entry or closure gate for these preceding Phases.
+
 Rollout priority updated 2026-11-11: Phase 7 -> Phase 11.1 -> Phase 8 ->
 [Phase 8.1](phase-8.1.md), formerly 6.12 -> Phase 9 -> [Phase 18](phase-18.md).
 Phase 9 retains its existing number,

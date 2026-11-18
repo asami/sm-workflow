@@ -14,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.value.GoalPhaseStartInput
 /**
  * @since   Oct.  6, 2026
  *  version Oct. 28, 2026
- * @version Nov.  7, 2026
+ * @version Nov. 18, 2026
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -56,6 +56,8 @@ private[smworkflow] trait GoalPhaseGeneratedAbiBehavior extends AnyWordSpec with
     SmWorkflowComponent.GoalPhaseServiceService.ContinueGoalPhaseCandidateObservationOperation,
     SmWorkflowComponent.GoalPhaseServiceService.DescribeGoalPhaseCompletionPolicyOperation,
     SmWorkflowComponent.GoalPhaseServiceService.AdoptGoalPhaseCompletionPolicyOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.DescribeGoalPhaseQualificationOperation,
+    SmWorkflowComponent.GoalPhaseServiceService.SelectGoalPhaseQualificationOperation,
     SmWorkflowComponent.GoalPhaseServiceService.DescribeGoalPhaseStepReviewOperation,
     SmWorkflowComponent.GoalPhaseServiceService.RequestGoalPhaseStepReviewOperation,
     SmWorkflowComponent.GoalPhaseServiceService.DescribeGoalPhaseRepairPolicyOperation,
@@ -90,7 +92,8 @@ private[smworkflow] trait GoalPhaseGeneratedAbiBehavior extends AnyWordSpec with
       val optionaltransport = Set("recoverGoalPhaseCandidate", "recoverGoalPhaseWholePhaseCandidate", "describeGoalPhaseValidationRepair",
         "adoptGoalPhaseValidationRepair", "describeGoalPhaseReleaseRepairContinuation", "recoverGoalPhaseReleaseRepairContinuation",
         "describeGoalPhaseDependencySourceRevision", "adoptGoalPhaseDependencySourceRevision", "recoverGoalPhasePrerequisitePublication",
-        "adoptGoalPhaseSourceHistoryNormalization", "reconstructGoalPhaseDevelopment", "describeGoalPhasePrerequisitePublicationRecovery")
+        "adoptGoalPhaseSourceHistoryNormalization", "reconstructGoalPhaseDevelopment", "describeGoalPhasePrerequisitePublicationRecovery",
+        "describeGoalPhaseQualification", "selectGoalPhaseQualification")
       When("the generated Start and Advance readers construct actions from named parameters")
       val started = operations(0).createOperationRequest(request(operations(0), start))
       val advanced = operations(1).createOperationRequest(request(operations(1), advance))
@@ -101,9 +104,9 @@ private[smworkflow] trait GoalPhaseGeneratedAbiBehavior extends AnyWordSpec with
       started.isSuccess shouldBe true
       advanced.isSuccess shouldBe true
       absent.foreach { (operation, result) => withClue(operation.specification.name) { result.isSuccess shouldBe false } }
-      And("only the twelve declared optional transport operations permit inert generated request syntax without business admission")
+      And("only the fourteen declared optional transport operations permit inert generated request syntax without business admission")
       optionaloperations.map(_.specification.name).toSet shouldBe optionaltransport
-      optionaloperations should have size 12
+      optionaloperations should have size 14
       optionaloperations.foreach { operation =>
         withClue(operation.specification.name) {
           val names = if (operation.specification.name == "describeGoalPhasePrerequisitePublicationRecovery")
@@ -162,6 +165,8 @@ private[smworkflow] trait GoalPhaseGeneratedAbiBehavior extends AnyWordSpec with
         "continueGoalPhaseCandidateObservation" -> Some("GoalPhaseCandidateObservationContinuationInput"),
         "describeGoalPhaseCompletionPolicy" -> Some("GoalPhaseCompletionPolicyDescriptionInput"),
         "adoptGoalPhaseCompletionPolicy" -> Some("GoalPhaseCompletionPolicyAdoptionInput"),
+        "describeGoalPhaseQualification" -> Some("GoalPhaseQualificationDescriptionInput"),
+        "selectGoalPhaseQualification" -> Some("GoalPhaseQualificationSelectionInput"),
         "describeGoalPhaseStepReview" -> Some("GoalPhaseStepReviewDescriptionInput"),
         "requestGoalPhaseStepReview" -> Some("GoalPhaseStepReviewRequestInput"),
         "describeGoalPhaseRepairPolicy" -> Some("GoalPhaseRepairPolicyDescriptionInput"),

@@ -21,7 +21,7 @@ import GoalPhaseDependencyValidation.given
   * Storage/process bootstrap has already been performed by the owning Subsystem.
   * @since   Oct.  7, 2026
   *  version Oct. 29, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowLauncherAssembly.RuntimeCompositionDecoder {
@@ -120,7 +120,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
       GoalPhaseNativeExecution.declaration, GoalPhaseNativeExecution.logicalOrigin, GoalPhaseRetainedObservations.declaration, GoalPhaseOperatingProfiles.declaration, GoalPhaseOperatingProfiles.cost, GoalPhaseOperatingProfiles.quality, GoalPhaseOperatingProfiles.localExperiment, GoalPhaseDispatchPolicy.declaration, GoalPhaseAcceptanceBoundary.declaration, GoalPhaseFindingRecording.declaration,
       RepositorySyncNativeExecution.declaration, RepositorySyncDocumentInputs.declaration, RepositorySyncProgramImpact.declaration,
       RepositorySyncPurpose.declaration, RepositorySyncDirectoryList.declaration, SplitPhaseNativeExecution.declaration, DevelopmentJournal.declaration, CommonEvidence.declaration,
-      completionPolicy, validationRepairCallerSource, developmentObservation, LocalPublicationRuntime.declaration, ManagedDevelopmentRuntime.declaration,
+      completionPolicy, validationRepairCallerSource, developmentObservation, GoalPhaseQualification.declaration, LocalPublicationRuntime.declaration, ManagedDevelopmentRuntime.declaration,
       ManagedDevelopmentRepositorySync.mainIntegration, RepositorySyncPolicies.uncommittedPolicy, RepositorySyncLocalMain.mappings,
       CommitHygiene.declaration, CompletionRecords.declaration)
   lazy val factory = new SmWorkflowConfiguredComponentFactory(declarations, Vector.empty,
@@ -163,6 +163,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
       dispatchpolicy <- parameters.resolve(GoalPhaseDispatchPolicy.declaration).map(_.value)
       logicalorigin <- parameters.resolve(GoalPhaseNativeExecution.logicalOrigin).map(_.value)
       retainedobservations <- parameters.resolve(GoalPhaseRetainedObservations.declaration).map(_.value)
+      qualification <- parameters.resolve(GoalPhaseQualification.declaration).map(_.value)
       repositoryclassifications <- RepositorySyncNativeExecution.resolveC(parameters)
       purposePolicy <- RepositorySyncPurpose.resolveC(parameters)
       splitclassifications <- SplitPhaseNativeExecution.resolveC(parameters)
@@ -213,7 +214,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
         None,
         Some(GoalPhasePrerequisitePublicationRecovery.Installation(ports.prerequisitePublicationRecovery,
           Some(ports.prerequisitePublicationObservation))), dispatchPolicy = dispatchpolicy,
-        logicalOrigin = logicalorigin, retainedObservations = retainedobservations)
+        logicalOrigin = logicalorigin, retainedObservations = retainedobservations, qualificationPolicy = qualification)
       _ <- if (settings.goal.dependencyValidation.forall(GoalPhaseDependencyValidation.bindingValid)) Consequence.unit
         else Consequence.configurationInvalid("Goal dependency validation binding is invalid")
       _ <- GoalPhaseNativeRun.validateC(goal)

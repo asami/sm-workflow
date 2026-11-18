@@ -1,5 +1,34 @@
 # sm-workflow incremental-use roadmap
 
+Current release and priority — 2026-11-19:
+[Phase 8](phase-8.md#human-approved-formal-release--2026-11-19) is closed as a
+Human-approved FORMAL local release, without additional validation or review
+(`NOT RUN — USER-APPROVED`). Its remaining unverified requirements and Workflow
+management issues are recorded in [Phase 22](phase-22.md), P22-01–06, and its
+[checklist](phase-22-checklist.md). Historical successes, failed/UNKNOWN outcomes,
+accepted Steps and repair count 10/10 are retained. Native Session reconciliation
+remains Phase 22 work and does not invalidate this accepted release. Next planned
+work remains 8.1 -> 9 -> 18; Phase 22 does not interrupt API-use priority. No
+successor is started and no push is selected by this release.
+
+Historical priority and residual allocation — 2026-11-18:
+retain the selected Phase 8 -> [Phase 8.1](phase-8.1.md) ->
+[Phase 9](phase-9.md) -> [Phase 18](phase-18.md) order. Reach Phase 9's API-use
+delivery quickly by completing each preceding Phase's bounded practical scope.
+API priority does not skip or reorder those preceding Phases. Expensive residuals
+are explicitly transferred with their ownership and acceptance conditions;
+unverified work is not relabeled PASS or left as an unexplained closing gate.
+[Phase 22: Runtime Stabilization and Difficult Continuations](phase-22.md)
+and its [checklist](phase-22-checklist.md) own the difficult P8-05 residuals:
+current-runtime reconstruction, connected-before-FULL scheduling, history-comment
+normalization and extended connected qualification. Phase 8's required
+performance/cost improvements and bounded representative verification remain
+in Phase 8, which continues through normal Steps without forced closure.
+Schedule the difficult stabilization work
+after API delivery without inserting a new prerequisite for Phase 8 closure,
+Phase 9 or the Phase 9 -> Phase 18 sequence. Transfer is a scope disposition,
+not successful qualification or a rewrite of the existing Session/history.
+
 Phase 8 result-submission simplification selected 2026-11-12:
 [program-owned semantic result submission](phase-8.md#program-owned-semantic-result-submission--2026-11-12)
 connects saved worker envelopes to the actual issued public DTO through typed
@@ -418,8 +447,10 @@ adoption boundary while retaining ongoing work, issued requests and evidence.
 independent Phase acceptance and later separately authorized integrated-main delivery
 are recorded at their actual scopes. Its real host-correction consumer passed; a
 historical immutable Finding-to-Decision consumer chain remains unverified.
-[Phase 8](phase-8.md#current-execution-boundary--2026-11-17) is in progress under
-its five-Step plan; INIT-1/SST-1/RSP-1 are completed prerequisites, not whole-Phase acceptance.
+[Phase 8](phase-8.md#human-approved-formal-release--2026-11-19) is formally closed
+under explicit Human approval, with residual unverified work and native management
+reconciliation transferred to Phase 22. Its five-Step history and completed
+INIT-1/SST-1/RSP-1 prerequisites retain their actual evidence scopes.
 It adds decisions/issues/handoffs and single-entry
 revision management; [Phase 11.2](phase-11.2.md) owns later batch/consumer
 expansion. Neither retroactively delays the 6.4 trial. The main rollout below
@@ -597,7 +628,8 @@ in Phase 6, using the corrected runtime contract.
 | [19: Docker installation and customization qualification](phase-19.md) | Empty-environment install/use, configuration, preserved customization, update/failure and owned cleanup | Independent HEAVY track; consume INIT and profile producers per case; [checklist](phase-19-checklist.md); no active Phase gate |
 | [20: Phase Completion AI Consumption Summary](phase-20.md) | Aggregate attributable usage across one Phase execution, including repair and closure | Depends on accepted Phase 13 measurement; [checklist](phase-20-checklist.md); planned, not started |
 | [21: Recursive Repository Catch-up](phase-21.md) | Existing local repository/worktree and registered dependency catch-up from remote/local main; fast-forward, explicit rebase/merge and resumable Human decisions | Restores former P13-01–06 as P21-01–06; [checklist](phase-21-checklist.md); no implicit push/publication and no selected execution slot |
-| [8: Runtime extensions and practical closure](phase-8.md) | Resolve necessary Phase 2 carryover and observed operational problems, including [work classification](phase-8.md#work-classification-in-practice--selected-for-phase-8), [review handoffs](phase-8.md#review-handoff-between-assignments) and [completion reports](phase-8.md#completion-reports-for-consumers) | After Phase 7 and before 8.1; improve operation through the existing runtime owners |
+| [8: Runtime extensions and practical closure](phase-8.md) | Resolve necessary Phase 2 carryover and observed operational problems, including [work classification](phase-8.md#work-classification-in-practice--selected-for-phase-8), [review handoffs](phase-8.md#review-handoff-between-assignments) and [completion reports](phase-8.md#completion-reports-for-consumers) | FORMAL local release closed 2026-11-19; additional validation/review NOT RUN — USER-APPROVED; residuals in Phase 22; next 8.1 |
+| [22: Runtime stabilization and difficult continuations](phase-22.md) | Phase 8 residual reconstruction, ordering/history robustness, extended assurance, remaining unverified requirements and native management reconciliation | Planned after API-use delivery; preserve 9 -> 18 priority; [checklist](phase-22-checklist.md); not a retrospective Phase 8 gate |
 | [8.1: Shared Scala lint and Goldenport conventions](phase-8.1.md) | A shared strict lint, B strict Scala 3 generation/AI, C Core safe collection APIs and consumption | Former 6.12; after Phase 8 and before existing Phase 9; [checklist](phase-8.1-checklist.md); retain SLP IDs and accepted Q3 |
 | [11: Common Journal and trial skills](phase-11.md) | Actual common record/read/find, accepted Finding recording, packaged/deployed skills and Phase 6.4 trial-host connection | Short priority delivery before remaining 6.4 work; no 6.4 archive or 7–10 completion dependency |
 | [11.1: Journal single-entry decisions, issues and handoffs](phase-11.1.md) | Linked semantic records, single-entry correction/history, state/query and one real consumer | After 7 and before 8; reuse 11 without reopening its trial |

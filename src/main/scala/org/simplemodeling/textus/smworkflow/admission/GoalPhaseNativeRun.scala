@@ -25,8 +25,7 @@ import RepositorySyncManagedGitObservation as G
   * controller digest or AI-supplied plan admission is introduced.
   * @since   Oct.  6, 2026
   *  version Oct. 29, 2026
-  *  version Nov.  2, 2026
-  * @version Nov.  6, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeRun {
@@ -80,6 +79,7 @@ private[smworkflow] object GoalPhaseNativeRun {
     dispatchPolicy: Option[GoalPhaseDispatchPolicy.Policy] = None,
     logicalOrigin: Option[String] = None,
     retainedObservations: Option[GoalPhaseRetainedObservations.Retained] = None,
+    qualificationPolicy: Option[GoalPhaseQualification.Policy] = None,
     private[admission] val sourceHistoryInvocation: Option[GoalPhaseSourceHistoryAutomatic.Invocation] = None,
     private[admission] val sourceHistoryObservation: Option[GoalPhaseSourceHistoryAutomatic.CallerObservation] = None)
   final case class SelectedPlan(selectionIdentity: String, participantIdentity: String,
@@ -319,6 +319,7 @@ private[smworkflow] object GoalPhaseNativeRun {
             GoalPhaseValidationRepairAdoption.describeOperation, GoalPhaseValidationRepairAdoption.adoptionOperation,
             GoalPhaseCompletionPolicyAdoption.describeOperation, GoalPhaseCompletionPolicyAdoption.adoptionOperation,
             GoalPhaseStepReviewRequest.describeOperation, GoalPhaseStepReviewRequest.requestOperation,
+            GoalPhaseQualification.describeOperation, GoalPhaseQualification.selectOperation,
             GoalPhaseRepairPolicyAdoption.describeOperation, GoalPhaseRepairPolicyAdoption.adoptionOperation,
             GoalPhaseOrderedHumanDecision.completionOperation.operation,
             GoalPhaseNativeFindingRecording.completionOperation.operation)(core.action.request.operation)) ||

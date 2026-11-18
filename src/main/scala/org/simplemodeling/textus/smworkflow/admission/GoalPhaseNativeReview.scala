@@ -15,7 +15,7 @@ import GoalPhaseOrderedProgression as O
   * A worker's identity/accept string alone never establishes independence.
   * @since   Oct.  6, 2026
   *  version Oct. 26, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeReview {
@@ -38,11 +38,12 @@ private[smworkflow] object GoalPhaseNativeReview {
     metadata: Vector[GoalPhaseNativeMetadata.Batch] = Vector.empty,
     priorReviews: Vector[Prior] = Vector.empty,
     dependencyValidations: Vector[GoalPhaseNativeValidation.Payload] = Vector.empty,
-    triageJudgment: Option[GoalPhaseStepTriage.Judgment] = None)
+    triageJudgment: Option[GoalPhaseStepTriage.Judgment] = None,
+    qualification: Option[GoalPhaseQualification.Selection] = None)
   object Context {
     given Encoder[Context] = deriveEncoder[Context].mapJson(value => value.mapObject(fields =>
       Vector("metadata", "priorReviews", "dependencyValidations").foldLeft(fields)((retained, key) =>
-        if (retained(key).exists(_.asArray.exists(_.isEmpty))) retained.remove(key) else retained).filter { case (key, value) => key != "triageJudgment" || !value.isNull }))
+        if (retained(key).exists(_.asArray.exists(_.isEmpty))) retained.remove(key) else retained).filter { case (key, value) => !Set("triageJudgment", "qualification")(key) || !value.isNull }))
     private val _decoder: Decoder[Context] = deriveDecoder
     given Decoder[Context] = Decoder.instance { cursor =>
       val normalized = Vector("metadata", "priorReviews", "dependencyValidations").foldLeft(cursor.value)((retained, key) =>
@@ -53,7 +54,8 @@ private[smworkflow] object GoalPhaseNativeReview {
           value.dependencyValidations.forall(p => p != null &&
             GoalPhaseDependencySourceRevision.binding(p.dependency, p.dependencySource).nonEmpty &&
             p.outcome.contains("passed") && GoalPhaseNativeValidation.codec.decode(GoalPhaseNativeValidation.codec.encode(p)).contains(p)) &&
-          value.triageJudgment != null && value.triageJudgment.forall(GoalPhaseStepTriage.valid)) Right(value)
+          value.triageJudgment != null && value.triageJudgment.forall(GoalPhaseStepTriage.valid) &&
+          value.qualification != null && value.qualification.forall(q => q != null && GoalPhaseQualification.targetValid(q.target))) Right(value)
         else Left(DecodingFailure("Invalid retained review metadata or prior reports", cursor.history)))
     }
   }

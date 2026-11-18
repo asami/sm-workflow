@@ -19,7 +19,7 @@ import IncrementalSbtDiagnosisRepair.given
   * only after their actual native predecessor has been connected.
   * @since   Oct.  6, 2026
   *  version Oct. 29, 2026
-  * @version Nov.  9, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWork {
@@ -427,7 +427,7 @@ private[smworkflow] object GoalPhaseNativeWork {
           admitCheckFailureContextC(value).isSuccess && value.initialPhaseRepair.exists(reference =>
             reference.identity.startsWith(request.instanceIdentity + ":ordered-initial-phase-check-repair:")) &&
           value.validation.step == "phase:" + request.selectedPlan.phase && {
-            val selected = GoalPhaseNativeMetadata.declaredIdentities(value.validation.selected)
+            val selected = GoalPhaseNativeMetadata.declaredIdentities(GoalPhaseQualification.originalPrimary(value.validation))
             selected.nonEmpty && selected == request.selectedPlan.phaseChecks.take(selected.size)
           })) ||
       (validreview && request.stepIdentity != null && request.stepIdentity.isEmpty && request.selectedPlan != null &&

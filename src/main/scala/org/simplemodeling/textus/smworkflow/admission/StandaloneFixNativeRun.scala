@@ -718,6 +718,10 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
         next <- ManagedDevelopmentBoundedWork.collectC(store, definition, s, core)
         saved <- if (next == s) Consequence.success(record) else saveC(h, store, record, payload.copy(state = next), core)
       } yield view(saved, next, "Wait", next.message)
+      // Receipt is a confirmed transport stage, not requester adoption. Advance
+      // passively exposes it until the existing explicit delivery owner acts.
+      case "AwaitResult" | "ResultReceived" if delegation =>
+        Consequence.success(view(record, s, "Wait", s.message))
       case "Adopted" if delegation && h.managedDevelopment.exists(_.dependencyWorkEdge.nonEmpty) => for {
         _ <- if (record.lifecycle == Lifecycle.Active) Consequence.unit else invalid(
           "Managed requester integration requires its retained active adoption frontier; a historical completed adoption cannot be reopened by Advance")
@@ -1002,8 +1006,13 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     from: InstanceRecord, payload: Payload, core: ActionCall.Core, depth: Int): Consequence[V.StandaloneFixView] = for {
     _ <- if (payload.state.commit.isEmpty && payload.state.commitExecution.isEmpty) Consequence.unit
       else invalid("A retained commit must be collected through its ordinary commit owner")
+    // The admitted original Review remains provenance for pending reevaluation,
+    // never a verdict on the newly captured candidate. All checks run afresh.
+    originalreview = Option.when(delegation && payload.delegateReviewContinuation.exists(d =>
+      d.target.hcursor.downField("original").downField("resultReference").get[String]("identity").toOption == payload.state.reviewReference.map(_.identity) &&
+      d.target.hcursor.downField("original").downField("resultReference").get[String]("revision").toOption == payload.state.reviewReference.map(_.revision)))(payload.state.reviewReference).flatten
     next = payload.copy(state = payload.state.copy(stage = "Inspect", candidate = None, receipts = Vector.empty,
-      pendingCheck = None, reviewReference = None, recoveredValidation = None,
+      pendingCheck = None, reviewReference = originalreview, recoveredValidation = None,
       message = "Restarting candidate capture and checks from retained semantic work"),
       validationCompilations = None, candidateContinuation = None, validationCaptureReservation = None, validationRecovery = None,
       records = None, hygiene = None)
@@ -1214,7 +1223,7 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
       else Consequence.success(None)
     work = S.Work(from.identity.value, from.revision.value.toString, payload.state.stage, payload.state,
       reviewReevaluation = reevaluation)
-    bundle = ContextBundle((if (reviewReevaluation) "Independently reevaluate the unchanged candidate against the original purpose and all retained evidence, including the original Review result and Human clarification. Read reviewReevaluation.originalWork through WorkflowRetainedWorkService.readWorkflowRetainedWork for the exact original work and issued context; reviewReevaluation.originalResult and clarification are resolved from native completion and admitted direction. Do not treat a prior review repair as the sole scope or accept an earlier verdict automatically. " else "") + "Return only the assigned semantic result within the adopted objective and ownership. DeliveryAcceptance evaluates retained later conditions against actual validation, publication and application evidence; it is read-only and must not repeat implementation, validation, commit or publication. Conditions not assigned to submission remain false during Implement/Repair/Review and require genuine evidence before DeliveryAcceptance accepts. Native runtime owns validation, limits and acceptance. Review is independent and read-only; never execute commands or commit." + (if (reviewReevaluation) "" else " If a prior review exists, judge only its retained findings, repair delta against priorReviewCandidate and affected meaning; preserve settled scope and applicable successful checks.") + " Review-origin input retains the original review/context/findings: repair only these findings and affected meaning, return exact reviewDispositions and never repeat the original whole-repository review.",
+    bundle = ContextBundle((if (reviewReevaluation) "Independently reevaluate the current candidate against the original purpose and all retained evidence, including the original Review result and Human clarification. Read reviewReevaluation.originalWork through WorkflowRetainedWorkService.readWorkflowRetainedWork for the exact original work and issued context; reviewReevaluation.originalResult and clarification are resolved from native completion and admitted direction. Do not treat a prior review repair as the sole scope or accept an earlier verdict automatically. " else "") + "Return only the assigned semantic result within the adopted objective and ownership. DeliveryAcceptance evaluates retained later conditions against actual validation, publication and application evidence; it is read-only and must not repeat implementation, validation, commit or publication. Conditions not assigned to submission remain false during Implement/Repair/Review and require genuine evidence before DeliveryAcceptance accepts. Native runtime owns validation, limits and acceptance. Review is independent and read-only; never execute commands or commit." + (if (reviewReevaluation) "" else " If a prior review exists, judge only its retained findings, repair delta against priorReviewCandidate and affected meaning; preserve settled scope and applicable successful checks.") + " Review-origin input retains the original review/context/findings: repair only these findings and affected meaning, return exact reviewDispositions and never repeat the original whole-repository review.",
       (payload.state.input.sourceReferences ++ payload.state.input.reviewOrigin.toVector.flatMap(StandaloneReviewFix.references) ++ payload.state.evidenceReferences).distinct,
       payload.supersededWork.toVector.map(id => ContextReference(id, "1")),
       ContextSnapshot(from.definition.workflowRevision.value, evidenceRevision = Some(work.sourceRevision)))

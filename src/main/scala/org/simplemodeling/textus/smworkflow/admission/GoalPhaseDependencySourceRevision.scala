@@ -34,10 +34,7 @@ import WorkflowManagedProcessExecution as E
   * Native capture/check/review/closure owners qualify the newly selected bytes.
   * @since   Oct. 26, 2026
   *  version Oct. 28, 2026
-  *  version Nov.  8, 2026
-  *  version Nov.  9, 2026
-  *  version Nov.  6, 2026
-  * @version Nov. 11, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseDependencySourceRevision {
@@ -698,6 +695,19 @@ private[smworkflow] object GoalPhaseDependencySourceRevision {
       } yield () }
     }
   }
+
+  /** Observe eligibility before the primary candidate owner retains any intent.
+    * Capture observes again after staging; this check grants no replay or source
+    * succession and never turns a historical capture into current evidence. */
+  private[admission] def beforeInspectionC(core: ActionCall.Core, direction: Direction,
+    generation: Long, scope: Option[ScopeSuccessor]): Consequence[Unit] = for {
+    _ <- if (directionValid(direction) && scope != null && scope.forall(scopeValid(direction, _))) Consequence.unit
+      else D.invalid("source inspection requires its exact adopted direction and scope")
+    _ <- preflightC(core, direction, scope)
+    observed <- _qualified_observation_c(core, direction, scope)
+    _ <- if (captureBaseValid(direction, generation, observed, scope)) Consequence.unit
+      else D.invalid("source inspection differs from its adopted bytes, modes or permitted ordinary repair")
+  } yield ()
 
   final case class Capture(schemaVersion: String, sessionId: String, plan: ContextReference, step: String,
     generation: Long, sourceRevision: String, primaryBase: O.Snapshot, direction: Direction,

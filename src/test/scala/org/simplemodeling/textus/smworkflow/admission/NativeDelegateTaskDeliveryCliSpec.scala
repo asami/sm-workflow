@@ -20,11 +20,12 @@ import scala.jdk.CollectionConverters.*
 
 /** Public source-launcher transport with specification-owned return data.
   * @since   Nov.  7, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 18, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
-final class NativeDelegateTaskDeliveryCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+final class NativeDelegateTaskDeliveryCliSpec extends AnyWordSpec with Matchers with GivenWhenThen
+    with org.simplemodeling.textus.smworkflow.testing.DevelopFixtureValidation {
   private def json(value: RecordPresentable): String = take(value.toRecord().toJsonStringC)
 
   "Public delegate delivery Resource intake" should {
@@ -49,10 +50,44 @@ final class NativeDelegateTaskDeliveryCliSpec extends AnyWordSpec with Matchers 
         process.getOutputStream.close()
         val invocation = F.Invocation(argv, process.pid(), out, err)
         try {
-          withClue(invocation.logs) { process.waitFor(240, TimeUnit.SECONDS) shouldBe true }
+          withClue(s"stdout=$out; stderr=$err; pid=${invocation.pid}") { process.waitFor(240, TimeUnit.SECONDS) shouldBe true }
           F.Result(process.exitValue(), invocation)
         } finally if (process.isAlive) process.destroyForcibly()
       }
+      // The ordinary control omits retained state/work. Read those exact
+      // public owners before inspecting delivery, never Advance to fill them.
+      extension (output: F.Result)
+        def delegateView: V.DelegateTaskView = {
+          withClue(output.boundedDiagnostic) { output.exitCode shouldBe 0 }
+          val control = output.businessBounded[V.DelegateTaskView]
+          val work = control.retainedWork.map { reference =>
+            val selected = call(WorkflowRetainedWork.serviceName, WorkflowRetainedWork.readOperation,
+              Vector("--input", json(reference)))
+            withClue(selected.boundedDiagnostic) { selected.exitCode shouldBe 0 }
+            val retained = selected.businessBounded[V.WorkflowRetainedWorkReadResult]
+            retained.availability shouldBe "available"
+            retained.reference shouldBe reference
+            retained.response
+          }.getOrElse(control.toRecord())
+          val complete = control.retainedMaterials.foldLeft(work) { (prior, field) =>
+            val selected = call(WorkflowRetainedWork.serviceName, WorkflowRetainedSnapshot.readOperation,
+              Vector("--input", json(field.reference)))
+            withClue(selected.boundedDiagnostic) { selected.exitCode shouldBe 0 }
+            val retained = selected.businessBounded[V.WorkflowRetainedSnapshotReadResult]
+            retained.availability shouldBe "available"
+            retained.reference shouldBe field.reference
+            val overlay = control.controlSummary.flatMap(_.getRecord(field.fieldName))
+              .getOrElse(org.goldenport.record.Record.empty)
+            val material = org.goldenport.record.Record.createFull(retained.material.fields
+              .filterNot(value => overlay.getAny(value.key).nonEmpty).map(value => value.key -> value.value.single)) ++ overlay
+            org.goldenport.record.Record.createFull(prior.fields.filterNot(_.key == field.fieldName)
+              .map(value => value.key -> value.value.single)) ++ org.goldenport.record.Record.data(field.fieldName -> material)
+          }
+          val view = V.DelegateTaskView.createC(complete).toOption.getOrElse(
+            fail("Cannot decode retained delegate detail; " + output.boundedDiagnostic))
+          withClue("Missing retained delegate state; " + output.boundedDiagnostic) { view.state.nonEmpty shouldBe true }
+          view
+        }
       val base = DelegateTaskRequesterRoutingFixture.input("large-resource-fixture")
       val request = base.copy(reviewRequired = false, scalaLint = "off",
         delegation = base.delegation.copy(publicationTarget = None, artifactCoordinates = Vector.empty,
@@ -62,8 +97,10 @@ final class NativeDelegateTaskDeliveryCliSpec extends AnyWordSpec with Matchers 
       val prepare = V.WorkflowDelegateTaskStartPreparationInput(file.toUri.toASCIIString,
         "selection", "participant", "ExplicitHuman", "key", "entity:smworkflow.cli.goal_selection")
       val prepared = call("NativeWorkflowPreparationService", "prepareDelegateTaskStart", Vector("--input", json(prepare)))
-      withClue(prepared.invocation.logs) { prepared.exitCode shouldBe 0 }
-      val preparedStdout = prepared.invocation.stdout
+      withClue(prepared.boundedDiagnostic) { prepared.exitCode shouldBe 0 }
+      val importer = scenario.resolvePreparedImport(prepared, reference =>
+        call("NativeWorkflowPreparationService", "readPreparedImport", Vector("--input", reference.noSpaces)))
+      val preparedStdout = importer.invocation.stdout
       require(preparedStdout.isAbsolute && preparedStdout.normalize == preparedStdout &&
         preparedStdout.startsWith(root) && Files.isRegularFile(preparedStdout),
         "Prepared stdout must be the actual host-owned file")
@@ -75,8 +112,8 @@ final class NativeDelegateTaskDeliveryCliSpec extends AnyWordSpec with Matchers 
         io.circe.Json.fromString(preparedStdout.toString))).noSpaces)
       val started = call("DelegateTaskService", "startDelegateTask", Vector("--input", json(request),
         "--selectionId", "selection", "--participant", "participant", "--idempotencyKey", "key"))
-        .business[V.DelegateTaskView]
-      call("DelegateTaskService", "advanceDelegateTask", Vector("--sessionId", started.sessionId)).business[V.DelegateTaskView]
+        .delegateView
+      call("DelegateTaskService", "advanceDelegateTask", Vector("--sessionId", started.sessionId)).delegateView
       val destination = "SPECIFICATION-OWNED-destination-session"
       def observation(event: String, result: Option[org.goldenport.record.Record]) = V.DelegateTaskObservationInput(
         started.sessionId, event, V.WorkflowArtifactReference("SPECIFICATION-OWNED-" + event, "1"), Some(destination),
@@ -85,7 +122,7 @@ final class NativeDelegateTaskDeliveryCliSpec extends AnyWordSpec with Matchers 
       val dispatchFile = root.resolve("dispatch-observation.json")
       Files.writeString(dispatchFile, json(dispatch))
       val dispatched = call("DelegateTaskDeliveryService", "observeDelegateTaskDelivery",
-        Vector("--inputResource", dispatchFile.toUri.toASCIIString)).business[V.DelegateTaskView]
+        Vector("--inputResource", dispatchFile.toUri.toASCIIString)).delegateView
       // Transport ambiguity and a crossed destination refuse before observation
       // effects. Exact recollection keeps the original Session and counters.
       call("DelegateTaskDeliveryService", "observeDelegateTaskDelivery",
@@ -95,7 +132,7 @@ final class NativeDelegateTaskDeliveryCliSpec extends AnyWordSpec with Matchers 
       call("DelegateTaskDeliveryService", "observeDelegateTaskDelivery",
         Vector("--inputResource", crossedFile.toUri.toASCIIString)).exitCode should not be 0
       val recollected = call("DelegateTaskDeliveryService", "observeDelegateTaskDelivery",
-        Vector("--inputResource", dispatchFile.toUri.toASCIIString)).business[V.DelegateTaskView]
+        Vector("--inputResource", dispatchFile.toUri.toASCIIString)).delegateView
       DelegateTaskRequesterRoutingFixture.state(recollected) shouldBe DelegateTaskRequesterRoutingFixture.state(dispatched)
       val requester = take(DelegateTask.inputC(request))
       val producerInput = requester.copy(delegation = requester.delegation.map(_.copy(role = "destination")),
@@ -123,15 +160,20 @@ final class NativeDelegateTaskDeliveryCliSpec extends AnyWordSpec with Matchers 
       Files.writeString(resource, text)
       text.getBytes(java.nio.charset.StandardCharsets.UTF_8).length should be > 2000000
       When("the normal public operation reads the full observation DTO through its authorized Resource")
-      val result = call("DelegateTaskDeliveryService", "observeDelegateTaskDelivery",
-        Vector("--inputResource", resource.toUri.toASCIIString)).business[V.DelegateTaskView]
+      val delivered = call("DelegateTaskDeliveryService", "observeDelegateTaskDelivery",
+        Vector("--inputResource", resource.toUri.toASCIIString))
+      val result = delivered.delegateView
       val received = DelegateTaskRequesterRoutingFixture.state(result)
       Then("the requester retains the complete captured bytes and corrected inventory without claiming adoption")
       received.stage shouldBe "ResultReceived"
-      val retained = take(DelegateTask.returnedC(requester, received.delivery.get.returned.get))
+      val returned = received.delivery.flatMap(_.returned)
+        .getOrElse(fail("Missing actual retained delegate return; " + delivered.boundedDiagnostic))
+      val retained = take(DelegateTask.returnedC(requester, returned))
       retained.input shouldBe producerInput
-      retained.receipts.map(_.processObservation.get.stdout.content) shouldBe Vector(bytes, bytes)
-      retained.receipts.map(_.processObservation.get.stdout.byteCount) shouldBe Vector(bytes.size.toLong, bytes.size.toLong)
+      val observations = retained.receipts.map(receipt => receipt.processObservation.getOrElse(
+        fail("Missing retained process observation for " + receipt.identity + "; " + delivered.boundedDiagnostic)))
+      observations.map(_.stdout.content) shouldBe Vector(bytes, bytes)
+      observations.map(_.stdout.byteCount) shouldBe Vector(bytes.size.toLong, bytes.size.toLong)
     }
   }
 }

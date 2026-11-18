@@ -1,5 +1,21 @@
 # Phase 8.1 acceptance checklist
 
+Conditional latter-stage model adoption, selected 2026-11-18:
+
+- [ ] SLP-M01: When 6.2 Sol becomes available on the selected machine, verify its
+      official model ID and actual supported effort values; keep unavailable
+      status explicit until observed.
+- [ ] SLP-M02: Add the verified selection through existing model configuration
+      and sm-workflow selection owners without switching already issued work.
+- [ ] SLP-M03: A lightweight real execution confirms the selected model/effort
+      route; configured identity is distinguished from observed execution.
+- [ ] SLP-M04: Preserve issued choices, Sessions, histories and repair counts;
+      apply selection to new work only. Unavailable adoption stays deferred and
+      is neither a Phase 8 gate nor a reason to delay prioritized API delivery.
+
+These conditional items supplement the later-stage plan; they do not assert
+current availability, launch work or change existing A/B/C acceptance.
+
 Stage Status:
 - Current status: OPEN
 - Owner: sm-workflow development

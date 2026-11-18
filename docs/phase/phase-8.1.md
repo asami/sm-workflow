@@ -9,6 +9,11 @@ Stage Status:
 
 Planned: 2026-11-01
 Sequence: Phase 7 -> Phase 11.1 -> Phase 8 -> Phase 8.1 -> existing Phase 9 -> Phase 18.
+Priority clarification (2026-11-18): retain this order and complete the bounded
+practical scope quickly to reach Phase 9's API-use delivery. When expensive
+residuals are selected for deferral, transfer their explicit item identities,
+ownership and acceptance conditions to [Phase 22](phase-22.md), after API delivery.
+This priority neither marks an unchecked SLP item complete nor silently deletes it.
 Specification: [shared Scala lint profiles](../spec/scala-lint-profiles.md).
 Handoff: [English journal](https://github.com/asami/sm-workflow/blob/9debf6484e3e16e6739b83688a30a814772c7b29/docs/journal/2026/11/2026-11-01-shared-scala-lint-profiles-handoff.md).
 Producer plans: [cross-project deliveries and dependencies](phase-8.1-dependencies.md).
@@ -195,6 +200,26 @@ publication owners. Representative compiler-negative cases replace no behavioral
 obligation, and add no second whole-repository test or review cycle. This update
 adds producer planning documents only; it does not implement Core/Cozy/common
 instruction changes, execute a workflow or publish.
+
+## Later adoption: 6.2 Sol, when available — 2026-11-18
+
+Add 6.2 Sol support in the latter part of this Phase after it becomes available
+on the selected machine. Availability and support are not established now.
+Verify the actual official model identifier and supported effort settings,
+then connect the existing model configuration and sm-workflow selection route
+and perform one lightweight real execution check. Use the existing provider
+and role owners; do not add a new execution engine or infer capability from a
+model name.
+
+Preserve model/effort choices already captured in issued work, existing Sessions,
+history and repair accounting. Apply new selection only to newly issued work.
+This is conditional planning, not a current model switch or Phase execution.
+It is not a Phase 8 completion condition and does not delay its repair,
+validation or closure. If unavailable, retain the explicit deferred status;
+availability is not a reason to hold the prioritized API-use delivery.
+
+Track the bounded adoption as SLP-M01–SLP-M04 in the checklist. Existing A/B/C
+requirements and previously issued selections remain unchanged.
 
 ## Completion
 

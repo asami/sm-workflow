@@ -5,6 +5,18 @@ an existing native Session. The current Phase/checklist documents and source
 determine remaining development; native history retains accepted results and
 supports their reuse. Reconstruction does not start another Goal or Session.
 
+This is an ordinary execution route under the Human-directed
+[management-data reconstruction contract](../notes/workflow-management-data-reconstruction.md).
+Use current source and retained business/execution facts to rebuild derived
+stage, candidate and validation data when possible. Legitimate source changes,
+including a later main merge, are not contradictions merely because they differ
+from an older execution base. Preserve accepted requirements, scope, real
+results/effects, history and counters. Failure to reconstruct or genuinely
+conflicting facts require an explanatory error, not an indefinite unusable Wait
+or another incident-specific recovery mechanism. The qualified cases and
+eligibility limits below describe delivered coverage separately from this
+normal-behavior requirement.
+
 ## Acceptance of existing committed Step work
 
 For P611-CHECKPOINT-A-01, actual existing committed Step work is accepted only

@@ -71,6 +71,10 @@ private[admission] object NativeWorkflowCliFixture {
       Files.readString(stdout) + "\n" + Files.readString(stderr)
   }
   final case class Result(exitCode: Int, invocation: Invocation) {
+    def boundedDiagnostic: String =
+      s"exit=$exitCode; argv=${invocation.argv.mkString(" ").take(1024)}; pid=${invocation.pid}; " +
+        s"stdout=${invocation.stdout}; stderr=${invocation.stderr}\n" +
+        Files.readString(invocation.stdout).take(4096) + "\n" + Files.readString(invocation.stderr).take(4096)
     /** Large-output qualifications retain full captures but never embed them
       * into a failed assertion or decoder diagnostic. */
     def businessBounded[A: ValueReader]: A = {
@@ -271,7 +275,24 @@ private[admission] object NativeWorkflowCliFixture {
       * importer captures remain accepted without issuing a new preparation. */
     def resolvePreparedImport(success: Result, installations: Option[Path] = None): Result = {
       require(success.exitCode == 0 && _sequence.contains(success.invocation), "Select actual preparation output")
-      val json = parse(Files.readString(success.invocation.stdout)).fold(error => throw new AssertionError(error.message), identity)
+      resolvePreparedImport(success, reference => {
+        val argv = success.invocation.argv
+        val selector = argv.indexWhere(_.contains(".NativeWorkflowPreparationService."))
+        val input = argv.indexOf("--input")
+        require(selector >= 0 && input >= 0 && input + 1 < argv.size, "Select exact public preparation argv")
+        _run(argv.updated(selector, "org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.readPreparedImport")
+          .updated(input + 1, reference.noSpaces), installations)
+      })
+    }
+
+    /** A retaining caller may recollect its completed preparation and detail
+      * invocations. It still follows only the exact confirmed public reference. */
+    def resolvePreparedImport(success: Result, readImport: Json => Result): Result = {
+      val stdout = success.invocation.stdout
+      require(success.exitCode == 0 && stdout.isAbsolute && stdout.normalize == stdout &&
+        stdout.startsWith(root) && Files.isRegularFile(stdout) && stdout.toRealPath() == stdout,
+        "Select an actual successful scenario-owned preparation capture")
+      val json = parse(Files.readString(stdout)).fold(error => throw new AssertionError(error.message), identity)
       json.hcursor.downField("retainedImport").focus.filterNot(_.isNull) match {
         case None =>
           require(json.hcursor.get[Vector[Json]]("datastore").toOption.exists(_.nonEmpty),
@@ -279,13 +300,8 @@ private[admission] object NativeWorkflowCliFixture {
           success
         case Some(reference) =>
           require(json.hcursor.get[String]("status").toOption.contains("prepared"), "Reference requires confirmed prepared storage")
-          val argv = success.invocation.argv
-          val selector = argv.indexWhere(_.contains(".NativeWorkflowPreparationService."))
-          val input = argv.indexOf("--input")
-          require(selector >= 0 && input >= 0 && input + 1 < argv.size, "Select exact public preparation argv")
-          val detail = _run(argv.updated(selector, "org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.readPreparedImport")
-            .updated(input + 1, reference.noSpaces), installations)
-          require(detail.exitCode == 0, "Selected public importer detail unavailable; retain both captures")
+          val detail = readImport(reference)
+          require(detail.exitCode == 0, "Selected public importer detail unavailable; retain both captures; " + detail.boundedDiagnostic)
           detail
       }
     }

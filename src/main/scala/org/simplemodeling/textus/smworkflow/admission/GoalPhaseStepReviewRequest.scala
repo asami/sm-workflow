@@ -24,7 +24,7 @@ import GoalPhaseStepAssessment.given
 /** One native request opens independent review before any Step closure attempt.
   * A motivating report is prose, never a native review verdict or effect grant.
   * @since   Oct. 28, 2026
-  * @version Oct. 28, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseStepReviewRequest {
@@ -96,7 +96,7 @@ private[smworkflow] object GoalPhaseStepReviewRequest {
         validation.payload.candidate == snapshot && validation.payload.outcome.contains("passed") &&
         validation.payload.receipts.size == validation.payload.selected.size &&
         GoalPhaseNativeValidation.successful(validation.payload.receipts, validation.payload.selected) &&
-        GoalPhaseNativeMetadata.declaredIdentities(validation.payload.selected.filter(_.dependency.isEmpty)) ==
+        GoalPhaseNativeMetadata.declaredIdentities(GoalPhaseQualification.originalPrimary(validation.payload)) ==
           state.plan.steps(state.cursor).checks && validation.payload.assessment.exists(a =>
           a == admission.assessment || (a.branch == "triage" && admission.assessment.triageJudgment.nonEmpty &&
             GoalPhaseStepAssessment.triaged(a, admission.assessment.triageJudgment.get) == admission.assessment)) &&

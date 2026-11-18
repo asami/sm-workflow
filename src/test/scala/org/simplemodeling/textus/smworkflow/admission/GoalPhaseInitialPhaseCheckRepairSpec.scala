@@ -18,7 +18,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Pure actual-shaped source, codec and canonical successor evidence. Fixtures
   * confer no real Session, command, Human or independent-review authority.
   * @since   Oct. 26, 2026
-  * @version Oct. 26, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -79,9 +79,110 @@ final class GoalPhaseInitialPhaseCheckRepairSpec extends AnyWordSpec with Matche
     val failed = take(V.observedStateC(phase, validation.payload, reference))
     Fixture(validationrecord, failed, candidate, validation)
   }
+  /** Specification-shaped native prefixes only; no stored Q selection, process
+    * observation or real execution authority is fabricated by this local test.
+    */
+  private def _qualified_fixture(metadata: Boolean = false, failedPrefix: Boolean = false): Fixture = {
+    val phase = _phase(_plan, Some(R.version))
+    val inspection = _append(_initial, "PhaseInspection", "fixture-closed-Step")
+    val candidaterecord = _append(inspection, "PhaseValidation", "ordered-candidate:candidate")
+    val candidate = GoalPhaseNativeCandidate.Saved(candidaterecord, GoalPhaseNativeCandidate.Payload(
+      inspection.revision.value.toString, "phase:" + phase.plan.phase, Vector.empty, Vector.empty,
+      phase.candidate, _paths, Some("Specification-owned qualified Phase diff")))
+    val profile = GoalPhaseNativeMetadataFixture.profile.copy(query =
+      org.goldenport.cncf.validation.ValidationDiscoveryV1.SelectionQuery(standardFramework = true,
+        explicitSuites = Set(GoalPhaseNativeMetadataFixture.fixtureClass.getName)), supplemental = Vector.empty)
+    val suffix = Vector(V.Check("phase-qualified", 3, WorkflowSbtValidation.Kind.TestOnly,
+      if (metadata) Some(profile) else None))
+    val target = GoalPhaseQualification.Target(candidaterecord.identity.value,
+      candidaterecord.definition.workflowIdentity.value, candidaterecord.definition.workflowRevision.value,
+      "specification-participant", candidaterecord.revision.value, phase.plan.identity, phase.plan.revision,
+      candidate.payload.step, phase.generation, phase.candidate.get, candidaterecord.revision.value,
+      "specification-inventory", "1", "{\"specificationOwned\":true}", _checks, suffix)
+    val source = _append(candidaterecord, "PhaseValidation", GoalPhaseQualification.cause(candidaterecord))
+    val requested = _checks ++ suffix
+    val (selected, batches) = if (metadata && !failedPrefix)
+      take(GoalPhaseNativeMetadata.prepareC(requested, GoalPhaseNativeMetadataFixture.loader))
+      else (if (failedPrefix) requested.takeWhile(_.metadata.isEmpty) else requested, Vector.empty[GoalPhaseNativeMetadata.Batch])
+    val receipts = if (failedPrefix) Vector(_receipt(selected.head, passed = false)) else selected.zipWithIndex.map { (check, index) =>
+      val passed = index < selected.size - 1
+      val receipt = _receipt(check, passed)
+      if (passed && check.kind == WorkflowSbtValidation.Kind.TestOnly) receipt.copy(sbt = Some(WorkflowSbtValidation.Facts(
+        check.kind, WorkflowSbtValidation.Outcome.Succeeded,
+        Some(WorkflowSbtValidation.Selection(Vector(GoalPhaseNativeMetadataFixture.fixtureClass.getName), 1, 1L)), None)))
+      else receipt
+    }
+    val record = _append(source, "Decision", "ordered-validation:validation")
+    val value = V.Payload(source.revision.value.toString, candidate.payload.step, phase.candidate.get, selected,
+      receipts, Some("failed"), batches, qualification = Some(GoalPhaseQualification.Selection(target)))
+    val validation = V.Saved(record, value)
+    val reference = record.identity.value + ":ordered-validation:" + value.sourceRevision + ":validation"
+    Fixture(record, take(V.observedStateC(phase, value, reference)), candidate, validation)
+  }
+
   private def _source(fixture: Fixture): A.Source = take(fixture.selectC).get
   private def _change(wire: Json, field: String, value: Json): Json = wire.mapObject(_.add("payload",
     wire.hcursor.downField("payload").focus.get.mapObject(_.add(field, value))))
+
+  "Qualified whole-Phase check coverage" should {
+    "retain the exact combined failure or genuine before-discovery failure prefix and original repair allowance" in {
+      for (fixture <- Vector(_qualified_fixture(), _qualified_fixture(metadata = true),
+          _qualified_fixture(metadata = true, failedPrefix = true))) {
+        val original = fixture.validation.payload
+        val source = _source(fixture)
+        val payload = A.payload(source)
+        val state = take(A.admittedStateC(source, payload))
+        state.repairs shouldBe 1
+        state.ordinaryRepairs shouldBe 1
+        state.plan shouldBe fixture.controller.plan
+        state.completed shouldBe fixture.controller.completed
+        fixture.validation.payload shouldBe original
+        val record = _append(fixture.from, "Repair", A.causation)
+        val saved = A.Saved(record, payload, state)
+        val failure = take(W.checkFailureContextC(_paths, fixture.candidate.payload.diff.get, original, Some(saved.reference)))
+        val semantic = state.next.asInstanceOf[O.Semantic]
+        val request = W.Request(record.identity.value, record.revision.value.toString, "RepairStep", None,
+          state.generation, "Repair the actual qualified Phase failure", state.plan, state.base, state.completed,
+          None, None, semantic.repairDirective, checkFailure = Some(failure))
+        W.admitSemanticResultC(request, W.Result("completed", "Specification correction", Vector.empty)).isSuccess shouldBe true
+        W.inputCodec.decode(W.inputCodec.encode(request)) shouldBe Right(request)
+      }
+    }
+
+    "refuse crossed required Check vectors suffix bindings and missing native selection history" in {
+      val fixture = _qualified_fixture()
+      val value = fixture.validation.payload
+      val qualified = value.qualification.get
+      val badRequired = qualified.copy(target = qualified.target.copy(required =
+        qualified.target.required.updated(0, qualified.target.required.head.copy(ordinal = 8))))
+      val badSuffix = qualified.copy(target = qualified.target.copy(supplemental =
+        qualified.target.supplemental.map(_.copy(ordinal = 9))))
+      for (changed <- Vector(badRequired, badSuffix,
+          qualified.copy(target = qualified.target.copy(sessionId = "foreign-session")))) {
+        fixture.copy(validation = fixture.validation.copy(payload = value.copy(qualification = Some(changed)))).selectC.isSuccess shouldBe false
+      }
+      val missing = _fixture()
+      missing.copy(validation = missing.validation.copy(payload = value.copy(sourceRevision = missing.validation.payload.sourceRevision)))
+        .selectC.isSuccess shouldBe false
+    }
+
+    "require every qualified success receipt before admitting observed Phase review" in {
+      val fixture = _qualified_fixture()
+      val value = fixture.validation.payload
+      val receipts = value.selected.map { check =>
+        val receipt = _receipt(check, passed = true)
+        if (check.kind == WorkflowSbtValidation.Kind.TestOnly) receipt.copy(sbt = Some(WorkflowSbtValidation.Facts(check.kind,
+          WorkflowSbtValidation.Outcome.Succeeded,
+          Some(WorkflowSbtValidation.Selection(Vector("fixture.QualifiedSpec"), 1, 1L)), None))) else receipt
+      }
+      val success = value.copy(outcome = Some("passed"), receipts = receipts)
+      val phase = _phase(_plan, Some(R.version))
+      take(V.observedStateC(phase, success, "specification-qualified-complete-receipt")).stage shouldBe O.Stage.PhaseReview
+      V.observedStateC(phase, success.copy(receipts = receipts.dropRight(1)), "specification-missing-suffix-receipt").isSuccess shouldBe false
+      V.observedStateC(phase, success.copy(selected = _checks, receipts = receipts.take(_checks.size)),
+        "specification-omitted-suffix").isSuccess shouldBe false
+    }
+  }
 
   "First whole-Phase check repair admission" should {
     "reserve one ordinary Release batch after retaining the historical failed Decision exactly" in {

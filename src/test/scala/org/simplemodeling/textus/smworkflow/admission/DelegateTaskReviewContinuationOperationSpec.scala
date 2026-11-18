@@ -1,3 +1,7 @@
+/**
+ * @since   Nov. 18, 2026
+ * @version Nov. 18, 2026
+ */
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.Json
@@ -460,6 +464,7 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
       }
     }
     if (installed.nonEmpty) installedCall[V.DelegateTaskReviewContinuationDescriptionResult]("resumeDelegateTaskReviewContinuation", Vector("--input", encoded(direction))).outcome shouldBe "resumed-awaiting-advance"
+    var currentcandidate = stopped.state.candidate
     def verifyCheckpoint(suspended: Boolean): Unit =
       _with_runtime_(root, "TaskReview", hostParameters = parameters, componentInstance = "default") { (_, _, _, prepare) =>
         prepare { setup => for {
@@ -516,6 +521,13 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
       work.state.automaticCount shouldBe stopped.state.automaticCount
       work.state.ordinaryCount shouldBe stopped.state.ordinaryCount
       work.state.repairControl shouldBe stopped.state.repairControl
+      work.state.candidate should not be stopped.state.candidate
+      work.state.candidate.get.diff should include ("changed after admission")
+      work.state.receipts.map(_.identity) shouldBe stopped.state.receipts.map(_.identity)
+      work.state.receipts should not be stopped.state.receipts
+      work.state.commit shouldBe None
+      work.state.commitExecution shouldBe None
+      currentcandidate = work.state.candidate
       val reevaluation = work.reviewReevaluation.getOrElse(fail("Successor omitted original Review evidence"))
       reevaluation.originalResult shouldBe target.original.result
       reevaluation.originalResult.unresolvedQuestions shouldBe Vector("SPEC original contract question")
@@ -560,18 +572,15 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
       }
     }
     verifyCheckpoint(false)
+    val executionsbefore = Files.readAllLines(root.resolve("sbt-executions.txt")).size()
+    val currentsource = candidateText + "changed after admission\n"
+    Files.writeString(root.resolve("repository/docs/phase.md"), currentsource)
     _with_runtime_(root, "TaskReview", hostParameters = parameters, componentInstance = "default") { (owner, component, actor, prepare) =>
       def call(name: String, properties: List[Property]) = owner.executeOperationResponseInContext(
         Request.of(component = component.name, service = "DelegateTaskService", operation = name, properties = properties), actor)
       val repeat = read_value[V.DelegateTaskReviewContinuationDescriptionResult](take(call("resumeDelegateTaskReviewContinuation", List(Property("input", direction, None)))))
       repeat.outcome shouldBe "already-resumed"
       call("resumeDelegateTaskReviewContinuation", List(Property("input", direction.copy(rationale = "different"), None))).isSuccess shouldBe false
-      val source = root.resolve("repository/docs/phase.md")
-      val originalSource = Files.readString(source)
-      Files.writeString(source, originalSource + "changed after admission\n")
-      try {
-        call("advanceDelegateTask", List(Property("sessionId", session, None))).isSuccess shouldBe false
-      } finally Files.writeString(source, originalSource)
       if (installed.isEmpty) {
         val issued = read_control_value[V.DelegateTaskView](take(call("advanceDelegateTask", List(Property("sessionId", session, None)))))
         issued.kind shouldBe "Request"
@@ -609,6 +618,8 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
       val duplicate = installedCall[V.DelegateTaskView]("advanceDelegateTask", Vector("--sessionId", session))
       duplicate.retainedWork shouldBe issued.retainedWork
     }
+    val executionsafter = Files.readAllLines(root.resolve("sbt-executions.txt")).size()
+    executionsafter should be > executionsbefore
     verifyCheckpoint(true)
     _with_runtime_(root, "TaskReview", hostParameters = parameters, componentInstance = "default") { (owner, component, actor, _) =>
       def call(name: String, properties: List[Property]) = owner.executeOperationResponseInContext(
@@ -711,7 +722,7 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
           payload.branch shouldBe stopped.branch
           payload.baseHead shouldBe stopped.baseHead
           payload.state.input shouldBe stopped.state.input
-          payload.state.candidate shouldBe stopped.state.candidate
+          payload.state.candidate shouldBe currentcandidate
           payload.state.generation shouldBe stopped.state.generation
           payload.state.automaticCount shouldBe stopped.state.automaticCount
           payload.state.ordinaryCount shouldBe stopped.state.ordinaryCount
@@ -758,7 +769,8 @@ final class DelegateTaskReviewContinuationOperationSpec extends AnyWordSpec with
       } yield () }
     }
     Files.exists(root.resolve("sbt-executions.txt")) shouldBe true
-    Files.readString(root.resolve("repository/docs/phase.md")) shouldBe candidateText
+    Files.readString(root.resolve("repository/docs/phase.md")) shouldBe currentsource
+    Files.readAllLines(root.resolve("sbt-executions.txt")).size() shouldBe executionsafter
     val report = Json.obj("specimen" -> "fixture-owned-native-review-continuation".asJson,
       "mode" -> (if (installed.nonEmpty) "installed" else "managed").asJson,
       "growth" -> (if (large) "large" else "small").asJson,

@@ -22,17 +22,26 @@ import RepositorySyncValidationContinuation as N
 import RepositorySyncReviewInputContinuation as R
 import SplitPhaseExplicitPartitionFixture.take
 
+/** A finite feature on the two current leaves, retaining the original runtime
+  * classification and leaving historical Human episode registrations untouched.
+  */
+class Phase8RemoteClassificationDeclaration extends org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration {
+  override def declaration: org.goldenport.cncf.validation.ValidationMetadataV1.Declaration =
+    super.declaration.copy(features = super.declaration.features +
+      org.goldenport.cncf.validation.ValidationMetadataV1.FeatureReference("component:sm-workflow", "phase8-remote-classification"))
+}
+
 /** Two separately selected publication stages share one genuine native Session.
   * Independent semantic answers are specification-owned evidence, never live
   * provider acceptance. SQLite is observed read-only, never seeded or repaired.
   * @since   Nov.  3, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 18, 2026
   */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec with Matchers with GivenWhenThen
-    with RepositorySyncMaintenanceFixture {
+    with RepositorySyncMaintenanceFixture with org.simplemodeling.textus.smworkflow.testing.DevelopFixtureValidation {
   private val _checks = Vector(C.Check("compile1", 1, WorkflowSbtValidation.Kind.Compile),
     C.Check("test2", 2, WorkflowSbtValidation.Kind.Test), C.Check("lint3", 3, WorkflowSbtValidation.Kind.FixCheck))
   private val _unknown = Vector("README.md", "scripts/probe.py", "skills/probe/SKILL.md")
@@ -283,6 +292,16 @@ final class NativeRepositoryReviewInputContinuationCliSpec extends AnyWordSpec w
     episode.nativeRows.filterNot(raw => WorkflowInstanceRecordJsonV1.decodeC(raw, _catalog).toOption.nonEmpty)
       .foreach(raw => currentrows should contain(raw))
   }
+
+  @org.goldenport.cncf.validation.annotation.ValidationScenario(
+    name = "Installed P8-03 semantic remote-phase classification should P8-03 REMOTE technical classification continue with actual retained product checks",
+    identity = "phase8-remote-continue", declaration = classOf[Phase8RemoteClassificationDeclaration])
+  def phase8RemoteContinueDeclaration(): Unit = ()
+
+  @org.goldenport.cncf.validation.annotation.ValidationScenario(
+    name = "Installed P8-03 semantic remote-phase classification should P8-03 REMOTE technical classification consumed-demotion with actual retained product checks",
+    identity = "phase8-remote-consumed-demotion", declaration = classOf[Phase8RemoteClassificationDeclaration])
+  def phase8RemoteConsumedDemotionDeclaration(): Unit = ()
 
   "Installed P8-03 semantic remote-phase classification" should {
     for (mode <- Vector("continue", "consumed-demotion")) {

@@ -36,8 +36,9 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Shared real producer discovery, never a synthetic positive inventory.
   * @since   Oct. 18, 2026
+  *  version Oct. 19, 2026
   *  version Oct. 24, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object GoalPhaseNativeMetadataFixture {
@@ -58,10 +59,8 @@ private[admission] object GoalPhaseNativeMetadataFixture {
 
 /** Actual selection and passive transport; synthetic return values test refusal
   * only and do not establish native execution or independent review.
-  * @since   Oct. 18, 2026
-  *  version Oct. 19, 2026
-  * @version Nov.  6, 2026
-  * @author  ASAMI, Tomoharu
+  * Scenario examples created Oct. 18, 2026 and revised Oct. 19 and Nov. 6, 2026
+  * by ASAMI, Tomoharu; the file history is maintained above.
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -70,6 +69,55 @@ final class GoalPhaseNativeMetadataSpec extends AnyWordSpec with Matchers with G
   import S.given
   import GoalPhaseNativeMetadataFixture.*
   private val _snapshot = GoalPhaseOrderedProgression.Snapshot("a" * 40, "b" * 40)
+  "Managed metadata build proof" should {
+    "preserve absent wire and reject null unknown crossed and simultaneous source fields" in {
+      Given("the historical static profile wire and a new optional managed build identity")
+      val legacy = profile.asJson
+      val managed = profile.copy(buildCheckIdentity = Some("qualification-build"))
+      When("the exact profile codec decodes omitted present malformed and unknown attributes")
+      val invalid = Vector(legacy.mapObject(_.add("buildCheckIdentity", Json.Null)),
+        legacy.mapObject(_.add("buildCheckIdentity", Json.fromString("bad identity"))),
+        legacy.mapObject(_.add("classpath", Json.arr(Json.fromString("/tmp/classes")))))
+      Then("legacy absence remains byte-shape compatible and only the typed optional identity is accepted")
+      legacy.hcursor.downField("buildCheckIdentity").focus shouldBe None
+      legacy.as[N.Profile] shouldBe Right(profile)
+      managed.asJson.as[N.Profile] shouldBe Right(managed)
+      invalid.foreach(_.as[N.Profile].isLeft shouldBe true)
+      val source = L.Source("src/plan.json", "slice-plan", "slice-1", Vector("selected-behavior"))
+      N.profileValid(managed.copy(query = D.SelectionQuery(), supplemental = Vector.empty, source = Some(source))) shouldBe false
+    }
+
+    "refuse missing synthetic truncated wrong-root and crossed native build receipts" in {
+      Given("a managed profile and synthetic negative observations that cannot establish native build success")
+      val build = V.Check("qualification-build", 1, WorkflowSbtValidation.Kind.TestCompile)
+      val selected = check.copy(ordinal = 2, metadata = Some(profile.copy(buildCheckIdentity = Some(build.identity))))
+      val requested = Vector(build, selected)
+      val capture = ProcessExecutionCapture(Vector.empty, 0L, false)
+      val process = ProcessExecutionResult(ProcessExecutionTermination.Exited(0), capture, capture, Vector.empty, 0L, "negative-build")
+      val facts = WorkflowSbtValidation.Facts(WorkflowSbtValidation.Kind.TestCompile, WorkflowSbtValidation.Outcome.Succeeded, None, None)
+      val receipt = RepositorySyncNativeMergeValidation.Receipt(build.identity, "exited", Some(0), "", "", Some(facts), Some(process))
+      val root = profile.scope.artifacts.head.root
+      def exports(paths: String): RepositorySyncNativeMergeValidation.Receipt = {
+        val bytes = paths.getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector
+        val observed = process.copy(stdout = ProcessExecutionCapture(bytes, bytes.size.toLong, false))
+        receipt.copy(stdout = paths, processObservation = Some(observed))
+      }
+      val wrongroot = exports("/private/tmp/foreign-classes\n/private/tmp/foreign-classes\n")
+      val exported = exports(root.toString + "\n" + root.toString + "\n")
+      When("the receipt-only projection encounters missing captures exports or an incorrect relation")
+      val refused = Vector(Vector.empty, Vector(receipt.copy(processObservation = None)), Vector(receipt),
+        Vector(wrongroot), Vector(exported.copy(identity = "foreign-check")),
+        Vector(exported.copy(processObservation = exported.processObservation.map(p => p.copy(stdout = p.stdout.copy(truncated = true))))))
+      Then("raw exit zero and export-like text never replace complete matching native proof")
+      refused.foreach(values => N.buildsC(requested, values).isSuccess shouldBe false)
+      N.buildsC(Vector(selected, build), Vector(exported)).isSuccess shouldBe false
+      N.prepareC(requested, loader).isSuccess shouldBe false
+      val binding = SbtValidationDiscovery.Binding("wrong-component", "wrong-artifact", "wrong-revision", "wrong.package")
+      val crossed = SbtValidationDiscovery.Build(take(WorkspaceId.parseC("foreign-workspace")), binding, Vector(root), Vector(root))
+      N.buildMatches(selected.metadata.get, crossed, 1) shouldBe false
+      N.prepareC(requested, loader, builds = Map(selected.identity -> crossed)).isSuccess shouldBe false
+    }
+  }
   private def _payload(checks: Vector[V.Check], batches: Vector[N.Batch]) =
     V.Payload("8", "S1", _snapshot, checks, Vector.empty, None, batches)
   private def _configuration(value: Json): ConfigurationValue = value.fold(ConfigurationValue.NullValue,

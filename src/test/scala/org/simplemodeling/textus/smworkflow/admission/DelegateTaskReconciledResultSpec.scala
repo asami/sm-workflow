@@ -28,8 +28,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * effects. The opt-in variant uses distinct selected installed CLI processes.
   * Neither variant is the authorized live existing-chat D2 delivery.
   * @since   Oct. 27, 2026
-  *  version Oct. 27, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] abstract class DelegateTaskReconciledResultFixture extends AnyWordSpec with GivenWhenThen with ThreeWorkflowManagedRepositoryFixture {
@@ -181,6 +180,9 @@ private[admission] abstract class DelegateTaskReconciledResultFixture extends An
       "observeDelegateTaskDelivery", List(Property("input", input, None)), Vector("--input", _json(input))))
     val sent = observe(observation("dispatch-observed"))
     _state(sent).stage shouldBe "AwaitResult"
+    advance(requester).kind shouldBe "Wait"
+    advance(requester).state shouldBe sent.state
+    _calls(root) shouldBe (if (unknown) 1L else 0L)
     var failed = Option.empty[S.State]
     if (!unknown) {
       val first = advance(destination)
@@ -214,7 +216,15 @@ private[admission] abstract class DelegateTaskReconciledResultFixture extends An
     val received = observe(receive)
     _state(received).stage shouldBe "ResultReceived"
     observe(receive).state shouldBe received.state
-    advance(requester).state shouldBe received.state
+    val collected = advance(requester)
+    collected.kind shouldBe "Wait"
+    collected.state shouldBe received.state
+    _state(collected).delivery.get.returned shouldBe _state(received).delivery.get.returned
+    _state(collected).delivery.get.artifactSelection shouldBe None
+    _state(collected).automaticCount shouldBe _state(sent).automaticCount
+    _state(collected).ordinaryCount shouldBe _state(sent).ordinaryCount
+    _state(collected).repairControl shouldBe _state(sent).repairControl
+    _calls(root) shouldBe 1L
     val selected = Record.data("sourceCommit" -> commit.identity, "coordinates" -> Vector.empty[String],
       "selectionReference" -> Record.data("identity" -> "specification-artifact-selection", "revision" -> "1"),
       "consumerCheckReferences" -> Vector.empty[Record])
@@ -280,8 +290,8 @@ final class DelegateTaskReconciledResultSpec extends DelegateTaskReconciledResul
 }
 
 /** Explicit installed-image qualification retains its original external inputs and assertions.
-  * @since Nov. 8, 2026
-  * @version Nov. 8, 2026
+  * Fixture origin: Nov. 8, 2026.
+  * Last fixture update: Nov. 8, 2026.
   */
 @org.scalatest.DoNotDiscover
 @org.scalatest.tags.Slow

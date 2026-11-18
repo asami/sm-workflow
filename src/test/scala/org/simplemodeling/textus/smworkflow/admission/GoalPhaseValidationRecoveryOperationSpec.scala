@@ -27,11 +27,14 @@ import GoalPhaseValidationRecovery as R
 import GoalPhaseOrderedProgression as O
 import SplitPhaseExplicitPartitionFixture.take
 
-/** Isolated normal Operations own all native state. The acknowledgement hook
+/** File-wide history for the recovery fixture and operation specification.
+  * Isolated normal Operations own all native state. The acknowledgement hook
   * deliberately retains unknown state before any check effect. Test-owned
   * evidence is not an independent production Human or registered-runner proof.
   * @since   Oct. 20, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 22, 2026
+  *  version Oct. 25, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] trait GoalPhaseValidationRecoveryOperationFixture extends ThreeWorkflowManagedRepositoryFixture {
@@ -94,7 +97,8 @@ private[admission] trait GoalPhaseValidationRecoveryOperationFixture extends Thr
   protected def withRecoveryEpisode(root: Path, initialize: Boolean = false, interrupt: Boolean = false,
     admission: String = "allowed", sequential: Boolean = false,
     acknowledgement: Option[String => Consequence[Unit]] = None,
-    importData: Option[String] = None, componentInstance: String = "repository-spec")(task: RecoveryEpisode => Unit): Unit = {
+    importData: Option[String] = None, componentInstance: String = "repository-spec",
+    qualificationPolicy: Option[GoalPhaseQualification.Policy] = None)(task: RecoveryEpisode => Unit): Unit = {
     val previous = _admission
     val previoussequence = _sequential
     _admission = admission
@@ -105,7 +109,8 @@ private[admission] trait GoalPhaseValidationRecoveryOperationFixture extends Thr
       else Consequence.unit
     try _with_runtime_(root, "Goal", Some(recoveryHost(root)),
       hostParameters = Map("textus.resource.url.file.roots" -> root.toAbsolutePath.normalize.toString) ++
-        importData.map(value => "textus.import.data.file" -> value),
+        importData.map(value => "textus.import.data.file" -> value) ++
+        qualificationPolicy.map(value => GoalPhaseQualification.parameter -> value.asJson.noSpaces),
       goalAcknowledgement = Some(acknowledgement.getOrElse(defaultack)), componentInstance = componentInstance) {
       (owner, component, actor, prepare) =>
         if (initialize) prepare(call => call.setupC(_setup_commands_(root, "Goal").size).flatMap { _ =>
@@ -203,10 +208,6 @@ private[admission] trait GoalPhaseValidationRecoveryOperationFixture extends Thr
 
 /** Normal managed Operations prove storage/authority separation. Real SBT is
   * required by the parent's selected runtime preparation; this worker runs none.
-  * @since   Oct. 20, 2026
-  *  version Oct. 22, 2026
-  * @version Oct. 25, 2026
-  * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])

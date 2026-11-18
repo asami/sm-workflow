@@ -14,7 +14,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Typed-result projection and admission, without launching a build.
   * @since   Oct. 15, 2026
   *  version Oct. 25, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -32,6 +32,25 @@ final class WorkflowSbtValidationSpec extends AnyWordSpec with Matchers with Giv
       Vector.empty, 7L, "selected-sbt"), selection)
 
   "Actual typed SBT receipts" should {
+    "retain TestCompile DiscoveryUnavailable as unverified zero exit without broadening other preparatory facts" in {
+      Given("a typed discovery request with an actual-shaped zero-exit unavailable observation, used only as a negative fixture")
+      val original = _result(SbtOperation.TestCompile)
+      val unavailable = original.copy(target = original.target.copy(validationDiscovery = true),
+        discovery = Some(SbtValidationDiscovery.Result.Unavailable("negative fixture: missing exports")))
+      When("the receipt boundary projects the owning CNCF unavailable result")
+      val receipt = take(V.sbtReceiptC("qualification-build", Kind.TestCompile, unavailable))
+      Then("the original process survives without a successful product or selected test claim")
+      receipt.exitCode shouldBe Some(0)
+      receipt.processObservation shouldBe Some(original.processResult)
+      receipt.sbt shouldBe Some(Facts(Kind.TestCompile, Outcome.Unverified, None, Some("DiscoveryUnavailable")))
+      receipt.asJson.as[V.Receipt] shouldBe Right(receipt)
+      V.productSuccessful(receipt, Kind.TestCompile) shouldBe false
+      Vector(Kind.Compile, Kind.Test, Kind.FixCheck).foreach(kind =>
+        Facts(kind, Outcome.Unverified, None, Some("DiscoveryUnavailable")).valid shouldBe false)
+      Facts(Kind.TestCompile, Outcome.Unverified, None, Some("MissingSelection")).valid shouldBe false
+      Facts(Kind.TestCompile, Outcome.Unverified, Some(Selection(_classes, 2, 3L)), Some("DiscoveryUnavailable")).valid shouldBe false
+    }
+
     "retain only estimate field presence as nonsemantic wire provenance" in {
       Given("historical omitted and explicit-null estimates and a populated valid estimate")
       val fresh = Facts(Kind.TestOnly, Outcome.Incomplete, None, None)

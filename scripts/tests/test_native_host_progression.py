@@ -106,7 +106,7 @@ class NativeHostProgressionSpecification(unittest.TestCase):
                                 ("submitSessionId", "submit_session_id"), ("resultType", "result_type")):
                 request[alias] = request.pop(name)
         self.save(self.request, request)
-        supplied = {"result": {"summary": "Fixture semantic result"},
+        supplied = {"result": {"outcome": "completed", "summary": "Fixture semantic result", "findings": []},
                     "completionFacts": [{"fixture": True}],
                     "executionEvidence": {"fixture": "not real execution"}}
         if family != "SplitPhase":
@@ -190,6 +190,109 @@ class NativeHostProgressionSpecification(unittest.TestCase):
             native.telemetry = telemetry.call_args_list
         return status, observations, diagnostic.getvalue(), calls, native
 
+    def retained_goal(self, output, transport="inline"):
+        # Explicit test-owned retained work, never installed provenance or authority.
+        self.select()
+        request = json.loads(self.request.read_text())
+        request["issuedWorkContext"] = {"result_type": GOAL_PAIR[1],
+            "continuation_id": "fixture-work", "expected_revision": "1"}
+        resource = "sm-workflow-work:fixture"
+        detail = {"availability": "available", "reference": {"session_id": self.outer_id,
+            "identity": "fixture-work", "revision": "1", "resource": resource}, "response": request}
+        self.save(self.request, detail)
+        supplied = json.loads(self.submission.read_text())
+        result = supplied["result"]
+        if transport == "envelope":
+            supplied["result"] = {"schemaVersion": "sm-workflow.public-worker-return.v1",
+                "resultType": GOAL_PAIR[1], "workResource": resource, "result": result}
+        elif transport in {"compact", "resource"}:
+            source = self.root / "worker-result.json"
+            self.save(source, result)
+            if transport == "compact":
+                supplied["result"] = {"outcome": "completed", "summary": result["summary"],
+                    "resultType": GOAL_PAIR[1], "resultResource": source.as_uri()}
+            else:
+                supplied.pop("result")
+                supplied["resultResource"] = source.as_uri()
+        else:
+            source = output / "projection/input.json"
+        self.save(self.submission, supplied)
+        if transport == "envelope":
+            source = output / "projection/input.json"
+        projection = {"result_json": json.dumps(result), "result_type": GOAL_PAIR[1],
+            "work_resource": resource, "result_resource": source.as_uri(),
+            "submit_session_id": self.submit_id, "next_operation": GOAL_PAIR[0]}
+        return result, projection
+
+    def test_retained_goal_complete_projects_each_public_transport_before_submit(self):
+        for transport in ("inline", "envelope", "compact", "resource"):
+            with self.subTest(transport=transport):
+                output = self.output()
+                result, projection = self.retained_goal(output, transport)
+                route = self.route.read_bytes()
+                responses = [projection, self.submit_response(), self.advance_response("Wait")]
+
+                def during(index, observed):
+                    # Projection is passive and never displayed as accepted semantic work.
+                    if index < 2:
+                        self.assertEqual(observed.getvalue(), "")
+                    else:
+                        self.assertEqual(json.loads(observed.getvalue()), responses[1])
+
+                status, observed, diagnostic, calls, _native = self.call(output, responses, during=during)
+                self.assertEqual(status, 0, diagnostic)
+                self.assertEqual(len(calls), 3)
+                self.assertEqual(calls[0], [str(self.executable),
+                    "org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.projectSemanticWorkResult",
+                    "--input", json.dumps({"workResource": projection["work_resource"],
+                        "resultResource": projection["result_resource"], "format": "public-result"}), "--json"])
+                self.assertEqual(calls[1][1], SERVICES["GoalPhase"] + GOAL_PAIR[0])
+                self.assertNotIn("--result", calls[1])
+                self.assertEqual(calls[1][calls[1].index("--resultResource") + 1],
+                    (output / "projection/public-result.json").as_uri())
+                self.assertEqual(json.loads((output / "projection/public-result.json").read_text()), result)
+                self.assertEqual(calls[2], self.expected_command("GoalPhase", "advanceGoalPhase", ["--sessionId", self.outer_id]))
+                self.assertEqual([json.loads(line) for line in observed.getvalue().splitlines()], responses[1:])
+                self.assertEqual(self.route.read_bytes(), route)
+                for index, directory in enumerate((output / "projection", output, output / "advance")):
+                    self.assertEqual((directory / "response.json").read_bytes(), self.raw(responses[index]))
+
+    def test_retained_goal_projection_refuses_crossed_or_missing_metadata_before_submit(self):
+        cases = [("result_type", "GoalTaskWorkResult"), ("work_resource", "sm-workflow-work:other"),
+                 ("result_resource", "file:///other.json"), ("submit_session_id", "other"),
+                 ("next_operation", "other"), ("result_json", "not json"), ("result_type", None)]
+        for field, value in cases:
+            with self.subTest(field=field, value=value):
+                output = self.output()
+                _result, projection = self.retained_goal(output)
+                if value is None:
+                    projection.pop(field)
+                else:
+                    projection[field] = value
+                status, observed, _diagnostic, calls, _native = self.call(output, [projection])
+                self.assertEqual(status, 2)
+                self.assertEqual(len(calls), 1)
+                self.assertTrue(calls[0][1].endswith(".projectSemanticWorkResult"))
+                self.assertEqual(observed.getvalue(), "")
+                self.assertFalse((output / "response.json").exists())
+                self.assertEqual(list((output / "advance").iterdir()), [])
+
+    def test_retained_goal_projection_keeps_accepted_submit_when_advance_fails(self):
+        for failure in ("transport", "disconnected", "nonzero"):
+            with self.subTest(failure=failure):
+                output = self.output()
+                _result, projection = self.retained_goal(output)
+                accepted = self.submit_response()
+                responses = [projection, accepted, self.advance_response()]
+                status, observed, _diagnostic, calls, _native = self.call(output, responses, fault=(2, failure))
+                self.assertEqual(status, 2)
+                self.assertEqual(len(calls), 3)
+                self.assertEqual(json.loads(observed.getvalue()), accepted)
+                self.assertEqual(observed.flushed, [observed.getvalue()])
+                self.assertEqual((output / "response.json").read_bytes(), self.raw(accepted))
+                self.assertEqual((output / "advance/response.json").read_bytes(), self.raw(responses[2]))
+                self.assertEqual(sum(command[1].endswith("." + GOAL_PAIR[0]) for command in calls), 1)
+
     def test_compact_complete_retains_wait_boundary_and_lossless_detail_without_another_advance(self):
         # Given an accepted result followed by a real-shaped UNKNOWN boundary,
         # including a large retained detail that must not become inline control.
@@ -244,8 +347,7 @@ class NativeHostProgressionSpecification(unittest.TestCase):
         self.assertFalse((output / "response.json").exists())
 
     def expected_command(self, service, operation, pairs):
-        return [str(self.executable), "--runtime-root", str(self.runtime_root),
-                "command", SERVICES[service] + operation, *pairs, "--json"]
+        return [str(self.executable), SERVICES[service] + operation, *pairs, "--json"]
 
     def assert_success(self, output, responses, during=None):
         # Given the selected issued route, prepared output and native response fixtures,
@@ -257,7 +359,7 @@ class NativeHostProgressionSpecification(unittest.TestCase):
         self.assertEqual(diagnostic, "")
         self.assertEqual(native.call_count, 2)
         for command in calls:
-            self.assertEqual(command[3], "command")
+            self.assertTrue(command[1].startswith("org.simplemodeling.textus.SmWorkflow."))
             self.assertFalse(any(item.startswith("--textus.assembly.descriptor=") for item in command))
         supplied = json.loads(self.submission.read_text(encoding="utf-8"))
         pairs = ["--sessionId", self.submit_id]
@@ -326,10 +428,9 @@ class NativeHostProgressionSpecification(unittest.TestCase):
                 # Then the normal preparation, fixed binding Submit and unbound ordinary Advance retain actual outputs.
                 self.assertEqual(status, 0, diagnostic)
                 self.assertEqual(len(calls), 3)
-                self.assertEqual(calls[0][:5], [str(self.executable), "--runtime-root", str(self.runtime_root),
-                "command",
+                self.assertEqual(calls[0][:2], [str(self.executable),
                     "org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.prepareEvidence"])
-                value = json.loads(calls[0][6])
+                value = json.loads(calls[0][3])
                 supplied = json.loads(self.submission.read_text())
                 provenance = json.loads(self.provenance.read_text())
                 self.assertEqual({name: value[name] for name in provenance}, provenance)
@@ -345,7 +446,7 @@ class NativeHostProgressionSpecification(unittest.TestCase):
                 for name in ("answer", "resultReference", "executionEvidence"):
                     pairs.extend(["--" + name, json.dumps(supplied[name], ensure_ascii=False)])
                 expected = self.expected_command("GoalPhase", HUMAN_PAIR[0], pairs)
-                expected.insert(3, "--textus.import.data.file=" + str(output / "preparation/response.json"))
+                expected.insert(2, "--textus.import.data.file=" + str(output / "preparation/response.json"))
                 self.assertEqual(calls[1], expected)
                 self.assertEqual(calls[2], self.expected_command("GoalPhase", "advanceGoalPhase", ["--sessionId", self.outer_id]))
                 self.assertEqual([json.loads(line) for line in observed.getvalue().splitlines()], responses)
@@ -371,8 +472,8 @@ class NativeHostProgressionSpecification(unittest.TestCase):
         status, observed, diagnostic, calls, _native = self.call(output, responses, argv=self.human_args(output))
         self.assertEqual(status, 0, diagnostic)
         self.assertEqual(len(calls), 4)
-        self.assertEqual(calls[1][4], "org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.readPreparedImport")
-        self.assertEqual(json.loads(calls[1][6]), reference)
+        self.assertEqual(calls[1][1], "org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.readPreparedImport")
+        self.assertEqual(json.loads(calls[1][3]), reference)
         self.assertIn("--textus.import.data.file=" + str(output / "preparation/detail/response.json"), calls[2])
         self.assertNotIn("FULL_IMPORT_DETAIL_ONLY_", observed.getvalue())
         self.assertEqual([json.loads(line) for line in observed.getvalue().splitlines()],
@@ -520,38 +621,54 @@ class NativeHostProgressionSpecification(unittest.TestCase):
                 self.assert_success(self.output(), [self.submit_response(), self.advance_response()])
 
     def test_installed_child_transport_completes_without_development_artifacts(self):
-        # Given one explicitly selected executable in a spaced path and no checkout runtime artifacts,
+        # Each process is an owned finite fixture, not installed-tool qualification.
         output = self.output()
+        result, projection = self.retained_goal(output)
         calls = self.root / "installed-calls.jsonl"
-        responses = [self.submit_response(), self.advance_response("Wait")]
+        responses = [projection, self.submit_response(), self.advance_response("Wait")]
+        operations = ["org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.projectSemanticWorkResult",
+                      SERVICES["GoalPhase"] + GOAL_PAIR[0], SERVICES["GoalPhase"] + "advanceGoalPhase"]
+        public = output / "projection/public-result.json"
         program = ("#!" + sys.executable + "\n"
                    "import json, pathlib, sys, os\n"
                    "calls = pathlib.Path(" + repr(str(calls)) + ")\n"
                    "prior = calls.read_text().splitlines() if calls.exists() else []\n"
                    "responses = " + repr(responses) + "\n"
-                   "assert len(prior) < 2\n"
-                   "assert sys.argv[1:4] == " + repr(["--runtime-root", str(self.runtime_root), "command"]) + "\n"
-                   "assert sys.argv[4] == " + repr(SERVICES["GoalPhase"]) + " + ['submitGoalPhaseWorkResult', 'advanceGoalPhase'][len(prior)]\n"
-                   "with calls.open('a') as stream: stream.write(json.dumps({'argv': sys.argv[1:], 'cwd': os.getcwd()}) + '\\n')\n"
+                   "operations = " + repr(operations) + "\n"
+                   "index = len(prior)\n"
+                   "assert index < 3\n"
+                   "argv = sys.argv[1:]\n"
+                   "assert argv[0] == operations[index] and argv[-1] == '--json'\n"
+                   "if index == 0:\n"
+                   " value = json.loads(argv[argv.index('--input')+1])\n"
+                   " assert value == " + repr({"workResource": projection["work_resource"],
+                       "resultResource": projection["result_resource"], "format": "public-result"}) + "\n"
+                   " assert json.loads(pathlib.Path(" + repr(str(output / "projection/input.json")) + ").read_text()) == " + repr(result) + "\n"
+                   "elif index == 1:\n"
+                   " assert '--result' not in argv\n"
+                   " assert argv[argv.index('--resultResource')+1] == " + repr(public.as_uri()) + "\n"
+                   " assert json.loads(pathlib.Path(" + repr(str(public)) + ").read_text()) == " + repr(result) + "\n"
+                   " assert argv[argv.index('--sessionId')+1] == " + repr(self.submit_id) + "\n"
+                   "else:\n"
+                   " assert argv == " + repr([operations[2], "--sessionId", self.outer_id, "--json"]) + "\n"
+                   "with calls.open('a') as stream: stream.write(json.dumps({'argv': argv, 'cwd': os.getcwd()}) + '\\n')\n"
                    "sys.stderr.write('installed fixture diagnostic\\n')\n"
-                   "print(json.dumps(responses[len(prior)], ensure_ascii=False))\n")
+                   "print(json.dumps(responses[index], ensure_ascii=False))\n")
         self.executable.write_text(program)
         observed, diagnostic = io.StringIO(), io.StringIO()
         originalroute = self.route.read_bytes()
-        # When the real finite caller launches the selected test executable twice with no native-call mock,
+        # The real caller launches projection, Submit and Advance with the actual command prefix.
         with redirect_stdout(observed), redirect_stderr(diagnostic):
             status = CALLER.main(self.args(output))
-        # Then exact Submit/Advance transport, flushed actual observations and raw results are retained.
         self.assertEqual(status, 0, diagnostic.getvalue())
         actual = [json.loads(line) for line in calls.read_text().splitlines()]
-        self.assertEqual(len(actual), 2)
+        self.assertEqual(len(actual), 3)
         self.assertTrue(all(call["cwd"] == str(self.runtime_root) for call in actual))
-        self.assertEqual(actual[0]["argv"][:4], ["--runtime-root", str(self.runtime_root), "command", SERVICES["GoalPhase"] + "submitGoalPhaseWorkResult"])
-        self.assertEqual(actual[1]["argv"], ["--runtime-root", str(self.runtime_root), "command", SERVICES["GoalPhase"] + "advanceGoalPhase", "--sessionId", self.outer_id, "--json"])
+        self.assertEqual([call["argv"][0] for call in actual], operations)
         business = [item for item in map(json.loads, observed.getvalue().splitlines()) if "recordType" not in item]
-        self.assertEqual(business, responses)
-        self.assertEqual(json.loads((output / "response.json").read_text()), responses[0])
-        self.assertEqual(json.loads((output / "advance/response.json").read_text()), responses[1])
+        self.assertEqual(business, responses[1:])
+        for index, directory in enumerate((output / "projection", output, output / "advance")):
+            self.assertEqual(json.loads((directory / "response.json").read_text()), responses[index])
         self.assertEqual(self.route.read_bytes(), originalroute)
 
     def test_human_transport_uses_three_owned_subprocesses_and_unchanged_preparation_bytes(self):
@@ -571,16 +688,15 @@ class NativeHostProgressionSpecification(unittest.TestCase):
                    "index = len(prior)\n"
                    "assert index < 3\n"
                    "argv = sys.argv[1:]\n"
-                   "assert argv[:2] == " + repr(["--runtime-root", str(self.runtime_root)]) + "\n"
                    "binding = " + repr(binding) + "\n"
                    "if index == 1:\n"
-                   " assert argv[2] == binding and argv[3] == 'command'\n"
+                   " assert argv[1] == binding\n"
                    " assert pathlib.Path(binding.split('=', 1)[1]).read_bytes() == (json.dumps(responses[0], ensure_ascii=False)+'\\n').encode()\n"
                    "else:\n"
-                   " assert argv[2] == 'command' and binding not in argv\n"
+                   " assert binding not in argv\n"
                    "operations = ['org.simplemodeling.textus.SmWorkflow.NativeWorkflowPreparationService.prepareEvidence',"
                    "'" + SERVICES["GoalPhase"] + HUMAN_PAIR[0] + "','" + SERVICES["GoalPhase"] + "advanceGoalPhase']\n"
-                   "assert argv[argv.index('command')+1] == operations[index]\n"
+                   "assert argv[0] == operations[index]\n"
                    "with calls.open('a') as stream: stream.write(json.dumps({'argv':argv,'cwd':os.getcwd()})+'\\n')\n"
                    "sys.stderr.write('human fixture diagnostic\\n')\n"
                    "print(json.dumps(responses[index], ensure_ascii=False))\n")
@@ -596,7 +712,7 @@ class NativeHostProgressionSpecification(unittest.TestCase):
         self.assertTrue(all(call["cwd"] == str(self.runtime_root) for call in actual))
         business = [item for item in map(json.loads, observed.getvalue().splitlines()) if "recordType" not in item]
         self.assertEqual(business, responses)
-        self.assertEqual(actual[1]["argv"][2], binding)
+        self.assertEqual(actual[1]["argv"][1], binding)
         self.assertNotIn(binding, actual[2]["argv"])
         self.assertEqual((self.runtime_root / ".textus/config.json").read_bytes(), config)
         for index, directory in enumerate((output / "preparation", output, output / "advance")):
