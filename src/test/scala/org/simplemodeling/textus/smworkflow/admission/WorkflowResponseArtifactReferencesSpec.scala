@@ -10,19 +10,102 @@ import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.textus.smworkflow.value as V
-import org.simplemodeling.textus.smworkflow.preparation.NativeGoalTaskStartInput
+import org.simplemodeling.textus.smworkflow.preparation.{NativeGoalTaskStartInput, NativeStandaloneFixStartInput}
 import SplitPhaseExplicitPartitionFixture.take
 
 /** Public raw control and explicit native detail consumers, including a new
   * runtime over the same retained store. Fixture authorship is not execution.
   * @since   Nov.  8, 2026
-  * @version Nov. 11, 2026
+  * @version Nov. 18, 2026
   * The suite identity follows the frozen reference-continuation check selection.
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class WorkflowResponseArtifactReferencesSpec extends AnyWordSpec with GivenWhenThen with ThreeWorkflowManagedRepositoryFixture {
   "Retained Workflow work" should {
+    "return the saved completion projection on the first validation terminal response" in {
+      Given("a fixture-owned validation checkpoint with one successful receipt and no CommonEvidence installation")
+      val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/retained-work").toAbsolutePath), "terminal-").toRealPath()
+      val checks = Vector(GoalPhaseNativeValidation.Check("compile", 1, WorkflowSbtValidation.Kind.Compile))
+      val input = V.StandaloneFixInput("sm-workflow", "terminal-projection", "Qualify the selected candidate",
+        NonEmptyVector.one("src"), NonEmptyVector.one("compile"), NonEmptyVector.one("behavior"),
+        NonEmptyVector.one(V.WorkflowArtifactReference("fixture-request", "1")), false, "validation", "off", 10)
+      val original = ThreeWorkflowNormalHostFixture.definition(root)
+      val host = original.copy(goal = original.goal.copy(candidatePaths = input.ownedPaths.toVector,
+        stepValidation = original.goal.stepValidation.copy(checks = checks)))
+      val prepared = take(NativeStandaloneFixStartInput.prepareC(Map("input" -> "selected.json", "selection-id" -> "terminal-selection",
+        "participant" -> "participant", "origin" -> "ExplicitHuman", "idempotency-key" -> "terminal-start",
+        "selection-collection" -> "entity:smworkflow.cli.goal_selection"), _ => input.toRecord().toJsonStringC))
+      _with_runtime_(root, "Equal", Some(host), BoundedWorkExecutionAdmissionFixture.parameters) { (owner, component, actor, prepare) =>
+        prepare(call => call.setupC(_setup_commands_(root, "Equal").size).flatMap { _ =>
+          val row = prepared.getVector("datastore").get.head.asInstanceOf[Record].getVector("records").get.head.asInstanceOf[Record]
+          call.createC("goal_selection", row.getString("id").get, row.removeKeys(Set("id")))
+        })
+        def _invoke_(operation: String, properties: List[Property]) = take(owner.executeOperationResponseInContext(
+          Request.of(component = component.name, service = "StandaloneFixService", operation = operation, properties = properties), actor))
+        val started = read_control_value[V.StandaloneFixView](_invoke_("startStandaloneFix", List(Property("input", input, None),
+          Property("selectionId", "terminal-selection", None), Property("participant", "participant", None),
+          Property("idempotencyKey", "terminal-start", None))))
+        val receipt = RepositorySyncNativeMergeValidation.Receipt("compile", "exited", Some(0), "fixture success", "",
+          Some(WorkflowSbtValidation.Facts(WorkflowSbtValidation.Kind.Compile, WorkflowSbtValidation.Outcome.Succeeded, None, None)))
+        var checkpoint = Option.empty[org.goldenport.cncf.workflow.WorkflowInstancePersistence.InstanceRecord]
+        prepare { call => for {
+          definition <- StandaloneFixRuntimeCatalog.loadC()
+          h = BoundedWorkRuntime.Host(_configuration_, _collection_("instances"), _collection_("continuations"),
+            "sm-workflow", root.resolve("repository").toString, "main", host.goal.candidatePaths, checks,
+            None, None, None, None, None)
+          store <- StandaloneFixNativeRun.storageC(h, definition, call.core)
+          instances <- store.bindInstancesC()(using call.core.executionContext)
+          current <- instances.loadC(InstanceIdentity(started.sessionId))(using call.core.executionContext)
+            .flatMap(_.map(Consequence.success).getOrElse(Consequence.stateConflict("Fixture Start is absent")))
+          payload <- StandaloneFixNativeRun.loadPayloadC(store, started.sessionId, current.revision.value, call.core)
+          observed <- call.observeC()
+          tree <- RepositorySyncManagedGitObservation.indexTreeC(call.core)
+          state = payload.state.copy(stage = "Assess", candidate = Some(StandaloneFixExecution.Candidate(observed.head, tree, Vector.empty, "")),
+            receipts = Vector(receipt))
+          saved <- StandaloneFixNativeRun.saveC(h, store, current, payload.copy(state = state), call.core)
+          _ = { checkpoint = Some(saved) }
+        } yield () }
+        When("the first public Advance assesses and saves the terminal checkpoint")
+        val terminal = read_control_value[V.StandaloneFixView](_invoke_("advanceStandaloneFix", List(Property("sessionId", started.sessionId, None))))
+        val reference = terminal.retainedMaterials.find(_.fieldName == "state").get.reference
+        val detail = read_control_value[V.WorkflowRetainedSnapshotReadResult](take(owner.executeOperationResponseInContext(
+          Request.of(component = component.name, service = WorkflowRetainedWork.serviceName,
+            operation = WorkflowRetainedSnapshot.readOperation, properties = List(Property("input", reference, None))), actor)))
+        import StandaloneFixExecution.given
+        val state = take(GoalPhaseNativeMetadata.normalizePublicJson(DevelopmentOperationalView.json(detail.material))
+          .flatMap(_.as[StandaloneFixExecution.State].left.map(_.message)).fold(Consequence.stateConflict(_), Consequence.success))
+        Then("the first response references the exact saved warning and preserves the fixture receipt and repair counters")
+        terminal.kind shouldBe "Terminal"
+        terminal.sessionId shouldBe started.sessionId
+        state.projectionWarning shouldBe Some("Common Evidence projection is not installed")
+        state.receipts shouldBe Vector(receipt)
+        state.automaticCount shouldBe 0
+        state.ordinaryCount shouldBe 0
+        var terminalrecord = checkpoint
+        prepare { call => for {
+          definition <- StandaloneFixRuntimeCatalog.loadC()
+          current <- CallScopedWorkflowInstances.managed(_configuration_, definition, _collection_("instances"), _collection_("continuations"))
+            .loadForCallC(_configuration_, InstanceIdentity(started.sessionId), call.core)
+            .flatMap(_.map(Consequence.success).getOrElse(Consequence.stateConflict("Fixture terminal is absent")))
+          _ = { current.history.take(checkpoint.get.history.size) shouldBe checkpoint.get.history; terminalrecord = Some(current) }
+        } yield () }
+        When("the same Session is collected again")
+        val recollected = read_control_value[V.StandaloneFixView](_invoke_("advanceStandaloneFix", List(Property("sessionId", started.sessionId, None))))
+        Then("the same retained revision and history remain without SBT or publication replay")
+        recollected shouldBe terminal
+        prepare { call => for {
+          definition <- StandaloneFixRuntimeCatalog.loadC()
+          current <- CallScopedWorkflowInstances.managed(_configuration_, definition, _collection_("instances"), _collection_("continuations"))
+            .loadForCallC(_configuration_, InstanceIdentity(started.sessionId), call.core)
+            .flatMap(_.map(Consequence.success).getOrElse(Consequence.stateConflict("Fixture terminal is absent")))
+          _ = { current.history shouldBe terminalrecord.get.history; current.revision shouldBe terminalrecord.get.revision }
+        } yield () }
+        Files.exists(root.resolve("sbt-executions.txt")) shouldBe false
+        Files.exists(root.resolve("publication-count.txt")) shouldBe false
+      }
+    }
+
     "publish a bounded decision-needed result and retain Human state without inventing a completion route" in {
       val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/retained-work").toAbsolutePath), "human-").toRealPath()
       val input = V.GoalTaskInput("sm-workflow", "retained-human", "SPECIFICATION-OWNED unresolved adopted objective",

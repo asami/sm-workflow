@@ -16,6 +16,10 @@ import org.simplemodeling.textus.smworkflow.value as V
 import org.simplemodeling.textus.smworkflow.preparation.NativeDelegateTaskStartInput
 import DelegateTaskValidationRecovery.given
 
+/** Managed validation recovery and retained-capture qualification.
+  * @since   Nov. 12, 2026
+  * @version Nov. 18, 2026
+  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with Matchers with org.scalatest.GivenWhenThen with ThreeWorkflowManagedRepositoryFixture {
@@ -111,7 +115,11 @@ final class DelegateTaskValidationRecoveryOperationSpec extends AnyWordSpec with
       TypedSbtHostPlanFixture.build(root, successful = true, diagnosticBytes = 1500000)
       // Keep the actual full-Test ProductCheck and add an independently selected
       // ScalaTest suite for the third native check in this SPEC-owned repository.
-      TypedSbtHostPlanFixture.buildMetadata(root)
+      // Local fixtures use the current Test classpath prepared by Test/compile.
+      // Installed qualification keeps the official primary runtime classpath.
+      val localclasspath = Option.when(installed.isEmpty)(
+        Path.of("target/sm-workflow/validation-classpath.txt").toAbsolutePath.normalize)
+      TypedSbtHostPlanFixture.buildMetadata(root, selectedClasspath = localclasspath)
       val buildFile = root.resolve("repository/build.sbt")
       val build = Files.readString(buildFile).replace(root.resolve("sbt-executions.txt").toString,
         root.resolve("sbt-launches.txt").toString)

@@ -13,7 +13,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /**
  * @since   Oct.  2, 2026
  *  version Oct. 28, 2026
- * @version Nov. 17, 2026
+ * @version Nov. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -169,6 +169,7 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
           "WorkflowDelegateTaskScopeCorrectionPreparationInput",
           "DelegateTaskCandidateContinuationDescriptionInput", "DelegateTaskCandidateContinuationInput",
           "DelegateTaskCandidateContinuationView", "WorkflowDelegateTaskCandidateContinuationPreparationInput",
+          "DelegateTaskValidationRecoveryDescriptionInput", "DelegateTaskValidationRecoveryInput", "DelegateTaskValidationRecoveryView",
           "GoalTaskValidationContinuationInput", "GoalTaskValidationContinuationDescriptionResult",
           "BoundedValidationContinuationDescriptionInput", "BoundedValidationContinuationInput", "BoundedValidationContinuationView")
       values.foreach { name =>
@@ -388,7 +389,8 @@ final class ComponentPackagingDescriptorSpec extends AnyWordSpec with Matchers w
       valueFields("GoalPhaseWorkResult") shouldBe Vector("outcome", "summary", "findings", "acceptance", "fixAssessment",
         "issueReport", "planRevision", "reviewObservations")
       valueFields("GoalPhaseAdvanceResult").takeRight(4) shouldBe Vector("validation", "repairProgress", "findingRecording", "localPublication")
-      names("LocalPublicationService") should contain theSameElementsAs Vector("ensureLocalPublication", "collectLocalPublication")
+      names("LocalPublicationService") should contain theSameElementsAs Vector("ensureLocalPublication", "collectLocalPublication",
+        "describeLocalPublicationRecovery", "admitLocalPublicationRecovery", "advanceLocalPublicationRecovery")
       text(operation("LocalPublicationService", "ensureLocalPublication"), "input") shouldBe "LocalPublicationInput"
       text(operation("LocalPublicationService", "collectLocalPublication"), "input") shouldBe "LocalPublicationCollectionInput"
       Vector("ensureLocalPublication", "collectLocalPublication").foreach { name =>

@@ -18,7 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Oct.  5, 2026
  *  version Oct. 28, 2026
- * @version Nov. 17, 2026
+ * @version Nov. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -93,7 +93,11 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
       "submitDelegateTaskWorkResult", "resolveDelegateTaskDiagnosticInformation",
       "describeDelegateTaskScopeCorrection", "correctDelegateTaskScope",
       "describeDelegateTaskCandidateContinuation", "recoverDelegateTaskCandidateContinuation",
-      "describeDelegateTaskValidationContinuation", "adoptDelegateTaskValidationContinuation"),
+      "describeDelegateTaskValidationContinuation", "adoptDelegateTaskValidationContinuation",
+      "describeDelegateTaskValidationRecovery", "recoverDelegateTaskValidation",
+      "describeDelegateTaskSemanticContinuation", "resumeDelegateTaskSemanticContinuation",
+      "describeDelegateTaskRepairContinuation", "resumeDelegateTaskRepair",
+      "describeDelegateTaskReviewContinuation", "resumeDelegateTaskReviewContinuation"),
     SmWorkflowComponent.DelegateTaskImplementationServiceService -> Vector("implementDelegateTask"),
     SmWorkflowComponent.DelegateTaskRepairServiceService -> Vector("repairDelegateTask"),
     SmWorkflowComponent.DelegateTaskReviewServiceService -> Vector("reviewDelegateTask"),
@@ -108,7 +112,8 @@ private[smworkflow] trait SmWorkflowGeneratedHelpBehavior extends AnyWordSpec wi
     SmWorkflowComponent.DevelopmentObservationServiceService -> Vector("readDevelopmentState", "readDevelopmentHistory"),
     SmWorkflowComponent.ManagedDevelopmentServiceService -> Vector("publishDevelopmentArtifact", "selectDevelopmentArtifact",
       "compileDevelopmentConsumer", "readDevelopmentArtifactStatus"),
-    SmWorkflowComponent.LocalPublicationServiceService -> Vector("ensureLocalPublication", "collectLocalPublication", "collectLatestLocalPublication"),
+    SmWorkflowComponent.LocalPublicationServiceService -> Vector("ensureLocalPublication", "collectLocalPublication", "collectLatestLocalPublication",
+      "describeLocalPublicationRecovery", "admitLocalPublicationRecovery", "advanceLocalPublicationRecovery"),
     SmWorkflowComponent.JournalServiceService -> Vector("readJournalEntry", "findJournalEntries",
       "recordJournalEntry", "correctJournalEntry", "updateJournalIssueState",
       "readJournalSemanticEntry", "findJournalSemanticEntries"),

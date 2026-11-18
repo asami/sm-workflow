@@ -1154,6 +1154,20 @@
           "kind": "COMMAND",
           "input": "DelegateTaskReviewContinuationInput",
           "output": "DelegateTaskReviewContinuationDescriptionResult"
+        },
+        {
+          "service": "DelegateTaskService",
+          "name": "describeDelegateTaskValidationRecovery",
+          "kind": "COMMAND",
+          "input": "DelegateTaskValidationRecoveryDescriptionInput",
+          "output": "DelegateTaskValidationRecoveryView"
+        },
+        {
+          "service": "DelegateTaskService",
+          "name": "recoverDelegateTaskValidation",
+          "kind": "COMMAND",
+          "input": "DelegateTaskValidationRecoveryInput",
+          "output": "DelegateTaskValidationRecoveryView"
         }
       ],
       "types": [
@@ -9713,6 +9727,84 @@
             },
             {
               "name": "resumeOperation",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskValidationRecoveryDescriptionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskValidationRecoveryInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "proof",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskValidationRecoveryView",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
               "type": "string",
               "multiplicity": "1",
               "required": true
