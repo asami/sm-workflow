@@ -178,6 +178,13 @@ source guards, checks and freshness remain required. A current primary is not
 forced back to obsolete historical primary bytes. Ordinary later-generation
 capture performs current source qualification with those retained obligations.
 
+An unchanged dependency approval can follow an authenticated common selection
+to a later fresh capture in the same Session, Plan, Step and original primary
+base. The native selection must follow the original approval completion, advance
+its generation, and precede the new capture at an admitted generation. Existing
+admission, prefix and current-controller capture checks remain required. Older
+check results remain historical and cannot qualify the changed current bytes.
+
 If a common selection changes the captured Plan, source Capture v9 adds optional
 `planSelection`, linking the actual managed common reconstruction. Its ephemeral
 native chain proof binds the actual selected Plan, Session, base, Step,

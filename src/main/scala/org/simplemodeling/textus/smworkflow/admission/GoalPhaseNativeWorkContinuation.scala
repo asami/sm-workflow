@@ -121,6 +121,12 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           accepted.find(_.capture.step == admission.binding.step).forall(_.capture.admission == admission)) Consequence.unit
         else V.invalid("admission has a missing, forged, skipped or crossed accepted native prefix")
     } yield ()
+    private def _capture_generation_admitted(legacy: LegacyAdmission, capture: V.Capture): Boolean =
+      legacy.generation == capture.generation || developmentSelections.exists(selection =>
+        selection.session == legacy.session && ContextReference(selection.plan.identity, selection.plan.revision) == legacy.plan &&
+          selection.base == legacy.primaryBase && selection.step == legacy.step &&
+          selection.generation > legacy.generation && selection.generation <= capture.generation &&
+          selection.recordRevision > legacy.completionRevision && BigInt(capture.sourceRevision) >= selection.recordRevision)
     def captureC(capture: V.Capture): Consequence[Unit] = for {
       _ <- resolveC(capture.admission)
       _ <- if (V.captureValid(capture) && accepted.find(_.capture.step == capture.step).forall(_.capture == capture) &&
@@ -129,7 +135,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
             historicalPhase.exists(p => _historical_valid(p) && p.source.capture.contains(capture))) &&
           (capture.admission.acceptedPrefix.nonEmpty || _legacy.exists(e => e.admission == capture.admission &&
             e.session == capture.session && e.plan == capture.plan && e.step == capture.step &&
-            e.generation == capture.generation && e.primaryBase == capture.primaryBase &&
+            _capture_generation_admitted(e, capture) && e.primaryBase == capture.primaryBase &&
             BigInt(capture.sourceRevision) >= e.completionRevision)) &&
           _prior(capture.admission.binding).forall(a => a.capture.session == capture.session &&
             a.capture.plan == capture.plan && a.capture.primaryBase == capture.primaryBase) &&
