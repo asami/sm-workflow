@@ -25,7 +25,7 @@ import GoalPhaseAcceptanceBoundary as A
   * No Workflow state is read or seeded by this caller.
   * @since   Oct. 13, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeWorkflowCliFixture {
@@ -43,7 +43,8 @@ private[admission] object NativeWorkflowCliFixture {
         s.workClassification.map(c => { import io.circe.syntax.*; GoalPhaseNativeMetadata.record(c.asJson) }))),
       value.phaseChecks, value.repairLimit, A.publicAdoption(value.acceptance),
       A.publicEffective(value.effectiveAcceptance), value.phaseRepairInventory,
-      value.phaseReviewClassification.map(c => { import io.circe.syntax.*; GoalPhaseNativeMetadata.record(c.asJson) }))
+      value.phaseReviewClassification.map(c => { import io.circe.syntax.*; GoalPhaseNativeMetadata.record(c.asJson) }),
+      value.allowDependencyRepair, value.allowSharedCliUpdate, value.deliverySynchronization)
 
   final case class Invocation(argv: Vector[String], pid: Long, stdout: Path, stderr: Path) {
     def logs: String = s"argv=$argv; pid=$pid; stdout=$stdout; stderr=$stderr\n" +

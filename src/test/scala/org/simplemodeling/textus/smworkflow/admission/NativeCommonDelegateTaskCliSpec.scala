@@ -19,8 +19,7 @@ import S.given
 /** Tiny build and ordinary host declarations only. The fixed focused suite is
   * host configuration, never a request-supplied class or command argument.
   * @since   Nov.  5, 2026
-  *  version Nov. 11, 2026
-  * @version Nov. 16, 2026
+  * @version Nov. 18, 2026
   */
 private[admission] object NativeCommonDelegateTaskFixture {
   val suite = "org.simplemodeling.textus.smworkflow.p62authored.LineWriterSpec"
@@ -160,7 +159,7 @@ private[admission] trait NativeCommonDelegateTaskQualification extends AnyWordSp
           Vector("remote-push"), NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-Human", "1")),
           Some(NativeCommonDelegateTaskFixture.publication),
           Vector("org.example.sm-workflow-common-delegate-fixture:common-delegate-fixture_3:0.0.1-SNAPSHOT"),
-          "SPECIFICATION-OWNED artifact return; consumer selection and activation remain separate"), Vector.empty)
+          "SPECIFICATION-OWNED artifact return; consumer selection and activation remain separate", None, None, None), Vector.empty)
       def _start_(input: V.DelegateTaskInput): V.DelegateTaskView = {
         val role = input.delegation.role
         val file = root.resolve(role + "-input.json")
@@ -177,7 +176,7 @@ private[admission] trait NativeCommonDelegateTaskQualification extends AnyWordSp
       def _observe_(id: String, event: String, destination: String, result: Option[org.goldenport.record.Record] = None) =
         _view(scenario, _call(scenario, "DelegateTaskDeliveryService", "observeDelegateTaskDelivery", Vector("--input", _json(
           V.DelegateTaskObservationInput(id, event, V.WorkflowArtifactReference("SPECIFICATION-OWNED-" + event, "1"),
-            Some(destination), result, None, "SPECIFICATION-OWNED transport observation; no consumer effect is certified")))))
+            Some(destination), result, None, "SPECIFICATION-OWNED transport observation; no consumer effect is certified", None)))))
       def _submit_(view: V.DelegateTaskView, result: V.DelegateTaskWorkResult, name: String): F.Result = {
         val reference = V.WorkflowArtifactReference("SPECIFICATION-OWNED-" + name, "1")
         val worker = "SPECIFICATION-OWNED-" + name

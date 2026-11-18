@@ -24,8 +24,7 @@ import StandaloneFixExecution.given
   * Prior receipts and Human direction are explicitly specification-owned.
   * No actual user's Session, consent or delivery is represented by this fixture.
   * @since   Nov.  8, 2026
-  *  version Nov.  8, 2026
-  * @version Nov.  9, 2026
+  * @version Nov. 18, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
@@ -103,7 +102,7 @@ final class DelegateTaskValidationContinuationOperationSpec extends AnyWordSpec 
         val contract = V.DelegateTaskContract("fixture-requester", "fixture-destination", "fixture-requester", "repository",
           "destination", "localized", NonEmptyVector.of("dispatch", "implement", "validate", "review", "commit", "return", "adopt"),
           Vector("push"), NonEmptyVector.one(V.WorkflowArtifactReference("specification-human", "1")), None, Vector.empty,
-          "Isolated fixture only")
+          "Isolated fixture only", None, None, None)
         val input = V.DelegateTaskInput("sm-workflow", "selected-continuation-fixture", "Retain original behavior",
           NonEmptyVector.of("docs/phase.md", _suite_path), NonEmptyVector.of("compile", "focused", "test"), NonEmptyVector.one("behavior"),
           NonEmptyVector.one(V.WorkflowArtifactReference("specification-source", "1")), true, "code", "off", 10,

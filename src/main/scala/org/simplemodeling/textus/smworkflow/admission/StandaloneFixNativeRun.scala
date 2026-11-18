@@ -31,11 +31,12 @@ private[smworkflow] object BoundedWorkRuntime {
     publication: Option[LocalPublicationRuntime.Policy] = None, hygieneMode: String = CommitHygiene.autoFix,
     completionRecords: Option[CompletionRecords.Policy] = None,
     operatingContext: Option[GoalPhaseOperatingProfiles.Context] = None,
-    managedDevelopment: Option[ManagedDevelopmentRuntime.Policy] = None)
+    managedDevelopment: Option[ManagedDevelopmentRuntime.Policy] = None,
+    repositorySyncMainIntegration: Option[String] = None)
   def host(d: GoalPhaseNativeRun.Declaration): Host = Host(d.configuration, d.instances, d.continuations,
     d.input.repositoryIdentity, d.target.root.toString, d.target.localBranch, d.candidatePaths,
     d.validationPolicy.toVector.flatMap(_.checks), d.executionProfiles, d.executionOrigin, d.reviewInstallation.map(_.evidence), d.evidencePolicy, d.journalPolicy, d.localPublication, d.commitHygieneMode, d.completionRecords,
-    Some(GoalPhaseOperatingProfiles.context(d)))
+    Some(GoalPhaseOperatingProfiles.context(d)), d.managedDevelopment)
   final case class Payload(state: S.State, root: String, branch: String, baseHead: String,
     implementationWorker: Option[String] = None, unrelated: Option[Vector[G.DirtyPath]] = None, implementationWorkers: Option[Vector[String]] = None,
     supersededWork: Option[String] = None, hygiene: Option[CommitHygiene.Record] = None,
@@ -44,7 +45,8 @@ private[smworkflow] object BoundedWorkRuntime {
     candidateContinuation: Option[DelegateTaskCandidateContinuation.Checkpoint] = None,
     repairContinuation: Option[GoalTaskRepairContinuation.Direction] = None,
     validationContinuation: Option[GoalTaskValidationContinuation.Direction] = None,
-    managedDependency: Option[GoalPhaseDependencyValidation.ManagedCapture] = None)
+    managedDependency: Option[GoalPhaseDependencyValidation.ManagedCapture] = None,
+    dependencyDelivery: Option[DependencyDevelopmentDelivery.Binding] = None, queueActivated: Option[String] = None)
   private given Encoder[DelegateTaskCandidateContinuation.Checkpoint] = deriveEncoder
   private given Decoder[DelegateTaskCandidateContinuation.Checkpoint] = deriveDecoder
   private given Encoder[EstimatedValidationExecution.Compilation] = deriveEncoder
@@ -52,7 +54,7 @@ private[smworkflow] object BoundedWorkRuntime {
   private given Encoder[G.DirtyPath] = deriveEncoder
   private given Decoder[G.DirtyPath] = deriveDecoder
   given Encoder[Payload] = deriveEncoder[Payload].mapJson(_.mapObject(_.filter {
-    case ("unrelated" | "implementationWorkers" | "supersededWork" | "hygiene" | "records" | "validationCompilations" | "candidateContinuation" | "repairContinuation" | "validationContinuation" | "managedDependency", value) => !value.isNull
+    case ("unrelated" | "implementationWorkers" | "supersededWork" | "hygiene" | "records" | "validationCompilations" | "candidateContinuation" | "repairContinuation" | "validationContinuation" | "managedDependency" | "dependencyDelivery" | "queueActivated", value) => !value.isNull
     case _ => true
   }))
   given Decoder[Payload] = deriveDecoder
@@ -62,7 +64,7 @@ private[smworkflow] object BoundedWorkRuntime {
   * No Phase Start, Plan, Step acceptance, commit or private command driver.
   * @since   Oct. 26, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 12, 2026
+  * @version Nov. 18, 2026
   */
 private[smworkflow] object StandaloneFixNativeRun extends BoundedWorkNativeRun(false) {
   type Host = BoundedWorkRuntime.Host
@@ -329,7 +331,26 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     _ <- S.inputC(input)
     _ <- if (input.task.nonEmpty == task && input.delegation.nonEmpty == delegation) Consequence.unit else invalid("Entry completion policy differs from the adopted input")
     requester = delegation && DelegateTask.requester(input)
+    identity <- core.executionContext.security.session.flatMap(_.sessionId).map(x => Consequence.success(InstanceIdentity(x)))
+      .getOrElse(invalid("Standalone Start requires its canonical session"))
+    store <- storageC(h, definition, core)
+    instances <- store.bindInstancesC()(using core.executionContext)
+    prior <- if (delegation) instances.loadC(identity)(using core.executionContext) else Consequence.success(Option.empty[InstanceRecord])
+    _ <- prior.fold(Consequence.unit)(WorkflowForceClosure.requireOpenC)
+    priorPayload <- prior match {
+      case Some(current) => for {
+        _ <- if (current.definition == definition && current.correlation == CorrelationReference(key)) Consequence.unit
+          else invalid("Delegation request identity belongs to a different native definition or original idempotency key")
+        payload <- retainedPayloadC(store, current.identity.value, core)
+        _ <- if (payload.state.input == input && payload.state.participant == participant) Consequence.unit
+          else invalid("Redelivery changes the existing delegation request or owners")
+      } yield Some(payload)
+      case None => Consequence.success(Option.empty[Payload])
+    }
+    deliveryPolicy = h.managedDevelopment.map(p => priorPayload.fold(p)(retained => p.copy(delivery = retained.dependencyDelivery.map(Vector(_)))))
+    _ <- if (!requester && input.delegation.exists(_.providerPhase.nonEmpty)) invalid("Declared provider Phase uses its existing GoalPhase owner; no bounded destination Start or duplicate lifecycle is allowed") else Consequence.unit
     _ <- _preflight_execution_c(input, h)
+    _ <- if (delegation) deliveryPolicy.fold(Consequence.unit)(DependencyDevelopmentDelivery.admitC(_, input)) else Consequence.unit
     managed = delegation && !requester && h.managedDevelopment.exists(_.dependencyWorkEdge.nonEmpty)
     _ <- if (managed) ManagedDevelopmentBoundedWork.publicationInputC(h.managedDevelopment.get, input).map(_ => ()) else Consequence.unit
     _ <- (if (requester || managed) None else input.delegation.flatMap(_.publicationTarget)).fold(Consequence.unit) { target =>
@@ -343,7 +364,8 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     selected <- if (requester) Consequence.success(Vector.empty[GoalPhaseNativeValidation.Check])
       else if (delegation) DelegateTask.selectChecksC(input, h.checks) else Consequence.success(input.checks.flatMap(id => h.checks.find(_.identity == id)))
     _ <- if (task) Consequence.unit else WorkflowRepairAssessment.standaloneSelectionC(input, selected)
-    state <- if (requester) DelegateTask.startRequesterC(input, participant) else S.startC(input, participant, selected)
+    initialState <- if (requester) DelegateTask.startRequesterC(input, participant) else S.startC(input, participant, selected)
+    state = DependencyDevelopmentDelivery.fixedState(deliveryPolicy, initialState)
     admissionoperation = if (input.reviewOrigin.nonEmpty) reviewStartOperation else startOperation
     inputtype = if (input.reviewOrigin.nonEmpty) "StandaloneReviewFixInput" else entry + "Input"
     binding = ProfileStartAdmission.Binding(admissionoperation, definition.workflowIdentity, definition.workflowRevision, inputtype)
@@ -357,12 +379,6 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     _ <- ProfileStartAdmission.admitC(binding, TypedValue(inputtype, input.asJson), selection, participant, key, actualSelection)
     _ <- if (chosen.flatMap(_.selectedInput).exists(v => v.typeIdentity == inputtype && v.value == input.asJson))
       Consequence.unit else invalid("Actual human selection does not bind this complete standalone request")
-    identity <- core.executionContext.security.session.flatMap(_.sessionId).map(x => Consequence.success(InstanceIdentity(x)))
-      .getOrElse(invalid("Standalone Start requires its canonical session"))
-    store <- storageC(h, definition, core)
-    instances <- store.bindInstancesC()(using core.executionContext)
-    prior <- if (delegation) instances.loadC(identity)(using core.executionContext) else Consequence.success(Option.empty[InstanceRecord])
-    _ <- prior.fold(Consequence.unit)(WorkflowForceClosure.requireOpenC)
     root <- G.rootC(core)
     observed <- G.observeC(core)
     _ <- if (root == h.root && observed.branch == h.branch && (requester || prior.nonEmpty || observed.dirty.forall(d =>
@@ -373,29 +389,31 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
       else invalid("Task Start requires clean selected ownership so pre-existing edits cannot be silently captured")
     retainedStart <- prior match {
       case Some(current) => for {
-        _ <- if (current.definition == definition && current.correlation == CorrelationReference(key)) Consequence.unit
-          else invalid("Delegation request identity belongs to a different native definition or original idempotency key")
-        checkpoint <- if (current.causation.value.startsWith("standalone-completed:"))
-          current.causation.value.stripPrefix("standalone-completed:").takeWhile(_ != ':').toLongOption.map(Consequence.success)
-            .getOrElse(invalid("Redelivery completion has no actual source checkpoint"))
-          else Consequence.success(if (current.suspension.nonEmpty) current.revision.value - 1 else current.revision.value)
-        retained <- loadPayloadC(store, current.identity.value, checkpoint, core)
-        _ <- if (retained.state.input == input && retained.state.participant == participant && retained.root == root && retained.branch == observed.branch)
-          Consequence.unit else invalid("Redelivery changes the existing delegation request or owners")
-      } yield current -> retained.state
+        retained <- priorPayload.map(Consequence.success).getOrElse(invalid("Redelivery retained source is unavailable"))
+        _ <- if (retained.root == root && retained.branch == observed.branch) Consequence.unit
+          else invalid("Redelivery crosses the existing native source")
+      } yield (current, retained.state, retained.dependencyDelivery)
       case None => for {
-        dependency <- if (managed) ManagedDevelopmentBoundedWork.captureC(h, input, core)
+        _ <- if (requester && input.delegation.exists(_.providerPhase.nonEmpty)) ProviderPhaseDelivery.admitC(h, input, core)
+          else Consequence.unit
+        dependency <- if (managed || (requester && input.delegation.exists(_.providerPhase.nonEmpty)))
+          ManagedDevelopmentBoundedWork.captureC(h, if (requester) input.copy(delegation = input.delegation.map(_.copy(role = "destination"))) else input, core)
           else Consequence.success(Option.empty[GoalPhaseDependencyValidation.ManagedCapture])
         initial <- InstanceRecord(identity, definition, initialRevision, Lifecycle.NotStarted, None,
           CorrelationReference(key), CausationReference("standalone-started"), None, None, None, Vector.empty).validateC
         _ <- instances.createC(initial)(using core.executionContext)
         active <- instances.appendC(identity, initial.revision, history(initial, "standalone-started"))(using core.executionContext)
         // Requester Git facts describe this caller only, never the destination base.
-        saved <- saveC(h, store, active, Payload(state, root, observed.branch, observed.head,
+        capturedState = if (requester && input.delegation.exists(_.providerPhase.nonEmpty)) state.copy(
+          delivery = state.delivery.map(_.copy(managedContinuation = dependency))) else state
+        saved <- saveC(h, store, active, Payload(capturedState, root, observed.branch, observed.head,
           unrelated = if (requester) Some(observed.dirty) else if (task) Some(observed.dirty.filterNot(d => S.owned(d.path, input.ownedPaths))) else None,
-          managedDependency = dependency), core)
-      } yield saved -> state
+          managedDependency = dependency, dependencyDelivery = h.managedDevelopment.flatMap(DependencyDevelopmentDelivery.binding)), core)
+      } yield (saved, capturedState, h.managedDevelopment.flatMap(DependencyDevelopmentDelivery.binding))
     }
+    _ <- if (!requester && retainedStart._3.exists(_.mode == DependencyDevelopmentDelivery.assignedChat))
+      AssignedDevelopmentChatQueue.enqueueC(h, definition, store, retainedStart._1, input, core).map(_ => ())
+      else Consequence.unit
   } yield view(retainedStart._1, retainedStart._2, if (prior.nonEmpty) "Retained" else "Started", if (prior.nonEmpty)
     "Redelivery retains the original native Session and actual frontier; ordinary Advance collects its work/result without a new Start"
     else if (requester) "Requester request retained; normal Advance collects dispatch and delivery observations"
@@ -503,9 +521,33 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
     record: InstanceRecord, payload: Payload, core: ActionCall.Core, depth: Int): Consequence[V.StandaloneFixView] = {
     val s = payload.state
     if (depth > 36) invalid("Bounded native progress exceeded its finite check batch")
-    else s.stage match {
+    else if (delegation && !DelegateTask.requester(s.input) && payload.dependencyDelivery.exists(_.mode == DependencyDevelopmentDelivery.assignedChat)) for {
+      permit <- AssignedDevelopmentChatQueue.permitC(h, definition, store, record, s, core)
+      response <- if (permit && payload.queueActivated.isEmpty) for {
+        _ <- if (s.stage == "Implement" && s.candidate.isEmpty && s.receipts.isEmpty && s.semanticReference.isEmpty && s.commit.isEmpty)
+          Consequence.unit else invalid("Queue activation cannot replace already executed work")
+        observed <- G.observeC(core)
+        _ <- if (observed.branch == payload.branch && !observed.dirty.exists(d => S.owned(d.path, s.input.ownedPaths) ||
+            d.renamedFrom.exists(S.owned(_, s.input.ownedPaths)))) Consequence.unit
+          else invalid("Queued request waits for its selected clean ownership; no predecessor edits are captured")
+        activated = payload.copy(baseHead = observed.head, unrelated = Some(observed.dirty),
+          queueActivated = Some(record.identity.value + ":queue-activation:" + record.revision.next.value))
+        saved <- saveC(h, store, record, activated, core)
+        next <- _progress_unqueued_c(h, definition, store, saved, activated, core, depth)
+      } yield next
+      else if (permit) _progress_unqueued_c(h, definition, store, record, payload, core, depth)
+        else Consequence.success(view(record, s, "Wait", "Assigned development chat FIFO retains this request; another request is active, or this request is explicitly held/cancelled"))
+    } yield response
+    else _progress_unqueued_c(h, definition, store, record, payload, core, depth)
+  }
+
+  private def _progress_unqueued_c(h: Host, definition: DefinitionBinding, store: WorkflowComponentStorage,
+    record: InstanceRecord, payload: Payload, core: ActionCall.Core, depth: Int): Consequence[V.StandaloneFixView] = {
+    val s = payload.state
+    s.stage match {
+      case "DependencyChangeRequired" => Consequence.success(view(record, s, "DependencyChangeRequired", s.message))
       case "AwaitResult" if delegation && h.managedDevelopment.exists(_.dependencyWorkEdge.nonEmpty) => for {
-        next <- ManagedDevelopmentBoundedWork.collectC(store, definition, s, core)
+        next <- ManagedDevelopmentBoundedWork.collectC(h, store, definition, s, core)
         saved <- if (next == s) Consequence.success(record) else saveC(h, store, record, payload.copy(state = next), core)
       } yield view(saved, next, "Wait", next.message)
       case "Adopted" if delegation && h.managedDevelopment.exists(_.dependencyWorkEdge.nonEmpty) => for {
@@ -868,12 +910,22 @@ private[smworkflow] class BoundedWorkNativeRun(val task: Boolean, val delegation
       } yield Some(result) }.getOrElse(invalid("Required runtime-owned publication capability is not configured"))
     }
     ready = managed.fold(publication.forall(_.ready))(_._2.nonEmpty)
+    sync <- if (ready && contract.synchronization.nonEmpty && managed.flatMap(_._2).nonEmpty)
+      DevelopmentDeliverySynchronization.ensureC(core, h.managedDevelopment.get,
+        ManagedDevelopment.Input(managed.get._2.get.edge.identity, payload.state.input.requestIdentity,
+          payload.state.input.requestIdentity, payload.state.input.requestIdentity, synchronization = contract.synchronization), managed.get._2.get,
+          mainRoute = h.repositorySyncMainIntegration)
+        .recoverWith(error => Consequence.success(GoalPhasePostCompletionSync.Synchronization("unknown", error.toString))).map(Some(_))
+      else Consequence.success(delivery.synchronization)
     next = payload.state.copy(stage = if (ready && S.deliveryPending(payload.state)) "DeliveryAcceptance" else if (ready) "ReturnReady" else "PublicationWait", commit = Some(commit),
       delivery = Some(delivery.copy(publication = publication, managedPublication = managed.flatMap(_._2),
-        managedContinuation = payload.managedDependency, destinationSessionId = Some(from.identity.value))), message = if (ready)
+        managedContinuation = payload.managedDependency, destinationSessionId = Some(from.identity.value), synchronization = sync)), message = if (ready)
         "Accepted checks and local commit retained; actual required publication ready. Return this result to the named requester; adoption is separate"
         else "Local commit retained; publication unfinished: " + managed.map(_._1.status).getOrElse(publication.get.status + "; " + publication.get.reason))
     saved <- if (next == payload.state) Consequence.success(from) else saveC(h, store, from, payload.copy(state = next), core)
+    _ <- if (next.stage == "ReturnReady" && payload.dependencyDelivery.exists(_.mode == DependencyDevelopmentDelivery.assignedChat))
+      DelegateTaskRuntimeCatalog.loadC().flatMap(definition => AssignedDevelopmentChatQueue.permitC(h, definition, store, saved, next, core)).map(_ => ())
+      else Consequence.unit
   } yield view(saved, next, if (next.stage == "DeliveryAcceptance") "Progress" else if (ready) "Return" else "Wait",
     if (next.stage == "DeliveryAcceptance") "Publication retained; later adopted conditions still require actual semantic acceptance through ordinary Advance" else next.message)
 

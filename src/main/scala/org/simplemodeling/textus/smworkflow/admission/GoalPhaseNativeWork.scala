@@ -19,7 +19,7 @@ import IncrementalSbtDiagnosisRepair.given
   * only after their actual native predecessor has been connected.
   * @since   Oct.  6, 2026
   *  version Oct. 29, 2026
-  * @version Nov.  9, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWork {
@@ -121,7 +121,7 @@ private[smworkflow] object GoalPhaseNativeWork {
     else _decision_decoder(cursor).flatMap { value =>
       val validreference = value.decisionReference.forall(reference => reference != null &&
         Vector(reference.identity, reference.revision).forall(text => _bounded_text(text) && !text.exists(_.isControl)))
-      val dependency = Set("ApproveDependencyScope", "RejectDependencyScope")(value.choice)
+      val dependency = Set("ApproveDependencyScope", "RejectDependencyScope", GoalPhasePolicyDependencyContinuation.choice)(value.choice)
       val inventory = value.inventoryContinuation.forall(context =>
         GoalPhaseDependencyInventoryContinuation.contextValid(context) && value.choice == "ApproveDependencyScope" &&
           value.decisionReference.contains(context.approval) && value.requestingResult != null &&

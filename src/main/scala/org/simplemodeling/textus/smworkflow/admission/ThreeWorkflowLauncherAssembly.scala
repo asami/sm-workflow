@@ -14,7 +14,7 @@ import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
   * Parameter data selects storage/targets/policies, never independent authority ports.
   * @since   Oct.  6, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 12, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowLauncherAssembly {
@@ -168,6 +168,6 @@ private[smworkflow] object ThreeWorkflowLauncherAssembly {
       CommonEvidenceService.bind(host.goal.evidencePolicy, host.goal.journalPolicy),
       DevelopmentObservationService.bind(host.goal, goalCatalog.definition),
       LocalPublicationService.bind(host.goal, goalCatalog.definition),
-      ManagedDevelopmentService.bind(host.managedDevelopment)).map(NativeWorkflowCompactResponse.bind) :+
+      ManagedDevelopmentService.bind(host.managedDevelopment, Some(ProviderPhaseDelivery.Storage(host.goal.configuration, host.goal.instances, host.goal.continuations)))).map(NativeWorkflowCompactResponse.bind) :+
       WorkflowRetainedWork.bind
 }

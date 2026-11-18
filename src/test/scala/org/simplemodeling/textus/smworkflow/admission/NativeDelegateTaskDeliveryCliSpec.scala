@@ -19,8 +19,8 @@ import RepositorySyncNativeMergeValidation as R
 import scala.jdk.CollectionConverters.*
 
 /** Public source-launcher transport with specification-owned return data.
-  * @since Nov. 7, 2026
-  * @version Nov. 7, 2026
+  * @since   Nov.  7, 2026
+  * @version Nov. 18, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
@@ -80,7 +80,7 @@ final class NativeDelegateTaskDeliveryCliSpec extends AnyWordSpec with Matchers 
       val destination = "SPECIFICATION-OWNED-destination-session"
       def observation(event: String, result: Option[org.goldenport.record.Record]) = V.DelegateTaskObservationInput(
         started.sessionId, event, V.WorkflowArtifactReference("SPECIFICATION-OWNED-" + event, "1"), Some(destination),
-        result, None, "SPECIFICATION-OWNED transport observation")
+        result, None, "SPECIFICATION-OWNED transport observation", None)
       call("DelegateTaskDeliveryService", "observeDelegateTaskDelivery", Vector("--input", json(observation("dispatch-observed", None))))
         .business[V.DelegateTaskView]
       val requester = take(DelegateTask.inputC(request))

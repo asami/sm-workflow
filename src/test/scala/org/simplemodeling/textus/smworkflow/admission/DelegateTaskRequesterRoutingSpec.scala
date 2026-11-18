@@ -33,7 +33,8 @@ private[admission] object DelegateTaskRequesterRoutingFixture extends Matchers {
       Vector("remote-push", "consumer-activation"),
       NonEmptyVector.of(V.WorkflowArtifactReference("SPECIFICATION-OWNED-authorization", "1")),
       Some("destination-only-publication"), Vector("org.goldenport:goldenport-cncf_3:0.1.0-SNAPSHOT"),
-      "Return actual destination checks, review, commit and publication; consumer activation remains separate"), Vector.empty)
+      "Return actual destination checks, review, commit and publication; consumer activation remains separate",
+      None, None, None), Vector.empty)
 
   def state(view: V.DelegateTaskView): S.State = {
     val json = parser.parse(take(view.state.get.toJsonStringC)).toOption.get
@@ -61,7 +62,7 @@ private[admission] object DelegateTaskRequesterRoutingFixture extends Matchers {
 /** Cheap pure admission and managed public operations; no destination program
   * or SBT program is installed or executed by this specification.
   * @since   Nov.  5, 2026
-  * @version Nov.  6, 2026
+  * @version Nov. 18, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
@@ -196,7 +197,7 @@ final class DelegateTaskRequesterRoutingSpec extends AnyWordSpec with GivenWhenT
           _invoke_("DelegateTaskDeliveryService", "observeDelegateTaskDelivery", List(Property("input",
             V.DelegateTaskObservationInput(session, event, V.WorkflowArtifactReference("SPECIFICATION-OWNED-" + event, "1"),
               Some("SPECIFICATION-OWNED-destination-session"), result, artifact,
-              "SPECIFICATION-OWNED observation; no genuine chat delivery or execution is claimed"), None)))
+              "SPECIFICATION-OWNED observation; no genuine chat delivery or execution is claimed", None), None)))
 
         When("passive preparation is independently provisioned and normal Start admits the exact requester selection")
         _prepare_("requester-selection", request)

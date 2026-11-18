@@ -231,6 +231,8 @@ OperationResult
 | requestIdentity | string | 1 |
 | publication | string | 1 |
 | selection | string | 1 |
+| providerPhase | DelegateProviderPhaseLocator | ? |
+| synchronization | DelegateDeliverySynchronization | ? |
 
 ## PublishDevelopmentArtifactInput
 
@@ -1762,6 +1764,9 @@ OperationResult
 | effectiveAcceptance | GoalPhaseEffectiveAcceptanceBoundary | ? |
 | phaseRepairInventory | string | * |
 | phaseReviewClassification | org.goldenport.record.Record | ? |
+| allowDependencyRepair | boolean | ? |
+| allowSharedCliUpdate | boolean | ? |
+| deliverySynchronization | string | ? |
 
 ## GoalPhaseAcceptanceCondition
 
@@ -4534,6 +4539,16 @@ on = dependency-inventory-continued-Implementation
 
 to = Repair
 on = dependency-inventory-continued-Repair
+
+##### TRANSITION
+
+to = Implementation
+on = dependency-policy-admitted-Implementation
+
+##### TRANSITION
+
+to = Repair
+on = dependency-policy-admitted-Repair
 
 ##### TRANSITION
 
@@ -15481,6 +15496,9 @@ Independent single available existing-chat request. Complete adopted input binds
 | publicationTarget | string | ? |
 | artifactCoordinates | string | * |
 | consumerInstructions | string | 1 |
+| prerequisiteFor | string | ? |
+| providerPhase | DelegateProviderPhaseLocator | ? |
+| synchronization | DelegateDeliverySynchronization | ? |
 
 ## DelegateTaskObservationInput
 
@@ -15497,6 +15515,7 @@ Independent single available existing-chat request. Complete adopted input binds
 | result | record | ? |
 | artifactSelection | record | ? |
 | rationale | string | 1 |
+| commandIdentity | string | ? |
 
 # SERVICE
 
@@ -16167,3 +16186,27 @@ Explicit ad hoc Task request selection metadata and absolute local file: URI ref
 | target | string | 1 |
 | choices | string | * |
 | resumeOperation | string | 1 |
+
+## DelegateProviderPhaseLocator
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| startRevision | string | 1 |
+| publication | string | 1 |
+| producerSelection | string | 1 |
+
+## DelegateDeliverySynchronization
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| repositoryIdentity | string | 1 |
+| localBranch | string | 1 |
+| trackingRemote | string | 1 |
+| trackingBranch | string | 1 |
+| remoteEndpointIdentity | string | 1 |
+| syncMode | string | 1 |

@@ -24,12 +24,12 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Minimal real producer -> private repository -> immutable selection -> consumer
   * compilation. Fixture setup creates inputs; SBT effects use CNCF's native UoW.
   * @since   Nov. 12, 2026
-  * @version Nov. 12, 2026
+  * @version Nov. 18, 2026
   * @author ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
-final class Phase7ManagedDevelopmentSpec extends AnyWordSpec with GivenWhenThen with ThreeWorkflowManagedRepositoryFixture {
+final class Phase7ManagedDevelopmentSpec extends AnyWordSpec with GivenWhenThen with ThreeWorkflowManagedRepositoryFixture with Phase7DependencyDevelopmentDeliveryBehaviors {
   private val edge = Edge("consumer-provider",
     GoalPhaseDependencyScope.Component("org.example.Provider", "provider-repository", TypedGitHostPlanFixture.workspace),
     GoalPhaseDependencyScope.Component("org.example.Consumer", "consumer-repository", "development-consumer"),
@@ -204,6 +204,30 @@ final class Phase7ManagedDevelopmentSpec extends AnyWordSpec with GivenWhenThen 
     "connect native B delivery and explicit consumer integration to the exact original A Request" in {
       val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/phase7-managed-development").toAbsolutePath), "connected-").toRealPath()
       ConnectedFixture.exercise(root)
+    }
+
+    "attach an existing provider Phase locator and wait without starting or completing a substitute destination" in {
+      val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/phase7-managed-development").toAbsolutePath), "provider-phase-").toRealPath()
+      ConnectedFixture.exercise(root, "PhaseDelivery")
+    }
+
+    "exclude genuine provider Phases and bounded work in one assigned-chat FIFO in either admission order" in {
+      Vector("AssignedPhaseFirst", "AssignedPhaseBoundedFirst").foreach { mode =>
+        val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/phase7-managed-development").toAbsolutePath), "assigned-phase-").toRealPath()
+        ConnectedFixture.exercise(root, mode)
+      }
+    }
+
+    "admit two destination requests through native FIFO and preserve explicit waiting hold cancel and requeue" in {
+      val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/phase7-managed-development").toAbsolutePath), "assigned-").toRealPath()
+      ConnectedFixture.exercise(root, "Assigned")
+    }
+
+    "resume an actual dependency Decision from retained Phase policy without a fabricated Human answer" in {
+      val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/phase7-managed-development").toAbsolutePath), "phase-policy-").toRealPath()
+      ConnectedFixture.exercise(root, "PhasePolicy")
+      val enabled = Files.createTempDirectory(Files.createDirectories(Path.of("target/phase7-managed-development").toAbsolutePath), "phase-policy-enable-").toRealPath()
+      ConnectedFixture.exercise(enabled, "PhasePolicyEnable")
     }
 
     "keep passing canonical checks from certifying B and attribute correctly bound B failure" in {
@@ -583,9 +607,17 @@ final class Phase7ManagedDevelopmentSpec extends AnyWordSpec with GivenWhenThen 
       val plan = GoalPhaseOrderedProgression.Plan("connected-plan", "1", settings.goal.input.phaseIdentity, "sm-workflow",
         Vector(GoalPhaseOrderedProgression.Step("step-1", "Document the consumer's verified dependency", Vector("docs/phase.md"), Vector.empty, Vector("compile"),
           workClassification = Some(GoalPhaseWorkClassification.Assignment(coding, coding, coding.copy(kind = GoalPhaseWorkClassification.Kind.REVIEW))))),
-        Vector("compile"), repairLimit = 10)
+        Vector("compile"), repairLimit = 10, allowDependencyRepair = Option.when(mode == "PhasePolicy")(true))
+      val selectedPolicy = if (mode == "Assigned" || mode.startsWith("AssignedPhase")) connectedPolicy.copy(delivery = Some(Vector(
+        DependencyDevelopmentDelivery.Binding(connectedEdge.identity, DependencyDevelopmentDelivery.assignedChat,
+          Some(DelegateTaskRequesterRoutingFixture.input("owner").delegation.destinationIdentity))))) else connectedPolicy
+      // This provider Plan explicitly defers synchronization until scoped publication.
+      val completionParameters = if (mode == "PhaseDelivery" || mode.startsWith("AssignedPhase")) Map(
+        ThreeWorkflowRuntimeParameters.completionPolicy.name -> GoalPhasePostCompletionSync.localPolicy)
+      else Map.empty[String, String]
+      var reconnect = Option.empty[(V.DelegateTaskInput, String)]
       _with_runtime_(root, mode, Some(settings), BoundedWorkExecutionAdmissionFixture.parameters ++ Map(
-        "sm-workflow.managed-development" -> connectedPolicy.asJson.noSpaces, "textus.subsystem.storage.plan" -> storage.noSpaces)) { (owner, component, actor, prepare) =>
+        "sm-workflow.managed-development" -> selectedPolicy.asJson.noSpaces, "textus.subsystem.storage.plan" -> storage.noSpaces) ++ completionParameters) { (owner, component, actor, prepare) =>
         prepare(call => call.setupC(_setup_commands_(root, mode).size, scenario = mode).flatMap(_ =>
           call.setupC(_setup_commands_(root.resolve("b"), mode).size, Some(root.resolve("b")), mode)).flatMap(_ =>
           call.setupC(_setup_commands_(root.resolve("other"), mode).size, Some(root.resolve("other")), mode)).flatMap(_ =>
@@ -600,9 +632,11 @@ final class Phase7ManagedDevelopmentSpec extends AnyWordSpec with GivenWhenThen 
         val a = read_value[V.GoalPhaseStartResult](take(invoke("GoalPhaseService", "startGoalPhase", NativeWorkflowOperationInputFixture.goal(settings.goal.input))))
         val original = read_value[V.GoalPhaseAdvanceResult](take(invoke("GoalPhaseService", "advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(a.sessionId))))
         var source = Option.empty[V.WorkflowArtifactReference]
+        var actualGoal = Option.empty[GoalPhaseNativeWork.Request]
         prepare(call => call.goalWorkC(InstanceIdentity(a.sessionId)).map { work =>
           val order = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[GoalPhaseNativeWork.Request]]
-          source = Some(V.WorkflowArtifactReference(order.request.continuationId.value, order.request.expectedRevision.value)); ()
+          source = Some(V.WorkflowArtifactReference(order.request.continuationId.value, order.request.expectedRevision.value))
+          actualGoal = order.request.input.map(_.value); ()
         })
         def input(role: String, request: String) = {
           val c = DelegateTaskRequesterRoutingFixture.input(request).delegation
@@ -610,6 +644,11 @@ final class Phase7ManagedDevelopmentSpec extends AnyWordSpec with GivenWhenThen 
             NonEmptyVector.of("src/main/scala", "src/test/scala"), NonEmptyVector.of("compile", "test-only"), NonEmptyVector.of("behavior"),
             NonEmptyVector.of(source.get), false, "code", "off", 10, "direct-instruction", Vector.empty,
             c.copy(componentIdentity = connectedEdge.provider.identity, role = role, exclusions = Vector("remote-push"),
+              permittedOperations = if (mode == "Assigned" || mode.startsWith("AssignedPhase")) NonEmptyVector.fromVectorUnsafe(c.permittedOperations.toVector ++
+                Vector("queue-hold", "queue-cancel", "queue-resume")) else if (mode == "Connected")
+                NonEmptyVector.fromVectorUnsafe(c.permittedOperations.toVector :+ "repository-sync") else c.permittedOperations,
+              synchronization = Option.when(mode == "Connected")(V.DelegateDeliverySynchronization(connectedEdge.provider.repository,
+                "main", "origin", "main", root.resolve("b/upstream.git").toString, "FULL_STATE")),
               publicationTarget = Some(connectedEdge.identity), artifactCoordinates = Vector(connectedEdge.requested.organization + ":" +
                 connectedEdge.requested.module + ":" + version(connectedEdge.requested.version, connectedDefinition.scope, request))), Vector("behavior"))
         }
@@ -625,7 +664,244 @@ final class Phase7ManagedDevelopmentSpec extends AnyWordSpec with GivenWhenThen 
           invoke("DelegateTaskService", "startDelegateTask", List(Property("input", value, None), Property("selectionId", selected, None),
             Property("participant", "participant", None), Property("idempotencyKey", selected, None)))
         }
-        if (mode == "CanonicalAliases") {
+        if (mode.startsWith("PhasePolicy")) {
+          var activeWork = original
+          if (mode == "PhasePolicyEnable") {
+            actualGoal.get.selectedPlan.allowDependencyRepair shouldBe None
+            actualGoal.get.selectedPlan.allowSharedCliUpdate shouldBe None
+            val revised = plan.copy(revision = "2", allowDependencyRepair = Some(true))
+            val proposed = GoalPhasePlanRevision.Proposal("phase-policy-enable", "1",
+              "SPECIFICATION-OWNED direction to enable necessary external repair for this unchanged Phase purpose", revised)
+            val result = V.GoalPhaseWorkResult("decision-needed", "SPECIFICATION-OWNED Phase permission direction",
+              Vector.empty, None, None, None, GoalPhasePlanRevision.publicProposal(Some(proposed)), None, None, None, None,
+              dependencyValidation = None, diagnosticRepair = None)
+            val reference = V.WorkflowArtifactReference("phase-policy-enable-proposal", "1")
+            read_value[V.GoalPhaseWorkSubmissionResult](take(invoke("GoalPhaseService", "submitGoalPhaseWorkResult", List(
+              Property("sessionId", a.sessionId, None), Property("result", result, None), Property("issuedWorkContext", original.issuedWorkContext.get, None),
+              Property("resultReference", reference, None), Property("executionEvidence", V.WorkflowExecutionEvidence(Vector(reference),
+                Some("specification-enable-proposer"), None, Some(V.WorkflowExecutionObservation("INLINE",
+                  BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity, BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity,
+                  BoundedWorkExecutionAdmissionFixture.profile.identity))), None))))).accepted shouldBe true
+            val question = read_value[V.GoalPhaseAdvanceResult](take(invoke("GoalPhaseService", "advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(a.sessionId))))
+            question.kind shouldBe "Human"
+            question.human.get.choices shouldBe Vector("AdoptPlanRevision", "RejectPlanRevision", "Defer", "Cancel")
+            val answer = V.GoalPhaseOrderedDecisionAnswer("AdoptPlanRevision", "SPECIFICATION-OWNED independent Human direction; no real user consent claimed")
+            val answerReference = V.WorkflowArtifactReference("phase-policy-human-enable", "1")
+            val evidence = V.WorkflowExecutionEvidence(Vector(answerReference), Some("participant"), None, None)
+            val properties = List(Property("sessionId", a.sessionId, None), Property("answer", answer, None),
+              Property("resultReference", answerReference, None), Property("executionEvidence", evidence, None))
+            invoke("GoalPhaseService", "submitGoalPhaseOrderedDecision", properties).isSuccess shouldBe false
+            val stillPending = read_value[V.GoalPhaseAdvanceResult](take(invoke("GoalPhaseService", "advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(a.sessionId))))
+            stillPending.human.get.work.selectedPlan.allowDependencyRepair shouldBe None
+            prepare { call =>
+              for {
+                prepared <- org.simplemodeling.textus.smworkflow.preparation.NativeHumanDecisionPreparation.goalC(
+                  question.human.get.humanDecisionContext.get, answer, answerReference, evidence, "participant", "normal-development-host",
+                  call.executionContext.clock.instant().minusSeconds(60))
+                _ <- call.createC("host_evidence", prepared.recordIdentity, prepared.record)
+              } yield ()
+            }
+            read_value[V.GoalPhaseOrderedDecisionSubmissionResult](take(invoke("GoalPhaseService", "submitGoalPhaseOrderedDecision", properties))).accepted shouldBe true
+            activeWork = read_value[V.GoalPhaseAdvanceResult](take(invoke("GoalPhaseService", "advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(a.sessionId))))
+            activeWork.kind shouldBe "Request"
+            prepare(call => call.goalWorkC(InstanceIdentity(a.sessionId)).map { work =>
+              val order = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[GoalPhaseNativeWork.Request]]
+              actualGoal = order.request.input.map(_.value)
+              source = Some(V.WorkflowArtifactReference(order.request.continuationId.value, order.request.expectedRevision.value)); ()
+            })
+          }
+          val actual = actualGoal.get
+          actual.selectedPlan.allowDependencyRepair shouldBe Some(true)
+          actual.selectedPlan.allowSharedCliUpdate shouldBe None
+          val proposal = GoalPhaseDependencyScope.Proposal("external-local-repair", "1", "IMPLEMENTATION",
+            connectedEdge.consumer, connectedEdge.provider.copy(identity = "org.example.External"),
+            ContextReference("selected-usage", "1"), "Necessary provider correction for this Phase purpose",
+            Vector("src/External.scala"), Vector("Preserve the required consumer API"), Vector(ContextReference(source.get.identity, source.get.revision)), Vector.empty,
+            Some(GoalPhaseDependencyScope.AuthorizationBoundary(GoalPhaseDependencyScope.authorizationSchema,
+              ContextReference(actual.selectedPlan.identity, actual.selectedPlan.revision),
+              Vector("edit-source", "validate", "independent-review", "publish-local"), Vector.empty)))
+          val result = V.GoalPhaseWorkResult("decision-needed", "SPECIFICATION-OWNED necessary external dependency proposal",
+            Vector.empty, None, None, None, None, None, Some(GoalPhaseNativeMetadata.record(proposal.asJson)), None, None,
+            dependencyValidation = None, diagnosticRepair = None)
+          val reference = V.WorkflowArtifactReference("policy-semantic", "1")
+          read_value[V.GoalPhaseWorkSubmissionResult](take(invoke("GoalPhaseService", "submitGoalPhaseWorkResult", List(
+            Property("sessionId", a.sessionId, None), Property("result", result, None),
+            Property("issuedWorkContext", activeWork.issuedWorkContext.get, None), Property("resultReference", reference, None),
+            Property("executionEvidence", V.WorkflowExecutionEvidence(Vector(reference), Some("specification-policy-implementer"), None,
+              Some(V.WorkflowExecutionObservation("INLINE", BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity,
+                BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity, BoundedWorkExecutionAdmissionFixture.profile.identity))), None))))).accepted shouldBe true
+          val admitted = read_value[V.GoalPhaseAdvanceResult](take(invoke("GoalPhaseService", "advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(a.sessionId))))
+          val resumed = if (admitted.kind == "Request") admitted else read_value[V.GoalPhaseAdvanceResult](take(invoke(
+            "GoalPhaseService", "advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(a.sessionId))))
+          resumed.kind shouldBe "Request"
+          resumed.sessionId shouldBe a.sessionId
+          resumed.work.get.decisionContext.get.choice shouldBe GoalPhasePolicyDependencyContinuation.choice
+          resumed.work.get.decisionContext.get.decisionReference.get.identity should include(":phase-policy-dependency:")
+          resumed.work.get.selectedPlan.allowDependencyRepair shouldBe Some(true)
+          resumed.work.get.selectedPlan.allowSharedCliUpdate shouldBe None
+          resumed.work.get.originalBase shouldBe original.work.get.originalBase
+          resumed.work.get.completed shouldBe original.work.get.completed
+          resumed.repairProgress shouldBe original.repairProgress
+          val reconnected = read_value[V.GoalPhaseAdvanceResult](take(invoke("GoalPhaseService", "advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(a.sessionId))))
+          reconnected.issuedWorkContext.map(c => DevelopmentOperationalView.json(c.toRecord())) shouldBe
+            resumed.issuedWorkContext.map(c => DevelopmentOperationalView.json(c.toRecord()))
+        } else if (mode == "PhaseDelivery" || mode.startsWith("AssignedPhase")) {
+          Given("an existing provider Phase and bounded requests share the configured assigned development chat")
+          val boundedFirst = if (mode == "AssignedPhaseBoundedFirst") {
+            val bounded = read_value[V.DelegateTaskView](take(start(input("destination", "phase-bounded-first"), "phase-bounded-first")))
+            val work = advance(bounded.sessionId)
+            work.kind shouldBe "Request"
+            Some(bounded -> work)
+          } else None
+          val providerInput = V.GoalPhaseStartInput("provider-phase", connectedEdge.provider.repository)
+          val providerPlan = plan.copy(identity = "existing-provider-phase", phase = providerInput.phaseIdentity,
+            repository = providerInput.repositoryIdentity, steps = plan.steps.map(_.copy(identity = "provider-step",
+              purpose = "Develop the provider through its existing Phase owner", ownedPaths = Vector("src/main/scala", "src/test/scala"),
+              checks = Vector("compile", "test-only"))), deliverySynchronization = Some("after-scoped-publication"))
+          val providerSelection = _goal_selection_(providerInput, providerPlan.identity, "provider-phase-start")
+          prepare(call => call.createC("goal_selection", NativeWorkflowStartBusinessKey(NativeWorkflowStartInput.Goal(providerInput), "participant"),
+            Record.data(ProfileSelectionJsonV1.storageField -> take(ProfileSelectionJsonV1.encodeStorageC(providerSelection))))
+            .flatMap(_ => call.createC("goal_plans", providerSelection.selectionId, Record.data(GoalPhaseSelectedPlanJsonV1.storageField ->
+              take(GoalPhaseSelectedPlanJsonV1.encodeStorageC(GoalPhaseNativeRun.SelectedPlan(providerSelection.selectionId, "participant", providerPlan)))))))
+          val provider = read_value[V.GoalPhaseStartResult](take(invoke("GoalPhaseService", "startGoalPhase", NativeWorkflowOperationInputFixture.goal(providerInput))))
+          var providerSource = ""
+          var originalProvider = ""
+          prepare(call => call.goalCurrentC(InstanceIdentity(provider.sessionId)).map { current =>
+            providerSource = current.revision.value.toString
+            originalProvider = take(WorkflowInstanceRecordJsonV1.encodeC(current)); ()
+          })
+          val pending = read_value[V.GoalPhaseAdvanceResult](take(invoke("GoalPhaseService", "advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(provider.sessionId))))
+          pending.kind shouldBe (if (boundedFirst.nonEmpty) "Wait" else "Request")
+          if (boundedFirst.nonEmpty) prepare(call => call.goalCurrentC(InstanceIdentity(provider.sessionId)).map { current =>
+            take(WorkflowInstanceRecordJsonV1.encodeC(current)) shouldBe originalProvider
+            current.suspension shouldBe None; ()
+          })
+          if (mode.startsWith("AssignedPhase")) {
+            When("a second genuine Phase and another bounded request are admitted to the same chat")
+            val secondInput = providerInput.copy(phaseIdentity = "second-provider-phase")
+            val secondPlan = providerPlan.copy(identity = "second-provider-plan", phase = secondInput.phaseIdentity)
+            val secondSelection = _goal_selection_(secondInput, secondPlan.identity, "second-provider-start")
+            prepare(call => call.createC("goal_selection", NativeWorkflowStartBusinessKey(NativeWorkflowStartInput.Goal(secondInput), "participant"),
+              Record.data(ProfileSelectionJsonV1.storageField -> take(ProfileSelectionJsonV1.encodeStorageC(secondSelection))))
+              .flatMap(_ => call.createC("goal_plans", secondSelection.selectionId, Record.data(GoalPhaseSelectedPlanJsonV1.storageField ->
+                take(GoalPhaseSelectedPlanJsonV1.encodeStorageC(GoalPhaseNativeRun.SelectedPlan(secondSelection.selectionId, "participant", secondPlan)))))))
+            val second = read_value[V.GoalPhaseStartResult](take(invoke("GoalPhaseService", "startGoalPhase", NativeWorkflowOperationInputFixture.goal(secondInput))))
+            val bounded = read_value[V.DelegateTaskView](take(start(input("destination", "phase-bounded-later"), "phase-bounded-later")))
+            val secondWait = read_value[V.GoalPhaseAdvanceResult](take(invoke("GoalPhaseService", "advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(second.sessionId))))
+            secondWait.kind shouldBe "Wait"
+            advance(bounded.sessionId).kind shouldBe "Wait"
+            Then("only the original FIFO owner can expose work and waiting does not alter either provider lifecycle")
+            var secondRecord = ""
+            prepare(call => call.goalCurrentC(InstanceIdentity(second.sessionId)).map { r =>
+              secondRecord = take(WorkflowInstanceRecordJsonV1.encodeC(r)); r.suspension shouldBe None; ()
+            })
+            read_value[V.GoalPhaseAdvanceResult](take(invoke("GoalPhaseService", "advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(second.sessionId)))).kind shouldBe "Wait"
+            prepare(call => call.goalCurrentC(InstanceIdentity(second.sessionId)).map { r =>
+              take(WorkflowInstanceRecordJsonV1.encodeC(r)) shouldBe secondRecord; ()
+            })
+            boundedFirst.foreach { (first, work) =>
+              val reference = V.WorkflowArtifactReference("phase-fifo-pause", "1")
+              val result = V.DelegateTaskWorkResult("decision-needed", "SPECIFICATION-OWNED bounded direction is needed",
+                Vector.empty, NonEmptyVector.of(V.DelegateTaskCondition("behavior", false, "Await explicit direction")),
+                Vector("Choose provider behavior"), None, None)
+              delegate("submitDelegateTaskWorkResult", List(Property("sessionId", first.sessionId, None), Property("result", result, None),
+                Property("issuedWorkContext", work.issuedWorkContext.get, None), Property("resultReference", reference, None),
+                Property("executionEvidence", V.WorkflowExecutionEvidence(Vector(reference), Some("specification-phase-fifo-implementer"), None,
+                  Some(V.WorkflowExecutionObservation("INLINE", BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity,
+                    BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity, BoundedWorkExecutionAdmissionFixture.profile.identity))), None)))
+              advance(first.sessionId).kind shouldBe "Human"
+              val hold = V.DelegateTaskObservationInput(first.sessionId, "queue-hold", input("destination", "phase-bounded-first").delegation.authorizationReferences.head,
+                Some(first.sessionId), None, None, "SPECIFICATION-OWNED release by explicit original bounded control grant", Some("phase-fifo-hold"))
+              take(invoke("DelegateTaskDeliveryService", "observeDelegateTaskDelivery", List(Property("input", hold, None))))
+              read_value[V.GoalPhaseAdvanceResult](take(invoke("GoalPhaseService", "advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(provider.sessionId)))).kind shouldBe "Request"
+              read_value[V.GoalPhaseAdvanceResult](take(invoke("GoalPhaseService", "advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(second.sessionId)))).kind shouldBe "Wait"
+            }
+          }
+          val locator = V.DelegateProviderPhaseLocator(provider.sessionId, providerSource, "phase-publication", "phase-producer-selection")
+          val requested = input("requester", "phase-delivery")
+          val selectedRequest = requested.copy(delegation = requested.delegation.copy(providerPhase = Some(locator),
+            artifactCoordinates = Vector(connectedEdge.requested.organization + ":" + connectedEdge.requested.module + ":" +
+              version(connectedEdge.requested.version, connectedDefinition.scope, locator.publication))))
+          val requester = read_value[V.DelegateTaskView](take(start(selectedRequest, "phase-delivery-requester")))
+          val observation = V.DelegateTaskObservationInput(requester.sessionId, "dispatch-observed",
+            V.WorkflowArtifactReference("actual-provider-phase-dispatch", "1"), Some(provider.sessionId), None, None,
+            "SPECIFICATION-OWNED actual existing provider Phase locator; no substitute bounded Start", None)
+          take(invoke("DelegateTaskDeliveryService", "observeDelegateTaskDelivery", List(Property("input", observation, None))))
+          val waiting = advance(requester.sessionId)
+          waiting.kind shouldBe "Wait"
+          val retained = DelegateTaskRequesterRoutingFixture.state(waiting)
+          retained.delivery.flatMap(_.phaseDelivery) shouldBe None
+          retained.delivery.flatMap(_.returned) shouldBe None
+          retained.automaticCount shouldBe 0
+          val again = read_value[V.GoalPhaseAdvanceResult](take(invoke("GoalPhaseService", "advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(provider.sessionId))))
+          if (boundedFirst.isEmpty) again.issuedWorkContext.map(c => DevelopmentOperationalView.json(c.toRecord())) shouldBe pending.issuedWorkContext.map(c => DevelopmentOperationalView.json(c.toRecord()))
+          else again.kind shouldBe "Request"
+          val publish = ManagedDevelopment.Input(connectedEdge.identity, "phase-publication", locator.publication, locator.producerSelection,
+            providerPhase = Some(ProviderPhaseDelivery.Locator(locator.sessionId, locator.startRevision, locator.publication, locator.producerSelection)))
+          invoke("ManagedDevelopmentService", "publishDevelopmentArtifact", List(Property("input", GoalPhaseNativeMetadata.record(publish.asJson), None))).isSuccess shouldBe false
+          Files.exists(root.resolve(".textus/sm-workflow/work.d/artifacts")) shouldBe false
+          if (mode.startsWith("AssignedPhase")) {
+            val bounded = read_value[V.DelegateTaskView](take(start(input("destination", "after-failed-phase-publication"), "after-failed-phase-publication")))
+            advance(bounded.sessionId).kind shouldBe "Wait"
+            val unchanged = read_value[V.GoalPhaseAdvanceResult](take(invoke("GoalPhaseService", "advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(provider.sessionId))))
+            unchanged.issuedWorkContext.map(c => DevelopmentOperationalView.json(c.toRecord())) shouldBe again.issuedWorkContext.map(c => DevelopmentOperationalView.json(c.toRecord()))
+          }
+        } else if (mode == "Assigned") {
+          val firstInput = input("destination", "fifo-first")
+          val secondInput = input("destination", "fifo-second")
+          val first = read_value[V.DelegateTaskView](take(start(firstInput, "fifo-first")))
+          val second = read_value[V.DelegateTaskView](take(start(secondInput, "fifo-second")))
+          val work = advance(first.sessionId)
+          work.kind shouldBe "Request"
+          advance(second.sessionId).kind shouldBe "Wait"
+          advance(first.sessionId).issuedWorkContext.map(c => DevelopmentOperationalView.json(c.toRecord())) shouldBe
+            work.issuedWorkContext.map(c => DevelopmentOperationalView.json(c.toRecord()))
+          def pause(session: String, pending: V.DelegateTaskView): Unit = {
+            val reference = V.WorkflowArtifactReference("decision-" + session, "1")
+            val result = V.DelegateTaskWorkResult("decision-needed", "SPECIFICATION-OWNED semantic uncertainty",
+              Vector.empty, NonEmptyVector.of(V.DelegateTaskCondition("behavior", false, "Await bounded user direction")),
+              Vector("Choose the required provider behavior"), None, None)
+            delegate("submitDelegateTaskWorkResult", List(Property("sessionId", session, None), Property("result", result, None),
+              Property("issuedWorkContext", pending.issuedWorkContext.get, None), Property("resultReference", reference, None),
+              Property("executionEvidence", V.WorkflowExecutionEvidence(Vector(reference), Some("specification-fifo-implementer-" + session), None,
+                Some(V.WorkflowExecutionObservation("INLINE", BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity,
+                  BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity, BoundedWorkExecutionAdmissionFixture.profile.identity))), None)))
+            advance(session).kind shouldBe "Human"
+          }
+          def command(session: String, event: String, identity: String) = V.DelegateTaskObservationInput(session, event,
+            firstInput.delegation.authorizationReferences.head, Some(session), None, None,
+            "SPECIFICATION-OWNED actual caller control under the original explicit grant", Some(identity))
+          def control(value: V.DelegateTaskObservationInput): V.DelegateTaskView = read_value[V.DelegateTaskView](
+            take(invoke("DelegateTaskDeliveryService", "observeDelegateTaskDelivery", List(Property("input", value, None)))))
+          def queue(value: V.DelegateTaskView): AssignedDevelopmentChatQueue.State =
+            DevelopmentOperationalView.json(value.state.get).hcursor.get[AssignedDevelopmentChatQueue.State]("assignedChatQueue").toOption.get
+          pause(first.sessionId, work)
+          advance(second.sessionId).kind shouldBe "Wait"
+          Given("the first active request is held by command H1 under its original reusable authorization")
+          val h1 = command(first.sessionId, "queue-hold", "fifo-hold-1")
+          control(h1)
+          val secondWork = advance(second.sessionId)
+          secondWork.kind shouldBe "Request"
+          pause(second.sessionId, secondWork)
+          control(command(second.sessionId, "queue-cancel", "fifo-cancel-second"))
+          val r1 = command(first.sessionId, "queue-resume", "fifo-resume-1")
+          val resumed = queue(control(r1))
+          When("the original H1 is redelivered after R1")
+          queue(control(h1)) shouldBe resumed
+          queue(control(r1)) shouldBe resumed
+          Then("the retained command outcomes preserve the later direction and a new command can still use the same grant")
+          val h2 = h1.copy(commandIdentity = Some("fifo-hold-2"))
+          val heldAgain = queue(control(h2))
+          heldAgain.entries.find(_.session == first.sessionId).get.status shouldBe "held"
+          queue(control(r1)) shouldBe heldAgain
+          invoke("DelegateTaskDeliveryService", "observeDelegateTaskDelivery", List(Property("input", h1.copy(event = "queue-cancel"), None))).isSuccess shouldBe false
+          invoke("DelegateTaskDeliveryService", "observeDelegateTaskDelivery", List(Property("input", h1.copy(commandIdentity = None), None))).isSuccess shouldBe false
+          control(r1.copy(commandIdentity = Some("fifo-resume-2")))
+          reconnect = Some(firstInput -> first.sessionId)
+          advance(first.sessionId).kind shouldBe "Human"
+          advance(second.sessionId).kind shouldBe "Wait"
+          DelegateTaskRequesterRoutingFixture.state(advance(first.sessionId)).automaticCount shouldBe 0
+        } else if (mode == "CanonicalAliases") {
           prepare(call => WorkflowManagedProcessExecution.repositoryValidationAttemptC(call.core, 1, WorkflowSbtValidation.Kind.Compile).map { attempt =>
             attempt match {
               case org.goldenport.cncf.processexecution.SbtExecutionAttempt.Observed(result) => result.outcome shouldBe org.goldenport.cncf.processexecution.SbtExecutionOutcome.Succeeded
@@ -653,7 +929,7 @@ final class Phase7ManagedDevelopmentSpec extends AnyWordSpec with GivenWhenThen 
           def observe(session: String, event: String, artifact: Option[Record] = None): V.DelegateTaskView =
             read_value[V.DelegateTaskView](take(invoke("DelegateTaskDeliveryService", "observeDelegateTaskDelivery", List(Property("input",
               V.DelegateTaskObservationInput(session, event, V.WorkflowArtifactReference("connected-" + event + "-" + session, "1"),
-                Some(destination.sessionId), None, artifact, "SPECIFICATION-OWNED caller observation"), None)))))
+                Some(destination.sessionId), None, artifact, "SPECIFICATION-OWNED caller observation", None), None)))))
           observe(requester.sessionId, "dispatch-observed")
           val work = advance(destination.sessionId)
           work.kind shouldBe "Request"
@@ -666,6 +942,11 @@ final class Phase7ManagedDevelopmentSpec extends AnyWordSpec with GivenWhenThen 
                 BoundedWorkExecutionAdmissionFixture.origin.current.contextIdentity, BoundedWorkExecutionAdmissionFixture.profile.identity))), None)))
           val delivered = advance(destination.sessionId)
           val bState = DelegateTaskRequesterRoutingFixture.state(delivered)
+          if (mode == "Connected") {
+            bState.delivery.flatMap(_.managedPublication) should not be empty
+            bState.delivery.flatMap(_.synchronization).map(_.state) shouldBe Some("deferred")
+            bState.delivery.flatMap(_.synchronization).flatMap(_.childSessionId) shouldBe None
+          }
           if (mode == "FailB") {
             bState.receipts.exists(r => r.identity == "compile" && r.exitCode.contains(1)) shouldBe true
             bState.commit shouldBe None
@@ -702,7 +983,7 @@ final class Phase7ManagedDevelopmentSpec extends AnyWordSpec with GivenWhenThen 
               "selectionReference" -> Record.data("identity" -> selectionIdentity, "revision" -> "1"),
               "consumerCheckReferences" -> Vector.empty[Record])
             val adoption = V.DelegateTaskObservationInput(requester.sessionId, "adopt", V.WorkflowArtifactReference("connected-adopt-" + requester.sessionId, "1"),
-              Some(destination.sessionId), None, Some(artifact), "SPECIFICATION-OWNED caller observation")
+              Some(destination.sessionId), None, Some(artifact), "SPECIFICATION-OWNED caller observation", None)
             val context = read_value[V.DelegateTaskAdoptionContext](take(invoke("DelegateTaskDeliveryService", "describeDelegateTaskAdoption",
               List(Property("sessionId", requester.sessionId, None)))))
             // Keep preparation failures attributable to their actual boundary.
@@ -840,10 +1121,65 @@ final class Phase7ManagedDevelopmentSpec extends AnyWordSpec with GivenWhenThen 
             invoke("DelegateTaskService", "advanceDelegateTask", List(Property("sessionId", requester.sessionId, None))).isSuccess shouldBe false
           }
         }
-        if (mode != "Connected") {
+        if (mode != "Connected" && !mode.startsWith("PhasePolicy")) {
           val retainedA = read_value[V.GoalPhaseAdvanceResult](take(invoke("GoalPhaseService", "advanceGoalPhase", NativeWorkflowOperationInputFixture.advance(a.sessionId))))
           retainedA.issuedWorkContext.map(value => DevelopmentOperationalView.json(value.toRecord())) shouldBe
             original.issuedWorkContext.map(value => DevelopmentOperationalView.json(value.toRecord()))
+        }
+      }
+      if (mode == "Assigned") {
+        val (originalInput, session) = reconnect.get
+        Vector(DependencyDevelopmentDelivery.Binding(connectedEdge.identity, DependencyDevelopmentDelivery.fixed),
+          DependencyDevelopmentDelivery.Binding(connectedEdge.identity, DependencyDevelopmentDelivery.assignedChat, Some("new-development-chat"))).foreach { binding =>
+          val changedPolicy = connectedPolicy.copy(delivery = Some(Vector(binding)))
+          _with_runtime_(root, mode, Some(settings), BoundedWorkExecutionAdmissionFixture.parameters ++ Map(
+            "sm-workflow.managed-development" -> changedPolicy.asJson.noSpaces, "textus.subsystem.storage.plan" -> storage.noSpaces)) { (owner, component, actor, prepare) =>
+            def invoke(operation: String, properties: List[Property]) = owner.executeOperationResponseInContext(
+              Request.of(component = component.name, service = "DelegateTaskService", operation = operation, properties = properties), actor)
+            def current(): String = {
+              var value = ""
+              prepare(call => call.delegateCurrentC(InstanceIdentity(session)).map(r => { value = take(WorkflowInstanceRecordJsonV1.encodeC(r)); () }))
+              value
+            }
+            val before = current()
+            Given("a retained AssignedChat request while today's configuration selects " + binding.mode + binding.chat.getOrElse(""))
+            val properties = List(Property("input", originalInput, None), Property("sessionId", session, None),
+              Property("selectionId", "connected-fifo-first", None), Property("participant", "participant", None),
+              Property("idempotencyKey", "connected-fifo-first", None))
+            When("the original complete Start is redelivered with its actual native Session")
+            val retained = read_value[V.DelegateTaskView](take(invoke("startDelegateTask", properties)))
+            retained.sessionId shouldBe session
+            current() shouldBe before
+            Then("the original queue/mode/frontier and accepted history remain, while changed bodies and keys refuse")
+            invoke("startDelegateTask", properties.map(p => if (p.name == "input") Property("input", originalInput.copy(objective = "changed request"), None) else p)).isSuccess shouldBe false
+            invoke("startDelegateTask", properties.map(p => if (p.name == "idempotencyKey") Property("idempotencyKey", "changed-key", None) else p)).isSuccess shouldBe false
+            val observed = read_value[V.DelegateTaskView](take(invoke("advanceDelegateTask", List(Property("sessionId", session, None)))))
+            observed.kind shouldBe "Human"
+            observed.message should not include "dependency-change-required"
+            DelegateTaskRequesterRoutingFixture.state(observed).automaticCount shouldBe 0
+            val newRequest = "new-" + binding.mode
+            val newInput = originalInput.copy(requestIdentity = newRequest,
+              delegation = originalInput.delegation.copy(destinationIdentity = binding.chat.getOrElse(originalInput.delegation.destinationIdentity),
+                artifactCoordinates = Vector(connectedEdge.requested.organization + ":" + connectedEdge.requested.module + ":" +
+                  version(connectedEdge.requested.version, connectedDefinition.scope, newRequest))))
+            val selected = "changed-mode-new-" + binding.mode
+            val prepared = take(NativeDelegateTaskStartInput.prepareC(Map("input" -> "new.json", "selection-id" -> selected,
+              "participant" -> "participant", "origin" -> "ExplicitHuman", "idempotency-key" -> selected,
+              "selection-collection" -> "entity:smworkflow.cli.goal_selection"), _ => newInput.toRecord().toJsonStringC))
+            prepare { call =>
+              val row = prepared.getVector("datastore").get.head.asInstanceOf[Record].getVector("records").get.head.asInstanceOf[Record]
+              call.createC("goal_selection", row.getString("id").get, row.removeKeys(Set("id")))
+            }
+            val newStart = invoke("startDelegateTask", List(Property("input", newInput, None),
+              Property("selectionId", selected, None), Property("participant", "participant", None), Property("idempotencyKey", selected, None)))
+            if (binding.mode == DependencyDevelopmentDelivery.fixed) newStart.isSuccess shouldBe false
+            else {
+              val fresh = read_value[V.DelegateTaskView](take(newStart))
+              read_value[V.DelegateTaskView](take(invoke("advanceDelegateTask", List(Property("sessionId", fresh.sessionId, None))))).kind shouldBe "Request"
+              // A different configured chat remains independent of the retained active request.
+              fresh.sessionId should not be session
+            }
+          }
         }
       }
     }
@@ -852,11 +1188,13 @@ final class Phase7ManagedDevelopmentSpec extends AnyWordSpec with GivenWhenThen 
   private object SyncFixture extends Phase69ConfiguredRepositoryFixture {
     override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
       val configured = super.process_plan(root, scenario, goal)
-      val repository = configured.hcursor.get[Vector[Json]]("gitRepositories").toOption.get.head
+      val repositories = configured.hcursor.get[Vector[Json]]("gitRepositories").toOption.get
+      val repository = repositories.head
         .mapObject(_.add("identity", edge.provider.repository.asJson))
       val canonical = repository.mapObject(_.add("identity", "canonical-provider".asJson)
         .add("target", "canonical-provider".asJson).add("capability", "canonical-provider".asJson))
-      configured.mapObject(fields => fields.add("gitRepositories", Vector(repository, canonical).asJson)
+      // Keep the packaged candidate repository paired with its retained grant.
+      val complete = configured.mapObject(fields => fields.add("gitRepositories", (Vector(repository) ++ repositories.tail :+ canonical).asJson)
         .add("workspaces", (fields("workspaces").get.asArray.get :+ Json.obj(
           "identity" -> "canonical-provider".asJson, "root" -> root.resolve("unrelated-canonical").toString.asJson)).asJson)
         .add("workspaceGrants", (fields("workspaceGrants").get.asArray.get :+ Json.obj(
@@ -864,6 +1202,7 @@ final class Phase7ManagedDevelopmentSpec extends AnyWordSpec with GivenWhenThen 
           "access" -> "manage".asJson)).asJson)
         .add("grants", fields("grants").get.mapArray(_.map(_.mapObject(grant => grant.add("capabilities",
           (grant("capabilities").get.asArray.get :+ "canonical-provider".asJson).asJson))))))
+      Phase69ConfiguredRepositoryFixture.withInitializationSources(complete)
     }
 
     def exercise(root: Path): Unit = {

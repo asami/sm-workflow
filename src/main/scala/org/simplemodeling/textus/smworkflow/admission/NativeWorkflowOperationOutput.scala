@@ -15,8 +15,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * outcome. No extra store read, result verifier or transport envelope.
   * @since   Oct. 12, 2026
   *  version Oct. 29, 2026
-  *  version Nov.  8, 2026
-  * @version Nov.  9, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowOperationOutput {
@@ -278,7 +277,8 @@ private[smworkflow] object NativeWorkflowOperationOutput {
         s.workClassification.map(c => GoalPhaseNativeMetadata.record(c.asJson)))),
       value.phaseChecks, value.repairLimit, GoalPhaseAcceptanceBoundary.publicAdoption(value.acceptance),
       GoalPhaseAcceptanceBoundary.publicEffective(value.effectiveAcceptance), value.phaseRepairInventory,
-      value.phaseReviewClassification.map(c => GoalPhaseNativeMetadata.record(c.asJson)))
+      value.phaseReviewClassification.map(c => GoalPhaseNativeMetadata.record(c.asJson)),
+      value.allowDependencyRepair, value.allowSharedCliUpdate, value.deliverySynchronization)
   private def _goal_snapshot(value: GoalPhaseOrderedProgression.Snapshot): V.GoalPhaseNativeSnapshot =
     V.GoalPhaseNativeSnapshot(value.head, value.tree)
   private def _goal_check(value: RepositorySyncNativeMergeValidation.Receipt): V.GoalPhaseNativeCheckReceipt =

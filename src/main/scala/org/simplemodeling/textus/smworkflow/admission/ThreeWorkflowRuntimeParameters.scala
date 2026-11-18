@@ -21,7 +21,7 @@ import GoalPhaseDependencyValidation.given
   * Storage/process bootstrap has already been performed by the owning Subsystem.
   * @since   Oct.  7, 2026
   *  version Oct. 29, 2026
-  * @version Nov. 12, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowLauncherAssembly.RuntimeCompositionDecoder {
@@ -212,7 +212,7 @@ private[smworkflow] object ThreeWorkflowRuntimeParameters extends ThreeWorkflowL
         None,
         Some(GoalPhasePrerequisitePublicationRecovery.Installation(ports.prerequisitePublicationRecovery,
           Some(ports.prerequisitePublicationObservation))), dispatchPolicy = dispatchpolicy,
-        logicalOrigin = logicalorigin, retainedObservations = retainedobservations)
+        logicalOrigin = logicalorigin, retainedObservations = retainedobservations, managedDevelopment = managedDevelopment)
       _ <- if (settings.goal.dependencyValidation.forall(GoalPhaseDependencyValidation.bindingValid)) Consequence.unit
         else Consequence.configurationInvalid("Goal dependency validation binding is invalid")
       _ <- GoalPhaseNativeRun.validateC(goal)

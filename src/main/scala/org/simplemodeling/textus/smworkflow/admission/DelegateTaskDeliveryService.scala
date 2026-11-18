@@ -1,11 +1,13 @@
 /**
  * @since   Oct. 27, 2026
- * @version Nov. 12, 2026
+ * @version Nov. 18, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
 import cats.data.NonEmptyVector
 import io.circe.Json
+import io.circe.syntax.*
+import StandaloneFixExecution.given
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall}
 import org.goldenport.cncf.component.ComponentCreate
@@ -80,8 +82,11 @@ private[smworkflow] object DelegateTaskDeliveryService {
             result <- value.result.fold(Consequence.success(Option.empty[Json]))(record => jsonC(record).map(Some(_)))
             selection <- value.artifactSelection.fold(Consequence.success(Option.empty[Json]))(record => jsonC(record).map(Some(_)))
             observation = DelegateTask.Observation(value.event, ContextReference(value.sourceReference.identity, value.sourceReference.revision),
-              value.destinationSessionId, result, selection, value.rationale)
-            next <- DelegateTask.observeC(payload.state, observation)
+              value.destinationSessionId, result, selection, value.rationale, value.commandIdentity)
+            queueControl = observation.event.startsWith("queue-")
+            controlled <- if (queueControl) AssignedDevelopmentChatQueue.controlC(h, definition, storage, current, payload.state, observation, selected).map(Some(_))
+              else Consequence.success(Option.empty[AssignedDevelopmentChatQueue.State])
+            next <- if (queueControl) Consequence.success(payload.state) else DelegateTask.observeC(payload.state, observation)
             _ <- if (observation.event != "adopt" || next == payload.state) Consequence.unit else for {
               target <- targetC(selected, current, payload.state)
               admitted <- evidence.loadC(selected, NativeExternalEvidence.Purpose.DelegateAdoption,
@@ -95,8 +100,13 @@ private[smworkflow] object DelegateTaskDeliveryService {
               else if (current.lifecycle == Lifecycle.Active) N.saveC(h, storage, current, payload.copy(state = integrated), selected)
               else N.invalid("Completed delivery cannot accept a new observation")
             retained <- N.loadPayloadC(storage, session, saved.revision.value, selected)
-          } yield NativeWorkflowOperationOutput.response(N.view(saved, retained.state,
-            if (DelegateTask.terminal(retained.state.stage) && saved.lifecycle == Lifecycle.Completed) "Terminal" else "Wait", retained.state.message))
+            projected = N.view(saved, retained.state,
+              if (DelegateTask.terminal(retained.state.stage) && saved.lifecycle == Lifecycle.Completed) "Terminal" else "Wait", retained.state.message)
+            response = controlled.fold(projected)(queue => projected.copy(
+              message = "Assigned development chat retained " + observation.event + "; current request is " +
+                queue.entries.find(_.session == session).get.status,
+              state = Some(GoalPhaseNativeMetadata.record(retained.state.asJson.deepMerge(Json.obj("assignedChatQueue" -> queue.asJson))))))
+          } yield NativeWorkflowOperationOutput.response(response)
         } yield response
       }
     }

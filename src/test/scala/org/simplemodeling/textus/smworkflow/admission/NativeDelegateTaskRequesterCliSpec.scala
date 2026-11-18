@@ -16,7 +16,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * identity and transport observation here is SPECIFICATION-OWNED, not actual
   * chat delivery, producer execution, publication or consumer adoption.
   * @since   Nov.  5, 2026
-  * @version Nov.  6, 2026
+  * @version Nov. 18, 2026
   */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -91,7 +91,7 @@ final class NativeDelegateTaskRequesterCliSpec extends AnyWordSpec with Matchers
           _json(V.DelegateTaskObservationInput(started.sessionId, event,
             V.WorkflowArtifactReference("SPECIFICATION-OWNED-" + event, "1"),
             Some("SPECIFICATION-OWNED-destination-session"), None, artifact,
-            "SPECIFICATION-OWNED observation; no real chat delivery, producer execution or activation is claimed"))))
+            "SPECIFICATION-OWNED observation; no real chat delivery, producer execution or activation is claimed", None))))
       When("a separate installed Advance collects the requester's dispatch frontier")
       val dispatched = _advance_()
       Then("Dispatch retains the complete foreign request without execution facts")

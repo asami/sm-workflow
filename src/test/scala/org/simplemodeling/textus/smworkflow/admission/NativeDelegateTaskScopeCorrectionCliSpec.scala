@@ -19,7 +19,7 @@ import S.given
   * All Human selections, worker observations and semantic facts below are
   * SPECIFICATION-OWNED. They establish no actual consumer consent or delivery.
   * @since   Nov.  5, 2026
-  * @version Nov.  6, 2026
+  * @version Nov. 18, 2026
   */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -66,7 +66,7 @@ final class NativeDelegateTaskScopeCorrectionCliSpec extends AnyWordSpec with Ma
           "SPECIFICATION-OWNED-requester", "org.example.ScopeCorrectionFixture", "destination", "documentation",
           NonEmptyVector.of("dispatch", "implement", "validate", "review", "commit", "return", "adopt"),
           Vector("remote-push"), NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-Human", "1")),
-          None, Vector.empty, "SPECIFICATION-OWNED fixture; actual consumer remains untouched"), Vector("behavior", "delivery"))
+          None, Vector.empty, "SPECIFICATION-OWNED fixture; actual consumer remains untouched", None, None, None), Vector("behavior", "delivery"))
       val repository = Path.of(scenario.host.target.root)
       val document = Files.readString(repository.resolve("docs/phase.md"))
       val head = scenario.candidateHead

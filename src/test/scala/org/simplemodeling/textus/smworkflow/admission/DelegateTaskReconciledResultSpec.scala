@@ -1,3 +1,12 @@
+/** Matching-commit/result transfer qualification. Initial accepted semantics and
+  * check receipts are specification-owned checkpoint inputs, not fresh SBT or
+  * genuine AI/Human evidence. Git commit and collection are actual managed
+  * effects. The opt-in variant uses distinct selected installed CLI processes.
+  * Neither variant is the authorized live existing-chat D2 delivery.
+  * @since   Oct. 27, 2026
+  * @version Nov. 18, 2026
+  * @author  ASAMI, Tomoharu
+  */
 package org.simplemodeling.textus.smworkflow.admission
 
 import io.circe.{Json, parser}
@@ -22,16 +31,6 @@ import RepositorySyncManagedGitObservation as G
 import WorkflowManagedProcessExecution as E
 import SplitPhaseExplicitPartitionFixture.take
 
-/** Matching-commit/result transfer qualification. Initial accepted semantics and
-  * check receipts are specification-owned checkpoint inputs, not fresh SBT or
-  * genuine AI/Human evidence. Git commit and collection are actual managed
-  * effects. The opt-in variant uses distinct selected installed CLI processes.
-  * Neither variant is the authorized live existing-chat D2 delivery.
-  * @since   Oct. 27, 2026
-  *  version Oct. 27, 2026
-  * @version Nov.  8, 2026
-  * @author  ASAMI, Tomoharu
-  */
 private[admission] abstract class DelegateTaskReconciledResultFixture extends AnyWordSpec with GivenWhenThen with ThreeWorkflowManagedRepositoryFixture {
   private val _native = DelegateTaskNativeRun
   private val _checks = Vector(GoalPhaseNativeValidation.Check("compile", 1, WorkflowSbtValidation.Kind.Compile),
@@ -176,7 +175,7 @@ private[admission] abstract class DelegateTaskReconciledResultFixture extends An
       List(Property("sessionId", id, None)), Vector("--sessionId", id)))
     def observation(event: String, result: Option[Record] = None, artifact: Option[Record] = None) = V.DelegateTaskObservationInput(
       requester, event, V.WorkflowArtifactReference("specification-transport-" + event, "1"), Some(destination), result, artifact,
-      "SPECIFICATION-OWNED observation; no real chat transport, consent, publication or activation claimed")
+      "SPECIFICATION-OWNED observation; no real chat transport, consent, publication or activation claimed", None)
     def observe(input: V.DelegateTaskObservationInput): V.DelegateTaskView = hydrate(value("DelegateTaskDeliveryService",
       "observeDelegateTaskDelivery", List(Property("input", input, None)), Vector("--input", _json(input))))
     val sent = observe(observation("dispatch-observed"))
@@ -280,8 +279,7 @@ final class DelegateTaskReconciledResultSpec extends DelegateTaskReconciledResul
 }
 
 /** Explicit installed-image qualification retains its original external inputs and assertions.
-  * @since Nov. 8, 2026
-  * @version Nov. 8, 2026
+  * Introduced and last updated Nov. 8, 2026.
   */
 @org.scalatest.DoNotDiscover
 @org.scalatest.tags.Slow

@@ -26,19 +26,20 @@ import ManagedDevelopment.*
   * Physical roots come only from the resolved CNCF workspace graph. All actual
   * acquisition and effects still cross CNCF admission, including owner grants.
   * @since   Nov. 12, 2026
-  * @version Nov. 12, 2026
+  * @version Nov. 18, 2026
   * @author ASAMI, Tomoharu
   */
 private[smworkflow] object ManagedDevelopmentRuntime {
   final case class Policy(storeName: String, collection: String, definition: Definition,
-    repositorySyncEdge: Option[String] = None, dependencyWorkEdge: Option[String] = None)
+    repositorySyncEdge: Option[String] = None, dependencyWorkEdge: Option[String] = None, delivery: Option[Vector[DependencyDevelopmentDelivery.Binding]] = None)
   val declaration = ComponentParameterKey.optional("sm-workflow.managed-development",
     ComponentParameterDecoder[Policy] {
       case ConfigurationValue.StringValue(text) => io.circe.jawn.JawnParser(allowDuplicateKeys = false).parse(text)
         .flatMap(_.as[Policy]).fold(e => Consequence.configurationInvalid(e.getMessage), p =>
           validateC(p.definition).flatMap(_ => if (p.storeName.nonEmpty && EntityCollectionId.parse(p.collection).isSuccess &&
             p.repositorySyncEdge != null && p.repositorySyncEdge.forall(id => p.definition.edges.exists(_.identity == id)) &&
-            p.dependencyWorkEdge != null && p.dependencyWorkEdge.forall(id => p.definition.edges.exists(_.identity == id)))
+            p.dependencyWorkEdge != null && p.dependencyWorkEdge.forall(id => p.definition.edges.exists(_.identity == id)) &&
+            DependencyDevelopmentDelivery.validateC(p.definition, p.delivery).isSuccess)
             Consequence.success(p) else Consequence.configurationInvalid("Managed development requires its granted Component collection")))
       case _ => Consequence.configurationInvalid("Managed development requires a structured JSON declaration")
     })
@@ -48,6 +49,26 @@ private[smworkflow] object ManagedDevelopmentRuntime {
     _ <- edgeC(policy.definition, input)
     result <- ManagedDevelopment.runC(operation, policy.definition, input, new NativePort(core, policy, roots))
   } yield result
+
+  def executionPlanC(core: ActionCall.Core): Consequence[Json] =
+    core.executionContext.resolvedParameters.get("textus.subsystem.process-execution.plan").flatMap(p => p.value match {
+      case ConfigurationValue.StringValue(v) => Some(v)
+      case _ => None
+    }).map(text => io.circe.parser.parse(text).fold(e => invalid(e.message), Consequence.success))
+      .getOrElse(invalid("CNCF workspace graph is unavailable"))
+
+  def workspaceRootC(core: ActionCall.Core, workspace: String): Consequence[String] = rootsC(core).flatMap(roots =>
+    roots.get(workspace).map(Consequence.success).getOrElse(invalid("unregistered workspace: " + workspace)))
+
+  def publicationC(core: ActionCall.Core, policy: Policy, input: Input): Consequence[Option[Publication]] = for {
+    roots <- rootsC(core)
+    edge <- edgeC(policy.definition, input)
+    raw <- new NativePort(core, policy, roots).loadC(key(policy.definition, edge, "publication", input.publication))
+    publication <- raw.fold(Consequence.success(Option.empty[Publication]))(_.as[Publication]
+      .fold(e => invalid(e.message), p => Consequence.success(Some(p))))
+    _ <- publication.fold(Consequence.unit)(p => if (p.edge == edge && p.scope == policy.definition.scope && p.identity == input.publication)
+      Consequence.unit else invalid("immutable publication crosses its scoped edge/identity"))
+  } yield publication
 
   def consumerSourceC(core: ActionCall.Core, policy: Policy, edge: Edge): Consequence[Json] = for {
     roots <- rootsC(core)

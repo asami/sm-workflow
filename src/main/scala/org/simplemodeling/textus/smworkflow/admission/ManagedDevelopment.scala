@@ -8,7 +8,7 @@ import org.goldenport.Consequence
 /** A dependency edge selects source, JAR and project independently. Publications
   * and selections are immutable Component records, never a work.d JSON ledger.
   * @since   Nov. 12, 2026
-  * @version Nov. 12, 2026
+  * @version Nov. 18, 2026
   * @author ASAMI, Tomoharu
   */
 private[smworkflow] object ManagedDevelopment {
@@ -17,7 +17,16 @@ private[smworkflow] object ManagedDevelopment {
     localRepository: String, localJar: Boolean, localProject: Option[String], requested: Coordinate)
   final case class Definition(scope: String, ownerWorkspace: String, repository: String,
     staging: String, edges: Vector[Edge])
-  final case class Input(edgeIdentity: String, requestIdentity: String, publication: String, selection: String)
+  final case class Input(edgeIdentity: String, requestIdentity: String, publication: String, selection: String,
+    providerPhase: Option[ProviderPhaseDelivery.Locator] = None,
+    synchronization: Option[DevelopmentDeliverySynchronization.Selection] = None)
+  object Input {
+    given io.circe.Encoder[Input] = io.circe.generic.semiauto.deriveEncoder[Input].mapJson(_.mapObject(_.filter {
+      case ("providerPhase" | "synchronization", value) => !value.isNull
+      case _ => true
+    }))
+    given io.circe.Decoder[Input] = io.circe.generic.semiauto.deriveDecoder
+  }
   final case class Publication(edge: Edge, scope: String, identity: String, producerSelection: String,
     selected: Coordinate, jar: String, ivy: String, source: Json, report: Json, completion: Json)
   final case class Selection(identity: String, publication: Publication)
@@ -49,7 +58,9 @@ private[smworkflow] object ManagedDevelopment {
 
   def edgeC(d: Definition, input: Input): Consequence[Edge] = for {
     _ <- validateC(d)
-    _ <- if (input != null && Vector(input.edgeIdentity, input.requestIdentity, input.publication, input.selection).forall(id))
+    _ <- if (input != null && Vector(input.edgeIdentity, input.requestIdentity, input.publication, input.selection).forall(id) &&
+      input.providerPhase != null && input.providerPhase.forall(ProviderPhaseDelivery.valid) && input.synchronization != null &&
+      input.synchronization.forall(DevelopmentDeliverySynchronization.valid))
       Consequence.unit else invalid("invalid explicit operation identities")
     edge <- d.edges.find(_.identity == input.edgeIdentity).map(Consequence.success)
       .getOrElse(invalid("dependency edge is not declared"))

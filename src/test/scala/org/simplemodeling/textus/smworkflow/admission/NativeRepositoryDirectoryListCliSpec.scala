@@ -14,7 +14,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * the selected installed command and retains its complete two output streams.
   * Fixture inputs are not Phase acceptance or live reviewer/provider evidence.
   * @since   Nov.  9, 2026
-  * @version Nov. 11, 2026
+  * @version Nov. 18, 2026
   */
 @DoNotDiscover
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -332,7 +332,7 @@ final class NativeRepositoryDirectoryListCliSpec extends AnyWordSpec with GivenW
           "SPECIFICATION-OWNED-requester", "org.example.ReferenceFixture", "destination", "documentation",
           cats.data.NonEmptyVector.of("dispatch", "implement", "validate", "review", "commit", "return", "adopt"), Vector("remote-push"),
           cats.data.NonEmptyVector.one(V.WorkflowArtifactReference("SPECIFICATION-OWNED-Human", "1")),
-          None, Vector.empty, "SPECIFICATION-OWNED selected material only")
+          None, Vector.empty, "SPECIFICATION-OWNED selected material only", None, None, None)
         val input = family match {
           case "StandaloneFix" => common
           case "GoalTask" => task

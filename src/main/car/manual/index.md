@@ -412,3 +412,37 @@ an optional intent containing the explicit origin alongside its existing input,
 selection ID, participant and idempotency key. Existing preprovisioned calls can
 omit intent. A conflicting existing selection or Plan is an error and is never
 replaced. Start itself does not Advance or grant Git, SBT or other effect authority.
+
+### Managed dependency delivery and Phase permission source
+
+The existing managed-development parameter accepts explicit `delivery` entries
+for Fixed, AssignedChat and DevelopmentSubtree. See
+`docs/spec/dependency-development-delivery.md` for the exact shape, native FIFO,
+transport/admission distinction, original control grants and current composition
+limits. A Fixed dependency produces a dependency-change-required consumer wait.
+AssignedChat queues destination execution through the canonical native Workflow
+store; it does not send an application message or certify dispatch.
+
+A selected GoalPhase Plan accepts optional `allowDependencyRepair` and
+`allowSharedCliUpdate` booleans, independently false when omitted. Genuine
+mid-Phase enablement uses normal Human Plan adoption. Necessary in-purpose local
+dependency proposals can receive a distinct native Phase-policy admission receipt
+without a repeated Human dependency question. Concrete configured owners and
+effect grants remain necessary; a managed producer does not implicitly authorize
+shared CLI replacement. See `docs/spec/phase-development-permissions.md`.
+These source additions still require native validation and independent review.
+
+
+AssignedChat also admits genuine provider GoalPhase Starts to the same FIFO as
+bounded destinations. The original Phase owner obtains the active execution
+permit; only its accepted source and required immutable scoped publication
+release the place. A queued Phase remains a native Wait. Its locator never
+creates a bounded substitute lifecycle. Existing Sessions retain their captured
+source/mode across configuration changes and redelivered Starts.
+
+Queue controls additionally require `commandIdentity` on
+`DelegateTaskObservationInput`. This names the immutable command, independently
+of `sourceReference`, which remains the original authorization grant. A replay
+cannot undo later hold/resume direction; a new command can reuse the grant.
+Ordinary observations omit the command identity. See the dependency delivery
+specification for exact input, replay, compatibility and qualification limits.
