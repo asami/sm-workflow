@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: sm-workflow-dev <operation-selector> [args...]
+
+Run from the runtime host directory. The component and classpath come from
+the checkout containing this command. Prepare or refresh them with the
+project's cozyPrepareRuntime task through the configured serial SBT route.
+
+Example:
+  sm-workflow-dev org.simplemodeling.textus.SmWorkflow.meta.help \
+    org.simplemodeling.textus.SmWorkflow.RepositorySyncService
+EOF
+}
+
+if [[ $# -eq 0 ]]; then
+  usage >&2
+  exit 2
+fi
+
+case "$1" in
+  -h|--help|help)
+    usage
+    exit 0
+    ;;
+esac
+
+project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+runtime_directory="$project_root/target/cncf.d"
+
+for artifact in runtime-classpath.txt component-descriptor.json car-runtime-manifest.json; do
+  if [[ ! -s "$runtime_directory/$artifact" ]]; then
+    printf 'Official runtime preparation is missing: %s\n' "$runtime_directory/$artifact" >&2
+    printf '%s\n' 'Run cozyPrepareRuntime in this checkout through the configured serial SBT route.' >&2
+    exit 1
+  fi
+done
+
+exec "$project_root/bin/launcher" \
+  --classpath-file "$runtime_directory/runtime-classpath.txt" \
+  --main-class org.goldenport.cncf.CncfMain \
+  -- --force-exit --component-dev-dir "$project_root" command "$@"
