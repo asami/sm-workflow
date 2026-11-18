@@ -16,12 +16,13 @@ import WorkflowSbtValidation.Kind
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowValidationInitialization {
-  final case class Repository(program: Option[RepositorySyncProgramImpact.Policy], documents: Option[RepositorySyncDocumentInputs.Policy])
+  final case class Repository(program: Option[RepositorySyncProgramImpact.Policy], documents: Option[RepositorySyncDocumentInputs.Policy],
+    declarationReadFailure: Option[WorkflowProjectDeclaration.ReadFailure] = None)
   final case class Context(configuration: ResolvedConfiguration, parameters: ComponentInitializationParameters) {
     def repositoryC(root: Path, core: ActionCall.Core): Consequence[Repository] = for {
       program <- RepositorySyncProgramImpact.resolveC(parameters)
       documents <- RepositorySyncDocumentInputs.resolveC(parameters)
-      project <- if (program.nonEmpty && documents.nonEmpty) Consequence.success(None)
+      discovery <- if (program.nonEmpty && documents.nonEmpty) Consequence.success(Right(None))
         else WorkflowProjectDeclaration.readC(root, core)
       plan <- GoalPhaseInputRecordReadPolicy.storedValue(configuration.configuration.values,
         CncfConfigurationParameterCatalog.SUBSYSTEM_PROCESS_EXECUTION_PLAN_KEY) match {
@@ -31,14 +32,14 @@ private[smworkflow] object WorkflowValidationInitialization {
       }
       ordinary <- if (program.nonEmpty) Consequence.success(None)
         else RepositorySyncProgramImpact.ordinaryPolicyC(parameters, root.toString, plan)
-      initialized <- assembleC(root, plan, project, program.orElse(ordinary), documents)
+      initialized <- assembleC(root, plan, discovery.toOption.flatten, program.orElse(ordinary), documents)
       bound <- initialized.program match {
         case Some(policy) if policy.checks.exists(check => check.ordinaryDiscovery || check.metadata.nonEmpty) =>
           RepositorySyncProgramImpact.bindOrdinaryC(policy, plan, root.toString)
             .map(value => initialized.copy(program = Some(value)))
         case _ => Consequence.success(initialized)
       }
-    } yield bound
+    } yield bound.copy(declarationReadFailure = discovery.swap.toOption)
   }
 
   /** This inventory narrows existing declarations. Managed execution remains the

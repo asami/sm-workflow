@@ -364,7 +364,8 @@ private[smworkflow] object RepositorySyncPurposeRuntime {
       assessment <- GoalPhaseStepAssessment.assessPurposeC(slot.actionPolicy,
         GoalPhaseOrderedProgression.Snapshot(progress.candidate.get.parent, progress.candidate.get.tree),
         store.reference(prefix + "-assessment").identity, progress.receipts.head,
-        selected.map(check => GoalPhaseNativeValidation.Check(check.identity, check.ordinal, check.kind)), progress.receipts.drop(1))
+        selected.map(check => GoalPhaseNativeValidation.Check(check.identity, check.ordinal, check.kind)), progress.receipts.drop(1),
+        ordinaryFull = progress.sessionWorkspace.nonEmpty && progress.selection.exists(_.depth == "FULL"))
       priorReview <- if (assessment.branch == "admit") Consequence.success(Option.empty[org.goldenport.cncf.workflow.ContextReference])
         else policy.flatMap(_.impact).map(p => RepositorySyncProgramImpact.reusableReviewC(store, progress.candidate.get.tree, p))
           .getOrElse(Consequence.success(Option.empty[org.goldenport.cncf.workflow.ContextReference]))

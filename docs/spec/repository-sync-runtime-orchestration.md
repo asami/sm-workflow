@@ -413,6 +413,12 @@ or an initialization refusal for a light sync. Actual fetched parent/index delta
 still determine whether a merge needs product validation. Equal, local-ahead and
 fast-forward retain their existing structural-only integration policy.
 
+When a declaration read failure prevents required validation from being
+resolved, the setup wait identifies the file and reports the resource reader's
+reason. An absent optional declaration remains unknown or uses the applicable
+SBT defaults. Setup refresh continues the same Session with its retained
+candidate and accepted work.
+
 Existing configured prior-evidence references retain their native reader and
 actual input-applicability checks. There is no new evidence ledger or claim of
 global discovery of historical Sessions. Inferred defaults do not attach unknown

@@ -68,14 +68,18 @@ final class RepositorySyncSessionCandidateWorkspaceSpec extends AnyWordSpec with
       .map(row => row.mapObject(fields => fields.add("target", _alias.asJson)
         .add("identity", ("candidate-" + fields("operation").get.asString.get).asJson)
         .add("capability", ("candidate-" + fields("operation").get.asString.get).asJson)))
-    val sbt = Vector(
+    val ordinary = scenario == "DeclarationRead"
+    val sourceprograms = Vector(
       TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable, Vector(1), operation = SbtOperation.Compile),
-      TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable, Vector(2), operation = SbtOperation.TestOnly,
-        testClasses = Vector(_suite))).flatMap(_.hcursor.get[Vector[Json]]("sbtPrograms").toOption.get)
-      .map(row => row.mapObject { fields =>
+      TypedSbtHostPlanFixture.plan(root, TypedSbtHostPlanFixture.normalExecutable, Vector(2),
+        operation = if (ordinary) SbtOperation.Test else SbtOperation.TestOnly,
+        testClasses = if (ordinary) Vector.empty else Vector(_suite))
+    ).flatMap(_.hcursor.get[Vector[Json]]("sbtPrograms").toOption.get)
+    val candidateprograms = sourceprograms.map(row => row.mapObject { fields =>
         val identity = "candidate-" + fields("operation").get.asString.get
         fields.add("target", _alias.asJson).add("identity", identity.asJson).add("capability", identity.asJson)
       })
+    val sbt = if (ordinary) sourceprograms ++ candidateprograms else candidateprograms
     val owner = SmWorkflowComponent.componentId.name
     val capabilities = (observations ++ sbt).map(_.hcursor.get[Json]("capability").toOption.get)
     val policies = if (scenario == "MissingPolicy") Vector.empty else Vector(Json.obj(
@@ -129,6 +133,7 @@ final class RepositorySyncSessionCandidateWorkspaceSpec extends AnyWordSpec with
     Files.writeString(repository.resolve("build.sbt"), """scalaVersion := "2.12.18"
       |libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.19" % Test
       |""".stripMargin)
+    if (scenario == "DeclarationRead") Files.writeString(repository.resolve("project.yaml"), "project: {}\n")
     Files.writeString(repository.resolve("src/main/scala/candidatefixture/Value.scala"),
       "package candidatefixture\nobject Value { val expected = \"expected\\n\" }\n")
     Files.writeString(repository.resolve("src/test/scala/ProductCheck.scala"), """package candidatefixture
@@ -154,9 +159,12 @@ final class RepositorySyncSessionCandidateWorkspaceSpec extends AnyWordSpec with
     Files.writeString(repository.resolve("value.txt"), "incorrect\n")
     Files.writeString(repository.resolve("docs/purpose.md"), "original document\n")
   }
-  override protected def _setup_commands_(root: Path, scenario: String): Vector[Vector[String]] =
+  override protected def _setup_commands_(root: Path, scenario: String): Vector[Vector[String]] = {
+    val paths = Vector("docs/purpose.md", "src/main/scala/candidatefixture/Value.scala") ++
+      Option.when(scenario == "DeclarationRead")("project.yaml")
     super._setup_commands_(root, "Equal").patch(2, Vector(Vector("-C", root.resolve("repository").toString,
-      "add", "--", "docs/purpose.md", "src/main/scala/candidatefixture/Value.scala")), 0)
+      "add", "--") ++ paths), 0)
+  }
 
   private def _store_c(call: Setup, root: Path, identity: InstanceIdentity): Consequence[N.Store] = {
     val definition = take(RepositorySyncDefinitionBinding.bindC)
@@ -191,6 +199,106 @@ final class RepositorySyncSessionCandidateWorkspaceSpec extends AnyWordSpec with
   }
 
   "Session-owned Purpose candidate workspace" should {
+    "report each declaration read failure and resume the same prepared candidate" in {
+      Given("ordinary Compile and Test bindings and a Purpose candidate that needs project declaration discovery")
+      val root = _root("declaration-read")
+      val repository = root.resolve("repository")
+      val build = repository.resolve("build.sbt")
+      val declaration = repository.resolve("project.yaml")
+      val resourcekey = "textus.resource.url.file.roots"
+      val parameters = _parameters(root) - RepositorySyncDocumentInputs.declaration.name -
+        RepositorySyncProgramImpact.declaration.name
+      var waiting = Option.empty[V.RepositoryDirectoryBatchResult]
+      var prepared = Option.empty[P.Progress]
+      val input = ThreeWorkflowNormalHostFixture.definition(root).repository.input
+
+      def _refresh_properties_(result: V.RepositoryDirectoryBatchResult): List[Property] =
+        List(Property("sessionId", result.sessionId, None), Property("revision", result.resultReference.revision, None))
+
+      for ((readroot, blocked) <- Vector(root.resolve(".textus") -> Some(build), build -> Some(declaration),
+          repository -> None)) {
+        _with_runtime_(root, "DeclarationRead", hostParameters = parameters + (resourcekey -> readroot.toString)) {
+          (owner, component, actor, prepare) =>
+          def _invoke_[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A =
+            read_value[A](take(owner.executeOperationResponseInContext(Request.of(component = component.name,
+              service = "RepositorySyncService", operation = operation, properties = properties), actor)))
+
+          val result = waiting match {
+            case None =>
+              prepare(_.setupC(_setup_commands_(root, "DeclarationRead").size))
+              Files.writeString(repository.resolve("value.txt"), "pending incorrect\n")
+              val intent = Property("input", Record.data("syncMode" -> "FULL_STATE"), None)
+              val issued = _invoke_[V.RepositoryDirectoryBatchResult](RepositorySyncDirectoryList.syncOperation, List(intent))
+              val child = InstanceIdentity(issued.repositories.head.sessionId)
+              var work = Option.empty[WorkflowInteraction[P.Request, Nothing]]
+              prepare(_.repositoryWorkC(child, RepositorySyncPurposeContinuation.completionOperation, P.inputCodec)
+                .map(value => { work = Some(value); () }))
+              val request = work.get.current.asInstanceOf[WorkflowContinuation.WorkOrder[P.Request]].request
+              val proposal = P.Result("resolved", "One actual program candidate", Vector(P.Group("one-purpose", "Program value",
+                "Correct program input", Vector.empty, Vector(P.Content("value.txt", Some("expected\n"))), Vector.empty,
+                "Correct the one actual changed runtime input")), Vector.empty)
+              val reference = ContextReference("declaration-read-purpose", "1")
+              val reply = ContinuationResult(work.get.handle, request.runId, request.continuationId, request.expectedRevision,
+                request.context.snapshot, TypedValue(request.resultType.get.value, proposal), reference, Vector.empty,
+                ExecutionEvidence(Vector(reference), Some("declaration-read-specification")))
+              _invoke_[V.RepositorySyncConflictSubmissionResult]("submitRepositoryPurposeResult",
+                take(NativeWorkflowOperationInputFixture.submissionC(reply))).accepted shouldBe true
+              When("the same directory Session advances to candidate preflight")
+              _invoke_[V.RepositoryDirectoryBatchResult](RepositorySyncDirectoryList.syncOperation,
+                List(Property("sessionId", issued.sessionId, None), intent))
+            case Some(previous) =>
+              When("setup refresh reopens the same Session with the current read permissions")
+              _invoke_[V.RepositoryDirectoryBatchResult](RepositorySyncDirectoryList.refreshOperation, _refresh_properties_(previous))
+          }
+          val child = InstanceIdentity(result.repositories.head.sessionId)
+          waiting.foreach { previous =>
+            result.sessionId shouldBe previous.sessionId
+            child.value shouldBe previous.repositories.head.sessionId
+          }
+          blocked match {
+            case Some(path) =>
+              Then("the wait reports the attempted file and its resource refusal before any workspace allocation")
+              result.repositories.head.kind shouldBe "Wait"
+              result.repositories.head.condition shouldBe Some("purpose-materialization-preflight")
+              result.repositories.head.diagnostic.get should include(path.toString)
+              result.repositories.head.diagnostic.get should include("outside configured read-only roots")
+              prepare(call => for {
+                saved <- call.nativeStageC(input, child, root, "purpose-1-prepared")
+                allocation <- call.nativeStageC(input, child, root, "purpose-1-allocate-intent")
+              } yield {
+                val current = saved.get.payload.purposes.get
+                prepared.foreach(prior => current shouldBe prior)
+                prepared = Some(current)
+                allocation shouldBe None
+                ()
+              })
+              waiting = Some(result)
+            case None =>
+              Then("the same prepared candidate is checked, assessed and installed under ordinary FULL selection")
+              prepare(call => for {
+                saved <- call.nativeStageC(input, child, root, "purpose-1-check-1-result")
+                assessment <- call.nativeStageC(input, child, root, "purpose-1-assessment")
+                installed <- call.nativeStageC(input, child, root, "purpose-1-installed")
+              } yield {
+                saved should not be empty
+                val checked = saved.get.payload.purposes.get
+                checked.plan shouldBe prepared.get.plan
+                checked.candidate shouldBe prepared.get.candidate
+                checked.sessionWorkspace.get.session shouldBe child.value
+                checked.selection.get.depth shouldBe "FULL"
+                checked.receipts.drop(1).map(_.identity) shouldBe Vector("compile", "test")
+                C.productSuccessful(checked.receipts(1), WorkflowSbtValidation.Kind.Compile) shouldBe true
+                C.productSuccessful(checked.receipts(2), WorkflowSbtValidation.Kind.Test) shouldBe true
+                assessment.flatMap(_.payload.purposes).flatMap(_.assessment).map(_.branch) shouldBe Some("admit")
+                installed.flatMap(_.payload.purposes).map(_.commits) shouldBe
+                  Some(Vector(prepared.get.candidate.get.commit))
+                ()
+              })
+          }
+        }
+      }
+    }
+
     for (requirement <- Vector("check", "review")) {
       s"refuse installation when a checked frontier is reopened with a new required $requirement" in {
         Given("a real Session candidate checked successfully but paused before installation admission")
