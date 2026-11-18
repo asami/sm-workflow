@@ -62,6 +62,8 @@ final class DelegateTaskValidationContinuationOperationSpec extends AnyWordSpec 
         "Test / testOnly / testOptions := Seq.empty\n",
       java.nio.file.StandardOpenOption.APPEND)
     Files.writeString(root.resolve("repository/docs/phase.md"), "Specification source\n")
+    Files.writeString(root.resolve("repository/docs/parallel-existing.md"), "Other work baseline\n")
+    Files.writeString(root.resolve("repository/docs/parallel-later.md"), "Later work baseline\n")
   }
   override protected def _setup_commands_(root: Path, scenario: String): Vector[Vector[String]] =
     super._setup_commands_(root, scenario).patch(2, Vector(Vector("-C", root.resolve("repository").toString,
@@ -97,6 +99,8 @@ final class DelegateTaskValidationContinuationOperationSpec extends AnyWordSpec 
         stepValidation = initial.goal.stepValidation.copy(checks = _checks)))
       _with_runtime_(root, "Equal", Some(host), BoundedWorkExecutionAdmissionFixture.parameters) { (owner, component, actor, project) =>
         project(_.setupC(_setup_commands_(root, "Equal").size))
+        val earlierUnrelated = root.resolve("repository/docs/parallel-existing.md")
+        Files.writeString(earlierUnrelated, "Earlier unrelated work\n")
         def _call_(name: String, properties: List[Property]): Consequence[OperationResponse] =
           owner.executeOperationResponseInContext(Request.of(component = component.name, service = family + "Service",
             operation = name, properties = properties), actor)
@@ -169,6 +173,9 @@ final class DelegateTaskValidationContinuationOperationSpec extends AnyWordSpec 
           saved <- n.saveC(h, store, current, waiting, c.core)
           _ = { oldrevision = saved.revision.value; original = Some(waiting) }
         } yield ()))
+        val laterUnrelated = Vector("docs/parallel-later.md") ++
+          Vector.tabulate(4)(i => s"docs/parallel-note-$i.md")
+        laterUnrelated.foreach(path => Files.writeString(root.resolve("repository").resolve(path), "New unrelated work: " + path + "\n"))
         if (zero) {
           val path = root.resolve("repository").resolve(_suite_path)
           Files.writeString(path, Files.readString(path).replace("@org.scalatest.DoNotDiscover", "@org.scalatest.tags.Slow"))
@@ -193,11 +200,27 @@ final class DelegateTaskValidationContinuationOperationSpec extends AnyWordSpec 
             c.executionContext.clock.instant().minusSeconds(1))
           _ <- c.createC("host_evidence", row.recordIdentity, row.record)
         } yield ())
+        if (multiple) {
+          Given("an unrelated staged document which must not enter this candidate")
+          val path = laterUnrelated.last
+          _take(_run_setup_command_(Vector("-C", root.resolve("repository").toString, "--literal-pathspecs", "add", "--", path)))
+          _call_(adoptname, List(Property("input", answer, None))).isSuccess shouldBe false
+          project(c => _inspect_(c, (_, current, payload) => {
+            current.revision.value shouldBe oldrevision
+            payload shouldBe original.get
+            Consequence.unit
+          }))
+          // Undo only this specification's staging, never any consumer work.
+          _take(_run_setup_command_(Vector("-C", root.resolve("repository").toString, "restore", "--staged", "--", path)))
+        }
         _value_[V.BoundedValidationContinuationView](adoptname,
           List(Property("input", answer, None))).outcome shouldBe "resumed-awaiting-advance"
         project(c => _inspect_(c, (store, current, payload) => for {
           old <- n.loadPayloadC(store, session, oldrevision, c.core)
           _ = old shouldBe original.get
+          _ = old.unrelated.get.map(_.path) shouldBe Vector("docs/parallel-existing.md")
+          _ = payload.unrelated.get.map(_.path).toSet shouldBe (laterUnrelated :+ "docs/parallel-existing.md").toSet
+          _ = payload.state.input.ownedPaths shouldBe original.get.state.input.ownedPaths
           _ = payload.state.receipts shouldBe (if (zero || multiple) original.get.state.receipts else original.get.state.receipts.take(1))
           _ = payload.state.ordinaryCount shouldBe original.get.state.ordinaryCount
           _ = payload.state.automaticCount shouldBe original.get.state.automaticCount
@@ -231,10 +254,14 @@ final class DelegateTaskValidationContinuationOperationSpec extends AnyWordSpec 
             payload.state.receipts.last.stdout should not include "should retain its ordinary assertion"
           }
           _ = payload.state.selected shouldBe _checks
+          _ = payload.state.candidate.get.paths.forall(path => _owned.contains(path)) shouldBe true
+          _ = payload.unrelated.get.map(_.path).toSet shouldBe (laterUnrelated :+ "docs/parallel-existing.md").toSet
           _ = payload.state.ordinaryCount shouldBe (if (multiple) 1 else 0)
           _ = payload.state.automaticCount shouldBe (if (multiple) 1 else 0)
         } yield ()))
         Files.readString(root.resolve("sbt-executions.txt")).linesIterator.size shouldBe (if (zero) 4 else if (multiple) 3 else 2)
+        Files.readString(earlierUnrelated) shouldBe "Earlier unrelated work\n"
+        laterUnrelated.foreach(path => Files.readString(root.resolve("repository").resolve(path)) shouldBe "New unrelated work: " + path + "\n")
       }
     }
     }
