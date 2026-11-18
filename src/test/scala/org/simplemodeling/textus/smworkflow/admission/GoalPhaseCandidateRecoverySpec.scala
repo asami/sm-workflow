@@ -20,7 +20,8 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Pure contract and passive preparation evidence; these inputs grant no real Human authority.
   * @since   Oct. 22, 2026
-  * @version Oct. 27, 2026
+  *  version Oct. 27, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -105,9 +106,9 @@ final class GoalPhaseCandidateRecoverySpec extends AnyWordSpec with NativeGoalSo
         (1, Vector("ReviseWork", "Defer"), "dependency"),
         (2, Vector("ReviseWork", "Defer"), "dependency"),
         (3, Vector("ReviseWork", "Defer"), "dependency"),
-        (4, Vector("AuthorizeNewObservation", "Defer"), "dependency"),
-        (5, Vector("AuthorizeNewObservation", "Defer"), "dependency"),
-        (6, Vector("AuthorizeNewObservation", "Defer"), "primary"))
+        (4, Vector("AuthorizeNewObservation", "ReviseWork", "Defer"), "dependency"),
+        (5, Vector("AuthorizeNewObservation", "ReviseWork", "Defer"), "dependency"),
+        (6, Vector("AuthorizeNewObservation", "ReviseWork", "Defer"), "primary"))
       When("the existing pure target and preparation owners select the remaining obligation")
       Then("only recorded staging admits a distinct observation and every old unknown stays unknown")
       forAll(cases) { (count, choices, subject) =>
@@ -158,6 +159,57 @@ final class GoalPhaseCandidateRecoverySpec extends AnyWordSpec with NativeGoalSo
       R.bindingC("component", incomplete, "AuthorizeNewObservation", _answer.rationale, "participant",
         ContextReference(_reference.identity, _reference.revision)).isSuccess shouldBe false
       R.codec.decode(R.codec.encode(direction.copy(target = incomplete, choice = "ReviseWork"))).isRight shouldBe true
+    }
+  }
+
+  "Completed primary staging revision" should {
+    "preserve four accepted Steps original base and consumed repair counts when requesting fresh work" in {
+      Given("a pure five-Step controller with four independently reviewed committed Steps")
+      val original = _target
+      val plan = original.controller.plan.copy(steps = (1 to 5).map(index =>
+        original.controller.plan.steps.head.copy(identity = "step-" + index)).toVector)
+      val closed = (1 to 4).foldLeft(take(O.startC(plan, _base))) { (state, index) =>
+        val ready = take(state.acceptC(O.SemanticCompleted(state.next.asInstanceOf[O.Semantic].key, "Implementation")))
+        val candidate = O.Snapshot(state.tipSnapshot.head, index.toString * 40)
+        val inspected = take(ready.acceptC(O.CandidateObserved(candidate)))
+        val checked = take(inspected.acceptC(O.ChecksObserved(candidate, Vector("test"), "checks-" + index, true)))
+        val reviewed = take(checked.acceptC(O.ReviewAdmitted(checked.next.asInstanceOf[O.Semantic].key,
+          candidate, "checks-" + index, "review-" + index, O.ReviewOutcome.Accept)))
+        val pending = take(reviewed.acceptC(O.ClosureIntentSaved(candidate, "closure-" + index)))
+        take(pending.acceptC(O.StepCommitObserved("closure-" + index,
+          O.Commit((index + 4).toString * 40, state.tipSnapshot.head, candidate.tree))))
+      }
+      val repaired = (1 to 3).foldLeft(closed) { (state, index) =>
+        val ready = take(state.acceptC(O.SemanticCompleted(state.next.asInstanceOf[O.Semantic].key, "Fifth implementation")))
+        val candidate = O.Snapshot(state.tipSnapshot.head, "d" * 40)
+        val inspected = take(ready.acceptC(O.CandidateObserved(candidate)))
+        take(inspected.acceptC(O.RepairableChecksObserved(candidate, Vector("test"), "failed-checks-" + index,
+          O.RepairDirective("Observed check failure", Vector("failure-" + index)))))
+      }
+      val ready = take(repaired.acceptC(O.SemanticCompleted(repaired.next.asInstanceOf[O.Semantic].key, "Fifth correction")))
+      val inspection = original.inspection.copy(step = "step-5")
+      val target = original.copy(controller = R.controllerSnapshot(ready), inspection = inspection,
+        historyPrefix = original.historyPrefix.map(pair => pair.copy(
+          intent = pair.intent.copy(step = "step-5"), result = pair.result.copy(step = "step-5"))),
+        stagingPrefix = original.stagingPrefix.map(pair => pair.copy(
+          intent = pair.intent.copy(step = "step-5"), result = pair.result.copy(step = "step-5"))))
+      When("the completed primary frontier offers ReviseWork and its existing pure transition is applied")
+      R.validTarget(target) shouldBe true
+      R.choicesFor(target) should contain("ReviseWork")
+      val direction = R.Direction(target, ContextReference("fixture-human", "1"), "participant", "Revise current source", "ReviseWork")
+      val restored = R.codec.decode(R.codec.encode(direction))
+      val revised = take(ready.acceptC(O.CandidateWorkRevisionAdmitted(ContextReference("fixture-direction", "1"), direction.rationale)))
+      Then("the direction remains readable and only the semantic generation advances")
+      restored shouldBe Right(direction)
+      revised.stage shouldBe O.Stage.Implementation
+      revised.cursor shouldBe 4
+      revised.completed shouldBe ready.completed
+      revised.base shouldBe ready.base
+      revised.tipSnapshot shouldBe ready.tipSnapshot
+      revised.repairs shouldBe 3
+      revised.ordinaryRepairs shouldBe 3
+      revised.plan.repairLimit shouldBe ready.plan.repairLimit
+      revised.generation shouldBe ready.generation + 1
     }
   }
 

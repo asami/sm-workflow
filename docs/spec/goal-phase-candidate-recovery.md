@@ -30,7 +30,15 @@ establish termination, cancellation, success or `NotExecuted`.
 
 ## R2 — Independent Human binding
 
-The exact choices are `AuthorizeNewObservation` and `Defer`.
+Completed staging offers `AuthorizeNewObservation`, `ReviseWork` and `Defer`
+when the current generation can advance. `AuthorizeNewObservation` retains its
+unchanged-candidate meaning. `ReviseWork` selects the existing same-Step semantic
+revision transition when current source or ownership needs correction, including
+a binary diff rejected after staging. An exhausted generation offers no revision.
+Incomplete dependency preparation retains its `ReviseWork`/`Defer` restriction.
+Revision work does not itself change the selected Plan or remove paths from the
+index. Any ownership change still needs its own supported Plan adoption and
+actual Human direction; this recovery is not that authority.
 `NativeHostPreparationService.prepareEvidence` with `family=GoalPhase` and
 `kind=candidate-recovery` passively prepares the actual description and supplied
 `GoalPhaseCandidateRecoveryAnswer`, reference, matching worker/participant, issuer
@@ -45,8 +53,13 @@ Missing, foreign, crossed or stale evidence refuses.
 `GoalPhaseService.recoverGoalPhaseCandidate(input)` rederives the target and admits
 independent evidence. `Defer` authenticates and changes nothing. Authorization
 appends exactly one pure managed mechanical/CAS direction at the final staging
-result, in namespace `ordered-candidate-recovery:<original-source>`, with
-`InspectCandidate` and the controller unchanged. Describe and recover perform no
+result, in namespace `ordered-candidate-recovery:<original-source>`.
+`AuthorizeNewObservation` retains `InspectCandidate` and its controller;
+`ReviseWork` uses the existing `CandidateWorkRevisionAdmitted` transition to
+`Implementation` with a new semantic generation. It retains the original base,
+completed Steps and repair counters. A separate ordinary Advance issues fresh
+same-Step work; it does not replay the accepted implementation Submit.
+Describe and recover perform no
 Git, File or SBT effects. Stale and duplicate directions refuse. Source-history,
 validation and closure recovery retain their existing contracts.
 
