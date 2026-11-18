@@ -10,7 +10,10 @@ revision equals the current revision, native continuation derives a fresh techni
 revision from that revision and the authenticated Session and source revision.
 The continuation receipt records the original and effective revisions, while the
 accepted semantic result remains unchanged. Historical receipts without a
-correction remain readable. Repository, Component, purpose, Usage, raw/effective acceptance, checks,
+correction remain readable. Normal host path expansion, candidate coverage and
+native target capture use the same effective-revision resolution; host preflight
+must not reject the retained raw revision before that resolution runs.
+Repository, Component, purpose, Usage, raw/effective acceptance, checks,
 dependencies, operations, all other Steps and accepted prefix remain exact.
 Finite concrete path data has no arbitrary file-count ceiling. Relative-path,
 workspace, capability and actual-effect admission still applies. A registered

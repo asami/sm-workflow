@@ -26,7 +26,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * and Git closure. All semantic/review/closure inputs are specification-owned.
   * The same scenario uses the selected installed command without source fallback.
   * @since   Nov. 3, 2026
-  * @version Nov. 16, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -307,14 +307,14 @@ final class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers 
       scenario.candidateHead shouldBe next.work.get.completed.head.commit.identity
 
       Given("the completed first Step and an accepted inventory proposal for the remaining Step reusing its revision")
-      val beforeSecond = _stored(scenario)
       val secondPlan = next.work.get.selectedPlan
       val internalplan = _proposal(scenario).plan
       val secondProposal = R.Proposal("second-inventory", "1", "SPECIFICATION-OWNED second Step needs one source",
         internalplan.copy(steps = internalplan.steps.updated(1,
           internalplan.steps(1).copy(ownedPaths = internalplan.steps(1).ownedPaths :+ "src/SecondNeeded.scala"))))
+      secondProposal.plan.revision shouldBe secondPlan.revision
       val secondResult = _configuredResult("decision-needed", Some(secondProposal))
-      When("the actual remaining work is submitted and normal Advance continues it")
+      When("the accepted repeated revision passes normal host path expansion and coverage before native target capture")
       _submit(scenario, next, secondResult, "second-colliding-inventory")
         .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
       val acceptedSecond = _stored(scenario)
@@ -334,7 +334,6 @@ final class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers 
         steps = secondPlan.steps.updated(1, secondPlan.steps(1).copy(
           ownedPaths = secondPlan.steps(1).ownedPaths :+ "src/SecondNeeded.scala")))
       val restored = _stored(scenario)
-      beforeSecond.foreach(value => restored should contain(value))
       originalSecondResult.foreach(value => restored should contain(value))
       restored.exists(value => value.contains("revisionCorrection") && value.contains(secondPlan.revision) &&
         value.contains(secondContinued.work.get.selectedPlan.revision)) shouldBe true

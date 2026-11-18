@@ -20,7 +20,6 @@ import GoalTaskNativeRun as N
 /** Explicit supplemental validation for an actual completed legacy Assess batch.
   * The normal native checkpoint owns persistence; ordinary Advance owns checks.
   * @since Nov.  7, 2026
-  *  version Nov.  8, 2026
   * @version Nov. 18, 2026
   */
 private[smworkflow] object GoalTaskValidationContinuation {
@@ -114,9 +113,7 @@ private[smworkflow] object GoalTaskValidationContinuation {
             state.repairControl.restoration == original.repairControl.restoration &&
             (state.generation - original.generation == state.automaticCount.toLong - original.automaticCount.toLong) &&
             (state.ordinaryCount.toLong - original.ordinaryCount.toLong <= state.generation - original.generation) &&
-            (if (state.generation == original.generation) state.candidate == original.candidate &&
-              state.semanticReference == original.semanticReference &&
-              state.receipts.take(original.receipts.size) == original.receipts &&
+            (if (state.generation == original.generation)
               state.automaticCount == original.automaticCount && state.ordinaryCount == original.ordinaryCount &&
               payload.implementationWorker == target.business.implementationWorker &&
               payload.implementationWorkers == target.business.implementationWorkers
@@ -126,9 +123,9 @@ private[smworkflow] object GoalTaskValidationContinuation {
               after.take(before.size) == before && after.distinct == after &&
                 payload.implementationWorker.forall(after.contains)
             }) && payload.root == target.business.root &&
-            payload.branch == target.business.branch && payload.baseHead == target.business.baseHead)
+            payload.branch == target.business.branch)
           Right(Vector(direction -> target))
-        else Left("Retained Task validation continuation crosses its original owner, checks, candidate or source")
+        else Left("Retained Task validation continuation crosses its owner, purpose, selected checks or repair control")
       }
     }
   def retainedC(payload: Payload, owner: String, session: String, revision: Long): Consequence[Unit] =
@@ -308,8 +305,7 @@ private[smworkflow] object GoalTaskValidationContinuation {
   * Uses the existing bounded checkpoint and validation-continuation evidence;
   * historical supplemental GoalTask targets keep their original decoder.
   * @since   Nov.  8, 2026
-  *  version Nov.  8, 2026
-  * @version Nov.  9, 2026
+  * @version Nov. 18, 2026
   */
 private[smworkflow] object BoundedSelectedValidationContinuation {
   import StandaloneFixExecution as S

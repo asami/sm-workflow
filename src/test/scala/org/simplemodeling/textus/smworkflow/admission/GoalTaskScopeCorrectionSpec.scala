@@ -20,7 +20,10 @@ import StandaloneFixExecution as S
 import S.given
 import BoundedWorkRuntime.given
 
-/** SPECIFICATION-OWNED selection and workspace; no actual Human event is asserted. */
+/** SPECIFICATION-OWNED selection and workspace; no actual Human event is asserted.
+  * @since   Nov. 16, 2026
+  * @version Nov. 18, 2026
+  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenThen with ThreeWorkflowManagedRepositoryFixture {
@@ -40,6 +43,134 @@ final class GoalTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenThen w
     Path.of("target/sm-workflow/work/goal-task-scope").toAbsolutePath), "episode-").toRealPath()
 
   "GoalTask pending inventory correction" should {
+    "issue ordinary implementation from current main without requiring a scope correction" in {
+      Given("a started specification-owned Task whose implementation has not yet been issued")
+      val root = directory()
+      val original = ThreeWorkflowNormalHostFixture.definition(root)
+      val host = original.copy(goal = original.goal.copy(candidatePaths = input.ownedPaths.toVector,
+        stepValidation = original.goal.stepValidation.copy(checks = checks)))
+      _with_runtime_(root, "Equal", Some(host), BoundedWorkExecutionAdmissionFixture.parameters) { (owner, component, actor, prepare) =>
+        prepare(_.setupC(_setup_commands_(root, "Equal").size))
+        def _value_[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A =
+          read_value[A](take(owner.executeOperationResponseInContext(Request.of(component = component.name,
+            service = "GoalTaskService", operation = operation, properties = properties), actor)))
+        val options = Map("input" -> "input.json", "selection-id" -> "ordinary-start", "participant" -> "participant",
+          "origin" -> "ExplicitHuman", "idempotency-key" -> "ordinary-start", "selection-collection" -> "entity:smworkflow.cli.goal_selection")
+        val prepared = take(NativeGoalTaskStartInput.prepareC(options, _ => input.toRecord().toJsonStringC))
+        prepare { setup =>
+          val row = prepared.getVector("datastore").get.head.asInstanceOf[Record].getVector("records").get.head.asInstanceOf[Record]
+          setup.createC("goal_selection", row.getString("id").get, row.removeKeys(Set("id")))
+        }
+        val started = _value_[V.GoalTaskView]("startGoalTask", List(Property("input", input, None),
+          Property("selectionId", "ordinary-start", None), Property("participant", "participant", None),
+          Property("idempotencyKey", "ordinary-start", None)))
+        When("main advances and unrelated documentation appears before ordinary Advance")
+        val command = Vector("/usr/bin/git", "-C", root.resolve("repository").toString,
+          "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "core.hooksPath=/dev/null",
+          "commit", "--allow-empty", "--no-verify", "--no-gpg-sign", "-m", "fixture independent main change")
+        scala.sys.process.Process(command).! shouldBe 0
+        val unrelated = root.resolve("repository/docs/unrelated.md")
+        Files.createDirectories(unrelated.getParent)
+        Files.writeString(unrelated, "unrelated documentation\n")
+        val issued = _value_[V.GoalTaskView]("advanceGoalTask", List(Property("sessionId", started.sessionId, None)))
+        Then("normal work issuance preserves the same purpose and counters without a recovery operation")
+        issued.sessionId shouldBe started.sessionId
+        state(issued).stage shouldBe "Implement"
+        state(issued).input.ownedPaths shouldBe input.ownedPaths.toVector
+        state(issued).automaticCount shouldBe 0
+        state(issued).ordinaryCount shouldBe 0
+        Files.readString(unrelated) shouldBe "unrelated documentation\n"
+        Files.exists(root.resolve("sbt-executions.txt")) shouldBe false
+      }
+    }
+
+    "continue a scope-corrected Repair after main advances without replacing its failed evidence or repair count" in {
+      Given("a specification-owned failed check and an unclaimed Repair in the original native GoalTask")
+      val root = directory()
+      val original = ThreeWorkflowNormalHostFixture.definition(root)
+      val host = original.copy(goal = original.goal.copy(candidatePaths = input.ownedPaths.toVector ++ added,
+        stepValidation = original.goal.stepValidation.copy(checks = checks)))
+      _with_runtime_(root, "Equal", Some(host), BoundedWorkExecutionAdmissionFixture.parameters) { (owner, component, actor, prepare) =>
+        prepare(_.setupC(_setup_commands_(root, "Equal").size))
+        def _call_(operation: String, properties: List[Property]): Consequence[OperationResponse] =
+          owner.executeOperationResponseInContext(Request.of(component = component.name, service = "GoalTaskService",
+            operation = operation, properties = properties), actor)
+        def _value_[A: org.goldenport.convert.ValueReader](operation: String, properties: List[Property]): A =
+          read_value[A](take(_call_(operation, properties)))
+        def _selection_(record: Record): Unit = prepare { setup =>
+          val row = record.getVector("datastore").get.head.asInstanceOf[Record].getVector("records").get.head.asInstanceOf[Record]
+          setup.createC("goal_selection", row.getString("id").get, row.removeKeys(Set("id")))
+        }
+        val options = Map("input" -> "input.json", "selection-id" -> "source-start", "participant" -> "participant",
+          "origin" -> "ExplicitHuman", "idempotency-key" -> "source-start", "selection-collection" -> "entity:smworkflow.cli.goal_selection")
+        _selection_(take(NativeGoalTaskStartInput.prepareC(options, _ => input.toRecord().toJsonStringC)))
+        val started = _value_[V.GoalTaskView]("startGoalTask", List(Property("input", input, None),
+          Property("selectionId", "source-start", None), Property("participant", "participant", None),
+          Property("idempotencyKey", "source-start", None)))
+        prepare(c => for {
+          storage <- c.taskStorageC()
+          instances <- storage.bindInstancesC()(using c.executionContext)
+          current <- instances.loadC(InstanceIdentity(started.sessionId))(using c.executionContext)
+          payload <- GoalTaskNativeRun.loadPayloadC(storage, started.sessionId, current.get.revision.value, c.core)
+          observed <- RepositorySyncManagedGitObservation.observeC(c.core)
+          tree <- RepositorySyncManagedGitObservation.indexTreeC(c.core)
+          candidate = S.Candidate(observed.head, tree, Vector.empty, "")
+          checking <- S.intentC(payload.state.copy(stage = "Validate", selected = checks, candidate = Some(candidate),
+            semanticReference = Some(ContextReference("specification-implementation", "1"))))
+          failed = RepositorySyncNativeMergeValidation.Receipt(checks.head.identity, "exited", Some(1), "Specification failure", "",
+            Some(WorkflowSbtValidation.Facts(checks.head.kind, WorkflowSbtValidation.Outcome.Failed, None, None)))
+          repair <- S.observedC(checking, failed)
+          nativehost = BoundedWorkRuntime.Host(_configuration_, _collection_("instances"), _collection_("continuations"),
+            "sm-workflow", payload.root, payload.branch, host.goal.candidatePaths, checks, None, None, None, None, None)
+          _ <- GoalTaskNativeRun.saveC(nativehost, storage, current.get, payload.copy(state = repair), c.core)
+        } yield ())
+        val pending = _value_[V.GoalTaskView]("advanceGoalTask", List(Property("sessionId", started.sessionId, None)))
+        val before = state(pending)
+        before.stage shouldBe "Repair"
+        val old = pending.issuedWorkContext.get.continuationId
+        val description = _value_[V.GoalTaskScopeCorrectionView]("describeGoalTaskScopeCorrection", List(Property("input",
+          V.GoalTaskScopeCorrectionDescriptionInput(started.sessionId, old, added), None)))
+        val target = take(GoalTaskScopeCorrection.targetC(description.target))
+        val correction = V.GoalTaskScopeCorrectionInput(started.sessionId, old, description.target, "source-scope", "participant",
+          "source-scope", V.WorkflowArtifactReference("specification-source-scope", "1"))
+        _selection_(take(NativeGoalTaskScopeCorrectionInput.prepareC(options ++ Map("selection-id" -> correction.selectionId,
+          "idempotency-key" -> correction.idempotencyKey), _ => correction.toRecord().toJsonStringC)))
+        _value_[V.GoalTaskScopeCorrectionView]("correctGoalTaskScope", List(Property("input", correction, None))).outcome shouldBe "corrected-awaiting-advance"
+        val partial = root.resolve("repository/src/test/scala/Partial.scala")
+        Files.createDirectories(partial.getParent)
+        Files.writeString(partial, "// retained partial repair\n")
+        When("an independent main commit precedes ordinary Advance after the adopted scope correction")
+        val command = Vector("/usr/bin/git", "-C", root.resolve("repository").toString,
+          "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "core.hooksPath=/dev/null",
+          "commit", "--allow-empty", "--no-verify", "--no-gpg-sign", "-m", "fixture main advancement")
+        scala.sys.process.Process(command).! shouldBe 0
+        val unrelated = root.resolve("repository/docs/unrelated.md")
+        Files.createDirectories(unrelated.getParent)
+        Files.writeString(unrelated, "unrelated documentation\n")
+        val successor = _value_[V.GoalTaskView]("advanceGoalTask", List(Property("sessionId", started.sessionId, None)))
+        Then("the same Repair is issued against current main while original evidence and counters remain unchanged")
+        successor.sessionId shouldBe started.sessionId
+        successor.issuedWorkContext.get.continuationId should not be old
+        val after = state(successor)
+        after.input.ownedPaths shouldBe before.input.ownedPaths ++ added
+        after.copy(input = before.input) shouldBe before
+        prepare(c => for {
+          storage <- c.taskStorageC()
+          current <- RepositorySyncManagedGitObservation.observeC(c.core)
+          source <- GoalTaskNativeRun.loadPayloadC(storage, started.sessionId, successor.issuedWorkContext.get.expectedRevision.toLong - 1, c.core)
+          originalpayload <- GoalTaskNativeRun.loadPayloadC(storage, started.sessionId, pending.issuedWorkContext.get.expectedRevision.toLong - 1, c.core)
+          _ = originalpayload shouldBe target.business
+          _ = source.baseHead shouldBe current.head
+          _ = source.baseHead should not be originalpayload.baseHead
+          _ = source.state shouldBe after
+        } yield ())
+        Files.readString(partial) shouldBe "// retained partial repair\n"
+        Files.readString(unrelated) shouldBe "unrelated documentation\n"
+        _value_[V.GoalTaskView]("advanceGoalTask", List(Property("sessionId", started.sessionId, None))).issuedWorkContext shouldBe successor.issuedWorkContext
+        Files.exists(root.resolve("sbt-executions.txt")) shouldBe false
+      }
+    }
+
     "retain the exact validation direction through a managed Repair scope correction and a later checkpoint" in {
       Vector(false, true).foreach { checkpointed =>
         Given("a specification-owned legacy success and explicitly admitted missing validation in the same native Session")

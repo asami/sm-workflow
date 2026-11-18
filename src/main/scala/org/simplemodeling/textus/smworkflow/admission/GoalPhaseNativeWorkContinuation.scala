@@ -46,8 +46,7 @@ import GoalPhaseCanonicalDependencySourceSuccession as CanonicalSource
   *  version Oct. 28, 2026
   *  version Oct. 31, 2026
   *  version Oct. 29, 2026
-  *  version Nov. 11, 2026
-  * @version Nov. 16, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWorkContinuation {
@@ -658,9 +657,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       extended <- currentinventory match {
         case None => Consequence.success(paths)
         case Some(value) => for {
-          added <- O.currentInventoryPathsC(controller.plan,
-            value.result.result.value.planRevision.get.plan.copy(effectiveAcceptance = controller.plan.effectiveAcceptance),
-            controller.step.identity)
+          added <- L.inventoryPathsC(value)
           selected = (paths ++ added).distinct
           _ <- L.targetForC(value, d.copy(candidatePaths = selected), core)
         } yield selected
@@ -1002,9 +999,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         decisioncontext = None, recordingCandidate = None)
 
     private def _current_inventory_covered(source: L.Source): Boolean =
-      source.result.result.value.planRevision.exists(proposal => O.currentInventoryPathsC(source.controller.plan,
-        proposal.plan.copy(effectiveAcceptance = source.controller.plan.effectiveAcceptance), source.controller.step.identity)
-        .toOption.exists(_.forall(d.candidatePaths.contains)))
+      L.inventoryPathsC(source).toOption.exists(_.forall(d.candidatePaths.contains))
 
     private def _dependency_source_revision_source_c(identity: String, core: ActionCall.Core):
       Consequence[GoalPhaseDependencySourceRevision.Source] = for {

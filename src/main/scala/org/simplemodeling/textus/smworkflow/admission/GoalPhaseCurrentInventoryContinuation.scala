@@ -19,7 +19,7 @@ import GoalPhasePlanRevision as R
 /** Automatic inventory under the retained original-purpose execution. A decoded
   * proposal is data; only the native issue/completion walker constructs Source.
   * @since   Nov. 3, 2026
-  * @version Nov. 16, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseCurrentInventoryContinuation {
@@ -35,6 +35,11 @@ private[smworkflow] object GoalPhaseCurrentInventoryContinuation {
   final class Source private[GoalPhaseCurrentInventoryContinuation](val session: F.Session,
     val from: InstanceRecord, val controller: O.State, val input: W.Request,
     val result: ContinuationResult[W.Result], val human: Option[H.Source]) {
+    lazy val captured: R.Captured = {
+      val effective = _effective_proposal(controller.plan, result.result.value.planRevision.get,
+        from.identity.value + "-" + from.revision.value.toString)
+      R.Captured(effective, effective.plan.copy(effectiveAcceptance = controller.plan.effectiveAcceptance), input.documents)
+    }
     def frontierC: Consequence[InstanceRecord] = human.fold(Consequence.success(from))(_pending_c)
     def reference: WorkflowMechanicalTransition.Reference =
       WorkflowMechanicalTransition.Reference(from.identity.value + _namespace + from.revision.value, "1")
@@ -114,6 +119,12 @@ private[smworkflow] object GoalPhaseCurrentInventoryContinuation {
       proposal.copy(plan = proposal.plan.copy(revision = current.revision + "-inventory-" + suffix))
     else proposal
 
+  /** Resolve the same effective revision at host preflight, coverage and capture.
+    * The accepted result remains the original proposal in native history.
+    */
+  private[admission] def inventoryPathsC(source: Source): Consequence[Vector[String]] =
+    O.currentInventoryPathsC(source.controller.plan, source.captured.plan, source.controller.step.identity)
+
   final case class Target(schemaVersion: String, componentInstance: String, sessionId: String,
     sourceRevision: String, frontierRevision: String, plan: O.Plan, base: O.Snapshot,
     completed: Vector[O.ClosedStep], generation: Long, repairProgress: GoalPhaseRepairProgress.Snapshot,
@@ -175,10 +186,9 @@ private[smworkflow] object GoalPhaseCurrentInventoryContinuation {
   private[admission] def targetForC(source: Source, d: F.Declaration, core: ActionCall.Core): Consequence[Target] = for {
     _ <- sourceC(source.session, source.from, source.controller, source.input, source.result, source.human)
     proposal <- source.result.result.value.planRevision.map(Consequence.success).getOrElse(F.invalid("inventory proposal is absent"))
-    effective = _effective_proposal(source.controller.plan, proposal,
-      source.from.identity.value + "-" + source.from.revision.value.toString)
+    captured = source.captured
+    effective = captured.proposal
     correction = if (effective == proposal) None else Some(RevisionCorrection(proposal.plan.revision, effective.plan.revision))
-    captured = R.Captured(effective, effective.plan.copy(effectiveAcceptance = source.controller.plan.effectiveAcceptance), source.input.documents)
     _ <- R.validateCapturedC(captured)
     added <- O.currentInventoryPathsC(source.controller.plan, captured.plan, source.controller.step.identity)
     _ <- _check(d.input.repositoryIdentity == source.controller.plan.repository && _paths(d.candidatePaths) &&

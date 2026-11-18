@@ -11,6 +11,10 @@ import StandaloneFixExecution as S
 import StandaloneFixExecution.given
 import GoalTaskValidationContinuation as C
 
+/**
+  * @since   Nov.  7, 2026
+  * @version Nov. 18, 2026
+  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
 final class GoalTaskValidationContinuationSpec extends AnyWordSpec with GivenWhenThen with Matchers {
@@ -111,7 +115,13 @@ final class GoalTaskValidationContinuationSpec extends AnyWordSpec with GivenWhe
       Then("foreign owner and stale revision refuse")
       C.retainedC(retained, "foreign", "session", 9).isSuccess shouldBe false
       C.retainedC(retained, "component", "session", 8).isSuccess shouldBe false
-      C.retainedC(retained.copy(state = retained.state.copy(receipts = Vector.empty)), "component", "session", 9).isSuccess shouldBe false
+      When("ordinary source reconstruction discards inapplicable candidate and check data")
+      val reconstructed = retained.copy(baseHead = "c" * 40, state = retained.state.copy(stage = "Inspect",
+        candidate = None, receipts = Vector.empty))
+      Then("the original direction remains readable while fresh validation is still required")
+      C.retainedC(reconstructed, "component", "session", 9).isSuccess shouldBe true
+      reconstructed.validationContinuation shouldBe retained.validationContinuation
+      S.assessC(reconstructed.state.copy(stage = "Assess")).isSuccess shouldBe false
     }
     "derive missing checks after a successful historical batch beyond sixteen entries" in {
       Given("seventeen distinct successful historical Test checks")
