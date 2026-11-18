@@ -11,6 +11,17 @@ Execution: not started by this plan.
 Parent: [Phase 8.1](phase-8.1.md)
 Behavior: [Scala lint profiles](../spec/scala-lint-profiles.md)
 
+SLP-1 source boundary: the [independent rule module](../../scala-lint-rules/README.md)
+contains the initial rules, versioned profiles and compiler-input specifications.
+The selected host is Scala 2.13.14 / Scalafix 0.12.1; analyzed input is Scala
+3.3.8 with compiler-produced SemanticDB. This is a candidate combination pending
+native checks, not an accepted SLP-RULES handoff. Per-call typed invocation and
+effective-configuration retention remain SLP-4; history-key migration remains
+SLP-3. Root whole-source lint keeps its existing project configuration selection;
+shared defaults are not activated there by this candidate. Full A01 normal-route
+adoption remains owed until actual native qualification. No producer delivery or
+checklist item is completed by source authorship or partial fixture proof.
+
 ## Roadmap position — 2026-11-11
 
 Formerly Phase 6.12. The Phase order is 7 -> 8 -> 8.1 -> 9. The A/B/C capability

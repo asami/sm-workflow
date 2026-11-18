@@ -1,6 +1,63 @@
 import org.goldenport.cozy.CozyPlugin.autoImport._
 import org.goldenport.cozy.CozyProjectIdentityEvidence
 import sbt.Keys.*
+lazy val scalaLintInput = project.in(file("scala-lint-rules/input"))
+  .settings(
+    scalaVersion := "3.3.8",
+    semanticdbEnabled := true,
+    publish / skip := true
+  )
+
+// Compile the consumer's handwritten Main and Test sources with the real Scala 3
+// compiler. This project does not load the standalone fixture's nested build.
+lazy val scalaLintConsumerInput = project.in(file("scala-lint-rules/consumer-input"))
+  .settings(
+    scalaVersion := "3.3.8",
+    semanticdbEnabled := true,
+    publish / skip := true,
+    Compile / unmanagedSourceDirectories := Seq(
+      baseDirectory.value.getParentFile / "fixtures" / "no-project-config" / "src" / "main" / "scala"),
+    Test / unmanagedSourceDirectories := Seq(
+      baseDirectory.value.getParentFile / "fixtures" / "no-project-config" / "src" / "test" / "scala")
+  )
+
+// The host runs Scala 2.13; analyzed source remains Scala 3.3.8.
+// This artifact has no dependency on the application or any CNCF runtime.
+lazy val scalaLintRules = project.in(file("scala-lint-rules"))
+  .disablePlugins(_root_.scalafix.sbt.ScalafixPlugin)
+  .enablePlugins(_root_.scalafix.sbt.ScalafixTestkitPlugin)
+  .settings(
+    organization := "org.simplemodeling",
+    moduleName := "scala-lint-rules",
+    version := "0.1.0-SNAPSHOT",
+    scalaVersion := "2.13.14",
+    libraryDependencies ++= Seq(
+      "ch.epfl.scala" %% "scalafix-core" % "0.12.1" % Provided,
+      "ch.epfl.scala" % "scalafix-cli_2.13.14" % "0.12.1" % Test,
+      "com.typesafe" % "config" % "1.4.3",
+      "org.scalatest" %% "scalatest" % "3.2.19" % Test
+    ),
+    Compile / unmanagedSources += baseDirectory.value.getParentFile / "project" / "ScalaLintProfiles.scala",
+    scalafixTestkitInputClasspath := (scalaLintInput / Compile / fullClasspath).value,
+    scalafixTestkitInputSourceDirectories := (scalaLintInput / Compile / unmanagedSourceDirectories).value,
+    scalafixTestkitInputScalacOptions := (scalaLintInput / Compile / scalacOptions).value,
+    scalafixTestkitInputScalaVersion := (scalaLintInput / scalaVersion).value,
+    scalafixTestkitOutputSourceDirectories := Nil,
+    Test / resourceGenerators += Def.task {
+      val props = new java.util.Properties()
+      props.setProperty("sourceroot", (ThisBuild / baseDirectory).value.getAbsolutePath)
+      props.setProperty("scalaVersion", (scalaLintConsumerInput / scalaVersion).value)
+      props.setProperty("classpath", (scalaLintConsumerInput / Test / fullClasspath).value.files.mkString(java.io.File.pathSeparator))
+      props.setProperty("main", (scalaLintConsumerInput / Compile / sources).value.mkString(java.io.File.pathSeparator))
+      props.setProperty("test", (scalaLintConsumerInput / Test / sources).value.mkString(java.io.File.pathSeparator))
+      props.setProperty("mainScalacOptions", (scalaLintConsumerInput / Compile / scalacOptions).value.mkString("|"))
+      props.setProperty("testScalacOptions", (scalaLintConsumerInput / Test / scalacOptions).value.mkString("|"))
+      props.setProperty("fixture", (baseDirectory.value / "fixtures" / "no-project-config").getAbsolutePath)
+      val destination = (Test / resourceManaged).value / "scala-lint-consumer.properties"
+      IO.write(props, "Actual consumer compiler inputs; not a testkit invocation", destination)
+      Seq(destination)
+    }.taskValue
+  )
 
 lazy val projectIdentityEvidence = settingKey[CozyProjectIdentityEvidence]("Admitted project.yaml component identity evidence")
 lazy val skillSourceFiles = taskKey[Seq[(File, String)]]("Exact component-owned semantic skill sources")
@@ -48,6 +105,8 @@ lazy val cncfSourceSettings: Seq[Def.Setting[_]] = cncfSourceProject.toSeq.flatM
 
 lazy val root = project
   .in(file("."))
+  .aggregate(scalaLintRules)
+  .dependsOn(scalaLintRules % ScalafixConfig)
   .dependsOn(cncfSourceProject.toSeq.map(source => source % "compile->compile;runtime->runtime"): _*)
   .enablePlugins(org.goldenport.cozy.CozyPlugin)
   .settings(inConfig(Test)(Defaults.testTaskOptions(labelledTestExecution) ++
@@ -65,10 +124,25 @@ lazy val root = project
     resolvers += Resolver.defaultLocal,
     resolvers += "SimpleModeling.org" at "https://www.simplemodeling.org/repository/maven",
     libraryDependencies ++= ProjectYamlBuild.dependencies(cozyProjectMetadata.value),
+    libraryDependencies += "com.typesafe" % "config" % "1.4.3",
+    // Share configuration data/code, without adding the rule engine to the CAR.
+    Compile / unmanagedSources += baseDirectory.value / "project" / "ScalaLintProfiles.scala",
+    Compile / resourceGenerators += Def.task {
+      val source = baseDirectory.value / "scala-lint-rules" / "src" / "main" / "resources" / "scala-lint"
+      val destination = (Compile / resourceManaged).value / "scala-lint"
+      IO.copyDirectory(source, destination)
+      (destination ** "*").get.filter(_.isFile)
+    }.taskValue,
 
-    // Lint only handwritten production Scala.
+    scalafixScalaBinaryVersion := "2.13",
+    // The local rule module uses ScalafixConfig, never the CAR runtime classpath.
+    // Lint handwritten Compile and Test; generated sources stay with their owner.
     Compile / scalafix / unmanagedSources := (Compile / unmanagedSources).value,
     Compile / scalafix / managedSources := Nil,
+    Compile / scalafix / aggregate := false,
+    Test / scalafix / unmanagedSources := (Test / unmanagedSources).value,
+    Test / scalafix / managedSources := Nil,
+    Test / scalafix / aggregate := false,
     prepareTestArtifacts := {
       (Compile / packageBin).value
       checkSkillBundleReproducibility.value
@@ -255,5 +329,5 @@ lazy val root = project
     cozyManifestMetadata ++= ProjectYamlBuild.manifestMetadata(projectIdentityEvidence.value, cozyProjectMetadata.value)
   )
   .settings(cncfSourceSettings)
-// Syntactic check only: no SemanticDB or additional compilation prerequisite.
-addCommandAlias("fixCheck", "Compile / scalafix --check")
+// Semantic rules use the normal compiler/SemanticDB prerequisite in each scope.
+addCommandAlias("fixCheck", ";Compile / scalafix --check;Test / scalafix --check")

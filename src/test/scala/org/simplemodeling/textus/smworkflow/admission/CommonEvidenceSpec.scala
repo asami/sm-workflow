@@ -23,7 +23,7 @@ import org.simplemodeling.textus.smworkflow.value as V
   * SQL and fresh-process public retrieval have separate connected coverage.
   * @since   Oct. 20, 2026
   *  version Oct. 24, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -273,7 +273,7 @@ final class CommonEvidenceSpec extends AnyWordSpec with Matchers with GivenWhenT
       val store = new Memory
       When("unsupported material is proposed")
       val running = take(E.archiveC(store, _policy, _source.copy(actionOutcome = "running"), "live", _now))
-      val invalid = take(E.archiveC(store, _policy, _source, "\ud800", _now))
+      val invalid = take(E.archiveC(store, _policy, _source, 0xd800.toChar.toString, _now))
       Then("neither source becomes stored or starts File I/O")
       running._1.status shouldBe "unavailable"
       invalid._1.status shouldBe "unavailable"
@@ -531,11 +531,11 @@ final class CommonEvidenceSpec extends AnyWordSpec with Matchers with GivenWhenT
       val store = new CommonEvidenceLifecycleFixture.Memory
       val sources = Vector(source().copy(repository = "../repository"), source().copy(phase = ".."),
         source().copy(repository = "repo:native"), source().copy(phase = "phase%31")) ++
-        Vector("", ".", "..", "a/b", "a\\b", "a b", "a\tb", "a\nb", "a\u0000b", "\ud800", "a" * 256)
+        Vector("", ".", "..", "a/b", "a\\b", "a b", "a\tb", "a\nb", "a\u0000b", 0xd800.toChar.toString, "a" * 256)
           .map(session => source().copy(session = session))
       When("managed archive admits each proposal")
       val invalid = sources.map(s => take(E.archiveManagedC(store, policy, s, "text", "identity", clock))) ++
-        Vector("\ud800", "nul\u0000text").map(text => take(E.archiveManagedC(store, policy, source(), text, "identity", clock)))
+        Vector(0xd800.toChar.toString, "nul\u0000text").map(text => take(E.archiveManagedC(store, policy, source(), text, "identity", clock)))
       val item = V.EvidenceArchiveItem(V.WorkflowArtifactReference("result", "1"), "repository", "6.4", None,
         "selected-goal", "stdout", "passed", "original", "identity")
       val oversized = take(E.archiveBatchC(store, policy,

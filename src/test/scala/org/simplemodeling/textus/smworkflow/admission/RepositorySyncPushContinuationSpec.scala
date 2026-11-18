@@ -1,6 +1,6 @@
 /**
  * @since   Nov. 17, 2026
- * @version Nov. 17, 2026
+ * @version Nov. 18, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -92,7 +92,7 @@ final class RepositorySyncPushContinuationSpec extends AnyWordSpec with Matchers
       rationale.getBytes(java.nio.charset.StandardCharsets.UTF_8).length should be > 65536
       P.decodeAnswer(large.copy(rationale = "   \n\t ").asJson).isLeft shouldBe true
       P.decodeAnswer(large.copy(rationale = "理由\u0000を変更").asJson).isLeft shouldBe true
-      P.decodeAnswer(large.copy(rationale = "理由\ud800").asJson).isLeft shouldBe true
+      P.decodeAnswer(large.copy(rationale = ("理由" + 0xd800.toChar.toString)).asJson).isLeft shouldBe true
     }
 
     "refuse missing null unknown crossed and expanded target facts" in {

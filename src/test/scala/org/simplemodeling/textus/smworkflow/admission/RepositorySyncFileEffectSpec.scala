@@ -12,7 +12,7 @@ import SplitPhaseExplicitPartitionFixture.take
   * Filesystem algorithms, encoding and root defenses remain producer contracts.
   * @since   Oct. 15, 2026
   *  version Oct. 24, 2026
-  * @version Nov.  3, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -182,7 +182,7 @@ final class RepositorySyncFileEffectSpec extends AnyWordSpec with Matchers with 
         request.copy(files = Vector(request.files.head.copy(path = ".git/config"))),
         request.copy(files = Vector(request.files.head.copy(expected = None))),
         request.copy(files = Vector(request.files.head.copy(replacement = "NUL\u0000text"))),
-        request.copy(files = Vector(request.files.head.copy(replacement = "\ud800"))),
+        request.copy(files = Vector(request.files.head.copy(replacement = 0xd800.toChar.toString))),
         request.copy(files = Vector(request.files.head.copy(replacement = null))))
       WorkflowFileRuntimeFixture.withCore(root, workspace = _workspace) { core =>
         When("the owning call receives malformed assigned intents or an invalid selected policy")

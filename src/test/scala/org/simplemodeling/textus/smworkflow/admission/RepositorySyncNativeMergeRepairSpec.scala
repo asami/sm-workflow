@@ -16,7 +16,7 @@ import RepositorySyncNativeConflictInput as I
   * they are not native issued work or independent reviewer/effect evidence.
   * @since   Oct. 15, 2026
   *  version Oct. 24, 2026
-  * @version Nov.  3, 2026
+  * @version Nov. 18, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -71,7 +71,7 @@ final class RepositorySyncNativeMergeRepairSpec extends AnyWordSpec with Matcher
         Some(continuation.copy(groups = Vector(first.copy(content = Vector(first.content.head.copy(path = "docs/future.md"))), continuation.groups(1)))),
         Some(continuation.copy(groups = Vector(first.copy(content = Vector(first.content.head.copy(path = "../outside.scala"))), continuation.groups(1)))),
         Some(continuation.copy(rationale = " "))) ++
-        Vector("\u0000", "\ud800").map(text => Some(continuation.copy(groups = Vector(
+        Vector("\u0000", 0xd800.toChar.toString).map(text => Some(continuation.copy(groups = Vector(
           first.copy(content = Vector(first.content.head.copy(text = Some(text)))), continuation.groups(1)))))
       When("ordinary repair admission compares exact current files and all derived later-owner/path pairs")
       val admitted = M.admitC(request, result, policy)
@@ -137,7 +137,7 @@ final class RepositorySyncNativeMergeRepairSpec extends AnyWordSpec with Matcher
         result.copy(replacements = result.replacements.updated(250, result.replacements.head)),
         result.copy(replacements = result.replacements.updated(250, M.File("foreign.scala", "text"))),
         result.copy(replacements = result.replacements.updated(250, files.last.copy(text = "\u0000"))),
-        result.copy(replacements = result.replacements.updated(250, files.last.copy(text = "\ud800"))))
+        result.copy(replacements = result.replacements.updated(250, files.last.copy(text = 0xd800.toChar.toString))))
       When("request restoration and ordinary repair admission consume all assigned files")
       val restored = M.inputCodec.decode(M.inputCodec.encode(request))
       val admitted = M.admitC(request, result, policy)
@@ -419,7 +419,7 @@ final class RepositorySyncNativeMergeRepairSpec extends AnyWordSpec with Matcher
     }
     "refuse absent blank NUL or invalid UTF-8 rationale and preserve complete large rationale" in {
       Given("rationale that is null, blank, binary or invalid Unicode alongside complete large text")
-      val bad = Vector(null, "", " \n\t", "reason\u0000", "\ud800")
+      val bad = Vector(null, "", " \n\t", "reason\u0000", 0xd800.toChar.toString)
 
       When("finding and result admission consume each rationale")
       val actual = bad.flatMap(reason => Vector(
@@ -435,7 +435,7 @@ final class RepositorySyncNativeMergeRepairSpec extends AnyWordSpec with Matcher
       Given("selected affected paths with complete large multibyte ordinary text")
       val request = _request.copy(files = _files.map(_.copy(text = "界" * 40000)))
       val result = _result.copy(replacements = _files.map(_.copy(text = "語" * 40000)))
-      val bad = Vector(null, "\u0000", "\ud800")
+      val bad = Vector(null, "\u0000", 0xd800.toChar.toString)
 
       When("request and result admission consume complete large or invalid texts")
       val accepted = M.admitC(request, result, _policy)

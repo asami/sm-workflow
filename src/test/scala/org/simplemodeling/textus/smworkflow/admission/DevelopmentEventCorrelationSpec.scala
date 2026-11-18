@@ -7,8 +7,9 @@ import org.scalacheck.{Gen, Prop, Test}
 import SplitPhaseExplicitPartitionFixture.take
 import DevelopmentOperationalView as V
 
-/** @since Oct. 25, 2026
-  * @version Oct. 25, 2026
+/**
+  * @since   Oct. 25, 2026
+  * @version Nov. 18, 2026
   * @author ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -48,7 +49,7 @@ final class DevelopmentEventCorrelationSpec extends AnyWordSpec with Matchers wi
     }
     "refuse malformed and oversized identities without replacement or normalization" in {
       Given("empty, padded, control, oversized and unpaired-surrogate session identities")
-      val malformed = Vector("", " padded", "padded ", "\u2000padded", "padded\u00a0", "\u2000", "control\n", "x" * 1025, "\ud800")
+      val malformed = Vector("", " padded", "padded ", "\u2000padded", "padded\u00a0", "\u2000", "control\n", "x" * 1025, 0xd800.toChar.toString)
       When("the exact-identity boundary attempts correlation without repairing the supplied strings")
       val rejected = malformed.map(value => DevelopmentEventCorrelation.keyC(_subject.copy(sessionId = value)))
       Then("every malformed identity is refused")

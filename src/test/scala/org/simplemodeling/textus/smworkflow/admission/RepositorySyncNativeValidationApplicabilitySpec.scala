@@ -18,7 +18,7 @@ import SplitPhaseExplicitPartitionFixture.take
 /** Actual selected facts, not policy metadata or re-encoded body certificates.
   * @since   Oct.  8, 2026
   *  version Oct. 24, 2026
-  * @version Nov.  3, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -80,7 +80,7 @@ final class RepositorySyncNativeValidationApplicabilitySpec extends AnyWordSpec 
       text.getBytes(java.nio.charset.StandardCharsets.UTF_8).length should be > 131072
       Vector(group.copy(content = Vector(RepositorySyncPurpose.Content("foreign.scala", Some(text)))),
         group.copy(content = Vector(RepositorySyncPurpose.Content("one.scala", Some("\u0000")))),
-        group.copy(content = Vector(RepositorySyncPurpose.Content("one.scala", Some("\ud800"))))).foreach { invalid =>
+        group.copy(content = Vector(RepositorySyncPurpose.Content("one.scala", Some(0xd800.toChar.toString))))).foreach { invalid =>
         RepositorySyncPurpose.admitC(request, result.copy(groups = Vector(invalid))).isSuccess shouldBe false
       }
     }
@@ -240,7 +240,7 @@ final class RepositorySyncNativeValidationApplicabilitySpec extends AnyWordSpec 
       val invalid = Vector(clean.copy(termination = "indeterminate", exitCode = None),
         clean.copy(exitCode = None), clean.copy(exitCode = null), clean.copy(stdout = null), clean.copy(stderr = null),
         clean.copy(stdout = "unexpected"), clean.copy(stderr = "unexpected"), clean.copy(stdout = "\u0000"),
-        clean.copy(stdout = "\ud800"), clean.copy(exitCode = Some(2), stdout = "+ source only\n"),
+        clean.copy(stdout = 0xd800.toChar.toString), clean.copy(exitCode = Some(2), stdout = "+ source only\n"),
         clean.copy(exitCode = Some(2)), clean.copy(exitCode = Some(2), stdout = "finding", stderr = "warning"),
         clean.copy(stderr = "x" * 65537),
         clean.copy(exitCode = Some(1)), clean.copy(exitCode = Some(7)), clean.copy(exitCode = Some(128)))

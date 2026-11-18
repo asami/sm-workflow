@@ -1,6 +1,9 @@
 # Shared Scala lint profiles
 
-Status: approved development direction, not implemented by this document.
+Status: approved development direction. The SLP-1 source candidate is described
+in [the shared rule module](../../scala-lint-rules/README.md); source authorship
+does not establish validation, publication or runtime adoption. Remaining rules,
+key migration and integrated acceptance remain open.
 
 Delivery ownership, producer-local plans and capability dependencies are tracked
 in the [Phase 8.1 dependency plan](../phase/phase-8.1-dependencies.md).
@@ -84,7 +87,10 @@ rewrite live Sessions or replay successful work for this rename. Before adoption
 qualify the new runtime and resolved settings together; issue subsequent work with
 new keys through the supported configuration route. Already issued execution and
 its retained results remain unchanged. This document specifies a planned contract;
-current `WorkflowSourceHistoryParameters` still implements the old history-only keys.
+current `WorkflowSourceHistoryParameters` retains the old history keys until
+SLP-3. The SLP-1 candidate adds source selection and absent-only history
+inheritance through normal resolved parameters; it introduces no old/new dual
+read, automatic conversion or historical-result rewrite.
 
 ## Resolution semantics
 

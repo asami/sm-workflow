@@ -15,7 +15,8 @@ import SplitPhaseCandidateAllocationFixture.*
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 24, 2026
+ *  version Oct. 24, 2026
+ * @version Nov. 18, 2026
  */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
@@ -99,7 +100,7 @@ final class SplitPhaseMechanicalCandidateAllocationSpec extends AnyWordSpec with
           O.ItemDemand(id, O.Demand.Unresolved("語" * (1024 * 1024)))))), None)
       When("allocation receives invalid checkpoint metadata or a complete large row")
       val results = Vector(null, M.Reference("", "1"), M.Reference(" leading", "1"), M.Reference("bad\n", "1"),
-        M.Reference("\uD800", "1"), M.Reference("é" * 200, "1"), M.Reference("x" * 1025, "1"))
+        M.Reference(0xd800.toChar.toString, "1"), M.Reference("é" * 200, "1"), M.Reference("x" * 1025, "1"))
         .map(value => policy.allocateMechanicalC(selected, value))
       val complete = policy.allocateMechanicalC(need(source, huge), anchor)
       Then("invalid anchors are refused and complete data is not trimmed or replaced")
