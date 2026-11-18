@@ -114,6 +114,27 @@ stages only existing host-bound selections; necessary additions use that same
 ordinary registration boundary, and real scope/effect expansion retains Human
 admission. Broader dirty-selection support remains allocated separately.
 
+Ordinary Advance constructs execution data from the current source and retained
+purpose, conditions and completed work. Main advancing or unrelated unstaged
+documents appearing do not require a new Session or scope correction. Original
+bases and results remain historical observations. Before new semantic work or
+candidate capture, the current repository supplies the execution base and outside
+inventory. At reentry to validation, assessment, review or an unstarted commit,
+a changed candidate returns to candidate capture and fresh selected checks rather
+than proving the applicability of old checks. Counts and adopted limits do not
+change when execution data is reconstructed.
+
+A resultless candidate-capture intent resumes through ordinary candidate capture.
+A definitely ended incomplete validation resumes from that same stage, retaining
+the earlier complete attempt in history and collecting new checks. No old partial
+prefix is promoted to a successful result. A validation whose termination is not
+confirmed cannot be rerun automatically: the call reports the missing execution
+fact as an error, rather than an indefinitely nonprogressing Wait. A state that
+cannot be reconstructed or contradicts a retained commit likewise reports an
+error. Actual pending semantic work, Human decisions and running calls retain
+their ordinary owners. Known committed effects are collected through the normal
+commit owner and are never repeated by this reconstruction.
+
 The native runtime persists commit intent before the typed effect and retains the
 actual execution outcome, physical paths and process output afterward. Closure
 requires observed single-parent commit metadata with the reviewed tree and the

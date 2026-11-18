@@ -38,10 +38,14 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
     GoalPhaseNativeValidation.Check("focused", 2, WorkflowSbtValidation.Kind.TestOnly))
   override protected def process_plan(root: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json =
     TypedGitHostPlanFixture.plan(Programs.Target(root.resolve("repository"), "main", "origin", "main",
-      root.resolve("upstream.git").toString), kinds = TypedGitHostPlanFixture.observations :+ org.goldenport.cncf.processexecution.GitOperationKind.IndexTree)
+      root.resolve("upstream.git").toString), kinds = TypedGitHostPlanFixture.observations ++ Vector(
+        org.goldenport.cncf.processexecution.GitOperationKind.IndexTree,
+        org.goldenport.cncf.processexecution.GitOperationKind.CommitMetadata))
 
   private def _state(view: V.DelegateTaskView): S.State = GoalPhaseNativeMetadata.normalizePublicJson(
     parser.parse(take(view.state.get.toJsonStringC)).toOption.get).toOption.get.as[S.State].toOption.get
+  private def _work(view: V.DelegateTaskView): S.Work = GoalPhaseNativeMetadata.normalizePublicJson(
+    parser.parse(take(view.work.get.toJsonStringC)).toOption.get).toOption.get.as[S.Work].toOption.get
 
   "Same-Session Task scope correction" should {
     "evaluate committed delivery without requiring the later worktree to remain unchanged" in {
@@ -221,6 +225,22 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
         corrected.outcome shouldBe "corrected-awaiting-advance"
         When("the exact correction is repeated and ordinary Advance issues its successor")
         val repeated = _value_[V.DelegateTaskScopeCorrectionView]("correctDelegateTaskScope", List(Property("input", correction, None)))
+        def git(args: String*): Unit = {
+          val command = Vector("/usr/bin/git", "-C", root.resolve("repository").toString,
+            "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "core.hooksPath=/dev/null") ++ args
+          scala.sys.process.Process(command).! shouldBe 0
+        }
+        git("checkout", "-b", "incompatible")
+        _call_("advanceDelegateTask", List(Property("sessionId", started.sessionId, None))).isSuccess shouldBe false
+        git("checkout", "main")
+        git("commit", "--allow-empty", "--no-verify", "--no-gpg-sign", "-m", "fixture descendant")
+        git("add", "--", "src/test/scala/Partial.scala")
+        val unrelated = root.resolve("repository/docs/unrelated.md")
+        Files.createDirectories(unrelated.getParent)
+        Files.writeString(unrelated, "unrelated documentation\n")
+        val index = Files.readAllBytes(root.resolve("repository/.git/index")).toVector
+        var currentHead = ""
+        prepare(_.observeC().map(observed => { currentHead = observed.head; () }))
         val next = _advance_()
         Then("repetition is idempotent and the new issue retains the same Session and original state")
         repeated.outcome shouldBe "already-corrected"
@@ -231,7 +251,22 @@ final class DelegateTaskScopeCorrectionSpec extends AnyWordSpec with GivenWhenTh
         after.copy(input = before.input) shouldBe before
         after.input.copy(ownedPaths = before.input.ownedPaths, sourceReferences = before.input.sourceReferences) shouldBe before.input
         after.input.sourceReferences should contain (ContextReference(correction.reference.identity, correction.reference.revision))
+        prepare { call => for {
+          definition <- DelegateTaskRuntimeCatalog.loadC()
+          h = BoundedWorkRuntime.Host(_configuration_, _collection_("instances"), _collection_("continuations"),
+            "sm-workflow", root.resolve("repository").toString, "main", host.goal.candidatePaths, _checks,
+            None, None, None, None, None)
+          store <- DelegateTaskNativeRun.storageC(h, definition, call.core)
+          original <- DelegateTaskNativeRun.loadPayloadC(store, started.sessionId, _work(old).sourceRevision.toLong, call.core)
+          active <- DelegateTaskNativeRun.loadPayloadC(store, started.sessionId, _work(next).sourceRevision.toLong, call.core)
+          _ = original shouldBe target.business
+          _ = active.baseHead shouldBe currentHead
+          _ = active.state shouldBe after
+          _ = original.baseHead should not be active.baseHead
+        } yield () }
         Files.readString(partial) shouldBe "// retained partial implementation\n"
+        Files.readString(unrelated) shouldBe "unrelated documentation\n"
+        Files.readAllBytes(root.resolve("repository/.git/index")).toVector shouldBe index
         Files.exists(root.resolve("sbt-executions.txt")) shouldBe false
         When("Advance recollects the successor and the old exact correction is repeated again")
         val recollected = _advance_()

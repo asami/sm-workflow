@@ -1,0 +1,63 @@
+[info] welcome to sbt 1.9.7 (Eclipse Adoptium Java 21.0.2)
+[info] loading settings for project cozy-build from plugins.sbt ...
+[info] loading project definition from /Users/asami/src/dev2025/cozy/project
+[info] loading settings for project root from build.sbt ...
+[info] set current project to cozy (in build file:/Users/asami/src/dev2025/cozy/)
+[info] running cozy.Cozy modeler-scala /Users/asami/src/dev2025/cozy/src/test/fixtures/nested-value-codecs/model.cml --save /Users/asami/src/dev2025/cozy/src/test/fixtures/nested-value-codecs/target/scala-3.3.8/src_managed/main/nested-value-codecs
+Tree
+[info] compiling 24 Scala sources to /Users/asami/src/dev2025/cozy/src/test/fixtures/nested-value-codecs/target/scala-3.3.8/classes ...
+[info] done compiling
+[info] compiling 1 Scala source to /Users/asami/src/dev2025/cozy/src/test/fixtures/nested-value-codecs/target/scala-3.3.8/test-classes ...
+[info] done compiling
+[info] NestedValueCodecRoundTripSpec:
+[info] Generated nested value codecs
+[info] - should supply the entity persistence binding and preserve ordered Japanese text
+[info]   + Given a generated envelope with a present optional branch and ordered branches
+[info]   + When the persistence binding captures the generated codecs and JSON is encoded
+[info]   + Then the binding captures the generated value and the exact JSON order roundtrips
+[info] - should roundtrip varied optional and ordered nested values
+[info]   + Given varied text including non-ASCII and both optional states
+[info]   + When the generated codecs encode and decode each value
+[info]   + Then all cases preserve the original value and order
+[info] Run completed in 350 milliseconds.
+[info] Total number of tests run: 2
+[info] Suites: completed 1, aborted 0
+[info] Tests: succeeded 2, failed 0, canceled 0, ignored 0, pending 0
+[info] All tests passed.
+[info] compiling 22 Scala sources to /Users/asami/src/dev2025/cozy/target/scala-2.12/test-classes ...
+[info] done compiling
+Tree
+Tree
+Tree
+Tree
+Tree
+Tree
+Tree
+Tree
+Tree
+Tree
+Tree
+Tree
+Tree
+Tree
+Tree
+Tree
+Tree
+Tree
+Tree
+Tree
+Tree
+Tree
+Tree
+Tree
+Tree
+Tree
+Tree
+Tree
+Tree
+[info] Run completed in 4 seconds, 804 milliseconds.
+[info] Total number of tests run: 32
+[info] Suites: completed 3, aborted 0
+[info] Tests: succeeded 32, failed 0, canceled 0, ignored 0, pending 0
+[info] All tests passed.
+[success] Total time: 31 s, completed 2026/11/18 3:41:38

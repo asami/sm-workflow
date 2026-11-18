@@ -28,7 +28,7 @@ import D.given
   * review are SPECIFICATION-OWNED, never actual user/provider acceptance.
   * SQLite is read only; all progression uses the ordinary public lifecycle.
   * @since   Oct. 28, 2026
-  * @version Nov.  6, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object ReleaseDependencyCliSpecification extends ThreeWorkflowManagedRepositoryFixture {
@@ -1424,6 +1424,8 @@ private[admission] object ReleaseDependencyCliSpecification extends ThreeWorkflo
   }
 }
 
+@org.scalatest.DoNotDiscover
+@org.scalatest.tags.Slow
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
 final class NativeGoalReleaseDependencyValidationCliSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -1445,6 +1447,65 @@ final class NativeGoalReleaseDependencyValidationCliSpec extends AnyWordSpec wit
       ReleaseDependencyCliSpecification.installed(stage, locator, old, selected)
       Then("the helper's actual capture/check/review/closure and no-replay assertions have completed")
       Files.isRegularFile(locator) shouldBe true
+    }
+  }
+}
+
+/** Explicit source-owner qualification with a supplied disposable source template.
+  * Source copying and local publication are not part of the bounded dependency suite.
+  * @since   Nov. 18, 2026
+  * @version Nov. 18, 2026
+  * @author  ASAMI, Tomoharu
+  */
+@org.scalatest.DoNotDiscover
+@org.scalatest.tags.Slow
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class NativeGoalReleaseDependencyExplicitSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  "Explicit source-owner Release dependency qualification" should {
+    "retain failed-history terminal facts through new phase dependency review after three genuine source repairs" in {
+      Given("a supplied disposable source template, pre-adopted limit ten and a fixed Phase test requiring three documentation corrections")
+      val frontier = ReleaseDependencyCliSpecification.setup("p69-release-dependency-failed-history", None,
+        coherentSource = true, priorReleaseHistory = true, failedReleaseHistory = true)
+      When("ordinary continuation authenticates failed and repair-required history before the new dependency purpose")
+      ReleaseDependencyCliSpecification.resume(frontier, None, negativeChecks = true, stopAtDependencyReview = true)
+      Then("the actual dependency ReviewPhase retains all three failed facts and the later passed fact without source-coherence acceptance")
+      frontier.repair.repairProgress.get.limit shouldBe 10
+      frontier.repair.repairProgress.get.ordinaryCount shouldBe 4
+    }
+  }
+}
+
+/** Verify the actual compiled qualification registrations without running their bodies.
+  * @since   Nov. 18, 2026
+  * @version Nov. 18, 2026
+  * @author  ASAMI, Tomoharu
+  */
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
+final class ReleaseDependencyExplicitSelectionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  "Release dependency qualification selection" should {
+    "exclude special-environment bodies from automatic scopes while retaining exact named selection" in {
+      Given("the actual compiled explicit-only qualification suites and this local specification")
+      val root = Path.of(getClass.getProtectionDomain.getCodeSource.getLocation.toURI).toRealPath().toString
+      val qualifications = Vector(
+        classOf[NativeGoalReleaseDependencyValidationCliSpec].getName -> new NativeGoalReleaseDependencyValidationCliSpec().testNames,
+        classOf[NativeGoalReleaseDependencyExplicitSpec].getName -> new NativeGoalReleaseDependencyExplicitSpec().testNames)
+      val suites = qualifications.map(_._1).toArray
+      val local = getClass.getName
+      When("normal FULL, automatic Slow and exact suite selection use the existing compiled-metadata bridge")
+      val full = org.simplemodeling.textus.smworkflow.testing.LabelledTestSelection.select(root, "test", "FULL", suites :+ local)
+      val automatic = scala.util.Try(org.simplemodeling.textus.smworkflow.testing.LabelledTestSelection.select(root, "test", "HEAVY", suites))
+      val explicit = org.simplemodeling.textus.smworkflow.testing.LabelledTestSelection.select(root, "test", "EXPLICIT", suites)
+      Then("automatic scopes exclude the qualification bodies and named selection retains their complete real registrations")
+      full.map(_(0)).toSet shouldBe Set(local)
+      automatic.failed.get shouldBe a[IllegalArgumentException]
+      automatic.failed.get.getMessage should include("No labelled runnable operation selected")
+      explicit.map(row => row(0) -> row(1)).toSet shouldBe qualifications.flatMap((suite, names) => names.map(suite -> _)).toSet
+      And("the bounded dependency suite no longer registers the source-copy qualification")
+      val sourcecase = "retain failed-history terminal facts through new phase dependency review after three genuine source repairs"
+      new NativeGoalDependencyValidationCliSpec().testNames.exists(_.endsWith(sourcecase)) shouldBe false
+      qualifications(1)._2.exists(_.endsWith(sourcecase)) shouldBe true
     }
   }
 }

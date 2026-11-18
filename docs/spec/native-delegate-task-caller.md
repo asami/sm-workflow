@@ -138,6 +138,13 @@ historical and cannot be submitted as that successor. Neither correction nor
 description changes files, checks, counters, source base, prior results or
 unknown external effects. Force-closed work cannot be reopened this way.
 
+If the corrected Implement remains unissued and the same branch has advanced,
+ordinary Advance observes and proves the descendant source before retaining an
+active source checkpoint. Unrelated dirty and staged work is observed and left
+in place; the earlier base and corrected request remain in native history.
+Advance refuses an incompatible target, ancestry or ownership and does not
+recover an already issued worker or a later candidate or Review stage.
+
 Every Implement, Repair and Review result must retain all original condition IDs
 in order. With the selected timing plan, report submission IDs true and later
 IDs false; no premature all-true completion is admitted. Once normal validation,
@@ -152,12 +159,12 @@ original condition, actual qualification and retained source/publication.
 `DelegateTaskScopeCorrectionSpec` covers native managed supersession, condition
 timing, legacy wire omission and final gates. The explicitly selected
 `NativeDelegateTaskScopeCorrectionCliSpec` uses the normal installed executable
-and optional Component archive inputs described below. Its tiny isolated
+and an explicitly selected candidate Component archive. Its tiny isolated
 destination uses an existing concrete fixture profile and genuine public
 prepare, Start, description, independently fixture-selected correction and
 Advance. It checks same-Session successor binding, immutable condition IDs,
-idempotence, retired-result refusal and absence of file, SBT or publication
-effects. All its Human and worker facts are SPECIFICATION-OWNED; it establishes
+idempotence, retired-result refusal, preserved partial/index and unrelated work,
+and absence of SBT or publication effects. All its Human and worker facts are SPECIFICATION-OWNED; it establishes
 no actual consumer choice, full delivery or application result.
 
 ## Transport and adoption

@@ -6,10 +6,11 @@ import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{InstanceRecord,
 import org.goldenport.record.Record
 import org.simplemodeling.textus.smworkflow.value as V
 
-/** Exact field projections of native retained state, selected without executing
+/** Field references to native retained state, selected without executing
   * any Workflow continuation. Small current business observations remain inline.
   * @since   Nov.  8, 2026
-  * @version Nov. 17, 2026
+  *  version Nov. 17, 2026
+  * @version Nov. 18, 2026
   */
 private[smworkflow] object WorkflowResponseMaterials {
   def referencesC(record: Record, call: ActionCall.Core): Consequence[Vector[V.WorkflowRetainedFieldReference]] = {
@@ -30,20 +31,10 @@ private[smworkflow] object WorkflowResponseMaterials {
       references <- selected.foldLeft(Consequence.success(Vector.empty[V.WorkflowRetainedFieldReference])) { (prior, field) => for {
         values <- prior
         reference <- selectC(field, record.getRecord(field).get, current, core)
-        material <- WorkflowRetainedSnapshot.readC(reference, core)
-        expected = DevelopmentOperationalView.json(record.getRecord(field).get)
-        actual <- GoalPhaseNativeMetadata.normalizePublicJson(material).fold(invalid, Consequence.success)
-        supplied <- GoalPhaseNativeMetadata.normalizePublicJson(expected).fold(invalid, Consequence.success)
-        // These fields are actual separately observed current summaries, rather
-        // than the immutable source projection. Keep them inline explicitly.
-        overlay = field match {
-          case "validation" => Set("evidenceRecording", "assessmentJournal")
-          case "completion" => Set("synchronization", "repository")
-          case "selectedPlan" => Set("effectStatus")
-          case _ => Set.empty[String]
-        }
-        _ <- if (actual.mapObject(_.filter { case (name, _) => !overlay(name) }) == supplied.mapObject(_.filter { case (name, _) => !overlay(name) }))
-          Consequence.unit else invalid("selected retained " + field + " differs from its actual public projection")
+        // Completion can append Evidence references or projection warnings to
+        // the saved state after the business response was formed. Publish that
+        // native source; its reader owns material access, not a duplicate read
+        // and full-body comparison against the earlier response copy.
       } yield values :+ V.WorkflowRetainedFieldReference(field, WorkflowRetainedSnapshot.publicReference(reference)) }
     } yield references
   }

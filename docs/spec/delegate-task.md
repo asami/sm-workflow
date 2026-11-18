@@ -358,6 +358,17 @@ literal owned paths for the same purpose, subject to the retained host ownership
 and delegation exclusions. It replaces no original ownership, purpose, operation
 or authority.
 
+After that correction retires an Implement issue, ordinary Advance can rebind
+the still-unissued implementation to the observed current source. It requires
+the same root and branch, valid adopted ownership and a current HEAD descended
+from the retained execution base. It retains a mechanical checkpoint with the
+current base and unrelated dirty snapshot before issuing the successor. The
+earlier checkpoint remains immutable history, and the adopted input, condition
+timing, counters and partial or staged work are preserved. If the observation
+does not qualify, Advance refuses; an already issued worker, Review and candidate
+recovery are outside this continuation. Subsequent implementation freshness and
+candidate checks still use the newly retained source boundary.
+
 The same public route also accepts an unclaimed, unsubmitted Repair issue when
 necessary same-purpose literal inventory is missing. Supply additional owned
 paths and leave submission timing empty; Repair cannot select a new timing plan.
@@ -468,3 +479,93 @@ alone must not silently add private tests to full validation. No CNCF execution
 contract change or alternative test runner is implied. A changed build or test
 source uses `AdoptCurrentOwnedCandidate` so fresh Compile and affected checks
 cover the new candidate; the old zero-test result remains in its native history.
+
+### Lost full-Test result recovery
+
+`describeDelegateTaskValidationRecovery` describes an active destination Session's
+retained full-Test intent, successful applicable prefix, unchanged Git candidate,
+and current host configuration without advancing or running a check. The selected
+SBT test ceilings are conservative capture upper bounds: CNCF may admit stricter
+host limits, and the description does not assert the exact limits of a future run.
+The old native process result and raw captures remain unknown when unavailable.
+
+`recoverDelegateTaskValidation` accepts an exact described target and a closed
+historical proof through the independently provisioned host evidence boundary.
+The proof references both a terminal event and completed caller invocation; its
+historical association is an attestation, not a native process receipt or a PASS.
+Passive `prepareEvidence` uses family `DelegateTask` and kind
+`delegate-task-validation-recovery`; preparation alone grants no authority.
+Recovery appends only a direction, preserving the original immutable frontier.
+A later ordinary Advance must recheck the direction and policy and own any new
+intent. An incomplete or missing capture cannot establish successful validation.
+
+The described `captureAvailability` is `not-retained` when no native
+reservation exists, `absent` when its admitted File read confirms no artifact,
+`available` only after the exact owner, Session, intent, check and source
+association and complete canonical contents are verified, and
+`unavailable-or-unreadable` when those facts cannot be established. The latter
+is not evidence of loss. A matching host-attested `available` direction may
+collect the real retained result without rerunning SBT. For `not-retained` or
+`absent`, an independently admitted `unavailable` direction retains the lost
+result and permits only a separately prepared new attempt. Neither path turns
+missing or partial data into success.
+
+The proof records caller terminal status and caller exit code separately from the
+child Test termination and its terminal-event OS exit code. The event OS exit
+code is not converted into a native SBT process exit code for an output-limit
+termination. A failed caller with exit code 1 is an ended invocation,
+not a successful check. Artifact content digests detect changed stored bytes;
+they are not proof of execution, Human authorization or source authority. A
+structurally valid complete capture containing undecodable text or NUL remains
+stored and discoverable, but is not admitted as behavioral success or diagnostic
+text. A reserved attempt whose SBT admission is confirmed rejected remains
+waiting; this boundary supplies no automatic retry for it.
+
+`not-retained` describes only the absence of a capture locator in this exact
+native intent. It does not assert that no bytes exist in another provider. If a
+caller knows of a genuine durable result in an unregistered provider, report the
+unsupported provider or setup gap rather than attesting that its bytes are
+absent. This recovery boundary does not discover or import unrelated providers.
+
+## Repair-trend continuation
+
+At an eligible destination DelegateTask Human repair-trend stop, `describeDelegateTaskRepairContinuation` reads the retained exact target. Prepare and independently admit the actual Human `ContinueRepair` or `Defer` direction using the `DelegateTask` `repair-continuation` evidence purpose. `resumeDelegateTaskRepair` checks the target, participant, evidence and source freshness. Defer leaves the checkpoint untouched; ContinueRepair appends a Repair checkpoint without running work or checks. A separate ordinary `advanceDelegateTask` owns the next Repair and the retained allowance. Repeating the same admitted direction collects the existing result; a changed or stale target is refused.
+
+The description reports the retained generation, repair counts and limit, successful check prefix, receipt and observation counts; its opaque target carries the exact retained receipts and observations. Recurring check or test names indicate a coarse trend and do not establish that failures share a root cause. Description runs no checks.
+
+## Requester reads of referenced validation captures
+
+An external full-Test receipt remains a compact reference in the returned
+result. The requester must read the complete canonical capture before it can
+accept that receipt as a successful check. The requester host may declare
+`sm-workflow.delegate-task.returned-capture-read-bindings` with schema
+`sm-workflow.delegate-task-returned-capture-read.v1` and a `bindings` array.
+Each binding specifies `sourceComponentInstance`, `sourceSessionId`,
+`sourceRepository`, `sourceParticipant`, `sourceRoot`, `sourceBranch`,
+`sourceBaseHead`, `sourceCandidateTree`, `sourceCommit`, `sourceWorkspace`,
+`readWorkspace`, and `maximumBytes`. These are independently configured host
+facts, not values inferred from the incoming receipt. The read workspace must
+be separately granted read access to the original capture root; the finite
+maximum cannot exceed the native capture ceiling. The original workspace and
+reference remain unchanged in the stored result.
+
+Receipt, adoption and later reopening require an exact, unambiguous binding and
+an available File read. The Session, owner, selected check and candidate must
+match, and the complete artifact must satisfy its size, digest, canonical
+content and process-observation checks. Missing, changed, denied, foreign,
+ambiguous, incomplete or oversized evidence is refused. Configuring a binding
+does not itself establish successful validation or authorize a consumer effect.
+
+### Initial semantic Human continuation
+
+A destination stopped by the original initial Implement result may describe its current target with `describeDelegateTaskSemanticContinuation`, using `DelegateTaskSemanticContinuationDescriptionInput` and receiving `DelegateTaskSemanticContinuationDescriptionResult`. The target includes the retained original issue and completion, complete semantic result and unresolved questions, native frontier and original input. Description only reads native state. If the original Submit has not yet been materialized as Human, ordinary Advance must materialize it first. Pending work, noninitial or other Human stops and exhausted or terminal sessions are refused.
+
+The host prepares independently attributable Human evidence with `prepareEvidence`, family `DelegateTask` and kind `semantic-continuation`, using the exact description and `DelegateTaskSemanticContinuationInput`. The input supplies the same target, participant, Human reference, a closed choice (`ContinueAfterDependencyResolution` or `Defer`), rationale and actual upstream result references. The independently admitted Human evidence must cover the original questions, unchanged boundary and dependency resolution; preparation or an upstream result alone does not grant authority. Existing attributable direction can cover the continuation without a repeated user grant. `resumeDelegateTaskSemanticContinuation` admits that evidence and, for continuation, appends a checkpoint without issuing work. A separate `advanceDelegateTask` issues the successor Implement in the same Session. An exact repeated admission collects the retained result; a changed direction refuses. Defer changes no workflow state.
+
+The Lake owner must perform its own current-target description, independent Human evidence admission, and ordinary Advance against its original R2 after this capability is installed. Delivery of this capability does not itself resume or accept the Lake or Curator work.
+
+### Review decision continuation
+
+A destination owner can describe a materialized independent Review `decision-needed` Human frontier with `describeDelegateTaskReviewContinuation`. The description carries a compact typed target identifying the component owner, Session, frontier revision and original issued Review and result reference. Candidate, validation receipts, original issued work and completion remain in native storage. The native operation resolves and verifies those records and their full context; the caller’s target is not authority. Description does not progress the Session. The owner prepares independent Human evidence with `review-continuation`, naming that exact description, either `ReevaluateReview` or `Defer`, and attributable clarification references. `resumeDelegateTaskReviewContinuation` admits only the independently observed matching direction. Defer leaves the frontier unchanged.
+
+Reevaluation retains the original Review and its result, the input and candidate, successful checks and repair counts. It appends a Review checkpoint with the original result, Human direction and clarification references; a separate ordinary Advance issues a fresh independent Review. The successor Review work contains the retained original completion and Human clarification plus an `originalWork` reference. The reviewer reads the exact original Review work and issued context through `WorkflowRetainedWorkService.readWorkflowRetainedWork`, using the public form of that reference. The native candidate freshness guard applies again at issuance, so a source change after admission cannot reuse prior checks. The new Review may accept or request same-purpose repair under the existing policy. This operation neither overrides the original verdict nor commits, publishes, restarts, or performs a consumer owner's Session work. Exact repeated admission collects the retained direction.

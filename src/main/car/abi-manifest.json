@@ -729,6 +729,27 @@
           "output": "LocalPublicationResult"
         },
         {
+          "service": "LocalPublicationService",
+          "name": "describeLocalPublicationRecovery",
+          "kind": "COMMAND",
+          "input": "LocalPublicationRecoveryInput",
+          "output": "LocalPublicationResult"
+        },
+        {
+          "service": "LocalPublicationService",
+          "name": "admitLocalPublicationRecovery",
+          "kind": "COMMAND",
+          "input": "LocalPublicationRecoveryInput",
+          "output": "LocalPublicationResult"
+        },
+        {
+          "service": "LocalPublicationService",
+          "name": "advanceLocalPublicationRecovery",
+          "kind": "COMMAND",
+          "input": "LocalPublicationRecoveryInput",
+          "output": "LocalPublicationResult"
+        },
+        {
           "service": "CompletionRecordClosureService",
           "name": "describeCompletionRecordClosure",
           "kind": "COMMAND",
@@ -1091,9 +1112,76 @@
           "kind": "COMMAND",
           "input": "ReadDevelopmentArtifactStatusInput",
           "output": "ManagedDevelopmentResult"
+        },
+        {
+          "service": "DelegateTaskService",
+          "name": "describeDelegateTaskSemanticContinuation",
+          "kind": "COMMAND",
+          "input": "DelegateTaskSemanticContinuationDescriptionInput",
+          "output": "DelegateTaskSemanticContinuationDescriptionResult"
+        },
+        {
+          "service": "DelegateTaskService",
+          "name": "resumeDelegateTaskSemanticContinuation",
+          "kind": "COMMAND",
+          "input": "DelegateTaskSemanticContinuationInput",
+          "output": "DelegateTaskSemanticContinuationDescriptionResult"
+        },
+        {
+          "service": "DelegateTaskService",
+          "name": "describeDelegateTaskRepairContinuation",
+          "kind": "COMMAND",
+          "input": "GoalTaskRepairContinuationDescriptionInput",
+          "output": "GoalTaskRepairContinuationDescriptionResult"
+        },
+        {
+          "service": "DelegateTaskService",
+          "name": "resumeDelegateTaskRepair",
+          "kind": "COMMAND",
+          "input": "GoalTaskRepairContinuationInput",
+          "output": "GoalTaskRepairContinuationDescriptionResult"
+        },
+        {
+          "service": "DelegateTaskService",
+          "name": "describeDelegateTaskReviewContinuation",
+          "kind": "COMMAND",
+          "input": "DelegateTaskReviewContinuationDescriptionInput",
+          "output": "DelegateTaskReviewContinuationDescriptionResult"
+        },
+        {
+          "service": "DelegateTaskService",
+          "name": "resumeDelegateTaskReviewContinuation",
+          "kind": "COMMAND",
+          "input": "DelegateTaskReviewContinuationInput",
+          "output": "DelegateTaskReviewContinuationDescriptionResult"
+        },
+        {
+          "service": "DelegateTaskService",
+          "name": "describeDelegateTaskValidationRecovery",
+          "kind": "COMMAND",
+          "input": "DelegateTaskValidationRecoveryDescriptionInput",
+          "output": "DelegateTaskValidationRecoveryView"
+        },
+        {
+          "service": "DelegateTaskService",
+          "name": "recoverDelegateTaskValidation",
+          "kind": "COMMAND",
+          "input": "DelegateTaskValidationRecoveryInput",
+          "output": "DelegateTaskValidationRecoveryView"
         }
       ],
       "types": [
+        {
+          "name": "LocalPublicationRecoveryInput",
+          "kind": "value",
+          "fields": [
+            { "name": "requestIdentity", "type": "string", "multiplicity": "1", "required": true },
+            { "name": "targetIdentity", "type": "string", "multiplicity": "1", "required": true },
+            { "name": "successorIdentity", "type": "string", "multiplicity": "1", "required": true },
+            { "name": "explicit", "type": "boolean", "multiplicity": "1", "required": true },
+            { "name": "answer", "type": "Record", "multiplicity": "?", "required": false }
+          ]
+        },
         {
           "name": "GoalPhaseReleaseRepairContinuationDescriptionInput",
           "kind": "value",
@@ -2140,7 +2228,7 @@
         },
         {
           "name": "GoalPhaseOrderedDecisionContext",
-          "kind": "value",
+          "kind": "statemachine",
           "fields": [
             {
               "name": "requestingResult",
@@ -4068,30 +4156,6 @@
           "name": "GoalPhaseRunLifecycle",
           "kind": "statemachine",
           "fields": []
-        },
-        {
-          "name": "GoalPhaseOrderedDecisionContext",
-          "kind": "statemachine",
-          "fields": [
-            {
-              "name": "requestingResult",
-              "type": "GoalPhaseWorkResult",
-              "multiplicity": "1",
-              "required": true
-            },
-            {
-              "name": "choice",
-              "type": "string",
-              "multiplicity": "1",
-              "required": true
-            },
-            {
-              "name": "rationale",
-              "type": "string",
-              "multiplicity": "1",
-              "required": true
-            }
-          ]
         },
         {
           "name": "SplitPhaseReasoningSemanticContext",
@@ -9448,6 +9512,300 @@
             {
               "name": "detail",
               "type": "Record",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskSemanticContinuationDescriptionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskSemanticContinuationInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choice",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "upstream",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskSemanticContinuationDescriptionResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "componentInstance",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choices",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "resumeOperation",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskReviewContinuationDescriptionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskReviewContinuationInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choice",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "rationale",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "upstream",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "*",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskReviewContinuationDescriptionResult",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "componentInstance",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "choices",
+              "type": "string",
+              "multiplicity": "*",
+              "required": false
+            },
+            {
+              "name": "resumeOperation",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskValidationRecoveryDescriptionInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskValidationRecoveryInput",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "proof",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "participant",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "reference",
+              "type": "WorkflowArtifactReference",
+              "multiplicity": "1",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "DelegateTaskValidationRecoveryView",
+          "kind": "value",
+          "fields": [
+            {
+              "name": "sessionId",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "outcome",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "multiplicity": "1",
+              "required": true
+            },
+            {
+              "name": "target",
+              "type": "string",
               "multiplicity": "1",
               "required": true
             }

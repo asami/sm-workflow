@@ -498,6 +498,39 @@ final class LocalPublicationSpec extends AnyWordSpec with Matchers with GivenWhe
       m.starts shouldBe 1
     }
 
+    "retain a standalone UNKNOWN while collecting one qualified successor" in {
+      Given("an explicit standalone request with an intent and no terminal result")
+      val m = new Memory
+      val originalInput = Input("standalone-original", _target.identity, explicit = true)
+      val original = take(ensureC(originalInput, _target, "actor", m)).request
+      m.rows.remove(_request_key(original) + ":result")
+      val unknown = take(collectC(originalInput, _target, "actor", m)).get
+      val oldFacts = m.rows.toMap
+      take(describeStandaloneUnknownC(originalInput, _target, "actor", m)) shouldBe (unknown -> _clean)
+      describeStandaloneUnknownC(originalInput, _target, "other-actor", m).isFaillure shouldBe true
+      val successor = Input("standalone-successor", _target.identity)
+      val permit = _successor(original)
+      ensureQualifiedSuccessorC(successor, _target, "other-actor", permit, m).isFaillure shouldBe true
+      ensureQualifiedSuccessorC(successor, _target, "actor",
+        _successor(original, _clean.copy(dirty = Vector(Change("src/change", "M", " ")))), m)
+        .isFaillure shouldBe true
+      m.starts shouldBe 1
+      When("the independently admitted Direction supplies the distinct successor")
+      val result = take(ensureQualifiedSuccessorC(successor, _target, "actor", permit, m))
+      Then("recollection preserves both actual identities and never repeats the effect")
+      result.status shouldBe "published"
+      take(ensureQualifiedSuccessorC(successor, _target, "actor", permit, m)) shouldBe result
+      take(collectC(successor, _target, "actor", m)) shouldBe Some(result)
+      take(collectC(originalInput, _target, "actor", m)) shouldBe Some(unknown)
+      unknown.status shouldBe "uncertain"
+      oldFacts.foreach { (key, value) => m.rows(key) shouldBe value }
+      m.starts shouldBe 2
+      describeStandaloneUnknownC(originalInput, _target, "actor", m).isFaillure shouldBe true
+      ensureQualifiedSuccessorC(successor.copy(requestIdentity = "stale"), _target, "actor", permit, m)
+        .isFaillure shouldBe true
+      m.starts shouldBe 2
+    }
+
     "E2 execute one exactly bound successor and collect its retained result after later attempts" in {
       Given("LocalPublicationSpec.scala E2 R1,R2: a latest UNKNOWN and an independently admitted runtime Direction")
       val m = new Memory

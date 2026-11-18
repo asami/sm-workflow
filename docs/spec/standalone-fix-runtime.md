@@ -37,7 +37,10 @@ accepted checks.
    checks, diagnosis, semantic WorkOrder issue and completion assessment. Requests
    return their actual issuedWorkContext, submit operation/session and result type.
    Candidate and validation intents are retained before their effects. A loaded
-   unknown intent returns Wait and is never replay permission. Confirmed SBT
+   resultless candidate intent reconstructs candidate data through normal capture.
+   A definitely ended incomplete validation restarts capture and fresh checks;
+   an unconfirmed validation termination reports an error instead of authorizing
+   replay or remaining indefinitely at Wait. Confirmed SBT
    admission rejection retains nonexecution and the unconsumed selection; a later
    normal Advance may continue corrected preparation without resetting counts.
 4. An actual repair worker returns `StandaloneFixWorkResult` through
@@ -88,10 +91,14 @@ passing checks yield a distinct NoChange state without inventing a semantic repa
 or condition assessment. A byte-identical candidate reuses its complete applicable
 successful check batch. Changed bytes receive fresh selected checks. All old
 checkpoints, failures, unknown intents, results and counts remain in canonical
-history. Terminal redisplay executes no validation or repository operation.
+history. Reentry reconstructs execution data from current source and retained
+purpose; inapplicable checks restart through normal capture and validation.
+Terminal redisplay executes no validation or repository operation.
 
-The initial route refuses unrelated dirty paths before staging, preserving them
-without effects; extended dirty/focused selection belongs to Phase 17. Genuine
+Start retains its selected ownership admission. Later unrelated unstaged or
+untracked work is preserved outside the selected candidate; it does not block
+normal source reconstruction. Unrelated staged changes still require an actual
+candidate decision. Genuine
 scope or effect expansion returns Human rather than silently widening the host.
 Existing active Phase repairs remain in their existing Session.
 

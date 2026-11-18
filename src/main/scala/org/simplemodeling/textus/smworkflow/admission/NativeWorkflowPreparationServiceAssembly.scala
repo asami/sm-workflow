@@ -18,7 +18,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Passive normal Operations borrow only the current executing call's resource context.
   * @since   Oct. 15, 2026
   *  version Oct. 27, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object NativeWorkflowPreparationServiceAssembly {

@@ -23,11 +23,11 @@ import org.simplemodeling.textus.smworkflow.value.{GoalPhaseDevelopmentReconstru
   * only when its Operation executes, within that call's ordinary storage/UoW.
   * @since   Oct. 27, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 17, 2026
+  * @version Nov. 18, 2026
   */
 private[smworkflow] object StandardWorkflowRuntime {
   private final case class Shared(persistence: GoalPhaseRuntimeParameters.Persistence,
-    ports: ThreeWorkflowExternalEvidencePorts, profiles: Option[WorkflowExecutionProfileMapping],
+    reader: NativeExternalEvidence.Reader, ports: ThreeWorkflowExternalEvidencePorts, profiles: Option[WorkflowExecutionProfileMapping],
     origin: Option[GoalPhaseNativeExecution.Origin], journal: Option[DevelopmentJournal.Policy],
     evidence: Option[CommonEvidence.Policy], operatingcontext: GoalPhaseOperatingProfiles.Context,
     publication: Option[LocalPublicationRuntime.Policy], hygienemode: String,
@@ -55,7 +55,7 @@ private[smworkflow] object StandardWorkflowRuntime {
         definition <- GoalPhaseRuntimeCatalog.loadC().map(_.definition)
       } yield Vector(LocalPublicationService.bind(policy, (id, call) =>
         retainedGoalC(creation, shared.persistence, definition, id, call).flatMap(payload =>
-          GoalPhaseParticipantAdmission.admitC(payload.participantIdentity, call.executionContext))))
+          GoalPhaseParticipantAdmission.admitC(payload.participantIdentity, call.executionContext)), Some(shared.reader)))
       case Some("DevelopmentObservationService") => parameters.resolve(ThreeWorkflowRuntimeParameters.developmentObservation).flatMap {
         case value if value.value.isEmpty => Consequence.success(Vector(DevelopmentObservationService.bindNotConfigured))
         case value =>
@@ -84,7 +84,7 @@ private[smworkflow] object StandardWorkflowRuntime {
     records <- parameters.resolve(CompletionRecords.declaration).map(_.value)
     journal <- DevelopmentJournal.resolvePolicyC(parameters, persistence.instances, persistence.continuations)
     evidence <- CommonEvidence.resolveForCallC(parameters, Vector(persistence.instances, persistence.continuations) ++ journal.map(_.collection), context, creation.configuration.configuration.values)
-  } yield Shared(persistence, new ThreeWorkflowExternalEvidencePorts(reader), profiles, origin, journal, evidence,
+  } yield Shared(persistence, reader, new ThreeWorkflowExternalEvidencePorts(reader), profiles, origin, journal, evidence,
     operatingcontext, publication, hygiene, records, WorkflowValidationInitialization.Context(creation.configuration, parameters))
 
   private def splitC(creation: ComponentCreate, parameters: ComponentInitializationParameters,
@@ -563,7 +563,9 @@ private[smworkflow] object StandardWorkflowRuntime {
   } yield managed.fold(selected)(m => RepositorySyncDirectoryList.bindWorkspace(selected, m.workspace))
 
   private def _bounded_session_c(request: Request, core: ActionCall.Core): Consequence[String] =
-    if (request.operation == "adoptGoalTaskValidationContinuation") GoalTaskValidationContinuation.inputForCallC(request, core).map(_.sessionId)
+    if (request.operation == "recoverDelegateTaskValidation") DelegateTaskValidationRecovery.inputForCallC(request, core).map(_.sessionId)
+    else if (request.operation == "describeDelegateTaskValidationRecovery") DelegateTaskValidationRecovery.descriptionForCallC(request, core).map(_.sessionId)
+    else if (request.operation == "adoptGoalTaskValidationContinuation") GoalTaskValidationContinuation.inputForCallC(request, core).map(_.sessionId)
     else if (request.operation == "correctDelegateTaskScope") DelegateTaskScopeCorrection.inputForCallC(request, core).map(_.sessionId)
     else if (request.operation == "correctGoalTaskScope") GoalTaskScopeCorrection.inputForCallC(request, core).map(_.sessionId)
     else NativeWorkflowOperationInput.optionalTextC(request, "sessionId").flatMap {

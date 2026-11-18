@@ -101,6 +101,90 @@ object NativeReviewPreparation {
     } yield Prepared(NativeExternalEvidence.recordIdentity(purpose, identity), Record.data(NativeExternalEvidence.storageField -> encoded))
   }
 
+  private[smworkflow] def delegateTaskSemanticContinuationC(description: V.DelegateTaskSemanticContinuationDescriptionResult,
+    answer: V.DelegateTaskSemanticContinuationInput, reference: V.WorkflowArtifactReference,
+    execution: V.WorkflowExecutionEvidence, participant: String, issuer: String,
+    occurredAt: Instant): Consequence[Prepared] = {
+    import org.simplemodeling.textus.smworkflow.admission.DelegateTaskSemanticContinuation as R
+    import org.goldenport.cncf.workflow.ContextReference
+    for {
+      _ <- if (description != null && answer != null && reference != null && execution != null &&
+        description.outcome == "decision-required" && description.choices == R.choices &&
+        description.resumeOperation == R.resumeOperation && answer.reference == reference &&
+        execution.workerIdentity.contains(participant) && participant == answer.participant &&
+        org.simplemodeling.textus.smworkflow.admission.GoalPhaseRuntimeRepairControl.exact(issuer) && occurredAt != null)
+        Consequence.unit else Consequence.stateConflict("Semantic continuation preparation requires its exact description and Human evidence")
+      target <- R.targetC(description.target)
+      supplied <- R.targetC(answer.target)
+      _ <- if (target == supplied && description.sessionId == target.sessionId && answer.sessionId == target.sessionId &&
+        description.componentInstance == target.componentInstance) Consequence.unit
+        else Consequence.stateConflict("Semantic continuation preparation crosses its target")
+      direction = R.Direction(target.asJson, answer.choice, answer.rationale, participant,
+        ContextReference(reference.identity, reference.revision), answer.upstream.map(r => ContextReference(r.identity, r.revision)))
+      binding <- R.bindingC(target.componentInstance, target, direction)
+      purpose = NativeExternalEvidence.Purpose.DelegateTaskSemanticContinuation
+      identity = ThreeWorkflowExternalEvidencePorts.key(reference.identity, reference.revision)
+      encoded <- NativeExternalEvidence.encodeStorageC(NativeExternalEvidence.Evidence(NativeExternalEvidence.schema,
+        purpose.identity, identity, reference.identity, reference.revision, issuer, participant, binding, occurredAt.toString))
+    } yield Prepared(NativeExternalEvidence.recordIdentity(purpose, identity), Record.data(NativeExternalEvidence.storageField -> encoded))
+  }
+
+  private[smworkflow] def delegateTaskReviewContinuationC(description: V.DelegateTaskReviewContinuationDescriptionResult,
+    answer: V.DelegateTaskReviewContinuationInput, reference: V.WorkflowArtifactReference,
+    execution: V.WorkflowExecutionEvidence, participant: String, issuer: String,
+    occurredAt: Instant): Consequence[Prepared] = {
+    import org.simplemodeling.textus.smworkflow.admission.DelegateTaskReviewContinuation as R
+    import org.goldenport.cncf.workflow.ContextReference
+    for {
+      _ <- if (description != null && answer != null && reference != null && execution != null &&
+        description.outcome == "decision-required" && description.choices == R.choices &&
+        description.resumeOperation == R.resumeOperation && answer.reference == reference &&
+        execution.workerIdentity.contains(participant) && participant == answer.participant &&
+        org.simplemodeling.textus.smworkflow.admission.GoalPhaseRuntimeRepairControl.exact(issuer) && occurredAt != null)
+        Consequence.unit else Consequence.stateConflict("Review continuation preparation requires its exact description and Human evidence")
+      targetWire <- R.wireC(description.target)
+      target = targetWire._1
+      suppliedWire <- R.wireC(answer.target)
+      supplied = suppliedWire._1
+      _ <- if (target == supplied && targetWire._2 == suppliedWire._2 && description.sessionId == target.sessionId && answer.sessionId == target.sessionId &&
+        description.componentInstance == target.componentInstance) Consequence.unit
+        else Consequence.stateConflict("Review continuation preparation crosses its target")
+      direction = R.Direction(targetWire._2, answer.choice, answer.rationale, participant,
+        ContextReference(reference.identity, reference.revision), answer.upstream.map(r => ContextReference(r.identity, r.revision)))
+      binding <- R.bindingC(target.componentInstance, target, direction)
+      purpose = NativeExternalEvidence.Purpose.DelegateTaskReviewContinuation
+      identity = ThreeWorkflowExternalEvidencePorts.key(reference.identity, reference.revision)
+      encoded <- NativeExternalEvidence.encodeStorageC(NativeExternalEvidence.Evidence(NativeExternalEvidence.schema,
+        purpose.identity, identity, reference.identity, reference.revision, issuer, participant, binding, occurredAt.toString))
+    } yield Prepared(NativeExternalEvidence.recordIdentity(purpose, identity), Record.data(NativeExternalEvidence.storageField -> encoded))
+  }
+
+  private[smworkflow] def delegateTaskRepairContinuationC(description: V.GoalTaskRepairContinuationDescriptionResult,
+    answer: V.GoalTaskRepairContinuationInput, reference: V.WorkflowArtifactReference,
+    execution: V.WorkflowExecutionEvidence, participant: String, issuer: String,
+    occurredAt: Instant): Consequence[Prepared] = {
+    import org.simplemodeling.textus.smworkflow.admission.DelegateTaskRepairContinuation as R
+    for {
+      _ <- if (description != null && answer != null && reference != null && execution != null &&
+        description.outcome == "decision-required" && description.choices == R.choices &&
+        description.resumeOperation == R.resumeOperation && answer.reference == reference &&
+        execution.workerIdentity.contains(participant) && participant == answer.participant &&
+        org.simplemodeling.textus.smworkflow.admission.GoalPhaseRuntimeRepairControl.exact(issuer) && occurredAt != null)
+        Consequence.unit else Consequence.stateConflict("Task continuation preparation requires its actual description, Human reference, participant, worker, issuer and time")
+      target <- R.targetC(description.target)
+      supplied <- R.targetC(answer.target)
+      _ <- if (target == supplied && description.sessionId == target.sessionId && answer.sessionId == target.sessionId &&
+        description.componentInstance == target.componentInstance) Consequence.unit
+        else Consequence.stateConflict("Task continuation preparation crosses the exact opaque target")
+      binding <- R.bindingC(target.componentInstance, target, answer.choice, answer.rationale, participant,
+        org.goldenport.cncf.workflow.ContextReference(reference.identity, reference.revision))
+      purpose = NativeExternalEvidence.Purpose.DelegateTaskRepairContinuation
+      identity = ThreeWorkflowExternalEvidencePorts.key(reference.identity, reference.revision)
+      encoded <- NativeExternalEvidence.encodeStorageC(NativeExternalEvidence.Evidence(NativeExternalEvidence.schema,
+        purpose.identity, identity, reference.identity, reference.revision, issuer, participant, binding, occurredAt.toString))
+    } yield Prepared(NativeExternalEvidence.recordIdentity(purpose, identity), Record.data(NativeExternalEvidence.storageField -> encoded))
+  }
+
   /** Preserve the complete opaque target before Record projection can erase
     * malformed fields or colliding public property names. */
   private[smworkflow] def sourceHistoryNormalizationTargetC(value: Json): Consequence[Unit] =

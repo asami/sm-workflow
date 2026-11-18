@@ -8,14 +8,17 @@ import WorkflowSbtValidation as V
   * Old Wait checkpoints retain the complete attempt when the active prefix moves.
   * @since   Nov.  6, 2026
   *  version Nov.  8, 2026
-  * @version Nov.  9, 2026
+  *  version Nov.  9, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object TerminatedValidationContinuation {
   /** A canceled ScalaTest case or ZeroTests selection is not a live process.
     * ZeroTests stays unsuccessful; only a separately admitted direction can
     * select another attempt of this known-ended check.
-    * Actual assertion failures and ambiguous/incomplete observations stay out.
+    * Multiple complete reports may remain InvalidReport without preventing
+    * source correction. They never become a successful selected-test result.
+    * Actual assertion failures and incomplete captures stay out.
     */
   def unverified(state: S.State): Boolean = state != null && state.stage == "Wait" &&
     state.pendingCheck.isEmpty && state.candidate.nonEmpty && state.receipts.nonEmpty &&
@@ -31,12 +34,26 @@ private[smworkflow] object TerminatedValidationContinuation {
             process.termination == ProcessExecutionTermination.Exited(0) && WorkflowSbtCapture.valid(process, facts) &&
               !process.stdout.truncated && !process.stderr.truncated)) &&
         S.diagnostics(state, "selected-validation-continuation").lastOption.exists(d =>
-          d.testExecution.failedTests.contains(0) &&
+          (d.testExecution.failedTests.contains(0) &&
             ((d.testExecution.testsRun.exists(_ > 0) && d.testExecution.completedSuites.exists(_ > 0)) ||
               (receipt.sbt.exists(_.reason.contains("ZeroTests")) &&
-                d.testExecution.testsRun.contains(0L) && d.testExecution.completedSuites.contains(0))) &&
+                d.testExecution.testsRun.contains(0L) && d.testExecution.completedSuites.contains(0))) ||
+            (receipt.sbt.exists(_.reason.contains("InvalidReport")) &&
+              d.testExecution.status == "executed-tests-observed" && multipleReportsWithoutFailures(receipt))) &&
             d.groups.forall(g => !Set("test-failure", "suite-abort", "compiler-error", "compilation-failure")(g.kind)))
     }
+
+  // Continuation eligibility only: inspect every reported failure count without
+  // summing reports or claiming which report belongs to the selected suites.
+  private def multipleReportsWithoutFailures(receipt: RepositorySyncNativeMergeValidation.Receipt): Boolean = {
+    val tests = "Tests: succeeded [0-9]+, failed ([0-9]+), canceled [0-9]+, ignored [0-9]+, pending [0-9]+".r
+    val suites = "Suites: completed [0-9]+, aborted ([0-9]+)".r
+    val lines = (receipt.stdout.linesIterator ++ receipt.stderr.linesIterator).map(line =>
+      line.replaceAll("\u001b\\[[0-9;]*[A-Za-z]", "").replaceFirst("^\\[(?:info|error|warn|debug)\\] ?", "")).toVector
+    val failures = lines.collect { case tests(n) => n.toLongOption }
+    val aborted = lines.collect { case suites(n) => n.toLongOption }
+    failures.size > 1 && aborted.size > 1 && failures.forall(_.contains(0L)) && aborted.forall(_.contains(0L))
+  }
   def eligible(state: S.State, progressDepth: Int = 0): Boolean = {
     val prefix = state.receipts.dropRight(1)
     progressDepth == 0 && state.stage == "Wait" && state.pendingCheck.isEmpty && state.candidate.nonEmpty &&

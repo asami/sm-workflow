@@ -25,7 +25,8 @@ import StandaloneFixExecution.given
   * No actual user's Session, consent or delivery is represented by this fixture.
   * @since   Nov.  8, 2026
   *  version Nov.  8, 2026
-  * @version Nov.  9, 2026
+  *  version Nov.  9, 2026
+  * @version Nov. 18, 2026
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
@@ -61,6 +62,8 @@ final class DelegateTaskValidationContinuationOperationSpec extends AnyWordSpec 
         "Test / testOnly / testOptions := Seq.empty\n",
       java.nio.file.StandardOpenOption.APPEND)
     Files.writeString(root.resolve("repository/docs/phase.md"), "Specification source\n")
+    Files.writeString(root.resolve("repository/docs/parallel-existing.md"), "Other work baseline\n")
+    Files.writeString(root.resolve("repository/docs/parallel-later.md"), "Later work baseline\n")
   }
   override protected def _setup_commands_(root: Path, scenario: String): Vector[Vector[String]] =
     super._setup_commands_(root, scenario).patch(2, Vector(Vector("-C", root.resolve("repository").toString,
@@ -85,8 +88,9 @@ final class DelegateTaskValidationContinuationOperationSpec extends AnyWordSpec 
   }
 
   "The common selected-check public continuation" should {
-    Vector("DelegateTask" -> false, "DelegateTask" -> true, "GoalTask" -> true).foreach { case (family, zero) =>
-    s"retain the $family history and qualify a new selected attempt after ${if (zero) "ZeroTests source correction" else "an ended canceled test"}" in {
+    Vector(("DelegateTask", false, false), ("DelegateTask", true, false), ("GoalTask", true, false),
+      ("DelegateTask", false, true)).foreach { case (family, zero, multiple) =>
+    s"retain the $family history and qualify a new selected attempt after ${if (multiple) "multiple retained Cozy reports" else if (zero) "ZeroTests source correction" else "an ended canceled test"}" in {
       Given("an isolated destination with specification-owned prior Compile and exited-zero unverified focused facts")
       _zero_tests = zero
       val root = Files.createTempDirectory(Files.createDirectories(Path.of("target/sm-workflow/work/delegate-validation").toAbsolutePath), "episode-").toRealPath()
@@ -95,6 +99,8 @@ final class DelegateTaskValidationContinuationOperationSpec extends AnyWordSpec 
         stepValidation = initial.goal.stepValidation.copy(checks = _checks)))
       _with_runtime_(root, "Equal", Some(host), BoundedWorkExecutionAdmissionFixture.parameters) { (owner, component, actor, project) =>
         project(_.setupC(_setup_commands_(root, "Equal").size))
+        val earlierUnrelated = root.resolve("repository/docs/parallel-existing.md")
+        Files.writeString(earlierUnrelated, "Earlier unrelated work\n")
         def _call_(name: String, properties: List[Property]): Consequence[OperationResponse] =
           owner.executeOperationResponseInContext(Request.of(component = component.name, service = family + "Service",
             operation = name, properties = properties), actor)
@@ -127,6 +133,7 @@ final class DelegateTaskValidationContinuationOperationSpec extends AnyWordSpec 
           else _value_[V.DelegateTaskView]("startDelegateTask", startarguments).sessionId
         val n: BoundedWorkNativeRun = if (family == "GoalTask") GoalTaskNativeRun else DelegateTaskNativeRun
         var initialreceipt = SelectedValidationFixture.receipt()
+        if (multiple) initialreceipt = SelectedValidationFixture.multipleReportReceipt()
         if (zero) project(c => for {
           result <- WorkflowManagedProcessExecution.repositoryValidationC(c.core, 2, WorkflowSbtValidation.Kind.TestOnly)
           facts <- WorkflowSbtValidation.factsC(WorkflowSbtValidation.Kind.TestOnly, result)
@@ -154,6 +161,8 @@ final class DelegateTaskValidationContinuationOperationSpec extends AnyWordSpec 
         project(c => _inspect_(c, (store, current, payload) => for {
           observed <- c.observeC()
           state = SelectedValidationFixture.state.copy(input = payload.state.input, selected = _checks,
+            generation = if (multiple) 2 else 1,
+            ordinaryCount = if (multiple) 1 else 0, automaticCount = if (multiple) 1 else 0,
             conditionReport = payload.state.input.conditions.map(id => S.Condition(id, family == "GoalTask",
               "Specification-owned semantic behavior; actual validation and review remain pending")),
             receipts = SelectedValidationFixture.state.receipts.dropRight(1) :+ initialreceipt,
@@ -164,17 +173,24 @@ final class DelegateTaskValidationContinuationOperationSpec extends AnyWordSpec 
           saved <- n.saveC(h, store, current, waiting, c.core)
           _ = { oldrevision = saved.revision.value; original = Some(waiting) }
         } yield ()))
+        val laterUnrelated = Vector("docs/parallel-later.md") ++
+          Vector.tabulate(4)(i => s"docs/parallel-note-$i.md")
+        laterUnrelated.foreach(path => Files.writeString(root.resolve("repository").resolve(path), "New unrelated work: " + path + "\n"))
         if (zero) {
           val path = root.resolve("repository").resolve(_suite_path)
           Files.writeString(path, Files.readString(path).replace("@org.scalatest.DoNotDiscover", "@org.scalatest.tags.Slow"))
         }
+        if (multiple) {
+          val path = root.resolve("repository").resolve(_suite_path)
+          Files.writeString(path, Files.readString(path).replace("2 + 2 == 4", "LineWriter.render(\"fixture\") == \"fixture\\n\""))
+        }
         val descriptionname = BoundedSelectedValidationContinuation.describeName(n)
         val adoptname = BoundedSelectedValidationContinuation.adoptName(n)
         val description = _value_[V.BoundedValidationContinuationView](descriptionname,
-          List(Property("input", V.BoundedValidationContinuationDescriptionInput(session, Vector.empty, zero), None)))
+          List(Property("input", V.BoundedValidationContinuationDescriptionInput(session, Vector.empty, zero || multiple), None)))
         val reference = V.WorkflowArtifactReference("specification-selection-direction", "1")
         val answer = V.BoundedValidationContinuationInput(session, description.target,
-          if (zero) "AdoptCurrentOwnedCandidate" else "RetrySelectedCheck",
+          if (zero || multiple) "AdoptCurrentOwnedCandidate" else "RetrySelectedCheck",
           "The fixture selection now contains its automatic assertion", "participant", reference)
         When("missing independent admission is refused, then actual fixture-owned host evidence admits the new attempt")
         _call_(adoptname, List(Property("input", answer, None))).isSuccess shouldBe false
@@ -184,14 +200,30 @@ final class DelegateTaskValidationContinuationOperationSpec extends AnyWordSpec 
             c.executionContext.clock.instant().minusSeconds(1))
           _ <- c.createC("host_evidence", row.recordIdentity, row.record)
         } yield ())
+        if (multiple) {
+          Given("an unrelated staged document which must not enter this candidate")
+          val path = laterUnrelated.last
+          _take(_run_setup_command_(Vector("-C", root.resolve("repository").toString, "--literal-pathspecs", "add", "--", path)))
+          _call_(adoptname, List(Property("input", answer, None))).isSuccess shouldBe false
+          project(c => _inspect_(c, (_, current, payload) => {
+            current.revision.value shouldBe oldrevision
+            payload shouldBe original.get
+            Consequence.unit
+          }))
+          // Undo only this specification's staging, never any consumer work.
+          _take(_run_setup_command_(Vector("-C", root.resolve("repository").toString, "restore", "--staged", "--", path)))
+        }
         _value_[V.BoundedValidationContinuationView](adoptname,
           List(Property("input", answer, None))).outcome shouldBe "resumed-awaiting-advance"
         project(c => _inspect_(c, (store, current, payload) => for {
           old <- n.loadPayloadC(store, session, oldrevision, c.core)
           _ = old shouldBe original.get
-          _ = payload.state.receipts shouldBe (if (zero) original.get.state.receipts else original.get.state.receipts.take(1))
-          _ = payload.state.ordinaryCount shouldBe 0
-          _ = payload.state.automaticCount shouldBe 0
+          _ = old.unrelated.get.map(_.path) shouldBe Vector("docs/parallel-existing.md")
+          _ = payload.unrelated.get.map(_.path).toSet shouldBe (laterUnrelated :+ "docs/parallel-existing.md").toSet
+          _ = payload.state.input.ownedPaths shouldBe original.get.state.input.ownedPaths
+          _ = payload.state.receipts shouldBe (if (zero || multiple) original.get.state.receipts else original.get.state.receipts.take(1))
+          _ = payload.state.ordinaryCount shouldBe original.get.state.ordinaryCount
+          _ = payload.state.automaticCount shouldBe original.get.state.automaticCount
         } yield ()))
         if (!zero) Files.exists(root.resolve("sbt-executions.txt")) shouldBe false
         val reviewwork = if (family == "GoalTask") _value_[V.GoalTaskView]("advanceGoalTask",
@@ -202,7 +234,13 @@ final class DelegateTaskValidationContinuationOperationSpec extends AnyWordSpec 
         project(c => _inspect_(c, (store, current, payload) => for {
           old <- n.loadPayloadC(store, session, oldrevision, c.core)
           _ = old.state.receipts.last.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Unverified
-          _ = if (zero) payload.state.receipts.head should not be original.get.state.receipts.head
+          _ = if (multiple) {
+            old.state.receipts.last.sbt.get.reason shouldBe Some("InvalidReport")
+            old.state.receipts.last.stdout shouldBe initialreceipt.stdout
+            payload.state.generation shouldBe 2
+            payload.state.repairControl shouldBe original.get.state.repairControl
+          }
+          _ = if (zero || multiple) payload.state.receipts.head should not be original.get.state.receipts.head
             else payload.state.receipts.head shouldBe original.get.state.receipts.head
           _ = payload.state.receipts.size shouldBe 3
           _ = payload.state.receipts.drop(1).foreach(r => r.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Succeeded)
@@ -216,10 +254,14 @@ final class DelegateTaskValidationContinuationOperationSpec extends AnyWordSpec 
             payload.state.receipts.last.stdout should not include "should retain its ordinary assertion"
           }
           _ = payload.state.selected shouldBe _checks
-          _ = payload.state.ordinaryCount shouldBe 0
-          _ = payload.state.automaticCount shouldBe 0
+          _ = payload.state.candidate.get.paths.forall(path => _owned.contains(path)) shouldBe true
+          _ = payload.unrelated.get.map(_.path).toSet shouldBe (laterUnrelated :+ "docs/parallel-existing.md").toSet
+          _ = payload.state.ordinaryCount shouldBe (if (multiple) 1 else 0)
+          _ = payload.state.automaticCount shouldBe (if (multiple) 1 else 0)
         } yield ()))
-        Files.readString(root.resolve("sbt-executions.txt")).linesIterator.size shouldBe (if (zero) 4 else 2)
+        Files.readString(root.resolve("sbt-executions.txt")).linesIterator.size shouldBe (if (zero) 4 else if (multiple) 3 else 2)
+        Files.readString(earlierUnrelated) shouldBe "Earlier unrelated work\n"
+        laterUnrelated.foreach(path => Files.readString(root.resolve("repository").resolve(path)) shouldBe "New unrelated work: " + path + "\n")
       }
     }
     }

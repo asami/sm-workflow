@@ -1,6 +1,6 @@
 /**
  * @since   Oct. 27, 2026
- * @version Nov. 17, 2026
+ * @version Nov. 18, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -8,11 +8,13 @@ import io.circe.Json
 import io.circe.syntax.*
 import java.nio.file.{Files, Path}
 import org.goldenport.Consequence
-import org.goldenport.cncf.action.ActionCall
+import org.goldenport.cncf.action.{ActionCall, CommandAction}
 import org.goldenport.cncf.datastore.{ComponentRecordStorage, DataStore}
 import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation, SbtOperation}
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
+import org.goldenport.protocol.Request
+import org.goldenport.protocol.operation.OperationResponse
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms as Programs
 import org.scalatest.GivenWhenThen
@@ -73,14 +75,26 @@ final class BoundedWorkNativeOutcomeSpec extends AnyWordSpec with Matchers with 
       Some(V.Facts(V.Kind.Compile, outcome, None, None)))
 
   override protected def process_plan(directory: Path, scenario: String, goal: ThreeWorkflowRuntimeParameters.Goal): Json = {
+    val records = Files.exists(directory.resolve("record-fixture"))
+    val recordpaths = if (records) Vector("docs/record.md") else Vector.empty
     val plan = TypedGitHostPlanFixture.plan(Programs.Target(directory.resolve("repository"), "main", "origin", "main",
-      directory.resolve("upstream.git").toString), goalPaths = Vector("value.txt", "second.txt"),
-      goalMessages = Vector("Fixture Task selected commit"), goalSelections = Vector(Vector("value.txt")))
-    val git = plan.mapObject(fields => fields.add("gitPrograms", Json.fromValues(fields("gitPrograms").get.asArray.get.map { program =>
+      directory.resolve("upstream.git").toString), goalPaths = Vector("value.txt", "second.txt") ++ recordpaths,
+      goalMessages = Vector("Fixture Task selected commit"), goalSelections = Vector(Vector("value.txt") ++ recordpaths))
+    val programs = plan.hcursor.get[Vector[Json]]("gitPrograms").toOption.get.map { program =>
       val selection = if (program.hcursor.get[String]("selectionId").toOption.contains("goal-step-1"))
         program.mapObject(_.add("selectionId", Json.fromString("goal-task"))) else program
       selection.mapObject(_.add("gitExecutable", Json.fromString(directory.resolve("observed-git").toString)))
-    })))
+    }
+    val read = if (!records) Vector.empty else Vector(programs.find(program =>
+      program.hcursor.get[String]("selectionId").contains("goal-task") &&
+        program.hcursor.get[String]("operation").contains("tree-entries")).get.mapObject(fields => fields
+      .add("selectionId", Json.fromString("completion-record-files"))
+      .add("selectedPaths", Json.fromValues(recordpaths.map(Json.fromString)))
+      .add("identity", Json.fromString("fixture-record-read")).add("capability", Json.fromString("fixture-record-read"))))
+    val git = plan.mapObject(fields => fields.add("gitPrograms", Json.fromValues(programs ++ read))
+      .add("grants", Json.fromValues(fields("grants").get.asArray.get.map(grant => grant.mapObject(values =>
+        values.add("capabilities", Json.fromValues(values("capabilities").get.asArray.get ++
+          (if (records) Vector(Json.fromString("fixture-record-read")) else Vector.empty))))))))
     val executable = directory.resolve("candidate-check")
     if (Files.exists(executable)) TypedSbtHostPlanFixture.plan(directory, executable, Vector(1),
       gitPlan = Some(git), operation = SbtOperation.Compile) else git
@@ -165,7 +179,84 @@ final class BoundedWorkNativeOutcomeSpec extends AnyWordSpec with Matchers with 
   } yield json
 
   "Task candidate capture and retained unknown intent" should {
-    "retain a loaded Task candidate intent without replaying staging or validation" in {
+    "discard an old completion plan when current source requires fresh validation and refuse a conflicting projected record" in {
+      Given("an applied completion projection and a later source change before the retained unstarted commit")
+      val directory = root(); prepare(directory)
+      Files.writeString(directory.resolve("record-fixture"), "specification-owned completion destination\n")
+      val recordfile = directory.resolve("repository/docs/record.md")
+      Files.createDirectories(recordfile.getParent)
+      Files.writeString(recordfile, "# Existing record\n")
+      take(_run_setup_command_(Vector("-C", directory.resolve("repository").toString, "add", "--", "docs/record.md")))
+      take(_run_setup_command_(Vector("-C", directory.resolve("repository").toString, "-c", "user.name=Fixture",
+        "-c", "user.email=fixture@example.invalid", "commit", "-m", "Fixture record baseline")))
+      Files.writeString(directory.resolve("repository/value.txt"), "accepted prior source\n")
+      _with_runtime_(directory, "Outcome", hostParameters = parameters(directory)) { (_, _, _, project) =>
+        project(call => for {
+          before <- G.observeC(call.core)
+          _ <- E.stageGoalCandidateC(call.core, 1).flatMap(_.valueC)
+          candidate <- candidateC(call.core, before.head)
+          session = "fixture-record-reconstruction"
+          owners = Vector("value.txt", "docs/record.md")
+          policy = CompletionRecords.Policy(Vector(CompletionRecords.Target("goal-task", "fixture-request", Vector("docs/record.md"))))
+          h = host(directory).copy(paths = Vector("value.txt", "second.txt", "docs/record.md"), completionRecords = Some(policy))
+          plan <- CompletionRecords.captureC(call.core, session, "goal-task", "fixture-request", candidate.tree,
+            Vector("old-review@1"), Vector("docs/record.md"), owners, h.paths)
+          _ <- CompletionRecords.applyC(call.core, plan)
+          applied <- candidateC(call.core, before.head)
+          old = state(true, "CommitReady")
+          payload = Payload(old.copy(input = old.input.copy(ownedPaths = owners), candidate = Some(applied),
+            reviewReference = Some(ContextReference("old-review", "1"))), h.root, "main", before.head, records = Some(plan))
+          seeded <- seedC(GoalTaskNativeRun, h, session, payload, call.core)
+          _ = When("normal Advance reconstructs checks after the current source changes")
+          _ = Files.writeString(directory.resolve("repository/value.txt"), "current replacement source\n")
+          response <- GoalTaskNativeRun.advanceC(session, h, seeded._1, call.core)
+          current <- currentC(seeded._2, session, call.core)
+          retained <- GoalTaskNativeRun.loadPayloadC(seeded._2, session, current.revision.value, call.core)
+          original <- GoalTaskNativeRun.loadPayloadC(seeded._2, session, seeded._3.revision.value, call.core)
+          _ = Then("old record metadata cannot close the new candidate and the existing projection is preserved")
+          _ = response.kind shouldBe "Wait"
+          _ = retained.state.stage shouldBe "AdmissionBlocked"
+          _ = retained.records shouldBe None
+          _ = retained.state.receipts shouldBe Vector.empty
+          _ = original shouldBe payload
+          _ = retained.state.automaticCount shouldBe old.automaticCount
+          _ = retained.state.ordinaryCount shouldBe old.ordinaryCount
+          _ = Files.readString(recordfile) shouldBe plan.files.head.after
+          _ = commitCalls(directory) shouldBe 0L
+          conflict = CompletionRecords.captureC(call.core, session, "goal-task", "fixture-request", retained.state.candidate.get.tree,
+            Vector("new-review@2"), Vector("docs/record.md"), owners, h.paths)
+          _ = conflict.isSuccess shouldBe false
+        } yield ())
+      }
+    }
+
+    "report missing execution facts and unreconstructable stages without changing the original Session" in {
+      Vector("ValidationIntent", "ValidationPreparationIntent", "UnreconstructableStage").foreach { stage =>
+        Given("an original native checkpoint with no confirmed process result or supported execution stage")
+        val directory = root(); prepare(directory)
+        _with_runtime_(directory, "Outcome", hostParameters = parameters(directory)) { (_, _, _, project) =>
+          project(call => for {
+            before <- G.observeC(call.core)
+            h = host(directory)
+            pending = state(true, stage).copy(receipts = Vector.empty, pendingCheck = Some(selected.head.identity))
+            payload = Payload(pending, h.root, "main", before.head, unrelated = Some(Vector.empty))
+            session = "fixture-unreconstructable-" + stage
+            seeded <- seedC(GoalTaskNativeRun, h, session, payload, call.core)
+            _ = When("ordinary Advance cannot reconstruct a safe execution stage")
+            attempted = GoalTaskNativeRun.advanceC(session, h, seeded._1, call.core)
+            record <- currentC(seeded._2, session, call.core)
+            _ = Then("it reports an error instead of a nonprogressing Wait or a replayed effect")
+            _ = attempted.isSuccess shouldBe false
+            _ = record shouldBe seeded._3
+            _ = Files.exists(directory.resolve("stage-calls")) shouldBe false
+            _ = Files.exists(directory.resolve("check-calls")) shouldBe false
+            _ = commitCalls(directory) shouldBe 0L
+          } yield ())
+        }
+      }
+    }
+
+    "reconstruct a resultless candidate intent through normal capture while retaining its original checkpoint" in {
       Given("a fixture-owned accepted repair whose candidate capture intent has no retained result")
       val directory = root(); prepare(directory)
       Files.writeString(directory.resolve("repository/value.txt"), "retained selected delta\n")
@@ -180,12 +271,19 @@ final class BoundedWorkNativeOutcomeSpec extends AnyWordSpec with Matchers with 
           result <- GoalTaskNativeRun.advanceC("fixture-unknown-candidate", h, seeded._1, call.core)
           record <- currentC(seeded._2, "fixture-unknown-candidate", call.core)
           after <- G.observeC(call.core)
-          _ = Then("the intent and history remain unchanged and no staging or check is executed")
+          original <- GoalTaskNativeRun.loadPayloadC(seeded._2, "fixture-unknown-candidate", seeded._3.revision.value, call.core)
+          retained <- GoalTaskNativeRun.loadPayloadC(seeded._2, "fixture-unknown-candidate", record.revision.value, call.core)
+          _ = Then("capture resumes from retained implementation and fresh checks await their existing host binding")
           _ = result.kind shouldBe "Wait"
-          _ = record shouldBe seeded._3
-          _ = after shouldBe before
-          _ = Files.exists(directory.resolve("stage-calls")) shouldBe false
+          _ = original.state shouldBe pending
+          _ = retained.state.stage shouldBe "AdmissionBlocked"
+          _ = retained.state.candidate.get.head shouldBe before.head
+          _ = retained.state.automaticCount shouldBe pending.automaticCount
+          _ = retained.state.ordinaryCount shouldBe pending.ordinaryCount
+          _ = after.head shouldBe before.head
+          _ = Files.exists(directory.resolve("stage-calls")) shouldBe true
           _ = Files.exists(directory.resolve("check-calls")) shouldBe false
+          _ = commitCalls(directory) shouldBe 0L
         } yield ())
       }
     }
@@ -299,7 +397,7 @@ final class BoundedWorkNativeOutcomeSpec extends AnyWordSpec with Matchers with 
   }
 
   "Later native Advance of confirmed terminated validation" should {
-    "retain the old checkpoint and successful prefix for both Task and Fix while admitting only the affected check" in {
+    "retain old attempts for Task and Fix while reconstructing the candidate and starting a fresh check batch" in {
       Given("fixture-managed Task and Fix Wait checkpoints with confirmed terminal incomplete captures")
       Vector(false, true).foreach { task =>
         val directory = root(); prepare(directory)
@@ -323,13 +421,13 @@ final class BoundedWorkNativeOutcomeSpec extends AnyWordSpec with Matchers with 
             record <- currentC(seeded._2, session, call.core)
             retained <- n.loadPayloadC(seeded._2, session, record.revision.value, call.core)
             original <- n.loadPayloadC(seeded._2, session, seeded._3.revision.value, call.core)
-            _ = Then("only the affected fresh attempt is admission-blocked and its predecessor capture remains immutable")
+            _ = Then("the fresh batch is admission-blocked and the original partial results remain immutable history")
             _ = result.kind shouldBe "Wait"
             _ = retained.state.stage shouldBe "AdmissionBlocked"
-            _ = retained.state.receipts shouldBe waiting.receipts.dropRight(1)
+            _ = retained.state.receipts shouldBe Vector.empty
             _ = original shouldBe payload
             _ = original.state.receipts.last shouldBe raw
-            _ = retained.copy(state = waiting) shouldBe payload
+            _ = retained.state.input shouldBe waiting.input
             _ = retained.state.candidate shouldBe waiting.candidate
             _ = retained.state.automaticCount shouldBe 3
             _ = retained.state.ordinaryCount shouldBe 2
@@ -341,7 +439,7 @@ final class BoundedWorkNativeOutcomeSpec extends AnyWordSpec with Matchers with 
       }
     }
 
-    "leave changed candidates and unconfirmed executions at the same Wait without a duplicate intent" in {
+    "reconstruct changed candidates after confirmed termination and reject unconfirmed executions without replay" in {
       Given("an existing Wait whose original capture is either terminal or termination-unconfirmed")
       Vector(false, true).foreach { changed =>
         val directory = root(); prepare(directory)
@@ -361,16 +459,25 @@ final class BoundedWorkNativeOutcomeSpec extends AnyWordSpec with Matchers with 
             session = "fixture-refused-continuation-" + changed
             seeded <- seedC(GoalTaskNativeRun, h, session, payload, call.core)
             _ = if (changed) Files.writeString(directory.resolve("repository/value.txt"), "changed after capture\n") else ()
-            _ = When("Advance is repeated without a valid current candidate and confirmed termination pair")
-            first <- GoalTaskNativeRun.advanceC(session, h, seeded._1, call.core)
-            second <- GoalTaskNativeRun.advanceC(session, h, seeded._1, call.core)
+            _ = When("Advance selects a normal restart only from a confirmed ended attempt")
+            attempt = GoalTaskNativeRun.advanceC(session, h, seeded._1, call.core)
             record <- currentC(seeded._2, session, call.core)
             retained <- GoalTaskNativeRun.loadPayloadC(seeded._2, session, record.revision.value, call.core)
-            _ = Then("both reads remain Wait and retain exactly the old checkpoint, counts and incomplete observation")
-            _ = first.kind shouldBe "Wait"
-            _ = second.kind shouldBe "Wait"
-            _ = record.revision shouldBe seeded._3.revision
-            _ = retained shouldBe payload
+            original <- GoalTaskNativeRun.loadPayloadC(seeded._2, session, seeded._3.revision.value, call.core)
+            _ = Then("changed bytes receive a new candidate; unconfirmed execution reports an error and changes no state")
+            _ = if (changed) {
+              take(attempt).kind shouldBe "Wait"
+              retained.state.stage shouldBe "AdmissionBlocked"
+              retained.state.candidate.get.tree should not be candidate.tree
+              retained.state.receipts shouldBe Vector.empty
+            } else {
+              attempt.isSuccess shouldBe false
+              record.revision shouldBe seeded._3.revision
+              retained shouldBe payload
+            }
+            _ = original shouldBe payload
+            _ = retained.state.automaticCount shouldBe waiting.automaticCount
+            _ = retained.state.ordinaryCount shouldBe waiting.ordinaryCount
             _ = commitCalls(directory) shouldBe 0L
           } yield ())
         }
@@ -474,6 +581,28 @@ final class BoundedWorkNativeOutcomeSpec extends AnyWordSpec with Matchers with 
               retained <- n.loadPayloadC(storage, session, saved.revision.value, call.core)
               _ = retained.state.evidenceReferences.size shouldBe 1
               _ = retained.state.projectionWarning shouldBe None
+              // Model the genuine save/response boundary: the caller still has
+              // the business state while terminal save has added its Evidence.
+              responseAction = new CommandAction {
+                val request = Request.of(component = SmWorkflowComponent.componentId.name,
+                  service = if (task) "GoalTaskService" else "StandaloneFixService",
+                  operation = if (task) "advanceGoalTask" else "advanceStandaloneFix")
+                def createCall(core: ActionCall.Core): ActionCall = call
+              }
+              responseCore = call.core.copy(action = responseAction)
+              compact <- NativeWorkflowCompactResponse.responseC(OperationResponse.RecordResponse(
+                n.view(saved, state(task, stage), "Terminal", "Specification-owned successful terminal response").toRecord()), responseCore)
+              control = read_control_value[org.simplemodeling.textus.smworkflow.value.StandaloneFixView](compact)
+              _ = control.kind shouldBe "Terminal"
+              _ = control.state shouldBe None
+              materialReference = control.retainedMaterials.find(_.fieldName == "state").get.reference
+              reference <- WorkflowRetainedSnapshot.fromPublicC(materialReference)
+              material <- WorkflowRetainedSnapshot.readC(reference, responseCore)
+              _ = material.hcursor.get[String]("stage").toOption shouldBe Some(stage)
+              _ = material.hcursor.downField("evidenceReferences").downArray.get[String]("identity").toOption shouldBe
+                Some(retained.state.evidenceReferences.head.identity)
+              _ = material.hcursor.get[Int]("ordinaryCount").toOption shouldBe Some(retained.state.ordinaryCount)
+              _ = material.hcursor.get[Int]("automaticCount").toOption shouldBe Some(retained.state.automaticCount)
               // A terminal checkpoint is collected, never re-executed as a new mechanical intent.
               mechanical <- storage.bindMechanicalC(n.advanceOperation, n.stateCodec)
               checkpoint <- mechanical.loadRetainedC(WorkflowMechanicalTransition.Reference(

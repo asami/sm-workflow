@@ -319,6 +319,50 @@ OperationResult
 | targetIdentity | string | 1 |
 | ownerSessionId | string | 1 |
 
+## LocalPublicationRecoveryInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| requestIdentity | string | 1 |
+| targetIdentity | string | 1 |
+| successorIdentity | string | 1 |
+| explicit | boolean | 1 |
+| answer | org.goldenport.record.Record | ? |
+
+## DescribeLocalPublicationRecoveryInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | LocalPublicationRecoveryInput | 1 |
+
+## AdmitLocalPublicationRecoveryInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | LocalPublicationRecoveryInput | 1 |
+
+## AdvanceLocalPublicationRecoveryInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | LocalPublicationRecoveryInput | 1 |
+
 ## LocalPublicationResult
 
 ### ATTRIBUTE
@@ -12685,6 +12729,90 @@ LocalPublicationLatestCollectionInput
 
 LocalPublicationResult
 
+#### describeLocalPublicationRecovery
+
+##### DESCRIPTION
+
+Describe the exact latest standalone UNKNOWN and current clean source without executing publication. The earlier writer lifecycle remains unknown.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DescribeLocalPublicationRecoveryInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | LocalPublicationRecoveryInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+LocalPublicationResult
+
+#### admitLocalPublicationRecovery
+
+##### DESCRIPTION
+
+Admit one independently provisioned Human direction bound to the complete description. Admission does not execute publication.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+AdmitLocalPublicationRecoveryInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | LocalPublicationRecoveryInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+LocalPublicationResult
+
+#### advanceLocalPublicationRecovery
+
+##### DESCRIPTION
+
+Execute or recollect the single admitted successor using the runtime publication path. Original UNKNOWN remains unchanged.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+AdvanceLocalPublicationRecoveryInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | LocalPublicationRecoveryInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+LocalPublicationResult
+
 ## JournalService
 
 ### DESCRIPTION
@@ -15377,6 +15505,30 @@ operation = DelegateTaskDeliveryService.observeDelegateTaskDelivery
 operation = DelegateTaskDeliveryService.describeDelegateTaskAdoption
 
 
+#### describeDelegateTaskSemanticContinuation
+
+operation = DelegateTaskService.describeDelegateTaskSemanticContinuation
+
+#### resumeDelegateTaskSemanticContinuation
+
+operation = DelegateTaskService.resumeDelegateTaskSemanticContinuation
+
+#### describeDelegateTaskReviewContinuation
+
+operation = DelegateTaskService.describeDelegateTaskReviewContinuation
+
+#### resumeDelegateTaskReviewContinuation
+
+operation = DelegateTaskService.resumeDelegateTaskReviewContinuation
+
+#### describeDelegateTaskRepairContinuation
+
+operation = DelegateTaskService.describeDelegateTaskRepairContinuation
+
+#### resumeDelegateTaskRepair
+
+operation = DelegateTaskService.resumeDelegateTaskRepair
+
 #### describeDelegateTaskValidationContinuation
 
 operation = DelegateTaskService.describeDelegateTaskValidationContinuation
@@ -15384,6 +15536,14 @@ operation = DelegateTaskService.describeDelegateTaskValidationContinuation
 #### adoptDelegateTaskValidationContinuation
 
 operation = DelegateTaskService.adoptDelegateTaskValidationContinuation
+
+#### describeDelegateTaskValidationRecovery
+
+operation = DelegateTaskService.describeDelegateTaskValidationRecovery
+
+#### recoverDelegateTaskValidation
+
+operation = DelegateTaskService.recoverDelegateTaskValidation
 
 # STATE-MACHINE
 
@@ -15421,6 +15581,174 @@ on = task-accepted
 Independent single-request existing-chat delegation. Reuse the shared bounded WorkOrder, execution/profile preflight, validation, repair, conditional review and native selected commit owner. Required runtime-owned publication precedes return readiness; requester dispatch, returned source and artifact adoption retain their own correlated Sessions.
 
 ### OPERATION
+
+#### describeDelegateTaskSemanticContinuation
+
+##### DESCRIPTION
+
+Describe the exact retained initial destination Implement semantic Human stop without advancing it.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskSemanticContinuationDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | DelegateTaskSemanticContinuationDescriptionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskSemanticContinuationDescriptionResult
+
+#### resumeDelegateTaskSemanticContinuation
+
+##### DESCRIPTION
+
+Admit independently verified covering Human direction and actual upstream references for the exact target. A separate ordinary Advance issues the successor.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskSemanticContinuationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | DelegateTaskSemanticContinuationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskSemanticContinuationDescriptionResult
+
+#### describeDelegateTaskReviewContinuation
+
+##### DESCRIPTION
+
+Describe the exact materialized destination Review decision-needed Human stop without advancing it. Return a compact owner, Session, frontier revision and original native work/result reference, without duplicating retained validation output, candidate diff or issued context. The native owner resolves the complete original records at admission.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskReviewContinuationDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | DelegateTaskReviewContinuationDescriptionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskReviewContinuationDescriptionResult
+
+#### resumeDelegateTaskReviewContinuation
+
+##### DESCRIPTION
+
+Admit independently verified covering Human direction and actual upstream references for the exact compact target. A separate ordinary Advance issues a new independent Review with the retained original completion, clarification and an exact original-work reference readable through WorkflowRetainedWorkService. Preserve the original contract, history and repair allowance; changed source still requires its owning continuation. Existing full-target directions retain their legacy meaning.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskReviewContinuationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | DelegateTaskReviewContinuationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskReviewContinuationDescriptionResult
+
+#### describeDelegateTaskRepairContinuation
+
+##### DESCRIPTION
+
+Same active DelegateTask repair-trend Human stop only. Complete opaque native target and independently admitted exact Human direction. Before appending one Repair checkpoint, ContinueRepair compares the current host source root/branch/repository and performs existing native read-only Git observation of root/HEAD/index/scoped working tree against the saved candidate; changed source or crossed host refuses without append or counter change. Zero Git/source mutation, staging, work, checks, commit or publication. Defer writes nothing; describe and repeated collection read storage. A separate ordinary Advance owns the next Repair and normal allowance. Repeated collection retains the original direction and target.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalTaskRepairContinuationDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalTaskRepairContinuationDescriptionInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalTaskRepairContinuationDescriptionResult
+
+#### resumeDelegateTaskRepair
+
+##### DESCRIPTION
+
+Same active DelegateTask repair-trend Human stop only. Complete opaque native target and independently admitted exact Human direction. Before appending one Repair checkpoint, ContinueRepair compares the current host source root/branch/repository and performs existing native read-only Git observation of root/HEAD/index/scoped working tree against the saved candidate; changed source or crossed host refuses without append or counter change. Zero Git/source mutation, staging, work, checks, commit or publication. Defer writes nothing; describe and repeated collection read storage. A separate ordinary Advance owns the next Repair and normal allowance. Repeated collection retains the original direction and target.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+GoalTaskRepairContinuationInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | GoalTaskRepairContinuationInput | 1 |
+
+##### OUTPUT
+
+###### TYPE
+
+GoalTaskRepairContinuationDescriptionResult
 
 #### describeDelegateTaskScopeCorrection
 
@@ -15508,6 +15836,64 @@ DelegateTaskCandidateContinuationDescriptionInput
 ###### TYPE
 
 DelegateTaskCandidateContinuationView
+
+#### describeDelegateTaskValidationRecovery
+
+##### DESCRIPTION
+
+Describe the retained full-Test intent, unchanged candidate, successful prefix and resolved policies without executing or advancing. Missing old capture remains unknown.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskValidationRecoveryDescriptionInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | DelegateTaskValidationRecoveryDescriptionInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskValidationRecoveryView
+
+#### recoverDelegateTaskValidation
+
+##### DESCRIPTION
+
+Admit an independently host-attested historical terminal event and completed caller invocation for the exact retained intent. Append a direction only; a separate Advance owns any new check. No old receipt or success is inferred.
+
+##### TYPE
+
+COMMAND
+
+##### INPUT
+
+###### TYPE
+
+DelegateTaskValidationRecoveryInput
+
+##### PARAMETER
+
+| name | type | multiplicity |
+|------+------|--------------|
+| input | DelegateTaskValidationRecoveryInput | ? |
+| inputResource | string | ? |
+
+##### OUTPUT
+
+###### TYPE
+
+DelegateTaskValidationRecoveryView
 
 #### recoverDelegateTaskCandidateContinuation
 
@@ -16392,6 +16778,47 @@ Explicit ad hoc Task request selection metadata and absolute local file: URI ref
 
 # VALUE
 
+## DelegateTaskValidationRecoveryDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+# VALUE
+
+## DelegateTaskValidationRecoveryInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | string | 1 |
+| proof | string | 1 |
+| participant | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+
+# VALUE
+
+## DelegateTaskValidationRecoveryView
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| target | string | 1 |
+
+# VALUE
+
 ## DelegateTaskCandidateContinuationInput
 
 - input-kind :: COMMAND
@@ -16491,6 +16918,86 @@ Explicit ad hoc Task request selection metadata and absolute local file: URI ref
 | name | type | multiplicity |
 |------+------|--------------|
 | sessionId | string | 1 |
+
+## DelegateTaskSemanticContinuationDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+## DelegateTaskSemanticContinuationDescriptionResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| componentInstance | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| target | string | 1 |
+| choices | string | * |
+| resumeOperation | string | 1 |
+
+## DelegateTaskSemanticContinuationInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | string | 1 |
+| choice | string | 1 |
+| rationale | string | 1 |
+| participant | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+| upstream | WorkflowArtifactReference | * |
+
+## DelegateTaskReviewContinuationDescriptionInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+
+## DelegateTaskReviewContinuationDescriptionResult
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| componentInstance | string | 1 |
+| outcome | string | 1 |
+| message | string | 1 |
+| target | string | 1 |
+| choices | string | * |
+| resumeOperation | string | 1 |
+
+## DelegateTaskReviewContinuationInput
+
+- input-kind :: COMMAND
+
+### ATTRIBUTE
+
+| name | type | multiplicity |
+|------+------|--------------|
+| sessionId | string | 1 |
+| target | string | 1 |
+| choice | string | 1 |
+| rationale | string | 1 |
+| participant | string | 1 |
+| reference | WorkflowArtifactReference | 1 |
+| upstream | WorkflowArtifactReference | * |
 
 ## GoalTaskRepairContinuationInput
 

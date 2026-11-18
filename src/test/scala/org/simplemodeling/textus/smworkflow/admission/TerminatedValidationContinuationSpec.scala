@@ -16,7 +16,8 @@ import RepositorySyncNativeMergeValidation as B
 /** Fixture observations, not installed execution or acceptance evidence.
   * @since   Nov.  6, 2026
   *  version Nov.  8, 2026
-  * @version Nov.  9, 2026
+  *  version Nov.  9, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object TerminatedValidationFixture {
@@ -54,6 +55,48 @@ final class TerminatedValidationContinuationSpec extends AnyWordSpec with Matche
   }
 
   "Explicit selected-validation continuation" should {
+    "retain the actual two-report InvalidReport while allowing source correction without inventing aggregate success" in {
+      Given("the retained Cozy fixture 2-test and root 32-test stdout from the exited-zero selected check")
+      val receipt = SelectedValidationFixture.multipleReportReceipt()
+      val original = SelectedValidationFixture.state.copy(generation = 2, ordinaryCount = 1, automaticCount = 1,
+        receipts = SelectedValidationFixture.state.receipts.dropRight(1) :+ receipt)
+      val restored = original.asJson.as[S.State].toOption.get
+      val diagnostic = S.diagnostics(restored, "fixture").last
+      diagnostic.testExecution.status shouldBe "executed-tests-observed"
+      diagnostic.testExecution.testsRun shouldBe None
+      diagnostic.testExecution.failedTests shouldBe None
+      diagnostic.testExecution.completedSuites shouldBe None
+      B.productSuccessful(receipt, V.Kind.TestOnly) shouldBe false
+      When("only the explicit continuation eligibility is evaluated")
+      val next = _take(S.continueUnverifiedValidationC(restored))
+      Then("the old report stays unverified and the same candidate, successful prefix, policy and counters survive")
+      TerminatedValidationContinuation.unverified(restored) shouldBe true
+      restored.receipts.last shouldBe receipt
+      restored.receipts.last.sbt.get.reason shouldBe Some("InvalidReport")
+      next.receipts shouldBe restored.receipts.dropRight(1)
+      next.input shouldBe restored.input
+      next.selected shouldBe restored.selected
+      next.candidate shouldBe restored.candidate
+      next.generation shouldBe 2
+      next.ordinaryCount shouldBe 1
+      next.automaticCount shouldBe 1
+      next.repairControl shouldBe restored.repairControl
+    }
+
+    "keep failed, aborted and incomplete multiple-report observations outside the continuation" in {
+      Given("the retained two reports with fixture-only failure, abort and capture-loss variations")
+      val original = SelectedValidationFixture.multipleReportReceipt()
+      val failed = SelectedValidationFixture.multipleReportReceipt(_.replace("succeeded 2, failed 0", "succeeded 1, failed 1"))
+      val aborted = SelectedValidationFixture.multipleReportReceipt(_.replace("completed 1, aborted 0", "completed 1, aborted 1"))
+      val incomplete = original.copy(processObservation = original.processObservation.map(p =>
+        p.copy(stdout = p.stdout.copy(truncated = true))))
+      When("continuation reads those original-shaped observations without executing anything")
+      val results = Vector(failed, aborted, incomplete).map(r => TerminatedValidationContinuation.unverified(
+        SelectedValidationFixture.state.copy(receipts = SelectedValidationFixture.state.receipts.dropRight(1) :+ r)))
+      Then("none becomes an eligible no-assertion-failure continuation")
+      results shouldBe Vector(false, false, false)
+    }
+
     "retain a confirmed zero-test selection as unsuccessful while admitting its separately selected new attempt" in {
       Given("an exact specification-owned exited-zero report with no suites or tests and a successful Compile prefix")
       val original = SelectedValidationFixture.state.copy(ordinaryCount = 9, automaticCount = 9,
@@ -189,6 +232,26 @@ final class TerminatedValidationContinuationSpec extends AnyWordSpec with Matche
 
 /** Specification-owned terminated observations; never a real check receipt. */
 private[admission] object SelectedValidationFixture {
+  // Retained reporter output, with trailing description padding removed in
+  // the source fixture. Tests supply their own Session/process attribution;
+  // the unchanged original capture remains in the requester Task.
+  def multipleReportReceipt(transform: String => String = identity): B.Receipt = {
+    def resource(name: String): String = {
+      val stream = getClass.getResourceAsStream("/validation-continuation/cozy-two-reports-20261118-" + name + ".log")
+      require(stream != null, "Retained Cozy report fixture is absent")
+      try new String(stream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8) finally stream.close()
+    }
+    val stdout = transform(resource("stdout"))
+    val stderr = resource("stderr")
+    def capture(value: String): ProcessExecutionCapture = {
+      val bytes = value.getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector
+      ProcessExecutionCapture(bytes, bytes.size.toLong, false)
+    }
+    val process = ProcessExecutionResult(ProcessExecutionTermination.Exited(0), capture(stdout), capture(stderr),
+      Vector.empty, 1L, "specification-retained-cozy-report")
+    B.Receipt("focused", "exited", Some(0), stdout, stderr,
+      Some(V.Facts(V.Kind.TestOnly, V.Outcome.Unverified, None, Some("InvalidReport"))), Some(process))
+  }
   val checks = Vector(GoalPhaseNativeValidation.Check("compile", 1, V.Kind.Compile),
     GoalPhaseNativeValidation.Check("focused", 2, V.Kind.TestOnly),
     GoalPhaseNativeValidation.Check("test", 3, V.Kind.Test))

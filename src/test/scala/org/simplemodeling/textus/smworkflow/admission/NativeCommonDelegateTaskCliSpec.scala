@@ -19,8 +19,7 @@ import S.given
 /** Tiny build and ordinary host declarations only. The fixed focused suite is
   * host configuration, never a request-supplied class or command argument.
   * @since   Nov.  5, 2026
-  *  version Nov. 11, 2026
-  * @version Nov. 16, 2026
+  * @version Nov. 18, 2026
   */
 private[admission] object NativeCommonDelegateTaskFixture {
   val suite = "org.simplemodeling.textus.smworkflow.p62authored.LineWriterSpec"
@@ -192,6 +191,27 @@ private[admission] trait NativeCommonDelegateTaskQualification extends AnyWordSp
       val dispatch = _advance_(requester.sessionId)
       val destination = _start_(request.copy(delegation = request.delegation.copy(role = "destination")))
       val implement = _advance_(destination.sessionId)
+      withClue("Recovery qualification requires the actual selected candidate Component archive: ") {
+        commonDelegateComponentFile should not be empty
+      }
+      val help = _call(scenario, "meta", "help", Vector(SmWorkflowComponent.componentId.name + ".DelegateTaskService"))
+      help.exitCode shouldBe 0
+      val helpText = Files.readString(help.invocation.stdout)
+      helpText should include("describeDelegateTaskValidationRecovery")
+      helpText should include("recoverDelegateTaskValidation")
+      // Actual installed handlers must reject an active issued Implement frontier;
+      // declaration-only Help or failure to resolve the operation is insufficient.
+      val description = _call(scenario, "DelegateTaskService", "describeDelegateTaskValidationRecovery",
+        Vector("--input", _json(V.DelegateTaskValidationRecoveryDescriptionInput(destination.sessionId))))
+      description.exitCode should not be 0
+      (Files.readString(description.invocation.stdout) + Files.readString(description.invocation.stderr)) should
+        include("checkpoint")
+      val recovery = _call(scenario, "DelegateTaskService", "recoverDelegateTaskValidation",
+        Vector("--input", _json(V.DelegateTaskValidationRecoveryInput(destination.sessionId, "{}", "{}", "participant",
+          V.WorkflowArtifactReference("SPECIFICATION-OWNED-unadmitted", "1")))))
+      recovery.exitCode should not be 0
+      (Files.readString(recovery.invocation.stdout) + Files.readString(recovery.invocation.stderr)) should
+        include("checkpoint")
       val dispatched = _observe_(requester.sessionId, "dispatch-observed", destination.sessionId)
       Then("requester transport preserves explicit empty timing and destination work does not wait for later effects")
       dispatch.kind shouldBe "Dispatch"
@@ -311,8 +331,8 @@ private[admission] trait NativeCommonDelegateTaskQualification extends AnyWordSp
       _state(received).stage shouldBe "ResultReceived"
       _state(observed).stage shouldBe "Returned"
       _state(received).input.submissionConditions shouldBe Some(Vector.empty)
-      _advance_(requester.sessionId).state shouldBe received.state
-      _advance_(destination.sessionId).state shouldBe observed.state
+      _state(_advance_(requester.sessionId)) shouldBe _state(received)
+      _state(_advance_(destination.sessionId)) shouldBe _state(observed)
       _state(_observe_(requester.sessionId, "result-received", destination.sessionId, returned.state)) shouldBe _state(received)
       Files.readString(root.resolve("sbt-executions.txt")) shouldBe checks
       Files.readString(root.resolve("publication-count.txt")) shouldBe publications
@@ -336,10 +356,112 @@ final class NativeCommonDelegateTaskCliSpec extends AnyWordSpec with NativeCommo
     path
   }
   "Installed common delegation" should {
+    "collect the actual retained full-Test result through the selected candidate CAR without replay" in {
+      val component = commonDelegateComponentFile.getOrElse(fail(
+        "Select the native-published candidate CAR through SM_WORKFLOW_SPEC_COMPONENT_FILE or smworkflow.spec.componentFile"))
+      new DelegateTaskValidationRecoveryOperationSpec().qualifyInstalledAvailableRecovery(commonDelegateExecutable, component)
+    }
     Vector("accept", "decision-needed").foreach { outcome =>
       s"defer initial obligations then retain actual focused checks commit publication and $outcome through normal owners" in {
         qualifyCommonDelegate(outcome)
       }
+    }
+  }
+}
+
+@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class NativeDelegateTaskDeliveryCaptureCliSpec extends AnyWordSpec with Matchers {
+  "Installed referenced DelegateTask validation" should {
+    "roundtrip the actual managed Test capture through public requester operations" in {
+      val executable = Path.of(sys.props.get("smworkflow.spec.installedCommand")
+        .orElse(sys.env.get("SM_WORKFLOW_SPEC_INSTALLED_COMMAND"))
+        .getOrElse(fail("Select SM_WORKFLOW_SPEC_INSTALLED_COMMAND")))
+      val component = Path.of(sys.props.get("smworkflow.spec.componentFile")
+        .orElse(sys.env.get("SM_WORKFLOW_SPEC_COMPONENT_FILE"))
+        .getOrElse(fail("Select SM_WORKFLOW_SPEC_COMPONENT_FILE")))
+      new DelegateTaskValidationRecoveryOperationSpec().qualifyReturnedCapture(Some(executable -> component))
+    }
+  }
+}
+
+/** Explicit, independently selectable installed recovery qualification. */
+@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class NativeDelegateTaskValidationRecoveryReviewCliSpec extends AnyWordSpec with NativeCommonDelegateTaskQualification {
+  override protected lazy val commonDelegateExecutable: Path = {
+    val path = Path.of(sys.props.get("smworkflow.spec.installedCommand")
+      .orElse(sys.env.get("SM_WORKFLOW_SPEC_INSTALLED_COMMAND"))
+      .getOrElse(fail("Select smworkflow.spec.installedCommand or SM_WORKFLOW_SPEC_INSTALLED_COMMAND")))
+    require(path.isAbsolute && path.normalize == path && Files.isRegularFile(path) && Files.isExecutable(path),
+      "Select the actual absolute installed executable")
+    path
+  }
+  "Installed recovery review" should {
+    "collect the actual retained full-Test result through the selected candidate CAR without replay" in {
+      val component = commonDelegateComponentFile.getOrElse(fail(
+        "Select the native-published candidate CAR through SM_WORKFLOW_SPEC_COMPONENT_FILE or smworkflow.spec.componentFile"))
+      new DelegateTaskValidationRecoveryOperationSpec().qualifyInstalledAvailableRecovery(commonDelegateExecutable, component)
+    }
+  }
+}
+
+/** Focused installed continuation only; no unrelated common-delegation scenarios. */
+@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class NativeDelegateTaskRepairContinuationCliSpec extends AnyWordSpec with Matchers {
+  "Installed DelegateTask repair continuation" should {
+    "describe, admit and separately advance the same specification-owned stop" in {
+      val executable = Path.of(sys.props.get("smworkflow.spec.installedCommand")
+        .orElse(sys.env.get("SM_WORKFLOW_SPEC_INSTALLED_COMMAND"))
+        .getOrElse(fail("Select SM_WORKFLOW_SPEC_INSTALLED_COMMAND")))
+      val component = Path.of(sys.props.get("smworkflow.spec.componentFile")
+        .orElse(sys.env.get("SM_WORKFLOW_SPEC_COMPONENT_FILE"))
+        .getOrElse(fail("Select SM_WORKFLOW_SPEC_COMPONENT_FILE")))
+      new DelegateTaskRepairContinuationOperationSpec().qualify(Some(executable -> component))
+    }
+  }
+}
+
+/** Installed semantic continuation qualification on a specification-owned Session. */
+@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class NativeDelegateTaskSemanticContinuationCliSpec extends AnyWordSpec with Matchers {
+  "Installed DelegateTask semantic continuation" should {
+    "admit and separately advance the original semantic stop after reopen" in {
+      val executable = Path.of(sys.props.get("smworkflow.spec.installedCommand")
+        .orElse(sys.env.get("SM_WORKFLOW_SPEC_INSTALLED_COMMAND"))
+        .getOrElse(fail("Select SM_WORKFLOW_SPEC_INSTALLED_COMMAND")))
+      val component = Path.of(sys.props.get("smworkflow.spec.componentFile")
+        .orElse(sys.env.get("SM_WORKFLOW_SPEC_COMPONENT_FILE"))
+        .getOrElse(fail("Select SM_WORKFLOW_SPEC_COMPONENT_FILE")))
+      new DelegateTaskSemanticContinuationOperationSpec().qualify(Some(executable -> component))
+    }
+  }
+}
+
+/** Installed Review continuation qualification on a specification-owned Session. */
+@DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class NativeDelegateTaskReviewContinuationCliSpec extends AnyWordSpec with Matchers {
+  "Installed DelegateTask Review continuation" should {
+    "admit and separately advance the original Review stop after reopen" in {
+      val executable = Path.of(sys.props.get("smworkflow.spec.installedCommand")
+        .orElse(sys.env.get("SM_WORKFLOW_SPEC_INSTALLED_COMMAND"))
+        .getOrElse(fail("Select SM_WORKFLOW_SPEC_INSTALLED_COMMAND")))
+      val component = Path.of(sys.props.get("smworkflow.spec.componentFile")
+        .orElse(sys.env.get("SM_WORKFLOW_SPEC_COMPONENT_FILE"))
+        .getOrElse(fail("Select SM_WORKFLOW_SPEC_COMPONENT_FILE")))
+      val specimen = new DelegateTaskReviewContinuationOperationSpec()
+      val small = specimen.qualify(Some(executable -> component))
+      val large = specimen.qualify(Some(executable -> component), large = true)
+      small.keys shouldBe large.keys
+      small.foreach { case (key, size) => withClue(key) { math.abs(large(key) - size) should be <= 256 } }
     }
   }
 }

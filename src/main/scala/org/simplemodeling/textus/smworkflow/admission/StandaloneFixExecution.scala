@@ -5,6 +5,7 @@ import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.*
 import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.ContextReference
+import org.simplemodeling.textus.smworkflow.{value as V}
 import GoalPhaseNativeValidation.Check
 import RepositorySyncNativeMergeValidation.Receipt
 import GoalPhaseRuntimeRepairControl as R
@@ -13,7 +14,7 @@ import GoalPhaseRuntimeRepairControl as R
   * It is neither a Phase Plan nor a second mechanical command runner.
   * @since   Oct. 26, 2026
   *  version Oct. 27, 2026
-  * @version Nov.  8, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object StandaloneFixExecution {
@@ -56,8 +57,15 @@ private[smworkflow] object StandaloneFixExecution {
     delivery: Option[DelegateTask.Delivery] = None,
     commitReconciliation: Option[CommitReconciliation] = None,
     recoveredValidation: Option[StandaloneFixValidationRecovery.Direction] = None)
+  /** Full original work/context stays in its native issued record. Only the
+    * completion and clarification needed by the successor reviewer accompany
+    * this detail body; control responses still carry a retained-work reference.
+    */
+  final case class ReviewReevaluation(originalWork: V.WorkflowRetainedWorkReference,
+    originalResult: Result, clarification: DelegateTaskReviewContinuation.Direction)
   final case class Work(session: String, sourceRevision: String, kind: String, state: State,
-    operatingProfile: Option[GoalPhaseOperatingProfiles.Capture] = None)
+    operatingProfile: Option[GoalPhaseOperatingProfiles.Capture] = None,
+    reviewReevaluation: Option[ReviewReevaluation] = None)
 
   private given Encoder[ContextReference] = deriveEncoder
   private given Decoder[ContextReference] = deriveDecoder
@@ -87,8 +95,12 @@ private[smworkflow] object StandaloneFixExecution {
   private given Decoder[R.Context] = deriveDecoder
   given Encoder[State] = deriveEncoder[State].mapJson(_.mapObject(o => o.filter { case ("commit" | "commitExecution" | "projectionWarning" | "reviewDispositions" | "delivery" | "commitReconciliation" | "recoveredValidation", value) => !value.isNull; case _ => true }))
   given Decoder[State] = deriveDecoder
+  private given Encoder[V.WorkflowRetainedWorkReference] = deriveEncoder
+  private given Decoder[V.WorkflowRetainedWorkReference] = deriveDecoder
+  given Encoder[ReviewReevaluation] = deriveEncoder
+  given Decoder[ReviewReevaluation] = deriveDecoder
   given Encoder[Work] = deriveEncoder[Work].mapJson(_.mapObject(_.filter {
-    case ("operatingProfile", value) => !value.isNull
+    case ("operatingProfile" | "reviewReevaluation", value) => !value.isNull
     case _ => true
   }))
   private val _work_decoder: Decoder[Work] = deriveDecoder
