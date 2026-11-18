@@ -1,6 +1,7 @@
 /**
  * @since   Oct. 27, 2026
- * @version Nov.  6, 2026
+ *  version Nov.  6, 2026
+ * @version Nov. 18, 2026
  */
 package org.simplemodeling.textus.smworkflow.admission
 
@@ -8,11 +9,13 @@ import io.circe.Json
 import io.circe.syntax.*
 import java.nio.file.{Files, Path}
 import org.goldenport.Consequence
-import org.goldenport.cncf.action.ActionCall
+import org.goldenport.cncf.action.{ActionCall, CommandAction}
 import org.goldenport.cncf.datastore.{ComponentRecordStorage, DataStore}
 import org.goldenport.cncf.processexecution.{GitObjectId, GitOperation, SbtOperation}
 import org.goldenport.cncf.workflow.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
+import org.goldenport.protocol.Request
+import org.goldenport.protocol.operation.OperationResponse
 import org.simplemodeling.textus.smworkflow.SmWorkflowComponent
 import org.simplemodeling.textus.smworkflow.runtime.RepositoryGitRuntimePrograms as Programs
 import org.scalatest.GivenWhenThen
@@ -424,6 +427,28 @@ final class BoundedWorkNativeOutcomeSpec extends AnyWordSpec with Matchers with 
               retained <- n.loadPayloadC(storage, session, saved.revision.value, call.core)
               _ = retained.state.evidenceReferences.size shouldBe 1
               _ = retained.state.projectionWarning shouldBe None
+              // Model the genuine save/response boundary: the caller still has
+              // the business state while terminal save has added its Evidence.
+              responseAction = new CommandAction {
+                val request = Request.of(component = SmWorkflowComponent.componentId.name,
+                  service = if (task) "GoalTaskService" else "StandaloneFixService",
+                  operation = if (task) "advanceGoalTask" else "advanceStandaloneFix")
+                def createCall(core: ActionCall.Core): ActionCall = call
+              }
+              responseCore = call.core.copy(action = responseAction)
+              compact <- NativeWorkflowCompactResponse.responseC(OperationResponse.RecordResponse(
+                n.view(saved, state(task, stage), "Terminal", "Specification-owned successful terminal response").toRecord()), responseCore)
+              control = read_control_value[org.simplemodeling.textus.smworkflow.value.StandaloneFixView](compact)
+              _ = control.kind shouldBe "Terminal"
+              _ = control.state shouldBe None
+              materialReference = control.retainedMaterials.find(_.fieldName == "state").get.reference
+              reference <- WorkflowRetainedSnapshot.fromPublicC(materialReference)
+              material <- WorkflowRetainedSnapshot.readC(reference, responseCore)
+              _ = material.hcursor.get[String]("stage").toOption shouldBe Some(stage)
+              _ = material.hcursor.downField("evidenceReferences").downArray.get[String]("identity").toOption shouldBe
+                Some(retained.state.evidenceReferences.head.identity)
+              _ = material.hcursor.get[Int]("ordinaryCount").toOption shouldBe Some(retained.state.ordinaryCount)
+              _ = material.hcursor.get[Int]("automaticCount").toOption shouldBe Some(retained.state.automaticCount)
               // A terminal checkpoint is collected, never re-executed as a new mechanical intent.
               mechanical <- storage.bindMechanicalC(n.advanceOperation, n.stateCodec)
               checkpoint <- mechanical.loadRetainedC(WorkflowMechanicalTransition.Reference(
