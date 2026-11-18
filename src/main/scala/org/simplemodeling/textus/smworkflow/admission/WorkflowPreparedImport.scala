@@ -15,7 +15,7 @@ import org.simplemodeling.textus.smworkflow.value as V
 /** Derived importer retention uses CommonEvidence's collection, File UoW and
   * confirmed storage observation. Attribution never authenticates imported facts.
   * @since   Nov.  9, 2026
-  * @version Nov.  9, 2026
+  * @version Nov. 19, 2026
   */
 private[smworkflow] object WorkflowPreparedImport {
   val schema = "sm-workflow.prepared-import.v1"
@@ -45,11 +45,45 @@ private[smworkflow] object WorkflowPreparedImport {
     }
   }
 
+  private def _authority_fields_c(value: Json, names: Vector[(String, String)]): Consequence[Json] =
+    names.foldLeft(Consequence.success(value)) { case (prior, (camel, snake)) => for {
+      selected <- prior
+      field <- publicFieldC(Some(selected), camel, snake)
+    } yield selected.mapObject(fields => field.fold(fields.remove(snake))(actual =>
+      fields.remove(snake).add(camel, actual))) }
+
+  private def _authority_target_c(request: Option[Json]): Consequence[Option[Json]] = for {
+    context <- publicFieldC(request, "authorityContext", "authority_context")
+    target <- context match {
+      case None => Consequence.success(Option.empty[Json])
+      case Some(value) => for {
+        owner <- publicFieldC(Some(value), "componentInstance", "component_instance")
+        declared <- _authority_fields_c(value, Vector("componentInstance" -> "component_instance"))
+        scope <- _authority_fields_c(value.hcursor.downField("scope").focus.getOrElse(Json.Null), Vector(
+          "sourceRevision" -> "source_revision", "planRevision" -> "plan_revision", "reviewEvidence" -> "review_evidence",
+          "admissionReference" -> "admission_reference", "childInvocation" -> "child_invocation",
+          "reviewedCandidate" -> "reviewed_candidate", "endpointIdentity" -> "endpoint_identity"))
+        normalized <- GoalPhaseNativeMetadata.normalizePublicJson(declared.mapObject(_.add("scope", scope)))
+          .fold(invalid, Consequence.success)
+        purpose <- normalized.hcursor.get[String]("purpose").toOption
+          .flatMap(name => NativeExternalEvidence.Purpose.values.find(_.identity == name))
+          .map(Consequence.success)
+          .getOrElse(invalid("authority target has an unsupported purpose"))
+        _ <- if (owner.flatMap(_.asString).exists(text => text.nonEmpty && text.trim == text &&
+            !text.exists(_.isControl))) Consequence.unit else invalid("authority target requires an exact owner")
+        selected <- if (NativeAuthorityScope.supports(purpose)) NativeAuthorityScope.select(purpose, normalized)
+          .fold(invalid, value => Consequence.success(Some(value.mapObject(_.add("purpose", Json.fromString(purpose.identity))))))
+          else Consequence.success(Option.empty[Json])
+      } yield selected
+    }
+  } yield target
+
   /** Actual business references and native source revisions are identities.
     * Observer timestamps, issuers and generated answer filenames are not. */
   def associationC(component: String, participant: String, operation: String, input: Json,
     request: Option[Json], suppliedReference: Option[Json]): Consequence[CommonEvidence.Source] = for {
     context <- publicFieldC(request, "issuedWorkContext", "issued_work_context")
+    authority <- _authority_target_c(request)
     target = request.flatMap(_.hcursor.downField("target").focus)
     directSession <- publicFieldC(request, "sessionId", "session_id")
     contextSession <- publicFieldC(context, "runId", "run_id")
@@ -62,7 +96,10 @@ private[smworkflow] object WorkflowPreparedImport {
     handle = context.flatMap(_.hcursor.downField("handle").focus)
     workflow <- publicFieldC(handle, "workflowIdentity", "workflow_identity")
     actualReference <- sourceReferenceC(suppliedReference)
-    session = targetSession.orElse(contextSession).orElse(directSession)
+    authorityscope = authority.flatMap(_.hcursor.downField("scope").focus)
+    authoritysession = authorityscope.flatMap(_.hcursor.downField("instance").focus)
+    authorityrevision = authorityscope.flatMap(_.hcursor.downField("sourceRevision").focus)
+    session = authoritysession.orElse(targetSession).orElse(contextSession).orElse(directSession)
     _ <- if (session.forall(_.asString.exists(_.nonEmpty))) Consequence.unit else invalid("native Session is not a literal string")
     // A pre-Start input may have only its exact selected input resource. There
     // is no invented native Session/revision or guessed snapshot filename.
@@ -72,11 +109,12 @@ private[smworkflow] object WorkflowPreparedImport {
       input.asObject.toVector.flatMap(_.toVector).filter((key, _) => Set("input", "plan", "source", "allocationReference", "request")(key)))
     scope = Json.obj("sourceReference" -> actualReference.getOrElse(Json.Null),
       "selectedInputResources" -> fallback, "selectors" -> Json.fromFields(selected),
-      "sourceRevision" -> sourceRevision.orElse(expectedRevision).orElse(targetRevision).getOrElse(Json.Null),
+      "sourceRevision" -> authorityrevision.orElse(sourceRevision).orElse(expectedRevision).orElse(targetRevision).getOrElse(Json.Null),
       "continuation" -> continuation.orElse(targetContinuation).getOrElse(Json.Null),
       "envelopeSession" -> directSession.getOrElse(Json.Null), "issuedSession" -> contextSession.getOrElse(Json.Null),
       "targetSession" -> targetSession.getOrElse(Json.Null),
-      "workflow" -> workflow.getOrElse(Json.Null))
+      "workflow" -> workflow.getOrElse(Json.Null)).mapObject(fields =>
+        authority.fold(fields)(value => fields.add("authorityTarget", value)))
     binding = canonical(Json.obj("schemaVersion" -> Json.fromString(schema),
       "componentInstance" -> Json.fromString(component), "participantIdentity" -> Json.fromString(participant),
       "operation" -> Json.fromString(operation), "scope" -> scope, "nativeSession" -> session.getOrElse(Json.Null)))

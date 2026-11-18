@@ -26,7 +26,7 @@ import RepositorySyncManagedGitObservation as G
   * contains business observations and assessment, never another controller or
   * an authority grant. Native history remains the sole progression source.
   * @since   Nov.  5, 2026
-  * @version Nov.  7, 2026
+  * @version Nov. 19, 2026
   */
 private[smworkflow] object GoalPhaseDevelopmentReconstruction {
   val operation = "reconstructGoalPhaseDevelopment"
@@ -157,8 +157,9 @@ private[smworkflow] object GoalPhaseDevelopmentReconstruction {
   } yield input
 
   def documentsC(input: V.GoalPhaseDevelopmentReconstructionInput, d: F.Declaration,
-    core: ActionCall.Core): Consequence[Documents] = for {
+    core: ActionCall.Core, retainedPlan: Option[O.Plan] = None): Consequence[Documents] = for {
     proposal <- proposalC(input)
+    plan <- GoalPhaseAcceptanceBoundary.captureC(d.projectAcceptance, proposal.plan)
     workspace <- WorkspaceId.parseC("sm-workflow-repository")
     phasepath <- WorkspaceFilePath.parseC(input.phasePath)
     checklistpath <- WorkspaceFilePath.parseC(input.checklistPath)
@@ -171,15 +172,20 @@ private[smworkflow] object GoalPhaseDevelopmentReconstruction {
     imported <- if (selected) GoalPhaseDocumentPlan.decodeC(phasetext, checklisttext).map(Some(_))
       else Consequence.success(Option.empty[GoalPhaseDocumentPlan.Imported])
     _ <- _check(imported.forall(_.plan == proposal.plan), "actual sm-workflow-plan differs from the complete raw proposal")
-    _ <- _check(proposal.plan.acceptance.toVector.flatMap(_.conditions).forall(condition =>
+    _ <- _check(retainedPlan.contains(plan) || proposal.plan.acceptance.toVector.flatMap(_.conditions).forall(condition =>
       items.exists(item => item.identity == condition.identity && item.acceptance == condition.description)),
       "proposed checklist acceptance identities and text must exist in the actual checklist")
-    plan <- GoalPhaseAcceptanceBoundary.captureC(d.projectAcceptance, proposal.plan)
     bound = imported.map(value => GoalPhaseDocumentSource.Bound(
       GoalPhaseDocumentSource.Source(input.phasePath, input.checklistPath), value.bindings, value.items))
     captured = R.Captured(proposal, plan, bound)
     _ <- R.validateCapturedC(captured)
   } yield Documents(input.phasePath, input.checklistPath, phasetext, checklisttext, captured)
+
+  /** New native selections cannot turn contradictory or unresolved facts into
+    * a requirements question. Historical payload replay remains unchanged. */
+  def requireReconstructibleC(assessment: Assessment): Consequence[Unit] =
+    _check(assessment.incompatible.isEmpty && assessment.uncertainEffects.isEmpty,
+      (assessment.incompatible ++ assessment.uncertainEffects).mkString("; "))
 
   def observeC(d: F.Declaration, core: ActionCall.Core): Consequence[Observation] = for {
     root <- G.rootC(core)

@@ -79,6 +79,26 @@ The passive helper `NativeHostAuthorityInput.prepareC(options: Map[String,String
 
 The raw successful `--json` response is the direct structured `WorkflowPreparedImport` datastore object. Existing codecs retain exact payload fields and row IDs; there is no JSON String/result/data wrapper. Save that actual output separately to the trusted `textus.import.data.file` input only when provisioning is intended. Existing CNCF StartupImport owns mutable save/create. Preparation performs no import/save/Start/Submit/Advance, grants no effect and authenticates no supplied origin.
 
+When preparation retains that derived importer through CommonEvidence, its
+association also includes the actual authority purpose, Component owner and
+selected target scope for purposes supported by `NativeAuthorityScope`. The
+retention owner normalizes standard public declaration/wire names and uses the
+existing purpose-specific scope selector. It derives the native Session and
+source revision from the selected Closing scope. Contradictory aliases,
+malformed owners and invalid selected fields refuse association. Unsupported
+InventoryAuthority scope retains its historical association; retention adds no
+new authority-scope support.
+
+One genuine direction can therefore prepare distinct real Closing targets
+without a retention collision. Recollecting the same target and bytes is
+idempotent; contradictory bytes under that target still conflict, and UNKNOWN
+storage is never replayed automatically. Observer time, issuer and generated
+filenames do not distinguish targets. This optional derived binding stays inside
+the existing opaque retention scope and schema; historical records and requests
+without an authority context keep their existing format and identity. It is
+retention identity only. Actual authorization remains with trusted provisioning
+and the existing consuming authority reader.
+
 ## Finite retained-task caller
 
 `scripts/native-goal-authority.py` calls that same normal installed Operation for one selected

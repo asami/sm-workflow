@@ -46,7 +46,7 @@ import GoalPhaseCanonicalDependencySourceSuccession as CanonicalSource
   *  version Oct. 28, 2026
   *  version Oct. 31, 2026
   *  version Oct. 29, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object GoalPhaseNativeWorkContinuation {
@@ -380,7 +380,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
       Consequence[org.simplemodeling.textus.smworkflow.value.GoalPhaseAdvanceResult] = for {
       _ <- if (cursor.from == source.current && cursor.from.suspension.isEmpty) Consequence.unit
         else F.invalid("Collect the actual pending work or Human decision before development reconstruction")
-      documents <- X.documentsC(input, d, core)
+      documents <- X.documentsC(input, d, core, Some(cursor.controller.plan))
       unchanged = cursor.developmentReconstruction.exists(saved =>
         saved.payload.documents.captured.plan == documents.captured.plan &&
           saved.payload.documents.phasePath == documents.phasePath &&
@@ -410,6 +410,7 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
           cursor.controller.candidate, unstarted, target, uncertainty ++
             cursor.controller.closureIntent.toVector.map(identity => "Unresolved native closure intent " + identity +
               "; a requirements choice cannot authorize commit, publication or push replay."))
+        _ <- X.requireReconstructibleC(assessment)
         reuse = unchanged && assessment.retainEvidence && uncertainty.isEmpty &&
           cursor.developmentReconstruction.nonEmpty
         result <- if (reuse) _wait_cursor_c(cursor,
@@ -516,13 +517,14 @@ private[smworkflow] object GoalPhaseNativeWorkContinuation {
         case None => Consequence.success(None)
         case Some((direction, failed)) => for {
           partition <- GoalPhaseNativeSourceHistory.assessCompletedPrefixC(core, direction.direction.target.recovery)
-          documents <- X.documentsC(input, d, core)
+          documents <- X.documentsC(input, d, core, Some(cursor.controller.plan))
           observed <- X.observeC(d, core)
           target = cursor.dependencySourceDirection.filter(_.target.initialOrigin.nonEmpty).map(_.target.generation)
           assessment = X.assess(cursor.controller, documents.captured.plan, d.candidatePaths,
             d.validationPolicy.toVector.flatMap(_.checks.map(_.identity)),
             d.phaseValidationPolicy.toVector.flatMap(_.checks.map(_.identity)), observed,
             cursor.controller.candidate, false, target)
+          _ <- X.requireReconstructibleC(assessment)
           compatible = documents.captured.plan.steps.lift(cursor.controller.cursor).exists(step =>
             step.identity == direction.direction.target.recovery.step && step.ownedPaths == direction.direction.target.recovery.ownedPaths)
           output <- if (partition.fresh.isEmpty || assessment.reasons.nonEmpty || !compatible) Consequence.success(None)

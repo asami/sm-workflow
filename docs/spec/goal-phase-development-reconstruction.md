@@ -77,7 +77,17 @@ paths/text are retained as business evidence and the caller supplies the semanti
 projection. This does not claim that runtime parsed prose or established success.
 
 The existing checklist parser extracts actual identities and acceptance text.
-Every proposed adopted checklist condition must match an actual identity/text.
+For a different proposed Plan, every proposed adopted checklist condition must
+match an actual identity/text in that checklist. The native owner first captures
+the Project acceptance and compares the complete effective proposed Plan with
+its authenticated retained controller Plan. If they are exactly equal, the
+retained accepted conditions remain authoritative even when their source text
+resides across multiple actual documents. The selected checklist need not
+duplicate all of them. Both actual documents are still read and retained, and
+any supplied embedded `sm-workflow-plan` must still match the complete raw
+proposal through its existing decoder. A changed Plan or effective Project
+condition receives the ordinary strict document validation and requirements
+assessment. A caller-supplied Plan alone establishes no retained authority.
 Checked marks remain document data; they establish no native completion, passed
 check, accepted review or commit. The existing Project owner captures effective
 acceptance. A same-Plan projection may keep the existing revision.
@@ -105,7 +115,9 @@ An insertion or reorder at the current boundary may be adopted when no repair
 scope is reserved. A pending or stopped repair, a charged repair, or retained
 repair observations protect their original Step or Release boundary. Assessment
 marks a move of that boundary incompatible and does not offer adoption; the
-controller enforces the same rule on application. Plan revisions within the
+native operation returns an explanatory error before saving a reconstruction
+or creating a Human question. The controller enforces the same rule on
+application. Plan revisions within the
 same protected boundary retain its original convergence scope and accounting.
 A pending or stopped repair reservation cannot be amended, even when its current
 boundary remains the same; assessment withholds adoption for that revision.
@@ -232,6 +244,13 @@ Only applicable choices are offered:
   back no source and clears no uncertainty.
 - `Defer` and `Cancel` preserve all records and produce no automatic work/effects.
 
+For a new reconstruction, incompatible facts and unresolved external effects
+produce concrete errors naming the contradiction or the original owning action.
+They append no reconstruction, Decision or effect. Genuine semantic requirements
+questions retain the existing Human choice route. Previously stored payloads,
+including historical uncertainty and choices, retain their original codec and
+replay meaning.
+
 An actual adopted answer is retained by the existing Human completion and then
 appended through the same common managed reconstruction. A separate ordinary
 Advance owns subsequent work. Maintenance prose is not a runtime Human answer.
@@ -242,7 +261,7 @@ and recovery questions retain their own direction contracts.
 Unknown writer, commit, publication or push outcomes retain their original
 UNKNOWN records. Existing supported observation/reconciliation remains the only
 way to determine the outcome. Unresolved effects have concrete owner/action
-reasons and do not offer an ineffective Adopt choice. Historical UNKNOWN already
+reasons and return an error when they prevent a new reconstruction. Historical UNKNOWN already
 explicitly accepted by a retained genuine continuation is not a fresh ambiguity.
 
 Repair stage, actual failure, reservation, counters, pending allowance,
