@@ -441,19 +441,36 @@ final class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers 
       foreign.exitCode should not be 0
       _advance(scenario, task) shouldBe original
 
-      Given("a specification-owned incorrect candidate which runs the ordinary selected test and issues a real RepairStep")
-      Files.writeString(Path.of(scenario.host.target.root).resolve("value.txt"), "incorrect\n", UTF_8)
+      Given("a specification-owned candidate with successful checks and an actual independent Review requiring Repair")
+      Files.writeString(Path.of(scenario.host.target.root).resolve("value.txt"), "expected\n", UTF_8)
       _submit(scenario, original, _configuredResult("completed"), "actual-repair-initial")
+        .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
+      val checked = scenario.advance(task)
+      val review = _advance(scenario, checked)
+      review.work.get.kind shouldBe "ReviewStep"
+      val reviewResult = _configuredResult("decision-needed").copy(outcome = "repair",
+        findings = Vector("Required product behavior is not yet validated"))
+      val reviewReference = V.WorkflowArtifactReference("actual-repair-origin-review", "1")
+      val execution = V.WorkflowExecutionEvidence(Vector(reviewReference), Some("specification-independent-reviewer"), None, None)
+      val prepared = scenario.prepareHostInput("prepareEvidence", V.WorkflowEvidencePreparationInput("GoalPhase", "review",
+        _observed_resource(checked), _file(scenario, "repair-review-result", reviewResult),
+        _file(scenario, "repair-review-reference", reviewReference), _file(scenario, "repair-review-execution", execution),
+        "normal-development-host", Instant.now().minusSeconds(60).toString, "entity:smworkflow.cli.host_evidence", None).toRecord())
+      scenario.selectPreparedImport(prepared)
+      scenario.call("command", review.submitOperation.get, Vector("--sessionId", review.submitSessionId.get,
+        "--result", _json(reviewResult), "--resultReference", _json(reviewReference), "--executionEvidence", _json(execution)))
         .business[V.GoalPhaseWorkSubmissionResult].accepted shouldBe true
       val repair = _advance(scenario, task)
       repair.work.get.kind shouldBe "RepairStep"
+      repair.work.get.review should not be empty
       val assigned = repair.work.get.issues.get.issues.filter(issue => issue.repository == repair.work.get.selectedPlan.repository &&
         issue.step == repair.work.get.stepIdentity.get && issue.status != "RESOLVED" && issue.status != "DECLINED")
       assigned should not be empty
       val progressing = GoalPhaseFixAssessment.Report(GoalPhaseFixAssessment.Change("STANDARD_LOGIC", Vector("selected-product"),
         false, false, "SPECIFICATION-OWNED same-purpose repair", false, false),
         GoalPhaseFixAssessment.Convergence("PROGRESSING", "HIGH", "SPECIFICATION-OWNED inventory permits the existing correction"))
-      val result = _configuredResult("decision-needed", Some(_proposal(scenario))).copy(
+      val proposal = _proposal(scenario).copy(plan = _proposal(scenario).plan.copy(revision = repair.work.get.selectedPlan.revision))
+      val result = _configuredResult("decision-needed", Some(proposal)).copy(
         fixAssessment = GoalPhaseFixAssessment.publicReport(Some(progressing)),
         issueReport = Some(V.GoalPhaseIssueReport(assigned.map(issue => V.GoalPhaseIssueDisposition(issue.identity,
           "BLOCKED", "SPECIFICATION-OWNED existing issue remains unresolved while needed files are supplied", None)))))
@@ -464,12 +481,15 @@ final class NativeGoalCurrentInventoryCliSpec extends AnyWordSpec with Matchers 
       Then("native continuation retains all original evidence and accounting without accepting or resolving the repair")
       continued.work.get.kind shouldBe "ImplementStep"
       continued.human shouldBe None
+      continued.work.get.selectedPlan.revision should not be repair.work.get.selectedPlan.revision
       continued.work.get.selectedPlan.steps.head.ownedPaths shouldBe original.work.get.selectedPlan.steps.head.ownedPaths ++ _added
       continued.work.get.originalBase shouldBe original.work.get.originalBase
       continued.repairProgress shouldBe repair.repairProgress
       assigned.foreach(issue => continued.work.get.issues.get.issues.find(_.identity == issue.identity).get.status shouldBe issue.status)
       val stored = _stored(scenario)
       stored.exists(_.contains("actual-progressing-inventory")) shouldBe true
+      stored.exists(_.contains("actual-repair-origin-review")) shouldBe true
+      stored.exists(_.contains("revisionCorrection")) shouldBe true
       stored.exists(_.contains(progressing.convergence.rationale)) shouldBe true
       stored.exists(_.contains("PROGRESSING")) shouldBe true
       _findings.foreach(finding => stored.exists(_.contains(finding)) shouldBe true)

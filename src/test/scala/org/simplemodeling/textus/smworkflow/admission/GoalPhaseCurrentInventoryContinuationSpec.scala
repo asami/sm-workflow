@@ -11,7 +11,7 @@ import SplitPhaseExplicitPartitionFixture.take
 
 /** Pure contracts; NativeGoalCurrentInventoryCliSpec owns actual native provenance.
   * @since   Nov. 3, 2026
-  * @version Nov. 16, 2026
+  * @version Nov. 18, 2026
   * @author  ASAMI, Tomoharu
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
@@ -133,6 +133,14 @@ final class GoalPhaseCurrentInventoryContinuationSpec extends AnyWordSpec with M
       Then("the revision collision alone is eligible while mixed effects and unsafe paths remain concerns")
       C.pureProposal(source, _request(source), result) shouldBe true
       result.planRevision shouldBe Some(proposal)
+      Given("the same inventory decision from a Repair retaining its original review context")
+      val review = GoalPhaseNativeReview.Context(Vector("src/Product.scala"), "The selected product needs correction", Vector.empty)
+      val repair = _request(source, "RepairStep").copy(review = Some(review))
+      When("the selector distinguishes retained Repair evidence from a new returned review judgment")
+      Then("the existing review does not block technical revision correction or become accepted review evidence")
+      C.pureProposal(source, repair, result) shouldBe true
+      repair.review shouldBe Some(review)
+      C.pureProposal(source, _request(source).copy(review = Some(review)), result) shouldBe false
       val mixed = proposal.copy(plan = proposal.plan.copy(repository = "other-component"))
       C.pureProposal(source, _request(source), result.copy(planRevision = Some(mixed))) shouldBe false
       val unsafe = proposal.copy(plan = proposal.plan.copy(steps = proposal.plan.steps.updated(source.cursor,

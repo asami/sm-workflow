@@ -54,7 +54,7 @@ private[smworkflow] object GoalPhaseCurrentInventoryContinuation {
       controller.pendingRepair.isEmpty && controller.closureIntent.isEmpty && controller.releaseCommit.isEmpty &&
       controller.phaseReviewedCandidate.isEmpty && controller.repairControl.flatMap(_.stop).isEmpty &&
       Set("ImplementStep", "RepairStep")(input.kind) && input.stepIdentity.contains(controller.step.identity) &&
-      input.review.isEmpty && input.publicationFailure.isEmpty &&
+      (input.kind == "RepairStep" || input.review.isEmpty) && input.publicationFailure.isEmpty &&
       input.checkFailure.forall(failure => failure.validation.dependency.isEmpty && failure.validation.dependencySource.isEmpty) &&
       result.outcome == "decision-needed" && result.findings != null &&
       (result.findings.isEmpty || result.acceptance != null && result.acceptance.nonEmpty) &&
