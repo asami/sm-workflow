@@ -43,9 +43,12 @@ private[smworkflow] object WorkflowSbtCapture {
   object ExternalReference {
     given Encoder[ExternalReference] = deriveEncoder
     private val decoder: Decoder[ExternalReference] = deriveDecoder
-    given Decoder[ExternalReference] = Decoder.instance(cursor => decoder.tryDecode(cursor).flatMap(value =>
-      Either.cond(value.asJson == cursor.value && externalReferenceValid(value), value,
-        DecodingFailure("Invalid closed external capture reference", cursor.history))))
+    given Decoder[ExternalReference] = Decoder.instance(cursor => decoder.tryDecode(cursor).flatMap { value =>
+      val normalized = cursor.value.mapObject(fields =>
+        if (fields.contains("exitCode")) fields else fields.add("exitCode", Json.Null))
+      Either.cond(value.asJson == normalized && externalReferenceValid(value), value,
+        DecodingFailure("Invalid closed external capture reference", cursor.history))
+    })
   }
   private def exact(value: String, max: Int = 4096): Boolean = value != null && value.nonEmpty &&
     value.length <= max && value.trim == value && !value.exists(_.isControl)

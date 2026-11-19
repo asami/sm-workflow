@@ -18,13 +18,91 @@ import WorkflowSbtValidation.*
   */
 @org.goldenport.cncf.validation.annotation.ValidationSpecification(
   declaration = classOf[org.simplemodeling.textus.smworkflow.testing.LocalTestDeclaration])
-final class WorkflowSbtCaptureSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+class WorkflowSbtCaptureSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _capture(bytes: Vector[Byte], truncated: Boolean = false) = ProcessExecutionCapture(bytes, bytes.size.toLong, truncated)
   private val _empty = _capture(Vector.empty)
   private val _facts = Facts(Kind.Test, Outcome.Incomplete, None, None)
   private def _raw(bytes: Vector[Byte], terminal: ProcessExecutionTermination =
     ProcessExecutionTermination.OutputLimitExceeded(ProcessExecutionStream.Stderr)) =
     ProcessExecutionResult(terminal, _empty, _capture(bytes, true), Vector.empty, 100L, "selected-sbt")
+
+  private def _external_reference(association: WorkflowSbtCapture.Association, facts: Facts,
+    process: ProcessExecutionResult): WorkflowSbtCapture.ExternalReference = {
+    val artifact = Json.obj("schemaVersion" -> WorkflowSbtCapture.externalSchema.asJson,
+      "association" -> association.asJson, "facts" -> facts.asJson, "process" -> WorkflowSbtCapture.encode(process))
+      .noSpaces.getBytes(java.nio.charset.StandardCharsets.UTF_8)
+    val digest = java.security.MessageDigest.getInstance("SHA-256").digest(artifact).map(b => f"${b & 0xff}%02x").mkString
+    WorkflowSbtCapture.ExternalReference("sm-workflow-validation-artifacts", "validation/selected.json",
+      association, artifact.length.toLong, digest, process.stdout.byteCount, process.stderr.byteCount,
+      process.stdout.truncated, process.stderr.truncated, WorkflowSbtCapture.termination(process), WorkflowSbtCapture.exitCode(process))
+  }
+
+  private def _public_record_json(value: Json): Json = {
+    val record = take(new org.goldenport.record.io.RecordDecoder().json(value.noSpaces))
+    val rendered = io.circe.parser.parse(take(record.toJsonStringC)).fold(error =>
+      fail("Public Record JSON: " + error.message), identity)
+    GoalPhaseNativeMetadata.normalizePublicJson(rendered).fold(error =>
+      fail("Public Record naming normalization: " + error), identity)
+  }
+
+  "Public Record external capture references" should {
+    "retain a genuine output-limit reference when None exitCode is omitted" in {
+      Given("an artifact-valid typed output-limit specimen, without claiming a newly executed process")
+      val association = WorkflowSbtCapture.Association("component", "session", 7L, "participant", "selected", 3,
+        "/repository", "main", "a" * 40, "b" * 40)
+      val facts = Facts(Kind.TestOnly, Outcome.Incomplete, None, None)
+      val process = _raw(Vector(0x61.toByte))
+      val reference = _external_reference(association, facts, process)
+      val receipt = take(V.compactExternalC("selected", facts, process, reference))
+      When("actual Record serialization omits the optional None field and shared naming normalization precedes decoding")
+      val publicjson = _public_record_json(receipt.asJson)
+      val reopened = publicjson.as[V.Receipt].fold(error => fail(error.getMessage), identity)
+      Then("the exact external reference survives with no exit code and remains an unhydrated Incomplete result")
+      publicjson.hcursor.downField("externalCapture").downField("exitCode").focus shouldBe None
+      reopened.externalCapture shouldBe Some(reference)
+      reopened.sbt shouldBe Some(facts)
+      reopened.processObservation shouldBe None
+      V.productSuccessful(reopened, Kind.TestOnly) shouldBe false
+      WorkflowSbtCapture.externalMatches(reopened.externalCapture.get, facts, process) shouldBe true
+      reference.asJson.as[WorkflowSbtCapture.ExternalReference] shouldBe Right(reference)
+    }
+    "preserve Exited codes and refuse malformed or crossed references" in {
+      Given("an artifact-valid Exited zero specimen with exact selected TestOnly success facts")
+      val association = WorkflowSbtCapture.Association("component", "session", 7L, "participant", "selected", 3,
+        "/repository", "main", "a" * 40, "b" * 40)
+      val facts = Facts(Kind.TestOnly, Outcome.Succeeded, Some(Selection(Vector("example.SelectedSpec"), 1, 1L)), None)
+      val process = ProcessExecutionResult(ProcessExecutionTermination.Exited(0), _empty, _empty, Vector.empty, 1L, "selected-sbt")
+      val reference = _external_reference(association, facts, process)
+      val receipt = take(V.compactExternalC("selected", facts, process, reference))
+      When("the actual Record wire is decoded after shared naming normalization")
+      val reopened = _public_record_json(receipt.asJson).as[V.Receipt].fold(error => fail(error.getMessage), identity)
+      Then("the Some exit code and artifact association remain unchanged")
+      reopened.externalCapture shouldBe Some(reference)
+      reopened.externalCapture.get.exitCode shouldBe Some(0)
+      WorkflowSbtCapture.externalMatches(reopened.externalCapture.get, facts, process) shouldBe true
+      Given("unknown fields, missing required fields, malformed exit codes and a crossed termination")
+      val wire = reference.asJson
+      val associationjson = association.asJson
+      val malformed = Vector(
+        wire.mapObject(_.add("unknown", Json.True)),
+        wire.mapObject(_.add("unknown", Json.Null)),
+        wire.mapObject(_.remove("workspace")),
+        wire.mapObject(_.remove("termination")),
+        wire.mapObject(_.remove("stdoutTruncated")),
+        wire.mapObject(_.add("exitCode", Json.fromString("0"))),
+        wire.mapObject(_.add("exitCode", Json.fromBigDecimal(BigDecimal("1.5")))),
+        wire.mapObject(_.add("exitCode", Json.fromLong(Int.MaxValue.toLong + 1))),
+        wire.mapObject(_.add("association", associationjson.mapObject(_.add("unknown", Json.True)))))
+      val crossed = reference.copy(termination = "output-limit-exceeded", exitCode = None)
+      When("the closed decoder checks shape and actual compact admission checks process consistency")
+      val decoded = malformed.map(_.as[WorkflowSbtCapture.ExternalReference])
+      val admitted = V.compactExternalC("selected", facts, process, crossed)
+      Then("all malformed references and the termination-crossed capture are refused by their existing owners")
+      decoded.foreach(_.isLeft shouldBe true)
+      WorkflowSbtCapture.externalMatches(crossed, facts, process) shouldBe false
+      admitted.isFaillure shouldBe true
+    }
+  }
 
   "Raw SBT capture persistence" should {
     "retain selected TestOnly success failure and genuine truncated Incomplete through compact external receipts" in {
@@ -37,13 +115,7 @@ final class WorkflowSbtCaptureSpec extends AnyWordSpec with Matchers with GivenW
         val process = if (outcome == Outcome.Incomplete) _raw(Vector(0x61.toByte))
           else ProcessExecutionResult(ProcessExecutionTermination.Exited(if (outcome == Outcome.Succeeded) 0 else 1),
             _capture(Vector(0x61.toByte)), _empty, Vector.empty, 1L, "selected-sbt")
-        val artifact = Json.obj("schemaVersion" -> WorkflowSbtCapture.externalSchema.asJson,
-          "association" -> association.asJson, "facts" -> facts.asJson, "process" -> WorkflowSbtCapture.encode(process))
-          .noSpaces.getBytes(java.nio.charset.StandardCharsets.UTF_8)
-        val digest = java.security.MessageDigest.getInstance("SHA-256").digest(artifact).map(b => f"${b & 0xff}%02x").mkString
-        val reference = WorkflowSbtCapture.ExternalReference("sm-workflow-validation-artifacts", "validation/selected.json",
-          association, artifact.length.toLong, digest, process.stdout.byteCount, process.stderr.byteCount,
-          process.stdout.truncated, process.stderr.truncated, WorkflowSbtCapture.termination(process), WorkflowSbtCapture.exitCode(process))
+        val reference = _external_reference(association, facts, process)
         When("the exact process is compacted and the closed persisted reference is decoded")
         val receipt = take(V.compactExternalC("selected", facts, process, reference))
         val reopened = receipt.asJson.as[V.Receipt].toOption.get
@@ -168,5 +240,26 @@ final class WorkflowSbtCaptureSpec extends AnyWordSpec with Matchers with GivenW
       val catalog = take(WorkflowInstanceRecordJsonV1.catalogC(Vector(definition)))
       take(WorkflowMechanicalTransitionJsonV1.decodeC(encoded, catalog, GoalPhaseNativeValidation.codec, limits)) shouldBe mechanical
     }
+  }
+}
+
+/** Explicit qualification of only the new public Record reference regressions.
+  * The base specification keeps its ordinary complete test selection.
+  * @since   Nov. 19, 2026
+  * @version Nov. 19, 2026
+  */
+@org.scalatest.DoNotDiscover
+@org.goldenport.cncf.validation.annotation.ValidationSpecification(
+  declaration = classOf[org.simplemodeling.textus.smworkflow.testing.RuntimeTestDeclaration])
+final class WorkflowSbtCapturePublicReferenceSpec extends WorkflowSbtCaptureSpec {
+  private val _new_cases = Vector(
+    "Public Record external capture references should retain a genuine output-limit reference when None exitCode is omitted",
+    "Public Record external capture references should preserve Exited codes and refuse malformed or crossed references")
+
+  override protected def runTests(testName: Option[String], args: org.scalatest.Args): org.scalatest.Status = {
+    require(_new_cases.size == 2 && _new_cases.distinct == _new_cases && _new_cases.forall(testNames.contains),
+      "Both exact public Record reference regressions must exist before qualification")
+    val selected = testName.fold(_new_cases)(name => _new_cases.filter(_ == name))
+    new org.scalatest.CompositeStatus(selected.map(name => super.runTests(Some(name), args)).toSet)
   }
 }

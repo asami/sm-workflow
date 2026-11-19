@@ -499,8 +499,14 @@ final class NativeDelegateTaskTestOnlyRecoveryCliSpec extends AnyWordSpec with M
     with ThreeWorkflowManagedRepositoryFixture {
   private def _json(value: RecordPresentable): String = take(value.toRecord().toJsonStringC)
   private def _read(path: Path): Json = parser.parse(Files.readString(path)).toOption.get
-  private def _state(record: org.goldenport.record.Record): S.State =
-    GoalPhaseNativeMetadata.normalizePublicJson(parser.parse(take(record.toJsonStringC)).toOption.get).toOption.get.as[S.State].toOption.get
+  private def _state(record: org.goldenport.record.Record): S.State = {
+    val parsed = parser.parse(take(record.toJsonStringC)).fold(error =>
+      fail("SPEC retained DelegateTask state JSON: " + error.message), identity)
+    val normalized = GoalPhaseNativeMetadata.normalizePublicJson(parsed).fold(error =>
+      fail("SPEC retained DelegateTask state naming normalization: " + error), identity)
+    normalized.as[S.State].fold(error =>
+      fail("SPEC retained DelegateTask state decoder at " + error.history.mkString("/") + ": " + error.message), identity)
+  }
   private def _installed: Path = {
     val selected = Path.of(sys.props.get("smworkflow.spec.installedCommand").getOrElse(fail("Select smworkflow.spec.installedCommand")))
     require(selected.isAbsolute && selected.normalize == selected && Files.isExecutable(selected))
@@ -525,6 +531,41 @@ final class NativeDelegateTaskTestOnlyRecoveryCliSpec extends AnyWordSpec with M
     reference -> _call(scenario, WorkflowRetainedWork.serviceName, WorkflowRetainedSnapshot.readOperation, Vector("--input", _json(reference)))
   }
   private def _select_import(scenario: F.Scenario, preparation: F.Result): Unit = scenario.selectPreparedImport(preparation)
+  private def _qualify_recorded_wait(scenario: F.Scenario, manifest: Json, state: S.State): Unit = {
+    val root = scenario.root
+    val old = manifest.hcursor.get[S.State]("sourceState").fold(error =>
+      fail("SPEC fixture sourceState decoder at " + error.history.mkString("/") + ": " + error.message), identity)
+    Then("one remaining real TestOnly is Incomplete and the actual prefix and cumulative accounting survive unchanged")
+    state.stage shouldBe "Wait"
+    state.receipts.take(2) shouldBe old.receipts
+    state.automaticCount shouldBe old.automaticCount
+    state.ordinaryCount shouldBe old.ordinaryCount
+    state.candidate shouldBe old.candidate
+    state.conditionReport shouldBe old.conditionReport
+    state.receipts.last.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Incomplete
+    state.receipts.last.externalCapture should not be empty
+    val capture = state.receipts.last.externalCapture.get
+    val capturepath = root.resolve("capture-root").resolve(capture.path)
+    val processjson = _read(capturepath).hcursor.get[Json]("process").fold(error =>
+      fail("SPEC native capture process at " + capturepath + ": " + error.message), identity)
+    val native = WorkflowSbtCapture.decode(processjson).fold(error =>
+      fail("SPEC native capture decoder at " + capturepath + ": " + error), identity)
+    native.stdout.truncated shouldBe true
+    WorkflowSbtCapture.externalMatches(capture, state.receipts.last.sbt.get, native) shouldBe true
+    val bodycount = Files.readAllLines(root.resolve("selected-body-executions.txt")).size()
+    bodycount shouldBe manifest.hcursor.get[Int]("beforeBodyCount").toOption.get + 1
+    Files.readAllLines(root.resolve("fix-check-executions.txt")).size() shouldBe 1
+    val commands = Files.readString(root.resolve("sbt-command-lines.txt"))
+    val originalcommands = manifest.hcursor.get[String]("beforeCommands").toOption.get
+    commands.linesIterator.count(_ == "compile") shouldBe originalcommands.linesIterator.count(_ == "compile")
+    When("ordinary Advance is repeated once at the genuine recorded Incomplete frontier")
+    val repeatedadvance = _call(scenario, "DelegateTaskService", "advanceDelegateTask", Vector("--sessionId", manifest.hcursor.get[String]("sessionId").toOption.get))
+    Then("the passive Advance exposes Wait without executing another check or selected body")
+    repeatedadvance.exitCode shouldBe 0
+    repeatedadvance.business[V.DelegateTaskView].kind shouldBe "Wait"
+    Files.readString(root.resolve("sbt-command-lines.txt")) shouldBe commands
+    Files.readAllLines(root.resolve("selected-body-executions.txt")).size() shouldBe bodycount
+  }
   private def _prepare_direction(scenario: F.Scenario, fixture: Path, description: V.DelegateTaskValidationRecoveryView,
     proof: DelegateTaskValidationRecovery.Proof): V.DelegateTaskValidationRecoveryInput = {
     import DelegateTaskValidationRecovery.given
@@ -717,6 +758,15 @@ final class NativeDelegateTaskTestOnlyRecoveryCliSpec extends AnyWordSpec with M
     if (collect && target.retainedOutcome.contains("incomplete")) {
       Then("the reached genuine Incomplete is exposed without admitting another attempt")
       take(DelegateTaskValidationRecovery.targetC(description.target)).retainedOutcome shouldBe Some("incomplete")
+      target.sessionId shouldBe session
+      target.componentInstance shouldBe manifest.hcursor.get[String]("componentInstance").toOption.get
+      When("the exact actual stopped frontier is read through its public retained snapshot")
+      val (snapshot, read) = _snapshot(scenario, target.componentInstance, target.sessionId, target.frontierRevision)
+      manifest = manifest.mapObject(_.add("collectedWaitReference", parser.parse(_json(snapshot)).toOption.get)
+        .add("collectedWaitSnapshotLog", read.invocation.stdout.toString.asJson))
+      Files.writeString(manifestfile, manifest.noSpaces)
+      val state = _state(read.business[V.WorkflowRetainedSnapshotReadResult].material)
+      _qualify_recorded_wait(scenario, manifest, state)
     } else {
       val available = target.captureAvailability == "available"
       require(!collect || available, "Collection requires a genuine available native artifact; preserve this exact pending state")
@@ -764,29 +814,7 @@ final class NativeDelegateTaskTestOnlyRecoveryCliSpec extends AnyWordSpec with M
         Then("the genuine selected output-limit result is exposed as Wait")
         result.kind shouldBe "Wait"
         val state = _state(result.state.get)
-        val old = manifest.hcursor.get[S.State]("sourceState").toOption.get
-        Then("one remaining real TestOnly is Incomplete and the actual prefix and cumulative accounting survive unchanged")
-        state.receipts.take(2) shouldBe old.receipts
-        state.automaticCount shouldBe old.automaticCount
-        state.ordinaryCount shouldBe old.ordinaryCount
-        state.candidate shouldBe old.candidate
-        state.conditionReport shouldBe old.conditionReport
-        state.receipts.last.sbt.get.outcome shouldBe WorkflowSbtValidation.Outcome.Incomplete
-        state.receipts.last.externalCapture should not be empty
-        val capture = state.receipts.last.externalCapture.get
-        val native = WorkflowSbtCapture.decode(_read(root.resolve("capture-root").resolve(capture.path))
-          .hcursor.get[Json]("process").toOption.get).toOption.get
-        native.stdout.truncated shouldBe true
-        WorkflowSbtCapture.externalMatches(capture, state.receipts.last.sbt.get, native) shouldBe true
-        Files.readAllLines(root.resolve("selected-body-executions.txt")).size() shouldBe manifest.hcursor.get[Int]("beforeBodyCount").toOption.get + 1
-        Files.readAllLines(root.resolve("fix-check-executions.txt")).size() shouldBe 1
-        val aftercommands = Files.readString(root.resolve("sbt-command-lines.txt"))
-        aftercommands.linesIterator.count(_ == "compile") shouldBe commands.linesIterator.count(_ == "compile")
-        When("ordinary Advance is repeated at the newly recorded Incomplete frontier")
-        val repeatedadvance = _call(scenario, "DelegateTaskService", "advanceDelegateTask", Vector("--sessionId", session))
-        Then("the repeated Advance returns successfully without executing another check")
-        repeatedadvance.exitCode shouldBe 0
-        Files.readString(root.resolve("sbt-command-lines.txt")) shouldBe aftercommands
+        _qualify_recorded_wait(scenario, manifest, state)
       }
     }
     if (collect) Files.readString(root.resolve("sbt-command-lines.txt")) shouldBe commands
