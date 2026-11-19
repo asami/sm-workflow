@@ -16,15 +16,16 @@ import NativeWorkflowCliFixture as F
 /** Ordinary commands connect current resolved settings to candidate history and checks.
   * Semantic edits are controlled fixture input, not genuine AI or acceptance evidence.
   * @since   Oct. 17, 2026
-  * @version Oct. 25, 2026
+  *  version Oct. 25, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] trait NativeGoalSourceHistoryCliFixture extends Matchers with GivenWhenThen { this: AnyWordSpec =>
   val sourcePath = "src/main/scala/HistoryExample.scala"
   val initialText = "object HistoryExample { val value: Int = 0 }\n"
   val changedText = "object HistoryExample { val value: Int = 42 }\n"
-  val styleKey = "sm-workflow.source-history.style"
-  val ruleKey = "sm-workflow.source-history.rule"
+  val styleKey = "sm-workflow.source.history.style"
+  val ruleKey = "sm-workflow.source.history.rule"
   val historyFormatter = DateTimeFormatter.ofPattern("MMM. ppd, uuuu", Locale.forLanguageTag("en-US"))
   private val _document = Json.obj(
     "schemaVersion" -> Json.fromString("sm-workflow.source-history-rule.v1"),

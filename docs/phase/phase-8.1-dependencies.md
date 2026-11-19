@@ -14,11 +14,14 @@ Behavior: [Scala lint profiles](../spec/scala-lint-profiles.md)
 SLP-1 source boundary: the [independent rule module](../../scala-lint-rules/README.md)
 contains the initial rules, versioned profiles and compiler-input specifications.
 The selected host is Scala 2.13.14 / Scalafix 0.12.1; analyzed input is Scala
-3.3.8 with compiler-produced SemanticDB. SLP-1 qualified this bounded combination;
-SLP-2's expanded rule/fixture candidate requires fresh native checks. This is not
-an accepted full SLP-RULES handoff. Per-call typed invocation and
-effective-configuration retention remain SLP-4; history-key migration remains
-SLP-3. Root whole-source lint keeps its existing project configuration selection;
+3.3.8 with compiler-produced SemanticDB. SLP-1/SLP-2 were locally accepted at
+`0c300ad9658045406fbba1c73e961749baa24947` through native checks and independent
+review. This is not an accepted full SLP-RULES handoff. SLP-3's breaking history
+key migration (no aliases), ordered additions/removals, immutable effective
+snapshot and public Scalafix scoped-exception/project-difference assertions are
+authored, pending native qualification. These supply A02/A06/A08 data foundations;
+per-call typed invocation, full A08/A15 native Action retention and actual settings
+adoption remain SLP-4. All B/C acceptance remains owed. Root whole-source lint keeps its existing project configuration selection;
 shared defaults are not activated there by this candidate. Full A01 normal-route
 adoption remains owed until actual native qualification. No producer delivery or
 checklist item is completed by source authorship or partial fixture proof.
@@ -33,8 +36,9 @@ producer work or active Session is started by this scheduling decision.
 ## Ownership and delivery units
 
 The IDs below identify bounded handoffs, not new Sessions or producer Phase
-numbers. All handoffs are planned and unaccepted. Existing code is inspection
-evidence only; it is not qualification of these new requirements.
+numbers. The bounded local SLP-1/SLP-2 acceptance above does not close the
+cross-project handoffs below. They remain planned and unaccepted. Existing code
+alone is inspection evidence, not qualification of the remaining requirements.
 
 | Delivery | Producer and local plan | Handoff to Phase 8.1 | Required before |
 | --- | --- | --- | --- |

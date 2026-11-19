@@ -32,6 +32,14 @@ coverage through SLP-3/SLP-4. Existing identifiers and acceptance states remain.
 Stage B maps SLP-B1 -> B01, SLP-B2 -> B02/B03 and SLP-B3 -> B04.
 Stage C maps SLP-C1 -> C01, SLP-C2 -> C02/C03 and SLP-C3 -> C04/C05.
 
+Progress note, 2026-11-19: bounded SLP-1/SLP-2 rule-module delivery was locally
+accepted at `0c300ad9` through native checks and independent review. SLP-3's
+resolver/migration and public Scalafix consumer assertions are authored, pending
+native qualification. They supply A02/A06/A08 configuration foundations only.
+Full A08/A15 native Action retention/settings adoption and normal runtime
+integration remain SLP-4; all B/C acceptance remains owed. No checkbox below is
+completed by this authorship note.
+
 Producer dependency mapping and local plans:
 [Phase 8.1 cross-project deliveries](phase-8.1-dependencies.md).
 Use bounded accepted handoffs and actual consumer evidence for the existing

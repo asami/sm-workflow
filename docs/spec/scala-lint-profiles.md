@@ -1,11 +1,12 @@
 # Shared Scala lint profiles
 
-Status: approved development direction. SLP-1's bounded rule-module delivery has
-native validation and independent review; its application runtime adoption
-remains open. SLP-2's additional authored rules and supported analysis boundaries
-are described in [the shared rule module](../../scala-lint-rules/README.md),
-pending fresh checks. Key migration, runtime integration and full A/B/C
-acceptance remain open; source authorship is not their acceptance.
+Status: approved development direction. SLP-1/SLP-2's bounded rule-module delivery
+was locally accepted with native validation and independent review at `0c300ad9`.
+Its rules and supported analysis boundaries are described in
+[the shared rule module](../../scala-lint-rules/README.md). SLP-3's key migration,
+resolution data and consumer assertions are authored, pending native qualification.
+Application runtime integration and full A/B/C acceptance remain open; source
+authorship is not their acceptance.
 
 Delivery ownership, producer-local plans and capability dependencies are tracked
 in the [Phase 8.1 dependency plan](../phase/phase-8.1-dependencies.md).
@@ -88,11 +89,11 @@ were produced. Historical readability is not an old-key execution path. Do not
 rewrite live Sessions or replay successful work for this rename. Before adoption,
 qualify the new runtime and resolved settings together; issue subsequent work with
 new keys through the supported configuration route. Already issued execution and
-its retained results remain unchanged. This document specifies a planned contract;
-current `WorkflowSourceHistoryParameters` retains the old history keys until
-SLP-3. The SLP-1 candidate adds source selection and absent-only history
-inheritance through normal resolved parameters; it introduces no old/new dual
-read, automatic conversion or historical-result rewrite.
+its retained results remain unchanged. The SLP-3 source candidate migrates the
+current resolver and history adapter to the new keys and rejects old-only and
+mixed old/new execution configuration with replacement guidance. It introduces
+no alias, dual read, automatic conversion or historical-result rewrite. Native
+qualification and actual runtime/settings adoption remain outstanding.
 
 ## Resolution semantics
 
@@ -101,9 +102,13 @@ read, automatic conversion or historical-result rewrite.
   rule; omission never disables an inherited rule.
 - Later layers override individual configuration leaves. Arrays other than rule
   membership replace the earlier value unless that setting defines other semantics.
-- Represent explicit rule removal as a documented sm-workflow resolution directive,
-  separated from Scalafix settings and removed before rendering its configuration.
-  Do not claim that stock Scalafix performs this layered merge automatically.
+- The optional project directive `sm-workflow.scala-lint.remove-rules = [NoOptionGet]`
+  removes exact rule IDs after all baseline/team/history/project additions.
+  Deduplicate removals; unknown IDs, non-string/null entries, malformed lists and
+  blank or padded IDs are errors. Strip this directive before rendering Scalafix
+  configuration. Stock Scalafix does not perform this layered merge automatically.
+- Reject source/history selector and history-rule keys in project `.scalafix.conf`;
+  those choices belong to CNCF `ExecutionContext.resolvedParameters`.
 - Preserve standard Scalafix diagnostic settings and scoped suppressions. A rule's
   removal and a diagnostic suppression are distinct, visible effective settings.
 - Missing project configuration uses shared defaults. Malformed selected configuration
@@ -117,7 +122,16 @@ Resolve and retain effective configuration for the issued validation. Configurat
 changes apply to subsequently issued validation; do not mutate an executing request
 or reinterpret previous successful results. Use existing evidence/result retention
 for profile identities/versions, effective configuration reference and relevant
-overrides/removals. No hashes, approval registry or additional AI call is required.
+overrides/removals. The authored resolver exposes `Effective.removedRules`,
+`projectOverrideKeys` (project leaf keys excluding the removal directive), and
+immutable `snapshot: Config` data. Its schemaVersion is
+`sm-workflow.scala-lint-effective.v1`; fields are sourceStyle, historyStyle,
+profiles, rules, removedRules, projectOverrideKeys and configuration. Resolving
+again after a file change produces a new value while the earlier snapshot stays
+unchanged. Missing optional project configuration is `None`; a selected invalid
+file fails rather than becoming absent. No hashes, approval registry or additional
+AI call is required. This is an A02/A06/A08 data foundation; retaining the snapshot
+with the actual native Action and full A08/A15 settings adoption remain SLP-4 work.
 
 ## Initial baseline safety rule: Option.get
 
@@ -514,6 +528,19 @@ Keep lint detection separate from rewriting. Findings use the existing FIX and
 re-validation path; no extra mandatory AI review is introduced. Use standard
 Scalafix `@SuppressWarnings` / `scalafix:ok` and a reason for intentional exceptions
 under existing decision policy, without a new annotation or exception registry.
+For example, use a preceding reason comment rather than a custom inline grammar:
+
+```scala
+// REASON: the caller guarantees this optional value is present at this boundary.
+@SuppressWarnings(Array("scalafix:NoOptionGet"))
+def assumed(value: Option[Int]): Int = value.get
+```
+
+The exception remains specific to that rule and definition. The SLP-3 compiled
+consumer fixture requires NoTryGet inside the same definition and NoOptionGet
+outside it to remain visible through Scalafix's public entry. These new assertions
+await native qualification; source authorship does not complete A06 or runtime
+admission. No blanket Test exemption follows from this example.
 
 Analyze full syntax context of changed files and attribute blocking findings to
 new/affected scope. Report unrelated pre-existing violations separately; do not

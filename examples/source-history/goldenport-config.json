@@ -1,6 +1,6 @@
 {
-  "sm-workflow.source-history.style": "goldenport",
-  "sm-workflow.source-history.rule": {
+  "sm-workflow.source.history.style": "goldenport",
+  "sm-workflow.source.history.rule": {
     "schemaVersion": "sm-workflow.source-history-rule.v1",
     "identity": "goldenport-source-history-v1",
     "style": "goldenport",

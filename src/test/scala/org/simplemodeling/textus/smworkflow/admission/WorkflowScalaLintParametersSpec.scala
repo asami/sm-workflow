@@ -2,9 +2,11 @@ package org.simplemodeling.textus.smworkflow.admission
 
 import com.typesafe.config.ConfigFactory
 import org.goldenport.Consequence
-import org.goldenport.cncf.config.ResolvedParameters
+import org.goldenport.cncf.config.{ResolvedParameter, ResolvedParameters}
 import org.goldenport.configuration.{Configuration, ConfigurationOrigin, ConfigurationResolution, ConfigurationTrace,
   ConfigurationValue, ResolvedConfiguration}
+import org.goldenport.protocol.Property
+import org.simplemodeling.scalalint.ScalaLintProfiles
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -70,6 +72,68 @@ final class WorkflowScalaLintParametersSpec extends AnyWordSpec with Matchers wi
       }
     }
 
+    "resolve each key through real CNCF layers before applying all six inheritance combinations" in {
+      Given("conflicting component and operation source values, with independent history overrides")
+      val cases = Vector(
+        ("none", None, "none"), ("none", Some("none"), "none"),
+        ("none", Some("goldenport"), "goldenport"),
+        ("goldenport", None, "goldenport"), ("goldenport", Some("none"), "none"),
+        ("goldenport", Some("goldenport"), "goldenport"))
+      cases.foreach { (source, history, expected) =>
+        val opposite = if (source == "none") "goldenport" else "none"
+        val componentValues = Map(_source -> StringValue(opposite)) ++ history.map { value =>
+          _history -> StringValue(if (value == "none") "goldenport" else "none")
+        }
+        val common = _parameters(_source -> StringValue(source))
+        val component = ResolvedParameters.fromComponentConfiguration(Configuration(componentValues), "lint-test", Some(common))
+        val properties = List(Property(_source, source, None)) ++ history.map(v => Property(_history, v, None))
+        val parameters = ResolvedParameters.forOperation(Nil, Nil, properties, Some(component))
+        When("the published CNCF resolver composes each key before source/history selection")
+        val selected = _take(WorkflowScalaLintParameters.selectionC(parameters))
+        Then("operation values win independently and absence alone inherits the resolved source")
+        selected.source shouldBe source
+        selected.history shouldBe expected
+        component.usedEntries shouldBe empty
+        parameters.usedEntries.map(_.source).toSet shouldBe Set(ResolvedParameter.Source.Operation("property"))
+      }
+    }
+
+    "retain a component history override when only source is overridden by the operation" in {
+      Given("common history goldenport, component history none and operation source goldenport")
+      val common = _parameters(_source -> StringValue("none"), _history -> StringValue("goldenport"))
+      val component = ResolvedParameters.fromComponentConfiguration(
+        Configuration(Map(_history -> StringValue("none"))), "lint-test", Some(common))
+      val parameters = ResolvedParameters.forOperation(Nil, Nil,
+        List(Property(_source, "goldenport", None)), Some(component))
+      When("independent per-key lookup precedes history inheritance")
+      val selected = _take(WorkflowScalaLintParameters.selectionC(parameters))
+      Then("source comes from the operation and explicit history none comes from the component")
+      selected.source shouldBe "goldenport"
+      selected.history shouldBe "none"
+      parameters.usedEntries.find(_.key == _history).get.source shouldBe ResolvedParameter.Source.Component("lint-test")
+      common.usedEntries shouldBe empty
+    }
+
+    "reject obsolete keys before inheritance and explicit none including null and mixed configuration" in {
+      Given("each obsolete key alone or alongside current source and disabled history values")
+      ScalaLintProfiles.obsoleteHistoryKeys.foreach { (old, replacement) =>
+        Vector(StringValue("goldenport"), NullValue).foreach { value =>
+          Vector(Vector(old -> value), Vector(old -> value, _source -> StringValue("goldenport"),
+            _history -> StringValue("none"))).foreach { entries =>
+            When("the resolved parameter admission checks key presence")
+            val parameters = _parameters(entries*)
+            val result = WorkflowScalaLintParameters.selectionC(parameters)
+            Then("the obsolete spelling fails with its replacement before source or current history is used")
+            result shouldBe a[Consequence.Failure[?]]
+            result.toString should include (old)
+            result.toString should include (replacement)
+            parameters.usedEntries.map(_.key) should not contain _source
+            parameters.usedEntries.map(_.key) should not contain _history
+          }
+        }
+      }
+    }
+
     "preserve baseline union and noFinalize when a project adds a rule" in {
       Given("Goldenport naming with history disabled and an additive project rule")
       val project = ConfigFactory.parseString("rules = [RedundantSyntax, NoOptionGet]")
@@ -96,6 +160,17 @@ final class WorkflowScalaLintParametersSpec extends AnyWordSpec with Matchers wi
       val results = invalid.map(value => WorkflowScalaLintParameters.selectionC(
         _parameters(_source -> StringValue("goldenport"), _history -> value)))
       Then("each returns a configuration failure")
+      results.foreach(_ shouldBe a[Consequence.Failure[?]])
+    }
+
+    "reject malformed source styles even when an explicit valid history override is supplied" in {
+      Given("invalid empty, padded, unknown, null and mistyped source values with history none")
+      val invalid = Vector(StringValue(""), StringValue(" goldenport"), StringValue("unknown"), NullValue,
+        BooleanValue(false), NumberValue(BigDecimal(1)), ListValue(Nil), ObjectValue(Map.empty))
+      When("resolved source selection is admitted before history inheritance")
+      val results = invalid.map(value => WorkflowScalaLintParameters.selectionC(
+        _parameters(_source -> value, _history -> StringValue("none"))))
+      Then("all malformed source styles fail instead of selecting a fallback")
       results.foreach(_ shouldBe a[Consequence.Failure[?]])
     }
 

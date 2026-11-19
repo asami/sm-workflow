@@ -25,7 +25,7 @@ import GoalPhaseAcceptanceBoundary as A
   * No Workflow state is read or seeded by this caller.
   * @since   Oct. 13, 2026
   *  version Oct. 28, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[admission] object NativeWorkflowCliFixture {
@@ -1127,8 +1127,8 @@ private[admission] object NativeWorkflowCliFixture {
     val configfile = scenario.root.resolve(".textus/config.json")
     val config = parse(Files.readString(configfile)).toOption.get
     Files.writeString(configfile, config.mapObject(_.add("textus.subsystem.process-execution.plan", Json.fromString(process.noSpaces))
-      .add("sm-workflow.source-history.style", Json.fromString("goldenport"))
-      .add("sm-workflow.source-history.rule", rule)).noSpaces)
+      .add("sm-workflow.source.history.style", Json.fromString("goldenport"))
+      .add("sm-workflow.source.history.rule", rule)).noSpaces)
     if (directoryowners) scenario.prepareReleaseDirectoryBaseline()
     scenario
   }
@@ -2147,8 +2147,8 @@ private[admission] object NativeWorkflowCliFixture {
       _.as[GoalPhaseOrderedProgression.Plan]).fold(error => throw new AssertionError(error.getMessage), identity)
     val history = plan.identity == "native-primary-generation-history-plan" &&
       host.goal.candidatePaths == Vector("src/main") &&
-      config.hcursor.get[String]("sm-workflow.source-history.style").toOption.contains("goldenport") &&
-      config.hcursor.get[Json]("sm-workflow.source-history.rule").toOption.contains(PrimaryGenerationHistorySpecificationFixture.rule)
+      config.hcursor.get[String]("sm-workflow.source.history.style").toOption.contains("goldenport") &&
+      config.hcursor.get[Json]("sm-workflow.source.history.rule").toOption.contains(PrimaryGenerationHistorySpecificationFixture.rule)
     val exactsource = plan.identity == "native-primary-generation-plan" &&
       host.goal.candidatePaths == Vector("src/main/cozy/generation.cml")
     val checks = Vector(GoalPhaseNativeValidation.Check("primary-compile", 14, WorkflowSbtValidation.Kind.Compile),

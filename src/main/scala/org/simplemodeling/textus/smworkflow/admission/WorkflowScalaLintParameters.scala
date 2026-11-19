@@ -7,9 +7,8 @@ import org.goldenport.configuration.ConfigurationValue
 import org.simplemodeling.scalalint.ScalaLintProfiles
 
 /** Per-call source selection consumes CNCF's resolved values; it does not execute lint.
-  * History's current keys remain with SLP-3's breaking migration.
   * @since   Nov. 19, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 19, 2026
   * @author  ASAMI, Tomoharu
   */
 private[smworkflow] object WorkflowScalaLintParameters {
@@ -17,8 +16,10 @@ private[smworkflow] object WorkflowScalaLintParameters {
 
   def selectionC(parameters: ResolvedParameters): Consequence[ScalaLintProfiles.Selection] = for {
     _ <- if (parameters != null) Consequence.unit else _invalid("resolved parameters are required")
+    _ <- scala.util.Try(ScalaLintProfiles.rejectObsoleteHistoryKeys(key => parameters.get(key).nonEmpty)).fold(
+      error => _invalid(error.getMessage), _ => Consequence.unit)
     source <- _string_c(parameters, sourceKey)
-    history <- _string_c(parameters, WorkflowSourceHistoryParameters.styleKey)
+    history <- _string_c(parameters, ScalaLintProfiles.historyKey)
     selected <- scala.util.Try(ScalaLintProfiles.selection(source, history)).fold(
       error => _invalid(error.getMessage), Consequence.success)
   } yield selected

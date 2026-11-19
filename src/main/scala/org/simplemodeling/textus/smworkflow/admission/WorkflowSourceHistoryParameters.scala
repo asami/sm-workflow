@@ -5,14 +5,15 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.config.ResolvedParameters
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.configuration.ConfigurationValue
+import org.simplemodeling.scalalint.ScalaLintProfiles
 
 /** Per-call resolved configuration for the history-comment driver internals.
   * @since   Oct. 17, 2026
-  * @version Nov. 18, 2026
+  * @version Nov. 19, 2026
   */
 private[smworkflow] object WorkflowSourceHistoryParameters {
-  val styleKey = "sm-workflow.source-history.style"
-  val ruleKey = "sm-workflow.source-history.rule"
+  val styleKey = ScalaLintProfiles.historyKey
+  val ruleKey = ScalaLintProfiles.historyRuleKey
 
   def resolveC(context: ExecutionContext): Consequence[WorkflowSourceHistoryRule.Selection] =
     if (context == null) _invalid("execution context is required")
